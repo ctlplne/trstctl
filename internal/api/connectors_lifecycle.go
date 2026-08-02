@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -327,10 +328,15 @@ func (a *API) testConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		// The target is not contacted here: this route resolves schema and
+		// credential references locally and nothing else. The status says exactly
+		// that (servedstatus.ConnectorConfigValidated) rather than claiming a
+		// successful test — truth-integrity 3. Epic D5 turns this into a real
+		// agent-executed dry-run that reaches the target and returns a mutation plan.
 		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 			Destination: "connector.test", Connector: target.Type, Target: target.Name,
-			Status: "test_succeeded", Attempts: 1, Reason: "target_config_validated",
-			Detail:         "connector target metadata and credential references validated; external mutation still travels through connector.deploy outbox",
+			Status: servedstatus.ConnectorConfigValidated, Attempts: 1, Reason: "target_config_validated",
+			Detail:         "connector target metadata and credential references validated locally; the target was not contacted and nothing was changed. External mutation still travels through connector.deploy outbox",
 			IdempotencyKey: idempotencyKey,
 		})
 		if err != nil {
@@ -424,10 +430,17 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if reason == "" {
 			reason = "operator rollback"
 		}
+		// Nothing is restored here. This records the operator's rollback intent in
+		// the evidence chain; the predecessor credential is not put back on the
+		// target and the target is not contacted — truth-integrity 4. The
+		// RollbackRef states the outstanding action rather than describing it as
+		// done. Epic D4 makes this a connector.rollback job the bound agent
+		// executes from its local predecessor bundle, with a restore transcript.
 		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 			IdentityID: identityID, Destination: "connector.rollback", Connector: target.Type, Target: target.Name,
-			Fingerprint: fingerprint, Status: "rollback_recorded", Attempts: 1, Reason: "rollback_recorded",
-			Detail: reason, RollbackRef: "restore previous credential for " + target.Name, IdempotencyKey: idempotencyKey,
+			Fingerprint: fingerprint, Status: servedstatus.ConnectorRollbackRecorded, Attempts: 1, Reason: "rollback_attested_not_executed",
+			Detail:      reason,
+			RollbackRef: "pending manual restore of the previous credential for " + target.Name, IdempotencyKey: idempotencyKey,
 		})
 		if err != nil {
 			return 0, nil, err

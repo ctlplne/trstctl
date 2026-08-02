@@ -291,10 +291,17 @@ describe("i18n boundary", () => {
       // I-aa8623a3 adds the tenant key-domain migration, seal, failure,
       // recovery, and unseal workflow in both production catalogs while
       // preserving the completed/total progress placeholders.
+      // K2 truth-integrity sweep re-pin: three delivery-status labels move the
+      // console off wording that read stronger than the served claim —
+      // config_validated ("target not contacted"), its legacy spelling for
+      // receipts stored before the rename, and rollback_recorded ("attested,
+      // not executed"). Reviewed for meaning in all three locales: each label
+      // has to carry the negation, because dropping it is exactly the defect
+      // being fixed. No placeholders and no technical identifiers involved.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "5c808ef7a58deb0bed4f45fa6ae1d238ff9479c1819de2e9bafa8d008635b2fe",
-      "de-DE": "30eb5d64a5dc6da5509b27cf2dfc230f8899528e0ad40c47faae30983ab5de40",
+      "es-ES": "938c63e005b7187a48da593de868bb4e7be3c288eece3360bc34863390ebefda",
+      "de-DE": "24a982408ee13de7c7c628b4c61743dc64465d44989d452c4017aa52651b7160",
     });
   });
 

@@ -1209,7 +1209,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "queued" | "delivered" | "failed" | "test_succeeded" | "rollback_recorded";
+  status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "test_succeeded";
   target: string;
   tenant_id: string;
   updated_at: string;
@@ -1821,7 +1821,7 @@ export interface FleetReissuanceBatch {
   identity_ids: string[];
   index: number;
   replacement_identity_ids: string[];
-  status: string;
+  status: "planned" | "executed" | "failed" | "completed";
 }
 
 export interface FleetReissuanceEvidence {

@@ -140,7 +140,7 @@ describe("connector deployment disclosure surface", () => {
       renewal_intent: "ca.renew",
     });
     apiMock.bindIdentityConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "issued" });
-    apiMock.testConnectorTarget.mockReset().mockResolvedValue({ destination: "connector.test", status: "test_succeeded" });
+    apiMock.testConnectorTarget.mockReset().mockResolvedValue({ destination: "connector.test", status: "config_validated" });
     apiMock.deployConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "deployed" });
     apiMock.rollbackConnectorTarget.mockReset().mockResolvedValue({ destination: "connector.rollback", status: "rollback_recorded" });
     apiMock.connectorDeliveries.mockReset().mockResolvedValue({

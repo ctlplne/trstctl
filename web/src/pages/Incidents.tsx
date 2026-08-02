@@ -38,7 +38,7 @@ import { BreakGlassReconcile } from "@/components/breakglass";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { IncidentSeverityBadge, IncidentStepper } from "./incidents/IncidentsPageParts";
 import { formatDateTime } from "@/i18n/format";
-import type { StatusTone } from "@/lib/statusVocab";
+import { describeStatus, type StatusTone } from "@/lib/statusVocab";
 
 const defaultExecution: IncidentExecutionRequest = {
   identity_id: "",
@@ -1862,16 +1862,19 @@ function remediationRunTone(status: string | undefined): StatusTone {
   // of crashing the page.
   if (!status) return "neutral";
   if (status.includes("fail") || status.includes("error")) return "critical";
+  // "rollback_recorded" is an attested intent, not an executed restore, so it
+  // must not read as a green outcome (truth-integrity 4).
+  if (status.includes("rollback")) return "warning";
   if (status.includes("complete") || status.includes("succeed") || status.includes("recorded") || status.includes("done")) return "success";
   if (status.includes("pending") || status.includes("running") || status.includes("progress") || status.includes("open")) return "warning";
   return "neutral";
 }
 
+// Delegated to the shared delivery vocabulary so a receipt cannot render greener
+// here than it does on the Connectors page or than the served claim allows
+// (internal/servedstatus).
 function connectorDeliveryTone(status: NonNullable<RemediationPlaybookRun["connector_delivery"]>["status"]): StatusTone {
-  if (status === "delivered" || status === "test_succeeded") return "success";
-  if (status === "failed") return "critical";
-  if (status === "queued") return "warning";
-  return "neutral";
+  return describeStatus("delivery", status).tone;
 }
 
 function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue }) {

@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -229,7 +230,7 @@ func (a *API) initialRightSizeRunResponse(ctx context.Context, tenantID string, 
 	delivery := toConnectorDeliveryResponse(store.ConnectorDeliveryReceipt{
 		ID: *run.ConnectorDeliveryID, TenantID: tenantID, IdentityID: identityID,
 		Destination: orchestrator.DestinationConnectorRightSize,
-		Connector:   run.Connector, Target: run.Target, Status: "queued", Attempts: 0,
+		Connector:   run.Connector, Target: run.Target, Status: servedstatus.ConnectorQueued, Attempts: 0,
 		Reason: "least_privilege_right_size_queued", Detail: "usage-backed right-size connector intent queued",
 		RollbackRef: rollbackRef, IdempotencyKey: identity.OutboxIdempotencyKey,
 		CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,

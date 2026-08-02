@@ -274,6 +274,42 @@ export const deliveryStatus: Record<string, StatusDescriptor> = {
     tone: "critical",
     order: 4,
   },
+  // Connector delivery receipt statuses. These labels are the operator-facing
+  // half of the served status vocabulary in internal/servedstatus: a status is a
+  // claim, so the badge says exactly what the code did. config_validated and
+  // rollback_recorded deliberately are not success tones — nothing reached the
+  // target on either path (truth-integrity 3 and 4). They turn green when epics
+  // D5 and D4 make them a real dry-run and a real executed restore.
+  queued: {
+    get label() {
+      return translateNow("source.queued.661ff40a07");
+    },
+    tone: "observe",
+    order: 1,
+  },
+  config_validated: {
+    get label() {
+      return translateNow("source.config.validated.target.not.contacted.983573f318");
+    },
+    tone: "info",
+    order: 5,
+  },
+  // Retired spelling, still stored on receipts written before the rename, so the
+  // console must keep rendering it rather than falling back to a raw string.
+  test_succeeded: {
+    get label() {
+      return translateNow("source.config.validated.legacy.label.2387440f43");
+    },
+    tone: "info",
+    order: 5,
+  },
+  rollback_recorded: {
+    get label() {
+      return translateNow("source.rollback.attested.not.executed.7bf8b3ca82");
+    },
+    tone: "warning",
+    order: 6,
+  },
 };
 
 export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDescriptor>> = {

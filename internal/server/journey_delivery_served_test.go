@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/protocols/ari"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -534,9 +535,15 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 		t.Fatalf("drain issue: %v", err)
 	}
 
+	// The target-test route validates configuration locally and contacts nothing,
+	// so the receipt says config_validated rather than claiming a successful test
+	// (truth-integrity 3; internal/servedstatus).
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets/"+target.ID+"/test", tok, nil)
-	if status != http.StatusOK || !jsonContains(t, body, "test_succeeded") {
+	if status != http.StatusOK || !jsonContains(t, body, servedstatus.ConnectorConfigValidated) {
 		t.Fatalf("test target: status %d body %s", status, body)
+	}
+	if jsonContains(t, body, "test_succeeded") {
+		t.Fatalf("test target receipt reintroduced the retired overstating status: %s", body)
 	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets/"+target.ID+"/deploy", tok, map[string]any{

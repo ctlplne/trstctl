@@ -7964,6 +7964,14 @@ export const messages = {
     defaultMessage: "Columns",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/DataGrid.tsx.",
   },
+  "source.config.validated.legacy.label.2387440f43": {
+    defaultMessage: "Config validated (legacy label)",
+    description: "K2 truth-integrity sweep: renders receipts stored under the retired status test_succeeded, which claimed a successful test on a path that contacts nothing.",
+  },
+  "source.config.validated.target.not.contacted.983573f318": {
+    defaultMessage: "Config validated (target not contacted)",
+    description: "K2 truth-integrity sweep: connector delivery receipt status config_validated. States plainly that the route validated configuration locally and never reached the target.",
+  },
   "source.connect.issuer.abc8382bc1": {
     defaultMessage: "Connect issuer",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/CommandPalette.tsx.",
@@ -8439,6 +8447,10 @@ export const messages = {
   "source.right.environment.17dc94151f": {
     defaultMessage: "Right environment",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
+  },
+  "source.rollback.attested.not.executed.7bf8b3ca82": {
+    defaultMessage: "Rollback attested (not executed)",
+    description: "K2 truth-integrity sweep: connector delivery receipt status rollback_recorded. The intent is recorded as evidence; nothing was restored on the target.",
   },
   "source.rollback.c48b9dea6f": {
     defaultMessage: "rollback:",

@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -250,7 +251,7 @@ func (a *API) recordIncidentDelivery(ctx context.Context, tenantID, replacementI
 	identityID := replacementIdentityID
 	return a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 		ID: guuid.NewString(), IdentityID: &identityID, Destination: "connector.deploy",
-		Connector: connector, Target: target, Status: "queued", Attempts: 0,
+		Connector: connector, Target: target, Status: servedstatus.ConnectorQueued, Attempts: 0,
 		Reason:      "incident replacement deployment requires connector worker confirmation",
 		Detail:      "served incident execution queued replacement deploy before compromised identity revocation: " + reason,
 		RollbackRef: rollback, IdempotencyKey: idempotencyKey,

@@ -159,6 +159,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Tenant offboarding & audit retention | Served; PostgreSQL rows erased, event log/archive follow separate retention | [Tenant offboarding boundary](#tenant-offboarding-boundary) |
 | Library-only backlog | Empty — nothing is stuck library-only right now | [Built and tested, but not yet served](#built-and-tested-but-not-yet-served-by-the-binary) |
 | Conditional/partial residuals | Real served spine; specific operator-facing edges remain | [Conditional, partial, and residual boundaries](#conditional-partial-and-residual-boundaries) |
+| Served status strings | Every status is registered with what the code actually did; CI blocks a status spelled stronger than its own flags | [Served status vocabulary](#served-status-vocabulary-what-each-status-claims) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -447,6 +448,44 @@ only when an operator enables or configures a backend, and some have a served
 spine with explicit residual work. The matrix above is the authority for whether
 the running binary serves a capability; this section records the operator-facing
 edges and follow-up integration work.
+
+### Served status vocabulary: what each status claims
+
+A status string is a claim you act on, so each one has to mean exactly what the
+code did and nothing more. Three statuses on the deployment surface used to read
+stronger than the work behind them. They are corrected below, and the correction
+is enforced rather than remembered.
+
+The mechanism is a registry. `internal/servedstatus` records, for every status
+the API can write, whether that attempt contacted the target, changed it,
+independently re-read it, or computed a verdict from evidence. The API builds
+receipts from those constants, the OpenAPI enum is generated from the same
+registry, and `docs/status_vocabulary_test.go` fails the build if a status is
+spelled stronger than its own flags allow, or if a receipt is built from a bare
+string that bypassed the registry.
+
+| Status | Surface | What it means | What it does **not** mean |
+|---|---|---|---|
+| `queued` | connector delivery | Intent committed to the outbox in the same transaction as the state change. | That any connector has run. |
+| `delivered` | connector delivery | A connector reached the target and applied the credential. | That the endpoint was re-read and proven to serve it. Live verification is separate work (not yet served). |
+| `failed` | connector delivery | The attempt ran and did not succeed. | — |
+| `config_validated` | connector delivery | `POST /api/v1/connectors/targets/{id}/test` resolved target metadata, schema, and credential references **locally**. | That the target was contacted, reachable, or willing to accept the credential. Nothing was changed. |
+| `rollback_recorded` | connector delivery | `POST /api/v1/connectors/targets/{id}/rollback` recorded an operator-attested rollback intent as durable evidence. | That a rollback executed. The predecessor credential is **not** restored on the target; the `rollback_ref` names the outstanding manual action. |
+| `not_evaluated` | fleet re-issuance health gate | No evidence exists from which a verdict could be computed, so trstctl asserts none. | It is **not** a pass. |
+| `passed` / `failed` | fleet re-issuance health gate | An operator attested this verdict on the request. | That trstctl computed it. trstctl never fills in `passed` itself. |
+| `planned` | fleet re-issuance batch | A partition of the affected identity set. | That the run executes batch by batch. It issues every replacement in one pass. |
+
+Two spellings are retired and are no longer written: `test_succeeded` (now
+`config_validated`) claimed a successful test on a route that opens no
+connection, and a batch `completed` was stamped at planning time before anything
+ran per batch. Both remain in the served OpenAPI enum and render in the console,
+because receipts written before the correction still carry them and removing an
+enum member would put stored rows outside the contract that describes them.
+
+Making these statuses stronger is real work, not relabelling: contacting the
+target needs an agent-executed dry-run, and restoring a predecessor needs an
+on-host predecessor bundle and an executed restore transcript. Neither is served
+today, which is why the words changed instead of the flags.
 
 - Remaining private CA hierarchy operator flows beyond root/intermediate/leaf
   issuance. Root/intermediate CA creation, existing signer-backed CA chain

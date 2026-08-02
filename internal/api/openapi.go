@@ -5,6 +5,8 @@ package api
 import (
 	"net/http"
 	"strings"
+
+	"trstctl.com/trstctl/internal/servedstatus"
 )
 
 // The minimal subset of OpenAPI 3.1 the platform needs to describe its REST
@@ -1908,7 +1910,9 @@ func componentSchemas() map[string]*Schema {
 	connectorDelivery := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "outbox_id": {Type: "integer"}, "identity_id": uuid(),
 		"destination": str(), "connector": str(), "target": str(), "fingerprint": str(),
-		"status":   {Type: "string", Enum: []string{"queued", "delivered", "failed", "test_succeeded", "rollback_recorded"}},
+		// Generated from the served status vocabulary so the published contract
+		// cannot drift from what the code actually claims (internal/servedstatus).
+		"status":   {Type: "string", Enum: servedstatus.ConnectorDelivery.Values()},
 		"attempts": {Type: "integer"}, "reason": str(), "detail": str(), "rollback_ref": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "destination", "connector", "target", "status", "attempts", "created_at", "updated_at")
@@ -2230,11 +2234,16 @@ func componentSchemas() map[string]*Schema {
 		"action":          ref("OwnerRemediationAction"),
 		"remediation_run": ref("RemediationPlaybookRun"),
 	}, "capability", "status", "action", "remediation_run")
+	// A gate trstctl fills in itself is servedstatus.FleetGateNotEvaluated:
+	// nothing re-reads an endpoint to compute a verdict yet (epic D6). The status
+	// stays an open string because an operator may attest a gate in their own
+	// words on the request, and the handler passes that attestation through
+	// unmodified rather than rewriting it into a vocabulary they did not choose.
 	fleetHealthGate := object(map[string]*Schema{
 		"name": str(), "status": str(),
 	}, "name", "status")
 	fleetBatch := object(map[string]*Schema{
-		"index": {Type: "integer"}, "status": str(),
+		"index": {Type: "integer"}, "status": {Type: "string", Enum: servedstatus.FleetBatch.Values()},
 		"identity_ids":             {Type: "array", Items: uuid()},
 		"replacement_identity_ids": {Type: "array", Items: uuid()},
 		"health_gate":              str(),

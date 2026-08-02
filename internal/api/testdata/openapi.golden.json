@@ -4608,8 +4608,9 @@
               "queued",
               "delivered",
               "failed",
-              "test_succeeded",
-              "rollback_recorded"
+              "config_validated",
+              "rollback_recorded",
+              "test_succeeded"
             ],
             "type": "string"
           },
@@ -6997,6 +6998,12 @@
             "type": "array"
           },
           "status": {
+            "enum": [
+              "planned",
+              "executed",
+              "failed",
+              "completed"
+            ],
             "type": "string"
           }
         },

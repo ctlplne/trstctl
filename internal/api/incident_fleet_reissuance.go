@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -360,7 +361,7 @@ func (a *API) recordFleetReissuanceDelivery(ctx context.Context, tenantID, repla
 	identityID := replacementIdentityID
 	return a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 		ID: guuid.NewString(), IdentityID: &identityID, Destination: "connector.deploy",
-		Connector: connector, Target: target, Status: "queued", Attempts: 0,
+		Connector: connector, Target: target, Status: servedstatus.ConnectorQueued, Attempts: 0,
 		Reason:      "fleet replacement deployment requires connector worker confirmation",
 		Detail:      "served compromised issuer fleet reissuance queued replacement deploy before revocation: " + reason,
 		RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,
@@ -380,12 +381,20 @@ func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID strin
 	}
 }
 
+// normalizeFleetHealthGates fills in the gate set for a run. trstctl evaluates
+// none of these gates today: it enumerates the blast radius, queues replacement
+// deploys, and records revocation intent, but nothing re-reads an endpoint to
+// decide whether a gate held. So the gates trstctl supplies itself are
+// not_evaluated, not passed — a verdict nobody computed is not a pass
+// (truth-integrity 2). An operator may still assert a gate status explicitly,
+// which is an attestation and recorded as theirs. Epic D6 wires these to WS-D
+// verification receipts, at which point trstctl computes passed/failed for real.
 func normalizeFleetHealthGates(in []store.FleetReissuanceHealthGate) []store.FleetReissuanceHealthGate {
 	if len(in) == 0 {
 		return []store.FleetReissuanceHealthGate{
-			{Name: "graph enumeration", Status: "passed"},
-			{Name: "replacement deployment", Status: "passed"},
-			{Name: "revocation publication", Status: "passed"},
+			{Name: "graph enumeration", Status: servedstatus.FleetGateNotEvaluated},
+			{Name: "replacement deployment", Status: servedstatus.FleetGateNotEvaluated},
+			{Name: "revocation publication", Status: servedstatus.FleetGateNotEvaluated},
 		}
 	}
 	out := make([]store.FleetReissuanceHealthGate, 0, len(in))
@@ -396,13 +405,19 @@ func normalizeFleetHealthGates(in []store.FleetReissuanceHealthGate) []store.Fle
 		}
 		status := strings.TrimSpace(gate.Status)
 		if status == "" {
-			status = "passed"
+			status = servedstatus.FleetGateNotEvaluated
 		}
 		out = append(out, store.FleetReissuanceHealthGate{Name: name, Status: status})
 	}
 	return out
 }
 
+// buildFleetBatches partitions the affected identities into batches. The run does
+// not execute batch by batch — it issues every replacement in one pass — so a
+// batch is a plan, and its status says planned rather than completed
+// (truth-integrity 2). The per-batch gate label likewise carries the gate's real
+// status, which is not_evaluated unless an operator asserted otherwise. Epic D6
+// makes batches actual execution units with pause/resume that gates publishing.
 func buildFleetBatches(identityIDs, replacementIDs []string, batchSize int, gates []store.FleetReissuanceHealthGate) []store.FleetReissuanceBatch {
 	if batchSize <= 0 {
 		batchSize = 25
@@ -413,13 +428,13 @@ func buildFleetBatches(identityIDs, replacementIDs []string, batchSize int, gate
 		if end > len(identityIDs) {
 			end = len(identityIDs)
 		}
-		gate := "passed"
+		gate := servedstatus.FleetGateNotEvaluated
 		if len(gates) > 0 {
 			g := gates[(index-1)%len(gates)]
 			gate = strings.TrimSpace(g.Name + ":" + g.Status)
 		}
 		batches = append(batches, store.FleetReissuanceBatch{
-			Index: index, Status: "completed", IdentityIDs: append([]string(nil), identityIDs[start:end]...),
+			Index: index, Status: servedstatus.FleetBatchPlanned, IdentityIDs: append([]string(nil), identityIDs[start:end]...),
 			ReplacementIdentityIDs: append([]string(nil), replacementIDs[start:end]...), HealthGate: gate,
 		})
 	}

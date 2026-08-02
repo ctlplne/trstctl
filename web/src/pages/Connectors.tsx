@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
+import { describeStatus } from "@/lib/statusVocab";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/i18n/format";
@@ -457,7 +458,7 @@ export function Connectors() {
                     {deliveries.map((receipt) => (
                       <tr key={receipt.id} className="align-top">
                         <td>
-                          <StatusBadge value={receipt.status} label={receipt.status} tone={deliveryStatusTone(receipt.status)} />
+                          <StatusBadge value={receipt.status} vocabulary="delivery" tone={deliveryStatusTone(receipt.status)} />
                         </td>
                         <td>{receipt.connector}</td>
                         <td className="font-mono text-xs">{receipt.destination}</td>
@@ -677,7 +678,7 @@ export function Connectors() {
               {deliveryDetail.id}
             </ConnectorDetailRow>
             <ConnectorDetailRow term="Status">
-              <StatusBadge value={deliveryDetail.status} label={deliveryDetail.status} tone={deliveryStatusTone(deliveryDetail.status)} />
+              <StatusBadge value={deliveryDetail.status} vocabulary="delivery" tone={deliveryStatusTone(deliveryDetail.status)} />
             </ConnectorDetailRow>
             <ConnectorDetailRow term="Connector">{deliveryDetail.connector}</ConnectorDetailRow>
             <ConnectorDetailRow term="Target">{deliveryDetail.target}</ConnectorDetailRow>
@@ -726,11 +727,12 @@ function ConnectorDetailRow({ children, mono = false, term }: { term: string; ch
   );
 }
 
+// Tones come from the shared delivery vocabulary so the console cannot paint a
+// status greener than the served claim (internal/servedstatus). Only `delivered`
+// earns success here: config_validated never contacted the target and
+// rollback_recorded never restored anything.
 function deliveryStatusTone(status: ConnectorDelivery["status"]) {
-  if (status === "delivered" || status === "test_succeeded") return "success";
-  if (status === "failed") return "critical";
-  if (status === "queued") return "warning";
-  return "neutral";
+  return describeStatus("delivery", status).tone;
 }
 
 function circuitStateTone(state: OutboxCircuit["state"]) {

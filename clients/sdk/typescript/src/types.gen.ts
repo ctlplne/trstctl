@@ -5528,7 +5528,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /** @enum {string} */
-            status: "queued" | "delivered" | "failed" | "test_succeeded" | "rollback_recorded";
+            status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "test_succeeded";
             target: string;
             /** Format: uuid */
             tenant_id: string;
@@ -6158,7 +6158,8 @@ export interface components {
             identity_ids: string[];
             index: number;
             replacement_identity_ids: string[];
-            status: string;
+            /** @enum {string} */
+            status: "planned" | "executed" | "failed" | "completed";
         };
         FleetReissuanceEvidence: {
             evidence_bundle: string;
