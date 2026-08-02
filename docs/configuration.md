@@ -1080,7 +1080,7 @@ never receives provider credentials.
 | `TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN_FILE` | unset | File containing the YubiHSM authentication value/PIN. |
 | `TRSTCTL_MANAGED_KEYS_YUBIHSM2_KEY_LABEL_PREFIX` | `trstctl-pkcs11` | Label prefix for generated YubiHSM signing objects. |
 
-| Provider | Shipped binding | Required DoD substrate |
+| Provider | Shipped binding | Required proof substrate |
 | --- | --- | --- |
 | `aws` | AWS SDK v2 asymmetric KMS | Faithful SigV4 KMS emulator |
 | `azure-key-vault` | Azure Keys/Managed HSM data plane | Faithful Managed HSM wire emulator |

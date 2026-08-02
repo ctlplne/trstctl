@@ -207,7 +207,7 @@ never live in the API process. What you can do end to end against the running bi
   target schemas bind endpoint/filesystem/process and same-tenant secret
   references before a served issue/deploy route can enqueue work.
   Credential-bearing `connector.deploy` payloads exist only while needed, travel
-  through the durable outbox, and are wiped after delivery. The DoD proof requires
+  through the durable outbox, and are wiped after delivery. The acceptance proof requires
   provider-specific mutation plus independent external readback before a connector
   counts as served. Inventory: nginx, Apache, Caddy, Envoy, IIS, HAProxy, F5,
   NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, Postfix, Traefik, AWS ACM,
@@ -476,7 +476,7 @@ edges and follow-up integration work.
   constructs tenant-bound AD CS, AWS PCA, Azure Key Vault, DigiCert, EJBCA,
   Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA,
   Smallstep, Vault PKI, and Venafi TPP/TLS Protect clients. The authenticated
-  served issue route journals the request before the upstream call, and the DoD
+  served issue route journals the request before the upstream call, and the acceptance
   proof independently validates the returned chain for every provider. F4
   remains partial only because its separate Kubernetes CSR/TrustBundle posture
   rows are still residual, not because CA breadth is library-only.
@@ -823,7 +823,7 @@ when off, requiring a KEK when on):
   `gcp-iam`, `azure-entra`, `kubernetes`, and `redis`. Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity, and only the authorized issue
-  response opens the sealed credential. The DoD proof logs in with each
+  response opens the sealed credential. The acceptance proof logs in with each
   generated credential, rotates it, revokes both copies, and verifies both are
   rejected afterward.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` — a
@@ -862,7 +862,7 @@ first-class Terraform Cloud/OpenTofu Variables API and Vault KV v2 targets
 (Terraform writes are workspace-scoped with category/sensitive metadata;
 Vault writes use the KV v2 data/metadata paths and preserve version/CAS
 semantics). Only the outbox dispatcher resolves the target credential and
-writes externally. The DoD proof enforces exact target authentication,
+writes externally. The acceptance proof enforces exact target authentication,
 decrypts GitHub's X25519 sealed box in a separate receiver process, and
 independently reads every destination value back. `GET
 /api/v1/secrets/syncs/targets` shows the catalog and this installation's
@@ -1525,7 +1525,7 @@ The cloud receipts are high-fidelity protocol emulation, not a claim that this t
 ran in a customer's live cloud account. Likewise, SoftHSM proves the PKCS#11 ABI and
 swtpm proves TPM command/lifecycle behavior; an operator still validates its exact
 device firmware, module certificate, network policy, and cloud IAM. The LocalStack
-demo is not the DoD receipt source. Static no-cgo signer builds fail closed for native
+demo is not the acceptance proof's receipt source. Static no-cgo signer builds fail closed for native
 PKCS#11/YubiHSM selection; use the published HSM signer artifact. Provider selection
 is startup-static: this is ordinary Go interface injection, not a runtime crypto
 plugin engine or a policy-selected algorithm marketplace.

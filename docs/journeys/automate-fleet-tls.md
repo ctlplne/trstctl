@@ -4,7 +4,7 @@
 !!! success "Served path — wiring census 81/81"
 
     The shipped-binary census reports **81/81 required capabilities served**.
-    DoD-gated rows used by this journey (all `required`, all `served`): `connector.registry`, `connector_right_size.dispatch`, `protocol_ergonomics.eval_profile`.
+    Independently proof-gated capability rows used by this journey (all `required`, all `served`): `connector.registry`, `connector_right_size.dispatch`, `protocol_ergonomics.eval_profile`.
     Core surfaces guarded by route and journey tests: `acme_protocol`, `lifecycle_endpoint_bindings`, `certificate_renewal`.
     This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
 <!-- trstctl:journey-census:end -->

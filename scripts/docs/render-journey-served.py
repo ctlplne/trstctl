@@ -168,9 +168,9 @@ def badge(snapshot: dict[str, Any], journey_id: str) -> str:
         f"    The shipped-binary census reports **{summary['served']}/{summary['required']} required capabilities served**.",
     ]
     if rows:
-        lines.append("    DoD-gated rows used by this journey (all `required`, all `served`): " + ", ".join(f"`{row}`" for row in rows) + ".")
+        lines.append("    Independently proof-gated capability rows used by this journey (all `required`, all `served`): " + ", ".join(f"`{row}`" for row in rows) + ".")
     else:
-        lines.append("    This journey uses no separately DoD-gated capability row; it stays on core served surfaces.")
+        lines.append("    This journey uses no separately proof-gated capability row; it stays on core served surfaces.")
     lines.append("    Core surfaces guarded by route and journey tests: " + ", ".join(f"`{surface}`" for surface in core) + ".")
     lines.extend(
         [

@@ -4,7 +4,7 @@
 !!! success "Served path — wiring census 81/81"
 
     The shipped-binary census reports **81/81 required capabilities served**.
-    This journey uses no separately DoD-gated capability row; it stays on core served surfaces.
+    This journey uses no separately proof-gated capability row; it stays on core served surfaces.
     Core surfaces guarded by route and journey tests: `openapi_contract`, `cli`, `generated_sdks`, `cursor_pagination`, `credential_graph`.
     This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
 <!-- trstctl:journey-census:end -->

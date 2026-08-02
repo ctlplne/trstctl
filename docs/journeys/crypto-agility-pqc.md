@@ -4,7 +4,7 @@
 !!! success "Served path — wiring census 81/81"
 
     The shipped-binary census reports **81/81 required capabilities served**.
-    DoD-gated rows used by this journey (all `required`, all `served`): `pqc_end_to_end.automated_rollout_tls_findings`, `pqc_end_to_end.multikey_spiffe_hybrid_svid`, `pqc_end_to_end.pure_mldsa_leaf_stock_clients`.
+    Independently proof-gated capability rows used by this journey (all `required`, all `served`): `pqc_end_to_end.automated_rollout_tls_findings`, `pqc_end_to_end.multikey_spiffe_hybrid_svid`, `pqc_end_to_end.pure_mldsa_leaf_stock_clients`.
     Core surfaces guarded by route and journey tests: `crypto_inventory`, `migration_plans`.
     This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
 <!-- trstctl:journey-census:end -->

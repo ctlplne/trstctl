@@ -4,7 +4,7 @@
 !!! success "Served path — wiring census 81/81"
 
     The shipped-binary census reports **81/81 required capabilities served**.
-    DoD-gated rows used by this journey (all `required`, all `served`): `k8s_posture_routes.certificate_signing_requests`, `k8s_posture_routes.trust_bundles`, `pqc_end_to_end.multikey_spiffe_hybrid_svid`.
+    Independently proof-gated capability rows used by this journey (all `required`, all `served`): `k8s_posture_routes.certificate_signing_requests`, `k8s_posture_routes.trust_bundles`, `pqc_end_to_end.multikey_spiffe_hybrid_svid`.
     Core surfaces guarded by route and journey tests: `spiffe_workload_api`, `kubernetes_operator`, `workload_identity_inventory`.
     This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
 <!-- trstctl:journey-census:end -->
