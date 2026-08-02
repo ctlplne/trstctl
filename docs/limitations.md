@@ -136,6 +136,18 @@ receipt cannot certify it.
 
 <!-- feature-served-state-matrix:end -->
 
+### Feature pages without an `F*` catalog row
+
+A feature page can document a surface that carries no `F*` catalog ID, so the
+generated matrix above cannot hold it. Those pages record their served state
+here instead, in the same vocabulary, so no page in the feature catalog is
+statusless.
+
+| Page | Served state | Why it has no `F*` row |
+|---|---|---|
+| docs/features/agent-delegation.md | Conditional | The Enterprise `agent-delegation` license feature. `attachAgentDelegation` in `cmd/trstctl/ee_attach.go` attaches the `/api/v1/agent-delegation/*` routes and the `agentid.issue-chain-bound` outbox worker only when the license carries that feature, and the signer refuses a chain-bound mint until the operator provisions the root-anchor, reachability-verdict, and attestor trust floors under the signer key store. |
+| docs/features/client-sdks.md | Served | The generated clients under `clients/sdk/` track the served OpenAPI 3.1 contract; they package the REST API rather than adding a capability of their own. |
+
 ## Status at a glance
 
 One line per domain below, for a reader who wants the answer without the prose.

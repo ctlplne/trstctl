@@ -560,3 +560,58 @@ func cellAt(cells []string, idx int) string {
 	}
 	return cells[idx]
 }
+
+// ---- DOCS-007: no feature page ships without a served state --------------------
+
+// TestEveryFeaturePageDeclaresServedState is the DOCS-007 reverse-coverage guard
+// for the AGENTS.md rule "Served-vs-library status stated once per page".
+// docs/index.md sends a reader to limitations.md to learn whether a capability is
+// really served today, so a feature page that appears in neither the canonical
+// served-state table nor states its own status leaves that instruction
+// unanswerable. Every docs/features/*.md page must therefore do one of the two:
+// be cited by path somewhere in limitations.md (the generated F-row matrix, or
+// the non-catalog table recorded beside it), or use one of the five maturity
+// words limitations.md defines above that matrix.
+func TestEveryFeaturePageDeclaresServedState(t *testing.T) {
+	limitations := read(t, "limitations.md")
+
+	// The vocabulary is re-read from the definition list limitations.md keeps above
+	// the matrix, so a renamed maturity word fails loudly here instead of quietly
+	// making this guard vacuous.
+	vocabulary := []string{"Served", "Conditional", "Partial", "Library-only", "Roadmap"}
+	for _, label := range vocabulary {
+		if !strings.Contains(limitations, "- **"+label+"** means") {
+			t.Fatalf("DOCS-007: limitations.md no longer defines the maturity word %q; update this guard with the new vocabulary", label)
+		}
+	}
+
+	entries, err := os.ReadDir(filepath.FromSlash("features"))
+	if err != nil {
+		t.Fatalf("DOCS-007: read docs/features: %v", err)
+	}
+	pages := 0
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
+			continue
+		}
+		pages++
+		rel := "features/" + entry.Name()
+		if strings.Contains(limitations, "docs/"+rel) {
+			continue
+		}
+		page := strings.ToLower(read(t, rel))
+		stated := false
+		for _, label := range vocabulary {
+			if strings.Contains(page, strings.ToLower(label)) {
+				stated = true
+				break
+			}
+		}
+		if !stated {
+			t.Errorf("DOCS-007: docs/%s states no served-vs-library status: it is absent from limitations.md AND never uses one of the maturity words %v that limitations.md defines", rel, vocabulary)
+		}
+	}
+	if pages < 15 {
+		t.Fatalf("DOCS-007: only %d feature pages found; revisit this guard (the feature catalog should not have shrunk)", pages)
+	}
+}

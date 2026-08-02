@@ -14,6 +14,13 @@ OpenAPI document. The free single-hop attested workload credential path
 ([Workload identity](workload-identity.md), including the AI-agent broker at
 `POST /api/v1/broker/agent-identities`) is separate and unchanged.
 
+Served state: **Conditional** in the vocabulary
+[Current limitations](../limitations.md) defines — the served path exists in the
+running binary, but it is inert until the Enterprise license carries
+`agent-delegation` and the operator provisions the signer trust floors listed
+below. Until both hold, a chain-bound request is refused rather than issued
+unverified.
+
 ## Why it exists
 
 Agents spawn agents. Without a chain rule, a leaf agent can end up holding
