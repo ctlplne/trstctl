@@ -8,7 +8,7 @@ const repoRoot = path.resolve(scriptDir, "../..");
 const reportPath = path.join(repoRoot, "deploy/supply-chain/dependency-freshness.json");
 // The committed report is the only thing that gates a build: the Makefile target and
 // the CI job pass no argument. The single accepted argument is "-", which reads a report
-// from stdin, so the CODE-109 guard test can feed the checker a mutated copy of the real
+// from stdin, so the CODE-111 guard test can feed the checker a mutated copy of the real
 // report and prove the age budget actually fails without writing to the tracked file.
 const reportArg = process.argv[2] ?? "";
 if (reportArg !== "" && reportArg !== "-") {
@@ -46,6 +46,24 @@ function utcToday() {
 function daysBetween(start, end) {
   return Math.floor((end.getTime() - start.getTime()) / 86400000);
 }
+
+// AH-fad87256: an age budget and a major-version gap are different debts. A row can sit
+// well inside its class age budget and still be two majors behind -- where TypeScript was
+// (5.9.3 against a published 7.0.2, in the 90-day developer-tooling class) while this gate
+// printed OK. majorOf parses the leading integer of a version and fails closed on anything
+// it cannot read as a major, so an unparseable version is never silently skipped.
+function majorOf(value, field) {
+  const match = /^v?(\d+)\./.exec(typeof value === "string" ? value : "");
+  if (!match) {
+    fail(`${field} must start with a numeric major version, got ${value}`);
+    return null;
+  }
+  return Number(match[1]);
+}
+
+// maxMajorGap is the cap: zero or one major behind is ordinary upgrade-queue work governed
+// by the age budget; more than that needs an accepted_deferral that still covers today.
+const maxMajorGap = 1;
 
 function parseGoModDirectVersions() {
   const goMod = fs.readFileSync(path.join(repoRoot, "go.mod"), "utf8");
@@ -165,7 +183,27 @@ for (const upgrade of report.tracked_upgrades ?? []) {
     }
   }
 
-  // CODE-109: the declared SLO has to bite. Every row that is not already "current"
+  // AH-fad87256: the major-version gap cap. More than one major behind is allowed only
+  // while an accepted_deferral is live, so a multi-major pin stays a dated, argued decision
+  // instead of drift the age budget alone cannot see. A current_version whose major is
+  // newer than the observed latest means the observation is stale, not that the row is
+  // ahead, so that fails too.
+  const currentMajor = majorOf(upgrade.current_version, `${upgrade.name}.current_version`);
+  const latestMajor = majorOf(upgrade.latest_observed_version, `${upgrade.name}.latest_observed_version`);
+  if (currentMajor !== null && latestMajor !== null) {
+    const majorGap = latestMajor - currentMajor;
+    if (majorGap < 0) {
+      fail(`tracked upgrade ${upgrade.name} current_version ${upgrade.current_version} is a newer major than latest_observed_version ${upgrade.latest_observed_version}: re-observe the row`);
+    } else if (majorGap > maxMajorGap) {
+      if (upgrade.status !== "accepted_deferral") {
+        fail(`tracked upgrade ${upgrade.name} is ${majorGap} majors behind (${upgrade.current_version} against ${upgrade.latest_observed_version}), over the ${maxMajorGap}-major gap cap: upgrade it, or record status accepted_deferral with a dated deferral_until whose rationale names the next hop`);
+      } else if (!deferralUntil || deferralUntil < today) {
+        fail(`tracked upgrade ${upgrade.name} is ${majorGap} majors behind (${upgrade.current_version} against ${upgrade.latest_observed_version}), over the ${maxMajorGap}-major gap cap, and its deferral_until ${upgrade.deferral_until || "(missing)"} does not cover today`);
+      }
+    }
+  }
+
+  // CODE-111: the declared SLO has to bite. Every row that is not already "current"
   // records behind_since -- the earliest date this repository observed the row as not
   // current -- and that age is measured against the max_age_days of its class. Rolling
   // next_review_by forward no longer keeps a stale dependency compliant; the only way

@@ -92,7 +92,7 @@ func TestDependencyFreshnessSLOHasReportAndOwnerQueue(t *testing.T) {
 				t.Fatalf("tracked upgrade %q accepted_deferral must include deferral_until YYYY-MM-DD: %v", upgrade.Name, err)
 			}
 		}
-		// CODE-109: the class age budget is measured from behind_since, so every row
+		// CODE-111: the class age budget is measured from behind_since, so every row
 		// that is not already current has to carry one. Without it the declared
 		// max_age_days is documentation rather than a gate.
 		if upgrade.Status != "current" {
@@ -148,7 +148,7 @@ func TestDependencyFreshnessGateIsWiredSeparatelyFromVulnerabilityScanning(t *te
 		}
 	}
 
-	// CODE-109: the checker accepts "-" so the enforcement guards can feed it a mutated
+	// CODE-111: the checker accepts "-" so the enforcement guards can feed it a mutated
 	// report on stdin. The gate itself must never take that path -- it has to read the
 	// committed report.
 	for name, body := range map[string]string{"Makefile": makefile, "ci.yml": ci} {

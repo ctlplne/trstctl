@@ -156,7 +156,7 @@
     {
       "ecosystem": "npm",
       "name": "react-router-dom",
-      "current_version": "7.18.1",
+      "current_version": "7.18.2",
       "latest_observed_version": "7.18.1",
       "update_type": "security",
       "freshness_slo_class": "web-runtime",
@@ -235,7 +235,7 @@
       "behind_since": "2026-06-21",
       "next_review_by": "2026-08-26",
       "deferral_until": "2026-09-19",
-      "rationale": "TypeScript 6 should be upgraded with the generated OpenAPI types and strict build/typecheck gates, not as an isolated manifest bump."
+      "rationale": "TypeScript 5.9.3 is two majors behind the published 7.0.2, with 6.0.3 as the intermediate stable release; this dated deferral is the only thing holding the row inside the 1-major gap cap. The pin is deliberate, not drift: web/ runs `npm run gen:api -- --check` and `tsc -p tsconfig.build.json` before Vite builds, so a 5 -> 6 -> 7 walk has to regenerate the OpenAPI types and keep the strict build, typecheck and lint gates green in one reviewed change rather than an isolated manifest bump. This row measures web/package-lock.json only; clients/sdk/typescript pins its own typescript 5.5.4 under a separate lockfile and is not covered here."
     }
   ]
 }
