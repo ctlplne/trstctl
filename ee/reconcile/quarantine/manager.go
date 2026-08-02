@@ -65,17 +65,28 @@ func (m *Manager) ObserveWitness(ctx context.Context, idempotencyKey string, evi
 }
 
 func (m *Manager) Admit(ctx context.Context, req editionseam.AdmissionRequest) (editionseam.AdmissionDecision, error) {
-	if m == nil || m.state == nil {
+	if m == nil || m.state == nil || m.admission == nil {
 		return editionseam.AdmissionDecision{}, ErrInvalidQuarantine
 	}
 	tenantID := strings.TrimSpace(req.TenantID)
 	if tenantID == "" {
 		return editionseam.AdmissionDecision{}, ErrInvalidQuarantine
 	}
-	if !m.state.HasOpenTenantQuarantine(tenantID) {
+	// Fail closed. Containment is a security control: a lookup that cannot answer
+	// must refuse the operation, never fall through to AllowAdmission().
+	open, err := m.admission.HasOpenTenantQuarantine(ctx, tenantID)
+	if err != nil {
+		return editionseam.AdmissionDecision{}, fmt.Errorf("%w: containment state lookup: %v", ErrInvalidQuarantine, err)
+	}
+	if !open {
 		return editionseam.AllowAdmission(), nil
 	}
-	record, reason := m.refusalRecord(req)
+	// Same seam, so the tenant gate and the per-authority lookup cannot be
+	// answered by two substrates that disagree.
+	record, reason, err := m.refusalRecord(ctx, req)
+	if err != nil {
+		return editionseam.AdmissionDecision{}, fmt.Errorf("%w: containment authority lookup: %v", ErrInvalidQuarantine, err)
+	}
 	if record.AuthorityID == "" {
 		return editionseam.AllowAdmission(), nil
 	}
@@ -90,22 +101,29 @@ func (m *Manager) Admit(ctx context.Context, req editionseam.AdmissionRequest) (
 	}, nil
 }
 
-func (m *Manager) refusalRecord(req editionseam.AdmissionRequest) (Record, string) {
+// refusalRecord resolves WHICH open quarantine an admission request collides
+// with. It reads the same AdmissionState the tenant gate read, and propagates a
+// lookup failure instead of degrading it to "no quarantined authority found",
+// which Admit would otherwise turn into AllowAdmission().
+func (m *Manager) refusalRecord(ctx context.Context, req editionseam.AdmissionRequest) (Record, string, error) {
 	tenantID := strings.TrimSpace(req.TenantID)
 	if len(req.ObservedInputs) == 0 {
-		return Record{TenantID: tenantID, AuthorityID: "ambiguous", State: StateQuarantined, Open: true}, "ambiguous observed-state provenance while quarantine is open"
+		return Record{TenantID: tenantID, AuthorityID: "ambiguous", State: StateQuarantined, Open: true}, "ambiguous observed-state provenance while quarantine is open", nil
 	}
 	for _, input := range req.ObservedInputs {
 		authorityID := strings.TrimSpace(input.AuthorityID)
 		if authorityID == "" {
-			return Record{TenantID: tenantID, AuthorityID: "ambiguous", State: StateQuarantined, Open: true}, "ambiguous observed-state provenance while quarantine is open"
+			return Record{TenantID: tenantID, AuthorityID: "ambiguous", State: StateQuarantined, Open: true}, "ambiguous observed-state provenance while quarantine is open", nil
 		}
-		rec, ok := m.state.Lookup(tenantID, authorityID)
-		if ok && rec.Open && rec.State == StateQuarantined {
-			return rec, "observed state from quarantined authority"
+		rec, ok, err := m.admission.LookupOpenQuarantine(ctx, tenantID, authorityID)
+		if err != nil {
+			return Record{}, "", err
+		}
+		if ok {
+			return rec, "observed state from quarantined authority", nil
 		}
 	}
-	return Record{}, ""
+	return Record{}, "", nil
 }
 
 func (m *Manager) recordRefusal(ctx context.Context, req editionseam.AdmissionRequest, rec Record, reason string) (eventspec.Event, error) {

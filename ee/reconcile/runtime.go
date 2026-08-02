@@ -48,7 +48,8 @@ type Runtime struct {
 	WitnessRecorder          *witness.Recorder
 	RemediationManager       *remediation.Manager
 	RemediationOperationGate remediation.OperationGrant
-	QuarantineState          *quarantine.MemoryState
+	QuarantineState          quarantine.AdmissionState
+	QuarantineProjection     *quarantine.StateProjection
 	IssuanceAdmission        server.AdmissionHook
 	ProjectionOptions        []projections.Option
 	BackgroundWorkers        []server.BackgroundWorker
@@ -88,6 +89,13 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	}
 
 	quarantineState := quarantine.NewMemoryState()
+	// XREC containment must survive a restart. NewRuntime IS the restart path
+	// (cmd/trstctl/ee_attach.go calls it on every boot) and it previously
+	// allocated an empty map and loaded nothing, so every quarantined tenant was
+	// admitted again. The quarantine read model is a projection of
+	// xrec.quarantine.entered / xrec.quarantine.released (AN-2), registered below
+	// so the core projector resets it and replays the log from sequence 0 on boot.
+	quarantineProjection := quarantine.NewStateProjection(quarantineState)
 	quarantineManager := quarantine.NewManager(quarantine.Options{
 		Log:         quarantineLog,
 		Idempotency: cfg.Idempotency,
@@ -112,8 +120,9 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		RemediationManager:       remediationManager,
 		RemediationOperationGate: remediation.NewOperationGrant("rotate-key", "disable-key", "delete-secret"),
 		QuarantineState:          quarantineState,
+		QuarantineProjection:     quarantineProjection,
 		IssuanceAdmission:        quarantineManager,
-		ProjectionOptions:        []projections.Option{rounds.WithDriftProjection(driftProjection)},
+		ProjectionOptions:        []projections.Option{projections.WithEventProjection(quarantineProjection), rounds.WithDriftProjection(driftProjection)},
 		BackgroundWorkers: rounds.NewWorkers(rounds.WorkerOptions{
 			Log:    roundsLog,
 			Source: &runtimeDigestSource{reducers: reducerRegistry, signer: cfg.Signer},
