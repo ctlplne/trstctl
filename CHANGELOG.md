@@ -13,6 +13,23 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### The repository has an intake path and a code of conduct (2026-08-02)
+- **README.md and CONTRIBUTING.md told readers to open an issue; nothing was
+  behind that invitation.** `.github/ISSUE_TEMPLATE/` now carries a bug report
+  and a feature request as GitHub issue forms, each requiring only what a
+  maintainer needs to reproduce or judge the report — version/commit, what
+  happened versus expected, and steps for a bug; the problem, the proposal, and
+  whether it lands in core or `ee/` for a feature.
+- **A vulnerability could be filed as a public issue in one click.** SECURITY.md
+  says not to; nothing enforced it at the point of filing. Blank issues are now
+  disabled and a contact link routes a would-be reporter to SECURITY.md before
+  the new-issue form, with a second link to `docs/limitations.md` so a
+  not-yet-served subsystem is not reported as a defect.
+- **CODE_OF_CONDUCT.md adopts the Contributor Covenant 2.1 verbatim**, with the
+  enforcement address taken from the one SECURITY.md already publishes rather
+  than a second address that could drift. A guard in `docs/issue_intake_test.go`
+  pins all of it, including that the two addresses stay the same.
+
 ### Broker-issued agent credentials can be task-scoped (B-7, 2026-07-26)
 - **Only the chain-bound delegation path could bind a credential to one
   authorized task.** The broker's single-hop path — the one an AI/MCP agent

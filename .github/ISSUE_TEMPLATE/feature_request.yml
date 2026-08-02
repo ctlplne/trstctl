@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a capability trstctl does not have yet.
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check
+        [docs/limitations.md](https://github.com/ctlplne/trstctl/blob/main/docs/limitations.md)
+        first — the capability may already exist as a library and simply not be
+        served yet, which is a different request.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do that you cannot do today?
+      description: The problem, not the solution. Include the workaround you use now.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you want trstctl to do instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tree
+    attributes:
+      label: Which tree would this land in?
+      description: >-
+        Core is MPL-2.0 and takes DCO sign-off; the proprietary `ee/` tree needs a
+        signed CLA. Answer "Not sure" if you do not know — a maintainer will say.
+      options:
+        - Core (everything outside ee/)
+        - Enterprise (ee/, license-gated)
+        - Not sure
+    validations:
+      required: true

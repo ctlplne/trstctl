@@ -1,0 +1,20 @@
+# Issue intake for trstctl.
+#
+# Blank issues are disabled so every report arrives on a form: a bug report or a
+# feature request. The contact links below route the two kinds of report that
+# must NOT become a public issue (vulnerabilities) or that a page already answers
+# (not-yet-served subsystems) away from the issue tracker at the point of filing.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Security vulnerability (do not open a public issue)
+    url: https://github.com/ctlplne/trstctl/blob/main/SECURITY.md
+    about: >-
+      Report vulnerabilities privately: use GitHub's "Report a vulnerability" on
+      the Security tab, or email the maintainer. SECURITY.md has the address and
+      what to include.
+  - name: Is this subsystem served yet?
+    url: https://github.com/ctlplne/trstctl/blob/main/docs/limitations.md
+    about: >-
+      trstctl is pre-1.0 and some subsystems are library-only or Phase 2. Check
+      the served-state matrix before filing a bug about missing behaviour.

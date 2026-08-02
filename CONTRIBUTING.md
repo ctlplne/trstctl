@@ -79,6 +79,20 @@ service, `internal/crypto`, the store's RLS policies, or the linter itself
 require review from the owners listed in
 [`.github/CODEOWNERS`](.github/CODEOWNERS).
 
+## Code of conduct
+
+This project adopts the [Contributor Covenant](CODE_OF_CONDUCT.md) 2.1 as-is. It
+applies to issues, pull requests, and every other project space, and the
+enforcement address is the maintainer address published in
+[SECURITY.md](SECURITY.md).
+
+## Bug reports and feature requests
+
+Issues arrive on a form:
+[`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) carries a bug report and a
+feature request, and blank issues are disabled. A vulnerability is not an issue —
+follow [SECURITY.md](SECURITY.md).
+
 ## Getting started
 
 The authoring guides for
