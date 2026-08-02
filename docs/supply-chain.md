@@ -133,7 +133,7 @@ $ bash scripts/ci/npm-audit-dependency-surfaces.sh
 
 ### embedded-postgres binary — committed checksum pin (CI and runtime) + Trivy
 
-The `embedded-postgres` dependency downloads a real PostgreSQL 16.4.0 binary
+The `embedded-postgres` dependency downloads a real PostgreSQL 16.14.0 binary
 from Maven Central at runtime — outside `go.sum`. It backs both the
 integration tests and the served single-node/eval path that starts bundled
 PostgreSQL, so its provenance is committed and enforced at runtime, not

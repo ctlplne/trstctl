@@ -702,7 +702,7 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	// (3) The embedded-postgres runtime binary is given provenance and a scan: a
 	// committed manifest pins the version + source, and CI verifies its checksum.
 	manifest := repoFile(t, "deploy", "supply-chain", "embedded-postgres.json")
-	mustContainAll(t, "embedded-postgres manifest", manifest, "16.4.0", "sha256")
+	mustContainAll(t, "embedded-postgres manifest", manifest, "16.14.0", "sha256")
 	mustContainAll(t, "embedded-postgres scanner receipt policy", manifest,
 		"receiptArtifact", "embedded-postgres-trivy-receipt", "failOnFixableCritical", "lastResult")
 	if strings.Contains(manifest, "pending first CI run") {
@@ -718,8 +718,8 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 		`-v "${trivy_cache}:/root/.cache/trivy"`,
 		`-v "${trivy_cache}:/root/.cache/trivy:ro" "$TRIVY_IMAGE" --version >"$trivy_version_out"`)
 
-	// (4) The version the manifest pins is the version the integration tests
-	// actually request — so the scanned binary is the binary that runs.
+	// (4) The manifest pin is the version the SERVED eval path requests (that tie
+	// is asserted in internal/server); the tests still pin the library's V16.
 	pg := repoFile(t, "internal", "projections", "projections_test.go")
 	mustContainAll(t, "projections test pins the PG binary version", pg, "embeddedpostgres.V16")
 

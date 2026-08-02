@@ -20,14 +20,25 @@ package server
 // segment, i.e. `<os>-<arch>` where <arch> follows the library's naming
 // (amd64, arm64v8, …) — see archiveArch().
 var bundledPGTxzSHA256 = map[string]string{
-	// PostgreSQL 16.4.0, linux/amd64 — the production single-node/eval default.
-	"linux-amd64": "d24cafae863e1ba9502bdc27942661391748ce60345725e7a15429be637fc8b6",
-	// PostgreSQL 16.4.0, linux/arm64 (zonky names it arm64v8).
-	"linux-arm64v8": "5b8a4b595f847ef11d47c51f40de713ff0ef335aa86f668677470d43c681f47b",
-	// PostgreSQL 16.4.0, darwin/arm64 (zonky names it arm64v8).
-	"darwin-arm64v8": "2805111c0e325e191be8eb4290e0e45930cd30250a864ca30b385d828ae7b309",
+	// PostgreSQL 16.14.0, linux/amd64 — the single-node/eval default.
+	"linux-amd64": "77eac54dd8e936ca817420c59c6251e5a07c1ad140941270999c18126c027c02",
+	// PostgreSQL 16.14.0, linux/arm64 (zonky names it arm64v8).
+	"linux-arm64v8": "5883cd9540dd138ff594463b705d164b23bbfb650468a232aa2730371728f9fe",
+	// PostgreSQL 16.14.0, darwin/arm64 (zonky names it arm64v8).
+	"darwin-arm64v8": "bc34c59637702d73d7bad7e17620c33be6fd219a28609eb26fdb36b85e6f89fd",
 }
 
-// bundledPGVersion is the pinned PostgreSQL version (must match
-// embeddedpostgres.V16 used in startBundledPostgres and the supply-chain manifest).
-const bundledPGVersion = "16.4.0"
+// bundledPGVersion is the pinned PostgreSQL version. It must equal
+// postgresVersion in deploy/supply-chain/embedded-postgres.json
+// (TestRuntimePinsMatchManifest asserts that).
+//
+// startBundledPostgres passes this constant to embeddedpostgres.Version()
+// DIRECTLY, and deliberately not the library's embeddedpostgres.V16 constant.
+// V16 is frozen at 16.4.0 in v1.29.0 — a release affected by CVE-2024-10979
+// (CVSS 8.8) — and, worse, it is a SECOND source of truth: bundledPGCacheArchive
+// builds the cache filename from bundledPGVersion, so if the two ever disagreed
+// the library would download and cache under a different name, the provenance
+// check would find nothing at the pinned path, take the documented cold-cache
+// (false, nil) branch, and start an unverified binary. One source of truth keeps
+// SUPPLY-003 from silently degrading into a no-op.
+const bundledPGVersion = "16.14.0"

@@ -109,15 +109,15 @@ func TestArchiveArchMirrorsEmbeddedPostgresStrategy(t *testing.T) {
 		alpine  bool
 		want    string
 	}{
-		{goos: "linux", goarch: "amd64", version: "16.4.0", want: "amd64"},
-		{goos: "linux", goarch: "arm64", version: "16.4.0", want: "arm64v8"},
-		{goos: "linux", goarch: "arm", version: "16.4.0", uname: "armv7l", want: "arm32v7"},
-		{goos: "linux", goarch: "arm", version: "16.4.0", uname: "armv6l", want: "arm32v6"},
-		{goos: "linux", goarch: "amd64", version: "16.4.0", alpine: true, want: "amd64-alpine"},
-		{goos: "darwin", goarch: "amd64", version: "16.4.0", want: "amd64"},
+		{goos: "linux", goarch: "amd64", version: "16.14.0", want: "amd64"},
+		{goos: "linux", goarch: "arm64", version: "16.14.0", want: "arm64v8"},
+		{goos: "linux", goarch: "arm", version: "16.14.0", uname: "armv7l", want: "arm32v7"},
+		{goos: "linux", goarch: "arm", version: "16.14.0", uname: "armv6l", want: "arm32v6"},
+		{goos: "linux", goarch: "amd64", version: "16.14.0", alpine: true, want: "amd64-alpine"},
+		{goos: "darwin", goarch: "amd64", version: "16.14.0", want: "amd64"},
 		{goos: "darwin", goarch: "arm64", version: "14.1.0", want: "amd64"},
 		{goos: "darwin", goarch: "arm64", version: "14.2.0", want: "arm64v8"},
-		{goos: "darwin", goarch: "arm64", version: "16.4.0", want: "arm64v8"},
+		{goos: "darwin", goarch: "arm64", version: "16.14.0", want: "arm64v8"},
 	}
 
 	for _, tt := range tests {
