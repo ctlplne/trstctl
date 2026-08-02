@@ -30,6 +30,12 @@ type PossessionProof struct {
 // such that neither limb alone establishes the succession. The predecessor and
 // successor public keys are named inside Fields (bound in the commitment); the
 // verifier uses those, negotiating no algorithm and loading no provider.
+//
+// It is also the succession-record limb of the independent method claim
+// (PCAS-claim-1): the committed fields, a first signature over the commitment
+// generated with the predecessor private key, and a second signature over the
+// commitment generated with the successor private key, such that neither
+// signature alone is sufficient to establish the succession.
 type SuccessionRecord struct {
 	Fields         CommitmentFields
 	PredecessorAtt []byte          // predecessor signature over the commitment

@@ -433,9 +433,14 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 	@echo ">> trstctl_core live perf packages (serial)"
 	@$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)
 
-.PHONY: pcas-caller-gate
-pcas-caller-gate: ## PCAS production-caller gate (INT-23): every delivered mechanism has a non-test caller
+.PHONY: pcas-caller-gate pcas-caller-gate-strong
+pcas-caller-gate: ## PCAS-INT-CALL production-caller FLOOR: the non-constructor mechanism gate plus the auto-enumerated ee/succession constructor floor + seam
 	@./scripts/pcas_prod_caller_gate.sh
+	@echo ">> pcas-caller-gate (PCAS-INT-CALL floor + seam: every ee/succession constructor has a non-test caller rooted at an EE attach seam)"
+	@$(GO) test ./ee/succession/intgate/... -count=1
+pcas-caller-gate-strong: ## PCAS-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl, cmd/trstctl-signer and cmd/trstctl-agent proves every ee/succession constructor is reachable
+	@echo ">> pcas-caller-gate-strong (PCAS-INT-CALL RTA reachability; whole-program load, CI-only)"
+	@$(GO) test -tags pcasrta ./ee/succession/intgate/... -count=1
 
 .PHONY: pcas-no-skip-gate no-skip-gate
 pcas-no-skip-gate: ## PCAS no-skip gate (INT-20): release-gate tests must not call t.Skip
@@ -487,9 +492,9 @@ xrec-release-gate: ## XREC-13 release gate: conformance vectors + differential +
 	@$(GO) test -tags integration ./ee/reconcile/conformance/... -count=1 -timeout=10m
 
 .PHONY: claim-traceability-check
-claim-traceability-check: ## Verify ee/docs/claim-traceability.md regenerates byte-identical from the claim citations in ee/ source
-	@echo ">> claim-traceability-check (ee/docs/claim-traceability.md is generated; a stale table fails)"
-	@python3 scripts/ci/extract-claim-traceability.py --check
+claim-traceability-check: ## Verify ee/docs/claim-traceability.md regenerates byte-identical from the claim citations in ee/ source, with zero integrity findings
+	@echo ">> claim-traceability-check (ee/docs/claim-traceability.md is generated; a stale table or any integrity finding fails)"
+	@python3 scripts/ci/extract-claim-traceability.py --check --strict
 
 .PHONY: cwe-docs-check
 cwe-docs-check: ## Verify docs/security/cwe-register.md + cwe-coverage.md regenerate byte-identical from the tree's #nosec waivers

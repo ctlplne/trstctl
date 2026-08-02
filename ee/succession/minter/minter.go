@@ -7,6 +7,12 @@
 // successor public key and the encoded dual-signed record (INV-1). The
 // per-identity epoch floor is durable signer state that survives restart
 // (INV-3, mint-time half).
+//
+// This package is the isolated-signing-process limb of the independent method
+// claim (PCAS-claim-1): the process that does not release private key material,
+// that enforces monotonicity of the algorithm-epoch value at the time of
+// minting, that generates the second private key, and under whose control the
+// first signature over the commitment is obtained.
 package minter
 
 import (

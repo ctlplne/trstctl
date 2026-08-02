@@ -21,7 +21,7 @@ it cannot drift from the code it describes.
 | PCAS | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
 | VDEC | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
 
-Citations parsed: **823 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **831 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
@@ -65,7 +65,7 @@ Citations parsed: **823 qualified**, **0 bare** (bare citations infer their fami
 
 | Claim | Implementation | Tests | Verified |
 |---|---|---|---|
-| 1 | `ee/succession/doc.go` | `ee/succession/conformance/e2e_test.go`, `ee/succession/epoch_test.go`, `ee/succession/minter/minter_test.go` _(+2 more)_ | _[counsel]_ |
+| 1 | `ee/succession/commitment.go`, `ee/succession/doc.go`, `ee/succession/epoch.go` _(+3 more)_ | `ee/succession/conformance/e2e_test.go`, `ee/succession/epoch_test.go`, `ee/succession/minter/minter_test.go` _(+2 more)_ | _[counsel]_ |
 | 2 | `ee/succession/retirement/retirement.go`, `ee/succession/retirement/worker.go` | `ee/succession/retirement/retirement_test.go` | _[counsel]_ |
 | 3 | `ee/succession/api/api.go`, `ee/succession/events.go`, `ee/succession/retirement/retirement.go` _(+1 more)_ | `ee/succession/api/api_http_test.go`, `ee/succession/retirement/retirement_test.go` | _[counsel]_ |
 | 4 | `ee/translog/log.go` | `ee/translog/log_test.go` | _[counsel]_ |
@@ -76,7 +76,7 @@ Citations parsed: **823 qualified**, **0 bare** (bare citations infer their fami
 | 9 | `ee/pqcmigration/succession.go`, `ee/succession/api/api.go` | `ee/pqcmigration/succession_test.go`, `ee/succession/api/api_http_test.go` | _[counsel]_ |
 | 10 | `ee/succession/doc.go`, `ee/succession/posture.go` | `ee/succession/posture_test.go` | _[counsel]_ |
 | 11 | `ee/succession/events.go`, `ee/succession/monitor/monitor.go` | `ee/succession/monitor/monitor_test.go`, `ee/translog/log_test.go` | _[counsel]_ |
-| 12 | `ee/succession/minter/highwater.go`, `ee/succession/minter/hsm.go`, `ee/succession/minter/minter.go` | `ee/succession/minter/minter_test.go`, `ee/succession/signerwiring/rpc_integration_test.go` | _[counsel]_ |
+| 12 | `ee/succession/minter/highwater.go`, `ee/succession/minter/hsm.go`, `ee/succession/minter/minter.go` _(+1 more)_ | `ee/succession/minter/minter_test.go`, `ee/succession/signerwiring/floorstore_contract_test.go`, `ee/succession/signerwiring/rpc_integration_test.go` | _[counsel]_ |
 | 13 | `ee/rpverify/verifier.go`, `ee/rpverify/wasm/main.go` | `ee/rpverify/verifier_test.go`, `ee/succession/conformance/e2e_test.go`, `ee/succession/record_test.go` | _[counsel]_ |
 | 14 | `ee/succession/checkpoint.go` | `ee/succession/checkpoint_test.go` | _[counsel]_ |
 | 15 | `ee/succession/commitment.go`, `ee/succession/kem/kem.go`, `ee/succession/kem/signer_mint.go` _(+1 more)_ | `ee/succession/kem/kem_test.go`, `ee/succession/kem/signer_mint_test.go` | _[counsel]_ |
@@ -124,5 +124,5 @@ Citations parsed: **823 qualified**, **0 bare** (bare citations infer their fami
 
 ## Integrity findings
 
-None. Every cited claim has an implementation and a test, and no claim number is ambiguous across families.
+None. Every cited claim has an implementation and a test, no implementation set is a package doc comment alone, and no claim number is ambiguous across families.
 

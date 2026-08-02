@@ -32,6 +32,13 @@ var (
 // runtime provider — it verifies with the algorithms the keys already carry
 // (INV-6 building block). Signature verification routes through the core AN-3
 // boundary (crypto.VerifyMessage).
+//
+// It is the relying-party limb of the independent method claim (PCAS-claim-1):
+// both signatures over the commitment are verified offline, without invoking a
+// runtime cryptographic-provider engine and without re-negotiating an algorithm
+// with the identity. The other half of that limb — confirming the incremented
+// algorithm-epoch value exceeds the last-accepted value for the identity — is
+// VerifyChain below (ErrDowngrade).
 func VerifyRecord(rec SuccessionRecord) error {
 	commitment, err := Commit(rec.Fields)
 	if err != nil {

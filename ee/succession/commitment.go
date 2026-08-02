@@ -78,6 +78,14 @@ func registryID(alg crypto.Algorithm) (uint64, error) {
 // §Commitment Construction). deployment_scope binds a trust-domain/deployment
 // identifier so records minted by distinct deployments cannot verify against one
 // another even where tenant and identity identifiers collide (INV-5 / PCAS-claim-7).
+//
+// These fields are the commitment limb of the independent method claim
+// (PCAS-claim-1): the commitment binds at least the stable identity identifier
+// (IdentityID), a representation of the first public key (PredecessorAlg +
+// PredecessorPub), a representation of the second public key (SuccessorAlg +
+// SuccessorPub), an incremented algorithm-epoch value (Epoch), and a policy
+// reference (PolicyRef). Algorithms are bound as fixed registry ids, so each
+// "representation of" a public key is unambiguous about its algorithm.
 type CommitmentFields struct {
 	DeploymentScope  string
 	IdentityID       string

@@ -7,8 +7,8 @@ Target path in repo: scripts/ci/extract-claim-traceability.py
 What it does, in one breath: walk ee/, find every patent-claim citation in a Go
 comment, group them by patent family, and emit a traceability table plus a set of
 integrity findings — claims implemented but never tested, claims tested but never
-implemented, and claim numbers that collide across families without an application
-qualifier.
+implemented, claims whose whole implementation set is a package doc comment, and claim
+numbers that collide across families without an application qualifier.
 
 Why it exists: 204 ee/ files already cite claim numbers. That is a rare asset and it
 is currently unreadable except by grep. This turns it into a generated artifact that
@@ -128,12 +128,18 @@ def scan(root: str):
 
 def findings(records) -> dict:
     families = sorted({f for f, _c in records})
-    impl_only, test_only = [], []
+    impl_only, test_only, doc_only = [], [], []
     for (fam, claim), rec in sorted(records.items()):
         if rec["impl"] and not rec["test"]:
             impl_only.append(f"{fam}-{claim}")
         if rec["test"] and not rec["impl"]:
             test_only.append(f"{fam}-{claim}")
+        # A claim whose entire implementation set is package doc comments is cited
+        # from prose, not from the code that carries its limbs. The table then sends
+        # a reader — counsel, an examiner, a diligence reviewer — to a summary
+        # instead of to the mechanism. Independent claims mislead most this way.
+        if rec["impl"] and all(os.path.basename(p) == "doc.go" for p in rec["impl"]):
+            doc_only.append(f"{fam}-{claim}")
 
     # Bare claim numbers appearing in more than one family are ambiguous.
     bare_by_claim = defaultdict(set)
@@ -146,6 +152,7 @@ def findings(records) -> dict:
         "families": families,
         "implemented_but_untested": impl_only,
         "tested_but_unimplemented": test_only,
+        "implemented_only_in_doc_comments": doc_only,
         "ambiguous_claim_numbers": collisions,
         "ambiguous_families": sorted(
             {f for c in collisions for f in bare_by_claim[c]}
@@ -222,6 +229,14 @@ def render(records, found, n_qualified, n_bare) -> str:
         for x in found["tested_but_unimplemented"]:
             w(f"- `{x}`")
         w("")
+    if found["implemented_only_in_doc_comments"]:
+        w("**Cited only from a package doc comment** — every path in the implementation "
+          "column is a `doc.go`, so the table sends a reader to prose rather than to the "
+          "code carrying the claim's limbs. Cite the implementing files themselves:")
+        w("")
+        for x in found["implemented_only_in_doc_comments"]:
+            w(f"- `{x}`")
+        w("")
     if found["ambiguous_claim_numbers"]:
         fams = ", ".join(found["ambiguous_families"])
         w(f"**Ambiguous claim numbers** — cited bare in more than one family ({fams}), so "
@@ -231,9 +246,11 @@ def render(records, found, n_qualified, n_bare) -> str:
         w("> " + ", ".join(str(c) for c in found["ambiguous_claim_numbers"]))
         w("")
     if not any(found[k] for k in
-               ("implemented_but_untested", "tested_but_unimplemented", "ambiguous_claim_numbers")):
-        w("None. Every cited claim has an implementation and a test, and no claim number "
-          "is ambiguous across families.")
+               ("implemented_but_untested", "tested_but_unimplemented",
+                "implemented_only_in_doc_comments", "ambiguous_claim_numbers")):
+        w("None. Every cited claim has an implementation and a test, no implementation "
+          "set is a package doc comment alone, and no claim number is ambiguous across "
+          "families.")
         w("")
     return "\n".join(out) + "\n"
 
@@ -301,7 +318,7 @@ def main() -> int:
 
     n_findings = sum(len(found[k]) for k in
                      ("implemented_but_untested", "tested_but_unimplemented",
-                      "ambiguous_claim_numbers"))
+                      "implemented_only_in_doc_comments", "ambiguous_claim_numbers"))
     if n_findings:
         print(f"claim traceability: {n_findings} integrity finding(s) — see "
               f"'Integrity findings' in {args.out}", file=sys.stderr)

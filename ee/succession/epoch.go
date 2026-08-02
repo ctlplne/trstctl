@@ -11,6 +11,12 @@ import "trstctl.com/trstctl/internal/crypto"
 // which counts same-algorithm re-keys. A same-algorithm re-key advances the
 // rotation-version but NOT the algorithm-epoch and is definitionally not a
 // succession (PCAS-claim-22 / INV-2). Genesis is epoch 0.
+//
+// This type is the algorithm-epoch limb of the independent method claim
+// (PCAS-claim-1): a monotonically increasing algorithm-epoch value, distinct
+// from any rotation-version counter of the identity, incrementing only upon a
+// change of cryptographic algorithm. Identity below carries the other half of
+// that limb, the stable identity identifier invariant across such changes.
 type AlgorithmEpoch uint64
 
 // RotationCounter is the read-only view of core byok lifecycle state that the

@@ -144,7 +144,9 @@ jobs:
 
       # Patent claim traceability: ee/docs/claim-traceability.md is generated
       # from the claim citations in ee/ Go source. A citation added, moved, or
-      # removed without regenerating the committed table fails the build here.
+      # removed without regenerating the committed table fails the build here,
+      # and --strict additionally fails on any integrity finding — including a
+      # claim whose whole implementation set is a package doc comment.
       - name: Claim traceability check
         run: make claim-traceability-check
 
@@ -178,6 +180,12 @@ jobs:
       # verifiable decommissioning family. The lexical floor runs inside `make lint`.
       - name: VDEC production-caller gate (strong / RTA)
         run: make vdec-caller-gate-strong
+
+      # PCAS-INT-CALL STRONG check: same delivered-not-test-only proof for the
+      # post-compromise automated succession family. The lexical floor + seam run
+      # inside `make lint` (pcas-caller-gate).
+      - name: PCAS production-caller gate (strong / RTA)
+        run: make pcas-caller-gate-strong
 
       # XREC-INT-WIRE: run the real-substrate integration suite over PostgreSQL/RLS,
       # embedded file-backed NATS/JetStream, the outbox, and the real signer process.
