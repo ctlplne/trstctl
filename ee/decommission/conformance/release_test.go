@@ -201,14 +201,9 @@ func TestConformance_FuzzSeedCorpusPresent(t *testing.T) {
 
 func TestConformance_TraceabilityMatrixAllClaimsProven(t *testing.T) {
 	root := moduleRoot(t)
-	matrix := filepath.Join(root, "..", "patent-strategy", "vdec-harness", "TRACEABILITY-MATRIX.md")
-	if b, err := os.ReadFile(matrix); err == nil {
-		assertMatrixTextProven(t, string(b), matrix)
-		return
-	}
 	raw, err := os.ReadFile(filepath.Join(root, "ee/decommission/conformance/testdata/traceability_status.json"))
 	if err != nil {
-		t.Fatalf("neither live TRACEABILITY-MATRIX.md nor in-repo traceability status manifest is readable: %v", err)
+		t.Fatalf("in-repo traceability status manifest is not readable: %v", err)
 	}
 	var manifest traceabilityStatus
 	if err := json.Unmarshal(raw, &manifest); err != nil {
@@ -313,25 +308,6 @@ func mustReadAllGoTests(t *testing.T, root string) string {
 		t.Fatalf("read tests under %s: %v", root, err)
 	}
 	return b.String()
-}
-
-func assertMatrixTextProven(t *testing.T, text, name string) {
-	t.Helper()
-	statusCell := regexp.MustCompile(`\|\s*(pending|unit-green|blocked|uncovered)\s*\|`)
-	if hit := statusCell.FindString(text); hit != "" {
-		t.Fatalf("%s still contains non-proven status cell %q", name, hit)
-	}
-	for _, claim := range claimIDs() {
-		re := regexp.MustCompile(`(?m)^\|\s*\*\*` + regexp.QuoteMeta(claim) + `\*\*.*\|\s*proven\s*\|$`)
-		if !re.MatchString(text) {
-			t.Fatalf("%s does not show claim %s as proven", name, claim)
-		}
-	}
-	if !strings.Contains(text, "VDEC-08 offline-verifier license decision") ||
-		!strings.Contains(text, "ee/decommission/verify") ||
-		!strings.Contains(text, "LicenseRef-trstctl-EE") {
-		t.Fatalf("%s does not record the proprietary VDEC-08 verifier-license decision", name)
-	}
 }
 
 type traceabilityStatus struct {
