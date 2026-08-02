@@ -144,6 +144,14 @@ func (s *Store) ApplyDynamicSecretLeasePreparedTx(ctx context.Context, tx pgx.Tx
 // claim another request's deterministic lease id. If an older caller has no
 // separate hard expiry, the initial expiry becomes the hard bound.
 func (s *Store) ApplyDynamicSecretLeaseIssuedTx(ctx context.Context, tx pgx.Tx, lease DynamicSecretLease) error {
+	// This transaction walks leases -> operations while the request-side intent
+	// transaction walks operations -> leases.  Take the shared per-command lock
+	// before either table so the two orders cannot form a cycle; a 40P01 here
+	// aborts a projection that has already minted an external credential, and the
+	// outbox retry would then mint a second one.
+	if err := lockDynamicSecretOperationTx(ctx, tx, lease.TenantID, lease.IdempotencyKey); err != nil {
+		return err
+	}
 	hardExpiresAt := lease.HardExpiresAt
 	if hardExpiresAt.IsZero() {
 		hardExpiresAt = lease.ExpiresAt
@@ -211,6 +219,18 @@ func (s *Store) ApplyDynamicSecretLeaseIssuedTx(ctx context.Context, tx pgx.Tx, 
 // ApplyDynamicSecretLeaseIssuanceFailedTx projects a terminal provider creation
 // failure. A stale failure replayed after activation cannot downgrade the lease.
 func (s *Store) ApplyDynamicSecretLeaseIssuanceFailedTx(ctx context.Context, tx pgx.Tx, tenantID, leaseID, lastError string, failedAt time.Time) error {
+	// Same first-lock discipline as the issued projection: this transaction also
+	// walks leases -> operations.  The plain SELECT takes no row lock, so reading
+	// the command identity before the advisory lock cannot form a cycle.
+	var failedIdempotencyKey string
+	if err := tx.QueryRow(ctx,
+		`SELECT idempotency_key FROM dynamic_secret_leases WHERE tenant_id = $1 AND id = $2`,
+		tenantID, leaseID).Scan(&failedIdempotencyKey); err != nil {
+		return err
+	}
+	if err := lockDynamicSecretOperationTx(ctx, tx, tenantID, failedIdempotencyKey); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE dynamic_secret_leases
 		    SET state = CASE WHEN state = 'pending' THEN 'failed' ELSE state END,

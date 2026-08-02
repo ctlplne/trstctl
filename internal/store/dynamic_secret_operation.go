@@ -34,6 +34,31 @@ type DynamicSecretOperation struct {
 	UpdatedAt      time.Time
 }
 
+// lockDynamicSecretOperationTx serializes every transaction that writes the
+// dynamic_secret_operations / dynamic_secret_leases pair for one authenticated
+// command.  The request-side intent projection walks operations -> leases while
+// the worker-side result projection walks leases -> operations; taking this lock
+// as the FIRST statement of both is what stops that ABBA order from deadlocking
+// (SQLSTATE 40P01) and aborting a post-provider projection that has already
+// minted an external credential.  Under READ COMMITTED an ON CONFLICT DO UPDATE
+// locks the conflicting row even when its update is a semantic no-op, so both
+// walks really do take both row locks.
+//
+// INVARIANT: every writer of that table pair takes this lock first, before it
+// touches either table.  ApplySecretSyncIntentTx documents the same discipline
+// for the sync job/outbox pair.
+func lockDynamicSecretOperationTx(ctx context.Context, tx pgx.Tx, tenantID, idempotencyKey string) error {
+	if tenantID == "" || idempotencyKey == "" {
+		return fmt.Errorf("store: dynamic-secret operation lock identity is incomplete")
+	}
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"dynamic-secret-operation\x1f"+tenantID+"\x1f"+idempotencyKey); err != nil {
+		return fmt.Errorf("store: lock dynamic-secret operation: %w", err)
+	}
+	return nil
+}
+
 // ApplyDynamicSecretOperationRequestedTx claims the raw Idempotency-Key in a
 // tenant-wide namespace. The no-op conflict update succeeds only for the exact
 // same authenticated command and never regresses a terminal operation.
@@ -54,10 +79,8 @@ func (s *Store) ApplyDynamicSecretOperationRequestedTx(ctx context.Context, tx p
 	if op.UpdatedAt.IsZero() {
 		op.UpdatedAt = op.CreatedAt
 	}
-	if _, err := tx.Exec(ctx,
-		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-		"dynamic-secret-operation\x1f"+op.TenantID+"\x1f"+op.IdempotencyKey); err != nil {
-		return fmt.Errorf("store: lock dynamic-secret operation: %w", err)
+	if err := lockDynamicSecretOperationTx(ctx, tx, op.TenantID, op.IdempotencyKey); err != nil {
+		return err
 	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO dynamic_secret_operations

@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1007 annotated sites across 24 rules. Each row is
+1008 annotated sites across 24 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -708,7 +708,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:162` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:277` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (264 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (265 sites)
 
 | Location | Reason |
 |---|---|
@@ -899,6 +899,7 @@ not this file.
 | `internal/signing/managedkeys_test.go:445` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/sign_journal.go:205` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/spireupstream/plugin.go:238` | operator-configured upstream-authority plugin config path (CWE-22) |
+| `internal/store/dynamic_secret_lock_order_test.go:110` | fixed sibling path inside this package's own directory (CWE-22) |
 | `internal/store/migration_safety_test.go:82` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/store/store_isolation_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:244` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
