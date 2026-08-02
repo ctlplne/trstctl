@@ -95,3 +95,9 @@ docs-internal/
 # .gitignore is advisory and `git add -f` walks straight past it.
 AGENTS.md
 CLAUDE.md
+
+# Agent/editor session state. .claude/ holds per-machine Claude Code settings and
+# hooks. It was previously excluded only via .git/info/exclude, which is local to
+# one checkout and is never published - so a fresh clone showed it as untracked
+# AND unignored, and the first `git add -A` in that clone would stage it (AH-0ffc461f).
+.claude/
