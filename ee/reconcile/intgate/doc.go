@@ -11,4 +11,8 @@
 //
 // This package asserts production reachability. It must not add XREC product
 // wiring or business logic.
+//
+// The reachability proof is what keeps the XREC system claim (XREC-claim-16)
+// honest: every exported XREC constructor must be reachable from a shipped
+// binary's main, not merely from a test.
 package intgate

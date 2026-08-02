@@ -68,6 +68,10 @@ type StaleDigest struct {
 	BoundSeconds int64
 }
 
+// Verify checks a signed witness and its signed state digests using only
+// caller-supplied verification keys. It communicates with neither authority and
+// touches no ledger, which is the substance of the independent-verifier claim
+// (XREC-claim-20).
 func Verify(ctx context.Context, req Request) (Result, error) {
 	if ctx == nil {
 		return Result{}, fmt.Errorf("%w: nil context", ErrInvalidRequest)

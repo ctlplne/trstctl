@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// Three-way majority classification (XREC-claim-7).
 func TestMajority_MinorityConformsToMajority(t *testing.T) {
 	key := canon.RecordKey{TenantID: "tenant-a", RecordType: canon.RecordTypeX509Certificate, StableID: "cert-a"}
 	result, err := witness.ClassifyMajority(witness.MajorityRequest{
@@ -53,6 +54,7 @@ func TestMajority_MinorityConformsToMajority(t *testing.T) {
 	}
 }
 
+// Authoritative-plane override of the majority vote (XREC-claim-7).
 func TestMajority_AuthoritativePlaneOverridesVote(t *testing.T) {
 	result, err := witness.ClassifyMajority(witness.MajorityRequest{
 		TenantID:    "tenant-a",

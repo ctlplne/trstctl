@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+// Whole-program reachability from a shipped binary's main is what keeps the XREC
+// system claim honest (XREC-claim-16).
 func TestProdCaller_ReachableFromBinaryMain(t *testing.T) {
 	unreachable, pkgCount, err := rtaReachability()
 	if err != nil {

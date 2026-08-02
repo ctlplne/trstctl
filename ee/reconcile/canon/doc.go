@@ -15,4 +15,7 @@
 // through R-19 are authored in SPEC.md for later XREC cards; this package does
 // not build Merkle trees, sign digests, generate witnesses, schedule rounds, or
 // call connectors.
+//
+// The canonical record model this package owns — record key, normalized
+// attributes, and the blanket exclusion of secret material — is XREC-claim-10.
 package canon

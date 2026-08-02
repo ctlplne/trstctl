@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/idem"
 )
 
+// Quarantine entry on a recorded divergence witness (XREC-claim-4).
 func TestQuarantine_EnteredOnPolicy(t *testing.T) {
 	log := &memoryLog{}
 	mgr := quarantine.NewManager(quarantine.Options{

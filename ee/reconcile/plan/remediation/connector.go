@@ -34,6 +34,9 @@ type OperationGrant struct {
 
 // NewOperationGrant returns an operation-class grant for a remediation
 // connector. Operation names are normalized the same way plan actions are.
+// NewOperationGrant builds the capability grant a remediation connector must
+// hold. A corrective write outside the granted operation classes is refused
+// (XREC-claim-18).
 func NewOperationGrant(classes ...string) OperationGrant {
 	g := OperationGrant{classes: map[string]bool{}}
 	for _, class := range classes {

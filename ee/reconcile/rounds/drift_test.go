@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
+// Drift metrics are a replayable projection (XREC-claim-12).
 func TestDrift_ProjectionReconstructable(t *testing.T) {
 	base := time.Date(2026, 7, 8, 4, 0, 0, 0, time.UTC)
 	events := []eventspec.Event{
@@ -41,6 +42,7 @@ func TestDrift_ProjectionReconstructable(t *testing.T) {
 	}
 }
 
+// Per-class drift counts rebuilt from the ledger (XREC-claim-12).
 func TestDrift_CountsPerClassPerWindow(t *testing.T) {
 	base := time.Date(2026, 7, 8, 4, 0, 0, 0, time.UTC)
 	events := []eventspec.Event{

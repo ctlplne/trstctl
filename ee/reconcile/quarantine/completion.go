@@ -18,6 +18,8 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
+// CompletionRequest carries the inputs for a reconciliation-completion record —
+// the only thing that releases a quarantine (XREC-claim-5).
 type CompletionRequest struct {
 	IdempotencyKey    string                 `json:"idempotency_key"`
 	Witness           witness.Evidence       `json:"witness"`

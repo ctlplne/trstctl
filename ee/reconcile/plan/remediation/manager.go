@@ -117,7 +117,8 @@ func NewManager(s *corestore.Store, outbox *orchestrator.Outbox, opts ...Option)
 // Authorize records the signer-approved action and stages its corrective write in
 // the same tenant-scoped database transaction. The idempotency key is derived from
 // (witness hash, record key, operation), so repeating the same authorization does
-// not create a second ledger row or outbox job.
+// not create a second ledger row or outbox job. That outbox-in-the-same-
+// transaction plus witness-digest idempotency binding is XREC-claim-14.
 func (m *Manager) Authorize(ctx context.Context, req AuthorizationRequest) (AuthorizationRecord, error) {
 	rec, job, err := buildAuthorization(req)
 	if err != nil {

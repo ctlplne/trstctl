@@ -41,6 +41,9 @@ var (
 // ObservedRecord is the feature-neutral input shape for R-1..R-10 reduction.
 // The fields are identifiers and metadata only. Secret material belongs in the
 // observed-state substrate and is rejected if it reaches this boundary.
+// ObservedRecord is the pre-canonical observation. Its reduction carries a record
+// key and normalized attributes and never carries secret material
+// (XREC-claim-10).
 type ObservedRecord struct {
 	TenantID   string
 	RecordType string

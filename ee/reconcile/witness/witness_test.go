@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+// Exercises minimal disclosure of diverging records only (XREC-claim-9).
 func TestWitness_MinimalDisclosure(t *testing.T) {
 	left := mustPlane(t, "tenant-a", "vault", []observedKey{
 		{id: "a", label: "shared-a"},
@@ -85,6 +86,7 @@ func TestWitness_MinimalDisclosure(t *testing.T) {
 	}
 }
 
+// Exercises redaction of the bracketing non-diverging bodies (XREC-claim-9).
 func TestWitness_AbsenceProofBracketing(t *testing.T) {
 	left := mustPlane(t, "tenant-a", "vault", []observedKey{
 		{id: "a", label: "shared-a"},
@@ -137,6 +139,7 @@ func TestWitness_AbsenceProofBracketing(t *testing.T) {
 	}
 }
 
+// Exercises the four divergence classes (XREC-claim-2).
 func TestWitness_ClassifiesAllFourClasses(t *testing.T) {
 	left := mustPlane(t, "tenant-a", "vault", []observedKey{
 		{id: "a", label: "policy-target"},

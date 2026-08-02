@@ -45,6 +45,8 @@ type ObservationSandbox struct {
 	denied    int
 }
 
+// ReadOnlyObservationGrant is the only grant an observation reducer may hold: it
+// permits reads of a foreign authority and nothing else (XREC-claim-8).
 func ReadOnlyObservationGrant(scope string) pluginhost.Grant {
 	g := pluginhost.NewGrant(CapObserveList, CapObserveDescribe, CapObserveSubscribe)
 	prefix := resourcePrefix(scope)

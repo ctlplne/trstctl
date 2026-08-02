@@ -17,6 +17,9 @@ import (
 
 var _ editionseam.AdmissionHook = (*Manager)(nil)
 
+// ObserveWitness evaluates a recorded divergence witness against the tenant
+// containment policy and enters quarantine when the policy says so
+// (XREC-claim-4).
 func (m *Manager) ObserveWitness(ctx context.Context, idempotencyKey string, evidence witness.Evidence) (Decision, error) {
 	if m == nil || m.log == nil || m.state == nil || strings.TrimSpace(idempotencyKey) == "" {
 		return Decision{}, ErrInvalidQuarantine

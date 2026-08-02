@@ -90,6 +90,9 @@ func (s *Scheduler) NextDue() time.Time {
 	return s.nextDue
 }
 
+// RunDue executes one anti-entropy round when the schedule says it is due,
+// comparing already-signed digests and recording agreement as of their
+// watermarks (XREC-claim-3).
 func (s *Scheduler) RunDue(ctx context.Context) (RoundResult, bool, error) {
 	now := s.clock().UTC()
 	if !s.nextDue.IsZero() && now.Before(s.nextDue) {

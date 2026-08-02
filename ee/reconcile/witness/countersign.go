@@ -12,6 +12,9 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+// CounterSignRequest carries a witness for countersignature by the second
+// authority, so the artifact is mutually attested rather than one-sided
+// (XREC-claims-6, 21).
 type CounterSignRequest struct {
 	Evidence           Evidence
 	Digests            []digest.SignedDigest

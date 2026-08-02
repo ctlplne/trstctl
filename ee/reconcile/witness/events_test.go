@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+// Mutual countersignature of the witness artifact (XREC-claim-6).
 func TestWitness_MutualCountersign(t *testing.T) {
 	fixture := mustSignedWitnessFixture(t)
 	evidence, err := witness.EvidenceFromSignedWitness(fixture.Original)
@@ -103,6 +104,7 @@ func TestWitness_DisputeRecorded(t *testing.T) {
 	}
 }
 
+// The XREC ledger event vocabulary (XREC-claim-19).
 func TestLedger_EventTypesPresent(t *testing.T) {
 	fixture := mustSignedWitnessFixture(t)
 	evidence, err := witness.EvidenceFromSignedWitness(fixture.Original)
@@ -163,6 +165,7 @@ func TestLedger_EventTypesPresent(t *testing.T) {
 	}
 }
 
+// The stored witness is self-contained (XREC-claim-15).
 func TestWitness_SelfContainedStorable(t *testing.T) {
 	fixture := mustSignedWitnessFixture(t)
 	evidence, err := witness.EvidenceFromSignedWitness(fixture.Original)

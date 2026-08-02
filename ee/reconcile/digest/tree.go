@@ -131,7 +131,9 @@ func EmptyRoot() []byte {
 	return crypto.SHA256Sum(b.Bytes())
 }
 
-// BuildTree builds a sorted Merkle tree from pre-built leaves.
+// BuildTree builds a sorted Merkle tree from pre-built leaves. Leaf ordering is
+// total and canonical, which is what makes both inclusion and absence provable
+// against the published root (XREC-claim-9).
 func BuildTree(in []Leaf) (*Tree, error) {
 	leaves := copyLeaves(in)
 	sort.Slice(leaves, func(i, j int) bool {

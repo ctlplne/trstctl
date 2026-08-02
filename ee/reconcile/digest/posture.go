@@ -37,6 +37,9 @@ type PostureSummary struct {
 }
 
 // SummarizePosture evaluates the ordered rule set over records.
+// SummarizePosture counts records per policy rule so the signed digest body
+// carries a policy-posture summary alongside the observation watermark
+// (XREC-claim-11).
 func SummarizePosture(rules []Rule, records []canon.CanonicalRecord) (PostureSummary, error) {
 	if err := validateRules(rules); err != nil {
 		return PostureSummary{}, err

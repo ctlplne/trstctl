@@ -69,6 +69,9 @@ type majorityObservation struct {
 	digestHash   string
 }
 
+// ClassifyMajority decides, per record key, which planes agree and which must
+// conform, by three-way majority with an authoritative-plane override
+// (XREC-claim-7).
 func ClassifyMajority(req MajorityRequest) (MajorityResult, error) {
 	tenantID := strings.TrimSpace(req.TenantID)
 	spec := strings.TrimSpace(req.SpecVersion)

@@ -44,6 +44,9 @@ type RefusalRecord struct {
 	Signature    []byte           `json:"signature"`
 }
 
+// CanonicalBytes renders the signable body of a refusal. A plan that fails
+// signer-side verification produces one of these, signed, so the refusal is
+// itself evidence (XREC-claim-13).
 func (b RefusalBody) CanonicalBytes() ([]byte, error) {
 	if strings.TrimSpace(b.TenantID) == "" || strings.TrimSpace(b.FailedCheck) == "" || strings.TrimSpace(b.Reason) == "" || b.RefusedAt == 0 {
 		return nil, ErrInvalidPlan

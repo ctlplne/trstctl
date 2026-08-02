@@ -115,6 +115,7 @@ func newManager(t *testing.T, cs *corestore.Store, opts ...remediation.Option) *
 
 // TestRemediation_OutboxSameTxn proves the authorization ledger row and outbox
 // row commit or roll back together.
+// Authorization and corrective job share one transaction (XREC-claim-14).
 func TestRemediation_OutboxSameTxn(t *testing.T) {
 	cs := newStore(t)
 	ctx := context.Background()
@@ -148,6 +149,7 @@ func TestRemediation_OutboxSameTxn(t *testing.T) {
 
 // TestRemediation_IdempotentOnWitnessKey proves the same
 // (witness_hash, record_key, operation) tuple is recorded and enqueued once.
+// Idempotency keyed on the witness digest (XREC-claim-14).
 func TestRemediation_IdempotentOnWitnessKey(t *testing.T) {
 	cs := newStore(t)
 	ctx := context.Background()

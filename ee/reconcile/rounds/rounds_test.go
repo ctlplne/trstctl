@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
+// Exercises anti-entropy round scheduling (XREC-claim-3).
 func TestRounds_ScheduledPerConfig(t *testing.T) {
 	now := time.Date(2026, 7, 8, 4, 0, 0, 0, time.UTC)
 	log := &memoryLog{}
@@ -62,6 +63,7 @@ func TestRounds_ScheduledPerConfig(t *testing.T) {
 	}
 }
 
+// Exercises monotone watermark advance (XREC-claim-3).
 func TestRounds_WatermarkMonotonic(t *testing.T) {
 	tracker := rounds.NewWatermarkTracker(time.Hour)
 	base := time.Date(2026, 7, 8, 4, 0, 0, 0, time.UTC)
@@ -124,6 +126,7 @@ func TestRounds_StalenessIsDivergence(t *testing.T) {
 	}
 }
 
+// A regressed watermark becomes staleness (XREC-claims-3, 22).
 func TestRounds_RegressedWatermarkTreatedStale(t *testing.T) {
 	clock := time.Date(2026, 7, 8, 4, 0, 0, 0, time.UTC)
 	log := &memoryLog{}

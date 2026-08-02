@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// The four XREC divergence classes (XREC-claim-2).
 const (
 	ClassPresence          = "presence"
 	ClassAttributeConflict = "attribute_conflict"

@@ -21,6 +21,9 @@ func NewRegistry() *Registry {
 	return &Registry{reducers: map[string]PlaneReducer{}}
 }
 
+// Register adds one authority-plane reducer under its name. Every authority type
+// XREC observes — KMS, vault, CA, workload identity, KMIP — enters through this
+// one contract (XREC-claim-17).
 func (r *Registry) Register(name string, reducer PlaneReducer) error {
 	if name == "" {
 		return fmt.Errorf("xrec reducers: reducer name required")

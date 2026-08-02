@@ -57,6 +57,10 @@ func (t *WatermarkTracker) SetLiveness(authorityID string, liveness time.Duratio
 	t.liveness[authorityID] = liveness
 }
 
+// Advance records a new observation watermark for an authority. A watermark that
+// fails to move within the configured liveness window, or that regresses, becomes
+// a staleness divergence signal rather than being ignored
+// (XREC-claims-3, 22).
 func (t *WatermarkTracker) Advance(authorityID string, wm Watermark, observedNow time.Time) (WatermarkDecision, error) {
 	authorityID = strings.TrimSpace(authorityID)
 	wm.Position = strings.TrimSpace(wm.Position)

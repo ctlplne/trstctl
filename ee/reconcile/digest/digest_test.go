@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+// Root, policy posture and watermark in one signed body (XREC-claims-9, 11).
 func TestDigest_CommitsRootPostureWatermark(t *testing.T) {
 	base := mustBuild(t, sampleSet(t, "active", canon.SpecVersionV1), sampleRules(), "plane-a", "42")
 	baseHash := mustHash(t, base.Body)
@@ -112,6 +113,7 @@ func TestDigest_OrchestratorCannotSign(t *testing.T) {
 	}
 }
 
+// Sorted, domain-separated Merkle leaves and nodes (XREC-claim-9).
 func TestTree_DomainSeparationLeafNode(t *testing.T) {
 	set := sampleSet(t, "active", canon.SpecVersionV1)
 	tree, err := digest.BuildTreeFromSet(set)
@@ -153,6 +155,7 @@ func TestTree_DomainSeparationLeafNode(t *testing.T) {
 	}
 }
 
+// Per-rule policy-posture counts (XREC-claim-11).
 func TestPosture_PerRuleCounts(t *testing.T) {
 	set := sampleSet(t, "revoked", canon.SpecVersionV1)
 	summary, err := digest.SummarizePosture(sampleRules(), set.Records)

@@ -15,6 +15,9 @@ type Evidence struct {
 	Disputes          []DisputeRecord    `json:"disputes,omitempty"`
 }
 
+// EvidenceFromSignedWitness produces the stored evidence body. It is
+// self-contained: everything a verifier needs travels with it, so verification
+// never has to call back to either authority (XREC-claim-15).
 func EvidenceFromSignedWitness(signed SignedWitness) (Evidence, error) {
 	if err := signed.Verify(map[string]crypto.PublicKey{
 		signed.KeyID: {Algorithm: signed.Algorithm, DER: append([]byte(nil), signed.PublicKeyDER...)},

@@ -48,6 +48,9 @@ const (
 	e2eRecordStableID = "cert-revoked"
 )
 
+// TestE2E_ReconcileOfflineChain walks the full claimed method end to end —
+// observe, canonicalize, digest, witness, quarantine, remediate, verify offline
+// (XREC-claims-1, 16).
 func TestE2E_ReconcileOfflineChain(t *testing.T) {
 	h := newE2EHarness(t)
 	generatedAt := time.Now().UTC().Unix()

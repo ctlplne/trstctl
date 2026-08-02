@@ -21,7 +21,8 @@ Usage:
   scripts/ci/extract-claim-traceability.py --json out.json # machine-readable receipt
   scripts/ci/extract-claim-traceability.py --strict        # also fail on integrity findings
 
-Exit codes: 0 ok · 1 stale (--check) or integrity findings (--strict) · 2 usage error.
+Exit codes: 0 ok · 1 stale (--check), a configured family with zero citations
+(always), or integrity findings (--strict) · 2 usage error.
 
 NOTE ON QUALIFIED CITATIONS: once citations are namespaced as `PCAS-claim-5` /
 `AGID-claim-5`, this script prefers the explicit qualifier over the directory-derived
@@ -148,8 +149,16 @@ def findings(records) -> dict:
             bare_by_claim[claim].add(fam)
     collisions = sorted(c for c, fams in bare_by_claim.items() if len(fams) > 1)
 
+    # CLAIMTRACE-001. A family configured in FAMILY_BY_DIR that produced no citation
+    # at all is the failure this table exists to catch: the family is absent from
+    # every section below, so the artifact looks complete while silently omitting a
+    # whole filing. Unlike the three findings above, this one is not gated behind
+    # --strict; see main().
+    uncovered = sorted(set(FAMILY_BY_DIR.values()) - set(families))
+
     return {
         "families": families,
+        "uncovered_families": uncovered,
         "implemented_but_untested": impl_only,
         "tested_but_unimplemented": test_only,
         "implemented_only_in_doc_comments": doc_only,
@@ -215,6 +224,15 @@ def render(records, found, n_qualified, n_bare) -> str:
 
     w("## Integrity findings")
     w("")
+    if found["uncovered_families"]:
+        w("**Configured families with zero citations** — the family is configured in "
+          "`FAMILY_BY_DIR` but no file under `ee/` cites a single one of its claims, so "
+          "it is missing from every section above. This fails the gate unconditionally, "
+          "not only under `--strict`:")
+        w("")
+        for x in found["uncovered_families"]:
+            w(f"- `{x}`")
+        w("")
     if found["implemented_but_untested"]:
         w("**Implemented but no test cites the claim** — either add the citation to the "
           "test that already covers it, or the claim is not actually proven:")
@@ -315,6 +333,28 @@ def main() -> int:
         with open(args.out, "w", encoding="utf-8") as fh:
             fh.write(rendered)
         print(f"claim traceability: wrote {args.out}")
+
+    # CLAIMTRACE-001. A wholly uncited family fails the gate on its own, without
+    # --strict: a configured family that produces zero rows makes the generated table
+    # look complete while omitting an entire filing. --strict stays scoped to the
+    # three within-family findings so its meaning does not change.
+    if found["uncovered_families"]:
+        print("CLAIMTRACE-001: configured famil(ies) with zero claim citations: "
+              + ", ".join(found["uncovered_families"])
+              + " — cite those claims in ee/ or remove the family from FAMILY_BY_DIR",
+              file=sys.stderr)
+        return 1
+
+    # CLAIMTRACE-001. A wholly uncited family fails the gate on its own, without
+    # --strict: a configured family that produces zero rows makes the generated table
+    # look complete while omitting an entire filing. --strict stays scoped to the
+    # three within-family findings so its meaning does not change.
+    if found["uncovered_families"]:
+        print("CLAIMTRACE-001: configured famil(ies) with zero claim citations: "
+              + ", ".join(found["uncovered_families"])
+              + " — cite those claims in ee/ or remove the family from FAMILY_BY_DIR",
+              file=sys.stderr)
+        return 1
 
     n_findings = sum(len(found[k]) for k in
                      ("implemented_but_untested", "tested_but_unimplemented",

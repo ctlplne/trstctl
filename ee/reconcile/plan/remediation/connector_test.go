@@ -22,6 +22,7 @@ import (
 // a distinct write-scoped connector grant: the exact signer-authorized operation
 // class runs, a different operation class is recorded as denied, and the
 // observation sandbox remains read-only.
+// The remediation connector acts only within its granted classes (XREC-claim-18).
 func TestRemediationConnector_ScopedToAuthorizedClass(t *testing.T) {
 	ctx := context.Background()
 	recorder := newMemoryReceiptRecorder()

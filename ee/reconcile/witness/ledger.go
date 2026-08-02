@@ -64,6 +64,9 @@ func NewRecorder(log EventAppender, idempotencer idem.Idempotencer) *Recorder {
 	return &Recorder{log: log, idem: idempotencer}
 }
 
+// RecordWitness appends the witness-recorded event. Together with the
+// countersigned and disputed events it forms the XREC ledger vocabulary the
+// drift projection is rebuilt from (XREC-claim-19).
 func (r *Recorder) RecordWitness(ctx context.Context, idempotencyKey string, evidence Evidence) (eventspec.Event, error) {
 	if err := evidence.validateShape(); err != nil {
 		return eventspec.Event{}, err

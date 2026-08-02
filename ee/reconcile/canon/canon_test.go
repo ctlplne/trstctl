@@ -75,6 +75,7 @@ func TestCanon_GoldenVectors(t *testing.T) {
 	}
 }
 
+// Normalized attributes reduce alias forms to one value (XREC-claim-10).
 func TestCanon_AliasFormsReduceEqual(t *testing.T) {
 	base := ObservedRecord{
 		TenantID:   "tenant-a",
@@ -199,6 +200,7 @@ func TestCanon_SpecVersionBoundIntoDigest(t *testing.T) {
 	}
 }
 
+// Canonical records carry a record key and no secret material (XREC-claim-10).
 func TestNoSecrets_CanonicalRecords(t *testing.T) {
 	obs := ObservedRecord{
 		TenantID:   "tenant-a",

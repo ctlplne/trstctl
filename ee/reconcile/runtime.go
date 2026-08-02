@@ -60,6 +60,10 @@ type Runtime struct {
 // NewRuntime builds the shipped XREC runtime object graph. Authority reducers
 // are registered with nil sources so observation fails closed rather than
 // pretending an unconfigured authority is healthy.
+// NewRuntime assembles the whole XREC system — reducers, digester, round
+// scheduler, witness recorder, quarantine manager and remediation manager — into
+// the single runtime the attach seam mounts (XREC-claim-16), and drives the
+// end-to-end method it implements (XREC-claim-1).
 func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	var (
 		quarantineLog quarantine.EventAppender

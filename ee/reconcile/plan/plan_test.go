@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+// The plan is bound to the recorded witness digest (XREC-claim-13).
 func TestPlan_BindsWitnessHash(t *testing.T) {
 	fixture := mustPlanFixture(t)
 	decision, err := fixture.Gate.VerifyOperation(context.Background(), fixture.Request(t, fixture.SignedPlan, fixture.Envelope))
@@ -54,6 +55,7 @@ func TestPlan_BindsWitnessHash(t *testing.T) {
 	fixture.AssertRefusal(t, decision, plan.CheckWitnessRecorded)
 }
 
+// A failed plan verification emits a signed refusal (XREC-claim-13).
 func TestPlan_VerifyFailureEmitsSignedRefusal(t *testing.T) {
 	fixture := mustPlanFixture(t)
 	untrustedGate, err := plan.NewOperationGate(plan.GateConfig{

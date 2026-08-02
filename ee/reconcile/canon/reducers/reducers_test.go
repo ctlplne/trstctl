@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 )
 
+// Heterogeneous authority types through one reducer contract (XREC-claim-17).
 func TestReducer_VaultKMSSelfShapes(t *testing.T) {
 	ctx := context.Background()
 	tenantID := "tenant-a"
@@ -107,6 +108,7 @@ func TestReducer_VaultKMSSelfShapes(t *testing.T) {
 	}
 }
 
+// Foreign authorities are observed read-only (XREC-claim-8).
 func TestConnector_ReadOnlyNoMutation(t *testing.T) {
 	ctx := context.Background()
 	recorder := &recordingTransport{}
@@ -130,6 +132,7 @@ func TestConnector_ReadOnlyNoMutation(t *testing.T) {
 	}
 }
 
+// Observation outside the granted capability is denied (XREC-claim-8).
 func TestConnector_CapabilityGrantDenied(t *testing.T) {
 	ctx := context.Background()
 	sb := NewObservationSandbox(ReadOnlyObservationGrant("vault-prod"), &recordingTransport{})

@@ -24,6 +24,9 @@ type planeIndex struct {
 	leaves  map[string]digest.Leaf
 }
 
+// Build produces the minimal divergence witness: only diverging canonical
+// records are disclosed, and the absence proofs redact the bracketing
+// non-diverging record bodies (XREC-claim-9).
 func Build(req BuildRequest) (Body, error) {
 	if err := validateRequest(req); err != nil {
 		return Body{}, err

@@ -70,6 +70,9 @@ type DriftEventProjection struct {
 	projection *DriftProjection
 }
 
+// NewDriftProjection builds the drift-metric projection. Every counter it exposes
+// is derived by replaying ledger events, never incremented out of band, so the
+// metrics are reconstructable from the ledger alone (XREC-claim-12).
 func NewDriftProjection(window time.Duration) *DriftProjection {
 	if window <= 0 {
 		window = time.Hour

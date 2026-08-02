@@ -83,6 +83,7 @@ func TestVerify_RejectsBadDigestSignature(t *testing.T) {
 	}
 }
 
+// The verifier talks to neither authority (XREC-claim-20).
 func TestVerify_NoAuthorityCommunication(t *testing.T) {
 	assertVerifierImportsNoEgress(t)
 	fx := newOfflineFixture(t)
@@ -95,6 +96,7 @@ func TestVerify_NoAuthorityCommunication(t *testing.T) {
 	}
 }
 
+// The published vector verifies from stored bytes alone (XREC-claim-15).
 func TestVerify_PublishedConformanceVectorOffline(t *testing.T) {
 	vector := readVerifyVector(t, "presence-divergence.fixture.json")
 	fx := offlineFixtureFromVector(t, vector)
@@ -126,6 +128,7 @@ func TestVerify_PublishedConformanceVectorOffline(t *testing.T) {
 	}
 }
 
+// Verifier policy may require a countersignature (XREC-claim-21).
 func TestVerify_CountersignRequiredElseUnverified(t *testing.T) {
 	fx := newOfflineFixture(t)
 	missing := fx
@@ -144,6 +147,7 @@ func TestVerify_CountersignRequiredElseUnverified(t *testing.T) {
 	}
 }
 
+// The freshness bound is enforced (XREC-claim-22).
 func TestVerify_FreshnessBoundEnforced(t *testing.T) {
 	fx := newOfflineFixture(t)
 	req := fx.Request()
@@ -158,6 +162,7 @@ func TestVerify_FreshnessBoundEnforced(t *testing.T) {
 	}
 }
 
+// A stale watermark is surfaced to the verifier (XREC-claim-22).
 func TestVerify_StaleWatermarkFlagged(t *testing.T) {
 	fx := newOfflineFixture(t)
 	req := fx.Request()

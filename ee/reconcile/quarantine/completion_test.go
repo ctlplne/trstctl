@@ -53,6 +53,7 @@ func TestCompletion_RegenAgreesOverSubset(t *testing.T) {
 	}
 }
 
+// The reconciliation-completion record binds witness and plan (XREC-claim-5).
 func TestCompletion_RecordBindsWitnessAndPlan(t *testing.T) {
 	mgr, log, evidence := openQuarantine(t)
 	req := completionRequest(t, evidence, "shared-post-remediation")
@@ -79,6 +80,7 @@ func TestCompletion_RecordBindsWitnessAndPlan(t *testing.T) {
 	}
 }
 
+// Release happens only through a completion record (XREC-claim-5).
 func TestQuarantine_ReleasedOnlyByCompletion(t *testing.T) {
 	ctx := context.Background()
 	mgr, _, evidence := openQuarantine(t)
