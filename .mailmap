@@ -1,0 +1,32 @@
+# Canonical author identity for this repository.
+#
+# Every commit in this history is the work of one person. Eight distinct
+# author/committer identities accumulated over 1,200 commits: two spellings of a
+# GitHub handle, two email addresses for the same person, and four automation
+# identities used by local tooling. This file collapses all of them to one name,
+# so `git shortlog -sne`, `git log`, `git blame` and most review tooling show a
+# single contributor instead of a crowd.
+#
+# What this file does NOT do, stated plainly so nobody relies on it wrongly:
+# .mailmap rewrites how an identity is DISPLAYED. It does not alter the stored
+# commit objects. `git log --no-use-mailmap` still shows the original author, and
+# GitHub's commit list and REST API read the raw author and ignore .mailmap
+# entirely. Removing an identity from history rather than from its display is a
+# history rewrite, which is a separate and deliberate decision (NH-0001).
+#
+# Format: Canonical Name <canonical@email> Commit Name <commit@email>
+
+Shankar Kambam <skreddy040@gmail.com> <skreddy040@gmail.com>
+Shankar Kambam <skreddy040@gmail.com> Shankar <skreddy040@gmail.com>
+Shankar Kambam <skreddy040@gmail.com> imfeelingtheagi <skreddy040@gmail.com>
+
+# GitHub handle, both spellings, plus the noreply address it commits under.
+Shankar Kambam <skreddy040@gmail.com> imfeelingtheagi <imfeelingtheagi@users.noreply.github.com>
+Shankar Kambam <skreddy040@gmail.com> iamfeelingtheagi <imfeelingtheagi@users.noreply.github.com>
+
+# Local automation identities. These were tools run by the maintainer on the
+# maintainer's machine, not third parties, so they resolve to the same person.
+Shankar Kambam <skreddy040@gmail.com> trustctl remediation <remediation@trustctl.local>
+Shankar Kambam <skreddy040@gmail.com> trstctl-harness <harness@trstctl.local>
+Shankar Kambam <skreddy040@gmail.com> trustctl-bot <bot@trustctl.io>
+Shankar Kambam <skreddy040@gmail.com> Claude <noreply@anthropic.com>
