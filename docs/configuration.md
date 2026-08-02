@@ -1345,6 +1345,15 @@ the individual toggles below.
 | `TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED` | `false` | Require RFC 8555 External Account Binding on ACME `newAccount`; `/directory` advertises `externalAccountRequired`. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID` | — | Public EAB `kid` accepted by the ACME server. The single env shortcut configures one key; JSON config can carry multiple `protocols.acme_eab.keys`. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_HMAC_KEY` / `…_FILE` | — | Byte-backed HS256 HMAC key for the EAB `kid`; use the file form for production secret injection. |
+
+Each entry in `protocols.acme_eab.keys[]` also carries the scope that credential
+authorizes — `allowed_identifiers` (exact names or `*.suffix`, which covers the apex
+too), `max_orders`, an RFC 3339 `not_after`, and `disabled`. All are optional and a key
+with none behaves as it did before. An order outside a credential's scope, past its
+quota, or after its window is refused fail-closed and recorded. Scope has no env
+shortcut: it is per-key structured config. See
+[ACME external account bindings](features/acme-and-dns.md).
+
 | `TRSTCTL_PROTOCOLS_ACME_MAX_NONCES` | `4096` | Maximum outstanding ACME replay nonces retained by the tenant-bound ACME mount. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS` | `2048` | Maximum ACME accounts retained by the tenant-bound ACME mount. |
 | `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS` | `4096` | Maximum pending ACME orders retained before the server returns ACME `rateLimited` (429). |

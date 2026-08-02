@@ -141,6 +141,11 @@ type account struct {
 	jwk     json.RawMessage // public JWK needed to rebuild account verification after restart
 	contact []string        // RFC 8555 §7.1.2 account contact URLs (e.g. mailto:)
 	status  string          // "valid" (the only state this server tracks)
+	// eabKeyID is the external account credential that authorized this account
+	// (RFC 8555 §7.3.4, epic B4). Empty when the deployment does not use EAB.
+	// It is what every order under this account is then scoped against, so it
+	// travels in the account's state event and survives a replay.
+	eabKeyID string
 }
 
 // DirectoryMeta is the optional metadata block the ACME directory advertises
@@ -152,14 +157,6 @@ type DirectoryMeta struct {
 	Website                 string   // URL of a human-readable CA website
 	CAAIdentities           []string // hostnames the CA recognises in CAA records
 	ExternalAccountRequired bool     // require an externalAccountBinding on newAccount
-}
-
-// ExternalAccountBindingKey maps one ACME EAB kid to its HMAC key. The key is
-// copied into locked memory by WithExternalAccountBindings; callers should wipe
-// their own copy after construction.
-type ExternalAccountBindingKey struct {
-	KeyID   string
-	HMACKey []byte
 }
 
 // RevocationRequest is the authorized ACME revokeCert effect the served control
@@ -287,7 +284,7 @@ type Server struct {
 	deviceAttestNow         func() time.Time
 	stateLog                eventLog
 	stateTenantID           string
-	eabKeys                 map[string]*secret.Buffer
+	eabCredentials          map[string]*eabCredential
 
 	mux *http.ServeMux
 }
@@ -380,38 +377,38 @@ func (s *Server) WithDirectoryMeta(m DirectoryMeta) *Server {
 // (RFC 8555 §7.3.4). When required is true, newAccount must carry a valid EAB JWS.
 // Keys are copied into locked memory; call Destroy when the server is shut down.
 func (s *Server) WithExternalAccountBindings(required bool, keys []ExternalAccountBindingKey) (*Server, error) {
-	next := make(map[string]*secret.Buffer, len(keys))
+	next := make(map[string]*eabCredential, len(keys))
 	for _, key := range keys {
 		keyID := strings.TrimSpace(key.KeyID)
 		if keyID == "" {
-			destroyEABKeys(next)
+			destroyEABCredentials(next)
 			return nil, errors.New("acme: external account binding key id is required")
 		}
 		if _, dup := next[keyID]; dup {
-			destroyEABKeys(next)
+			destroyEABCredentials(next)
 			return nil, fmt.Errorf("acme: duplicate external account binding key id %q", keyID)
 		}
 		if len(key.HMACKey) < 16 {
-			destroyEABKeys(next)
+			destroyEABCredentials(next)
 			return nil, fmt.Errorf("acme: external account binding key %q must be at least 16 bytes", keyID)
 		}
 		buf, err := secret.NewFrom(key.HMACKey)
 		if err != nil {
-			destroyEABKeys(next)
+			destroyEABCredentials(next)
 			return nil, fmt.Errorf("acme: external account binding key %q: %w", keyID, err)
 		}
-		next[keyID] = buf
+		next[keyID] = &eabCredential{keyID: keyID, key: buf, policy: key.Policy}
 	}
 	if required && len(next) == 0 {
 		return nil, errors.New("acme: external account binding required with no keys")
 	}
 
 	s.mu.Lock()
-	old := s.eabKeys
-	s.eabKeys = next
+	old := s.eabCredentials
+	s.eabCredentials = next
 	s.meta.ExternalAccountRequired = required
 	s.mu.Unlock()
-	destroyEABKeys(old)
+	destroyEABCredentials(old)
 	return s, nil
 }
 
@@ -421,16 +418,16 @@ func (s *Server) Destroy() {
 		return
 	}
 	s.mu.Lock()
-	keys := s.eabKeys
-	s.eabKeys = nil
+	creds := s.eabCredentials
+	s.eabCredentials = nil
 	s.mu.Unlock()
-	destroyEABKeys(keys)
+	destroyEABCredentials(creds)
 }
 
-func destroyEABKeys(keys map[string]*secret.Buffer) {
-	for _, key := range keys {
-		if key != nil {
-			key.Destroy()
+func destroyEABCredentials(creds map[string]*eabCredential) {
+	for _, cred := range creds {
+		if cred != nil && cred.key != nil {
+			cred.key.Destroy()
 		}
 	}
 }
@@ -761,6 +758,8 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 			s.problem(w, r, http.StatusBadRequest, "externalAccountRequired", "this CA requires an external account binding")
 			return
 		}
+		boundEABKeyID := ""
+		var boundEABCredential *eabCredential
 		if len(req.ExternalAccountBinding) > 0 {
 			eab, err := jose.ParseACMEJWS(req.ExternalAccountBinding)
 			if err != nil {
@@ -769,13 +768,23 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 				return
 			}
 			keyID := strings.TrimSpace(eab.Protected.Kid)
-			eabKey := s.eabKeys[keyID]
-			if eabKey == nil {
+			cred := s.eabCredentials[keyID]
+			if cred == nil {
 				s.mu.Unlock()
 				s.problem(w, r, http.StatusUnauthorized, "unauthorized", "unknown external account binding key id")
 				return
 			}
-			macKey := eabKey.Bytes()
+			// The credential's own state gates the door before the MAC is even
+			// checked: a disabled, expired, or exhausted credential admits nothing
+			// (B4). Refusing here rather than at the first order means the client
+			// learns immediately, and the certificates already issued under this
+			// credential are untouched.
+			if ok, reason := cred.active(time.Now()); !ok {
+				s.mu.Unlock()
+				s.problem(w, r, http.StatusUnauthorized, "unauthorized", reason)
+				return
+			}
+			macKey := cred.key.Bytes()
 			if macKey == nil {
 				s.mu.Unlock()
 				s.problem(w, r, http.StatusInternalServerError, "serverInternal", "external account binding key is unavailable")
@@ -786,10 +795,14 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 				s.problem(w, r, http.StatusUnauthorized, "unauthorized", "external account binding verification failed")
 				return
 			}
+			// Keep the kid. Discarding it here is what made every admitted account
+			// identical and left nothing to scope, count, or switch off.
+			boundEABKeyID, boundEABCredential = keyID, cred
 		}
 		acct = &account{
 			id: thumb, url: baseURL(r) + "/acme/acct/" + s.nextID(), key: key,
 			jwk: copyRawMessage(msg.Protected.JWK), contact: req.Contact, status: statusValid,
+			eabKeyID: boundEABKeyID,
 		}
 		if err := s.appendStateEventLocked(r.Context(), acmeEventAccountUpserted, accountEventFrom(acct, s.seq)); err != nil {
 			s.mu.Unlock()
@@ -798,6 +811,9 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 		}
 		s.byKey[thumb] = acct
 		s.accounts[acct.url] = acct
+		if boundEABCredential != nil {
+			boundEABCredential.recordAccountBound(time.Now())
+		}
 	} else if len(req.Contact) > 0 {
 		// Update contact on a returning registration (§7.3.2 allows contact update).
 		updated := *acct
@@ -838,6 +854,19 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	req, err := ParseOrderRequest(msg.Payload)
 	if err != nil {
 		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
+		return
+	}
+	// The credential that admitted this account decides what it may ask for
+	// (B4). This runs before any work is done and before any rate limiter, so a
+	// denial costs nothing and is recorded against the credential rather than
+	// disappearing into a generic rejection.
+	eabCred, eabDenial := s.authorizeOrderAgainstEAB(acct, req)
+	if eabDenial != "" {
+		if eabCred != nil {
+			eabCred.recordDenial(time.Now())
+		}
+		s.recordEABOrderDenial(r.Context(), acct, req, eabDenial)
+		s.problem(w, r, http.StatusForbidden, "unauthorized", eabDenial)
 		return
 	}
 	if s.quota.MaxNewOrdersPerAccount > 0 && s.accountLimiter != nil {
@@ -943,6 +972,12 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	s.orders[o.id] = o
 	orderURL := base + "/acme/order/" + o.id
 	s.mu.Unlock()
+
+	// Count the order against the credential only once it exists, so a rejected
+	// or failed order does not consume quota an operator granted (B4).
+	if eabCred != nil {
+		eabCred.recordOrder(time.Now())
+	}
 
 	w.Header().Set("Location", orderURL)
 	writeJSON(w, http.StatusCreated, s.orderJSON(base, o, authzURLs))

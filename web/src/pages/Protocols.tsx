@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { ARIPosturePanel } from "@/pages/protocols/ARIPosturePanel";
+import { EABCredentialsPanel } from "@/pages/protocols/EABCredentialsPanel";
 import {
   api,
   ApiError,
@@ -364,6 +365,7 @@ export function Protocols() {
       </section>
 
       <ARIPosturePanel />
+      <EABCredentialsPanel />
 
       <section aria-labelledby="dns-provider-heading">
         <h2 id="dns-provider-heading" className="mb-3 text-title font-semibold">

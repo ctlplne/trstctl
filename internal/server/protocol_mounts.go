@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
@@ -293,7 +294,23 @@ func acmeExternalAccountBindingKeys(cfg config.ACMEExternalAccountBinding) ([]ac
 			raw = append(raw[:0], bytes.TrimSpace(data)...)
 			secret.Wipe(data)
 		}
-		keys = append(keys, acme.ExternalAccountBindingKey{KeyID: in.KeyID, HMACKey: raw})
+		notAfter, err := in.NotAfterTime()
+		if err != nil {
+			destroyACMEEABKeyCopies(keys)
+			secret.Wipe(raw)
+			return nil, fmt.Errorf("protocols.acme_eab key %q not_after: %w", in.KeyID, err)
+		}
+		keys = append(keys, acme.ExternalAccountBindingKey{
+			KeyID: in.KeyID, HMACKey: raw,
+			// The scope travels with the key so a credential is an authorization
+			// rather than a doorbell (B4).
+			Policy: acme.EABPolicy{
+				AllowedIdentifiers: append([]string(nil), in.AllowedIdentifiers...),
+				MaxOrders:          in.MaxOrders,
+				NotAfter:           notAfter,
+				Disabled:           in.Disabled,
+			},
+		})
 	}
 	return keys, nil
 }
@@ -876,4 +893,51 @@ func (s *Server) spiffeJWTSigner(ctx context.Context, c *signing.Client) (crypto
 	}
 	return s.generatePrivilegedKeyHandle(ctx, c, crypto.ECDSAP256, spiffeJWTHandle,
 		[]signing.KeyPurpose{signing.PurposeGeneric}, signing.PurposeGeneric)
+}
+
+// acmeEABPosture reads the mounted ACME server's external account binding state
+// for a tenant (B4). It is a read-time seam rather than a value captured at
+// construction because API construction precedes protocol construction, and
+// because the counters it exposes are live.
+//
+// The tenant check is the AN-1 boundary for this surface: one ACME mount binds
+// one tenant, so a caller authenticated for a different tenant sees an unserved
+// posture rather than another tenant's credentials.
+func (s *Server) acmeEABPosture(_ context.Context, tenantID string) (api.ACMEEABPosture, error) {
+	out := api.ACMEEABPosture{GeneratedAt: time.Now().UTC(), Items: []api.ACMEEABCredential{}}
+	sp := s.protocols
+	if sp == nil || sp.acme == nil || sp.acmeTenant == "" || sp.acmeTenant != tenantID {
+		return out, nil
+	}
+	out.Served = true
+	out.Required = sp.acme.ExternalAccountRequired()
+	for _, cred := range sp.acme.EABCredentials() {
+		out.Items = append(out.Items, toAPIACMEEABCredential(cred))
+	}
+	return out, nil
+}
+
+// setACMEEABDisabled applies an operator's runtime enable/disable decision to one
+// credential on this tenant's ACME mount.
+func (s *Server) setACMEEABDisabled(_ context.Context, tenantID, keyID string, disabled bool) (api.ACMEEABCredential, bool, error) {
+	sp := s.protocols
+	if sp == nil || sp.acme == nil || sp.acmeTenant == "" || sp.acmeTenant != tenantID {
+		return api.ACMEEABCredential{}, false, nil
+	}
+	status, ok := sp.acme.SetEABDisabled(keyID, disabled)
+	if !ok {
+		return api.ACMEEABCredential{}, false, nil
+	}
+	return toAPIACMEEABCredential(status), true, nil
+}
+
+func toAPIACMEEABCredential(in acme.EABCredentialStatus) api.ACMEEABCredential {
+	return api.ACMEEABCredential{
+		KeyID: in.KeyID, State: in.State, Reason: in.Reason,
+		AllowedIdentifiers: append([]string(nil), in.AllowedIdentifiers...),
+		MaxOrders:          in.MaxOrders, NotAfter: in.NotAfter,
+		AccountsBound: in.AccountsBound, OrdersCreated: in.OrdersCreated, OrdersDenied: in.OrdersDenied,
+		DisabledInConfig: in.DisabledInConfig, DisabledByOperator: in.DisabledByOperator,
+		LastUsedAt: in.LastUsedAt,
+	}
 }

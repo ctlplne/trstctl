@@ -528,6 +528,94 @@
         },
         "type": "object"
       },
+      "ACMEEABCredential": {
+        "properties": {
+          "accounts_bound": {
+            "type": "integer"
+          },
+          "allowed_identifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "disabled_by_operator": {
+            "type": "boolean"
+          },
+          "disabled_in_config": {
+            "type": "boolean"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "max_orders": {
+            "type": "integer"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "orders_created": {
+            "type": "integer"
+          },
+          "orders_denied": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "disabled",
+              "expired",
+              "exhausted"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "state",
+          "accounts_bound",
+          "orders_created",
+          "orders_denied",
+          "disabled_in_config",
+          "disabled_by_operator"
+        ],
+        "type": "object"
+      },
+      "ACMEEABPosture": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEEABCredential"
+            },
+            "type": "array"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "served": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "served",
+          "required",
+          "generated_at",
+          "items"
+        ],
+        "type": "object"
+      },
       "AIAnswer": {
         "properties": {
           "citations": {
@@ -20034,6 +20122,187 @@
         ],
         "summary": "List served ACME DNS-01 provider coverage",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/acme/eab-credentials": {
+      "get": {
+        "operationId": "listACMEEABCredentials",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEEABPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List served ACME external account binding credentials with their scope and usage",
+        "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/acme/eab-credentials/{kid}/disable": {
+      "post": {
+        "operationId": "disableACMEEABCredential",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ACME external account binding key id",
+            "in": "path",
+            "name": "kid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEEABCredential"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Stop new ACME accounts and orders under an external account binding credential",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/acme/eab-credentials/{kid}/enable": {
+      "post": {
+        "operationId": "enableACMEEABCredential",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ACME external account binding key id",
+            "in": "path",
+            "name": "kid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEEABCredential"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Re-enable an operator-disabled ACME external account binding credential",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/agents": {

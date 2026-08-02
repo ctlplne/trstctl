@@ -86,11 +86,13 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 			out[opID] = true
 		}
 	}
-	// The discovery coverage surface raised this to 298.
+	// The discovery coverage surface raised this to 298; the ACME external
+	// account binding operator surface (B4: list, disable, enable) raised it to
+	// 301 and is mapped onto F5 in the same change.
 	// The count is a deliberate ratchet: every new operation must be mapped to
 	// a feature-catalog row in the same change.
-	if len(out) != 298 {
-		t.Fatalf("OpenAPI operationIds = %d, want 298", len(out))
+	if len(out) != 301 {
+		t.Fatalf("OpenAPI operationIds = %d, want 301", len(out))
 	}
 	return out
 }

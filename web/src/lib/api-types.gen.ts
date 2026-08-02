@@ -140,6 +140,28 @@ export interface ACMEDeviceAttestationPolicy {
   max_age?: string;
 }
 
+export interface ACMEEABCredential {
+  accounts_bound: number;
+  allowed_identifiers?: string[];
+  disabled_by_operator: boolean;
+  disabled_in_config: boolean;
+  key_id: string;
+  last_used_at?: string;
+  max_orders?: number;
+  not_after?: string;
+  orders_created: number;
+  orders_denied: number;
+  reason?: string;
+  state: "active" | "disabled" | "expired" | "exhausted";
+}
+
+export interface ACMEEABPosture {
+  generated_at: string;
+  items: ACMEEABCredential[];
+  required: boolean;
+  served: boolean;
+}
+
 export interface AIAnswer {
   citations?: string[];
   grounded?: boolean;

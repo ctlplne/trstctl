@@ -24,6 +24,8 @@ public final class OpenApiSchemas {
       "ACMEDNS01ProviderConfigList",
       "ACMEDNS01ProviderConfigRequest",
       "ACMEDeviceAttestationPolicy",
+      "ACMEEABCredential",
+      "ACMEEABPosture",
       "AIAnswer",
       "AIQueryRequest",
       "AIStatus",

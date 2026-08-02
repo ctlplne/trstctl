@@ -186,6 +186,36 @@ ACMEDeviceAttestationPolicy = TypedDict(
     total=False,
 )
 
+ACMEEABCredential = TypedDict(
+    'ACMEEABCredential',
+    {
+        'accounts_bound': int,
+        'allowed_identifiers': list[str],
+        'disabled_by_operator': bool,
+        'disabled_in_config': bool,
+        'key_id': str,
+        'last_used_at': str,
+        'max_orders': int,
+        'not_after': str,
+        'orders_created': int,
+        'orders_denied': int,
+        'reason': str,
+        'state': str,
+    },
+    total=False,
+)
+
+ACMEEABPosture = TypedDict(
+    'ACMEEABPosture',
+    {
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'required': bool,
+        'served': bool,
+    },
+    total=False,
+)
+
 AIAnswer = TypedDict(
     'AIAnswer',
     {

@@ -123,6 +123,8 @@ type API struct {
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
 	acmeCAAResolver           acmesrv.CAAResolver
 	acmeARIPosture            ACMEARIPostureProvider
+	acmeEAB                   ACMEEABProvider
+	acmeEABDisable            ACMEEABDisabler
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
 	kubernetesCSRPosture      KubernetesPostureReader
@@ -204,6 +206,8 @@ type config struct {
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
 	acmeCAAResolver           acmesrv.CAAResolver
 	acmeARIPosture            ACMEARIPostureProvider
+	acmeEAB                   ACMEEABProvider
+	acmeEABDisable            ACMEEABDisabler
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
 	kubernetesCSRPosture      KubernetesPostureReader
@@ -461,6 +465,8 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
 		acmeCAAResolver:           cfg.acmeCAAResolver,
 		acmeARIPosture:            cfg.acmeARIPosture,
+		acmeEAB:                   cfg.acmeEAB,
+		acmeEABDisable:            cfg.acmeEABDisable,
 		featureObserver:           cfg.featureObserver,
 		privacyRetentionPolicy:    policy.WithDefaults(),
 		privacyRetentionSource:    cfg.privacyRetentionSource,
@@ -814,6 +820,7 @@ func (a *API) routes() []route {
 	caCeremonyPath := []param{pathUUID("id")}
 	caAuthorityPath := []param{pathUUID("id")}
 	dns01ProviderConfigPath := []param{pathUUID("id")}
+	acmeEABKeyPath := []param{pathString("kid", "ACME external account binding key id")}
 	externalCAPath := []param{pathString("id", "configured external CA registry id")}
 	notificationChannelPath := []param{pathString("id", "notification channel id")}
 	notificationRoutingPolicyPath := []param{pathUUID("id")}
@@ -1073,6 +1080,9 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/lifecycle/endpoint-bindings", opID: "createEndpointBinding", summary: "Create an automated enrollment-to-endpoint binding", handler: a.createEndpointBinding, reqSchema: "EndpointBindingRequest", resSchema: "EndpointBinding", successCode: "201", mutation: true, perm: authz.ConnectorsWrite},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
+		{method: "GET", path: "/api/v1/acme/eab-credentials", opID: "listACMEEABCredentials", summary: "List served ACME external account binding credentials with their scope and usage", handler: a.listACMEEABCredentials, resSchema: "ACMEEABPosture", successCode: "200", perm: authz.IssuersRead},
+		{method: "POST", path: "/api/v1/acme/eab-credentials/{kid}/disable", opID: "disableACMEEABCredential", summary: "Stop new ACME accounts and orders under an external account binding credential", handler: a.setACMEEABCredentialDisabled, pathParams: acmeEABKeyPath, resSchema: "ACMEEABCredential", successCode: "200", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/acme/eab-credentials/{kid}/enable", opID: "enableACMEEABCredential", summary: "Re-enable an operator-disabled ACME external account binding credential", handler: a.setACMEEABCredentialDisabled, pathParams: acmeEABKeyPath, resSchema: "ACMEEABCredential", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/acme/ari/posture", opID: "getACMEARIPosture", summary: "Get ACME Renewal Information publication and lifecycle-consumption posture", handler: a.getACMEARIPosture, query: page, resSchema: "ACMEARIPosture", successCode: "200", perm: authz.LifecycleRead},
 
 		{method: "POST", path: "/api/v1/incidents/executions", opID: "executeIncident", summary: "Execute a credential-compromise incident remediation", handler: a.executeIncident, reqSchema: "IncidentExecutionRequest", resSchema: "IncidentExecution", successCode: "201", mutation: true, perm: authz.IncidentsWrite},

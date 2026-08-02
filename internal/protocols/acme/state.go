@@ -39,6 +39,11 @@ type acmeAccountEvent struct {
 	JWK     json.RawMessage `json:"jwk"`
 	Contact []string        `json:"contact,omitempty"`
 	Status  string          `json:"status"`
+	// EABKeyID records which external account credential authorized this account
+	// (epic B4). Omitted for accounts created without EAB, and absent from events
+	// written before B4 — a replayed pre-B4 account comes back unscoped, which is
+	// what it was.
+	EABKeyID string `json:"eab_key_id,omitempty"`
 }
 
 type acmeOrderState struct {
@@ -229,6 +234,10 @@ func (s *Server) applyAccountEventLocked(payload acmeAccountEvent) error {
 	if acct.status == "" {
 		acct.status = statusValid
 	}
+	// The authorizing credential is part of the account's identity: without it a
+	// replayed account would come back unscoped and its next order would escape
+	// the policy it was admitted under (B4).
+	acct.eabKeyID = payload.EABKeyID
 	s.accounts[acct.url] = acct
 	if oldID != "" && oldID != acct.id {
 		delete(s.byKey, oldID)
@@ -364,12 +373,13 @@ func (s *Server) applyEarlyRenewalEventLocked(payload acmeEarlyRenewalEvent) err
 
 func accountEventFrom(acct *account, seq int) acmeAccountEvent {
 	return acmeAccountEvent{
-		Seq:     seq,
-		ID:      acct.id,
-		URL:     acct.url,
-		JWK:     copyRawMessage(acct.jwk),
-		Contact: append([]string(nil), acct.contact...),
-		Status:  acct.status,
+		Seq:      seq,
+		ID:       acct.id,
+		URL:      acct.url,
+		JWK:      copyRawMessage(acct.jwk),
+		Contact:  append([]string(nil), acct.contact...),
+		Status:   acct.status,
+		EABKeyID: acct.eabKeyID,
 	}
 }
 

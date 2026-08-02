@@ -474,6 +474,70 @@ export const messages = {
     defaultMessage: "Delivery & scanning",
     description: "Secrets space navigation group: sync targets and CI secret scanning.",
   },
+  "discovery.ct.alertChannels": {
+    defaultMessage: "{count} alert channels",
+    description: "C5: how many notification channels an unexpected-issuance alert would reach.",
+  },
+  "discovery.ct.cadence": {
+    defaultMessage: "Batch size",
+    description: "C5: how many CT log entries one run fetches per log.",
+  },
+  "discovery.ct.coverageHonesty": {
+    defaultMessage: "This covers only the domains and logs configured below. It is not automatic estate-wide coverage: a domain you have not listed, or a log you do not poll, produces no finding.",
+    description: "C5 coverage honesty: states the boundary of CT monitoring so an empty finding list is not read as an all-clear.",
+  },
+  "discovery.ct.description": {
+    defaultMessage: "Know the moment anyone issues a certificate for your domains, anywhere. trstctl polls the RFC 6962 logs you configure, checkpoints each one, and raises an unexpected-issuance finding for a watched domain it did not expect.",
+    description: "C5: what CT monitoring does, in the terms an operator would search for.",
+  },
+  "discovery.ct.heading": {
+    defaultMessage: "Certificate Transparency monitoring",
+    description: "C5: heading of the headline CT monitoring surface on the Discovery workspace.",
+  },
+  "discovery.ct.investigate": {
+    defaultMessage: "Investigate",
+    description: "C5: one-click hand-off from an unexpected-issuance finding to the rogue-certificate remediation path.",
+  },
+  "discovery.ct.logHealth": {
+    defaultMessage: "Log checkpoints",
+    description: "C5: heading for per-log checkpoint state.",
+  },
+  "discovery.ct.logs": {
+    defaultMessage: "CT logs",
+    description: "C5: label for the RFC 6962 logs polled.",
+  },
+  "discovery.ct.neverPolled": {
+    defaultMessage: "never polled",
+    description: "C5: a configured log with no checkpoint yet.",
+  },
+  "discovery.ct.nextIndex": {
+    defaultMessage: "next index {value}",
+    description: "C5: the checkpoint position CT monitoring has reached in one log.",
+  },
+  "discovery.ct.noFindings": {
+    defaultMessage: "No unexpected issuance for the watched domains, in the logs configured.",
+    description: "C5: empty state that restates the boundary rather than implying a clean estate.",
+  },
+  "discovery.ct.notConfigured": {
+    defaultMessage: "No CT monitoring source is configured yet. Add the domains you own and at least one RFC 6962 log.",
+    description: "C5: empty state before any CT watchlist exists.",
+  },
+  "discovery.ct.openFindings": {
+    defaultMessage: "{count} open",
+    description: "C5: open unexpected-issuance findings awaiting triage.",
+  },
+  "discovery.ct.save": {
+    defaultMessage: "Save and run now",
+    description: "C5: saves the CT watchlist and queues a run in one action.",
+  },
+  "discovery.ct.unexpectedIssuance": {
+    defaultMessage: "Unexpected issuance",
+    description: "C5: heading for findings where a certificate was issued for a watched domain that trstctl did not expect.",
+  },
+  "discovery.ct.watchedDomains": {
+    defaultMessage: "Watched domains",
+    description: "C5: label for the domains CT monitoring watches.",
+  },
   "discovery.tabs.findings": {
     defaultMessage: "Findings",
     description: "Discovery page tab: findings table plus CT/drift/monitoring posture.",
@@ -5329,6 +5393,78 @@ export const messages = {
   "protocols.dns01.configEmpty": {
     defaultMessage: "No provider configs were returned.",
     description: "Empty-state message for DNS-01 provider configuration table.",
+  },
+  "protocols.eab.accountsBound": {
+    defaultMessage: "{count} accounts",
+    description: "B4: how many ACME accounts this credential has admitted.",
+  },
+  "protocols.eab.description": {
+    defaultMessage: "Each credential is an authorization, not just a door key: an account remembers which credential admitted it, and every order under that account is checked against the credential's scope. Disabling one stops new accounts and orders under it and leaves certificates already issued under it valid.",
+    description: "B4: explains what an external account binding credential controls and what disabling one does and does not do.",
+  },
+  "protocols.eab.disable": {
+    defaultMessage: "Disable",
+    description: "B4: action that stops new accounts and orders under one credential.",
+  },
+  "protocols.eab.enable": {
+    defaultMessage: "Enable",
+    description: "B4: action that resumes an operator-disabled credential.",
+  },
+  "protocols.eab.heading": {
+    defaultMessage: "External account bindings",
+    description: "B4: heading of the ACME external-account-binding operator panel.",
+  },
+  "protocols.eab.keyID": {
+    defaultMessage: "Key ID",
+    description: "B4: column header for the EAB credential's kid.",
+  },
+  "protocols.eab.listLabel": {
+    defaultMessage: "External account binding credentials",
+    description: "B4: accessible label for the external-account-binding credential grid.",
+  },
+  "protocols.eab.noQuota": {
+    defaultMessage: "No order quota",
+    description: "B4: shown when a credential caps no number of orders.",
+  },
+  "protocols.eab.notConfigured": {
+    defaultMessage: "This ACME mount has no external account binding credentials configured.",
+    description: "B4: honest empty state distinguishing 'no credentials' from 'ACME not mounted'.",
+  },
+  "protocols.eab.ordersCreated": {
+    defaultMessage: "{count} orders",
+    description: "B4: how many orders have been created under this credential.",
+  },
+  "protocols.eab.ordersDenied": {
+    defaultMessage: "{count} denied",
+    description: "B4: how many orders this credential's scope refused \u2014 the signal that a credential is being used for work it was not granted.",
+  },
+  "protocols.eab.quota": {
+    defaultMessage: "{used} of {max} orders",
+    description: "B4: order quota consumed against a credential's limit.",
+  },
+  "protocols.eab.required": {
+    defaultMessage: "External account binding is required for new accounts",
+    description: "B4: shown when the ACME directory advertises externalAccountRequired.",
+  },
+  "protocols.eab.rotation": {
+    defaultMessage: "Rotation is a configuration operation: add the new key id to protocols.acme_eab, then disable the old one here while clients migrate. trstctl does not mint external account credentials over the API, because that would mean returning a shared MAC secret in a response.",
+    description: "B4: states plainly that credential rotation stays in configuration, rather than implying an API that mints shared secrets.",
+  },
+  "protocols.eab.scope": {
+    defaultMessage: "Scope",
+    description: "B4: column header for the identifiers and quota a credential authorizes.",
+  },
+  "protocols.eab.unavailable": {
+    defaultMessage: "ACME is not mounted for this tenant, so there is no external account binding state to show.",
+    description: "B4: distinguishes an unmounted ACME server from a mounted one with no credentials, so an empty panel is never ambiguous.",
+  },
+  "protocols.eab.unscoped": {
+    defaultMessage: "Unscoped \u2014 any identifier this server would allow",
+    description: "B4: shown when a credential sets no allowed identifiers, so the scope is whatever the server would otherwise allow.",
+  },
+  "protocols.eab.usage": {
+    defaultMessage: "Usage",
+    description: "B4: column header for accounts bound, orders created, and orders denied under a credential.",
   },
   "protocols.mdm.heading": {
     defaultMessage: "Intune / MDM SCEP policies",

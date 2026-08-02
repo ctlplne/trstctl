@@ -1130,6 +1130,10 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// scheduler uses, so the "renew/re-key by" date it shows and the alert an
 	// operator receives are answering the same question.
 	*defaults = append(*defaults, api.WithCALeafValidity(s.lifecycleLeafValidity))
+	// B4: the ACME external-account-binding operator surface. Read at request
+	// time because protocol construction follows API construction, and because
+	// the usage counters it exposes are live.
+	*defaults = append(*defaults, api.WithACMEEAB(s.acmeEABPosture, s.setACMEEABDisabled))
 	// B-5: the console's system readout reuses the same probes as /readyz, so
 	// the two can never disagree about whether the spine is up.
 	*defaults = append(*defaults, api.WithSystemReadout(func() api.SystemReadout {

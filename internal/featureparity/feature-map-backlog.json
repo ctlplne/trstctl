@@ -3490,15 +3490,21 @@
       ],
       "source_backend": [
         "/directory",
-        "/acme/*"
+        "/acme/*",
+        "internal/protocols/acme/eab.go",
+        "internal/api/acme_eab.go"
       ],
       "source_frontend": [
         "web/src/pages/Protocols.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
+      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. B4 adds the external-account-binding operator surface: GET /api/v1/acme/eab-credentials serves each configured credential's scope, quota, validity window and live usage without the HMAC key, and POST .../{kid}/disable|enable stops or resumes new accounts and orders under one credential without touching certificates already issued under it. Proven by TestServedACMEEABScopingAndDisable.",
+      "api_surface": [
+        "listACMEEABCredentials",
+        "disableACMEEABCredential",
+        "enableACMEEABCredential"
+      ],
+      "api_na": "",
       "cli_surface": [],
       "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
       "facet_evidence": {
@@ -3526,7 +3532,18 @@
           "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
         },
         "api": {
-          "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "OpenAPI operationId listACMEEABCredentials serves GET /api/v1/acme/eab-credentials with issuers:read and the ACMEEABPosture schema: each configured external account credential's scope, order quota, validity window, operator/config disable state, and live accounts-bound / orders-created / orders-denied counters.",
+            "OpenAPI operationIds disableACMEEABCredential and enableACMEEABCredential serve POST /api/v1/acme/eab-credentials/{kid}/disable and /enable with issuers:write and the ACMEEABCredential schema; disabling stops new accounts and new orders under one credential and leaves certificates already issued under it valid.",
+            "No response field carries the credential's HMAC key in any form; the secret stays byte-backed in locked memory where configuration put it (AN-8), and rotation remains a configuration operation rather than an API that mints shared MAC secrets."
+          ],
+          "refs": [
+            "internal/api/acme_eab.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json",
+            "internal/protocols/acme/eab.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -3561,10 +3578,13 @@
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps listACMEEABCredentials to issuers:read and disableACMEEABCredential/enableACMEEABCredential to issuers:write; each route also requires authenticated tenant context, and the provider serves an unserved posture rather than another tenant's credentials when the caller's tenant is not the one bound to the ACME mount.",
             "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "The public ACME protocol endpoints and the authenticated external-account-binding operator routes retain separate, explicit authorization rationales."
           ],
           "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
             "internal/server/protocol_authz.go",
             "internal/server/protocol_authz_test.go",
             "internal/server/protocols_served_test.go"
@@ -7077,7 +7097,7 @@
         "web/src/pages/Posture.tsx"
       ],
       "status": "closed",
-      "notes": "PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. Test evidence: internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; ee/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback. B-3 adds the licensed planner: POST /api/v1/pqc/migrations/plan previews the SAME BuildPlan the start path executes — reissues, TLS rollouts, and the residuals it will NOT touch — without queueing a run, so a fleet-wide re-issuance can be reviewed for blast radius before it is authorized.",
+      "notes": "PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. Test evidence: internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; ee/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback. B-3 adds the licensed planner: POST /api/v1/pqc/migrations/plan previews the SAME BuildPlan the start path executes \u2014 reissues, TLS rollouts, and the residuals it will NOT touch \u2014 without queueing a run, so a fleet-wide re-issuance can be reviewed for blast radius before it is authorized.",
       "api_surface": [
         "createProfile",
         "listProfiles",

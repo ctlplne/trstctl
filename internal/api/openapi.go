@@ -320,6 +320,28 @@ func componentSchemas() map[string]*Schema {
 	// not_after, so it is a judgment about now rather than a stored value that
 	// would be wrong tomorrow. An authority with no recorded expiry carries no
 	// horizon at all rather than a fabricated one.
+	// The ACME external account binding operator surface (B4). No field here
+	// carries the HMAC key in any form — the credential's secret stays byte-backed
+	// in locked memory where configuration put it (AN-8).
+	acmeEABCredential := object(map[string]*Schema{
+		"key_id":               str(),
+		"state":                {Type: "string", Enum: []string{"active", "disabled", "expired", "exhausted"}},
+		"reason":               str(),
+		"allowed_identifiers":  {Type: "array", Items: str()},
+		"max_orders":           {Type: "integer"},
+		"not_after":            timestamp(),
+		"accounts_bound":       {Type: "integer"},
+		"orders_created":       {Type: "integer"},
+		"orders_denied":        {Type: "integer"},
+		"disabled_in_config":   {Type: "boolean"},
+		"disabled_by_operator": {Type: "boolean"},
+		"last_used_at":         timestamp(),
+	}, "key_id", "state", "accounts_bound", "orders_created", "orders_denied", "disabled_in_config", "disabled_by_operator")
+	acmeEABPosture := object(map[string]*Schema{
+		"served": {Type: "boolean"}, "required": {Type: "boolean"},
+		"generated_at": timestamp(),
+		"items":        {Type: "array", Items: ref("ACMEEABCredential")},
+	}, "served", "required", "generated_at", "items")
 	caAuthorityHorizon := object(map[string]*Schema{
 		"band_months": {Type: "integer"}, "months_remaining": {Type: "integer"},
 		"severity":            {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
@@ -3960,6 +3982,8 @@ func componentSchemas() map[string]*Schema {
 		"CAOfflineRootRekey":                       caOfflineRootRekey,
 		"CAAuthority":                              caAuthority,
 		"CAAuthorityHorizon":                       caAuthorityHorizon,
+		"ACMEEABCredential":                        acmeEABCredential,
+		"ACMEEABPosture":                           acmeEABPosture,
 		"CAAuthorityList":                          list("CAAuthority"),
 		"CADiscoveryItem":                          caDiscoveryItem,
 		"CADiscoverySummary":                       caDiscoverySummary,

@@ -19,6 +19,8 @@ import type {
   AccessChangeRequestCreateRequest,
   AccessChangeRequestList,
   ACMEARIPosture,
+  ACMEEABCredential,
+  ACMEEABPosture,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
   ACMEDNS01ProviderCatalog,
@@ -485,6 +487,8 @@ export type {
   AccessChangeRequestCreateRequest,
   AccessChangeRequestList,
   ACMEARIPosture,
+  ACMEEABCredential,
+  ACMEEABPosture,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
   ACMEDNS01ProviderCatalog,
@@ -1171,6 +1175,8 @@ export interface Api {
   ctMonitoring(): Promise<CTMonitoring>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
+  acmeEABCredentials(): Promise<ACMEEABPosture>;
+  setACMEEABCredentialDisabled(kid: string, disabled: boolean): Promise<ACMEEABCredential>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   acmeDNS01ProviderConfigs(): Promise<ACMEDNS01ProviderConfigList>;
   getCertificate(id: string): Promise<Certificate>;
@@ -1487,6 +1493,9 @@ const liveApi: Api = {
     const suffix = qs.toString();
     return req<ACMEARIPosture>(`/api/v1/acme/ari/posture${suffix ? `?${suffix}` : ""}`);
   },
+  acmeEABCredentials: () => req<ACMEEABPosture>("/api/v1/acme/eab-credentials"),
+  setACMEEABCredentialDisabled: (kid, disabled) =>
+    mutate<ACMEEABCredential>("POST", `/api/v1/acme/eab-credentials/${encodeURIComponent(kid)}/${disabled ? "disable" : "enable"}`, {}),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
   mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),

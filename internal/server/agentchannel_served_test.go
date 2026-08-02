@@ -827,13 +827,29 @@ func TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd(t *testing.T) {
 			privateKeyBytes bool
 		}{cap.ReportedOver, cap.MetadataOnly, cap.PrivateKeyBytes}
 	}
-	for _, want := range []string{"filesystem", "pkcs11", "windows-store", "k8s-secret", "trust-store", "private-key", "ssh"} {
-		got, ok := caps[want]
+	// Advertised capability is what the agent binary can collect, not the full
+	// set of kinds the collector boundary declares. This list used to name all
+	// seven, including three with no enumerator in the binary, which is how an
+	// operator concluded their Windows estate was being inventoried
+	// (truth-integrity 1). It is derived from the same source the API advertises
+	// from, so the two cannot drift.
+	shipped := agentdiscovery.ShippedSourceKinds()
+	if len(caps) != len(shipped) {
+		t.Fatalf("agent API advertises %d source kinds, want the %d the agent binary ships: %+v",
+			len(caps), len(shipped), agents.Agents[0].DiscoveryCapabilities)
+	}
+	for _, want := range shipped {
+		got, ok := caps[want.Kind]
 		if !ok {
-			t.Fatalf("agent API missing CAP-DISC-02 source kind %s in %+v", want, agents.Agents[0].DiscoveryCapabilities)
+			t.Fatalf("agent API missing shipped source kind %s in %+v", want.Kind, agents.Agents[0].DiscoveryCapabilities)
 		}
 		if got.reportedOver != "agent.mtls.ReportInventory" || !got.metadataOnly || got.privateKeyBytes {
-			t.Fatalf("unsafe CAP-DISC-02 source capability %s: %+v", want, got)
+			t.Fatalf("unsafe CAP-DISC-02 source capability %s: %+v", want.Kind, got)
+		}
+	}
+	for _, unshipped := range agentdiscovery.UnshippedSourceKinds() {
+		if _, ok := caps[unshipped]; ok {
+			t.Fatalf("agent API advertises %q, which the agent binary builds no enumerator for", unshipped)
 		}
 	}
 

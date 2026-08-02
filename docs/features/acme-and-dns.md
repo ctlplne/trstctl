@@ -49,6 +49,30 @@ When `protocols.acme_eab.required` is on, the directory advertises
 binding is checked as an HS256 JWS over the account JWK using the configured `kid` and
 HMAC key.
 
+**A credential is an authorization, not just a door key.** The account remembers which
+`kid` admitted it, and every order under that account is checked against that
+credential's scope. A credential in `protocols.acme_eab.keys[]` may carry
+`allowed_identifiers` (exact names, or `*.example.com`, which covers the apex and
+anything beneath it), `max_orders`, an RFC 3339 `not_after`, and `disabled`. An order
+for an identifier outside the scope is refused fail-closed, names the identifier and
+the credential, and records an `acme.eab.order_denied` event; one out-of-scope
+identifier refuses the whole order. A credential with none of those fields behaves
+exactly as it did before.
+
+The mechanism: `GET /api/v1/acme/eab-credentials` serves each credential's scope,
+quota, window, and live accounts-bound / orders-created / orders-denied counters, and
+`POST /api/v1/acme/eab-credentials/{kid}/disable` (or `/enable`) stops or resumes new
+accounts and orders under one credential at runtime — the verb you want when a
+credential leaks, because it takes effect immediately and leaves certificates already
+issued under it valid. The Protocols console shows the same list with the same action.
+
+The exact contract: the served response carries no HMAC key in any encoding, and there
+is no API that mints one — **rotation is a configuration operation**: add the new key
+id to `protocols.acme_eab.keys`, then disable the old one while clients migrate. The
+served disable verb cannot re-enable a credential that configuration disables; config
+is the floor. Binding a credential to a certificate profile is not available, because
+the ACME server does not select profiles.
+
 The default ACME profile mode is full public-trust domain validation. For internal PKI,
 a profile can explicitly set `trust_authenticated`: an already-authenticated internal
 ACME account can move an order straight to ready without a DV challenge, while

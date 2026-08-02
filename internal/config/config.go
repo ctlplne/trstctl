@@ -808,13 +808,43 @@ type ACMEExternalAccountBinding struct {
 	Keys     []ACMEExternalAccountBindingKey `json:"keys,omitempty"`
 }
 
-// ACMEExternalAccountBindingKey maps one ACME EAB kid to its HMAC key. Operators
-// may supply HMACKey directly in structured config/env for single-node evaluation,
-// or HMACKeyFile for production file-backed secret injection.
+// ACMEExternalAccountBindingKey maps one ACME EAB kid to its HMAC key and to the
+// scope that key authorizes. Operators may supply HMACKey directly in structured
+// config/env for single-node evaluation, or HMACKeyFile for production
+// file-backed secret injection.
+//
+// The scope fields turn a kid from a doorbell into an authorization: without them
+// every account admitted by any credential is identical, and there is nothing to
+// constrain what it goes on to ask for. All of them are optional and a key with
+// none behaves exactly as it did before.
 type ACMEExternalAccountBindingKey struct {
 	KeyID       string `json:"key_id,omitempty"`
 	HMACKey     []byte `json:"hmac_key,omitempty"`
 	HMACKeyFile string `json:"hmac_key_file,omitempty"`
+	// AllowedIdentifiers scopes which DNS names orders under this credential may
+	// request. Each entry is an exact name ("api.example.com") or a wildcard
+	// suffix ("*.example.com", which covers the apex and anything beneath it).
+	// Empty means unscoped.
+	AllowedIdentifiers []string `json:"allowed_identifiers,omitempty"`
+	// MaxOrders caps how many orders may be created under this credential over
+	// the process's lifetime. Zero means uncapped.
+	MaxOrders int `json:"max_orders,omitempty"`
+	// NotAfter closes the credential at an RFC 3339 instant. Empty means no
+	// window. Certificates already issued under it are unaffected.
+	NotAfter string `json:"not_after,omitempty"`
+	// Disabled refuses new accounts and new orders under this credential while
+	// leaving issued certificates alone. It is the configuration floor: the
+	// served disable verb can switch a credential off at runtime but cannot
+	// switch a config-disabled one back on.
+	Disabled bool `json:"disabled,omitempty"`
+}
+
+// NotAfterTime parses the credential's validity window ("" = no window).
+func (k ACMEExternalAccountBindingKey) NotAfterTime() (time.Time, error) {
+	if strings.TrimSpace(k.NotAfter) == "" {
+		return time.Time{}, nil
+	}
+	return time.Parse(time.RFC3339, strings.TrimSpace(k.NotAfter))
 }
 
 // SPIFFEProtocol configures the served SPIFFE Workload API gRPC server (INTEROP-004).
@@ -3003,6 +3033,17 @@ func validateACMEEAB(e ACMEExternalAccountBinding) []error {
 			errs = append(errs, fmt.Errorf("%s must not set both hmac_key and hmac_key_file", label))
 		case hasInline && len(key.HMACKey) < 16:
 			errs = append(errs, fmt.Errorf("%s.hmac_key must be at least 16 bytes", label))
+		}
+		if _, err := key.NotAfterTime(); err != nil {
+			errs = append(errs, fmt.Errorf("%s.not_after %q is invalid (want RFC 3339): %w", label, key.NotAfter, err))
+		}
+		if key.MaxOrders < 0 {
+			errs = append(errs, fmt.Errorf("%s.max_orders must not be negative", label))
+		}
+		for j, identifier := range key.AllowedIdentifiers {
+			if strings.TrimSpace(identifier) == "" {
+				errs = append(errs, fmt.Errorf("%s.allowed_identifiers[%d] must not be empty; an empty entry silently widens the scope it looks like it narrows", label, j))
+			}
 		}
 	}
 	return errs

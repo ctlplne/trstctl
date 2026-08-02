@@ -317,8 +317,16 @@ describe("i18n boundary", () => {
       // The fallback is deleted; the panel now says nothing is advertised.
       // Reviewed for meaning in all three locales.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "6c99c499274d70bee1d1036ccefcc6dc7f25969ebdf863e80e74b01ec8d9d162",
-      "de-DE": "e8825b6abf77a23423e3de0ad8ae14ae14f9bf2896f6b880f550c5157a5bcdca",
+      // B4 re-pin: eighteen protocols.eab.* keys for the ACME external-account-
+      // binding operator panel — scope, quota, usage counters, the disable/enable
+      // verbs, the two distinct empty states (ACME not mounted vs no credentials
+      // configured), and the sentence stating that rotation stays a configuration
+      // operation because trstctl will not return a shared MAC secret over the
+      // API. Reviewed for meaning in all three locales; the count placeholders in
+      // the quota and usage strings are preserved.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "a7897196bbcc71650f31f199a8fe6e9b97e97e158c0194ea7f305cf6647bcd9e",
+      "de-DE": "a92c9de0f4ec372bb057b97dee7a7e012282dbfefdba413c9c0b6d1a542cfaec",
     });
   });
 

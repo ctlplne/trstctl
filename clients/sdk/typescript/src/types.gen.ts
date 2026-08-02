@@ -351,6 +351,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acme/eab-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List served ACME external account binding credentials with their scope and usage */
+        get: operations["listACMEEABCredentials"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/eab-credentials/{kid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop new ACME accounts and orders under an external account binding credential */
+        post: operations["disableACMEEABCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/eab-credentials/{kid}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-enable an operator-disabled ACME external account binding credential */
+        post: operations["enableACMEEABCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -4429,6 +4480,30 @@ export interface components {
             /** @enum {string} */
             format?: "tpm";
             max_age?: string;
+        };
+        ACMEEABCredential: {
+            accounts_bound: number;
+            allowed_identifiers?: string[];
+            disabled_by_operator: boolean;
+            disabled_in_config: boolean;
+            key_id: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            max_orders?: number;
+            /** Format: date-time */
+            not_after?: string;
+            orders_created: number;
+            orders_denied: number;
+            reason?: string;
+            /** @enum {string} */
+            state: "active" | "disabled" | "expired" | "exhausted";
+        };
+        ACMEEABPosture: {
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["ACMEEABCredential"][];
+            required: boolean;
+            served: boolean;
         };
         AIAnswer: {
             citations?: string[];
@@ -10304,6 +10379,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ACMEDNS01ProviderCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listACMEEABCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEEABPosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    disableACMEEABCredential: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description ACME external account binding key id */
+                kid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEEABCredential"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    enableACMEEABCredential: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description ACME external account binding key id */
+                kid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEEABCredential"];
                 };
             };
             /** @description client error */

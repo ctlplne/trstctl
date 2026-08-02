@@ -161,6 +161,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Conditional/partial residuals | Real served spine; specific operator-facing edges remain | [Conditional, partial, and residual boundaries](#conditional-partial-and-residual-boundaries) |
 | Served status strings | Every status is registered with what the code actually did; CI blocks a status spelled stronger than its own flags | [Served status vocabulary](#served-status-vocabulary-what-each-status-claims) |
 | CA hierarchy expiry horizon | Served; year-scale bands, re-alerting on each tightening, leaf-validity-compression check, horizon on the CA API and console | [The CA calendar](#the-ca-calendar-year-scale-hierarchy-expiry) |
+| ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window enforced fail-closed, runtime disable. Rotation stays a config operation | [Protocols](#protocols) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -1205,6 +1206,37 @@ This is a deliberate, documented trust boundary, not an accident.
   Roadmap residual: a dedicated ACME admin console for account/order/challenge
   drilldown, revocation operations, and richer client setup controls remains
   outside the F5 GA-served protocol denominator.
+- **External account bindings are authorizations, not just door keys.** RFC 8555
+  §7.3.4 EAB proves an ACME account key was pre-authorized out of band. The
+  server used to verify that proof and discard the key id, which made every
+  admitted account identical: nothing recorded which credential let it in, so
+  nothing could scope what it asked for next, count what it had taken, or stop
+  one credential without stopping all of them. An account now remembers its
+  `kid` — in its state event, so it survives a replay — and every order under
+  that account is checked against that credential's policy. A credential may
+  carry allowed identifiers (exact names or `*.suffix`, which covers the apex
+  too), an order quota, and a validity window; an out-of-scope identifier,
+  an exhausted quota, or a closed window refuses the order fail-closed, names
+  the cause, and records an `acme.eab.order_denied` event. A single out-of-scope
+  identifier refuses the whole order — issuance is granted or it is not.
+  `GET /api/v1/acme/eab-credentials` serves each credential's scope, quota,
+  window, and live accounts-bound / orders-created / orders-denied counters, and
+  `POST /api/v1/acme/eab-credentials/{kid}/disable` (and `/enable`) stops or
+  resumes new accounts and orders under one credential at runtime. Disabling is
+  a closed tap, not a revocation: certificates already issued under the
+  credential stay valid. The Protocols console shows the same list and carries
+  the disable action.
+  What is **not** served: the policy lives in `protocols.acme_eab.keys[]`
+  configuration, and **rotation is a configuration operation** — add the new key
+  id, then disable the old one here while clients migrate. trstctl does not mint
+  external account credentials over the API, because that would mean returning a
+  shared MAC secret in a response body; the HMAC key stays byte-backed in locked
+  memory where configuration put it and appears in no served response, in any
+  encoding. Binding a credential to a certificate profile is also **not**
+  served: the ACME server does not select profiles — that decision is made at
+  the issuance seam — so a per-credential profile setting would be policy that
+  nothing reads. The served disable verb cannot re-enable a credential that
+  configuration disables; config is the floor.
 - EST (RFC 7030), SCEP (RFC 8894), CMP (RFC 4210/6712), the SPIFFE Workload
   API, and the SSH CA issuance servers are served end-to-end by the running
   binary, each behind the same issuance seam as the API mint: signed in the
