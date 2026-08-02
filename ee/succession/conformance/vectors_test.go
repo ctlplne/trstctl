@@ -51,10 +51,10 @@ func TestConformance_ChainVector(t *testing.T) {
 	if os.Getenv("UPDATE_VECTORS") == "1" {
 		v := buildChainVector(t)
 		b, _ := json.MarshalIndent(v, "", "  ")
-		if err := os.MkdirAll("testdata", 0o755); err != nil {
+		if err := os.MkdirAll("testdata", 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(chainVectorPath, append(b, '\n'), 0o644); err != nil {
+		if err := os.WriteFile(chainVectorPath, append(b, '\n'), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

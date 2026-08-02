@@ -23,7 +23,7 @@ func TestOpenAPI_Golden(t *testing.T) {
 
 	const path = "openapi.pcas.json"
 	if os.Getenv("UPDATE_GOLDEN") == "1" {
-		if err := os.WriteFile(path, got, 0o644); err != nil {
+		if err := os.WriteFile(path, got, 0o600); err != nil {
 			t.Fatalf("write golden: %v", err)
 		}
 	}

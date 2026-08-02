@@ -62,7 +62,7 @@ func WriteTrustBundle(dir string, bundle TrustBundle) error {
 		return fmt.Errorf("xrec plan: encode trust bundle: %w", err)
 	}
 	raw = append(raw, '\n')
-	if err := os.WriteFile(filepath.Join(dir, TrustBundleFile), raw, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, TrustBundleFile), raw, 0o600); err != nil {
 		return fmt.Errorf("xrec plan: write trust bundle: %w", err)
 	}
 	return nil

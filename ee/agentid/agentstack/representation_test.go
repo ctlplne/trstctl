@@ -292,7 +292,7 @@ func TestRepresentation_RandomizedDeterminism(t *testing.T) {
 		var model agentstack.Model
 		if rng.Intn(2) == 0 {
 			wd := make([]byte, 32)
-			rng.Read(wd)
+			_, _ = rng.Read(wd)
 			model = weightsModel(wd)
 		} else {
 			model = providerModel("prov/model", "vX")

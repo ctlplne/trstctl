@@ -52,10 +52,10 @@ func writeVector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal vector: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(vectorPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(vectorPath), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(vectorPath, append(raw, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(vectorPath, append(raw, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
