@@ -116,8 +116,8 @@ not this file.
 | `internal/config/audit_test.go:32` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:80` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:1845` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:2415` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:1862` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2442` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:169` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:353` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -266,8 +266,8 @@ not this file.
 | `internal/store/secret_sync_workload_identity.go:202` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `tools/dodcensus/claims.go:162` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
 | `tools/dodcensus/runtime.go:39` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
-| `tools/trstctllint/keymaterial/keymaterial_test.go:44` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `tools/trstctllint/keymaterial/keymaterial_test.go:80` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `tools/trstctllint/keymaterial/keymaterial_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `tools/trstctllint/keymaterial/keymaterial_test.go:87` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 
 ### G107 — CWE-88 Argument injection (variable URL request) (1 sites)
 
@@ -807,7 +807,7 @@ not this file.
 | `internal/cli/doctor/doctor.go:203` | operator-supplied path to their own deployment's audit key (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:94` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:1918` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:1935` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/connector/localops.go:147` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:180` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
