@@ -60,7 +60,11 @@ CYCLONEDX_GOMOD := $(GO_TOOL_BIN)/cyclonedx-gomod
 WEB_NPM ?= npm --prefix web
 
 # Minimum total test coverage (percent), enforced by `make test`. Generated code
-# (*.pb.go) is excluded from the measurement.
+# (*.pb.go) is excluded from the measurement. Measured 70.5% on 2026-08-02 from
+# cover.out.nogen, so this aggregate floor already has only 0.5 points of margin
+# and is deliberately NOT ratcheted alongside the per-package floors below
+# (TEST-COVFLOOR-002). Raise it when the aggregate gains real headroom; the
+# per-package floors are what actually bite today. Never lower it.
 COVERAGE_MIN ?= 70
 COVERPROFILE := cover.out
 COVERPROFILE_MAIN := $(COVERPROFILE).main
@@ -82,8 +86,19 @@ SERVER_LIFECYCLE_FUNCS := Build|IssueLeaf|Drain|Shutdown
 # critical package can hide behind when the average passes. Computed from the same
 # merged -coverpkg profile, so it counts coverage delivered by cross-package
 # integration tests. Enforced by `make test` and the CI coverage gate (SF.1).
+# These are the TIER DEFAULTS. Packages that measure well above them carry their
+# own floor in scripts/ci/coverage-critical.sh (TEST-COVFLOOR-002), because one
+# flat number cannot ratchet a 98%-covered package and a 70%-covered one together:
+# the flat number must sit under the weakest member, leaving every stronger member
+# 20+ points of headroom a regression can fall through without crossing the bar.
 CRITICAL_COVERAGE_MIN ?= 70
-EE_COVERAGE_MIN ?= 40
+CRITICAL_COVERAGE_MIN_TIER2 ?= 70
+# ee/ measured 69.5% on 2026-08-02 (go tool cover -func=cover.out.ee) against a
+# floor of 40 — ~30 points of dead headroom. Ratcheted to 65 rather than to the
+# 66-67 the margin would allow only because that profile predates the
+# ee/reconcile/quarantine work; re-ratchet toward the measured figure after the
+# next full `make ee-test`. Never lower it.
+EE_COVERAGE_MIN ?= 65
 
 .PHONY: help
 help: ## Show this help
@@ -154,7 +169,7 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@$(GO) tool cover -func=$(COVERPROFILE).nogen | \
 		SERVER_LIFECYCLE_FUNCS='$(SERVER_LIFECYCLE_FUNCS)' SERVER_FUNC_COVERAGE_MIN=$(SERVER_FUNC_COVERAGE_MIN) \
 		bash scripts/ci/coverage-server-lifecycle.sh
-	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
+	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) CRITICAL_COVERAGE_MIN_TIER2=$(CRITICAL_COVERAGE_MIN_TIER2) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
 
 .PHONY: perf-live-wall
 perf-live-wall: ## Run the serialized live-performance SLO wall for iteration tips, batch tips, and release candidates
@@ -163,7 +178,7 @@ perf-live-wall: ## Run the serialized live-performance SLO wall for iteration ti
 
 .PHONY: coverage-critical
 coverage-critical: ## Enforce the per-package coverage floor on security-critical packages (consumes cover.out.nogen from `make test`)
-	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
+	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) CRITICAL_COVERAGE_MIN_TIER2=$(CRITICAL_COVERAGE_MIN_TIER2) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
 
 .PHONY: cover
 cover: test ## Alias for `make test`; writes cover.out and prints per-function coverage
