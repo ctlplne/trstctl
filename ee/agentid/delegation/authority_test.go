@@ -349,7 +349,7 @@ func TestAuthority_MinBudgetFoldProperty(t *testing.T) {
 	for i := 0; i < 2000; i++ {
 		n := r.Intn(6) + 1
 		chain := make([]delegation.Authority, n)
-		var wantSpend, wantRate uint64 = ^uint64(0), ^uint64(0)
+		wantSpend, wantRate := ^uint64(0), ^uint64(0)
 		for j := 0; j < n; j++ {
 			s := uint64(r.Intn(10000))
 			rt := uint64(r.Intn(10000))

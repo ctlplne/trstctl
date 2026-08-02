@@ -88,7 +88,8 @@ func DecodeProof(in []byte) (Proof, error) {
 	sig, ok4 := r.chunk()
 	idx, ok5 := r.u64()
 	n, ok6 := r.u64()
-	if !(ok1 && ok2 && ok3 && ok4 && ok5 && ok6) {
+	parsedAll := ok1 && ok2 && ok3 && ok4 && ok5 && ok6
+	if !parsedAll {
 		return Proof{}, ErrProofMalformed
 	}
 	// Bound the path length to the remaining bytes so a malformed count cannot force a

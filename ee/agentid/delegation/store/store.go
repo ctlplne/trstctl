@@ -370,8 +370,7 @@ func (r *Repo) FetchChain(ctx context.Context, tenantID, credentialID string) (c
 			}
 			leafToRoot = append(leafToRoot, rec)
 			if rec.RootAnchor {
-				cur = nil
-				break
+				break // root reached: the chain is complete, so stop walking parents
 			}
 			if len(rec.ParentDigest) == 0 {
 				// Not root-anchored yet no parent: the chain is broken.

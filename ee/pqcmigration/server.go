@@ -260,9 +260,7 @@ func (s *pqcMigrationService) PlanPreview(ctx context.Context, tenantID string, 
 		})
 	}
 	for _, residual := range plan.Residuals {
-		out.Residuals = append(out.Residuals, PlanPreviewResidual{
-			ID: residual.ID, Status: residual.Status, Reason: residual.Reason,
-		})
+		out.Residuals = append(out.Residuals, PlanPreviewResidual(residual))
 	}
 	out.ReissueCount = len(out.Reissues)
 	out.TLSRolloutCount = len(out.TLSRollouts)

@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -224,7 +223,7 @@ func TestRPVerify_WASMParity(t *testing.T) {
 
 	// The js/wasm target runs under node via GOROOT/lib/wasm/go_js_wasm_exec, which
 	// must be on PATH for `go run` to launch the wasm binary instead of exec'ing it.
-	wasmExecDir := filepath.Join(runtime.GOROOT(), "lib", "wasm")
+	wasmExecDir := filepath.Join(goRoot(t), "lib", "wasm")
 	cmd := exec.Command("go", "run", "./wasm")
 	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm",
 		"PATH="+wasmExecDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -362,4 +361,21 @@ func TestRPVerify_MirrorsStrengthRefusal(t *testing.T) {
 	if _, err := rpverify.Verify(in2, newMemEpoch(), rpverify.Options{ExpectedTenant: tenant, BreakGlassAuthorityDER: authority.Public().DER}); !errors.Is(err, rpverify.ErrStrengthRefusal) {
 		t.Fatalf("stripped marker: got %v, want ErrStrengthRefusal", err)
 	}
+}
+
+// goRoot returns the toolchain's GOROOT by asking the go command rather than
+// reading runtime.GOROOT(), which is deprecated since Go 1.24: it reports the
+// root used at BUILD time, which is meaningless once a test binary is copied to
+// another machine.
+func goRoot(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("go", "env", "GOROOT").Output() // #nosec G204 -- fixed argv, no user input (CWE-78)
+	if err != nil {
+		t.Skipf("go env GOROOT: %v", err)
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		t.Skip("go env GOROOT is empty")
+	}
+	return root
 }

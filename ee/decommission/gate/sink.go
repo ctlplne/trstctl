@@ -145,7 +145,7 @@ func countJSONLines(path string) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("vdec gate: open refusal sink for replay: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var n uint64
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {

@@ -56,8 +56,9 @@ func TestPolicyRef_Reproducible(t *testing.T) {
 	if got := PolicyRef(d); got != jobs[0].PolicyRef {
 		t.Fatalf("recompute %q != job %q", got, jobs[0].PolicyRef)
 	}
-	if PolicyRef(d) != PolicyRef(d) {
-		t.Fatal("policy_ref is not stable across recomputation")
+	first, second := PolicyRef(d), PolicyRef(d)
+	if first != second {
+		t.Fatalf("policy_ref is not stable across recomputation: %q != %q", first, second)
 	}
 
 	// Every field is bound: mutating any one changes the ref.

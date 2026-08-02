@@ -79,29 +79,6 @@ var DeferredSymbols = map[string]bool{
 	"ee/agentid/agentstack\x00New": true,
 }
 
-// isDeferredPkg reports whether importPath (module-relative) is on the DEFERRED
-// package allow-list, matching by prefix so subpackages (e.g. .../verify/wasm) are
-// covered.
-func isDeferredPkg(importPath string) bool {
-	for _, d := range DeferredPackages {
-		if importPath == d || hasPathPrefix(importPath, d) {
-			return true
-		}
-	}
-	return false
-}
-
-// isDeferred reports whether the constructor (pkg, name) is DEFERRED (exempt from the
-// caller/reachability bar) -- either because its whole package is deferred (the verify
-// RP SDK) or because the specific symbol is symbol-level deferred (agentstack.New, the
-// issuer-side representation builder).
-func isDeferred(pkg, name string) bool {
-	if isDeferredPkg(pkg) {
-		return true
-	}
-	return DeferredSymbols[pkg+"\x00"+name]
-}
-
 // hasPathPrefix reports whether p is prefix or a subpackage path of prefix (prefix +
 // "/..."). It is a plain string check on the '/'-delimited import path.
 func hasPathPrefix(p, prefix string) bool {

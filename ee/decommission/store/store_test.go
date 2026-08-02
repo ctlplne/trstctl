@@ -72,7 +72,7 @@ func newRepoOn(t *testing.T, dbName string) *decstore.Repo {
 	if err != nil {
 		t.Fatalf("admin connect: %v", err)
 	}
-	defer admin.Close(ctx)
+	defer func() { _ = admin.Close(ctx) }()
 	_, _ = admin.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{dbName}.Sanitize())
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{dbName}.Sanitize()); err != nil {
 		t.Fatalf("create db %s: %v", dbName, err)
@@ -259,7 +259,7 @@ func TestCoreOnly_AppliesZeroVDECMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("admin connect: %v", err)
 	}
-	defer admin.Close(ctx)
+	defer func() { _ = admin.Close(ctx) }()
 	_, _ = admin.Exec(ctx, "DROP DATABASE IF EXISTS vdec_coreonly")
 	if _, err := admin.Exec(ctx, "CREATE DATABASE vdec_coreonly"); err != nil {
 		t.Fatalf("create db: %v", err)

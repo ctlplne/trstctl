@@ -188,7 +188,7 @@ func TestCoreOnly_AppliesZeroPCASMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("admin connect: %v", err)
 	}
-	defer admin.Close(ctx)
+	defer func() { _ = admin.Close(ctx) }()
 	_, _ = admin.Exec(ctx, "DROP DATABASE IF EXISTS pcas_coreonly")
 	if _, err := admin.Exec(ctx, "CREATE DATABASE pcas_coreonly"); err != nil {
 		t.Fatalf("create db: %v", err)

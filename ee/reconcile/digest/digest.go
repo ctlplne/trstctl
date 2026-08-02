@@ -272,11 +272,11 @@ func writeJSONString(b *bytes.Buffer, s string) {
 }
 
 func writeJSONInt(b *bytes.Buffer, v int64) {
-	b.WriteString(fmt.Sprintf("%d", v))
+	fmt.Fprintf(b, "%d", v)
 }
 
 func writeJSONUint(b *bytes.Buffer, v uint64) {
-	b.WriteString(fmt.Sprintf("%d", v))
+	fmt.Fprintf(b, "%d", v)
 }
 
 func containsSecretEvidence(in []byte) bool {

@@ -22,6 +22,13 @@ const (
 	SLHDSA192s crypto.Algorithm = "SLH-DSA-SHA2-192s"
 	SLHDSA256s crypto.Algorithm = "SLH-DSA-SHA2-256s"
 
-	HybridEd25519Dilithium3         crypto.Algorithm = "Hybrid-Ed25519-Dilithium3"
-	HybridMLDSA44ECDSAP256Algorithm                  = "Hybrid-ML-DSA-44-ECDSA-P256"
+	HybridEd25519Dilithium3 crypto.Algorithm = "Hybrid-Ed25519-Dilithium3"
 )
+
+// HybridMLDSA44ECDSAP256Algorithm is the hybrid TLS algorithm name as it appears
+// in migration plans and API payloads, which carry it as a plain string rather
+// than a crypto.Algorithm. It sits outside the const group above deliberately:
+// it has a different type from every member of that group, and mixing the two
+// left it as an untyped constant that silently satisfied both (staticcheck
+// SA9004).
+const HybridMLDSA44ECDSAP256Algorithm string = "Hybrid-ML-DSA-44-ECDSA-P256"

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -16,7 +15,7 @@ import (
 var vdecPackageDirs = []string{"ee/decommission"}
 
 func TestEdition_CoreBuildLinksNoVDEC(t *testing.T) {
-	goBin := filepath.Join(runtime.GOROOT(), "bin", "go")
+	goBin := filepath.Join(goRoot(t), "bin", "go")
 	cmd := exec.Command(goBin, "list", "-tags", "trstctl_core", "-deps", "trstctl.com/trstctl/cmd/trstctl")
 	cmd.Dir = moduleRoot(t)
 	out, err := cmd.CombinedOutput()
@@ -296,15 +295,6 @@ func hasLicenseRefSPDXBeforePackage(s string) bool {
 	return false
 }
 
-func firstNonBlankLine(s string) string {
-	for _, line := range strings.Split(s, "\n") {
-		if t := strings.TrimSpace(line); t != "" {
-			return t
-		}
-	}
-	return ""
-}
-
 func sizeOf(st os.FileInfo) int64 {
 	if st == nil {
 		return 0
@@ -334,12 +324,6 @@ func mustReadAllGoTests(t *testing.T, root string) string {
 		t.Fatalf("read tests under %s: %v", root, err)
 	}
 	return b.String()
-}
-
-type traceabilityStatus struct {
-	Claims          map[string]string `json:"claims"`
-	Invariants      map[string]string `json:"invariants"`
-	VerifierLicense string            `json:"verifier_license"`
 }
 
 func claimIDs() []string {
@@ -413,4 +397,21 @@ func canonicalInvariantTests() []string {
 		"TestEdition_AllVDECPackagesAreEE",
 		"TestZeroRemoval_BasicKeyDestructionIntact",
 	}
+}
+
+// goRoot returns the toolchain's GOROOT by asking the go command rather than
+// reading runtime.GOROOT(), which is deprecated since Go 1.24: it reports the
+// root used at BUILD time, which is meaningless once a test binary is copied to
+// another machine.
+func goRoot(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("go", "env", "GOROOT").Output() // #nosec G204 -- fixed argv, no user input (CWE-78)
+	if err != nil {
+		t.Skipf("go env GOROOT: %v", err)
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		t.Skip("go env GOROOT is empty")
+	}
+	return root
 }

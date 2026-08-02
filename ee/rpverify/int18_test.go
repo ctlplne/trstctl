@@ -37,7 +37,7 @@ func TestINT18_ExceptionalInclusionUsesRealVerifier(t *testing.T) {
 
 	// Append it to a REAL signed log and attach a real, self-contained proof.
 	l := translog.New(logKey)
-	l.Append([]byte("prior-entry"))
+	_, _, _ = l.Append([]byte("prior-entry"))
 	idx, _, err := l.Append(leaf)
 	if err != nil {
 		t.Fatal(err)

@@ -118,8 +118,8 @@ type ProductionMinter struct{ *minter.Minter }
 // and PERSISTED in the signer keystore under their per-epoch handle (INT-03). The
 // signer calls it once at construction, before serving.
 func (p *ProductionMinter) UseSignerCustody(c signing.SignerCustody) {
-	p.Minter.SetPredecessorResolver(predecessorResolverAdapter{r: c})
-	p.Minter.SetSuccessorKeyStore(c)
+	p.SetPredecessorResolver(predecessorResolverAdapter{r: c})
+	p.SetSuccessorKeyStore(c)
 }
 
 // predecessorResolverAdapter adapts the signer's PredecessorResolver to the minter's

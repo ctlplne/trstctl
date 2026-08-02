@@ -766,7 +766,7 @@ func repoRoot(t *testing.T) string {
 // same no-skip gate package as the full-stack e2e. Missing node/wasm support is a
 // hard gate failure here; CI must provision it instead of silently degrading.
 func TestINT20_PCASWASMParity_NoSkip(t *testing.T) {
-	wasmExecDir := filepath.Join(runtime.GOROOT(), "lib", "wasm")
+	wasmExecDir := filepath.Join(goRoot(t), "lib", "wasm")
 	if _, err := os.Stat(filepath.Join(wasmExecDir, "go_js_wasm_exec")); err != nil {
 		t.Fatalf("wasm exec shim missing: %v", err)
 	}

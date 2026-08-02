@@ -40,16 +40,6 @@ func (l *orderLog) snapshot() []string {
 	return out
 }
 
-func (l *orderLog) count(ev string) int {
-	n := 0
-	for _, e := range l.snapshot() {
-		if e == ev {
-			n++
-		}
-	}
-	return n
-}
-
 // index returns the position of the first occurrence of ev, or -1.
 func (l *orderLog) index(ev string) int {
 	for i, e := range l.snapshot() {

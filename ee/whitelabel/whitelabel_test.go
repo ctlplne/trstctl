@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"encoding/base64"
 	"trstctl.com/trstctl/internal/branding"
 )
 
@@ -118,5 +119,53 @@ func TestBrandedEmailUsesResolvedBrandAndEscapesFields(t *testing.T) {
 	}
 	if from != hostile.ProductName {
 		t.Fatalf("from fallback = %q, want raw display name for mail layer", from)
+	}
+}
+
+// TestHostileLogoURIIsNotEmbedded covers the branding field that bypassed
+// escaping: LogoDataURI is tenant-configurable, and the renderer wraps it in
+// template.URL, which tells html/template not to sanitise it. Anything that is
+// not a plain https URL or a raster image data URI must be dropped, leaving the
+// text fallback, rather than reaching an outbound email.
+func TestHostileLogoURIIsNotEmbedded(t *testing.T) {
+	for name, uri := range map[string]string{
+		"javascript":      "javascript:alert(1)",
+		"javascript-case": "JaVaScRiPt:alert(1)",
+		"data-html":       "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte("<script>alert(1)</script>")),
+		"data-svg":        "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`)),
+		"plain-http":      "http://insecure.example/logo.png",
+		"not-base64":      "data:image/png;base64,!!!!not-base64!!!!",
+		"file":            "file:///etc/passwd",
+	} {
+		t.Run(name, func(t *testing.T) {
+			brand := branding.Brand{ProductName: "Acme", LogoDataURI: uri}
+			html, _, err := RenderEmail(brand, Email{Subject: "s", BodyHTML: template.HTML("<p>ok</p>")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(html, uri) {
+				t.Errorf("hostile logo URI was embedded verbatim in the email:\n%s", html)
+			}
+			if strings.Contains(html, "<img") {
+				t.Errorf("a rejected logo URI still rendered an <img> tag:\n%s", html)
+			}
+			if !strings.Contains(html, "Acme") {
+				t.Error("the text fallback must render when the logo is rejected")
+			}
+		})
+	}
+
+	// The safe forms still work, or the check is useless.
+	png := "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("\x89PNG\r\n"))
+	for name, uri := range map[string]string{"png-data": png, "https": "https://cdn.example/logo.png"} {
+		t.Run(name, func(t *testing.T) {
+			html, _, err := RenderEmail(branding.Brand{ProductName: "Acme", LogoDataURI: uri}, Email{Subject: "s"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(html, uri) {
+				t.Errorf("a safe logo URI was rejected:\n%s", html)
+			}
+		})
 	}
 }

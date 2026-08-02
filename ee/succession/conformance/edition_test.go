@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -39,7 +38,7 @@ var pcasPackageDirs = []string{"ee/succession", "ee/rpverify", "ee/translog"}
 // — in particular none of the PCAS packages. This is the same proof as `make
 // editions-gate`, asserted here so it runs in CI as a unit.
 func TestEdition_CoreBuildLinksNoPCAS(t *testing.T) {
-	goBin := filepath.Join(runtime.GOROOT(), "bin", "go")
+	goBin := filepath.Join(goRoot(t), "bin", "go")
 	cmd := exec.Command(goBin, "list", "-tags", "trstctl_core", "-deps", "trstctl.com/trstctl/cmd/trstctl")
 	cmd.Dir = moduleRoot(t)
 	out, err := cmd.CombinedOutput()
@@ -92,4 +91,21 @@ func firstNonBlankLine(s string) string {
 		}
 	}
 	return ""
+}
+
+// goRoot returns the toolchain's GOROOT by asking the go command rather than
+// reading runtime.GOROOT(), which is deprecated since Go 1.24: it reports the
+// root used at BUILD time, which is meaningless once a test binary is copied to
+// another machine.
+func goRoot(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("go", "env", "GOROOT").Output() // #nosec G204 -- fixed argv, no user input (CWE-78)
+	if err != nil {
+		t.Skipf("go env GOROOT: %v", err)
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		t.Skip("go env GOROOT is empty")
+	}
+	return root
 }

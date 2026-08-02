@@ -417,20 +417,6 @@ func ControlPlaneCallers(root, name, defFile string, searchRoots []string) ([]Ca
 	return out, nil
 }
 
-// callTargetName returns the target identifier of a call expression's function: the
-// bare name for name(...), or the selector's final segment for pkg.name(...). ok is
-// false for any other callable form (a func literal, an index expr, etc.), which the
-// gate does not attribute to a named constructor.
-func callTargetName(fun ast.Expr) (string, bool) {
-	switch fn := fun.(type) {
-	case *ast.Ident:
-		return fn.Name, true
-	case *ast.SelectorExpr:
-		return fn.Sel.Name, true
-	}
-	return "", false
-}
-
 // defaultSearchRoots are the module subtrees a production caller could live in: the
 // AGID family itself (an in-scope constructor calling another is a legitimate non-test
 // caller, e.g. NewSignerGate -> NewGate), plus cmd (the ee_attach seams) and internal

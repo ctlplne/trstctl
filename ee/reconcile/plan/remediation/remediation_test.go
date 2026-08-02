@@ -72,17 +72,17 @@ func newStore(t *testing.T) *corestore.Store {
 		t.Fatalf("admin connect: %v", err)
 	}
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{dbName}.Sanitize()); err != nil {
-		admin.Close(ctx)
+		_ = admin.Close(ctx)
 		t.Fatalf("create database: %v", err)
 	}
-	admin.Close(ctx)
+	_ = admin.Close(ctx)
 	t.Cleanup(func() {
 		admin, err := pgx.Connect(context.Background(), testDSN)
 		if err != nil {
 			t.Logf("admin reconnect for cleanup: %v", err)
 			return
 		}
-		defer admin.Close(context.Background())
+		defer func() { _ = admin.Close(context.Background()) }()
 		if _, err := admin.Exec(context.Background(), "DROP DATABASE IF EXISTS "+pgx.Identifier{dbName}.Sanitize()); err != nil {
 			t.Logf("drop database %s: %v", dbName, err)
 		}
