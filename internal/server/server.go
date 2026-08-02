@@ -273,6 +273,12 @@ type Deps struct {
 	// channels (Slack, Teams, email, PagerDuty, OpsGenie, webhook). Zero disables
 	// expiry-alert sweeps.
 	LifecycleAlertBefore time.Duration
+	// LifecycleLeafValidity is the reference leaf lifetime the CA calendar (H5)
+	// measures a parent authority's remaining horizon against, so it can say
+	// "this parent can no longer issue a full-length leaf" before anyone notices
+	// their certificates quietly getting shorter. Zero selects
+	// lifecycle.DefaultLeafValidity. It is a yardstick, not an issuance limit.
+	LifecycleLeafValidity time.Duration
 	// LifecycleInterval is the scheduler cadence. Zero selects a conservative default.
 	LifecycleInterval time.Duration
 	// NotificationChannels are the operator-configured served notification sinks
@@ -727,13 +733,14 @@ type Server struct {
 
 	// Lifecycle automation telemetry (JOURNEY-002): identities queued for served
 	// renewal, expiry notifications enqueued, and scheduler failures.
-	lifecycleRenewBefore time.Duration
-	lifecycleAlertBefore time.Duration
-	lifecycleInterval    time.Duration
-	mLifecycleQueued     *observ.Counter
-	mLifecycleAlerts     *observ.Counter
-	mLifecycleFailures   *observ.Counter
-	mLifecycleLastOK     *observ.Gauge
+	lifecycleRenewBefore  time.Duration
+	lifecycleAlertBefore  time.Duration
+	lifecycleLeafValidity time.Duration
+	lifecycleInterval     time.Duration
+	mLifecycleQueued      *observ.Counter
+	mLifecycleAlerts      *observ.Counter
+	mLifecycleFailures    *observ.Counter
+	mLifecycleLastOK      *observ.Gauge
 
 	// Fleet-health telemetry (OPS-002): aggregate, low-cardinality gauges/counters
 	// for enrollment, heartbeat, and missed-heartbeat thresholds.
@@ -1119,6 +1126,10 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	if s.connectorRegistry != nil {
 		*defaults = append(*defaults, api.WithConnectorRegistry(s.connectorRegistry))
 	}
+	// H5: the CA console needs the same reference leaf validity the horizon
+	// scheduler uses, so the "renew/re-key by" date it shows and the alert an
+	// operator receives are answering the same question.
+	*defaults = append(*defaults, api.WithCALeafValidity(s.lifecycleLeafValidity))
 	// B-5: the console's system readout reuses the same probes as /readyz, so
 	// the two can never disagree about whether the spine is up.
 	*defaults = append(*defaults, api.WithSystemReadout(func() api.SystemReadout {
@@ -1556,6 +1567,7 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mCRLFailures = s.registry.CounterVec("trstctl_crl_regeneration_failures_total", "CRL freshness scheduler sweeps that failed.", nil).WithLabelValues()
 	s.lifecycleRenewBefore = d.LifecycleRenewBefore
 	s.lifecycleAlertBefore = d.LifecycleAlertBefore
+	s.lifecycleLeafValidity = d.LifecycleLeafValidity
 	s.lifecycleInterval = d.LifecycleInterval
 	s.mLifecycleQueued = s.registry.CounterVec("trstctl_lifecycle_renewals_queued_total", "Identities queued by the lifecycle renewal scheduler.", nil).WithLabelValues()
 	s.mLifecycleAlerts = s.registry.CounterVec("trstctl_lifecycle_expiry_alerts_queued_total", "Expiry notifications queued by the lifecycle scheduler.", nil).WithLabelValues()
@@ -2644,8 +2656,41 @@ func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
 		s.observeLifecycleSweep(queued, alerted, err)
 		return queued, err
 	}
-	s.observeLifecycleSweep(queued, alerted, nil)
+	// The CA calendar runs on the same sweep but its own clock: leaf expiry is
+	// measured in days, a trust anchor's in months (H5). Its alerts count toward
+	// the same metric so a stalled horizon sweep is as visible as a stalled leaf
+	// sweep.
+	horizonAlerts, err := s.runCAHorizonAlertsOnce(ctx)
+	if err != nil {
+		s.observeLifecycleSweep(queued, alerted+horizonAlerts, err)
+		return queued, err
+	}
+	s.observeLifecycleSweep(queued, alerted+horizonAlerts, nil)
 	return queued, nil
+}
+
+// runCAHorizonAlertsOnce sweeps every tenant's CA authorities for year-scale
+// expiry horizons and leaf-validity compression. Unlike leaf expiry alerting it
+// has no configurable window to switch it off: an expiring root is not an
+// operator preference, and the thresholds are policy in internal/lifecycle.
+func (s *Server) runCAHorizonAlertsOnce(ctx context.Context) (int, error) {
+	if s.notifications == nil || s.store == nil || s.outbox == nil || s.log == nil {
+		return 0, nil
+	}
+	tenants, err := s.store.TenantsWithCAHorizonCandidates(ctx)
+	if err != nil {
+		return 0, err
+	}
+	m := lifecycle.NewManager(s.store, nil, s.outbox, s.idem, s.log, lifecycle.Config{LeafValidity: s.lifecycleLeafValidity})
+	alerted := 0
+	for _, tenant := range tenants {
+		n, err := m.AlertCAHorizon(ctx, tenant)
+		if err != nil {
+			return alerted, err
+		}
+		alerted += n
+	}
+	return alerted, nil
 }
 
 func (s *Server) runLifecycleAlertsOnce(ctx context.Context) (int, error) {

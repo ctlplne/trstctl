@@ -160,6 +160,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Library-only backlog | Empty — nothing is stuck library-only right now | [Built and tested, but not yet served](#built-and-tested-but-not-yet-served-by-the-binary) |
 | Conditional/partial residuals | Real served spine; specific operator-facing edges remain | [Conditional, partial, and residual boundaries](#conditional-partial-and-residual-boundaries) |
 | Served status strings | Every status is registered with what the code actually did; CI blocks a status spelled stronger than its own flags | [Served status vocabulary](#served-status-vocabulary-what-each-status-claims) |
+| CA hierarchy expiry horizon | Served; year-scale bands, re-alerting on each tightening, leaf-validity-compression check, horizon on the CA API and console | [The CA calendar](#the-ca-calendar-year-scale-hierarchy-expiry) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -448,6 +449,50 @@ only when an operator enables or configures a backend, and some have a served
 spine with explicit residual work. The matrix above is the authority for whether
 the running binary serves a capability; this section records the operator-facing
 edges and follow-up integration work.
+
+### The CA calendar: year-scale hierarchy expiry
+
+Leaf expiry alerting runs on 7/30/90-day windows. That is the right clock for a
+leaf and useless for a certificate authority: replacing a trust anchor means
+getting the new one into every relying party first, which is a quarters-long
+programme, so a 90-day warning arrives long after it could have helped. Nothing
+evaluated `ca_authorities.not_after` at all before this, and the CA console
+printed the raw date and called anything past 90 days healthy.
+
+CA authorities now run on their own clock. The leader lifecycle sweep walks every
+active authority against year-scale bands — **36, 24, 12, 6 and 3 months** — and
+alerts once per band an authority crosses into, with severity scaled to runway:
+a planning signal beyond a year, a warning inside one, critical inside three
+months or already expired. The band already notified is recorded on the authority
+and only ever tightens, so a repeated sweep is silent, each tightening re-fires,
+and a clock skew cannot replay an alert the operator already saw.
+
+The second check is the one that hides. A CA cannot issue a leaf that outlives
+it, so once an authority has less life left than the validity its leaves are
+issued with, every new leaf is silently truncated to the parent's expiry.
+Issuance keeps succeeding; the certificates just get shorter until something
+downstream rejects one. That case raises `ca.validity_compression` rather than a
+plain horizon alert, because the fix is different: renew or re-key the authority.
+
+Exact contract. Alerts land on the `notification.ca_horizon` outbox destination
+as `ca.horizon` or `ca.validity_compression`, carrying the authority, its band,
+how many active certificates chain to it, and the renew-by date; they fan out
+through the same operator-configured channels as expiry alerts. The alert intent
+and the band stamp commit in one transaction. The reference leaf validity is
+`lifecycle.leaf_validity` (`TRSTCTL_LIFECYCLE_LEAF_VALIDITY`, default `2160h` /
+90 days) — a yardstick for horizon reporting that caps nothing.
+`GET /api/v1/ca/authorities` carries a `horizon` object per authority, and the CA
+Hierarchy console shows the band, the renew/re-key-by date, and the truncation
+warning. `GET /api/v1/certificates/health` resolves beyond 90 days into 180-day,
+1-year, 2-year and 3-year bands; `later` now means beyond three years.
+
+What is **not** served: an authority with no recorded `not_after` raises nothing
+and is shown as "no recorded expiry" rather than healthy — an unknown expiry is a
+real state, not a passing one. Authorities beyond 36 months raise nothing. The
+compression check is forward-looking (it says new leaves are being truncated); it
+does not retrospectively scan already-issued leaves to report which ones were
+shortened. Nothing here schedules or performs the renewal — it tells you when to
+start, and the re-key and rotation routes remain the operator's action.
 
 ### Served status vocabulary: what each status claims
 
@@ -1355,11 +1400,20 @@ This is a deliberate, documented trust boundary, not an accident.
   rejected before projection. The tenant is derived from the agent's
   verified client-certificate SPIFFE SAN, never a request field. The
   `GET /api/v1/agents` response also publishes the served
-  `agent.mtls.ReportInventory` path and the endpoint source kinds accepted
-  by that channel (`filesystem`, `pkcs11`, `windows-store`, `k8s-secret`,
-  `trust-store`, and `private-key`), so the console can show a real
-  endpoint-discovery capability panel instead of treating agent discovery
-  as unavailable telemetry. The channel is behind its own bounded agent
+  `agent.mtls.ReportInventory` path and the source kinds the shipped agent
+  binary can actually collect — `filesystem`, `trust-store`,
+  `private-key`, and `ssh` — each with the flags that switch it on, so a
+  capability that is listed but unconfigured is not read as coverage that
+  is running. **`pkcs11`, `windows-store`, and `k8s-secret` are declared at
+  the agent's collector boundary but the binary constructs no enumerator
+  for any of them, so they are not advertised.** They were previously
+  listed here and on the API, which read as a Windows estate, token store,
+  and Kubernetes Secrets being inventoried when nothing was collecting
+  them. Advertised capability is derived from the agent package's own
+  record of what it ships, and `docs/agent_advertised_capability_test.go`
+  fails the build if a kind is advertised without a constructor the agent
+  binary calls. The three ship under the discovery-completeness work; they
+  return to the panel when they are real. The channel is behind its own bounded agent
   worker lane and per-connection gRPC stream cap, so a heartbeat or renewal
   storm sheds with `ResourceExhausted` rather than starving API, protocol,
   outbox, or signer capacity. Agents announce an explicit

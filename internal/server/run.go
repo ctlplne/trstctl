@@ -412,6 +412,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
+	leafValidity, err := cfg.Lifecycle.LeafValidityDuration()
+	if err != nil {
+		return Deps{}, fmt.Errorf("lifecycle leaf validity: %w", err)
+	}
 	pluginCfg, err := buildPluginConfig(cfg.Plugins)
 	if err != nil {
 		return Deps{}, fmt.Errorf("plugins: %w", err)
@@ -507,6 +511,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		PrivacyRetentionPolicy:       privacyRetentionPolicy,
 		LifecycleRenewBefore:         renewBefore,
 		LifecycleAlertBefore:         alertBefore,
+		LifecycleLeafValidity:        leafValidity,
 		NotificationChannels:         notificationChannels,
 		notificationChannelOwner:     notificationOwner,
 		CodeSigning:                  codeSigning,

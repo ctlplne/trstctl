@@ -324,6 +324,7 @@ export interface AgentCertRevocationRequest {
 }
 
 export interface AgentDiscoveryCapability {
+  enable_flags?: string[];
   label: string;
   metadata_only: boolean;
   private_key_bytes: boolean;
@@ -574,6 +575,7 @@ export interface CAAuthority {
   common_name: string;
   created_at: string;
   extended_key_usages?: string[];
+  horizon?: CAAuthorityHorizon;
   id: string;
   kind: string;
   max_path_len: number;
@@ -585,6 +587,16 @@ export interface CAAuthority {
   signer_handle: string;
   status: string;
   tenant_id: string;
+}
+
+export interface CAAuthorityHorizon {
+  band_months?: number;
+  expired: boolean;
+  leaf_validity_days: number;
+  months_remaining: number;
+  renew_by?: string;
+  severity: "low" | "informational" | "warning" | "critical";
+  validity_compressed: boolean;
 }
 
 export interface CAAuthorityList {
@@ -954,7 +966,7 @@ export interface Certificate {
 
 export interface CertificateExpiryBucket {
   count: number;
-  name: "expired" | "expiring_7d" | "expiring_30d" | "expiring_90d" | "later" | "unknown";
+  name: "expired" | "expiring_7d" | "expiring_30d" | "expiring_90d" | "expiring_180d" | "expiring_1y" | "expiring_2y" | "expiring_3y" | "later" | "unknown";
 }
 
 export interface CertificateHealthDashboard {
@@ -983,7 +995,11 @@ export interface CertificateHealthSummary {
   active: number;
   discovered_count: number;
   expired: number;
+  expiring_180d?: number;
+  expiring_1y?: number;
+  expiring_2y?: number;
   expiring_30d: number;
+  expiring_3y?: number;
   expiring_7d: number;
   expiring_90d: number;
   external_source_count: number;

@@ -75,6 +75,7 @@ public final class OpenApiSchemas {
       "BulkheadPool",
       "BulkheadStats",
       "CAAuthority",
+      "CAAuthorityHorizon",
       "CAAuthorityList",
       "CAAuthorityRekeyRequest",
       "CAAuthorityRotation",

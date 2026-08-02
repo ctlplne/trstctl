@@ -44,6 +44,33 @@ three signals, tenant-isolated at the database layer:
 - **Alert before expiry.** It finds certificates inside the `alert_before` window,
   enriches the alert with the owner and approver recipients, enqueues a notification,
   stamps `alerted_at` so it doesn't nag, and emits `certificate.expiring`.
+- **The CA calendar.** CA authorities run on their own clock. A leaf that expires is a
+  page; a root that expires is an outage across every leaf beneath it, and the fix — get
+  a new anchor into every relying party — takes quarters, not an afternoon. So the same
+  sweep also walks `ca_authorities.not_after` against year-scale bands (36, 24, 12, 6
+  and 3 months), alerting once per band an authority crosses into, with severity scaled
+  to the runway: a planning signal beyond a year, a warning inside one, critical inside
+  three months. It also flags the failure that hides — an authority with less life left
+  than the validity its leaves are issued with, which silently truncates every new leaf
+  while issuance keeps succeeding. Alerts carry the authority, the band, how many active
+  certificates chain to it, and the date after which leaves stop getting full validity.
+
+**The CA calendar's exact contract.** Bands are `36/24/12/6/3` months, evaluated against
+an averaged Gregorian month; an authority sits in the tightest band it has crossed and
+alerts only when it crosses into a tighter one, so a repeated sweep is silent and each
+tightening re-fires. The band already notified is recorded on the authority and only ever
+tightens, so a clock skew cannot re-fire an alert the operator already saw. Authorities
+beyond 36 months, and authorities with no recorded `not_after`, raise nothing —
+an unknown expiry is stated as unknown, not rendered as healthy. Alerts land on the
+`notification.ca_horizon` outbox destination as `ca.horizon` or
+`ca.validity_compression` and fan out through the same channels as expiry alerts. The
+reference leaf validity is `lifecycle.leaf_validity`
+(`TRSTCTL_LIFECYCLE_LEAF_VALIDITY`, default `2160h`/90 days); it is a yardstick for
+horizon reporting and caps nothing. `GET /api/v1/ca/authorities` carries a `horizon`
+object per authority (band, months remaining, severity, renew-by, whether truncation has
+started, and the leaf validity assumed), and `GET /api/v1/certificates/health` now
+resolves beyond 90 days into 180-day, 1-year, 2-year and 3-year bands — the flat
+"later" bucket is exactly what hid multi-year hierarchy expiry.
 
 **Status:** served by the running binary. A leader-only background loop scans
 tenant-scoped deployed X.509 identities, honoring `lifecycle.renew_before` and

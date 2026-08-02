@@ -1240,6 +1240,12 @@
       },
       "AgentDiscoveryCapability": {
         "properties": {
+          "enable_flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "label": {
             "type": "string"
           },
@@ -2166,6 +2172,9 @@
             },
             "type": "array"
           },
+          "horizon": {
+            "$ref": "#/components/schemas/CAAuthorityHorizon"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -2219,6 +2228,46 @@
           "serial",
           "max_path_len",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "CAAuthorityHorizon": {
+        "properties": {
+          "band_months": {
+            "type": "integer"
+          },
+          "expired": {
+            "type": "boolean"
+          },
+          "leaf_validity_days": {
+            "type": "integer"
+          },
+          "months_remaining": {
+            "type": "integer"
+          },
+          "renew_by": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "informational",
+              "warning",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "validity_compressed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "months_remaining",
+          "severity",
+          "validity_compressed",
+          "leaf_validity_days",
+          "expired"
         ],
         "type": "object"
       },
@@ -3540,6 +3589,10 @@
               "expiring_7d",
               "expiring_30d",
               "expiring_90d",
+              "expiring_180d",
+              "expiring_1y",
+              "expiring_2y",
+              "expiring_3y",
               "later",
               "unknown"
             ],
@@ -3656,7 +3709,19 @@
           "expired": {
             "type": "integer"
           },
+          "expiring_180d": {
+            "type": "integer"
+          },
+          "expiring_1y": {
+            "type": "integer"
+          },
+          "expiring_2y": {
+            "type": "integer"
+          },
           "expiring_30d": {
+            "type": "integer"
+          },
+          "expiring_3y": {
             "type": "integer"
           },
           "expiring_7d": {

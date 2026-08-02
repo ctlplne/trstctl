@@ -999,6 +999,13 @@ type Lifecycle struct {
 	// certs are immediately valid at verifiers with modest clock skew
 	// (OPS-CLOCKSKEW-001). Default "5m" per common CA practice; bounds 30s..1h.
 	NotBeforeSkew string `json:"not_before_skew,omitempty"`
+	// LeafValidity is the reference leaf lifetime the CA calendar measures a
+	// parent authority's remaining horizon against, so the scheduler can warn
+	// that a parent is truncating the leaves issued under it before anyone
+	// notices their certificates quietly getting shorter. Default "2160h"
+	// (90 days). It is a yardstick for CA-horizon alerting, never a cap on what
+	// any profile issues.
+	LeafValidity string `json:"leaf_validity,omitempty"`
 }
 
 // NotBeforeSkewDuration parses the issuance backdate window ("" = default 5m).
@@ -1017,6 +1024,15 @@ func (l Lifecycle) RenewBeforeDuration() (time.Duration, error) {
 // AlertBeforeDuration parses the alert threshold.
 func (l Lifecycle) AlertBeforeDuration() (time.Duration, error) {
 	return time.ParseDuration(l.AlertBefore)
+}
+
+// LeafValidityDuration parses the CA-calendar reference leaf validity
+// ("" = default 90 days).
+func (l Lifecycle) LeafValidityDuration() (time.Duration, error) {
+	if l.LeafValidity == "" {
+		return 90 * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(l.LeafValidity)
 }
 
 // Notifications configures operator-managed notification sinks. The REST/console
@@ -1852,6 +1868,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
 	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
 	setString(getenv, "TRSTCTL_LIFECYCLE_NOT_BEFORE_SKEW", &c.Lifecycle.NotBeforeSkew)
+	setString(getenv, "TRSTCTL_LIFECYCLE_LEAF_VALIDITY", &c.Lifecycle.LeafValidity)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ENABLED", &c.Connectors.Enabled)
 	setString(getenv, "TRSTCTL_CONNECTORS_HTTP_TIMEOUT", &c.Connectors.HTTPTimeout)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ALLOW_PRIVATE_CIDRS", &c.Connectors.AllowPrivateCIDRs)
@@ -2582,6 +2599,11 @@ func validateLoggingAndLifecycle(c *Config) []error {
 		} else if d < time.Second || d > 2*time.Minute {
 			errs = append(errs, errors.New("signer.call_timeout must be within [1s, 2m]"))
 		}
+	}
+	if d, err := c.Lifecycle.LeafValidityDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("lifecycle.leaf_validity %q is invalid: %w", c.Lifecycle.LeafValidity, err))
+	} else if d < time.Hour || d > 10*365*24*time.Hour {
+		errs = append(errs, errors.New("lifecycle.leaf_validity must be within [1h, 10 years]"))
 	}
 	if d, err := c.Lifecycle.NotBeforeSkewDuration(); err != nil {
 		errs = append(errs, fmt.Errorf("lifecycle.not_before_skew %q is invalid: %w", c.Lifecycle.NotBeforeSkew, err))

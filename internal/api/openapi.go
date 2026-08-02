@@ -316,6 +316,18 @@ func componentSchemas() map[string]*Schema {
 	caIntermediateCSR := object(map[string]*Schema{
 		"ceremony_id": uuid(), "parent_id": uuid(), "csr_pem": str(), "signer_handle": str(),
 	}, "ceremony_id", "parent_id", "csr_pem", "signer_handle")
+	// The CA calendar's read surface (H5). The band is computed at read time from
+	// not_after, so it is a judgment about now rather than a stored value that
+	// would be wrong tomorrow. An authority with no recorded expiry carries no
+	// horizon at all rather than a fabricated one.
+	caAuthorityHorizon := object(map[string]*Schema{
+		"band_months": {Type: "integer"}, "months_remaining": {Type: "integer"},
+		"severity":            {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
+		"renew_by":            timestamp(),
+		"validity_compressed": {Type: "boolean"},
+		"leaf_validity_days":  {Type: "integer"},
+		"expired":             {Type: "boolean"},
+	}, "months_remaining", "severity", "validity_compressed", "leaf_validity_days", "expired")
 	caAuthority := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "parent_id": uuid(), "common_name": str(),
 		"kind": str(), "status": str(), "certificate_pem": str(), "signer_handle": str(),
@@ -324,6 +336,7 @@ func componentSchemas() map[string]*Schema {
 		"extended_key_usages": {Type: "array", Items: str()},
 		"replaces_id":         uuid(),
 		"created_at":          timestamp(),
+		"horizon":             ref("CAAuthorityHorizon"),
 	}, "id", "tenant_id", "common_name", "kind", "status", "certificate_pem", "signer_handle", "serial", "max_path_len", "created_at")
 	caAuthorityRotationIssuer := object(map[string]*Schema{
 		"authority_id": uuid(), "role": str(), "status": str(), "issue_path": str(),
@@ -1060,6 +1073,10 @@ func componentSchemas() map[string]*Schema {
 		"expiring_7d":           {Type: "integer"},
 		"expiring_30d":          {Type: "integer"},
 		"expiring_90d":          {Type: "integer"},
+		"expiring_180d":         {Type: "integer"},
+		"expiring_1y":           {Type: "integer"},
+		"expiring_2y":           {Type: "integer"},
+		"expiring_3y":           {Type: "integer"},
 		"external_source_count": {Type: "integer"},
 		"imported_count":        {Type: "integer"},
 		"discovered_count":      {Type: "integer"},
@@ -1067,7 +1084,14 @@ func componentSchemas() map[string]*Schema {
 		"health":                {Type: "string", Enum: []string{"ok", "warning", "critical"}},
 	}, "total", "active", "revoked", "superseded", "expired", "expiring_7d", "expiring_30d", "expiring_90d", "external_source_count", "imported_count", "discovered_count", "unknown_expiry_count", "health")
 	certificateExpiryBucket := object(map[string]*Schema{
-		"name":  {Type: "string", Enum: []string{"expired", "expiring_7d", "expiring_30d", "expiring_90d", "later", "unknown"}},
+		// Long-horizon bands (H5). "later" keeps its name and its place at the end
+		// of the partition but now means "beyond three years"; the 90-day ceiling
+		// is what hid multi-year CA expiry.
+		"name": {Type: "string", Enum: []string{
+			"expired", "expiring_7d", "expiring_30d", "expiring_90d",
+			"expiring_180d", "expiring_1y", "expiring_2y", "expiring_3y",
+			"later", "unknown",
+		}},
 		"count": {Type: "integer"},
 	}, "name", "count")
 	certificateSourceHealth := object(map[string]*Schema{
@@ -2866,7 +2890,12 @@ func componentSchemas() map[string]*Schema {
 		"rows": {Type: "array", Items: &Schema{Type: "object"}},
 	}, "rows")
 
+	// Advertised capability is derived from what the agent binary can actually
+	// collect (internal/agent/discovery.ShippedSourceKinds), and enable_flags
+	// names the flags that switch each source on — a listed source with flags
+	// collects nothing until an operator configures it.
 	agentDiscoveryCapability := object(map[string]*Schema{
+		"enable_flags":      {Type: "array", Items: str()},
 		"source_kind":       str(),
 		"label":             str(),
 		"reported_over":     str(),
@@ -3930,6 +3959,7 @@ func componentSchemas() map[string]*Schema {
 		"CACrossSign":                              caCrossSign,
 		"CAOfflineRootRekey":                       caOfflineRootRekey,
 		"CAAuthority":                              caAuthority,
+		"CAAuthorityHorizon":                       caAuthorityHorizon,
 		"CAAuthorityList":                          list("CAAuthority"),
 		"CADiscoveryItem":                          caDiscoveryItem,
 		"CADiscoverySummary":                       caDiscoverySummary,

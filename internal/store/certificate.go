@@ -74,14 +74,22 @@ type CertificateHealthSnapshot struct {
 }
 
 type CertificateHealthSummary struct {
-	Total               int
-	Active              int
-	Revoked             int
-	Superseded          int
-	Expired             int
-	Expiring7d          int
-	Expiring30d         int
-	Expiring90d         int
+	Total       int
+	Active      int
+	Revoked     int
+	Superseded  int
+	Expired     int
+	Expiring7d  int
+	Expiring30d int
+	Expiring90d int
+	// Long-horizon counts (H5). The dashboard used to stop at 90 days and call
+	// everything past it "later", which is the right resolution for a leaf and
+	// useless for a CA: a root expiring in 30 months reads identically to one
+	// expiring in 30 years. These are cumulative, like the shorter windows above.
+	Expiring180d        int
+	Expiring1y          int
+	Expiring2y          int
+	Expiring3y          int
 	ExternalSourceCount int
 	ImportedCount       int
 	DiscoveredCount     int
@@ -163,6 +171,15 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 	soon7 := now.Add(7 * 24 * time.Hour)
 	soon30 := now.Add(30 * 24 * time.Hour)
 	soon90 := now.Add(90 * 24 * time.Hour)
+	// The long-horizon boundaries (H5). "later" keeps its name and its place at
+	// the end of the partition, but it now means "beyond three years" rather than
+	// "beyond ninety days" — the 90-day ceiling is exactly what hid multi-year CA
+	// expiry. The buckets remain a partition, so a consumer summing them still
+	// gets the total.
+	soon180 := now.Add(180 * 24 * time.Hour)
+	soon1y := now.Add(365 * 24 * time.Hour)
+	soon2y := now.Add(2 * 365 * 24 * time.Hour)
+	soon3y := now.Add(3 * 365 * 24 * time.Hour)
 	snap := CertificateHealthSnapshot{
 		GeneratedAt: now,
 		ExpiryBuckets: []CertificateExpiryBucket{
@@ -170,6 +187,10 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 			{Name: "expiring_7d"},
 			{Name: "expiring_30d"},
 			{Name: "expiring_90d"},
+			{Name: "expiring_180d"},
+			{Name: "expiring_1y"},
+			{Name: "expiring_2y"},
+			{Name: "expiring_3y"},
 			{Name: "later"},
 			{Name: "unknown"},
 		},
@@ -189,10 +210,14 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 			    COUNT(*) FILTER (WHERE COALESCE(source, '') IN ('import', 'manual', 'manual-ui')),
 			    COUNT(*) FILTER (WHERE COALESCE(source, '') LIKE 'discovery:%'),
 			    COUNT(*) FILTER (WHERE not_after IS NULL),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $5)
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $6),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $7),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $8),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $9),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $9)
 			   FROM certificates
 			  WHERE tenant_id = $1`,
-			tenantID, now, soon7, soon30, soon90).
+			tenantID, now, soon7, soon30, soon90, soon180, soon1y, soon2y, soon3y).
 			Scan(
 				&snap.Summary.Total,
 				&snap.Summary.Active,
@@ -206,20 +231,29 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 				&snap.Summary.ImportedCount,
 				&snap.Summary.DiscoveredCount,
 				&snap.Summary.UnknownExpiryCount,
-				&snap.ExpiryBuckets[4].Count,
+				&snap.Summary.Expiring180d,
+				&snap.Summary.Expiring1y,
+				&snap.Summary.Expiring2y,
+				&snap.Summary.Expiring3y,
+				&snap.ExpiryBuckets[8].Count,
 			); err != nil {
 			return err
 		}
+		// Each bucket is the slice between its boundary and the previous one, so
+		// the partition sums to the total. Cumulative counts come off the summary.
 		snap.ExpiryBuckets[0].Count = snap.Summary.Expired
 		snap.ExpiryBuckets[1].Count = snap.Summary.Expiring7d
 		snap.ExpiryBuckets[2].Count = snap.Summary.Expiring30d - snap.Summary.Expiring7d
 		snap.ExpiryBuckets[3].Count = snap.Summary.Expiring90d - snap.Summary.Expiring30d
-		snap.ExpiryBuckets[5].Count = snap.Summary.UnknownExpiryCount
-		if snap.ExpiryBuckets[2].Count < 0 {
-			snap.ExpiryBuckets[2].Count = 0
-		}
-		if snap.ExpiryBuckets[3].Count < 0 {
-			snap.ExpiryBuckets[3].Count = 0
+		snap.ExpiryBuckets[4].Count = snap.Summary.Expiring180d - snap.Summary.Expiring90d
+		snap.ExpiryBuckets[5].Count = snap.Summary.Expiring1y - snap.Summary.Expiring180d
+		snap.ExpiryBuckets[6].Count = snap.Summary.Expiring2y - snap.Summary.Expiring1y
+		snap.ExpiryBuckets[7].Count = snap.Summary.Expiring3y - snap.Summary.Expiring2y
+		snap.ExpiryBuckets[9].Count = snap.Summary.UnknownExpiryCount
+		for i := 2; i <= 7; i++ {
+			if snap.ExpiryBuckets[i].Count < 0 {
+				snap.ExpiryBuckets[i].Count = 0
+			}
 		}
 
 		rows, err := tx.Query(ctx,

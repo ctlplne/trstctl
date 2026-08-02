@@ -34,6 +34,13 @@ const (
 	// row and this delivery intent are committed in one PostgreSQL transaction;
 	// channel delivery happens later in the bounded notification outbox worker.
 	DestinationApproval = "notification.approval"
+	// DestinationCAHorizon carries year-scale CA hierarchy expiry alerts (H5).
+	// It is a sibling of DestinationExpiry rather than a reuse of it because the
+	// two answer different questions on different clocks: expiry alerting asks
+	// "renew this leaf this month", horizon alerting asks "start planning a trust
+	// migration this year". Routing them separately lets an operator page on one
+	// and file the other.
+	DestinationCAHorizon = "notification.ca_horizon"
 )
 
 // Alert kinds.
@@ -56,6 +63,15 @@ const (
 	// KindApprovalRequest marks a privileged action waiting for a distinct
 	// approver. It contains routing metadata only, never credential material.
 	KindApprovalRequest = "approval.requested"
+	// KindCAHorizon marks a CA authority crossing into a tighter expiry band
+	// (H5). Replacing a trust anchor is a quarters-long programme, so this fires
+	// years ahead and again at each tightening.
+	KindCAHorizon = "ca.horizon"
+	// KindCAValidityCompression marks a CA authority whose remaining life is
+	// shorter than the validity its leaves are supposed to receive. Issuance keeps
+	// succeeding and the certificates just get quietly shorter, so this is the
+	// only warning an operator gets before something downstream rejects one.
+	KindCAValidityCompression = "ca.validity_compression"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing
@@ -101,4 +117,17 @@ type Alert struct {
 	OwnerName            string           `json:"owner_name,omitempty"`
 	OwnerEmail           string           `json:"owner_email,omitempty"`
 	EscalationRecipients []AlertRecipient `json:"escalation_recipients,omitempty"`
+
+	// CA calendar fields (H5), set only on KindCAHorizon and
+	// KindCAValidityCompression. AuthorityID names the CA rather than a
+	// certificate; HorizonMonths is the band crossed (36/24/12/6/3, or 0 for an
+	// authority already past its expiry); RenewBy is the date after which leaves
+	// under this authority stop receiving their full validity; and
+	// DependentCertificates says how much of the estate sits behind the anchor,
+	// so the alert carries blast radius instead of naming a CA in isolation.
+	AuthorityID           string    `json:"authority_id,omitempty"`
+	AuthorityKind         string    `json:"authority_kind,omitempty"`
+	HorizonMonths         *int      `json:"horizon_months,omitempty"`
+	RenewBy               time.Time `json:"renew_by,omitempty"`
+	DependentCertificates *int      `json:"dependent_certificates,omitempty"`
 }

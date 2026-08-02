@@ -4,6 +4,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
@@ -100,6 +101,15 @@ func WithTenantKeyDomainLifecycle(service TenantKeyDomainLifecycle) Option {
 // of a description that could drift from what the process enforces.
 func WithConnectorRegistry(registry *connector.Registry) Option {
 	return func(c *config) { c.connectorRegistry = registry }
+}
+
+// WithCALeafValidity sets the reference leaf lifetime the CA calendar (H5)
+// measures each authority's remaining horizon against, so the console can serve a
+// "renew/re-key by" date and flag an authority that is already truncating the
+// leaves issued under it. Zero falls back to lifecycle.DefaultLeafValidity. It is
+// a yardstick for horizon reporting, never a cap on what any profile issues.
+func WithCALeafValidity(d time.Duration) Option {
+	return func(c *config) { c.caLeafValidity = d }
 }
 
 // WithSSHFleet wires the standing-SSH-key fleet inventory (B-2): the hosts

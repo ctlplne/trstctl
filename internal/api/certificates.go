@@ -63,6 +63,10 @@ type certificateHealthSummary struct {
 	Expiring7d          int    `json:"expiring_7d"`
 	Expiring30d         int    `json:"expiring_30d"`
 	Expiring90d         int    `json:"expiring_90d"`
+	Expiring180d        int    `json:"expiring_180d"`
+	Expiring1y          int    `json:"expiring_1y"`
+	Expiring2y          int    `json:"expiring_2y"`
+	Expiring3y          int    `json:"expiring_3y"`
 	ExternalSourceCount int    `json:"external_source_count"`
 	ImportedCount       int    `json:"imported_count"`
 	DiscoveredCount     int    `json:"discovered_count"`
@@ -119,6 +123,10 @@ func toCertificateHealthDashboard(s store.CertificateHealthSnapshot) certificate
 		Expiring7d:          s.Summary.Expiring7d,
 		Expiring30d:         s.Summary.Expiring30d,
 		Expiring90d:         s.Summary.Expiring90d,
+		Expiring180d:        s.Summary.Expiring180d,
+		Expiring1y:          s.Summary.Expiring1y,
+		Expiring2y:          s.Summary.Expiring2y,
+		Expiring3y:          s.Summary.Expiring3y,
 		ExternalSourceCount: s.Summary.ExternalSourceCount,
 		ImportedCount:       s.Summary.ImportedCount,
 		DiscoveredCount:     s.Summary.DiscoveredCount,

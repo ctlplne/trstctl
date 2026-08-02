@@ -308,7 +308,14 @@ func (a *API) listCAAuthorities(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
+	// Every authority carries its year-scale horizon (H5), so the console never
+	// has to decide for itself whether a not_after two years out is fine.
+	now := time.Now().UTC()
+	out := make([]caAuthorityResponse, 0, len(items))
+	for _, item := range items {
+		out = append(out, a.toCAAuthorityResponse(item, now))
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: out})
 }
 
 //trstctl:mutation

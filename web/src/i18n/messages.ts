@@ -1603,6 +1603,10 @@ export const messages = {
     defaultMessage: "Expiring 30d",
     description: "Certificate health summary label for certificates expiring within thirty days.",
   },
+  "certificates.health.expiringLongHorizon": {
+    defaultMessage: "Beyond 90d, inside 3y",
+    description: "H5 CA calendar: certificate health summary label for the long-horizon band the dashboard used to collapse into a single 'later' bucket, which is how multi-year CA expiry stayed invisible.",
+  },
   "certificates.health.externalSources": {
     defaultMessage: "External sources",
     description: "Certificate health summary label for non-trstctl-issued certificate sources.",
@@ -3785,6 +3789,10 @@ export const messages = {
   "agents.endpointDiscovery.noKeyBytes": {
     defaultMessage: "no key bytes",
     description: "Badge indicating private key bytes are not transported.",
+  },
+  "agents.endpointDiscovery.none": {
+    defaultMessage: "This agent version advertises no endpoint-discovery sources. Nothing is being collected until one is configured.",
+    description: "Truth-integrity 1: shown when the served agent response advertises no discovery capability, replacing a hardcoded console fallback that claimed sources the agent binary cannot collect.",
   },
   "agents.endpointDiscovery.filesystem": {
     defaultMessage: "Filesystem certificates",
@@ -7864,6 +7872,10 @@ export const messages = {
     defaultMessage: "approved",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/statusVocab.ts.",
   },
+  "source.assumes.value1.day.leaves.4477a854ad": {
+    defaultMessage: "assumes {value1}-day leaves",
+    description: "H5 CA calendar: states the reference leaf validity the renew-by date assumes, so the date is interpretable.",
+  },
   "source.attestation.e52a82c98b": {
     defaultMessage: "Attestation",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/GraphView.tsx.",
@@ -7883,6 +7895,10 @@ export const messages = {
   "source.aws.region.7e489ee639": {
     defaultMessage: "AWS Region",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/issuerCatalog.ts.",
+  },
+  "source.beyond.planning.horizon.99e839df1f": {
+    defaultMessage: "Beyond planning horizon",
+    description: "H5 CA calendar: an authority whose expiry is further out than the widest alerting band - known, healthy, and not yet news.",
   },
   "source.blast.radius.explorer.447e6bd3bc": {
     defaultMessage: "Blast radius explorer",
@@ -8092,6 +8108,10 @@ export const messages = {
     defaultMessage: "Expiring certificates",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
   },
+  "source.expiry.horizon.191bec0761": {
+    defaultMessage: "Expiry horizon",
+    description: "H5 CA calendar: column and field label for a CA authority's year-scale expiry band.",
+  },
   "source.failed.5d28a90f44": {
     defaultMessage: "failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/statusVocab.ts.",
@@ -8180,6 +8200,10 @@ export const messages = {
     defaultMessage: "Keyfactor EJBCA with mTLS or OAuth2 auth.",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/issuerCatalog.ts.",
   },
+  "source.leaves.are.being.truncated.to.this.authori.db6d7cf6b7": {
+    defaultMessage: "Leaves are being truncated to this authority's expiry",
+    description: "H5 CA calendar: warning that the parent authority now expires sooner than the leaf validity, so new leaves are silently shorter.",
+  },
   "source.left.environment.a42bb38048": {
     defaultMessage: "Left environment",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
@@ -8247,6 +8271,10 @@ export const messages = {
   "source.no.profiles.defined.e8bae00a32": {
     defaultMessage: "No profiles defined.",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/ca/index.tsx.",
+  },
+  "source.no.recorded.expiry.0511b89b6b": {
+    defaultMessage: "No recorded expiry",
+    description: "H5 CA calendar: an authority carries no not_after, so no horizon can be computed - stated rather than guessed.",
   },
   "source.no.renewal.history.for.this.certificate.ye.d731b9489d": {
     defaultMessage: "No renewal history for this certificate yet.",
@@ -8403,6 +8431,10 @@ export const messages = {
   "source.recover.to.timestamp.c9cb99538c": {
     defaultMessage: "Recover to (timestamp)",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
+  },
+  "source.renew.or.re.key.by.00be37d4f2": {
+    defaultMessage: "Renew or re-key by",
+    description: "H5 CA calendar: the date after which leaves issued under this authority stop receiving their full validity.",
   },
   "source.renewing.7c0bdbad43": {
     defaultMessage: "renewing",

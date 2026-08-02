@@ -201,6 +201,10 @@ function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard
         <HealthStat label={t("certificates.health.totalInventory")} value={health.summary.total} />
         <HealthStat label={t("certificates.health.expiring7d")} value={health.summary.expiring_7d} />
         <HealthStat label={t("certificates.health.expiring30d")} value={health.summary.expiring_30d} />
+        {/* H5: the strip stopped at 30 days and the buckets stopped at 90, so a
+            hierarchy expiring in two years rendered identically to one expiring
+            in twenty. This band is where CA expiry actually lives. */}
+        <HealthStat label={t("certificates.health.expiringLongHorizon")} value={Math.max(0, (health.summary.expiring_3y ?? 0) - health.summary.expiring_90d)} />
         <HealthStat label={t("certificates.health.externalSources")} value={health.summary.external_source_count} />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,1fr)]">

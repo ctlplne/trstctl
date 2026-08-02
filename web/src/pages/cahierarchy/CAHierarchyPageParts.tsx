@@ -84,3 +84,62 @@ export function CALineageTree({ authorities }: { authorities: CAAuthority[] }) {
     </ul>
   );
 }
+
+// H5 (the CA calendar): the authorities list printed `not_after` as a raw string
+// and the health language called anything more than 90 days out "healthy" — the
+// leaf yardstick. That reads a root expiring in 30 months as fine, which is the
+// one case where it is already late to start, because replacing a trust anchor
+// means distributing it to every relying party first.
+//
+// The served authority now carries its horizon (band, months left, renew-by,
+// and whether leaves are already being truncated). These render it.
+
+/** Tone for a horizon band. Severity is computed server-side from runway, so the
+ * console maps it rather than re-deciding what "healthy" means. */
+function horizonTone(horizon: NonNullable<CAAuthority["horizon"]>): "critical" | "warning" | "info" | "success" {
+  if (horizon.expired || horizon.severity === "critical") return "critical";
+  if (horizon.validity_compressed || horizon.severity === "warning") return "warning";
+  if (horizon.band_months != null) return "info";
+  return "success";
+}
+
+/** Short band label: "3 mo", "24 mo", "Expired", or "Beyond planning horizon"
+ * for an authority further out than the widest alerting band. */
+export function caHorizonLabel(horizon: NonNullable<CAAuthority["horizon"]>): string {
+  if (horizon.expired) return translateNow("source.expired.424a2551d3");
+  if (horizon.band_months == null) return translateNow("source.beyond.planning.horizon.99e839df1f");
+  return `${horizon.months_remaining} / ${horizon.band_months} mo`;
+}
+
+/** The horizon band as a badge. An authority with no recorded expiry says so
+ * rather than being rendered as healthy — an unknown expiry is a real state. */
+export function CAHorizonBadge({ authority }: { authority: CAAuthority }) {
+  const horizon = authority.horizon;
+  if (!horizon) {
+    return <span className="text-xs text-muted-foreground">{translateNow("source.no.recorded.expiry.0511b89b6b")}</span>;
+  }
+  return (
+    <div className="grid gap-1">
+      <StatusBadge value={horizon.band_months != null ? `${horizon.band_months}mo` : "planning"} label={caHorizonLabel(horizon)} tone={horizonTone(horizon)} />
+      {horizon.validity_compressed ? (
+        <span className="text-2xs text-status-warning">{translateNow("source.leaves.are.being.truncated.to.this.authori.db6d7cf6b7")}</span>
+      ) : null}
+    </div>
+  );
+}
+
+/** The renew-by date, i.e. when leaves under this authority stop getting their
+ * full validity. Stated with the leaf validity it assumes, so the date means
+ * something. */
+export function CAHorizonRenewBy({ authority }: { authority: CAAuthority }) {
+  const horizon = authority.horizon;
+  if (!horizon?.renew_by) return <span className="text-muted-foreground">-</span>;
+  return (
+    <span className="whitespace-nowrap">
+      {horizon.renew_by.slice(0, 10)}
+      <span className="ml-1 text-2xs text-muted-foreground">
+        {translateNow("source.assumes.value1.day.leaves.4477a854ad", { value1: horizon.leaf_validity_days })}
+      </span>
+    </span>
+  );
+}

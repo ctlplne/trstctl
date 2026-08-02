@@ -28,7 +28,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
-import { CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
+import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
 import {
   api,
   ApiError,
@@ -1833,6 +1833,10 @@ function ServedAuthoritiesPanel({
       { id: "status", header: "Status", cell: (authority) => <StatusBadge vocabulary="certificate" value={authority.status} /> },
       { id: "serial", header: "Serial", cell: (authority) => <span className="font-mono text-xs">{shortSerial(authority.serial)}</span> },
       { id: "not_after", header: "Not after", cell: (authority) => authority.not_after || "-" },
+      // H5: the band, not the raw date. A root 30 months out reads as fine
+      // against a leaf yardstick and is already late against its own.
+      { id: "horizon", header: translateNow("source.expiry.horizon.191bec0761"), cell: (authority) => <CAHorizonBadge authority={authority} /> },
+      { id: "renew_by", header: translateNow("source.renew.or.re.key.by.00be37d4f2"), cell: (authority) => <CAHorizonRenewBy authority={authority} /> },
       {
         id: "issuance",
         header: "Issuance",
@@ -2281,6 +2285,8 @@ function AuthorityDetailDialog({ authority, onClose }: { authority: CAAuthority;
           <KeyValue label="Status" value={authority.status} />
           <KeyValue label="Serial" value={authority.serial} mono />
           <KeyValue label="Not after" value={authority.not_after || "-"} />
+          <KeyValue label={translateNow("source.expiry.horizon.191bec0761")} value={<CAHorizonBadge authority={authority} />} />
+          <KeyValue label={translateNow("source.renew.or.re.key.by.00be37d4f2")} value={<CAHorizonRenewBy authority={authority} />} />
           <KeyValue label={t("parity.parentAuthority_d9bb89")} value={authority.parent_id || "-"} mono />
           <KeyValue label="Signer handle" value={authority.signer_handle || "-"} mono />
         </dl>
@@ -2743,7 +2749,7 @@ function ManagedKeyPanel({
   );
 }
 
-function KeyValue({ label, mono = false, value }: { label: string; mono?: boolean; value: string }) {
+function KeyValue({ label, mono = false, value }: { label: string; mono?: boolean; value: ReactNode }) {
   return (
     <div>
       <dt className="font-medium text-muted-foreground">{label}</dt>

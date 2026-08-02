@@ -26,50 +26,6 @@ const certRevocationReasons = [
   "privilegeWithdrawn",
   "aaCompromise",
 ] as const;
-const defaultEndpointDiscoveryCapabilities = [
-  {
-    source_kind: "filesystem",
-    labelKey: "agents.endpointDiscovery.filesystem",
-    reported_over: "agent.mtls.ReportInventory",
-    metadata_only: true,
-    private_key_bytes: false,
-  },
-  {
-    source_kind: "pkcs11",
-    labelKey: "agents.endpointDiscovery.pkcs11",
-    reported_over: "agent.mtls.ReportInventory",
-    metadata_only: true,
-    private_key_bytes: false,
-  },
-  {
-    source_kind: "windows-store",
-    labelKey: "agents.endpointDiscovery.windowsStore",
-    reported_over: "agent.mtls.ReportInventory",
-    metadata_only: true,
-    private_key_bytes: false,
-  },
-  {
-    source_kind: "k8s-secret",
-    labelKey: "agents.endpointDiscovery.k8sSecret",
-    reported_over: "agent.mtls.ReportInventory",
-    metadata_only: true,
-    private_key_bytes: false,
-  },
-  {
-    source_kind: "trust-store",
-    labelKey: "agents.endpointDiscovery.trustStore",
-    reported_over: "agent.mtls.ReportInventory",
-    metadata_only: true,
-    private_key_bytes: false,
-  },
-  {
-    source_kind: "private-key",
-    labelKey: "agents.endpointDiscovery.privateKey",
-    reported_over: "agent.mtls.ReportInventory",
-    metadata_only: true,
-    private_key_bytes: false,
-  },
-] as const;
 
 export function Agents() {
   const { t } = useTranslation();
@@ -515,9 +471,13 @@ export function Agents() {
 
 function AgentDetail({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
-  const capabilities = agent.discovery_capabilities?.length
-    ? agent.discovery_capabilities
-    : defaultEndpointDiscoveryCapabilities.map((capability) => ({ ...capability, label: t(capability.labelKey) }));
+  // Capability comes from the served response only. The console used to fall back
+  // to its own hardcoded list — which named PKCS#11, the Windows certificate
+  // store, and Kubernetes Secrets, none of which the agent binary can collect —
+  // so an agent that reported nothing still rendered as covering a Windows
+  // estate. If the server advertises nothing, the panel says nothing
+  // (truth-integrity 1).
+  const capabilities = agent.discovery_capabilities ?? [];
   const reportPath = agent.inventory_report_path || "agent.mtls.ReportInventory";
 
   return (
@@ -581,6 +541,9 @@ function AgentDetail({ agent }: { agent: Agent }) {
             <dd className="break-all font-mono text-xs">{reportPath}</dd>
           </div>
         </dl>
+        {capabilities.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("agents.endpointDiscovery.none")}</p>
+        ) : null}
         <ul className="grid gap-2">
           {capabilities.map((capability) => (
             <li key={capability.source_kind} className="grid gap-1 border-l-2 border-brand-accent/60 pl-2">
@@ -592,6 +555,9 @@ function AgentDetail({ agent }: { agent: Agent }) {
                 {!capability.private_key_bytes && <span className="text-xs text-muted-foreground">{t("agents.endpointDiscovery.noKeyBytes")}</span>}
               </div>
               <span className="text-muted-foreground">{capability.label}</span>
+              {capability.enable_flags?.length ? (
+                <span className="font-mono text-2xs text-muted-foreground">{capability.enable_flags.join(" ")}</span>
+              ) : null}
             </li>
           ))}
         </ul>

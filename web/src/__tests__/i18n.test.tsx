@@ -300,8 +300,25 @@ describe("i18n boundary", () => {
       // being fixed. No placeholders and no technical identifiers involved.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW alongside
       // the outstanding translation review sheet.
-      "es-ES": "938c63e005b7187a48da593de868bb4e7be3c288eece3360bc34863390ebefda",
-      "de-DE": "24a982408ee13de7c7c628b4c61743dc64465d44989d452c4017aa52651b7160",
+      // H5 CA-calendar re-pin: six keys give CA authorities a year-scale expiry
+      // horizon in the console — the band label, the renew/re-key-by date and the
+      // leaf validity it assumes, the "beyond planning horizon" and "no recorded
+      // expiry" states, and the warning that leaves are already being truncated.
+      // Reviewed for meaning in all three locales; the truncation warning and the
+      // "no recorded expiry" state must keep their negation, since a missing
+      // expiry rendered as healthy is the defect being fixed. One interpolated
+      // message ({value1}-day leaves) preserves its placeholder in every locale.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      // C1a truth-integrity re-pin: one key for the agent endpoint-discovery
+      // panel's honest empty state. The console previously fell back to a
+      // hardcoded capability list naming PKCS#11, the Windows certificate store,
+      // and Kubernetes Secrets — none of which the agent binary can collect — so
+      // an agent advertising nothing still rendered as covering a Windows estate.
+      // The fallback is deleted; the panel now says nothing is advertised.
+      // Reviewed for meaning in all three locales.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "6c99c499274d70bee1d1036ccefcc6dc7f25969ebdf863e80e74b01ec8d9d162",
+      "de-DE": "e8825b6abf77a23423e3de0ad8ae14ae14f9bf2896f6b880f550c5157a5bcdca",
     });
   });
 

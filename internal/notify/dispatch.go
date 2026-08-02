@@ -564,6 +564,10 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Credential drift")
 	case KindApprovalRequest:
 		b.WriteString("Approval requested")
+	case KindCAHorizon:
+		b.WriteString("CA hierarchy expiry horizon")
+	case KindCAValidityCompression:
+		b.WriteString("CA horizon is compressing leaf validity")
 	default:
 		b.WriteString("trstctl alert")
 		if a.Kind != "" {

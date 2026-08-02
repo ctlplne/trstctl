@@ -115,6 +115,7 @@ type API struct {
 	tenantKeyDomains          TenantKeyDomainLifecycle
 	tenantCrypto              tenantseal.Access
 	connectorRegistry         *connector.Registry
+	caLeafValidity            time.Duration
 	sshFleet                  SSHFleetProvider
 	codeSigningIdentities     CodeSigningIdentityProvider
 	serviceNowBindings        []ServiceNowBinding
@@ -195,6 +196,7 @@ type config struct {
 	tenantKeyDomains          TenantKeyDomainLifecycle
 	tenantCrypto              tenantseal.Access
 	connectorRegistry         *connector.Registry
+	caLeafValidity            time.Duration
 	sshFleet                  SSHFleetProvider
 	codeSigningIdentities     CodeSigningIdentityProvider
 	serviceNowBindings        []ServiceNowBinding
@@ -451,6 +453,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		tenantKeyDomains:          cfg.tenantKeyDomains,
 		tenantCrypto:              cfg.tenantCrypto,
 		connectorRegistry:         cfg.connectorRegistry,
+		caLeafValidity:            cfg.caLeafValidity,
 		sshFleet:                  cfg.sshFleet,
 		codeSigningIdentities:     cfg.codeSigningIdentities,
 		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),

@@ -4626,6 +4626,7 @@ export interface components {
             serial?: string;
         };
         AgentDiscoveryCapability: {
+            enable_flags?: string[];
             label: string;
             metadata_only: boolean;
             private_key_bytes: boolean;
@@ -4874,6 +4875,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             extended_key_usages?: string[];
+            horizon?: components["schemas"]["CAAuthorityHorizon"];
             /** Format: uuid */
             id: string;
             kind: string;
@@ -4890,6 +4892,17 @@ export interface components {
             status: string;
             /** Format: uuid */
             tenant_id: string;
+        };
+        CAAuthorityHorizon: {
+            band_months?: number;
+            expired: boolean;
+            leaf_validity_days: number;
+            months_remaining: number;
+            /** Format: date-time */
+            renew_by?: string;
+            /** @enum {string} */
+            severity: "low" | "informational" | "warning" | "critical";
+            validity_compressed: boolean;
         };
         CAAuthorityList: {
             items: components["schemas"]["CAAuthority"][];
@@ -5261,7 +5274,7 @@ export interface components {
         CertificateExpiryBucket: {
             count: number;
             /** @enum {string} */
-            name: "expired" | "expiring_7d" | "expiring_30d" | "expiring_90d" | "later" | "unknown";
+            name: "expired" | "expiring_7d" | "expiring_30d" | "expiring_90d" | "expiring_180d" | "expiring_1y" | "expiring_2y" | "expiring_3y" | "later" | "unknown";
         };
         CertificateHealthDashboard: {
             expiring: components["schemas"]["CertificateHealthItem"][];
@@ -5291,7 +5304,11 @@ export interface components {
             active: number;
             discovered_count: number;
             expired: number;
+            expiring_180d?: number;
+            expiring_1y?: number;
+            expiring_2y?: number;
             expiring_30d: number;
+            expiring_3y?: number;
             expiring_7d: number;
             expiring_90d: number;
             external_source_count: number;

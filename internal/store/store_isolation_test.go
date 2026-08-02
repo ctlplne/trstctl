@@ -177,6 +177,11 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		"internal/server/server.go":               1,
 		"internal/store/connector_lifecycle.go":   1,
 		"internal/store/lifecycle.go":             1,
+		// H5: the CA calendar's leader enumerator — "which tenants operate a CA
+		// authority with a known expiry" — mirrors the expiry-alert enumerator in
+		// lifecycle.go. It reads tenant ids only; the authority rows themselves are
+		// then loaded under each tenant's RLS context.
+		"internal/store/ca_horizon.go": 1,
 	}
 	found := map[string]int{}
 

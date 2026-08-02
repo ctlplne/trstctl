@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -21,16 +22,50 @@ type agentDiscoveryCapabilityResponse struct {
 	ReportedOver    string `json:"reported_over"`
 	MetadataOnly    bool   `json:"metadata_only"`
 	PrivateKeyBytes bool   `json:"private_key_bytes"`
+	// EnableFlags are the agent flags that switch this source on. A source with
+	// flags collects nothing until an operator configures it, so listing the
+	// capability without listing its flags reads as coverage that is not running.
+	EnableFlags []string `json:"enable_flags,omitempty"`
 }
 
-var agentDiscoveryCapabilities = []agentDiscoveryCapabilityResponse{
-	{SourceKind: "filesystem", Label: "Filesystem certificates", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
-	{SourceKind: "pkcs11", Label: "PKCS#11 token certificates", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
-	{SourceKind: "windows-store", Label: "Windows certificate store", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
-	{SourceKind: "k8s-secret", Label: "Kubernetes TLS Secrets", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
-	{SourceKind: "trust-store", Label: "OS, Java, NSS, browser, and Windows trust stores", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
-	{SourceKind: "private-key", Label: "Private-key material locations", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
-	{SourceKind: "ssh", Label: "SSH keys, authorized access, known hosts, and trusted CAs", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
+// agentDiscoveryCapabilityLabels names each source kind for the console. The list
+// of kinds actually advertised comes from discovery.ShippedSourceKinds, not from
+// here, so a label cannot resurrect a capability the agent binary does not have.
+var agentDiscoveryCapabilityLabels = map[string]string{
+	"filesystem":    "Filesystem certificates",
+	"pkcs11":        "PKCS#11 token certificates",
+	"windows-store": "Windows certificate store",
+	"k8s-secret":    "Kubernetes TLS Secrets",
+	"trust-store":   "OS, Java, NSS, and browser trust stores",
+	"private-key":   "Private-key material locations", // #nosec G101 -- source-kind label naming where key material was located; no credential value present (CWE-798)
+	"ssh":           "SSH keys, authorized access, known hosts, and trusted CAs",
+}
+
+// agentDiscoveryCapabilities advertises exactly the source kinds the shipped
+// agent binary can collect (truth-integrity 1).
+//
+// This list used to be hardcoded and named all seven declared kinds. The agent
+// binary constructs enumerators for four of them; PKCS#11, the Windows
+// certificate store, and Kubernetes Secrets are declared at the collector
+// boundary and never built. An operator reading the panel concluded their Windows
+// estate was inventoried. It was not. Advertising is now derived from the agent
+// package's own record of what it ships, and a guard test proves every entry has
+// a constructor the agent binary reaches. Epic C1 ships the missing three; they
+// appear here when they are real.
+func agentDiscoveryCapabilities() []agentDiscoveryCapabilityResponse {
+	shipped := discovery.ShippedSourceKinds()
+	out := make([]agentDiscoveryCapabilityResponse, 0, len(shipped))
+	for _, s := range shipped {
+		label := agentDiscoveryCapabilityLabels[s.Kind]
+		if label == "" {
+			label = s.Kind
+		}
+		out = append(out, agentDiscoveryCapabilityResponse{
+			SourceKind: s.Kind, Label: label, ReportedOver: agentInventoryReportPath,
+			MetadataOnly: true, EnableFlags: append([]string(nil), s.Flags...),
+		})
+	}
+	return out
 }
 
 // agentResponse is an in-network agent in the API's JSON shape.
@@ -57,7 +92,7 @@ func toAgentResponse(a store.Agent) agentResponse {
 	out := agentResponse{
 		ID: a.ID, Name: a.Name, Status: a.Status, Version: a.Version,
 		InventoryReportPath:   agentInventoryReportPath,
-		DiscoveryCapabilities: append([]agentDiscoveryCapabilityResponse(nil), agentDiscoveryCapabilities...),
+		DiscoveryCapabilities: agentDiscoveryCapabilities(),
 	}
 	if a.LastSeenAt != nil {
 		s := a.LastSeenAt.UTC().Format(time.RFC3339)

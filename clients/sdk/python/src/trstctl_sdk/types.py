@@ -440,6 +440,7 @@ AgentCertRevocationRequest = TypedDict(
 AgentDiscoveryCapability = TypedDict(
     'AgentDiscoveryCapability',
     {
+        'enable_flags': list[str],
         'label': str,
         'metadata_only': bool,
         'private_key_bytes': bool,
@@ -822,6 +823,7 @@ CAAuthority = TypedDict(
         'common_name': str,
         'created_at': str,
         'extended_key_usages': list[str],
+        'horizon': dict[str, Any],
         'id': str,
         'kind': str,
         'max_path_len': int,
@@ -833,6 +835,20 @@ CAAuthority = TypedDict(
         'signer_handle': str,
         'status': str,
         'tenant_id': str,
+    },
+    total=False,
+)
+
+CAAuthorityHorizon = TypedDict(
+    'CAAuthorityHorizon',
+    {
+        'band_months': int,
+        'expired': bool,
+        'leaf_validity_days': int,
+        'months_remaining': int,
+        'renew_by': str,
+        'severity': str,
+        'validity_compressed': bool,
     },
     total=False,
 )
@@ -1427,7 +1443,11 @@ CertificateHealthSummary = TypedDict(
         'active': int,
         'discovered_count': int,
         'expired': int,
+        'expiring_180d': int,
+        'expiring_1y': int,
+        'expiring_2y': int,
         'expiring_30d': int,
+        'expiring_3y': int,
         'expiring_7d': int,
         'expiring_90d': int,
         'external_source_count': int,

@@ -42,6 +42,11 @@ type Config struct {
 	RenewBefore time.Duration // renew certificates expiring within this window
 	AlertBefore time.Duration // alert on certificates expiring within this window
 	TTL         time.Duration // lifetime requested for renewed/rotated certificates
+	// LeafValidity is the reference leaf lifetime the CA calendar measures a
+	// parent authority's remaining horizon against (H5). It is a yardstick for
+	// "can this parent still issue a full-length leaf", not a limit on issuance.
+	// Zero means DefaultLeafValidity.
+	LeafValidity time.Duration
 }
 
 // Manager runs the certificate-lifecycle automation over the inventory and the
