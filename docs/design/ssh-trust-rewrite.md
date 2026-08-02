@@ -4,10 +4,10 @@
 > behavior is documented in [SSH](../features/ssh.md) — this page records the
 > design decisions and is kept for the served-state matrix reference.
 
-
 **Status:** implemented — historical design record.
 **Catastrophic-risk area.** A mistake in how the agent rewrites `sshd` / host
-trust can lock operators out of production. This document is the contract the
+trust can lock operators out of production.
+This document is the contract the implementation must satisfy.
 The implementation follows this design; it adds no behavior not specified here.
 
 ## 1. Goal and non-goals
