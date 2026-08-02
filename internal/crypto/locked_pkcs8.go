@@ -7,7 +7,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
-	"errors"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -17,13 +16,17 @@ import (
 // persistence (R3.2: keys survive a signer restart). The returned slice is
 // unprotected memory — the caller MUST seal it and wipe the copy promptly, so the
 // key does not live unsealed for long.
+// The copy is taken inside the locked buffer's borrow, so a concurrent Destroy
+// cannot wipe or unmap the region mid-copy (AN-8 lifetime).
 func (l *LockedSigner) PKCS8() ([]byte, error) {
-	der := l.der.Bytes()
-	if der == nil {
-		return nil, errors.New("crypto: locked key has been destroyed")
+	var out []byte
+	if err := l.der.Use(func(der []byte) error {
+		out = make([]byte, len(der))
+		copy(out, der)
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err)
 	}
-	out := make([]byte, len(der))
-	copy(out, der)
 	return out, nil
 }
 

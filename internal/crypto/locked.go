@@ -117,16 +117,28 @@ func (l *LockedSigner) Public() PublicKey { return l.public }
 // remains the locked buffer; this method exists for endpoints that require the
 // certificate's private key to land on the target.
 func (l *LockedSigner) PrivateKeyPEM() ([]byte, error) {
-	der := l.der.Bytes()
-	if der == nil {
-		return nil, errors.New("crypto: locked key has been destroyed")
+	var out []byte
+	if err := l.der.Use(func(der []byte) error {
+		out = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+		if out == nil {
+			return errors.New("crypto: encode private key PEM")
+		}
+		runtime.KeepAlive(l.der)
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err)
 	}
-	out := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
-	if out == nil {
-		return nil, errors.New("crypto: encode private key PEM")
-	}
-	runtime.KeepAlive(l.der)
 	return out, nil
+}
+
+// destroyedKeyError maps the locked buffer's lifetime error onto this package's
+// destroyed-key wording, so callers keep seeing one stable message whether the key
+// was already gone or a concurrent Destroy won the race for it.
+func destroyedKeyError(err error) error {
+	if errors.Is(err, secret.ErrDestroyed) {
+		return errors.New("crypto: locked key has been destroyed")
+	}
+	return err
 }
 
 // SignDigest signs digest with the locked private key, materializing the key in
@@ -146,35 +158,62 @@ func (l *LockedSigner) PrivateKeyPEM() ([]byte, error) {
 // cannot promise the runtime never copied the value mid-operation, so the
 // eliminate-it-entirely fix remains HSM custody where the key never materializes
 // here (EXC-CRYPTO-01).
+//
+// Lifetime (AN-4/AN-8): the whole private-key operation runs inside l.der.Use, so
+// the locked region is borrowed under the buffer's read lock for exactly as long
+// as this method holds a slice into it. A concurrent Destroy — the signer's
+// DestroyKey RPC racing this Sign — therefore waits for the signature to finish
+// instead of wiping and munmapping the region under the parse, which was a
+// use-after-free (a SIGSEGV on Linux, silent key corruption elsewhere). A Destroy
+// that lands FIRST is still honored: Use refuses the borrow and this returns the
+// clean destroyed-key error rather than signing with dead material.
 func (l *LockedSigner) SignDigest(digest []byte, opts SignOptions) ([]byte, error) {
-	der := l.der.Bytes()
-	if der == nil {
-		return nil, errors.New("crypto: locked key has been destroyed")
+	var sig []byte
+	if err := l.der.Use(func(der []byte) error {
+		// Test-only seam (nil in production): parks a signature INSIDE the borrow so a
+		// test can prove a concurrent Destroy waits instead of freeing the region here.
+		if signDigestBorrowObserver != nil {
+			signDigestBorrowObserver()
+		}
+		key, err := x509.ParsePKCS8PrivateKey(der)
+		if err != nil {
+			return fmt.Errorf("parse private key: %w", err)
+		}
+		// Zeroize the transient key's secret scalars after we are done, and keep both
+		// the key and its source buffer alive across the whole operation so the wipe is
+		// not reordered before the sign or elided.
+		defer func() {
+			wipeStdlibKey(key)
+			runtime.KeepAlive(key)
+			runtime.KeepAlive(l.der)
+		}()
+		signer, ok := key.(crypto.Signer)
+		if !ok {
+			return fmt.Errorf("crypto: parsed key %T is not a signer", key)
+		}
+		// Test-only seam (nil in production): hand the residue test a reference to the
+		// transiently-parsed key so it can assert the secret scalars are zero AFTER this
+		// method returns (i.e. after the deferred wipe runs). Verifies SIGNER-008.
+		if signDigestKeyObserver != nil {
+			signDigestKeyObserver(key)
+		}
+		out, err := signDigest(signer, digest, opts)
+		if err != nil {
+			return err
+		}
+		sig = out
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err)
 	}
-	key, err := x509.ParsePKCS8PrivateKey(der)
-	if err != nil {
-		return nil, fmt.Errorf("parse private key: %w", err)
-	}
-	// Zeroize the transient key's secret scalars after we are done, and keep both
-	// the key and its source buffer alive across the whole operation so the wipe is
-	// not reordered before the sign or elided.
-	defer func() {
-		wipeStdlibKey(key)
-		runtime.KeepAlive(key)
-		runtime.KeepAlive(l.der)
-	}()
-	signer, ok := key.(crypto.Signer)
-	if !ok {
-		return nil, fmt.Errorf("crypto: parsed key %T is not a signer", key)
-	}
-	// Test-only seam (nil in production): hand the residue test a reference to the
-	// transiently-parsed key so it can assert the secret scalars are zero AFTER this
-	// method returns (i.e. after the deferred wipe runs). Verifies SIGNER-008.
-	if signDigestKeyObserver != nil {
-		signDigestKeyObserver(key)
-	}
-	return signDigest(signer, digest, opts)
+	return sig, nil
 }
+
+// signDigestBorrowObserver is a test-only hook (nil in production) invoked at the
+// top of SignDigest's locked-buffer borrow, before the key is parsed. It exists so
+// the destroy-during-sign lifetime tests can hold the borrow open while another
+// goroutine calls Destroy, and has zero cost in production.
+var signDigestBorrowObserver func()
 
 // signDigestKeyObserver is a test-only hook (set via export_test.go) invoked with
 // the transiently-parsed private key inside SignDigest. It is nil in production and
