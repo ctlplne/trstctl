@@ -89,10 +89,25 @@ func TestEELintRatchetBaselineIsHonest(t *testing.T) {
 		t.Error("Makefile has no ee-lint-ratchet target")
 	}
 	// It must be wired into lint, not merely defined.
+	//
+	// Specifically it must be invoked from the lint RECIPE, not listed as a
+	// prerequisite. As a prerequisite it runs before lint's golangci-lint
+	// discovery, so on a machine without the tool `make lint` fails with the
+	// ratchet's error instead of the fail-closed message CODE-005 asserts, and it
+	// breaks lint-partial. Two other guards (CODE-005 and tenantfilter's
+	// release-gate check) caught exactly that.
 	lintRule := regexp.MustCompile(`(?m)^lint:[^\n]*`)
-	if m := lintRule.FindString(makefile); m != "" && !strings.Contains(m, "ee-lint-ratchet") {
-		t.Errorf("ee-lint-ratchet is defined but `lint` does not depend on it (%q); "+
-			"a ratchet nobody runs is not a ratchet", m)
+	if m := lintRule.FindString(makefile); strings.Contains(m, "ee-lint-ratchet") {
+		t.Errorf("ee-lint-ratchet is a PREREQUISITE of lint (%q); invoke it from the recipe "+
+			"instead, or it runs before the golangci-lint discovery and breaks lint-partial", m)
+	}
+	recipeInvokes := regexp.MustCompile(`(?m)^\t.*\$\(MAKE\)[^\n]*ee-lint-ratchet`)
+	if !recipeInvokes.MatchString(makefile) {
+		t.Error("no lint recipe line invokes ee-lint-ratchet; a ratchet nobody runs is not a ratchet")
+	}
+	if !strings.Contains(makefile, "ee/ lint ratchet NOT run by lint-partial") {
+		t.Error("the ratchet does not honour LINT_ALLOW_PARTIAL; lint-partial is the escape " +
+			"hatch for a machine without the optional tools and must stay usable there")
 	}
 	// GO_PACKAGES must NOT yet claim ee/ while the ratchet is the mechanism --
 	// if someone brings ee/ into the main scope, this test should be revisited
