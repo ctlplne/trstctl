@@ -60,17 +60,27 @@ func (l *lockedKey) public() *ecdsa.PublicKey { return l.pub }
 // operation, and wipes the reconstructed key's secret scalar before returning so
 // the unprotected copy does not outlive the call. fn must not retain the key.
 func (l *lockedKey) sign(fn func(*ecdsa.PrivateKey) error) error {
-	der := l.der.Bytes()
-	if der == nil {
-		return errors.New("ca: CA key has been destroyed")
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(der)
-	if err != nil {
-		return fmt.Errorf("ca: parse CA private key: %w", err)
-	}
-	key, ok := parsed.(*ecdsa.PrivateKey)
-	if !ok {
-		return fmt.Errorf("ca: parsed CA key %T is not ECDSA", parsed)
+	var key *ecdsa.PrivateKey
+	// The borrow covers the parse only. fn is caller-supplied and secret.Buffer.Use
+	// is not reentrant, so calling fn inside the borrow would let a caller that
+	// touches this same buffer deadlock behind a queued Destroy. The parsed key is
+	// an independent heap object, so fn does not need the borrow held.
+	if err := l.der.Use(func(der []byte) error {
+		parsed, err := x509.ParsePKCS8PrivateKey(der)
+		if err != nil {
+			return fmt.Errorf("ca: parse CA private key: %w", err)
+		}
+		k, ok := parsed.(*ecdsa.PrivateKey)
+		if !ok {
+			return fmt.Errorf("ca: parsed CA key %T is not ECDSA", parsed)
+		}
+		key = k
+		return nil
+	}); err != nil {
+		if errors.Is(err, secret.ErrDestroyed) {
+			return errors.New("ca: CA key has been destroyed")
+		}
+		return err
 	}
 	// Best-effort zeroization of the transiently-parsed private scalar after the
 	// signature. The big.Int words are the secret; clearing them shrinks the window

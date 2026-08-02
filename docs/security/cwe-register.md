@@ -306,9 +306,9 @@ not this file.
 | `internal/crypto/argon2id.go:69` | length of a stored KDF hash, far under the uint32 bound (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:286` | test-support package compiled only into test binaries (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:303` | test-support package compiled only into test binaries (CWE-190) |
-| `internal/crypto/seal/seal.go:178` | bounded to maxUint16Value by the check above (CWE-190) |
-| `internal/crypto/seal/seal.go:530` | validateDomain above caps the length at maxUint16Value (CWE-190) |
-| `internal/crypto/seal/seal.go:533` | bounded to maxUint16Value by the guard above (CWE-190) |
+| `internal/crypto/seal/seal.go:198` | bounded to maxUint16Value by the check above (CWE-190) |
+| `internal/crypto/seal/seal.go:550` | validateDomain above caps the length at maxUint16Value (CWE-190) |
+| `internal/crypto/seal/seal.go:553` | bounded to maxUint16Value by the guard above (CWE-190) |
 | `internal/crypto/signauth.go:66` | enum purpose and bounded message length framing (CWE-190) |
 | `internal/crypto/signauth.go:76` | enum purpose and bounded message length framing (CWE-190) |
 | `internal/crypto/ssh.go:69` | certificate validity epoch seconds; non-negative by validation (CWE-190) |

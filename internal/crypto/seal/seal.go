@@ -11,7 +11,6 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
-	"runtime"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -85,10 +84,20 @@ func (k *LocalKEK) Destroy() { k.key.Destroy() }
 // the crypto boundary — without lifting it into a heap []byte that the GC could
 // duplicate (AN-8). The key is kept alive across the call so the compiler cannot
 // free it early.
+//
+// The borrow holds the read side of the buffer lock for the whole of fn, so a
+// concurrent Destroy waits rather than unmapping the region mid-read (ARCH-014).
+// Two consequences for callers:
+//
+// On a destroyed KEK, WithKey does NOT call fn — it returns secret.ErrDestroyed.
+// It used to call fn with a nil slice, which pushed the "is this key still alive?"
+// check onto every caller and let a nil KEK reach a cipher constructor.
+//
+// fn must not call WithKey or Destroy on this same KEK: the buffer lock is a
+// sync.RWMutex, which is neither reentrant nor writer-starving, so a nested borrow
+// behind a queued Destroy deadlocks.
 func (k *LocalKEK) WithKey(fn func(kek []byte) error) error {
-	b := k.key.Bytes()
-	defer runtime.KeepAlive(b)
-	return fn(b)
+	return k.key.Use(fn)
 }
 
 // GenerateKEK returns a fresh random 256-bit key-encryption key. The caller
@@ -103,11 +112,22 @@ func GenerateKEK() ([]byte, error) {
 }
 
 func (k *LocalKEK) gcm() (cipher.AEAD, error) {
-	block, err := aes.NewCipher(k.key.Bytes())
-	if err != nil {
+	var aead cipher.AEAD
+	if err := k.key.Use(func(kek []byte) error {
+		block, err := aes.NewCipher(kek)
+		if err != nil {
+			return err
+		}
+		g, err := cipher.NewGCM(block)
+		if err != nil {
+			return err
+		}
+		aead = g
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	return cipher.NewGCM(block)
+	return aead, nil
 }
 
 // WrapDEK encrypts a DEK under the KEK (AES-256-GCM): nonce || ciphertext+tag.

@@ -110,11 +110,17 @@ func (a *SignAuthorizer) Authorize(intent SignIntent) ([]byte, error) {
 	if a == nil || a.key == nil {
 		return nil, ErrNoSignAuthorizer
 	}
-	k := a.key.Bytes()
-	if k == nil {
-		return nil, errors.New("crypto: sign authorizer destroyed")
+	var mac []byte
+	if err := a.key.Use(func(k []byte) error {
+		mac = HMACSHA256(k, intent.canonicalBytes())
+		return nil
+	}); err != nil {
+		if errors.Is(err, secret.ErrDestroyed) {
+			return nil, errors.New("crypto: sign authorizer destroyed")
+		}
+		return nil, err
 	}
-	return HMACSHA256(k, intent.canonicalBytes()), nil
+	return mac, nil
 }
 
 // Verify reports whether token is a valid authorization for intent, comparing in

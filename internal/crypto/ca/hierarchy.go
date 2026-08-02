@@ -9,11 +9,13 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // This file adds private/enterprise CA hierarchy support (F48) inside the AN-3
@@ -212,13 +214,22 @@ func (c *CA) applyCALane(prof boundarycrypto.LeafProfile) boundarycrypto.LeafPro
 // each SignDigest, AN-8); the caller MUST Destroy it when done. The in-process CA
 // key is always ECDSA-P256 (NewRoot/CreateIntermediate generate P256).
 func (c *CA) digestSigner() (*boundarycrypto.LockedSigner, error) {
-	der := c.key.der.Bytes()
-	if der == nil {
-		return nil, fmt.Errorf("ca: CA key has been destroyed")
-	}
-	signer, err := boundarycrypto.NewLockedSignerFromPKCS8(boundarycrypto.ECDSAP256, der)
-	if err != nil {
-		return nil, fmt.Errorf("ca: load CA signing key: %w", err)
+	var signer *boundarycrypto.LockedSigner
+	// Borrow rather than Bytes(): NewLockedSignerFromPKCS8 copies the DER into its
+	// own locked buffer, so holding the read lock for the call is enough to stop a
+	// concurrent Destroy wiping the region mid-parse.
+	if err := c.key.der.Use(func(der []byte) error {
+		s, err := boundarycrypto.NewLockedSignerFromPKCS8(boundarycrypto.ECDSAP256, der)
+		if err != nil {
+			return fmt.Errorf("ca: load CA signing key: %w", err)
+		}
+		signer = s
+		return nil
+	}); err != nil {
+		if errors.Is(err, secret.ErrDestroyed) {
+			return nil, fmt.Errorf("ca: CA key has been destroyed")
+		}
+		return nil, err
 	}
 	return signer, nil
 }

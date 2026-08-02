@@ -229,13 +229,10 @@ func TestAccessCompletedHotMigrationUsesExactDomainAndDestroysBeforeFenceRelease
 		if !ok {
 			t.Fatalf("local registry returned %T, want *seal.LocalKEK", registry.opened)
 		}
-		if err := localKey.WithKey(func(key []byte) error {
-			if len(key) != 0 {
-				return errors.New("tenant key remained live when the shared fence released")
-			}
-			return nil
-		}); err != nil {
-			t.Fatal(err)
+		if err := localKey.WithKey(func([]byte) error {
+			return errors.New("tenant key remained live when the shared fence released")
+		}); !errors.Is(err, secret.ErrDestroyed) {
+			t.Errorf("WithKey on the released tenant key = %v, want secret.ErrDestroyed", err)
 		}
 		if _, err := escaped.Seal(nil, nil); !errors.Is(err, tenantseal.ErrCipherLeaseExpired) {
 			t.Fatalf("cipher remained usable when the shared fence released: %v", err)

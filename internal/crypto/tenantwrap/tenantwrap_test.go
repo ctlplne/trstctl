@@ -297,13 +297,13 @@ func TestRawKeyInputsAreWipedOnSuccessAndFailure(t *testing.T) {
 		if ownedDomain == nil {
 			t.Fatal("test did not reach domain KEK allocation")
 		}
-		if err := ownedDomain.WithKey(func(got []byte) error {
-			if got != nil {
-				return errors.New("error path left owned domain KEK reachable")
-			}
-			return nil
-		}); err != nil {
-			t.Fatal(err)
+		// A destroyed KEK refuses the borrow outright, so fn never runs. That is a
+		// stronger proof than "fn saw nil": it also fails if WithKey regresses to
+		// Bytes(), which would hand fn a nil slice and report success.
+		if err := ownedDomain.WithKey(func([]byte) error {
+			return errors.New("error path left owned domain KEK reachable")
+		}); !errors.Is(err, secret.ErrDestroyed) {
+			t.Fatalf("WithKey on destroyed owned domain KEK = %v, want secret.ErrDestroyed", err)
 		}
 	})
 
@@ -400,13 +400,10 @@ func TestReturnedDomainKEKHasCallerOwnedDestroySemantics(t *testing.T) {
 
 	domain.Destroy()
 	domain.Destroy()
-	if err := domain.WithKey(func(got []byte) error {
-		if got != nil {
-			return errors.New("Destroy left domain KEK bytes reachable")
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
+	if err := domain.WithKey(func([]byte) error {
+		return errors.New("Destroy left domain KEK bytes reachable")
+	}); !errors.Is(err, secret.ErrDestroyed) {
+		t.Fatalf("WithKey after Destroy = %v, want secret.ErrDestroyed", err)
 	}
 }
 
