@@ -11,6 +11,17 @@
 #               non-test caller reachable from the shipped EE attach/API/outbox/background
 #               wiring; a regression to test-only fails the gate.
 #
+# SCOPE (PCAS-INT-CALL, 2026-08-02): the REQUIRED array below is HAND-WRITTEN, so it can
+# only ever prove what someone remembered to add to it. The constructor-shaped half of
+# the family no longer depends on it: ee/succession/intgate ENUMERATES every exported
+# ee/succession constructor straight from the AST and applies the same non-test-caller
+# floor plus a seam tier and an RTA whole-program reachability tier, so a newly added
+# constructor cannot hide from the gate. This script is kept as the COMPLEMENT: it covers
+# the mechanism entry points that are NOT constructors (Mint, MintPairedThroughSigner,
+# IssueLeafCertificate, IssueStapledLeaf, Import, SignEpochCheckpoint,
+# BuildPostureReport, ...), which a constructor enumeration cannot see. Both halves run
+# under `make pcas-caller-gate`; the RTA tier is `make pcas-caller-gate-strong` in CI.
+#
 # Run from the repo root; exit 0 = pass. The shipped binary wires the API/outbox/background
 # surfaces specified in PCAS-WIRING-DESIGN.md.
 set -uo pipefail
