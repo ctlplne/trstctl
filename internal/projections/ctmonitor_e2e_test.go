@@ -11,6 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -71,7 +72,7 @@ func TestCTMonitorEndToEndOverHTTP(t *testing.T) {
 	ob := orchestrator.NewOutbox(s)
 	sched := ctmonitor.NewScheduler(
 		ctmonitor.NewStorePersistence(s),
-		ctmonitor.NewHTTPFetcher(),
+		ctmonitor.NewHTTPFetcherWithClient(netsec.InsecureLoopbackClient(30*time.Second)),
 		ctmonitor.NewStoreKnownGood(s),
 		ctmonitor.NewStoreAlerter(s, ob),
 	)

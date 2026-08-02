@@ -125,16 +125,17 @@ var ambientHTTPClientGuardPackages = map[string]bool{
 // already existed when the rule landed, so the rule could be turned on without a
 // 27-file big-bang. Every row is debt: it means that call site still builds its
 // own client instead of going through the reviewed netsec/egress path. Rows come
-// OUT as sites migrate; no row may be added for new code.
+// OUT as sites migrate; no row may be added for new code. The first burn-down
+// pass took it from 27 to 20: the CT-log fetcher and the ARI client now default
+// to netsec.SafeClient, and the agent HTTP enroller, the ACME HTTP-01
+// conformance escape hatch, the perf live stack, and the PQC lab now default to
+// netsec.InsecureLoopbackClient.
 var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	"cmd/trstctl-agent/main.go": {
 		"enrollmentHTTPClient": true,
 	},
 	"cmd/trstctl/main.go": {
 		"controlPlaneProbe": true,
-	},
-	"internal/agent/httpenroll.go": {
-		"NewHTTPEnroller": true,
 	},
 	"internal/agent/k8s/client.go": {
 		"InCluster": true,
@@ -152,10 +153,6 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	"internal/crypto/mtls/server.go": {
 		"LoopbackProbeClient": true,
 	},
-	"internal/discovery/ctmonitor/httpfetcher.go": {
-		"NewHTTPFetcher":           true,
-		"NewHTTPFetcherWithClient": true,
-	},
 	"internal/observ/otlp.go": {
 		"NewOTLPHTTPExporter": true,
 	},
@@ -165,15 +162,6 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	},
 	"internal/operator/secretsync.go": {
 		"NewHTTPSecretResolver": true,
-	},
-	"internal/perf/live.go": {
-		"startLiveEvalStack": true,
-	},
-	"internal/protocols/acme/validate.go": {
-		"Validate": true,
-	},
-	"internal/protocols/ari/client.go": {
-		"NewClient": true,
 	},
 	"internal/server/auth.go": {
 		"buildOIDCAuthConfig": true,
@@ -196,9 +184,6 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	"tools/dodcensus/proof/proof.go": {
 		"brokerRequest": true,
 		"cleanup":       true,
-	},
-	"tools/pqclab/main.go": {
-		"runCore": true,
 	},
 }
 

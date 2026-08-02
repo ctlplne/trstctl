@@ -19,6 +19,7 @@ import (
 
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/protocol"
 	"trstctl.com/trstctl/internal/secretjson"
 )
@@ -72,7 +73,12 @@ func NewHTTPEnroller(baseURL string, client *http.Client, opts ...HTTPEnrollerOp
 	}
 	base, err := validateEnrollmentBaseURL(baseURL, client, cfg.allowLoopbackDevHTTP)
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		// validateEnrollmentBaseURL accepts a nil client only for the explicit
+		// loopback development endpoint, so the fallback is the loopback-only
+		// client (SEC-005). It re-checks the RESOLVED address before every dial,
+		// so a poisoned "localhost" resolver entry cannot turn the development
+		// escape hatch into real network egress carrying a bootstrap token.
+		client = netsec.InsecureLoopbackClient(30 * time.Second)
 	}
 	return &HTTPEnroller{base: base, client: client, err: err}
 }

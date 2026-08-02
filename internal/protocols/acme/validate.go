@@ -40,13 +40,15 @@ type Validator interface {
 // (loopback, link-local incl. 169.254.169.254, private, unique-local) and bounds
 // redirects, defeating a metadata/internal-endpoint fetch and DNS rebinding. An
 // explicitly injected Client is trusted and used as-is (e.g. the conformance
-// harness pointing at a loopback test server); AllowPrivateTargets opts the
-// default client out of the guard for tests that must dial loopback directly.
+// harness pointing at a loopback test server); AllowPrivateTargets swaps the
+// default for a loopback-only client for tests that must dial loopback directly.
 type HTTP01Validator struct {
 	Client *http.Client
-	// AllowPrivateTargets disables the SSRF guard on the DEFAULT client only. It
-	// exists for tests that deliberately dial a loopback httptest server; it is
-	// false in production, where every fetch is guarded.
+	// AllowPrivateTargets narrows the DEFAULT client to loopback only. It exists
+	// for tests that deliberately dial a loopback httptest server; it is false in
+	// production, where every fetch goes through the full SSRF guard. It is not an
+	// unguarded client: even set, the client can physically dial nothing but
+	// loopback, so it cannot reach RFC-1918, link-local, or public targets.
 	AllowPrivateTargets bool
 }
 
@@ -58,9 +60,9 @@ func (v HTTP01Validator) Validate(ctx context.Context, challengeType, domain, to
 	client := v.Client
 	if client == nil {
 		// Default to the SSRF-guarded client (SEC-006). Tests that must reach loopback
-		// set AllowPrivateTargets to get an unguarded default instead.
+		// set AllowPrivateTargets to get a loopback-only default instead.
 		if v.AllowPrivateTargets {
-			client = &http.Client{Timeout: 5 * time.Second}
+			client = loopbackOnlyClient(5 * time.Second)
 		} else {
 			client = ssrfSafeClient(5 * time.Second)
 		}

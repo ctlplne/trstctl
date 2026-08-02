@@ -27,3 +27,11 @@ func blockedIP(ip net.IP) bool { return netsec.BlockedIP(ip) }
 
 // ssrfSafeClient returns the SSRF-safe HTTP client for HTTP-01 validation.
 func ssrfSafeClient(timeout time.Duration) *http.Client { return netsec.SafeClient(timeout) }
+
+// loopbackOnlyClient is the client behind HTTP01Validator.AllowPrivateTargets. It
+// is not an unguarded client: it can physically dial only loopback, so the
+// conformance escape hatch cannot reach RFC-1918, link-local, or public targets
+// even if it were ever set outside a test (SEC-005).
+func loopbackOnlyClient(timeout time.Duration) *http.Client {
+	return netsec.InsecureLoopbackClient(timeout)
+}

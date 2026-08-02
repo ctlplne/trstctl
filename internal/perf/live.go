@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/server"
@@ -166,7 +167,7 @@ func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
 	if err != nil {
 		return nil, err
 	}
-	stack := &liveEvalStack{tempDir: dir, httpClient: &http.Client{Timeout: 10 * time.Second}}
+	stack := &liveEvalStack{tempDir: dir, httpClient: netsec.InsecureLoopbackClient(10 * time.Second)}
 	defer func() {
 		if err != nil {
 			stack.Close()

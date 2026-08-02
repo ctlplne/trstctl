@@ -90,6 +90,37 @@ func TestAmbientHTTPBurnDownLedgerOnlyShrinks(t *testing.T) {
 	}
 }
 
+// TestAmbientHTTPBurnDownLedgerKeepsTheMigratedSitesOut is the second half of the
+// ratchet. TestAmbientHTTPBurnDownLedgerOnlyShrinks bounds the TOTAL; this one
+// pins the specific call sites that have already been migrated to
+// netsec.SafeClient / netsec.InsecureLoopbackClient, so a later change cannot
+// silently re-introduce an ambient client at a site whose debt was already paid
+// and stay under the total. It also pins the post-migration total, so the ledger
+// cannot creep back up toward 27.
+func TestAmbientHTTPBurnDownLedgerKeepsTheMigratedSitesOut(t *testing.T) {
+	const sizeAfterTheFirstBurnDown = 20
+	migrated := []string{
+		"internal/agent/httpenroll.go",
+		"internal/discovery/ctmonitor/httpfetcher.go",
+		"internal/perf/live.go",
+		"internal/protocols/acme/validate.go",
+		"internal/protocols/ari/client.go",
+		"tools/pqclab/main.go",
+	}
+	for _, file := range migrated {
+		if functions, ok := reviewedAmbientHTTPClients[file]; ok {
+			t.Errorf("%s was migrated off ambient http.Client construction but is back in the burn-down ledger as %#v; take its client from internal/netsec instead of re-adding the row", file, functions)
+		}
+	}
+	total := 0
+	for _, functions := range reviewedAmbientHTTPClients {
+		total += len(functions)
+	}
+	if total != sizeAfterTheFirstBurnDown {
+		t.Fatalf("reviewedAmbientHTTPClients holds %d reviewed sites, want exactly %d after the first burn-down pass; lower this constant when you migrate another site, never raise it", total, sizeAfterTheFirstBurnDown)
+	}
+}
+
 // TestBasePackagePathStripsTestVariantSuffix covers the trap that would have
 // broken `make lint`: `go vet` analyzes a package a second time as part of its
 // own test binary, under the import path "p [p.test]". Without the strip,

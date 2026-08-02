@@ -31,6 +31,7 @@ import (
 	internalcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/license"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const (
@@ -449,7 +450,7 @@ func runCore(ctx context.Context, repo string) (map[string][]byte, []stageReceip
 	defer serverProcess.stop()
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", serverPort)
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := netsec.InsecureLoopbackClient(10 * time.Second)
 	fmt.Println(">> PQC core rehearsal: inspect served edition and CBOM read paths")
 	if err := waitReady(ctx, client, baseURL, serverProcess); err != nil {
 		return nil, nil, fmt.Errorf("%w; control-plane log=%s", err, sanitizeLog(serverLog.String()))

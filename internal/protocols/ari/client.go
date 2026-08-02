@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const maxBody = 1 << 20
@@ -21,10 +23,13 @@ type Client struct {
 	http *http.Client
 }
 
-// NewClient returns an ARI client using c (or a default client when c is nil).
+// NewClient returns an ARI client using c, or the SSRF-safe client (SEC-005) when
+// c is nil. renewalInfoBase comes from the upstream CA's ACME directory document,
+// so the default must not be able to reach loopback or internal addresses; tests
+// against a loopback ACME server pass netsec.InsecureLoopbackClient explicitly.
 func NewClient(c *http.Client) *Client {
 	if c == nil {
-		c = &http.Client{Timeout: 30 * time.Second}
+		c = netsec.SafeClient(30 * time.Second)
 	}
 	return &Client{http: c}
 }

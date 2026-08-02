@@ -5,9 +5,11 @@ package ctmonitor_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // The HTTP fetcher talks RFC 6962 to a faithful CT log and returns parsed,
@@ -24,7 +26,9 @@ func TestHTTPFetcher(t *testing.T) {
 	srv := ctlogtest.NewServer(ctlogtest.X509Entry(d1), ctlogtest.PrecertEntry(d2, tbs2))
 	defer srv.Close()
 
-	f := ctmonitor.NewHTTPFetcher()
+	// The production default is netsec.SafeClient, which refuses loopback; this
+	// test polls a loopback CT log server, so it injects the loopback-only client.
+	f := ctmonitor.NewHTTPFetcherWithClient(netsec.InsecureLoopbackClient(30 * time.Second))
 	ctx := context.Background()
 
 	size, err := f.TreeSize(ctx, srv.URL())

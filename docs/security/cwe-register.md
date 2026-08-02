@@ -341,7 +341,7 @@ not this file.
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
 | `internal/orchestrator/main_test.go:67` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/perf/live.go:847` | page size is positive and small (CWE-190) |
+| `internal/perf/live.go:848` | page size is positive and small (CWE-190) |
 | `internal/projections/full_dr_test.go:369` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/tenant_key_domain_test.go:59` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -514,8 +514,8 @@ not this file.
 | `deploy/deploycheck_test.go:450` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/docker/dist_test.go:408` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/docker/dist_test.go:511` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:797` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:862` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:802` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:867` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/docker/reproducible_test.go:64` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -544,8 +544,8 @@ not this file.
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:26` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/perf/live.go:727` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
-| `internal/perf/live.go:891` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:728` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:892` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/projections/server_assembly_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/acme/certbot_client_test.go:240` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/cmp/conformance_test.go:116` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -627,7 +627,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1123` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:819` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/substrate_broker.go:222` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/pqclab/main.go:593` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/pqclab/main.go:594` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:22` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:109` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:158` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -678,7 +678,7 @@ not this file.
 | `scripts/perf/cmd/soakgate/main.go:120` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/spineburst/main.go:170` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/dodcensus/main.go:1285` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
-| `tools/pqclab/main.go:794` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
+| `tools/pqclab/main.go:795` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:145` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
@@ -735,7 +735,7 @@ not this file.
 | `deploy/deploycheck_test.go:1273` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1517` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:23` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/docker/dist_test.go:813` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/docker/dist_test.go:818` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/reproducible_test.go:35` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/airgap_bundle_test.go:123` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `deploy/helm/airgap_bundle_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
@@ -972,8 +972,8 @@ not this file.
 | `tools/dodcensus/runtime_runner_test.go:415` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:469` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:473` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/pqclab/main.go:232` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/pqclab/main.go:297` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/pqclab/main.go:233` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/pqclab/main.go:298` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/pqclab/main_test.go:76` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/pqclab/main_test.go:80` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/docs_test.go:75` | test reads its own fixture/tempdir path (CWE-22) |

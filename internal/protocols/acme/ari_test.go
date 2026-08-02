@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/netsec"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/ari"
 )
@@ -147,7 +148,7 @@ func TestARIClientConsumesWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client := ari.NewClient(nil)
+	client := ari.NewClient(netsec.InsecureLoopbackClient(30 * time.Second))
 	info, retryAfter, err := client.FetchRenewalInfo(context.Background(), ts+"/acme/renewal-info", certID)
 	if err != nil {
 		t.Fatalf("client FetchRenewalInfo: %v", err)

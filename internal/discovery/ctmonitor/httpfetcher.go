@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/ctlog"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // maxCTResponse caps a single CT response body to keep a hostile or buggy log
@@ -25,9 +26,14 @@ type httpFetcher struct {
 	client *http.Client
 }
 
-// NewHTTPFetcher returns a Fetcher that polls real CT logs over HTTP.
+// NewHTTPFetcher returns a Fetcher that polls real CT logs over HTTP through the
+// SSRF-safe client (SEC-005). The log URL is tenant-supplied — it arrives from a
+// discovery source config and is persisted by RegisterCTLog — so the fetcher must
+// not be able to dial loopback, link-local (169.254.169.254), or RFC-1918 targets.
+// Tests that poll a loopback CT log server pass netsec.InsecureLoopbackClient to
+// NewHTTPFetcherWithClient instead.
 func NewHTTPFetcher() Fetcher {
-	return &httpFetcher{client: &http.Client{Timeout: 30 * time.Second}}
+	return &httpFetcher{client: netsec.SafeClient(30 * time.Second)}
 }
 
 // NewHTTPFetcherWithClient returns a Fetcher that uses the caller's HTTP client.
@@ -35,7 +41,7 @@ func NewHTTPFetcher() Fetcher {
 // operator-supplied outbound endpoints, while tests inject loopback-capable clients.
 func NewHTTPFetcherWithClient(client *http.Client) Fetcher {
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		client = netsec.SafeClient(30 * time.Second)
 	}
 	return &httpFetcher{client: client}
 }
