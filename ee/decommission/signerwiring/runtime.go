@@ -39,6 +39,11 @@ type Config struct {
 // Runtime is retained by the signer through signing.WithGatedDestruction and
 // signing.WithArtifactSigner. It delegates gate decisions while keeping
 // signer-held VDEC keys and custody components alive for the shipped EE binary.
+//
+// This assembly is the isolated-signing-process element of the VDEC-claim-12
+// system: the key material and the attestation key live behind the process and
+// memory boundary that verifies, refuses, destroys, and mints, and the control
+// plane holds neither.
 type Runtime struct {
 	Gate                       *gate.Gate
 	SoftwareCustodyDestroyer   *gate.SoftwareCustodyDestroyer

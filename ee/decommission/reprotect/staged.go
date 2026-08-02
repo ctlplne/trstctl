@@ -97,6 +97,10 @@ type StagedResult struct {
 	Completion CompletionResult
 }
 
+// NewStagedExecutor builds the executor that practices VDEC-claim-4: stage the
+// re-protected form alongside the existing one, cut consumers over, verify
+// health, retire the original, roll back on cutover or health failure, and record
+// the job complete only after health verification succeeds.
 func NewStagedExecutor(phases StagedPhases, recorder *CompletionRecorder) (*StagedExecutor, error) {
 	if phases == nil {
 		return nil, errors.New("reprotect: staged phases are required")

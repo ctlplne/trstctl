@@ -96,6 +96,12 @@ type ProofNode struct {
 	Digest  []byte    `json:"digest"`
 }
 
+// Verify practices VDEC-claim-16, the verifying-computer method: obtain the
+// destruction record, verify the minting signature against a held verification
+// key, verify the inclusion proof against a held transparency-log head, confirm
+// the final epoch against the retained last-accepted epoch, and emit the
+// destroyed-after-re-protection determination without network access to the
+// control plane.
 func Verify(req Request) (Verdict, error) {
 	if err := record.VerifyRecord(req.Record, req.VerificationKey); err != nil {
 		return Verdict{}, fmt.Errorf("%w: %v", ErrRecordSignature, err)
@@ -145,6 +151,9 @@ func VerifyEpoch(stableKeyID string, finalEpoch uint64, retained RetainedEpoch) 
 	return nil
 }
 
+// VerifyInclusionProof practices VDEC-claim-2: the destruction record is
+// committed to an append-only transparency log and published with an inclusion
+// proof, which a relying party checks against a held log head.
 func VerifyInclusionProof(rec record.SignedRecord, head LogHead) error {
 	tp := rec.Commitment.Transparency
 	if strings.TrimSpace(head.LogID) == "" || len(head.RootDigest) == 0 || head.TreeSize == 0 {
@@ -213,6 +222,10 @@ func HeadForRecord(rec record.SignedRecord) (LogHead, error) {
 	}, nil
 }
 
+// VerifySuccessionCorrespondence practices VDEC-claim-17: the verifier takes a
+// furnished chain of succession records for the stable key identifier, verifies
+// the chain signatures, and confirms the final epoch corresponds to an epoch at
+// which a successor superseded the key.
 func VerifySuccessionCorrespondence(rec record.SignedRecord, ev SuccessionEvidence) error {
 	c := rec.Commitment
 	if len(ev.TrustRootPublicKeyDER) == 0 || len(ev.Chain) == 0 {
@@ -256,6 +269,9 @@ func CompletionEventsDigest(tenantID, stableKeyID string, finalEpoch uint64, ev 
 	return crypto.SHA256Sum(raw), nil
 }
 
+// VerifyCompletionAccounting practices VDEC-claim-18: the verifier recomputes the
+// completion-events digest from a furnished completion set and confirms every
+// registered dependent is accounted for.
 func VerifyCompletionAccounting(rec record.SignedRecord, ev CompletionEvidence) error {
 	if unaccounted := unaccountedDependents(ev); len(unaccounted) > 0 {
 		return fmt.Errorf("%w: %s/%s", ErrUnaccountedDependent, unaccounted[0].Class, unaccounted[0].ID)

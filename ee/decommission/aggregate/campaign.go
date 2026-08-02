@@ -31,6 +31,10 @@ type CampaignBinding struct {
 	SuccessionJobDigests              [][]byte `json:"succession_job_digests,omitempty"`
 }
 
+// CampaignBindingFromPQC practices VDEC-claim-10: the retirement request is one of
+// a plurality from a decommissioning campaign keyed to the algorithm-succession
+// epoch at which the keys were superseded, and the commitment binds the epoch
+// identifier and a digest of the superseding succession record.
 func CampaignBindingFromPQC(req CampaignRequest) (CampaignBinding, error) {
 	campaignID := strings.TrimSpace(req.CampaignID)
 	epochID := strings.TrimSpace(req.SuccessionEpochID)

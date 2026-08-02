@@ -132,6 +132,10 @@ type RevocationTransactor interface {
 	WithinRevocationTx(context.Context, string, func(context.Context, RevocationTransaction) error) error
 }
 
+// RevokeFirstCoordinator practices VDEC-claim-3: it moves the key to fail-closed
+// before destruction (new protective use refused, re-protection decryption still
+// permitted) and records every per-destination revocation intent in the same
+// database transaction as the fail-closed state change.
 type RevokeFirstCoordinator struct {
 	tx RevocationTransactor
 }

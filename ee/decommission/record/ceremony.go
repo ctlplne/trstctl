@@ -10,6 +10,10 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
+// mintRequestFromCeremonyBundle carries the control-plane-unavailable half of
+// VDEC-claim-11: destroy and quorum are recorded in a signed ceremony bundle that
+// is verified and replayed on recovery, and a bundle failing verification is
+// rejected rather than replayed.
 func mintRequestFromCeremonyBundle(bundle gate.CeremonyBundle) MintRequest {
 	bundle = gate.NormalizeCeremonyBundleForRecord(bundle)
 	return MintRequest{

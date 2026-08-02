@@ -141,6 +141,14 @@ type SuccessorKey struct {
 // Commitment binds the VDEC-claim-1 destruction-record fields: the stable key
 // identifier, the final epoch, the digest of the recorded per-job completion
 // events, the destruction evidence, and the audit-chain head.
+//
+// The bound audit-chain head is sealed through the destruction events, which is
+// VDEC-claim-22: any alteration, deletion, insertion, or reordering of ledger
+// records is detectable by recomputation against the bound head. The stable key
+// identifier and successor representations carry VDEC-claim-23: the identifier is
+// invariant across rotations and algorithm changes, the final epoch is the highest
+// recorded algorithm epoch or rotation version, and the commitment binds a
+// representation of each successor key under which dependents were re-protected.
 type Commitment struct {
 	Version                    int                  `json:"version"`
 	Domain                     string               `json:"domain"`

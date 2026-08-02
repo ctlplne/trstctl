@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/transit"
 )
 
+// Guard for VDEC-claim-5.
 func TestReprotect_ReencryptInCryptoBoundaryNoKeyBytes(t *testing.T) {
 	assertBoundaryReturnsNoBytes(t)
 

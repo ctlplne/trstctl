@@ -44,6 +44,11 @@ type Minter struct {
 	minted   map[string]SignedRecord
 }
 
+// NewMinter builds the minter for the VDEC-claim-9 tenant-scope aggregate
+// decommissioning record, which binds the tenant identifier, the digests of the
+// per-key destruction records, and the audit head after the last destroyed key.
+// VDEC-claim-18 accepts verification of this aggregate record in place of
+// recomputing the per-key completion digest.
 func NewMinter(cfg Config) (*Minter, error) {
 	alg := cfg.Algorithm
 	if alg == "" {

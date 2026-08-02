@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// Guard for the control-plane-unavailable half of VDEC-claim-11.
 func TestCeremony_BundleVerifiedAndReplayed(t *testing.T) {
 	ctx := context.Background()
 	policy := ceremonyPolicy()

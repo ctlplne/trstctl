@@ -33,6 +33,10 @@ type CompletionEvidence struct {
 
 // CompletionRecorder records at most one completion event for a job idempotency
 // key and dependent identity pair.
+//
+// This is the idempotency half of VDEC-claim-14: a redelivered job yields at most
+// one completion event for a dependent, so a dispatch interrupted by control-plane
+// failure can resume from the durable queue without double-counting.
 type CompletionRecorder struct {
 	mu   sync.Mutex
 	sink CompletionEventSink

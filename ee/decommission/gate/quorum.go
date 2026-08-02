@@ -34,6 +34,8 @@ type QuorumApprovalsV1 struct {
 	Approvals []string `json:"approvals"`
 }
 
+// QuorumEvidence carries the VDEC-claim-11 quorum: approvals from a threshold of
+// distinct operators, bound into the destruction-record commitment.
 type QuorumEvidence struct {
 	Version         int      `json:"version"`
 	Domain          string   `json:"domain"`

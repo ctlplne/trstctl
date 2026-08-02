@@ -23,6 +23,10 @@ type LeaseRevocationQueue interface {
 	Pending(context.Context) ([]dynsecret.RevokeItem, error)
 }
 
+// LeaseRevocationExecutor practices VDEC-claim-19: leased credentials registered
+// at issuance are revoked through a durable queue, so a revocation interrupted by
+// control-plane failure resumes on restart and stays idempotent at one completion
+// event per lease.
 type LeaseRevocationExecutor struct {
 	engine   LeaseRevocationEngine
 	queue    LeaseRevocationQueue

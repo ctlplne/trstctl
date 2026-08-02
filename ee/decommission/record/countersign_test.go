@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// Guard for VDEC-claim-8.
 func TestCountersign_DistinctAuthorityDoesNotAlterRecord(t *testing.T) {
 	ctx := context.Background()
 	minter := newTestMinter(t)

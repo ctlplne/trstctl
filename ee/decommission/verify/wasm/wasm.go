@@ -15,6 +15,10 @@ type Response struct {
 	Error   string             `json:"error,omitempty"`
 }
 
+// VerifyJSON is the stored-instruction form of the verifier and practices
+// VDEC-claim-24: a distributable medium carrying the verification instructions
+// together with the destruction-record structure, evaluated with no control-plane
+// network access.
 func VerifyJSON(raw []byte) ([]byte, error) {
 	var req vdecverify.Request
 	if err := json.Unmarshal(raw, &req); err != nil {

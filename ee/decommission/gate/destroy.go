@@ -34,6 +34,10 @@ type EvidenceAppendSink interface {
 	Append(context.Context, eventspec.Event) (eventspec.Event, error)
 }
 
+// DestroyConfig wires the custody-boundary destroyers that practice
+// VDEC-claim-13: the module-signed destroy attestation identifies the destroyed
+// key object and a terminal epoch state inside the boundary makes the signer
+// refuse any subsequent key operation at or below the final epoch.
 type DestroyConfig struct {
 	SignerID string
 	Sink     EvidenceAppendSink

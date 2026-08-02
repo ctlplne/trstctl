@@ -23,6 +23,10 @@ const (
 
 var ErrDistinctAuthorityRequired = errors.New("destruction record: countersignature authority must be distinct")
 
+// Countersignature is the VDEC-claim-8 field: a countersignature by an authority
+// distinct from the minting signer, recorded as a ledger event, separately
+// verifiable by a relying party holding the authority's key, and absent from the
+// commitment so the record stays verifiable without it.
 type Countersignature struct {
 	Version                int              `json:"version"`
 	Domain                 string           `json:"domain"`

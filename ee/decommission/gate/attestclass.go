@@ -12,6 +12,10 @@ var ErrBelowMinAttestationClass = errors.New("custody destroy: attestation class
 
 // AttestationClass is ordered weakest to strongest. The identifier is carried
 // forward so the destruction record minter can bind the exact evidence class.
+//
+// The class floor practices VDEC-claim-7: policy associates a key class with a
+// minimum attestation class, the signer refuses to mint on lower-class evidence,
+// and the commitment binds the attestation-class identifier.
 type AttestationClass int
 
 const (

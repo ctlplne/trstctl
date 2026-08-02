@@ -14,6 +14,11 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// SanitizationClaim is the VDEC-claim-20 artifact: a data set under an erasure
+// designation is excluded from re-protection, the designation is accepted in place
+// of a completion event for that set while completions are still required for
+// every other dependent, and the commitment binds a sanitization claim naming the
+// set as unrecoverable.
 type SanitizationClaim struct {
 	TenantID       string   `json:"tenant_id"`
 	KeyID          string   `json:"key_id"`

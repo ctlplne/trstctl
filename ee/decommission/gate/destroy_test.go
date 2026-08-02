@@ -165,6 +165,7 @@ func TestDestroy_HSMDestroyReturnsAttestation(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-13.
 func TestDestroy_HSMTerminalEpochRefusesAtOrBelow(t *testing.T) {
 	ctx := context.Background()
 	module := &fakeHSMModule{
@@ -210,6 +211,7 @@ func TestDestroy_HSMTerminalEpochRefusesAtOrBelow(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-7.
 func TestDestroy_AttestationClassMinGate(t *testing.T) {
 	policy := AttestationClassPolicy{"root-ca": ClassCertifiedHardware}
 	software := newDestructionEvidence(TypeCustodyZeroized, testTenant, testKey, testEpoch, ClassSoftwareZeroize, []byte("zeroized"))

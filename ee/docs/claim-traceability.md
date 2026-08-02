@@ -22,7 +22,7 @@ it cannot drift from the code it describes.
 | VDEC | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
 | XREC | _[FILL]_ | _[FILL]_ | _[FILL]_ | _[FILL: filing + 12 months]_ |
 
-Citations parsed: **931 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **982 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
@@ -124,6 +124,29 @@ Citations parsed: **931 qualified**, **0 bare** (bare citations infer their fami
 | Claim | Implementation | Tests | Verified |
 |---|---|---|---|
 | 1 | `ee/decommission/record/record.go` | `ee/decommission/record/record_test.go` | _[counsel]_ |
+| 2 | `ee/decommission/verify/verify.go` | `ee/decommission/verify/verify_test.go` | _[counsel]_ |
+| 3 | `ee/decommission/reprotect/revokefirst.go` | `ee/decommission/reprotect/revokefirst_test.go` | _[counsel]_ |
+| 4 | `ee/decommission/reprotect/staged.go` | `ee/decommission/reprotect/staged_test.go` | _[counsel]_ |
+| 5 | `ee/decommission/reprotect/ciphertext.go` | `ee/decommission/reprotect/ciphertext_test.go` | _[counsel]_ |
+| 6 | `ee/decommission/reprotect/credential.go` | `ee/decommission/reprotect/credential_test.go` | _[counsel]_ |
+| 7 | `ee/decommission/gate/attestclass.go` | `ee/decommission/gate/destroy_test.go` | _[counsel]_ |
+| 8 | `ee/decommission/record/countersign.go` | `ee/decommission/record/countersign_test.go` | _[counsel]_ |
+| 9 | `ee/decommission/aggregate/aggregate.go` | `ee/decommission/aggregate/aggregate_test.go` | _[counsel]_ |
+| 10 | `ee/decommission/aggregate/campaign.go` | `ee/decommission/aggregate/aggregate_test.go` | _[counsel]_ |
+| 11 | `ee/decommission/gate/quorum.go`, `ee/decommission/record/ceremony.go` | `ee/decommission/gate/quorum_test.go`, `ee/decommission/record/ceremony_test.go` | _[counsel]_ |
+| 12 | `ee/decommission/signerwiring/runtime.go` | `ee/decommission/gate/gate_test.go`, `ee/decommission/record/record_test.go` | _[counsel]_ |
+| 13 | `ee/decommission/gate/destroy.go` | `ee/decommission/gate/destroy_test.go` | _[counsel]_ |
+| 14 | `ee/decommission/reprotect/completion.go` | `ee/decommission/reprotect/reprotect_test.go` | _[counsel]_ |
+| 15 | `ee/decommission/depstate/projection.go` | `ee/decommission/depstate/projection_test.go` | _[counsel]_ |
+| 16 | `ee/decommission/verify/verify.go` | `ee/decommission/verify/verify_test.go` | _[counsel]_ |
+| 17 | `ee/decommission/verify/verify.go` | `ee/decommission/verify/verify_test.go` | _[counsel]_ |
+| 18 | `ee/decommission/aggregate/aggregate.go`, `ee/decommission/verify/verify.go` | `ee/decommission/aggregate/aggregate_test.go`, `ee/decommission/verify/verify_test.go` | _[counsel]_ |
+| 19 | `ee/decommission/reprotect/lease.go` | `ee/decommission/reprotect/lease_test.go` | _[counsel]_ |
+| 20 | `ee/decommission/aggregate/erasure.go` | `ee/decommission/aggregate/aggregate_test.go` | _[counsel]_ |
+| 21 | `ee/decommission/gate/refusal.go` | `ee/decommission/gate/gate_test.go` | _[counsel]_ |
+| 22 | `ee/decommission/record/record.go` | `ee/decommission/record/record_test.go` | _[counsel]_ |
+| 23 | `ee/decommission/record/record.go` | `ee/decommission/record/record_test.go` | _[counsel]_ |
+| 24 | `ee/decommission/verify/wasm/wasm.go` | `ee/decommission/verify/wasm/wasm_test.go` | _[counsel]_ |
 
 ## XREC
 

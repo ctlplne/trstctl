@@ -8,6 +8,11 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
+// KeyState is the folded per-key dependency state and the substrate for
+// VDEC-claim-15: a deterministic-replay projection over the ledger from which the
+// set difference between dependents registered as of a stated ledger position and
+// dependents accounted for by completion, release, or erasure-designation events
+// must be empty before destruction.
 type KeyState struct {
 	KeyID             string
 	TenantID          string

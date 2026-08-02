@@ -80,6 +80,7 @@ func TestDepState_AssociatesAllDependentClasses(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-15.
 func TestDepState_DeterministicReplayProjection(t *testing.T) {
 	sink := &memSink{}
 	events := []eventspec.Event{

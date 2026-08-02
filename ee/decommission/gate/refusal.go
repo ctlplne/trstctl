@@ -14,6 +14,10 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+// RefusalBody is the body of the VDEC-claim-21 signed refusal artifact: when the
+// gate does not succeed, the signer names the requested destruction and at least
+// one dependent for which no completion, release, or erasure designation is
+// recorded, and the artifact is appended to the ledger.
 type RefusalBody struct {
 	TenantID           string               `json:"tenant_id"`
 	SubjectRef         string               `json:"subject_ref"`

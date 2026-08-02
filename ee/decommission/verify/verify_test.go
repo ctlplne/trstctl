@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// Guard for VDEC-claim-16.
 func TestVerify_OfflineFromRecordAndKeys(t *testing.T) {
 	minter := newMinter(t)
 	accounting := completionEvidence()
@@ -36,6 +37,7 @@ func TestVerify_OfflineFromRecordAndKeys(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-2.
 func TestVerify_InclusionProofAgainstLogHead(t *testing.T) {
 	minter := newMinter(t)
 	accounting := completionEvidence()
@@ -90,6 +92,7 @@ func TestVerify_FinalEpochNotBelowLastAccepted(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-17.
 func TestVerify_SuccessionChainCorrespondence(t *testing.T) {
 	sc, err := succession.BuildSampleChain(crypto.NewSoftwareBackend(), "scope-a", "key://tenant-a/root-ca", "tenant-a")
 	if err != nil {
@@ -124,6 +127,7 @@ func TestVerify_SuccessionChainCorrespondence(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-18.
 func TestVerify_RecomputeCompletionDigest(t *testing.T) {
 	minter := newMinter(t)
 	accounting := completionEvidence()

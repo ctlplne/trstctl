@@ -20,6 +20,10 @@ type TransitBoundary struct {
 	}
 }
 
+// CiphertextExecutor practices VDEC-claim-5: ciphertext dependents are decrypted
+// under the first key and re-encrypted under the successor inside a cryptographic
+// boundary that returns no key bytes, with plaintext held in a memory-locked
+// buffer and zeroized on completion.
 type CiphertextExecutor struct {
 	boundary RewrapBoundary
 	recorder *CompletionRecorder

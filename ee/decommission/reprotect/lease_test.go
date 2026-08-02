@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/dynsecret"
 )
 
+// Guard for VDEC-claim-19.
 func TestReprotect_LeasedCredentialRevocationResumes(t *testing.T) {
 	ctx := context.Background()
 	queue := dynsecret.NewMemoryQueue()

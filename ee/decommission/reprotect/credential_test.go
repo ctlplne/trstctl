@@ -9,6 +9,7 @@ import (
 	"trstctl.com/trstctl/ee/decommission/depstate"
 )
 
+// Guard for VDEC-claim-6.
 func TestReprotect_CredentialReissueSupersession(t *testing.T) {
 	ctx := context.Background()
 	job := credentialJob()

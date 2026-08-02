@@ -3,7 +3,6 @@
 package conformance
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -200,35 +199,62 @@ func TestConformance_FuzzSeedCorpusPresent(t *testing.T) {
 }
 
 func TestConformance_TraceabilityMatrixAllClaimsProven(t *testing.T) {
+	// VDEC-TRACE-001. This assertion used to read a hand-edited manifest that said
+	// every claim was "proven" -- the artifact deciding the question was the artifact
+	// a human edited, so the test was true by construction and carried no information
+	// about the code. Worse, it preferred an out-of-repo TRACEABILITY-MATRIX.md when
+	// one existed, so it silently changed oracles between a developer machine and CI.
+	//
+	// It now cross-checks against ee/docs/claim-traceability.md, which is GENERATED
+	// from the VDEC-claim-N citations in ee/ source and kept byte-fresh by
+	// `make claim-traceability-check`. A claim counts as proven only when the
+	// generated table carries a row for it with both an implementation and a test.
 	root := moduleRoot(t)
-	raw, err := os.ReadFile(filepath.Join(root, "ee/decommission/conformance/testdata/traceability_status.json"))
+	table, err := os.ReadFile(filepath.Join(root, "ee/docs/claim-traceability.md"))
 	if err != nil {
-		t.Fatalf("in-repo traceability status manifest is not readable: %v", err)
+		t.Fatalf("VDEC-TRACE-001: generated claim-traceability table unreadable: %v", err)
 	}
-	var manifest traceabilityStatus
-	if err := json.Unmarshal(raw, &manifest); err != nil {
-		t.Fatalf("decode traceability status manifest: %v", err)
+
+	section := ""
+	for _, part := range strings.Split(string(table), "\n## ") {
+		if strings.HasPrefix(part, "VDEC") {
+			section = part
+			break
+		}
 	}
+	if section == "" {
+		t.Fatal("VDEC-TRACE-001: the generated table has no VDEC section; either the family lost every citation or the table format changed")
+	}
+
+	// Columns may carry SEVERAL comma-separated paths, so match the cells rather
+	// than assuming one backticked path each. A claim counts as proven only when the
+	// implementation cell AND the test cell each name at least one file.
+	row := regexp.MustCompile(`(?m)^\| ([0-9]+) \| ([^|]*) \| ([^|]*) \|`)
+	hasPath := regexp.MustCompile("`[^`]+`")
+	proven := map[string]bool{}
+	for _, mm := range row.FindAllStringSubmatch(section, -1) {
+		if hasPath.MatchString(mm[2]) && hasPath.MatchString(mm[3]) {
+			proven[mm[1]] = true
+		}
+	}
+
+	var missing []string
 	for _, claim := range claimIDs() {
-		if manifest.Claims[claim] != "proven" {
-			t.Fatalf("claim %s status = %q, want proven", claim, manifest.Claims[claim])
+		if !proven[claim] {
+			missing = append(missing, claim)
 		}
 	}
-	for i := 1; i <= 10; i++ {
-		id := "INV-D" + string(rune('0'+i))
-		if i == 10 {
-			id = "INV-D10"
-		}
-		if manifest.Invariants[id] != "proven" {
-			t.Fatalf("%s status = %q, want proven", id, manifest.Invariants[id])
-		}
-	}
-	if manifest.VerifierLicense != "ee/decommission/verify:LicenseRef-trstctl-EE" {
-		t.Fatalf("verifier license = %q, want proprietary VDEC-08 decision", manifest.VerifierLicense)
+	if len(missing) > 0 {
+		t.Fatalf("VDEC-TRACE-001: %d VDEC claim(s) have no generated row carrying BOTH an implementation and a test: %s. "+
+			"Cite them from the ee/ code that practises them and regenerate with make claim-traceability-check -- "+
+			"do not record them as proven by hand.", len(missing), strings.Join(missing, ", "))
 	}
 }
 
 func TestConformance_AllInvariantGuardsPresent(t *testing.T) {
+	if got := len(canonicalInvariantTests()); got != canonicalInvariantTestCount {
+		t.Fatalf("canonical invariant guard list has %d entries, want %d: this list is a ratchet and must not shrink", got, canonicalInvariantTestCount)
+	}
 	root := moduleRoot(t)
 	tests := mustReadAllGoTests(t, filepath.Join(root, "ee/decommission"))
 	tests += mustReadAllGoTests(t, filepath.Join(root, "internal/signing"))
@@ -337,6 +363,11 @@ func strconvItoa(n int) string {
 	}
 	return string(buf[i:])
 }
+
+// canonicalInvariantTestCount is a ratchet on canonicalInvariantTests: the list of
+// canonical VDEC invariant guards may grow but must never shrink, so a guard cannot
+// be quietly dropped while the release gate still reports green.
+const canonicalInvariantTestCount = 41
 
 func canonicalInvariantTests() []string {
 	return []string{

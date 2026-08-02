@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 )
 
+// Guard for VDEC-claim-3.
 func TestRevokeFirst_FailClosedPermitsReprotectDecrypt(t *testing.T) {
 	guard := NewFailClosedKeyGuard()
 	activeProtective := KeyUseRequest{TenantID: "tenant-a", KeyID: "key://tenant-a/root", Use: KeyUseEncrypt}

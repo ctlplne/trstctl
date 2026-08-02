@@ -19,6 +19,10 @@ type CredentialSupersessionRecorder interface {
 	RecordCredentialSupersession(context.Context, CredentialSupersession) error
 }
 
+// CredentialReissueExecutor practices VDEC-claim-6: a credential dependent is
+// reissued under the successor key, a supersession link is recorded, the original
+// is marked superseded, and the completion event binds the credential and
+// replacement identifiers.
 type CredentialReissueExecutor struct {
 	issuer       CredentialIssuer
 	supersession CredentialSupersessionRecorder

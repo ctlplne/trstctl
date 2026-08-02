@@ -92,6 +92,7 @@ func TestDepState_ReprotectionJobsGeneratedFromState(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-14.
 func TestReprotect_IdempotentAtMostOneCompletion(t *testing.T) {
 	const (
 		tenantID = "tenant-a"

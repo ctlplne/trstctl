@@ -14,6 +14,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// Guard for VDEC-claim-24: the stored-instruction verifier reaches the same
+// verdict as the Go verifier on the published vectors.
 func TestVerifyJSON_VerdictParity(t *testing.T) {
 	minter, err := record.NewMinter(record.Config{
 		SignerID:  "test-vdec-wasm-signer",

@@ -68,6 +68,7 @@ func TestRecord_MintedInsideSignerWithAttestationKey(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-12.
 func TestRecord_ControlPlaneHoldsNoAttestationKey(t *testing.T) {
 	ctx := context.Background()
 	minter := newTestMinter(t)
@@ -100,6 +101,7 @@ func TestRecord_ControlPlaneHoldsNoAttestationKey(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-22 and VDEC-claim-23.
 func TestRecord_BindsSuccessorAndAuditHead(t *testing.T) {
 	ctx := context.Background()
 	minter := newTestMinter(t)

@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+// Guard for VDEC-claim-9 and the aggregate branch of VDEC-claim-18.
 func TestAggregate_TenantScopeRecordOfflineVerifiable(t *testing.T) {
 	ctx := context.Background()
 	perKeyMinter := newPerKeyMinter(t)
@@ -75,6 +76,7 @@ func TestAggregate_TenantScopeRecordOfflineVerifiable(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-10.
 func TestCampaign_KeyedToSuccessionEpoch(t *testing.T) {
 	ctx := context.Background()
 	perKeyMinter := newPerKeyMinter(t)
@@ -142,6 +144,7 @@ func TestCampaign_KeyedToSuccessionEpoch(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-20.
 func TestErasure_SanitizationClaimBound(t *testing.T) {
 	ctx := context.Background()
 	perKeyMinter := newPerKeyMinter(t)

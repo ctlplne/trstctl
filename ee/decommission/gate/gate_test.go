@@ -21,6 +21,7 @@ const (
 	testEpoch  = 3
 )
 
+// Guard for VDEC-claim-12.
 func TestGate_RefusesDestroyUntilAllDependentsReprotected(t *testing.T) {
 	ctx := context.Background()
 	sink := NewMemorySink()
@@ -94,6 +95,7 @@ func TestGate_SetDifferenceEmptyRequired(t *testing.T) {
 	}
 }
 
+// Guard for VDEC-claim-21.
 func TestRefusal_SignedArtifactNamesUnaccountedDependent(t *testing.T) {
 	ctx := context.Background()
 	sink := NewMemorySink()

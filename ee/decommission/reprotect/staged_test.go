@@ -11,6 +11,7 @@ import (
 	"trstctl.com/trstctl/ee/decommission/depstate"
 )
 
+// Guard for VDEC-claim-4.
 func TestReprotect_StagedCutoverHealthRollback(t *testing.T) {
 	ctx := context.Background()
 	job := stagedJob()

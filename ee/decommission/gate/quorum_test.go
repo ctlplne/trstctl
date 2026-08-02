@@ -25,6 +25,7 @@ const (
 	quorumEpoch    = 7
 )
 
+// Guard for VDEC-claim-11.
 func TestQuorum_RequiredAndBound(t *testing.T) {
 	ctx := context.Background()
 	policy := gate.QuorumPolicy{
