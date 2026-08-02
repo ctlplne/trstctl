@@ -195,9 +195,16 @@ served denominators below are checked against the repo-native
 ## How it's built
 
 trstctl is opinionated about architecture from the first commit, because these
-properties cannot be bolted on later. Nine non-negotiables: eight are enforced
-by a custom `go/analysis` linter that fails the build on violation; the ninth
-by the `ee/` build fence. They aren't guidelines, they're load-bearing walls.
+properties cannot be bolted on later. Nine non-negotiables, held two different
+ways. AN-1, AN-2, AN-3, AN-5, AN-8 and AN-9 are enforced by a custom
+`go/analysis` linter (`trstctllint`) that fails the build on violation — one
+analyzer per invariant, and for AN-9 the `licenseboundary` analyzer on top of
+the `ee/` build fence. AN-4, AN-6 and AN-7 have no analyzer: "the enqueue
+happened in the same transaction as the state change" is not reasonably
+lintable, so those three are held by tests instead — the signer's
+dependency-closure test (`cmd/trstctl-signer/core_boundary_test.go`) and the
+outbox and bulkhead regression suites under `internal/orchestrator` and
+`internal/bulkhead`. They aren't guidelines, they're load-bearing walls.
 
 | | Principle (in plain terms) |
 |---|---|
@@ -311,7 +318,7 @@ cmd/        # binaries: trstctl (control plane), trstctl-signer (isolated key-ho
 internal/   # subsystem packages: crypto (the one crypto boundary), signing, events,
             #   projections, store, orchestrator, api, ca, protocols/*, secrets..., graph, query, ...
 plugins/    # WASM plugin category roots — ca/ and connectors/
-tools/      # trstctllint — the architecture linter that enforces AN-1..AN-8
+tools/      # trstctllint — the architecture linter (AN-1, AN-2, AN-3, AN-5, AN-8, AN-9)
 web/        # React 18 + Vite + shadcn/ui UI, embedded into the control-plane binary
 deploy/     # docker (compose), helm chart, kubernetes, operator, observability,
             #   supply-chain, windows

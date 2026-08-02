@@ -36,8 +36,9 @@
 # AN-1 — multi-tenant storage, RLS policies, and migrations.
 /internal/store/                 @ctlplne/security
 
-# The architecture linter that enforces AN-1/AN-3/AN-5/AN-8 in CI — weakening it
-# silently weakens every guardrail, so it is owned alongside the crypto/signer/store.
+# The architecture linter that enforces AN-1, AN-2, AN-3, AN-5, AN-8 and AN-9 in CI
+# — weakening it silently weakens every guardrail, so it is owned alongside the
+# crypto/signer/store. AN-4, AN-6 and AN-7 have no analyzer; see MAINTAINERS.md.
 /tools/trstctllint/             @ctlplne/security
 
 # --- Security & supply-chain process surfaces -------------------------------
