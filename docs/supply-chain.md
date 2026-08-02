@@ -158,6 +158,20 @@ merely scanned in CI:
   severity counts, pass/fail). Any fixable CRITICAL finding fails
   the gate, because a patched upstream binary is available and the pin
   must move.
+- The receipt also records INVENTORY COVERAGE, because severity counts alone
+  cannot tell "scanned the binary and found nothing" apart from "scanned
+  nothing" — both read as `high=0 critical=0`.
+  `coverage.packages_inventoried` is how many packages the report listed,
+  `coverage.pinned_version_evidence[]` names the package(s) carrying the
+  pinned server version and the Trivy Results block each came from, and
+  `coverage.postgres_server_package_inventoried` says whether the PostgreSQL
+  server itself was inventoried. A report with no packages, or with no
+  package at the pinned version, is written out as `result: "fail"` and the
+  gate exits non-zero (SUPPLY-009). On the extracted zonky archive that flag
+  is `false`: Trivy finds no package database inside it, so the pinned
+  version is evidenced by the Maven packaging coordinate and PostgreSQL
+  server advisories would not be matched by this scan. The committed version
+  pin — not the scan — is what keeps the eval binary off a published CVE.
 
 This binary is not bundled in the shipped distroless image (Go binaries
 only); it is fetched on first run of the bundled single-node/eval path.

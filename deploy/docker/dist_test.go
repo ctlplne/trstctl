@@ -865,6 +865,21 @@ func TestEmbeddedPostgresScanReceiptPolicySelfTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embedded-postgres scan receipt self-test failed: %v\n%s", err, out)
 	}
+	// SUPPLY-009: the self-test prints one SELFTEST-OK line per case. Pinning the
+	// exact count makes deleting a case a failure here rather than a silent
+	// reduction in what the receipt policy is proven to reject.
+	if got := strings.Count(string(out), "SELFTEST-OK "); got != 6 {
+		t.Fatalf("SUPPLY-009: receipt self-test ran %d cases, want 6 — a case was removed\n%s", got, out)
+	}
+	for _, want := range []string{
+		"SELFTEST-OK rejects-empty-inventory",
+		"SELFTEST-OK rejects-missing-pinned-version-evidence",
+		"SELFTEST-OK names-the-package-that-supplied-the-version-evidence",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("SUPPLY-009: receipt self-test no longer proves %q; the empty-scan vacuity guard is weakened", want)
+		}
+	}
 }
 
 // TestACMEConformanceHarnessIsWired encodes the R4.2 close: the ACME server has a
