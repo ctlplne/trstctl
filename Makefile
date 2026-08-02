@@ -613,7 +613,7 @@ dependency-freshness: ## Validate dependency freshness SLO report and owner queu
 .PHONY: sca
 sca: ## Software-composition analysis across all dependency surfaces (Go + npm + embedded-postgres)
 	@echo ">> Go module SCA (pinned govulncheck)"; $(MAKE) --no-print-directory vuln
-	@echo ">> npm dependency tree SCA (web + TypeScript SDK generator)"; bash scripts/ci/npm-audit-dependency-surfaces.sh
+	@echo ">> npm dependency tree SCA (web + TypeScript SDK generator + Pulumi IaC)"; bash scripts/ci/npm-audit-dependency-surfaces.sh
 	@echo ">> embedded-postgres runtime-binary provenance + scan"; scripts/supply-chain/verify-embedded-postgres.sh
 
 .PHONY: supply-chain

@@ -61,7 +61,7 @@ func TestSupply101VulnScansStayRequired(t *testing.T) {
 		"govulncheck:",
 		"name: Run govulncheck (pinned by Makefile GOVULNCHECK_VERSION)",
 		"run: make vuln",
-		"npm dependency tree SCA (web + TypeScript SDK)",
+		"npm dependency tree SCA (web + TypeScript SDK + Pulumi IaC)",
 		"bash scripts/ci/npm-audit-dependency-surfaces.sh",
 		"npm audit --omit=dev --audit-level=high",
 		"Verify & scan the embedded-postgres binary",

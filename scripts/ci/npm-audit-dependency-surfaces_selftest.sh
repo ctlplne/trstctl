@@ -32,28 +32,38 @@ EOF
 }
 
 write_vulnerable_sdk_lock() {
-	local dir="$1"
+	local dir="$1" name="${2:-trstctl-sdk-audit-vulnerable}"
 	mkdir -p "$dir"
-	cat >"${dir}/package.json" <<'EOF'
-{"name":"trstctl-sdk-audit-vulnerable","version":"0.0.0","private":true,"devDependencies":{"minimist":"0.0.8"}}
+	cat >"${dir}/package.json" <<EOF
+{"name":"${name}","version":"0.0.0","private":true,"devDependencies":{"minimist":"0.0.8"}}
 EOF
 	npm --prefix "$dir" install --package-lock-only --ignore-scripts --no-audit >/dev/null
 }
 
 write_empty_lock "$tmp/good-web" "trstctl-web-audit-clean"
 write_empty_lock "$tmp/good-sdk" "trstctl-sdk-audit-clean"
+write_empty_lock "$tmp/good-pulumi" "trstctl-pulumi-audit-clean"
 write_vulnerable_sdk_lock "$tmp/bad-sdk"
+write_vulnerable_sdk_lock "$tmp/bad-pulumi" "trstctl-pulumi-audit-vulnerable"
 
 set +e
 TRSTCTL_WEB_NPM_PREFIX="$tmp/good-web" \
 	TRSTCTL_TS_SDK_NPM_PREFIX="$tmp/good-sdk" \
+	TRSTCTL_PULUMI_IAC_NPM_PREFIX="$tmp/good-pulumi" \
 	bash "$checker" >/dev/null
 check "accepts clean web + TypeScript SDK lockfiles" 0 $?
 
 TRSTCTL_WEB_NPM_PREFIX="$tmp/good-web" \
 	TRSTCTL_TS_SDK_NPM_PREFIX="$tmp/bad-sdk" \
+	TRSTCTL_PULUMI_IAC_NPM_PREFIX="$tmp/good-pulumi" \
 	bash "$checker" >/dev/null
 check "rejects critical minimist advisory in TypeScript SDK generator lockfile" 1 $?
+
+TRSTCTL_WEB_NPM_PREFIX="$tmp/good-web" \
+	TRSTCTL_TS_SDK_NPM_PREFIX="$tmp/good-sdk" \
+	TRSTCTL_PULUMI_IAC_NPM_PREFIX="$tmp/bad-pulumi" \
+	bash "$checker" >/dev/null
+check "rejects critical minimist advisory in Pulumi IaC lockfile" 1 $?
 set -e
 
 if [[ "$fails" -ne 0 ]]; then

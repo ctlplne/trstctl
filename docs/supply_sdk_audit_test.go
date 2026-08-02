@@ -12,7 +12,7 @@ import "testing"
 func TestSupply005TypeScriptSDKGeneratorLockfileSCAIsRequired(t *testing.T) {
 	mk := read(t, "../Makefile")
 	requireAllContained(t, "SUPPLY-005", "Makefile", mk,
-		"npm dependency tree SCA (web + TypeScript SDK generator)",
+		"npm dependency tree SCA (web + TypeScript SDK generator + Pulumi IaC)",
 		"bash scripts/ci/npm-audit-dependency-surfaces.sh",
 	)
 
@@ -36,7 +36,7 @@ func TestSupply005TypeScriptSDKGeneratorLockfileSCAIsRequired(t *testing.T) {
 
 	ci := read(t, "../.github/workflows/ci.yml")
 	requireAllContained(t, "SUPPLY-005", "ci.yml", ci,
-		"npm dependency tree SCA (web + TypeScript SDK)",
+		"npm dependency tree SCA (web + TypeScript SDK + Pulumi IaC)",
 		"bash scripts/ci/npm-audit-dependency-surfaces_selftest.sh",
 		"bash scripts/ci/npm-audit-dependency-surfaces.sh",
 	)

@@ -1,13 +1,17 @@
 # Supply-chain artifacts
 
-trstctl's dependencies span four concrete surfaces, and **all four are scanned** —
-three of them live outside `go.sum`, so they are easy to miss:
+trstctl's dependencies span five concrete surfaces, and **all five are scanned** —
+four of them live outside `go.sum`, so they are easy to miss. The npm rows are not
+maintained by hand: `TestSupply105NpmAuditSurfacesMatchTrackedPackageJSON` derives
+the required set from the tree and fails if a package.json exists without a
+lockfile, a scanner entry, and a Dependabot entry:
 
 | Surface | What pins it | What scans it |
 |---|---|---|
 | Go modules | `go.sum` (fully pinned) | `govulncheck` (pinned `@v1.6.0` by `GOVULNCHECK_VERSION` in the `Makefile`), reachability-aware, `make vuln` / CI |
 | npm (web UI) | `web/package-lock.json` | pinned `npm@11.16.0 audit --omit=dev --audit-level=high`, CI `web` job + `scripts/ci/npm-audit-dependency-surfaces.sh` severity-count receipt / `make sca` |
 | npm (TypeScript SDK generator) | `clients/sdk/typescript/package-lock.json` | `scripts/ci/npm-audit-dependency-surfaces.sh` with dev deps included, severity-count receipt, CI `supply-chain` job / `make sca` |
+| npm (Pulumi IaC example) | `deploy/iac/pulumi/trstctl-resources/package-lock.json` | `scripts/ci/npm-audit-dependency-surfaces.sh` with dev deps included, severity-count receipt, CI `supply-chain` job / `make sca` |
 | embedded-postgres binary | `embedded-postgres.json` (this dir) + `bundledPGVersion` in the served bundled eval path; `embeddedpostgres.V16` in the integration tests | checksum-pin + Trivy, CI `supply-chain` job / `scripts/supply-chain/verify-embedded-postgres.sh` |
 
 ## `embedded-postgres.json`

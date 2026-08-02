@@ -62,8 +62,10 @@ repository's release workflow identity.
 
 ## Software-composition analysis (every dependency surface)
 
-Dependencies live on four concrete surfaces; three are outside `go.sum`, so
-they get their own scans. All four run in CI and via `make sca`.
+Dependencies live on five concrete surfaces; four are outside `go.sum`, so
+they get their own scans. All five run in CI and via `make sca`, and
+`TestSupply105NpmAuditSurfacesMatchTrackedPackageJSON` fails the build if a new
+npm surface appears without a lockfile, a scanner, and a Dependabot entry.
 
 ## Dependency freshness SLO
 
@@ -102,7 +104,7 @@ Your code is affected by 0 vulnerabilities.
 (advisories can exist in imported modules, but none are reachable from trstctl's code.)
 ```
 
-### npm (web UI + TypeScript SDK generator) — `npm audit`
+### npm (web UI + TypeScript SDK generator + Pulumi IaC) — `npm audit`
 
 The web dependency tree is pinned by `web/package-lock.json`. The CI `web`
 job scans the browser runtime closure with
@@ -112,10 +114,16 @@ because Vite, PostCSS, and their plugins execute while producing the
 embedded release bundle. The TypeScript SDK generator tree is pinned by
 `clients/sdk/typescript/package-lock.json` and the same wrapper includes its
 dev dependencies because `openapi-typescript` executes from
-`scripts/gen-sdk.sh`. The scanner is pinned to npm CLI `11.16.0`; the CI
-`supply-chain` job runs it plus a self-test that plants `minimist@0.0.8` in
-a temporary SDK lockfile and expects npm audit to fail on the known critical
-advisory.
+`scripts/gen-sdk.sh`. The Pulumi IaC example under
+`deploy/iac/pulumi/trstctl-resources` is the third tree: its Node runtime
+resolves `@pulumi/pulumi` at deploy time, so it is pinned by its own
+`package-lock.json` and audited with dev dependencies included. A tree with no
+lockfile cannot be audited reproducibly at all — the wrapper fails closed on a
+missing `package-lock.json` rather than resolving floating ranges at scan time.
+The scanner is pinned to npm CLI `11.16.0`; the CI `supply-chain` job runs it
+plus a self-test that plants `minimist@0.0.8` in a temporary SDK lockfile and
+again in a temporary Pulumi lockfile, and expects npm audit to fail on the known
+critical advisory in each.
 
 The wrapper writes a machine-readable release-evidence receipt
 (`npm-audit-dependency-surfaces.json`) recording each audited surface,
@@ -127,6 +135,8 @@ $ bash scripts/ci/npm-audit-dependency-surfaces.sh
 >> npm audit (web build and runtime dependency tree)
    severity counts: info=0 low=0 moderate=0 high=0 critical=0 total=0
 >> npm audit (TypeScript SDK generator dependency tree)
+   severity counts: info=0 low=0 moderate=0 high=0 critical=0 total=0
+>> npm audit (Pulumi IaC example dependency tree)
    severity counts: info=0 low=0 moderate=0 high=0 critical=0 total=0
 >> wrote npm audit receipt: /tmp/trstctl-npm-audit-dependency-surfaces.json
 ```

@@ -846,10 +846,11 @@ jobs:
         run: npm install -g npm@${NPM_AUDIT_VERSION}
 
       # npm dependency trees are outside go.sum. The SDK generator is a devDependency
-      # used by scripts/gen-sdk.sh, so this audits web production deps and SDK
-      # generator deps, writes a severity-count receipt for release evidence, then
-      # self-tests that a critical SDK advisory fails closed.
-      - name: npm dependency tree SCA (web + TypeScript SDK)
+      # used by scripts/gen-sdk.sh and the Pulumi IaC example resolves @pulumi/pulumi
+      # at deploy time, so this audits web production deps, SDK generator deps, and
+      # the Pulumi IaC tree, writes a severity-count receipt for release evidence,
+      # then self-tests that a critical advisory in either non-web tree fails closed.
+      - name: npm dependency tree SCA (web + TypeScript SDK + Pulumi IaC)
         env:
           TRSTCTL_NPM_AUDIT_EXPECTED_VERSION: ${{ env.NPM_AUDIT_VERSION }}
           TRSTCTL_NPM_AUDIT_RECEIPT: ${{ runner.temp }}/npm-audit-dependency-surfaces.json

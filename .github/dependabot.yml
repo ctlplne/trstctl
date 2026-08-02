@@ -49,6 +49,21 @@ updates:
     commit-message:
       prefix: "deps(sdk-ts)"
 
+  # Pulumi IaC example npm dependencies. The example's Node runtime resolves
+  # @pulumi/pulumi at deploy time, so it is a real dependency surface even though
+  # it ships as a copyable example; scripts/ci/npm-audit-dependency-surfaces.sh
+  # audits its lockfile and SUPPLY-106 requires this entry to exist.
+  - package-ecosystem: npm
+    directory: "/deploy/iac/pulumi/trstctl-resources"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      pulumi-iac-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(pulumi-iac)"
+
   # Container base images in the Dockerfile.
   - package-ecosystem: docker
     directory: "/deploy/docker"

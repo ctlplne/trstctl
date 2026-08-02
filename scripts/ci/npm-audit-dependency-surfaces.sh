@@ -3,7 +3,12 @@
 # across dependency trees that live outside go.sum. The web release executes its
 # Vite/PostCSS build dependencies, so that complete lockfile is a supply-chain
 # surface even though only production packages remain in the runtime image. The
-# TypeScript SDK likewise executes its devDependency generator.
+# TypeScript SDK likewise executes its devDependency generator. The Pulumi IaC
+# example is a third such tree: its Node runtime resolves @pulumi/pulumi at deploy
+# time, so a copyable example still carries a real dependency closure. The set of
+# surfaces below must equal the set of first-party package.json trees in the
+# repository — docs/supply_npm_surface_parity_test.go (SUPPLY-106) fails if a
+# package.json appears that this script does not audit.
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -13,6 +18,7 @@ expected_npm_version="${TRSTCTL_NPM_AUDIT_EXPECTED_VERSION:-}"
 
 web_prefix="${TRSTCTL_WEB_NPM_PREFIX:-${repo}/web}"
 sdk_prefix="${TRSTCTL_TS_SDK_NPM_PREFIX:-${repo}/clients/sdk/typescript}"
+pulumi_prefix="${TRSTCTL_PULUMI_IAC_NPM_PREFIX:-${repo}/deploy/iac/pulumi/trstctl-resources}"
 
 npm_version="$("${npm_bin}" --version)"
 node_version="$(node --version 2>/dev/null || true)"
@@ -96,6 +102,7 @@ NODE
 failures=0
 audit_lock "web" "web build and runtime dependency tree" "${web_prefix}" "build-and-production" --include=dev || failures=1
 audit_lock "typescript-sdk-generator" "TypeScript SDK generator dependency tree" "${sdk_prefix}" "dev-generator" --include=dev || failures=1
+audit_lock "pulumi-iac" "Pulumi IaC example dependency tree" "${pulumi_prefix}" "deploy-time" --include=dev || failures=1
 
 mkdir -p "$(dirname "${receipt}")"
 node - "${surface_jsonl}" "${receipt}" "${npm_version}" "${node_version}" "${failures}" <<'NODE'
