@@ -59,3 +59,48 @@ func TestReviewedExecAllowlistPinsConnectorLocalOpsBoundary(t *testing.T) {
 		t.Fatalf("internal/connector/localops.go reviewed exec allowlist = %#v, want %#v", got, want)
 	}
 }
+
+// TestAmbientHTTPGuardPackagesStayTwo pins the ONLY structural exemption from
+// the SEC-005 ambient-client rule. internal/netsec and internal/egress are the
+// packages that build the sanctioned clients, so the rule cannot apply to them
+// without being circular; anything else added here would be a hole, not an
+// exemption.
+func TestAmbientHTTPGuardPackagesStayTwo(t *testing.T) {
+	want := map[string]bool{
+		"trstctl.com/trstctl/internal/netsec": true,
+		"trstctl.com/trstctl/internal/egress": true,
+	}
+	if !reflect.DeepEqual(ambientHTTPClientGuardPackages, want) {
+		t.Fatalf("ambientHTTPClientGuardPackages = %#v, want %#v", ambientHTTPClientGuardPackages, want)
+	}
+}
+
+// TestAmbientHTTPBurnDownLedgerOnlyShrinks makes reviewedAmbientHTTPClients a
+// ratchet. The rule landed pre-sized to the ambient client sites that already
+// existed, so `make lint` stayed green on day one; from here the ledger may only
+// get smaller. New outbound code takes its client from netsec or egress.
+func TestAmbientHTTPBurnDownLedgerOnlyShrinks(t *testing.T) {
+	const sizeWhenTheRuleLanded = 27
+	total := 0
+	for _, functions := range reviewedAmbientHTTPClients {
+		total += len(functions)
+	}
+	if total > sizeWhenTheRuleLanded {
+		t.Fatalf("reviewedAmbientHTTPClients holds %d reviewed sites, more than the %d it landed with; SEC-005 debt may only shrink -- route the new call site through internal/netsec or egress.Guard instead of adding a row", total, sizeWhenTheRuleLanded)
+	}
+}
+
+// TestBasePackagePathStripsTestVariantSuffix covers the trap that would have
+// broken `make lint`: `go vet` analyzes a package a second time as part of its
+// own test binary, under the import path "p [p.test]". Without the strip,
+// internal/netsec would lose its guard exemption in that pass and report on its
+// own SafeClient constructor.
+func TestBasePackagePathStripsTestVariantSuffix(t *testing.T) {
+	const plain = "trstctl.com/trstctl/internal/netsec"
+	if got := basePackagePath(plain + " [" + plain + ".test]"); got != plain {
+		t.Fatalf("basePackagePath(test variant) = %q, want %q", got, plain)
+	}
+	if got := basePackagePath(plain); got != plain {
+		t.Fatalf("basePackagePath(plain) = %q, want %q", got, plain)
+	}
+}

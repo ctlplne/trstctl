@@ -65,12 +65,22 @@ package badnetexec
 import (
 	"net/http"
 	"os/exec"
+	"time"
 )
 
 var client = http.DefaultClient
 
 func reload() error {
 	return exec.Command("sh", "-c", "reload").Run()
+}
+
+func ambient(url string) error {
+	c := &http.Client{Timeout: time.Second}
+	if _, err := c.Get(url); err != nil {
+		return err
+	}
+	_, err := http.Get(url)
+	return err
 }
 `)
 	writeFile(t, filepath.Join(fixture, "internal", "badlicense", "missing_spdx.go"), `package badlicense
@@ -111,6 +121,8 @@ const Algorithm = "ML-DSA-65"
 		`import "trstctl.com/trstctl/internal/policy" is not allowed in the crypto/signer boundary`,
 		`runtime-mutable crypto provider/engine registry "providerRegistry" is not allowed`,
 		"http.DefaultClient is not allowed in new outbound surfaces",
+		"ambient http.Client construction is not allowed in new outbound surfaces",
+		"http.Get/http.Head/http.Post/http.PostForm are not allowed",
 		"direct shell interpreter execution is not allowed",
 		"core file must carry SPDX-License-Identifier: MPL-2.0",
 		"core file imports \"trstctl.com/trstctl/ee/billing\"",

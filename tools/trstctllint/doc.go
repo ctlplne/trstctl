@@ -12,7 +12,7 @@
 //   - idempotency    (AN-5): mutating handlers must thread an idempotency key into a dedupe sink.
 //   - eventsource    (AN-2): a served mutation must not write the read model directly; it emits an event.
 //   - cryptoagility  (PQC-00): crypto/signer code must not grow runtime plugin/provider/engine registries.
-//   - netexec        (SEC-005): new HTTP/exec surfaces must use SSRF-safe clients or reviewed argv paths.
+//   - netexec        (SEC-005): new HTTP/exec surfaces must use SSRF-safe clients (netsec/egress) or reviewed argv paths; ambient http.Client construction and the http.Get/Post package helpers fail closed too.
 //   - licenseboundary (PACKAGING-007): core files carry MPL-2.0 SPDX, ee/ files carry the proprietary SPDX, core cannot import ee/, and PQC algorithms/fleet execution stay out of core while CBOM campaign records remain core.
 //   - tlsverify      (SEC-CWE-295): InsecureSkipVerify may be set only in internal/crypto/tlsprobe (the discovery prober), the mtls loopback liveness probe, and _test.go files.
 //

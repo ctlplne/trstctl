@@ -21,7 +21,7 @@ import (
 // test utilities are allowlisted by file and function so new surfaces fail closed.
 var Analyzer = &analysis.Analyzer{
 	Name: "netexec",
-	Doc:  "SEC-005: new outbound HTTP and exec surfaces must use netsec clients or validated argv, not ambient DefaultClient or shell interpreters.",
+	Doc:  "SEC-005: new outbound HTTP and exec surfaces must use netsec/egress clients or validated argv, not ambient DefaultClient, ambient http.Client construction, package-level http.Get/Post helpers, or shell interpreters.",
 	Run:  run,
 }
 
@@ -105,6 +105,100 @@ var reviewedDefaultClientUses = map[string]map[string]bool{
 	"internal/spireupstream/plugin.go": {
 		"New":        true,
 		"httpClient": true,
+	},
+}
+
+// ambientHTTPClientGuardPackages are the two packages that IMPLEMENT the
+// sanctioned outbound path. They must build *http.Client values by hand — that
+// is their whole job — so the ambient-construction rule cannot apply to them
+// without becoming circular. This exemption is permanent by design and is
+// deliberately package-scoped and tiny: every OTHER package has to obtain its
+// client from netsec.SafeClient / netsec.InsecureLoopbackClient /
+// egress.Guard.Client, or carry a reviewed row in reviewedAmbientHTTPClients.
+var ambientHTTPClientGuardPackages = map[string]bool{
+	"trstctl.com/trstctl/internal/netsec": true,
+	"trstctl.com/trstctl/internal/egress": true,
+}
+
+// reviewedAmbientHTTPClients is the SEC-005 burn-down ledger, not a permanent
+// exemption list. It is pre-sized to the ambient `&http.Client{...}` sites that
+// already existed when the rule landed, so the rule could be turned on without a
+// 27-file big-bang. Every row is debt: it means that call site still builds its
+// own client instead of going through the reviewed netsec/egress path. Rows come
+// OUT as sites migrate; no row may be added for new code.
+var reviewedAmbientHTTPClients = map[string]map[string]bool{
+	"cmd/trstctl-agent/main.go": {
+		"enrollmentHTTPClient": true,
+	},
+	"cmd/trstctl/main.go": {
+		"controlPlaneProbe": true,
+	},
+	"internal/agent/httpenroll.go": {
+		"NewHTTPEnroller": true,
+	},
+	"internal/agent/k8s/client.go": {
+		"InCluster": true,
+		"New":       true,
+	},
+	"internal/agent/k8s/signer.go": {
+		"NewHTTPSigner": true,
+	},
+	"internal/aimodel/http.go": {
+		"NewHTTPCompleter": true,
+	},
+	"internal/cli/cli.go": {
+		"httpClientForEnv": true,
+	},
+	"internal/crypto/mtls/server.go": {
+		"LoopbackProbeClient": true,
+	},
+	"internal/discovery/ctmonitor/httpfetcher.go": {
+		"NewHTTPFetcher":           true,
+		"NewHTTPFetcherWithClient": true,
+	},
+	"internal/observ/otlp.go": {
+		"NewOTLPHTTPExporter": true,
+	},
+	"internal/operator/client.go": {
+		"InCluster": true,
+		"NewClient": true,
+	},
+	"internal/operator/secretsync.go": {
+		"NewHTTPSecretResolver": true,
+	},
+	"internal/perf/live.go": {
+		"startLiveEvalStack": true,
+	},
+	"internal/protocols/acme/validate.go": {
+		"Validate": true,
+	},
+	"internal/protocols/ari/client.go": {
+		"NewClient": true,
+	},
+	"internal/server/auth.go": {
+		"buildOIDCAuthConfig": true,
+	},
+	"internal/server/external_ca_config.go": {
+		"externalCAHTTPClient": true,
+	},
+	"internal/server/run_connectors.go": {
+		"connectorHTTPClientFromConfig": true,
+	},
+	"internal/telemetry/poster.go": {
+		"HTTPPoster": true,
+	},
+	"internal/terraformprovider/client.go": {
+		"NewClient": true,
+	},
+	"tools/dodcensus/proof/launched.go": {
+		"Do": true,
+	},
+	"tools/dodcensus/proof/proof.go": {
+		"brokerRequest": true,
+		"cleanup":       true,
+	},
+	"tools/pqclab/main.go": {
+		"runCore": true,
 	},
 }
 
@@ -205,7 +299,15 @@ func checkFile(pass *analysis.Pass, file *ast.File) {
 			if isHTTPDefaultClient(pass, x) && !reviewedUse(pass, x.Pos(), funcName, reviewedDefaultClientUses) {
 				pass.Reportf(x.Pos(), "http.DefaultClient is not allowed in new outbound surfaces (SEC-005); use internal/netsec.SafeClient or add a reviewed package-specific client seam")
 			}
+		case *ast.CompositeLit:
+			if isHTTPClientLiteral(pass, x) && !isAmbientHTTPGuardPackage(pass) && !reviewedUse(pass, x.Pos(), funcName, reviewedAmbientHTTPClients) {
+				pass.Reportf(x.Pos(), "ambient http.Client construction is not allowed in new outbound surfaces (SEC-005); use internal/netsec.SafeClient, internal/netsec.InsecureLoopbackClient, or egress.Guard.Client so the SSRF and egress checks cannot be bypassed")
+			}
 		case *ast.CallExpr:
+			if isAmbientHTTPPackageCall(pass, x) {
+				pass.Reportf(x.Pos(), "http.Get/http.Head/http.Post/http.PostForm are not allowed (SEC-005); these use http.DefaultClient implicitly, so call the method on a client from internal/netsec or egress.Guard instead")
+				return true
+			}
 			if isExecCommandCall(pass, x) {
 				if commandIsShell(pass, x) {
 					pass.Reportf(x.Pos(), "direct shell interpreter execution is not allowed (SEC-005); pass validated argv to the target binary instead")
@@ -244,6 +346,63 @@ func isHTTPDefaultClient(pass *analysis.Pass, sel *ast.SelectorExpr) bool {
 	}
 	_, ok := obj.(*types.Var)
 	return ok
+}
+
+// isHTTPClientLiteral reports whether a composite literal constructs a
+// net/http.Client. It resolves the literal's type, so an import alias, a dot
+// import, or a type alias cannot spell its way past the rule.
+func isHTTPClientLiteral(pass *analysis.Pass, lit *ast.CompositeLit) bool {
+	tv, ok := pass.TypesInfo.Types[lit]
+	if !ok || tv.Type == nil {
+		return false
+	}
+	named, ok := types.Unalias(tv.Type).(*types.Named)
+	if !ok {
+		return false
+	}
+	obj := named.Obj()
+	return obj != nil && obj.Name() == "Client" && obj.Pkg() != nil && obj.Pkg().Path() == "net/http"
+}
+
+// isAmbientHTTPPackageCall reports whether a call is one of the package-level
+// net/http helpers that silently use http.DefaultClient. The receiver check is
+// load-bearing: client.Get(url) on a reviewed *http.Client is exactly the shape
+// we want callers to use, and must not be flagged.
+func isAmbientHTTPPackageCall(pass *analysis.Pass, call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	fn, ok := pass.TypesInfo.Uses[sel.Sel].(*types.Func)
+	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != "net/http" {
+		return false
+	}
+	if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
+		return false
+	}
+	switch fn.Name() {
+	case "Get", "Head", "Post", "PostForm":
+		return true
+	}
+	return false
+}
+
+func isAmbientHTTPGuardPackage(pass *analysis.Pass) bool {
+	if pass.Pkg == nil {
+		return false
+	}
+	return ambientHTTPClientGuardPackages[basePackagePath(pass.Pkg.Path())]
+}
+
+// basePackagePath strips the go/packages test-variant suffix ("p [p.test]").
+// Without it a guard package would lose its exemption the moment `go vet`
+// re-analyzed it as part of its own test binary, and `make lint` would fail on
+// internal/netsec itself.
+func basePackagePath(path string) string {
+	if i := strings.Index(path, " ["); i >= 0 {
+		return path[:i]
+	}
+	return path
 }
 
 func isExecCommandCall(pass *analysis.Pass, call *ast.CallExpr) bool {
