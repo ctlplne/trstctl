@@ -437,14 +437,20 @@ func (s *Store) UpsertTenantTx(ctx context.Context, tx pgx.Tx, t Tenant) error {
 // not be resurrected, and the rebuild owns exactly these tables. Each DELETE carries
 // tenant_id explicitly (AN-1). It does NOT touch independent tenant tables (those are
 // not rebuilt from the log); the live OffboardTenant path handles the full erase.
-// Deletes children before the tenants row so a foreign key never blocks the erase.
+//
+// The table set is DERIVED from ReadModelTables by readModelDeleteOrder (RMODEL-001)
+// rather than re-typed here: a second hand-maintained literal had drifted seven
+// tables behind ReadModelTables — including tenant_members — so a rebuild resurrected
+// those rows for an offboarded tenant. Children are deleted before the parents they
+// reference and the tenants row last, so a foreign key never blocks the erase.
 func (s *Store) DeleteTenantReadModelTx(ctx context.Context, tx pgx.Tx, tenantID string) error {
 	if tenantID == "" {
 		return fmt.Errorf("store: DeleteTenantReadModelTx requires a tenant id (AN-1)")
 	}
-	// Order: dependents first. identity_transitions and certificates reference
-	// identities/owners; the tenants row is removed last.
-	ordered := []string{"identity_transitions", "notification_delivery_receipts", "notification_test_operations", "connector_delivery_receipts", "lifecycle_rotation_runs", "remediation_playbook_runs", "incident_fleet_reissuance_runs", "pam_sessions", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "compliance_report_schedules", "access_change_request_decisions", "access_change_requests", "nhi_access_review_items", "nhi_access_review_campaigns", "pqc_migration_campaign_findings", "pqc_migration_campaigns", "notification_reads", "notification_threshold_deliveries", "notification_channels", "ca_crls", "ca_ocsp_responders", "ca_issued_certs", "ca_ceremony_approvals", "ca_key_ceremonies", "certificates", "crypto_assets", "agent_cert_revocations", "identities", "certificate_profiles", "secret_sync_workload_identity_sources", "workload_attester_trust_sources", "mdm_scep_policies", "acme_dns01_provider_configs", "discovery_coverage", "discovery_findings", "discovery_runs", "discovery_schedules", "discovery_sources", "privacy_archive_erasure_attestations", "privacy_retention_runs", "privacy_subject_erasures", "tenant_key_domains", "issuers", "owners", "tenants"}
+	ordered, err := readModelDeleteOrder()
+	if err != nil {
+		return err
+	}
 	for _, table := range ordered {
 		if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE tenant_id = $1", tenantID); err != nil {
 			return fmt.Errorf("store: delete read-model %s for tenant: %w", table, err)
