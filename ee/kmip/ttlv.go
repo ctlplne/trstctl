@@ -140,9 +140,9 @@ var DefaultTTLVLimits = TTLVLimits{
 
 // RequestMessage is the operation-level subset needed to route a KMIP request.
 type RequestMessage struct {
-	ProtocolMajor int
-	ProtocolMinor int
-	BatchCount    int
+	ProtocolMajor int32
+	ProtocolMinor int32
+	BatchCount    int32
 	Operations    []Operation
 	BatchItems    []RequestBatchItem
 }
@@ -227,7 +227,7 @@ func DecodeRequestMessage(frame []byte) (RequestMessage, error) {
 		payload, _ := item.FirstChild(TagRequestPayload)
 		batchItems = append(batchItems, RequestBatchItem{Operation: operation, Payload: payload})
 	}
-	if batchCount != len(ops) {
+	if int(batchCount) != len(ops) {
 		return RequestMessage{}, fmt.Errorf("kmip ttlv: batch count %d does not match %d batch items", batchCount, len(ops))
 	}
 
@@ -281,7 +281,7 @@ func (p *ttlvParser) parseItem(frame []byte, depth int) (TTLV, int, error) {
 	tag := uint32(frame[0])<<16 | uint32(frame[1])<<8 | uint32(frame[2])
 	typ := TTLVType(frame[3])
 	rawLength := binary.BigEndian.Uint32(frame[4:8])
-	if rawLength > uint32(p.limits.MaxFrameSize) {
+	if int64(rawLength) > int64(p.limits.MaxFrameSize) {
 		return TTLV{}, 0, fmt.Errorf("kmip ttlv: value length %d exceeds frame cap %d", rawLength, p.limits.MaxFrameSize)
 	}
 	length := int(rawLength)
@@ -291,7 +291,7 @@ func (p *ttlvParser) parseItem(frame []byte, depth int) (TTLV, int, error) {
 		return TTLV{}, 0, fmt.Errorf("kmip ttlv: value length %d exceeds remaining frame %d", length, len(frame)-8)
 	}
 
-	node := TTLV{Tag: tag, Type: typ, Length: uint32(length)}
+	node := TTLV{Tag: tag, Type: typ, Length: rawLength}
 	value := frame[8 : 8+length]
 	switch typ {
 	case TTLVStructure:
@@ -334,12 +334,16 @@ func normalizeTTLVLimits(limits TTLVLimits) TTLVLimits {
 	return limits
 }
 
-func integerChild(parent TTLV, tag uint32) (int, error) {
+// integerChild returns a KMIP Integer child. The result is int32 because that is
+// what a KMIP Integer IS on the wire: returning int here meant every value had to
+// be narrowed back to int32 at encode time, which is where the overflow risk was
+// being introduced rather than removed.
+func integerChild(parent TTLV, tag uint32) (int32, error) {
 	child, ok := parent.FirstChild(tag)
 	if !ok || child.Type != TTLVInteger || len(child.Value) != 4 {
 		return 0, fmt.Errorf("kmip ttlv: integer child %#06x missing", tag)
 	}
-	return int(int32(binary.BigEndian.Uint32(child.Value))), nil
+	return wireInt32(binary.BigEndian.Uint32(child.Value)), nil
 }
 
 func enumChild(parent TTLV, tag uint32) (int32, error) {
@@ -347,7 +351,7 @@ func enumChild(parent TTLV, tag uint32) (int32, error) {
 	if !ok || child.Type != TTLVEnumeration || len(child.Value) != 4 {
 		return 0, fmt.Errorf("kmip ttlv: enumeration child %#06x missing", tag)
 	}
-	return int32(binary.BigEndian.Uint32(child.Value)), nil
+	return wireInt32(binary.BigEndian.Uint32(child.Value)), nil
 }
 
 func ttlvPadding(length int) int {

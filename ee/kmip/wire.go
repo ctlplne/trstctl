@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -193,7 +194,7 @@ func (s *Server) handleQuery(ctx context.Context, clientCertDER []byte, payload 
 		if function.Type != TTLVEnumeration || len(function.Value) != 4 {
 			return wireResponseItem{}, wireError{reason: resultReasonInvalidField, message: "QueryFunction must be an enumeration"}
 		}
-		value := int32(binary.BigEndian.Uint32(function.Value))
+		value := wireInt32(binary.BigEndian.Uint32(function.Value))
 		if seen[value] {
 			continue
 		}
@@ -229,8 +230,8 @@ func (s *Server) handleQuery(ctx context.Context, clientCertDER []byte, payload 
 }
 
 type protocolVersion struct {
-	major int
-	minor int
+	major int32
+	minor int32
 }
 
 var supportedProtocolVersions = []protocolVersion{{major: 1, minor: 4}}
@@ -301,8 +302,8 @@ func protocolVersionsIn(root TTLV) []protocolVersion {
 
 func encodeProtocolVersion(version protocolVersion) []byte {
 	return encodeStructure(TagProtocolVersion,
-		encodeInteger(TagProtocolVersionMajor, int32(version.major)),
-		encodeInteger(TagProtocolVersionMinor, int32(version.minor)),
+		encodeInteger(TagProtocolVersionMajor, version.major),
+		encodeInteger(TagProtocolVersionMinor, version.minor),
 	)
 }
 
@@ -382,11 +383,17 @@ func (s *Server) handleGet(ctx context.Context, clientCertDER []byte, payload TT
 			encodeEnumeration(TagEncodingOption, spec.encoding),
 		)
 	}
+	// A key whose bit length overflows an int32 is not representable in KMIP and is
+	// not something this server can hold; refuse rather than encode a wrong length.
+	keyBits, err := wireInt32From(len(obj.Key) * 8)
+	if err != nil {
+		return wireResponseItem{}, wireError{reason: resultReasonInvalidField, message: "key length is not representable in KMIP"}
+	}
 	keyBlockChildren := [][]byte{
 		encodeEnumeration(TagKeyFormatType, keyFormatTypeRaw),
 		keyValue,
 		encodeEnumeration(TagCryptographicAlgorithm, cryptographicAlgorithmAES),
-		encodeInteger(TagCryptographicLength, int32(len(obj.Key)*8)),
+		encodeInteger(TagCryptographicLength, keyBits),
 	}
 	if len(wrappingData) > 0 {
 		keyBlockChildren = append(keyBlockChildren, wrappingData)
@@ -602,7 +609,7 @@ func parseCreatePayload(payload TTLV) (createPayloadSpec, error) {
 			switch normalizedAttributeName(name) {
 			case "cryptographic_algorithm":
 				if value.Type == TTLVEnumeration && len(value.Value) == 4 {
-					spec.algorithm = int32(binary.BigEndian.Uint32(value.Value))
+					spec.algorithm = wireInt32(binary.BigEndian.Uint32(value.Value))
 				}
 			case "cryptographic_length":
 				if value.Type == TTLVInteger && len(value.Value) == 4 {
@@ -649,7 +656,7 @@ func parseLocateAlgorithm(payload TTLV) (string, error) {
 			if value.Type != TTLVEnumeration || len(value.Value) != 4 {
 				return "", wireError{reason: resultReasonInvalidField, message: "Cryptographic Algorithm must be an enumeration"}
 			}
-			if int32(binary.BigEndian.Uint32(value.Value)) != cryptographicAlgorithmAES {
+			if wireInt32(binary.BigEndian.Uint32(value.Value)) != cryptographicAlgorithmAES {
 				return "", wireError{reason: resultReasonInvalidField, message: "only AES SymmetricKey Locate is served"}
 			}
 			return "AES", nil
@@ -711,21 +718,29 @@ func failureItem(op Operation, reason int32, message string) wireResponseItem {
 	}
 }
 
-func encodeResponse(major, minor int, items []wireResponseItem) []byte {
+func encodeResponse(major, minor int32, items []wireResponseItem) []byte {
 	if major <= 0 {
 		major = 1
 	}
 	if minor < 0 {
 		minor = 2
 	}
+	// A batch larger than an int32 has no KMIP encoding. It cannot arise here --
+	// the request parser caps the batch long before a response is built -- but
+	// emitting a truncated count would misdescribe the frame to the peer, so the
+	// count is clamped to the maximum rather than wrapped to a small number.
+	batchCount, err := wireInt32From(len(items))
+	if err != nil {
+		batchCount = math.MaxInt32
+	}
 	children := [][]byte{
 		encodeStructure(TagResponseHeader,
 			encodeStructure(TagProtocolVersion,
-				encodeInteger(TagProtocolVersionMajor, int32(major)),
-				encodeInteger(TagProtocolVersionMinor, int32(minor)),
+				encodeInteger(TagProtocolVersionMajor, major),
+				encodeInteger(TagProtocolVersionMinor, minor),
 			),
 			encodeDateTime(TagTimeStamp, time.Now()),
-			encodeInteger(TagBatchCount, int32(len(items))),
+			encodeInteger(TagBatchCount, batchCount),
 		),
 	}
 	for _, item := range items {
@@ -760,19 +775,20 @@ func encodeStructure(tag uint32, children ...[]byte) []byte {
 
 func encodeInteger(tag uint32, value int32) []byte {
 	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], uint32(value))
+	putInt32(buf[:], value)
 	return encodeItem(tag, TTLVInteger, buf[:])
 }
 
 func encodeEnumeration(tag uint32, value int32) []byte {
 	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], uint32(value))
+	putInt32(buf[:], value)
 	return encodeItem(tag, TTLVEnumeration, buf[:])
 }
 
 func encodeDateTime(tag uint32, value time.Time) []byte {
 	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], uint64(value.Unix()))
+	// POSIX seconds are signed: KMIP DateTime legitimately encodes pre-1970.
+	putInt64(buf[:], value.Unix())
 	return encodeItem(tag, TTLVDateTime, buf[:])
 }
 
@@ -786,11 +802,18 @@ func encodeBytes(tag uint32, value []byte) []byte {
 
 func encodeItem(tag uint32, typ TTLVType, value []byte) []byte {
 	out := make([]byte, 8+len(value)+ttlvPadding(len(value)))
-	out[0] = byte(tag >> 16)
-	out[1] = byte(tag >> 8)
-	out[2] = byte(tag)
+	out[0] = byte(tag >> 16 & 0xFF)
+	out[1] = byte(tag >> 8 & 0xFF)
+	out[2] = byte(tag & 0xFF)
 	out[3] = byte(typ)
-	binary.BigEndian.PutUint32(out[4:8], uint32(len(value)))
+	length, err := frameLen32(len(value))
+	if err != nil {
+		// Unreachable for any frame this server builds: every value is bounded by
+		// MaxFrameSize long before it reaches here. Encoding a truncated length
+		// would desynchronise the peer's parser, so refuse to emit anything.
+		panic(err)
+	}
+	binary.BigEndian.PutUint32(out[4:8], length)
 	copy(out[8:], value)
 	return out
 }

@@ -5,7 +5,6 @@ package kmip
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"testing"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -92,23 +91,19 @@ func ttlvStructure(tag uint32, children ...[]byte) []byte {
 
 func ttlvInteger(tag uint32, value int32) []byte {
 	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], uint32(value))
+	putInt32(buf[:], value)
 	return ttlvEncode(tag, TTLVInteger, buf[:])
 }
 
 func ttlvEnumeration(tag uint32, value int32) []byte {
 	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], uint32(value))
+	putInt32(buf[:], value)
 	return ttlvEncode(tag, TTLVEnumeration, buf[:])
 }
 
+// ttlvEncode is deliberately the production encodeItem: a fixture builder that
+// reimplemented the framing would let an encoding bug pass by agreeing with
+// itself. It is a thin alias so the tests read as "encode a TTLV item".
 func ttlvEncode(tag uint32, typ TTLVType, value []byte) []byte {
-	out := make([]byte, 8+len(value)+ttlvPadding(len(value)))
-	out[0] = byte(tag >> 16)
-	out[1] = byte(tag >> 8)
-	out[2] = byte(tag)
-	out[3] = byte(typ)
-	binary.BigEndian.PutUint32(out[4:8], uint32(len(value)))
-	copy(out[8:], value)
-	return out
+	return encodeItem(tag, typ, value)
 }

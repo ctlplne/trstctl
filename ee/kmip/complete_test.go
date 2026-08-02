@@ -5,6 +5,7 @@ package kmip
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"testing"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -207,7 +208,7 @@ func allEnumerationValues(root TTLV, tag uint32) []int32 {
 	var walk func(TTLV)
 	walk = func(node TTLV) {
 		if node.Tag == tag && node.Type == TTLVEnumeration && len(node.Value) == 4 {
-			out = append(out, int32(uint32(node.Value[0])<<24|uint32(node.Value[1])<<16|uint32(node.Value[2])<<8|uint32(node.Value[3])))
+			out = append(out, wireInt32(binary.BigEndian.Uint32(node.Value)))
 		}
 		for _, child := range node.Children {
 			walk(child)
