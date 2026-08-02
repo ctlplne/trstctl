@@ -106,14 +106,17 @@ func (s *SLHDSASigner) Public() PublicKey {
 
 // PrivateKeyBytes returns a copy of the CIRCL-marshaled private key for sealed
 // persistence. The returned bytes are unprotected memory; callers must wipe them
-// promptly after sealing.
+// promptly after sealing. The copy is taken inside the locked buffer's borrow, so a
+// concurrent Destroy cannot wipe or unmap the region mid-copy (AN-8 lifetime).
 func (s *SLHDSASigner) PrivateKeyBytes() ([]byte, error) {
-	der := s.der.Bytes()
-	if der == nil {
-		return nil, fmt.Errorf("crypto: SLH-DSA key has been destroyed")
+	var out []byte
+	if err := s.der.Use(func(der []byte) error {
+		out = make([]byte, len(der))
+		copy(out, der)
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err, destroyedSLHDSAKeyMsg)
 	}
-	out := make([]byte, len(der))
-	copy(out, der)
 	return out, nil
 }
 
@@ -122,27 +125,40 @@ func (s *SLHDSASigner) Destroy() { s.der.Destroy() }
 
 // Sign signs message with SLH-DSA. The scheme hashes internally, so SignOptions is
 // ignored. The private key is parsed transiently from the locked buffer.
+//
+// Lifetime (AN-4/AN-8): the parse and the signature both run inside s.der.Use, so a
+// concurrent Destroy waits for the signature rather than wiping and unmapping the locked
+// region under it; a Destroy that lands first refuses the borrow and this returns the
+// destroyed-key error instead of signing with dead material.
 func (s *SLHDSASigner) Sign(message []byte, _ SignOptions) ([]byte, error) {
-	der := s.der.Bytes()
-	if der == nil {
-		return nil, fmt.Errorf("crypto: SLH-DSA key has been destroyed")
-	}
-	id, err := slhdsaID(s.algorithm)
-	if err != nil {
-		return nil, err
-	}
-	var priv slhdsa.PrivateKey
-	priv.ID = id
-	if err := priv.UnmarshalBinary(der); err != nil {
-		return nil, fmt.Errorf("crypto: parse SLH-DSA key: %w", err)
-	}
-	defer crypto.WipeBinaryPrivateKey(&priv)
-	if slhdsaPrivateKeyObserver != nil {
-		slhdsaPrivateKeyObserver(&priv)
-	}
-	sig, err := priv.Sign(rand.Reader, message, nil)
-	if err != nil {
-		return nil, fmt.Errorf("crypto: SLH-DSA sign: %w", err)
+	var sig []byte
+	if err := s.der.Use(func(der []byte) error {
+		// Test-only seam (nil in production): parks a signature INSIDE the borrow so a test
+		// can prove a concurrent Destroy waits instead of freeing the region here.
+		if borrowObserver != nil {
+			borrowObserver()
+		}
+		id, err := slhdsaID(s.algorithm)
+		if err != nil {
+			return err
+		}
+		var priv slhdsa.PrivateKey
+		priv.ID = id
+		if err := priv.UnmarshalBinary(der); err != nil {
+			return fmt.Errorf("crypto: parse SLH-DSA key: %w", err)
+		}
+		defer crypto.WipeBinaryPrivateKey(&priv)
+		if slhdsaPrivateKeyObserver != nil {
+			slhdsaPrivateKeyObserver(&priv)
+		}
+		out, err := priv.Sign(rand.Reader, message, nil)
+		if err != nil {
+			return fmt.Errorf("crypto: SLH-DSA sign: %w", err)
+		}
+		sig = out
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err, destroyedSLHDSAKeyMsg)
 	}
 	return sig, nil
 }

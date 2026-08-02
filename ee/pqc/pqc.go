@@ -134,35 +134,79 @@ func (s *Signer) Algorithm() crypto.Algorithm { return s.algorithm }
 // Public returns the public key.
 func (s *Signer) Public() crypto.PublicKey { return s.public }
 
+// Destroyed-key wording, kept as constants so every borrow site in this package reports
+// the same message whether the key was already gone or a concurrent Destroy won the race
+// for it.
+const (
+	destroyedSigningKeyMsg = "pqc: signing key has been destroyed"
+	destroyedKEMKeyMsg     = "pqc: ML-KEM private key has been destroyed"
+	destroyedSLHDSAKeyMsg  = "crypto: SLH-DSA key has been destroyed"
+)
+
+// destroyedKeyError maps the locked buffer's lifetime error onto this package's per-key
+// destroyed wording, so callers keep seeing one stable message whether the key was
+// already gone or a concurrent Destroy refused the borrow.
+func destroyedKeyError(err error, msg string) error {
+	if errors.Is(err, secret.ErrDestroyed) {
+		return errors.New(msg)
+	}
+	return err
+}
+
+// borrowObserver is a test-only hook (nil in production) invoked at the top of every
+// locked-buffer borrow in this package that parses private material, before the parse. It
+// exists so the destroy-during-use lifetime tests can hold a borrow open while another
+// goroutine calls Destroy, and has zero cost in production.
+var borrowObserver func()
+
 // PrivateKeyBytes returns a copy of the CIRCL-marshaled private key for sealed
 // persistence. The returned bytes are unprotected memory; callers must wipe them
-// promptly after sealing.
+// promptly after sealing. The copy is taken inside the locked buffer's borrow, so a
+// concurrent Destroy cannot wipe or unmap the region mid-copy (AN-8 lifetime).
 func (s *Signer) PrivateKeyBytes() ([]byte, error) {
-	sk := s.priv.Bytes()
-	if sk == nil {
-		return nil, errors.New("pqc: signing key has been destroyed")
+	var out []byte
+	if err := s.priv.Use(func(sk []byte) error {
+		out = make([]byte, len(sk))
+		copy(out, sk)
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err, destroyedSigningKeyMsg)
 	}
-	out := make([]byte, len(sk))
-	copy(out, sk)
 	return out, nil
 }
 
 // Sign signs message. ML-DSA and the hybrid scheme sign the message directly
 // (there is no separate digest step), so SignOptions is ignored.
+//
+// Lifetime (AN-4/AN-8): the whole private-key operation runs inside s.priv.Use, so the
+// locked region is borrowed under the buffer's read lock for exactly as long as this
+// method holds a slice into it. A concurrent Destroy — the signer's DestroyKey RPC racing
+// this Sign — therefore waits for the signature to finish instead of wiping and
+// munmapping the region under the parse, which was a use-after-free. A Destroy that lands
+// FIRST is still honored: Use refuses the borrow and this returns the clean destroyed-key
+// error rather than signing with dead material.
 func (s *Signer) Sign(message []byte, _ crypto.SignOptions) ([]byte, error) {
-	sk := s.priv.Bytes()
-	if sk == nil {
-		return nil, errors.New("pqc: signing key has been destroyed")
+	var sig []byte
+	if err := s.priv.Use(func(sk []byte) error {
+		// Test-only seam (nil in production): parks a signature INSIDE the borrow so a test
+		// can prove a concurrent Destroy waits instead of freeing the region here.
+		if borrowObserver != nil {
+			borrowObserver()
+		}
+		priv, err := s.scheme.UnmarshalBinaryPrivateKey(sk)
+		if err != nil {
+			return err
+		}
+		defer crypto.WipeBinaryPrivateKey(priv)
+		if signPrivateKeyObserver != nil {
+			signPrivateKeyObserver(priv)
+		}
+		sig = s.scheme.Sign(priv, message, nil)
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err, destroyedSigningKeyMsg)
 	}
-	priv, err := s.scheme.UnmarshalBinaryPrivateKey(sk)
-	if err != nil {
-		return nil, err
-	}
-	defer crypto.WipeBinaryPrivateKey(priv)
-	if signPrivateKeyObserver != nil {
-		signPrivateKeyObserver(priv)
-	}
-	return s.scheme.Sign(priv, message, nil), nil
+	return sig, nil
 }
 
 // SignDigest lets a PQC key satisfy crypto.DigestSigner. ML-DSA has no separate

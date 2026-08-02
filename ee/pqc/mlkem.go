@@ -3,7 +3,6 @@
 package pqc
 
 import (
-	"errors"
 	"fmt"
 	"runtime"
 
@@ -132,33 +131,50 @@ func (k *KEMPrivateKey) Public() crypto.PublicKey { return k.public }
 
 // PrivateKeyBytes returns a copy of the CIRCL-marshaled private key for sealed
 // persistence and deterministic tests. The returned bytes are unprotected
-// memory; callers must wipe them promptly after use.
+// memory; callers must wipe them promptly after use. The copy is taken inside the locked
+// buffer's borrow, so a concurrent Destroy cannot wipe or unmap the region mid-copy
+// (AN-8 lifetime).
 func (k *KEMPrivateKey) PrivateKeyBytes() ([]byte, error) {
-	sk := k.priv.Bytes()
-	if sk == nil {
-		return nil, errors.New("pqc: ML-KEM private key has been destroyed")
+	var out []byte
+	if err := k.priv.Use(func(sk []byte) error {
+		out = make([]byte, len(sk))
+		copy(out, sk)
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err, destroyedKEMKeyMsg)
 	}
-	out := make([]byte, len(sk))
-	copy(out, sk)
 	return out, nil
 }
 
 // Decapsulate opens ciphertext with the private key and returns the shared
 // secret. The returned shared secret is secret material in ordinary memory;
 // callers that keep it beyond immediate protocol use must wrap or wipe it.
+//
+// Lifetime (AN-4/AN-8): the parse and the decapsulation both run inside k.priv.Use, so a
+// concurrent Destroy waits for this operation rather than wiping and unmapping the locked
+// region under it; a Destroy that lands first refuses the borrow and this returns the
+// destroyed-key error instead of decapsulating with dead material.
 func (k *KEMPrivateKey) Decapsulate(ciphertext []byte) ([]byte, error) {
-	sk := k.priv.Bytes()
-	if sk == nil {
-		return nil, errors.New("pqc: ML-KEM private key has been destroyed")
-	}
-	priv, err := k.scheme.UnmarshalBinaryPrivateKey(sk)
-	if err != nil {
-		return nil, fmt.Errorf("pqc: parse ML-KEM private key: %w", err)
-	}
-	defer wipeKEMPrivateKey(priv)
-	ss, err := k.scheme.Decapsulate(priv, ciphertext)
-	if err != nil {
-		return nil, fmt.Errorf("pqc: decapsulate ML-KEM ciphertext: %w", err)
+	var ss []byte
+	if err := k.priv.Use(func(sk []byte) error {
+		// Test-only seam (nil in production): parks the operation INSIDE the borrow so a test
+		// can prove a concurrent Destroy waits instead of freeing the region here.
+		if borrowObserver != nil {
+			borrowObserver()
+		}
+		priv, err := k.scheme.UnmarshalBinaryPrivateKey(sk)
+		if err != nil {
+			return fmt.Errorf("pqc: parse ML-KEM private key: %w", err)
+		}
+		defer wipeKEMPrivateKey(priv)
+		out, err := k.scheme.Decapsulate(priv, ciphertext)
+		if err != nil {
+			return fmt.Errorf("pqc: decapsulate ML-KEM ciphertext: %w", err)
+		}
+		ss = out
+		return nil
+	}); err != nil {
+		return nil, destroyedKeyError(err, destroyedKEMKeyMsg)
 	}
 	return ss, nil
 }
