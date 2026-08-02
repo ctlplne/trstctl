@@ -22,16 +22,11 @@ var helloWASM = []byte{
 	0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x2a, 0x0b, // code: i32.const 42; end
 }
 
-// capWASM imports env.cap_write(i32) i32 and exports run() i32 that calls it with
-// arg 1 and returns the result — used to exercise capability gating.
-var capWASM = []byte{
-	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-	0x01, 0x0a, 0x02, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x01, 0x7f, // types: (i32)->i32, ()->i32
-	0x02, 0x11, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x09, 0x63, 0x61, 0x70, 0x5f, 0x77, 0x72, 0x69, 0x74, 0x65, 0x00, 0x00, // import env.cap_write : type 0
-	0x03, 0x02, 0x01, 0x01, // func 1 (run) : type 1
-	0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x01, // export "run" func 1
-	0x0a, 0x08, 0x01, 0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b, // code: i32.const 1; call 0; end
-}
+// capWASM imports env.cap_write and exports run() i32 that calls it, targeting a
+// path no grant in these tests permits. It is the "declares a privileged import"
+// fixture: it instantiates only under an fs.write grant, and is denied at the call
+// unless that grant also covers /denied/by/default.
+var capWASM = writeGuest("/denied/by/default", "x")
 
 // TestGrantAllows is the capability model: a plugin cannot exceed its grant.
 func TestGrantAllows(t *testing.T) {
@@ -76,15 +71,24 @@ func TestHelloPluginRunsSandboxed(t *testing.T) {
 	}
 }
 
-// TestUngrantedOperationDenied is the acceptance: a plugin attempting an
-// un-granted operation is denied at runtime.
+// TestUngrantedOperationDenied is the acceptance for the RUNTIME half of the
+// capability model: a plugin holding a capability is still denied the resources
+// its grant does not cover.
+//
+// The other half — a plugin that was never granted the capability at all — is no
+// longer a runtime deny. It cannot instantiate, which is stronger and is covered
+// by TestUngrantedImportFailsToInstantiate.
 func TestUngrantedOperationDenied(t *testing.T) {
 	ctx := context.Background()
 	h := pluginhost.New()
 	t.Cleanup(func() { _ = h.Close(ctx) })
 
-	// Without the fs.write capability, cap_write is denied and performs nothing.
-	denied, err := h.Load(ctx, capWASM, pluginhost.NewGrant())
+	allowed := t.TempDir()
+	grant := pluginhost.NewGrant(pluginhost.CapFSWrite).
+		WithPathPrefix(pluginhost.CapFSWrite, allowed)
+
+	// capWASM targets /denied/by/default, outside the granted prefix.
+	denied, err := h.Load(ctx, capWASM, grant)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,17 +98,17 @@ func TestUngrantedOperationDenied(t *testing.T) {
 		t.Fatalf("Invoke: %v", err)
 	}
 	if res == 0 {
-		t.Error("un-granted cap_write returned success; it must be denied")
+		t.Error("a write outside the granted prefix returned success; it must be denied")
 	}
 	if denied.Stats().Writes != 0 {
-		t.Errorf("un-granted plugin performed %d writes, want 0", denied.Stats().Writes)
+		t.Errorf("denied plugin performed %d writes, want 0", denied.Stats().Writes)
 	}
 	if denied.Stats().Denied == 0 {
 		t.Error("denial was not recorded at runtime")
 	}
 
-	// With the capability granted, the same plugin succeeds.
-	granted, err := h.Load(ctx, capWASM, pluginhost.NewGrant(pluginhost.CapFSWrite))
+	// The same capability, a path the grant does cover.
+	granted, err := h.Load(ctx, writeGuest(allowed+"/ok", "x"), grant)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,12 +203,39 @@ func TestConformanceValidatesSamplePlugin(t *testing.T) {
 	h := pluginhost.New()
 	t.Cleanup(func() { _ = h.Close(ctx) })
 
-	report := h.Conformance(ctx, capWASM)
+	report := h.Conformance(ctx, helloWASM)
 	if !report.OK() {
 		t.Errorf("sample plugin failed conformance: %+v", report.Checks)
 	}
 	if len(report.Checks) == 0 {
 		t.Error("conformance produced no checks")
+	}
+
+	// A plugin that DECLARES a privileged import is not conformant at zero
+	// capabilities: with a grant-shaped environment it cannot even instantiate.
+	// That is the containment proof, so it must be reported as a failure rather
+	// than quietly passing.
+	if h.Conformance(ctx, capWASM).OK() {
+		t.Error("a plugin importing env.cap_write passed conformance under an empty grant")
+	}
+
+	// It is conformant under the grant it actually needs: the capability AND a
+	// prefix covering the path it writes.
+	workdir := t.TempDir()
+	needsWrite := writeGuest(workdir+"/out", "x")
+	underGrant := h.ConformanceUnderGrant(ctx, needsWrite,
+		pluginhost.NewGrant(pluginhost.CapFSWrite).WithPathPrefix(pluginhost.CapFSWrite, workdir))
+	if !underGrant.OK() {
+		t.Errorf("capability plugin failed conformance under its own grant: %+v", underGrant.Checks)
+	}
+
+	// The same plugin under a grant that does NOT cover the path it writes is
+	// reported as reaching past its grant — the signal an operator needs before
+	// admitting it, even though the sandbox itself held.
+	tooNarrow := h.ConformanceUnderGrant(ctx, needsWrite,
+		pluginhost.NewGrant(pluginhost.CapFSWrite).WithPathPrefix(pluginhost.CapFSWrite, t.TempDir()))
+	if tooNarrow.OK() {
+		t.Error("a plugin writing outside its granted prefix passed conformance")
 	}
 
 	// A non-module is not conformant.

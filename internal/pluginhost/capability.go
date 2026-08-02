@@ -67,6 +67,16 @@ func (g Grant) Capabilities() []Capability {
 // while allowing CA and connector plugin grants to be split explicitly.
 func (g Grant) Empty() bool { return len(g.caps) == 0 && len(g.prefixes) == 0 }
 
+// PathPrefixes returns the resource constraints recorded for cap, in the order
+// they were granted. The WASM sandbox uses them to open a directory handle per
+// prefix, so that filesystem I/O is contained by an open root rather than by a
+// string comparison alone.
+func (g Grant) PathPrefixes(cap Capability) []string {
+	out := make([]string, len(g.prefixes[cap]))
+	copy(out, g.prefixes[cap])
+	return out
+}
+
 // Allows reports whether the plugin may perform cap on resource: the capability
 // must be granted, and if it carries resource constraints the resource must fall
 // under one of them.
@@ -88,10 +98,12 @@ func (g Grant) Empty() bool { return len(g.caps) == 0 && len(g.prefixes) == 0 }
 //
 // Allows is a pure lexical predicate: it never touches the filesystem, so it
 // does not resolve symlinks. A symlink *inside* a granted prefix that points
-// outside it still satisfies Allows. Closing that requires the enforcing layer
-// to open the resolved path under a directory handle (openat/O_NOFOLLOW), a
-// TOCTOU-safe syscall discipline that belongs to the sandbox that performs the
-// I/O, not to this predicate.
+// outside it still satisfies Allows. That is not a hole in the model, because
+// Allows is only half of it: the WASM sandbox performs every filesystem
+// operation through an os.Root opened at the granted prefix (see sandbox.go), so
+// a symlink or ".." that leaves the root is refused when the path is resolved,
+// whatever this predicate concluded. Keep both halves — a caller that consults
+// Allows and then opens the path by name has re-opened the escape.
 func (g Grant) Allows(cap Capability, resource string) bool {
 	if !g.caps[cap] {
 		return false

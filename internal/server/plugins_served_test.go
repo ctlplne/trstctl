@@ -19,21 +19,32 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/pluginhost/wasmgen"
 	"trstctl.com/trstctl/internal/store"
 )
 
-// connectorWASM is a minimal WASM connector plugin: it imports env.cap_write(i32)
-// and exports run() i32 that calls cap_write(1) and returns the result. With the
-// fs.write capability granted it performs a (gated) privileged write and returns
-// 0 (success); without it, the host denies the write. It is the served analogue
-// of the pluginhost test fixture, here driven through the real outbox handler.
-var connectorWASM = []byte{
-	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-	0x01, 0x0a, 0x02, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x01, 0x7f, // types: (i32)->i32, ()->i32
-	0x02, 0x11, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x09, 0x63, 0x61, 0x70, 0x5f, 0x77, 0x72, 0x69, 0x74, 0x65, 0x00, 0x00, // import env.cap_write
-	0x03, 0x02, 0x01, 0x01, // func 1 (run) : type 1
-	0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x01, // export "run" func 1
-	0x0a, 0x08, 0x01, 0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b, // i32.const 1; call 0; end
+// pluginWriteTarget is the path every WASM fixture below writes to, relative to
+// the prefix the served grant hands it. The capability ABI carries a real path
+// now, so a fixture has to name one and the grant has to cover it.
+const pluginWriteTarget = "deployed.txt"
+
+// pluginGrantDir is a per-test directory granted to the plugin, and the grant that
+// permits writing inside it. Served plugins are sandboxed by an os.Root opened at
+// this prefix, so an fs.write capability without a prefix is refused outright.
+func pluginGrantDir(t *testing.T) (string, pluginhost.Grant) {
+	t.Helper()
+	dir := t.TempDir()
+	return dir, pluginhost.NewGrant(pluginhost.CapFSWrite).
+		WithPathPrefix(pluginhost.CapFSWrite, dir)
+}
+
+// connectorWASM is a minimal WASM connector plugin: it imports env.cap_write and
+// exports run() i32 that writes one file inside the granted prefix and returns the
+// status. With a grant covering that prefix it returns 0 (success); with a grant
+// that does not cover it, the host denies the write. It is the served analogue of
+// the pluginhost test fixture, here driven through the real outbox handler.
+func connectorWASMFor(dir string) []byte {
+	return wasmgen.WriteGuest(filepath.Join(dir, pluginWriteTarget), "deployed", "run")
 }
 
 // caWASM is the reference CA plugin shape: it exports run() for conformance and
@@ -42,13 +53,18 @@ var connectorWASM = []byte{
 // ca.IssuanceService rails. This keeps runtime plugins out of the crypto-provider
 // business: crypto remains compile-time Go interfaces + DI (like crypto.Signer,
 // Java JCA, OpenSSL ENGINE, and PKCS#11), not a runtime crypto-suite engine.
-var caWASM = []byte{
-	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-	0x01, 0x0a, 0x02, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x01, 0x7f,
-	0x02, 0x11, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x09, 0x63, 0x61, 0x70, 0x5f, 0x77, 0x72, 0x69, 0x74, 0x65, 0x00, 0x00,
-	0x03, 0x03, 0x02, 0x01, 0x01,
-	0x07, 0x0f, 0x02, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x01, 0x05, 0x69, 0x73, 0x73, 0x75, 0x65, 0x00, 0x02,
-	0x0a, 0x0d, 0x02, 0x04, 0x00, 0x41, 0x00, 0x0b, 0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b,
+func caWASMFor(dir string) []byte {
+	return wasmgen.Module("cap_write", 4,
+		[]byte(filepath.Join(dir, "issued.pem")+"issued"),
+		[]wasmgen.Export{
+			// run() performs no privileged call, so the plugin stays conformant at
+			// zero capabilities; issue() does the one granted host operation.
+			{Name: "run", Const: 0},
+			{Name: "issue", Args: []int32{
+				0, int32(len(filepath.Join(dir, "issued.pem"))),
+				int32(len(filepath.Join(dir, "issued.pem"))), int32(len("issued")),
+			}},
+		})
 }
 
 // writePluginDir writes name.wasm and, when sign != nil, a detached name.wasm.sig
@@ -117,15 +133,18 @@ func TestServedPluginDeployEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	st, log, keyPEM, sign := servedPluginStack(t)
 
-	dir := writePluginDir(t, "demo-connector", connectorWASM, sign)
+	workdir, grant := pluginGrantDir(t)
+	dir := writePluginDir(t, "demo-connector", connectorWASMFor(workdir), sign)
 
-	// Grant the plugin fs.write so its gated write succeeds (the "performs its
-	// action" half). A served Server with no signer still wires the plugin deploy
-	// path (deployment is not signer-gated).
+	// Grant the plugin fs.write UNDER workdir so its gated write succeeds (the
+	// "performs its action" half). The prefix is required: the sandbox contains
+	// filesystem I/O inside an os.Root opened at it, so a capability with no prefix
+	// has nothing to contain and is refused. A served Server with no signer still
+	// wires the plugin deploy path (deployment is not signer-gated).
 	srv, err := Build(ctx, Deps{Store: st, Log: log, Plugins: PluginConfig{
 		Dir:            dir,
 		TrustedKeyPEMs: [][]byte{keyPEM},
-		Grant:          pluginhost.NewGrant(pluginhost.CapFSWrite),
+		Grant:          grant,
 	}})
 	if err != nil {
 		t.Fatalf("Build with a signed plugin must succeed: %v", err)
@@ -187,8 +206,9 @@ func TestServedPluginDeployEndToEnd(t *testing.T) {
 func TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy(t *testing.T) {
 	ctx := context.Background()
 	_, _, keyPEM, sign := servedPluginStack(t)
-	caDir := writePluginDir(t, "reference-ca", caWASM, sign)
-	connectorDir := writePluginDir(t, "reference-connector", connectorWASM, sign)
+	workdir, grant := pluginGrantDir(t)
+	caDir := writePluginDir(t, "reference-ca", caWASMFor(workdir), sign)
+	connectorDir := writePluginDir(t, "reference-connector", connectorWASMFor(workdir), sign)
 
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
@@ -196,8 +216,8 @@ func TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy(t *testing.T) {
 			CADir:           caDir,
 			ConnectorDir:    connectorDir,
 			TrustedKeyPEMs:  [][]byte{keyPEM},
-			CAGrant:         pluginhost.NewGrant(pluginhost.CapFSWrite),
-			ConnectorGrant:  pluginhost.NewGrant(pluginhost.CapFSWrite),
+			CAGrant:         grant,
+			ConnectorGrant:  grant,
 			ReferenceCAName: "reference-ca",
 		}
 	})
@@ -255,7 +275,7 @@ func TestServedPluginRefusesUnsigned(t *testing.T) {
 	st, log, keyPEM, _ := servedPluginStack(t)
 
 	// No .sig written → unsigned.
-	dir := writePluginDir(t, "unsigned-connector", connectorWASM, nil)
+	dir := writePluginDir(t, "unsigned-connector", connectorWASMFor(t.TempDir()), nil)
 	_, err := Build(ctx, Deps{Store: st, Log: log, Plugins: PluginConfig{
 		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM}, Grant: pluginhost.NewGrant(),
 	}})
@@ -273,9 +293,10 @@ func TestServedPluginRefusesTampered(t *testing.T) {
 
 	// Sign the original, then write a tampered module under the same name so the
 	// detached signature no longer matches the bytes on disk.
-	sig := sign(connectorWASM)
+	original := connectorWASMFor(t.TempDir())
+	sig := sign(original)
 	dir := t.TempDir()
-	tampered := append([]byte(nil), connectorWASM...)
+	tampered := append([]byte(nil), original...)
 	tampered[len(tampered)-2] ^= 0xFF // flip the i32.const operand
 	if err := os.WriteFile(filepath.Join(dir, "tampered-connector.wasm"), tampered, 0o600); err != nil {
 		t.Fatal(err)
@@ -298,10 +319,18 @@ func TestServedPluginOutOfGrantDeployFails(t *testing.T) {
 	ctx := context.Background()
 	st, log, keyPEM, sign := servedPluginStack(t)
 
-	dir := writePluginDir(t, "greedy-connector", connectorWASM, sign)
-	// EMPTY grant: the plugin's cap_write attempt is denied by the sandbox.
+	// The plugin writes under wantsDir; the grant covers grantedDir instead. The
+	// capability IS held, so the module instantiates and runs — and is then denied
+	// on the resource, which is the runtime half of the sandbox. (A plugin denied
+	// the capability outright cannot instantiate at all; that is
+	// TestUngrantedImportFailsToInstantiate in internal/pluginhost.)
+	wantsDir := t.TempDir()
+	grantedDir := t.TempDir()
+	dir := writePluginDir(t, "greedy-connector", connectorWASMFor(wantsDir), sign)
 	srv, err := Build(ctx, Deps{Store: st, Log: log, Plugins: PluginConfig{
-		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM}, Grant: pluginhost.NewGrant(),
+		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM},
+		Grant: pluginhost.NewGrant(pluginhost.CapFSWrite).
+			WithPathPrefix(pluginhost.CapFSWrite, grantedDir),
 	}})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
@@ -347,11 +376,12 @@ func TestServedDNSProviderPluginRequiresDNSContract(t *testing.T) {
 	ctx := context.Background()
 	st, log, keyPEM, sign := servedPluginStack(t)
 
-	dir := writePluginDir(t, "not-dns", connectorWASM, sign)
+	workdir, grant := pluginGrantDir(t)
+	dir := writePluginDir(t, "not-dns", connectorWASMFor(workdir), sign)
 	_, err := Build(ctx, Deps{Store: st, Log: log, Plugins: PluginConfig{
 		DNSDir:         dir,
 		TrustedKeyPEMs: [][]byte{keyPEM},
-		Grant:          pluginhost.NewGrant(pluginhost.CapFSWrite),
+		Grant:          grant,
 	}})
 	if err == nil {
 		t.Fatal("Build admitted a signed plugin that does not implement the DNS provider present/cleanup contract")

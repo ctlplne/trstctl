@@ -31,7 +31,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/pluginhost/wasmgen"
 	"trstctl.com/trstctl/internal/projections"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/ari"
@@ -39,22 +39,22 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// dnsProviderWASM is a minimal signed DNS-provider plugin: run() satisfies the
-// admission/conformance probe, and present_txt()/cleanup_txt() each perform one
-// granted host operation so the served path proves the capability sandbox is active.
-var dnsProviderWASM = []byte{
-	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-	0x01, 0x0a, 0x02, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x01, 0x7f,
-	0x02, 0x11, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x09, 0x63, 0x61, 0x70, 0x5f, 0x77, 0x72, 0x69, 0x74, 0x65, 0x00, 0x00,
-	0x03, 0x04, 0x03, 0x01, 0x01, 0x01,
-	0x07, 0x23, 0x03,
-	0x03, 0x72, 0x75, 0x6e, 0x00, 0x01,
-	0x0b, 0x70, 0x72, 0x65, 0x73, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x78, 0x74, 0x00, 0x02,
-	0x0b, 0x63, 0x6c, 0x65, 0x61, 0x6e, 0x75, 0x70, 0x5f, 0x74, 0x78, 0x74, 0x00, 0x03,
-	0x0a, 0x14, 0x03,
-	0x04, 0x00, 0x41, 0x00, 0x0b,
-	0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b,
-	0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b,
+// dnsProviderWASMFor is a minimal signed DNS-provider plugin: run() satisfies the
+// admission/conformance probe without performing any privileged call, and
+// present_txt()/cleanup_txt() each perform one granted host operation so the
+// served path proves the capability sandbox is active.
+//
+// It writes inside dir, which the test grants: the capability ABI carries a real
+// path through guest memory, so the module has to name one and the grant has to
+// cover it.
+func dnsProviderWASMFor(dir string) []byte {
+	target := filepath.Join(dir, "txt-record")
+	args := []int32{0, int32(len(target)), int32(len(target)), int32(len("v"))}
+	return wasmgen.Module("cap_write", 4, []byte(target+"v"), []wasmgen.Export{
+		{Name: "run", Const: 0},
+		{Name: "present_txt", Args: args},
+		{Name: "cleanup_txt", Args: args},
+	})
 }
 
 // servedHarness is the assembled control plane (server.Build -> Handler) over the
@@ -831,7 +831,8 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 		t.Fatalf("generate plugin signing key: %v", err)
 	}
 	keyPEM := crypto.MarshalPublicKeyPEM(pubDER)
-	dnsDir := writePluginDir(t, "reference-dns", dnsProviderWASM, sign)
+	dnsWorkdir, dnsGrant := pluginGrantDir(t)
+	dnsDir := writePluginDir(t, "reference-dns", dnsProviderWASMFor(dnsWorkdir), sign)
 
 	h := newServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
@@ -841,7 +842,7 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 			d.Plugins = PluginConfig{
 				DNSDir:         dnsDir,
 				TrustedKeyPEMs: [][]byte{keyPEM},
-				DNSGrant:       pluginhost.NewGrant(pluginhost.CapFSWrite),
+				DNSGrant:       dnsGrant,
 			}
 		},
 	)

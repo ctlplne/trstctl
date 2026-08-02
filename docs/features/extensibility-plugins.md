@@ -34,6 +34,30 @@ plugin's reach is closed by construction. Every gated call (write a file, dial a
 checks the [capability grant](../glossary.md) first, including path/host prefix matching,
 and denials are counted.
 
+The ABI is three functions, each returning `0` (ok), `1` (denied by the grant) or `2`
+(error). Arguments are offsets and lengths into the plugin's own exported memory:
+
+```wat
+(import "env" "cap_read"  (func (param i32 i32 i32 i32 i32) (result i32)))  ;; path, out, cap, out_len
+(import "env" "cap_write" (func (param i32 i32 i32 i32)     (result i32)))  ;; path, data
+(import "env" "cap_dial"  (func (param i32 i32)             (result i32)))  ;; host:port
+```
+
+**Two things enforce a path grant, not one.** The grant check is *lexical*: it cleans
+both sides and requires the match to land on a separator boundary, so `/etc/nginx/certs`
+does not permit `/etc/nginx/certs-evil/x` and `../` is resolved before it is compared.
+On its own that is not enough — a **symlink inside a granted directory pointing outside
+it** would satisfy any purely textual check. So the sandbox never opens a path by name:
+it performs every filesystem operation through a directory handle opened at the granted
+prefix (Go's `os.Root`, i.e. `openat` with an escape check), and the kernel-facing layer
+refuses a component that leaves the root. A filesystem capability granted with **no**
+path prefix is refused outright rather than silently degrading to unrestricted access,
+because there is no root to contain it under.
+
+`cap_dial` matches the granted `host[:port]` **exactly** — not by prefix or suffix, which
+would let `example.com.attacker.example` or `evil-example.com` through a grant for
+`example.com`. A constraint naming a port requires that port; one without accepts any.
+
 Three properties make this trustworthy:
 
 - **The host holds no privileged handle.** A source-level test asserts the plugin host
@@ -46,6 +70,10 @@ Three properties make this trustworthy:
 - **A conformance gate.** `Conformance` runs a candidate plugin under an *empty* grant and
   asserts it instantiates, exports its entry point, runs without trapping, and performs
   zero privileged operations — the admission check a plugin author runs before shipping.
+  Because the environment is shaped by the grant, passing it proves something specific:
+  the plugin declares no privileged import at all. A plugin that legitimately needs
+  capabilities is admitted with `ConformanceUnderGrant` against the grant it will actually
+  run under, which additionally reports whether it reached past that grant.
   A misbehaving-plugin **containment test** proves a hostile plugin is actually contained.
 
 This same capability model is what governs the [deployment connectors](deployment-connectors.md)

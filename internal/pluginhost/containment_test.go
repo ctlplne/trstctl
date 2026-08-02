@@ -73,28 +73,34 @@ func TestMisbehavingPluginIsContained(t *testing.T) {
 	}
 }
 
-// TestUngrantedPluginCanDoNothingPrivileged is the zero-grant containment case: a
-// plugin loaded with an empty grant cannot perform any gated operation. It can
-// compute and return a value (pure compute is always allowed), but every
-// capability call is denied.
+// TestUngrantedPluginCanDoNothingPrivileged is the zero-grant containment case.
+//
+// It used to assert that a privileged call was DENIED at runtime. It now asserts
+// something stronger: under an empty grant the env module exports nothing, so a
+// plugin declaring a privileged import cannot instantiate and never executes an
+// instruction. Pure compute still loads and runs, which is the other half of
+// "contained, not crippled".
 func TestUngrantedPluginCanDoNothingPrivileged(t *testing.T) {
 	ctx := context.Background()
 	h := pluginhost.New()
 	t.Cleanup(func() { _ = h.Close(ctx) })
 
-	p, err := h.Load(ctx, capWASM, pluginhost.NewGrant()) // no capabilities
+	if _, err := h.Load(ctx, capWASM, pluginhost.NewGrant()); err == nil {
+		t.Fatal("a plugin declaring a privileged import instantiated under an empty grant; " +
+			"its reach is not closed by construction")
+	}
+
+	// Pure compute is unaffected by an empty grant.
+	p, err := h.Load(ctx, helloWASM, pluginhost.NewGrant())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("a zero-import plugin must still load under an empty grant: %v", err)
 	}
 	t.Cleanup(func() { _ = p.Close(ctx) })
 	if _, err := h.Invoke(ctx, p, "run"); err != nil {
 		t.Fatalf("invoke: %v", err)
 	}
-	if p.Stats().Writes != 0 {
-		t.Errorf("an ungranted plugin performed %d writes, want 0", p.Stats().Writes)
-	}
-	if p.Stats().Denied == 0 {
-		t.Error("an ungranted plugin's privileged call was not denied")
+	if s := p.Stats(); s.Writes != 0 || s.Reads != 0 || s.Dials != 0 {
+		t.Errorf("a zero-import plugin performed privileged operations: %+v", s)
 	}
 }
 

@@ -30,15 +30,33 @@ func (r *Report) add(name string, passed bool, detail string) {
 	r.Checks = append(r.Checks, Check{Name: name, Passed: passed, Detail: detail})
 }
 
-// Conformance validates that a plugin meets the host contract: it is a valid WASM
-// module, instantiates under the sandbox, exports the required run function,
-// executes without trapping, and — given no grant — performs no privileged
-// operation (its sandbox holds). It is the tool a plugin author runs against
-// their build, and what the host uses to admit a plugin.
+// Conformance validates that a plugin meets the host contract at ZERO
+// capabilities: it is a valid WASM module, instantiates under an empty grant,
+// exports the required run function, executes without trapping, and performs no
+// privileged operation.
+//
+// Because the sandbox shapes the environment by the grant, "instantiates under an
+// empty grant" now proves something specific and useful: the plugin declares no
+// privileged import at all. A plugin that does declare one fails this check —
+// correctly, since it is not a zero-capability plugin — and should be admitted
+// with ConformanceUnderGrant against the grant it will actually run under.
 func (h *Host) Conformance(ctx context.Context, wasm []byte) Report {
+	return h.ConformanceUnderGrant(ctx, wasm, NewGrant())
+}
+
+// ConformanceUnderGrant validates a plugin against the grant it will be run with.
+// It is the admission check for a plugin that legitimately needs capabilities: a
+// connector that writes certificates has to be judged under a grant that permits
+// writing them, not under an empty one it could never satisfy.
+//
+// The privileged-operation check is relative to the grant: under an empty grant it
+// asserts the plugin did nothing privileged; under a real grant it asserts the
+// plugin was never DENIED, which is the signal that it is reaching for something
+// its grant does not cover.
+func (h *Host) ConformanceUnderGrant(ctx context.Context, wasm []byte, grant Grant) Report {
 	var r Report
 
-	p, err := h.Load(ctx, wasm, NewGrant()) // empty grant: nothing is permitted
+	p, err := h.Load(ctx, wasm, grant)
 	if err != nil {
 		r.add("instantiates under sandbox", false, err.Error())
 		return r
@@ -58,12 +76,25 @@ func (h *Host) Conformance(ctx context.Context, wasm []byte) Report {
 	}
 	r.add("run() executes", true, "")
 
-	// With no capabilities granted, the plugin must not have performed any
-	// privileged operation.
-	if p.Stats().Writes != 0 {
-		r.add("sandbox respected under empty grant", false, "plugin performed a privileged write with no grant")
+	stats := p.Stats()
+	if grant.Empty() {
+		// Nothing was permitted, so nothing may have happened.
+		if stats.Writes != 0 || stats.Reads != 0 || stats.Dials != 0 {
+			r.add("sandbox respected under empty grant", false,
+				"plugin performed a privileged operation with no grant")
+		} else {
+			r.add("sandbox respected under empty grant", true, "")
+		}
+		return r
+	}
+	// Under a real grant, a denial means the plugin reached past what it was given.
+	// That is not a sandbox failure — the sandbox held — but it is a plugin that
+	// will not behave as its author expects, so admission should surface it.
+	if stats.Denied != 0 {
+		r.add("stays within its grant", false,
+			"plugin attempted an operation its grant does not cover")
 	} else {
-		r.add("sandbox respected under empty grant", true, "")
+		r.add("stays within its grant", true, "")
 	}
 	return r
 }

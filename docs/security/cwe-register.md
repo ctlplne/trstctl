@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1014 annotated sites across 24 rules. Each row is
+1018 annotated sites across 24 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -242,7 +242,7 @@ not this file.
 | `internal/server/protocols_served_test.go:573` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/protocols_served_test.go:643` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/protocols_served_test.go:719` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/protocols_served_test.go:892` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:893` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:32` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:52` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:53` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -708,7 +708,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:162` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:277` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (268 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (272 sites)
 
 | Location | Reason |
 |---|---|
@@ -833,7 +833,11 @@ not this file.
 | `internal/license/license.go:277` | operator-supplied license file path (CWE-22) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/perf/smoke.go:173` | perf harness reading its own artifact path (CWE-22) |
-| `internal/pluginhost/containment_test.go:116` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/pluginhost/containment_test.go:122` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/pluginhost/reference_plugin_test.go:49` | fixed in-repo reference plugin path (CWE-22) |
+| `internal/pluginhost/reference_plugin_test.go:129` | test reads the path it granted (CWE-22) |
+| `internal/pluginhost/sandbox_test.go:95` | test reads the fixture path it just granted (CWE-22) |
+| `internal/pluginhost/sandbox_test.go:171` | test reads the fixture it created (CWE-22) |
 | `internal/protocols/acme/certbot_client_test.go:178` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/acme/certbot_client_test.go:253` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/acme/certbot_client_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
