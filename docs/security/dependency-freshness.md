@@ -43,6 +43,36 @@ before that date, the real date is earlier and the recorded value understates th
 Move it earlier whenever a better-evidenced date is known; never move it later to buy
 time.
 
+## The major-version gap cap
+
+The age budget and the major-version gap are different debts. A row can sit well inside
+its class age budget and still be several majors behind, which is where the TypeScript
+row was: `5.9.3` against a published `7.0.2`, comfortably inside the 90-day
+`developer-tooling` budget, and the gate printed OK.
+
+`scripts/ci/check-dependency-freshness.mjs` parses the leading integer of
+`current_version` and `latest_observed_version` and applies a cap of one major:
+
+- A gap of zero or one major is ordinary upgrade-queue work, governed by the age budget.
+- A gap of more than one major fails the gate unless the row carries
+  `accepted_deferral` status with a `deferral_until` that still covers today. That is the
+  same single escape hatch the age budget uses, so a multi-major pin is always a dated,
+  argued decision rather than drift.
+- A `current_version` whose major is newer than `latest_observed_version` fails: the
+  observation is stale and has to be re-taken.
+- A version whose leading component is not an integer fails closed rather than being
+  skipped.
+
+The rationale is where the reason lives. A row parked more than one major behind must
+name the intermediate release it will hop through and the work the upgrade is waiting
+on, because once the gap cap applies, that rationale and its `deferral_until` are the
+only things standing between the pin and a red gate.
+
+A tracked npm row is measured against `web/package-lock.json`. Other npm trees in this
+repository -- `clients/sdk/typescript` and `deploy/iac/pulumi/trstctl-resources` -- have
+their own lockfiles and are not covered by a `web/` row, so do not read a tracked
+version as repository-wide.
+
 ## How to refresh the report
 
 Run the discovery commands:
