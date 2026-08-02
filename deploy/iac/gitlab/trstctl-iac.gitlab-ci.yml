@@ -9,7 +9,9 @@ variables:
 
 trstctl:terraform:plan:
   stage: plan
-  image: hashicorp/terraform:1.9.8
+  # Digest-pinned, not a floating tag (SUPPLY-008; enforced by
+  # scripts/ci/check-compose-images-pinned.sh). Tag for humans: 1.9.8.
+  image: hashicorp/terraform:1.9.8@sha256:18f9986038bbaf02cf49db9c09261c778161c51dcc7fb7e355ae8938459428cd
   script:
     - cd "$TRSTCTL_TERRAFORM_DIR"
     - terraform init -input=false
@@ -21,7 +23,8 @@ trstctl:terraform:plan:
 
 trstctl:terraform:apply:
   stage: apply
-  image: hashicorp/terraform:1.9.8
+  # Digest-pinned (SUPPLY-008); tag for humans: 1.9.8.
+  image: hashicorp/terraform:1.9.8@sha256:18f9986038bbaf02cf49db9c09261c778161c51dcc7fb7e355ae8938459428cd
   needs: ["trstctl:terraform:plan"]
   script:
     - cd "$TRSTCTL_TERRAFORM_DIR"

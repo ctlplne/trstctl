@@ -56,3 +56,17 @@ updates:
       interval: weekly
     commit-message:
       prefix: "deps(docker)"
+
+  # Container images in the live-demo stack (docker-compose.yml + Dockerfile.seed).
+  # Every image there is digest-pinned (SUPPLY-008, enforced by
+  # scripts/ci/check-compose-images-pinned.sh); Dependabot bumps those digest pins
+  # in place, so a pin stays current without ever reverting to a mutable tag.
+  # The demo stack had no docker updater at all, and its non-Postgres/NATS images
+  # were authored with floating tags rather than pins; this entry keeps the new
+  # digest pins current.
+  - package-ecosystem: docker
+    directory: "/deploy/demo"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps(docker)"

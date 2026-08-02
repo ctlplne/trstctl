@@ -202,7 +202,9 @@ jobs:
           bash scripts/ci/verify-required-checks_selftest.sh
           bash scripts/ci/verify-scheduled-gates_selftest.sh
           bash scripts/ci/profile-zlint_selftest.sh
+          bash scripts/ci/check-compose-images-pinned_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
+          bash scripts/ci/check-compose-images-pinned.sh .
 
   dod-gate:
     name: definition of done / wiring census

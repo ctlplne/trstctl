@@ -116,6 +116,16 @@ jobs:
       - name: Verify the production image base is digest-pinned (not a floating tag)
         run: bash scripts/ci/check-base-pinned.sh
 
+      # Pin policy, part three: the SHIPPED STACKS. check-base-pinned.sh covers only
+      # the production image's own bases; this covers every other image deploy/
+      # references — the compose stacks, the demo seed Dockerfile, the IaC job
+      # manifests — so an evaluator's first `docker compose up` cannot pull a
+      # silently-changed image (SUPPLY-008).
+      - name: Verify deploy/ stack images are digest-pinned (not floating tags)
+        run: |
+          bash scripts/ci/check-compose-images-pinned_selftest.sh
+          bash scripts/ci/check-compose-images-pinned.sh .
+
       # Supply-chain pin policy, part two: every third-party GitHub Action is
       # pinned by an immutable commit SHA, never a mutable tag (SUPPLY-002). The
       # release pipeline holds packages:write + id-token:write, so a repointed

@@ -206,6 +206,16 @@ merely reports:
   on any fixable HIGH/CRITICAL vulnerability. `scripts/ci/check-base-pinned.sh`
   guards that the release path pins both `BUILD_IMAGE` and `BASE_IMAGE` by
   digest.
+- **Shipped-stack image pinning**: `scripts/ci/check-compose-images-pinned.sh`
+  extends that rule past the production image to every container image the
+  `deploy/` tree references — the compose stacks, the demo seed Dockerfile, and
+  the IaC job manifests — failing CI on any `image:` or `FROM` that names a tag
+  without an `@sha256:` digest (SUPPLY-008). Locally-built `*:local` refs,
+  build-arg indirection, Helm-templated refs, and intra-Dockerfile stage
+  references are the only exemptions. Dependabot's docker updater covers the
+  compose and Dockerfile directories it can parse (`/deploy/docker`,
+  `/deploy/demo`) and bumps those digest pins in place; the `deploy/iac/` pins
+  are not reachable by that updater and are refreshed by hand.
 - **Critical-package coverage gate**: beyond the repo-wide coverage floor,
   each security-critical package (crypto boundary, issuance, outbox, RLS
   store, signing, revocation) must independently meet

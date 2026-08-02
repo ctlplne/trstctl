@@ -7,6 +7,12 @@
 # KMS-backed managed keys. It intentionally uses a different command, project
 # name, data volumes, and host ports than deploy/docker/docker-compose.yml so the
 # blank operational/eval stack can run beside it.
+#
+# Every third-party image below is pinned by @sha256 digest, not a floating tag,
+# so the demo is reproducible and cannot silently inherit a changed/ vulnerable
+# image (SUPPLY-008). The human-readable tag is kept in the ref. Enforced by
+# scripts/ci/check-compose-images-pinned.sh; Dependabot's docker updater
+# (directory /deploy/demo) bumps the digests in place.
 
 name: trstctl-demo
 
@@ -37,7 +43,7 @@ services:
       retries: 20
 
   localstack:
-    image: localstack/localstack:3.8.1
+    image: localstack/localstack:3.8.1@sha256:b279c01f4cfb8f985a482e4014cabc1e2697b9d7a6c8c8db2e40f4d9f93687c7
     environment:
       SERVICES: kms
       LS_LOG: warn
@@ -45,14 +51,14 @@ services:
       - localstack:/var/lib/localstack
 
   oidc-keys:
-    image: node:22-alpine
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
     command: ["node", "/demo/oidc-keygen.mjs"]
     volumes:
       - demoidp:/demo-oidc
       - ./oidc-keygen.mjs:/demo/oidc-keygen.mjs:ro
 
   managedkeys-config:
-    image: node:22-alpine
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
     command:
       - "node"
       - "-e"
@@ -206,7 +212,7 @@ services:
       start_period: 25s
 
   demo-oidc:
-    image: node:22-alpine
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
     restart: on-failure
     depends_on:
       trstctl:
@@ -230,7 +236,7 @@ services:
       - "19081:19081"
 
   oidc-loopback:
-    image: node:22-alpine
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
     network_mode: "service:trstctl"
     restart: on-failure
     depends_on:
@@ -254,7 +260,7 @@ services:
         });
 
   localstack-loopback:
-    image: node:22-alpine
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
     network_mode: "service:trstctl"
     restart: on-failure
     depends_on:
@@ -278,7 +284,7 @@ services:
         });
 
   localstack-signer-loopback:
-    image: node:22-alpine
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
     network_mode: "service:signer"
     restart: on-failure
     depends_on:

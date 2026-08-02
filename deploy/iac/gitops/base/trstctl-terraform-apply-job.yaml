@@ -17,7 +17,8 @@ spec:
       restartPolicy: Never
       containers:
         - name: terraform
-          image: hashicorp/terraform:1.9.8
+          # Digest-pinned (SUPPLY-008); tag for humans: 1.9.8.
+          image: hashicorp/terraform:1.9.8@sha256:18f9986038bbaf02cf49db9c09261c778161c51dcc7fb7e355ae8938459428cd
           imagePullPolicy: IfNotPresent
           workingDir: /workspace
           command: ["/bin/sh", "-ec"]
