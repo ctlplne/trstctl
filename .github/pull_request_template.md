@@ -7,13 +7,19 @@ first. See CONTRIBUTING.md.
 
 ## What this changes
 
-<!-- One or two sentences. Link the issue or sprint card. -->
+<!-- One or two sentences: what behaves differently after this merges, and why.
+Link the issue it closes, if there is one. -->
+
+## How to verify
+
+<!-- The commands you ran, and the one test that fails without this change:
+`go test ./<package>/ -run <TestName> -count=1`. -->
 
 ## Checklist
 
 - [ ] Commits are signed off (`git commit -s`) — DCO for core
 - [ ] `ee/` changes (if any) are covered by a signed CLA
-- [ ] Tests were written first and cover the acceptance criteria
+- [ ] A test that fails without this change was written first
 - [ ] `make lint test` is green, including the architecture linter
 - [ ] Docs and a CHANGELOG entry under `[Unreleased]` are updated
 - [ ] Scoped to one change; adjacent work is noted as a follow-up
