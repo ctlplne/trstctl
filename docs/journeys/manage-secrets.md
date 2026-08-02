@@ -3,7 +3,8 @@
 <!-- trstctl:journey-census:start -->
 !!! success "Served path — wiring census 81/81"
 
-    The shipped-binary census reports **81/81 required capabilities served**.
+    The Definition-of-Done census reports **81/81 required capabilities served**: **12 of 81 census rows launch the shipped binary** and **69 of 81 are proved through the production-assembled handler**.
+    Production-assembled means production `buildRunDeps` output driving the assembled `Server.Handler` in-process, with a hand-built `Deps` rejected; only the process launch differs.
     Independently proof-gated capability rows used by this journey (all `required`, all `served`): `dynamic_secret.registry`, `secret_sync.registry`, `secrets_residuals.kmip_wrapping_profile_negotiation`, `secrets_residuals.terraform_opentofu_native_sync`, `secrets_residuals.vault_kv_outbound_sync`, `secrets_residuals.vault_shim_acl_transit`.
     Core surfaces guarded by route and journey tests: `encrypted_secret_store`, `one_time_sharing`, `secret_scanning`.
     This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.

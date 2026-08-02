@@ -67,7 +67,7 @@ func TestValidateProductClaimsRejectsStaleResidual(t *testing.T) {
 
 func TestValidateProductClaimsRejectsReadmeCountMismatch(t *testing.T) {
 	manifest, report, ledger, readme, limitations := validProductClaimsFixture()
-	readme = strings.ReplaceAll(readme, "Deployment connectors: **24 inventory / 24 served in the shipped binary**", "Deployment connectors: **24 inventory / 23 served in the shipped binary**")
+	readme = strings.ReplaceAll(readme, "Deployment connectors: **24 inventory / 24 served through the production-assembled handler**", "Deployment connectors: **24 inventory / 23 served through the production-assembled handler**")
 
 	err := validateProductClaims(manifest, report, ledger, readme, limitations)
 	if err == nil || !strings.Contains(err.Error(), "README capabilities must show the fresh inventory/runtime split") {
@@ -118,13 +118,14 @@ func validProductClaimsFixture() (Manifest, Report, featureClaimsLedger, string,
 		capability string
 		label      string
 		count      int
+		mode       string
 	}
 	specs := []inventorySpec{
-		{capability: "connector", label: "Deployment connectors", count: 24},
-		{capability: "dynamic_secret", label: "Dynamic-secret backends", count: 8},
-		{capability: "external_ca", label: "CA integrations", count: 14},
-		{capability: "hsm_kms", label: "HSM/KMS backends", count: 6},
-		{capability: "secret_sync", label: "Secret-sync targets", count: 10},
+		{capability: "connector", label: "Deployment connectors", count: 24, mode: runtimeModeAssembledHandler},
+		{capability: "dynamic_secret", label: "Dynamic-secret backends", count: 8, mode: runtimeModeAssembledHandler},
+		{capability: "external_ca", label: "CA integrations", count: 14, mode: runtimeModeAssembledHandler},
+		{capability: "hsm_kms", label: "HSM/KMS backends", count: 6, mode: runtimeModeLaunchedBinary},
+		{capability: "secret_sync", label: "Secret-sync targets", count: 10, mode: runtimeModeAssembledHandler},
 	}
 	manifest := Manifest{}
 	report := Report{Entries: map[string]entryResult{}}
@@ -137,11 +138,16 @@ func validProductClaimsFixture() (Manifest, Report, featureClaimsLedger, string,
 			ServedState:     "conditional",
 			DoDCapabilities: []string{spec.capability},
 		})
-		_, _ = fmt.Fprintf(&readme, "%s: **%d inventory / %d served in the shipped binary**\n", spec.label, spec.count, spec.count)
+		launched, assembled := 0, spec.count
+		if spec.mode == runtimeModeLaunchedBinary {
+			launched, assembled = spec.count, 0
+		}
+		_, _ = fmt.Fprintf(&readme, "%s: **%d inventory / %d %s**\n", spec.label, spec.count, spec.count, servedProofPhrase(launched, assembled))
 		for backend := 1; backend <= spec.count; backend++ {
 			id := fmt.Sprintf("%s.backend_%02d", spec.capability, backend)
 			manifest.Entries = append(manifest.Entries, Entry{
 				ID: id, Capability: spec.capability, Inventory: boolPtr(true), Enforcement: enforcementRequired,
+				Runtime: RuntimeProof{Mode: spec.mode},
 			})
 			report.Entries[id] = entryResult{
 				Capability: spec.capability, Inventory: true, Enforcement: enforcementRequired, Status: statusServed,

@@ -166,7 +166,7 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		"secret_sync":    "Secret-sync targets",
 		"hsm_kms":        "HSM/KMS backends",
 	}
-	type count struct{ inventory, served int }
+	type count struct{ inventory, served, launched, assembled int }
 	counts := map[string]count{}
 	for _, entry := range manifest.Entries {
 		if entry.Inventory == nil || !*entry.Inventory {
@@ -177,6 +177,12 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		current.inventory++
 		if claimableCensusEntry(report.Entries[entry.ID]) {
 			current.served++
+			switch entry.Runtime.Mode {
+			case runtimeModeLaunchedBinary:
+				current.launched++
+			case runtimeModeAssembledHandler:
+				current.assembled++
+			}
 		}
 		counts[capability] = current
 	}
@@ -191,7 +197,7 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		if got.inventory != want {
 			failures.add("DoD manifest %s inventory=%d, code-backed advertised inventory=%d", capability, got.inventory, want)
 		}
-		marker := labels[capability] + ": **" + strconv.Itoa(want) + " inventory / " + strconv.Itoa(got.served) + " served in the shipped binary**"
+		marker := labels[capability] + ": **" + strconv.Itoa(want) + " inventory / " + strconv.Itoa(got.served) + " " + servedProofPhrase(got.launched, got.assembled) + "**"
 		if !strings.Contains(readme, marker) {
 			failures.add("README capabilities must show the fresh inventory/runtime split %q", marker)
 		}
@@ -200,6 +206,33 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		if strings.Contains(readme, stale) {
 			failures.add("README keeps stale integration count %q; code and DoD manifest have 8", stale)
 		}
+	}
+}
+
+// Runtime proof modes declared by tools/dodcensus/manifest.json. A launched-binary
+// row gate-builds cmd/trstctl and takes its HTTP response from that live process; an
+// assembled-handler row drives production buildRunDeps output through the assembled
+// Server.Handler in-process, with a hand-built Deps rejected.
+const (
+	runtimeModeAssembledHandler = "assembled-handler"
+	runtimeModeLaunchedBinary   = "launched-binary"
+)
+
+// servedProofPhrase names how the fresh census actually proved these rows. An
+// assembled-handler row exercises production code through production wiring, but it
+// never launches a binary, so "served in the shipped binary" would read stronger than
+// the evidence. Only launched-binary rows earn that phrase.
+func servedProofPhrase(launched, assembled int) string {
+	switch {
+	case launched > 0 && assembled > 0:
+		return "served (" + strconv.Itoa(launched) + " by the launched shipped binary, " +
+			strconv.Itoa(assembled) + " through the production-assembled handler)"
+	case launched > 0:
+		return "served by the launched shipped binary"
+	case assembled > 0:
+		return "served through the production-assembled handler"
+	default:
+		return "served"
 	}
 }
 

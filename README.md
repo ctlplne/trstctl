@@ -174,18 +174,23 @@ and conformance tests; [Current limitations](docs/limitations.md) is the
 single authority on what is served end to end versus library-complete. The
 served denominators below are checked against the repo-native
 [census gate](tools/dodcensus/manifest.json) (`make dod-gate` emits the local
-`wiring-census.json` receipt).
+`wiring-census.json` receipt). Proof modes are not uniform:
+**12 of 81 census rows launch the shipped binary**;
+**69 of 81 are proved through the production-assembled handler** — the
+production `buildRunDeps` output driving the assembled `Server.Handler`
+in-process, with a hand-built `Deps` rejected. Only the process launch differs,
+so each row below names the mode that proved it.
 
 | Area | What's there |
 |---|---|
-| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation. CA integrations: **14 inventory / 14 served in the shipped binary** through operator-configured, tenant-bound production assembly and provider-specific issuance. |
+| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation. CA integrations: **14 inventory / 14 served through the production-assembled handler**, over operator-configured, tenant-bound production assembly and provider-specific issuance. |
 | **Enrollment** | EST, SCEP, CMP servers; an embedded/IoT C client; Intune/MDM challenge gating |
 | **Workload identity** | SPIFFE Workload API (X.509 + JWT SVIDs), **6** cloud/hardware attesters, ephemeral issuance, an AI-agent broker |
 | **SSH** | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs |
-| **Secrets** | envelope-encrypted store, transit + KMIP, PKI-as-a-secrets-engine, and rotation. Dynamic-secret backends: **8 inventory / 8 served in the shipped binary**. Secret-sync targets: **10 inventory / 10 served in the shipped binary**. Each is tenant-bound, operator-configured, and reached only through the event-projected sealed outbox. |
-| **Deployment** | Deployment connectors: **24 inventory / 24 served in the shipped binary** (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, and cloud cert stores). Production `buildRunDeps` constructs the selected native registry; served target/identity/deploy flows perform target-specific mutation and independent readback. Also includes an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration. |
+| **Secrets** | envelope-encrypted store, transit + KMIP, PKI-as-a-secrets-engine, and rotation. Dynamic-secret backends: **8 inventory / 8 served through the production-assembled handler**. Secret-sync targets: **10 inventory / 10 served through the production-assembled handler**. Each is tenant-bound, operator-configured, and reached only through the event-projected sealed outbox. |
+| **Deployment** | Deployment connectors: **24 inventory / 24 served through the production-assembled handler** (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, and cloud cert stores). Production `buildRunDeps` constructs the selected native registry; served target/identity/deploy flows perform target-specific mutation and independent readback. Also includes an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration. |
 | **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM crypto posture, Enterprise/PQC migration posture, CT monitoring, drift, risk scoring, the credential graph |
-| **Key protection** | HSM/KMS backends: **6 inventory / 6 served in the shipped binary** through the separately shipped cgo HSM signer profile: AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2. The managed-key surface remains Enterprise-license- and configuration-gated, and every provider operation stays inside the isolated signer. |
+| **Key protection** | HSM/KMS backends: **6 inventory / 6 served by the launched shipped binary** through the separately shipped cgo HSM signer profile: AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2. The managed-key surface remains Enterprise-license- and configuration-gated, and every provider operation stays inside the isolated signer. |
 | **Crypto-agility** | classical algorithms in the MPL core; Enterprise/PQC algorithms (ML-DSA, ML-KEM, SLH-DSA, hybrid) and the PQC-migration orchestrator live behind the proprietary `ee/` boundary |
 | **Platform** | REST API (OpenAPI 3.1), CLI at full parity, a unified web console — five spaces (Certificates, Secrets, Workload & SSH, Posture & response, Platform) over one shell, with a first-run wizard, journeys hub, command palette, and en/es/de localization — OIDC/SAML/LDAP sign-on, SCIM 2.0 provisioning, RBAC + ABAC, append-only audit, multi-tenancy |
 | **Notifications** | Outbox-backed email, Slack, Teams, SMS, SIEM, HMAC webhook, native PagerDuty Events v2, and native OpsGenie Alert v2 delivery. The shipped binary constructs every channel family; credentials are redacted, locked where supported, and wiped on shutdown. |

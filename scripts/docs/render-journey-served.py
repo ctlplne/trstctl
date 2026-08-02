@@ -19,6 +19,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 JOURNEYS_DIR = ROOT / "docs" / "journeys"
+MANIFEST_PATH = ROOT / "tools" / "dodcensus" / "manifest.json"
 REQUIREMENTS_PATH = JOURNEYS_DIR / "census-requirements.json"
 SNAPSHOT_PATH = JOURNEYS_DIR / "served-census.json"
 WEB_PATH = ROOT / "web" / "src" / "lib" / "journeyCensus.gen.ts"
@@ -156,16 +157,50 @@ def build_snapshot(
     }
 
 
-def badge(snapshot: dict[str, Any], journey_id: str) -> str:
+def proof_mode_split() -> tuple[int, int]:
+    """Count how the committed DoD manifest actually proves each census row.
+
+    A ``launched-binary`` row gate-builds ``cmd/trstctl`` and takes its response
+    from that live process.  An ``assembled-handler`` row drives production
+    ``buildRunDeps`` output through the assembled ``Server.Handler`` in-process,
+    with a hand-built ``Deps`` rejected -- production code through production
+    wiring, but no binary launch.  The badge states the split so a reader never
+    reads "shipped binary" for a row that never launched one.
+    """
+    manifest = load_json(MANIFEST_PATH)
+    entries = manifest.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise ContractError(f"{MANIFEST_PATH} must contain a non-empty entries array")
+    launched = assembled = 0
+    for entry in entries:
+        mode = entry.get("runtime", {}).get("mode") if isinstance(entry, dict) else None
+        if mode == "launched-binary":
+            launched += 1
+        elif mode == "assembled-handler":
+            assembled += 1
+        else:
+            raise ContractError(f"DoD manifest row {entry.get('id')!r} has unusable runtime.mode {mode!r}")
+    return launched, assembled
+
+
+def badge(snapshot: dict[str, Any], journey_id: str, modes: tuple[int, int]) -> str:
     summary = snapshot["summary"]
     journey = snapshot["journeys"][journey_id]
     rows = [row["id"] for row in journey["census_rows"]]
     core = journey["core_surfaces"]
+    launched, assembled = modes
+    if launched + assembled != summary["total"]:
+        raise ContractError(
+            f"DoD manifest describes {launched + assembled} rows but the census reports {summary['total']}"
+        )
     lines = [
         START,
         f'!!! success "Served path — wiring census {summary["served"]}/{summary["total"]}"',
         "",
-        f"    The shipped-binary census reports **{summary['served']}/{summary['required']} required capabilities served**.",
+        f"    The Definition-of-Done census reports **{summary['served']}/{summary['required']} required capabilities served**: "
+        f"**{launched} of {summary['total']} census rows launch the shipped binary** and "
+        f"**{assembled} of {summary['total']} are proved through the production-assembled handler**.",
+        "    Production-assembled means production `buildRunDeps` output driving the assembled `Server.Handler` in-process, with a hand-built `Deps` rejected; only the process launch differs.",
     ]
     if rows:
         lines.append("    Independently proof-gated capability rows used by this journey (all `required`, all `served`): " + ", ".join(f"`{row}`" for row in rows) + ".")
@@ -257,9 +292,10 @@ def expected_outputs(snapshot: dict[str, Any]) -> dict[Path, str]:
         SNAPSHOT_PATH: json.dumps(snapshot, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         WEB_PATH: ts_module(snapshot),
     }
+    modes = proof_mode_split()
     for journey_id in snapshot["journeys"]:
         path = JOURNEYS_DIR / f"{journey_id}.md"
-        outputs[path] = render_doc(path.read_text(encoding="utf-8"), badge(snapshot, journey_id), path)
+        outputs[path] = render_doc(path.read_text(encoding="utf-8"), badge(snapshot, journey_id, modes), path)
     return outputs
 
 
