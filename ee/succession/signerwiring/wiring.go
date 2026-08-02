@@ -159,9 +159,20 @@ func (f *interimFloorStore) Load() (map[string]uint64, error) {
 	return out, nil
 }
 
+// Advance records a new floor for id and is MONOTONIC: an epoch less than or equal
+// to the current floor is an idempotent no-op, never a regression. This is the same
+// contract minter.DurableFloorStore and the module-resident hsmFloor enforce, and it
+// is deliberately re-enforced here rather than left to the caller: the floor is the
+// anti-rollback state a stale-epoch succession refusal rests on (PCAS-claim-12 /
+// INV-3), so whether it can fall must not depend on which FloorStore an operator's
+// flags happen to select. AN4-FLOORMONO in floorstore_contract_test.go holds every
+// implementation to one shared contract.
 func (f *interimFloorStore) Advance(id string, epoch uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if epoch <= f.m[id] {
+		return nil // monotonic: never lower the floor
+	}
 	f.m[id] = epoch
 	return nil
 }
