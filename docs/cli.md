@@ -652,6 +652,10 @@ trstctl-agent --enroll-url https://localhost:8443 \
   --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 trstctl-cli discovery findings list
 
+# In a cluster, add --inventory-k8s-secrets to inventory the kubernetes.io/tls
+# Secrets in the agent's own namespace (reads tls.crt, never tls.key; needs list
+# access to Secrets in that namespace, and sees only that namespace).
+
 # Run a graph query.
 trstctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"
 ```

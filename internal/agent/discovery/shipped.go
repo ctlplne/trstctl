@@ -33,11 +33,13 @@ type ShippedSourceKind struct {
 // shipped agent binary can collect today, in the order the API advertises them.
 //
 // Absent on purpose, because no enumerator is constructed for them: pkcs11
-// (SourcePKCS11), windows-store (SourceWindowsCert), and k8s-secret
-// (SourceKubernetes). The Kubernetes enumerator exists but is not wired; the
-// Windows read path and the PKCS#11 path are not built. Epic C1 ships all three,
-// at which point they belong here and the API will advertise them because they
-// are real.
+// (SourcePKCS11) and windows-store (SourceWindowsCert). Neither the Windows read
+// path nor the PKCS#11 path is built. They belong here when they are real, and
+// the API will advertise them then and not before.
+//
+// k8s-secret joined this list when its enumerator was actually wired into the
+// agent binary — the read side had existed unwired, which is exactly the state
+// that made the advertisement false.
 func ShippedSourceKinds() []ShippedSourceKind {
 	return []ShippedSourceKind{
 		{
@@ -54,6 +56,11 @@ func ShippedSourceKinds() []ShippedSourceKind {
 				"--inventory-nss-trust-roots",
 				"--inventory-browser-trust-roots",
 			},
+		},
+		{
+			Kind:        SourceKubernetes,
+			Constructor: "NewKubernetesSecretSource",
+			Flags:       []string{"--inventory-k8s-secrets"},
 		},
 		{
 			Kind:        SourcePrivateKey,

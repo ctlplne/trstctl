@@ -325,8 +325,18 @@ describe("i18n boundary", () => {
       // API. Reviewed for meaning in all three locales; the count placeholders in
       // the quota and usage strings are preserved.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "a7897196bbcc71650f31f199a8fe6e9b97e97e158c0194ea7f305cf6647bcd9e",
-      "de-DE": "a92c9de0f4ec372bb057b97dee7a7e012282dbfefdba413c9c0b6d1a542cfaec",
+      // C5 re-pin: seventeen keys give certificate-transparency monitoring its own
+      // headline surface on Discovery instead of one number in a tile shared with
+      // drift — the watchlist, per-log checkpoint state, unexpected-issuance
+      // findings with a hand-off to remediation, and the coverage-honesty
+      // sentence stating that only the configured domains and logs are covered.
+      // The drift panel keeps its own title now that CT is unbundled from it.
+      // Reviewed for meaning in all three locales; the coverage-honesty and
+      // empty-state strings must keep their negation, and the {count}/{value}
+      // placeholders are preserved.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "44e0f0293e600dfdd5717f7a6ef0c34e594e281e2c7027d685090512cefba1f5",
+      "de-DE": "7f0453d1686c2f6b37344e101f20850417ddd4174e11b845cfa66c4eef8f5863",
     });
   });
 

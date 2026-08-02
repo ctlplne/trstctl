@@ -8124,6 +8124,10 @@ export const messages = {
     defaultMessage: "Config validated (target not contacted)",
     description: "K2 truth-integrity sweep: connector delivery receipt status config_validated. States plainly that the route validated configuration locally and never reached the target.",
   },
+  "source.configuration.drift.9e0db44c38": {
+    defaultMessage: "Configuration drift",
+    description: "C5: title of the drift panel after certificate transparency was unbundled from it into its own headline surface.",
+  },
   "source.connect.issuer.abc8382bc1": {
     defaultMessage: "Connect issuer",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/CommandPalette.tsx.",

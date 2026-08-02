@@ -29,6 +29,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent"
 	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
+	"trstctl.com/trstctl/internal/agent/k8s"
 	"trstctl.com/trstctl/internal/agent/secretinject"
 	"trstctl.com/trstctl/internal/agent/sshdiscovery"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -58,6 +59,7 @@ func main() {
 	inventoryNSSTrustRoots := flag.String("inventory-nss-trust-roots", "", "comma-separated NSS profile export files/directories whose public CA certificates the agent inventories")
 	inventoryBrowserTrustRoots := flag.String("inventory-browser-trust-roots", "", "comma-separated browser profile export files/directories whose public CA certificates the agent inventories")
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
+	inventoryK8sSecrets := flag.Bool("inventory-k8s-secrets", false, "inventory the TLS Secrets in this pod's Kubernetes namespace (metadata only; reads tls.crt, never tls.key). Requires the in-cluster service-account mount and list access to Secrets in the namespace")
 	inventorySSHHostKeyGlobs := flag.String("inventory-ssh-host-key-globs", "", "comma-separated public host-key globs to inventory; empty disables this SSH source")
 	inventorySSHUserKeyGlobs := flag.String("inventory-ssh-user-key-globs", "", "comma-separated public user-key globs to inventory; empty disables this SSH source")
 	inventorySSHAuthorizedKeys := flag.String("inventory-ssh-authorized-keys", "", "comma-separated authorized_keys paths or globs to inventory; empty disables this SSH source")
@@ -192,6 +194,7 @@ func main() {
 		inventoryNSSTrustRoots:            splitList(*inventoryNSSTrustRoots),
 		inventoryBrowserTrustRoots:        splitList(*inventoryBrowserTrustRoots),
 		inventoryPrivateKeyRoots:          splitList(*inventoryPrivateKeyRoots),
+		inventoryK8sSecrets:               *inventoryK8sSecrets,
 		inventorySSH: sshdiscovery.Config{
 			HostKeyGlobs:        splitList(*inventorySSHHostKeyGlobs),
 			UserKeyGlobs:        splitList(*inventorySSHUserKeyGlobs),
@@ -251,6 +254,7 @@ type agentOptions struct {
 	inventoryBrowserTrustRoots                                                                         []string
 	inventoryPrivateKeyRoots                                                                           []string
 	inventorySSH                                                                                       sshdiscovery.Config
+	inventoryK8sSecrets                                                                                bool
 }
 
 func prepareIdentityDir(path string, uid, gid int) error {
@@ -358,6 +362,11 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: SSH inventory report failed:", err)
 		}
 	}
+	if o.inventoryK8sSecrets {
+		if err := reportKubernetesSecretInventory(ctx, a, ch); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes Secret inventory report failed:", err)
+		}
+	}
 
 	heartbeatTimer := time.NewTimer(nextHeartbeat)
 	defer heartbeatTimer.Stop()
@@ -435,6 +444,26 @@ func reportFilesystemInventory(ctx context.Context, a *agent.Agent, ch agent.Cha
 		return err
 	}
 	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourceFilesystem, found, 10, "inventory")
+}
+
+// reportKubernetesSecretInventory is the shipped-agent caller for the k8s-secret
+// source kind (C1). A cluster's TLS Secrets are frequently the largest population
+// of certificates an organization holds and the one nobody has an inventory of;
+// the read side existed unwired, so the kind was advertised and collected nothing.
+//
+// Metadata only: the enumerator reads `tls.crt`, which is public certificate
+// material, and never `tls.key`. The control plane derives the tenant from this
+// connection's verified client certificate.
+func reportKubernetesSecretInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient) error {
+	client, err := k8s.InCluster()
+	if err != nil {
+		return fmt.Errorf("kubernetes in-cluster client: %w", err)
+	}
+	found, err := agentdiscovery.NewKubernetesSecretSource(client.Namespace(), client).Discover(ctx)
+	if err != nil {
+		return err
+	}
+	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourceKubernetes, found, 30, "kubernetes secret inventory")
 }
 
 func hasTrustStoreInventory(o agentOptions) bool {

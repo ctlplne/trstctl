@@ -189,7 +189,7 @@ export const navSpaces: NavSpace[] = [
       {
         labelKey: "nav.group.detectRespond",
         items: [
-          { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
+          { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F17", "F35", "F36", "F42", "F49"] },
           { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
           { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
           { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
@@ -564,10 +564,14 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   },
   {
     featureId: "F17",
-    routes: ["/posture", "/discovery"],
-    component: "Posture",
+    routes: ["/discovery", "/posture"],
+    component: "Discovery",
     kind: "observe",
-    evidence: "certificate-transparency discovery, alert dispatch, and dedicated-dashboard gap",
+    // C5: CT monitoring is a discovery capability — "is someone issuing
+    // certificates for my domains?" — so Discovery is its home and Posture keeps
+    // the readiness view. It used to be one shared count tile on Discovery,
+    // which is why nobody could find it.
+    evidence: "certificate-transparency watchlist, per-log checkpoint state, unexpected-issuance findings, and remediation hand-off on the Discovery workspace",
   },
   {
     featureId: "F18",

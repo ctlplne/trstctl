@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn, type DataGridToolbarControls } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
-import { DiscoveryHero, CTDriftPanel } from "@/components/discovery";
+import { DiscoveryHero, CTMonitoringPanel, DriftPanel } from "@/components/discovery";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
   api,
@@ -803,7 +803,8 @@ export function Discovery() {
 
       {tab === "findings" && (
         <>
-          <CTDriftPanel findings={findings} sources={sources} />
+          <CTMonitoringPanel />
+          <DriftPanel findings={findings} sources={sources} />
           <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
           <ShadowPosturePanel posture={shadowPosture} />
         </>

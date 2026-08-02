@@ -119,6 +119,20 @@ For Linux certificate files, the shipped agent can inventory public certificate 
 startup with `--inventory-cert-roots`, reporting references, fingerprints, and
 certificate metadata only — never private keys or secret values.
 
+**Kubernetes TLS Secrets.** A cluster is frequently the largest single population of
+certificates an organization holds, and the one nobody has an inventory of. Run the agent
+in-cluster with `--inventory-k8s-secrets` and it enumerates the `kubernetes.io/tls`
+Secrets in **its own namespace** through the in-cluster service account, reporting each
+Secret's certificate metadata over the same mTLS inventory path as every other source.
+
+The exact contract: it reads `tls.crt` — public certificate material — and never
+`tls.key`; no key bytes cross the agent channel. It needs list access to Secrets in that
+namespace, and it sees **only that namespace**, so a cluster-wide inventory means an
+agent per namespace. A Secret whose certificate does not parse is skipped rather than
+failing the pass, so one malformed Secret does not cost you the inventory of the rest;
+an unreachable API server is an error rather than an empty result, because reporting
+"no certificates" for a cluster you could not reach is worse than reporting nothing.
+
 ### CA, trust-store & private-key discovery
 
 `GET /api/v1/ca/discovery` rolls up CA estates: configured public upstream CAs,

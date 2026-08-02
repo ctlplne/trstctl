@@ -2148,6 +2148,7 @@ const deDECatalog = {
   "source.columns.53aade77cd": "Spalten",
   "source.config.validated.legacy.label.2387440f43": "Konfiguration geprüft (Alt-Bezeichnung)",
   "source.config.validated.target.not.contacted.983573f318": "Konfiguration geprüft (Ziel nicht kontaktiert)",
+  "source.configuration.drift.9e0db44c38": "Konfigurationsabweichung",
   "source.connect.issuer.abc8382bc1": "Aussteller verbinden",
   "source.connector.delivery.670c8c3d02": "Connector-Zustellung",
   "source.credential.activity.timeline.e03f707dcc": "Aktivitätsverlauf der Credential",

@@ -237,7 +237,18 @@ never live in the API process. What you can do end to end against the running bi
   configured RFC 6962 log fixtures or public logs, checkpoints each log, and
   records unexpected issuance as `ct_unexpected_issuance` findings — this is
   served through the served discovery worker, queuing notification alerts the
-  same way expiry alerts do. For a **drift** source the worker compares configured
+  same way expiry alerts do. CT monitoring is a **headline capability on the
+  Discovery workspace**, not a footnote: one surface carries the watched-domain
+  and log watchlist, per-log checkpoint state (so you can see whether a log is
+  being polled at all or has never been reached), unexpected-issuance findings
+  with certificate detail, and a one-click hand-off to the rogue-certificate
+  remediation path. It previously appeared there only as a single count shared
+  with drift detection, so the capability was effectively unfindable. It covers
+  **only the domains and logs configured** — a domain you have not listed, or a
+  log you do not poll, produces no finding, and the surface says so beside the
+  counts so an empty list is not read as an all-clear. It also only sees what a
+  CA chose to log, which in practice means public issuance.
+  For a **drift** source the worker compares configured
   credential paths against expected fingerprints/permissions and records
   `credential_drift` findings through the same served discovery worker. For an
   **ssh** source the worker runs a non-invasive SSH host-key scan through the
@@ -1434,18 +1445,25 @@ This is a deliberate, documented trust boundary, not an accident.
   `GET /api/v1/agents` response also publishes the served
   `agent.mtls.ReportInventory` path and the source kinds the shipped agent
   binary can actually collect — `filesystem`, `trust-store`,
-  `private-key`, and `ssh` — each with the flags that switch it on, so a
-  capability that is listed but unconfigured is not read as coverage that
-  is running. **`pkcs11`, `windows-store`, and `k8s-secret` are declared at
+  `k8s-secret`, `private-key`, and `ssh` — each with the flags that switch
+  it on, so a capability that is listed but unconfigured is not read as
+  coverage that is running. **`pkcs11` and `windows-store` are declared at
   the agent's collector boundary but the binary constructs no enumerator
-  for any of them, so they are not advertised.** They were previously
-  listed here and on the API, which read as a Windows estate, token store,
-  and Kubernetes Secrets being inventoried when nothing was collecting
-  them. Advertised capability is derived from the agent package's own
-  record of what it ships, and `docs/agent_advertised_capability_test.go`
-  fails the build if a kind is advertised without a constructor the agent
-  binary calls. The three ship under the discovery-completeness work; they
-  return to the panel when they are real. The channel is behind its own bounded agent
+  for either, so they are not advertised.** All three unbuilt kinds were
+  previously listed here and on the API, which read as a Windows estate,
+  token store, and Kubernetes Secrets being inventoried when nothing was
+  collecting them. Advertised capability is derived from the agent
+  package's own record of what it ships, and
+  `docs/agent_advertised_capability_test.go` fails the build if a kind is
+  advertised without a constructor the agent binary calls. `k8s-secret`
+  left the unbuilt list when its enumerator was actually wired: with
+  `--inventory-k8s-secrets` the agent enumerates the TLS Secrets in its own
+  namespace through the in-cluster service account, reading `tls.crt` and
+  never `tls.key`, and reports metadata-only findings over the same mTLS
+  inventory path as every other source. It needs list access to Secrets in
+  that namespace and sees only that namespace. The Windows read path and
+  the PKCS#11 path are still unbuilt and return to the panel when they are
+  real. The channel is behind its own bounded agent
   worker lane and per-connection gRPC stream cap, so a heartbeat or renewal
   storm sheds with `ResourceExhausted` rather than starving API, protocol,
   outbox, or signer capacity. Agents announce an explicit

@@ -76,9 +76,25 @@ crypto path, and checkpoints persist so monitoring resumes across restarts, tena
 at the database layer.
 
 **Status: served.** Use `GET`/`PUT /api/v1/discovery/ct-monitoring`, `discovery
-ct-monitoring get|update`, or the Posture page to configure watched domains/logs, inspect
+ct-monitoring get|update`, or the console to configure watched domains/logs, inspect
 checkpoints, queue a poll, and review `ct_unexpected_issuance` findings. The worker polls,
 records tenant-scoped findings, and queues notifications via the outbox.
+
+**Where to find it.** CT monitoring is a **discovery** capability — it answers "is
+someone issuing certificates for my domains?" — so its home is the **Discovery**
+workspace, which carries the whole loop on one surface: the watched-domain and log
+watchlist, per-log checkpoint state (so you can see whether a log is actually being
+polled or has never been reached), unexpected-issuance findings with the certificate
+detail, and a one-click hand-off to the rogue-certificate remediation path. Posture keeps
+the readiness view. It previously appeared on Discovery only as a single count shared
+with drift detection, which is why operators could not find the capability at all.
+
+**What it does not cover.** CT monitoring sees exactly the domains you list and the logs
+you poll — nothing else. A domain you have not added, or a log you do not configure,
+produces no finding, so an empty findings list is not an all-clear for an estate. The
+Discovery surface states this next to the counts rather than leaving a zero to be
+misread. It also only sees certificates a CA chose to log, which in practice means
+public issuance: a private CA that logs nothing is invisible here by construction.
 
 ### Drift detection (F18)
 
@@ -255,7 +271,7 @@ The response contains `items` and `migration_progress`; a non-empty
 | Capability | Status today |
 |---|---|
 | Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`, and the four `/api/v1/nhi/posture/*` routes above, plus `risk`/`nhi posture` CLI |
-| CT monitoring (F17) | **Served** — CT watchlist/checkpoint API, CLI, Posture UI, plus Discovery `ct_log` execution and outbox-backed alerts |
+| CT monitoring (F17) | **Served** — CT watchlist/checkpoint API, CLI, and a headline Discovery surface (watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off), plus Discovery `ct_log` execution and outbox-backed alerts |
 | Drift detection (F18) | **Served** — Discovery `drift` execution, outbox-backed alerts, remediation API/CLI/Posture dashboard, and event-sourced decisions |
 | CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, core `/api/v1/pqc/campaigns`, event-backed inventory + signed campaign closure |
 

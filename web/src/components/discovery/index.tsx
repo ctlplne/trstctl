@@ -23,14 +23,20 @@ export function DiscoveryHero({ findings }: { findings: DiscoveryFinding[] }) {
   );
 }
 
-export function CTDriftPanel({ findings, sources }: { findings: DiscoveryFinding[]; sources: DiscoverySource[] }) {
-  const monitoredSourceIds = new Set(sources.filter((source) => source.kind === "ct_log" || source.kind === "drift").map((source) => source.id));
-  const monitored = findings.filter((finding) => monitoredSourceIds.has(finding.source_id)).length;
+// C5: certificate transparency used to share this tile with drift detection —
+// one number labelled "CT-log & drift findings", which is not a capability, it
+// is a footnote. CT monitoring now has its own surface (CTMonitoringPanel) and
+// this counts drift alone, so neither number is diluted by the other.
+export function DriftPanel({ findings, sources }: { findings: DiscoveryFinding[]; sources: DiscoverySource[] }) {
+  const driftSourceIds = new Set(sources.filter((source) => source.kind === "drift").map((source) => source.id));
+  const drift = findings.filter((finding) => driftSourceIds.has(finding.source_id)).length;
   return (
-    <SectionCard title={translateNow("source.ct.log.drift.monitoring.82c2bb4d3f")} description="certificate-transparency and configuration-drift findings">
+    <SectionCard title={translateNow("source.configuration.drift.9e0db44c38")} description="credentials that no longer match the state trstctl declared">
       <DashboardGrid>
-        <StatTile label="CT-log & drift findings" value={monitored} tone={monitored ? "warning" : undefined} />
+        <StatTile label="Drift findings" value={drift} tone={drift ? "warning" : undefined} />
       </DashboardGrid>
     </SectionCard>
   );
 }
+
+export { CTMonitoringPanel } from "./CTMonitoringPanel";

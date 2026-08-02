@@ -71,7 +71,10 @@ func TestAgentResponseDoesNotAdvertiseUnbuiltEnumerators(t *testing.T) {
 	for _, capability := range got.DiscoveryCapabilities {
 		advertised[capability.SourceKind] = struct{}{}
 	}
-	for _, kind := range []string{"pkcs11", "windows-store", "k8s-secret"} {
+	// k8s-secret left this list when its enumerator was actually wired into the
+	// agent binary. PKCS#11 and the Windows certificate store have no read path
+	// yet, so they must stay off the advertised set.
+	for _, kind := range []string{"pkcs11", "windows-store"} {
 		if _, ok := advertised[kind]; ok {
 			t.Errorf("agent advertises %q; if its enumerator now ships, add it to discovery.ShippedSourceKinds and drop it from this list in the same change", kind)
 		}
