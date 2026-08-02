@@ -872,7 +872,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: sbom-module-cyclonedx
-          path: sbom.module.cyclonedx.json
+          path: dist/release-evidence/sbom.module.cyclonedx.json
+          if-no-files-found: error
 
       # Dependency freshness is separate from SCA: govulncheck/npm audit answer
       # "is a known vulnerability reachable?", while this gate answers "is the

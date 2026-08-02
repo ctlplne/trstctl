@@ -586,10 +586,14 @@ audit-verify: ## Verify audit corpus citation, score, and cross-reference integr
 	node scripts/audit/verify-corpus.mjs --audit-dir "$(AUDIT_OUTPUTS)" --repo "$(CURDIR)"
 
 .PHONY: sbom
-sbom: ## Generate a CycloneDX SBOM of the Go module graph (sbom.module.cyclonedx.json)
+sbom: ## Generate a CycloneDX SBOM of the Go module graph (dist/release-evidence/)
 	$(GO) install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@$(CYCLONEDX_GOMOD_VERSION)
-	$(CYCLONEDX_GOMOD) mod -json -licenses -output sbom.module.cyclonedx.json
-	@test -s sbom.module.cyclonedx.json && echo ">> wrote sbom.module.cyclonedx.json"
+	@# Written under dist/release-evidence/ beside the license-audit receipts, not at
+	@# the repo root: /dist/ is gitignored, so this generated dependency dump can never
+	@# appear as an untracked-and-unignored path that a bulk `git add -A` would stage.
+	@mkdir -p dist/release-evidence
+	$(CYCLONEDX_GOMOD) mod -json -licenses -output dist/release-evidence/sbom.module.cyclonedx.json
+	@test -s dist/release-evidence/sbom.module.cyclonedx.json && echo ">> wrote dist/release-evidence/sbom.module.cyclonedx.json"
 
 .PHONY: license-audit
 license-audit: ## Fail if a copyleft, source-available, or unlicensed dependency ships (D9)
