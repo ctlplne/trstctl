@@ -4,8 +4,8 @@ package succession
 
 import (
 	"errors"
-	"math/rand"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -139,7 +139,7 @@ func TestRekey_IsNotASuccession(t *testing.T) {
 func TestEpoch_TwoCounterIndependenceProperty(t *testing.T) {
 	algs := []crypto.Algorithm{crypto.RSA2048, crypto.Ed25519, crypto.ECDSAP256, crypto.ECDSAP384}
 	for seed := int64(0); seed < 100; seed++ {
-		rng := rand.New(rand.NewSource(seed))
+		rng := proptest.New(seed)
 		id := NewGenesis("id", "t", algs[0], []byte{0})
 		rc := &fakeByok{v: 0, alg: algs[0]}
 		successions, rotations := 0, 0

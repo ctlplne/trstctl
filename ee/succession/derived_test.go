@@ -3,8 +3,8 @@
 package succession
 
 import (
-	"math/rand"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -15,7 +15,7 @@ import (
 func TestEpoch_DerivedFormEqualsStored(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	for seed := int64(0); seed < 100; seed++ {
-		rng := rand.New(rand.NewSource(seed))
+		rng := proptest.New(seed)
 		epoch := map[string]uint64{}
 		sink := &MemSink{}
 		for n := 0; n < 40; n++ {

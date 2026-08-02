@@ -4,10 +4,10 @@ package delegation
 
 import (
 	"encoding/binary"
-	"math/rand"
 	"reflect"
 	"sort"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/internal/eventspec"
 )
@@ -113,7 +113,7 @@ func TestProjection_IdempotentUnderDuplicateDelivery(t *testing.T) {
 func TestProjection_DescendantSetEqualsReferenceUnderRandomForests(t *testing.T) {
 	subjects := []string{"s0", "s1", "s2", "s3"}
 	for seed := int64(0); seed < 80; seed++ {
-		rng := rand.New(rand.NewSource(seed))
+		rng := proptest.New(seed)
 		f := randomForest(rng, subjects)
 
 		var events []eventspec.Event
@@ -160,7 +160,7 @@ type forest struct {
 // randomForest builds a random valid delegation forest: a set of roots, each
 // extended by random parent-linked records, and random credentials issued over
 // random chain-head records.
-func randomForest(rng *rand.Rand, subjects []string) forest {
+func randomForest(rng *proptest.Rand, subjects []string) forest {
 	f := forest{byDigest: map[string]DelegationRecordedV1{}}
 	var digests [][]byte
 	n := 3 + rng.Intn(8)

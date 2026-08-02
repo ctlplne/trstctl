@@ -5,9 +5,9 @@ package store_test
 import (
 	"context"
 	"encoding/binary"
-	"math/rand"
 	"reflect"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	agidstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 )
@@ -31,7 +31,7 @@ func TestChainFetch_OrderedAndGaplessProperty(t *testing.T) {
 	ctx := context.Background()
 
 	for seed := 0; seed < 25; seed++ {
-		rng := rand.New(rand.NewSource(int64(seed)))
+		rng := proptest.New(int64(seed))
 		length := 1 + rng.Intn(6) // 1..6 records
 
 		base := seed * 100

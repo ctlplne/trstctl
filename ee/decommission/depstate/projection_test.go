@@ -3,9 +3,9 @@
 package depstate
 
 import (
-	"math/rand"
 	"reflect"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/internal/eventspec"
 )
@@ -187,7 +187,7 @@ func TestDepState_UnaccountedDependentBlocksDestroy(t *testing.T) {
 func TestDepState_FoldEqualsReplayOverGeneratedSequences(t *testing.T) {
 	classes := []DependentClass{DependentCiphertext, DependentWrappedKey, DependentCredential, DependentLeasedSecret, DependentDataSet}
 	for seed := int64(0); seed < 50; seed++ {
-		rng := rand.New(rand.NewSource(seed))
+		rng := proptest.New(seed)
 		var seq []eventspec.Event
 		for i := 0; i < 40; i++ {
 			dep := Dependent{Class: classes[rng.Intn(len(classes))], ID: string(rune('a' + rng.Intn(8)))}

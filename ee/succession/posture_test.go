@@ -3,9 +3,9 @@
 package succession
 
 import (
-	"math/rand"
 	"reflect"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/internal/events"
 )
@@ -94,7 +94,7 @@ func TestFold_IdempotentUnderDuplicateDelivery(t *testing.T) {
 func TestFold_EqualsReferenceUnderRandomSequences(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	for seed := int64(0); seed < 50; seed++ {
-		rng := rand.New(rand.NewSource(seed))
+		rng := proptest.New(seed)
 		var payloads []Payload
 		epoch := map[string]uint64{}
 		for n := 0; n < 40; n++ {

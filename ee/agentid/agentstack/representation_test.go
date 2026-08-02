@@ -4,8 +4,8 @@ package agentstack_test
 
 import (
 	"bytes"
-	"math/rand"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/ee/agentid/agentstack"
 )
@@ -278,7 +278,7 @@ func TestRepresentation_DeterministicAndCollisionSensitive(t *testing.T) {
 // checks the digest is stable across two independent constructions of the same
 // stack (a stronger property-style sweep).
 func TestRepresentation_RandomizedDeterminism(t *testing.T) {
-	rng := rand.New(rand.NewSource(1))
+	rng := proptest.New(1)
 	toolPool := []string{"fs.read", "fs.write", "net.http", "db.query", "shell.exec", "kv.get"}
 	for i := 0; i < 200; i++ {
 		prompt := make([]byte, 1+rng.Intn(64))

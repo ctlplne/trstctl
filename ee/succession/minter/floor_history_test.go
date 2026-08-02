@@ -4,9 +4,9 @@ package minter_test
 
 import (
 	"errors"
-	"math/rand"
 	"reflect"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/ee/rpverify"
 	"trstctl.com/trstctl/ee/succession"
@@ -56,7 +56,7 @@ func TestCounterFree_RefusesSameRollbacks(t *testing.T) {
 		return m
 	}
 	for seed := int64(0); seed < 40; seed++ {
-		rng := rand.New(rand.NewSource(seed))
+		rng := proptest.New(seed)
 		mh := mk(minter.NewHistoryFloorStore())
 		mc := mk(newMemFloor())
 		for n := 0; n < 20; n++ {

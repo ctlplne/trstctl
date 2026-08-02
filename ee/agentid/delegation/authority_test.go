@@ -4,8 +4,8 @@ package delegation_test
 
 import (
 	"bytes"
-	"math/rand"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/ee/agentid/delegation"
 )
@@ -281,7 +281,7 @@ func TestAuthority_EffectiveBudgetIsMinAlongChain(t *testing.T) {
 
 // randAuthority builds a random authority set drawn from a small fixed universe so
 // that subset relationships actually occur with useful frequency.
-func randAuthority(r *rand.Rand) delegation.Authority {
+func randAuthority(r *proptest.Rand) delegation.Authority {
 	scopeU := []string{"read", "write", "admin", "root"}
 	toolU := []string{"fs.read", "fs.write", "net.http", "db.query"}
 	classU := []string{"pii", "internal", "secret"}
@@ -311,7 +311,7 @@ func randAuthority(r *rand.Rand) delegation.Authority {
 // over random authority sets: reflexive, antisymmetric under canonical form, and
 // transitive (AGID-claim-3 / INV-A2 — the comparator is a genuine partial order).
 func TestAuthority_PartialOrderProperties(t *testing.T) {
-	r := rand.New(rand.NewSource(0xA61D01))
+	r := proptest.New(0xA61D01)
 	const iters = 4000
 	for i := 0; i < iters; i++ {
 		a := randAuthority(r)
@@ -345,7 +345,7 @@ func TestAuthority_PartialOrderProperties(t *testing.T) {
 // spend and min rate over random chains (AGID-claim-4), cross-checked against a naive
 // scan.
 func TestAuthority_MinBudgetFoldProperty(t *testing.T) {
-	r := rand.New(rand.NewSource(4))
+	r := proptest.New(4)
 	for i := 0; i < 2000; i++ {
 		n := r.Intn(6) + 1
 		chain := make([]delegation.Authority, n)

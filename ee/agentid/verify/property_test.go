@@ -4,8 +4,8 @@ package verify
 
 import (
 	"errors"
-	"math/rand"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -24,7 +24,7 @@ import (
 
 // TestProperty_ToolManifestDigestCanonicalization (P1).
 func TestProperty_ToolManifestDigestCanonicalization(t *testing.T) {
-	rng := rand.New(rand.NewSource(1))
+	rng := proptest.New(1)
 	vocab := []string{"a", "b", "c", "read", "write", "list", "delete", "exec"}
 	for i := 0; i < 200; i++ {
 		n := rng.Intn(len(vocab)) + 1
@@ -48,7 +48,7 @@ func TestProperty_ToolManifestDigestCanonicalization(t *testing.T) {
 
 // TestProperty_ToolManifestMembership (P2).
 func TestProperty_ToolManifestMembership(t *testing.T) {
-	rng := rand.New(rand.NewSource(2))
+	rng := proptest.New(2)
 	class, op := "reader", "read-object"
 	for i := 0; i < 60; i++ {
 		tools := randomTools(rng, 1, 6)
@@ -84,7 +84,7 @@ func TestProperty_ValidityMonotone(t *testing.T) {
 	action := Action{Operation: op, Tool: "read-object"}
 
 	nbf, exp := testNow, testNow+3600
-	rng := rand.New(rand.NewSource(3))
+	rng := proptest.New(3)
 	for i := 0; i < 120; i++ {
 		// Pick an instant anywhere in a wide band around the window.
 		at := nbf - 1800 + int64(rng.Intn(3600+3600))
@@ -127,7 +127,7 @@ func TestProperty_RefusalStable(t *testing.T) {
 
 // ---- small property helpers ----
 
-func randomTools(rng *rand.Rand, min, max int) []string {
+func randomTools(rng *proptest.Rand, min, max int) []string {
 	n := min + rng.Intn(max-min+1)
 	out := make([]string, 0, n)
 	for i := 0; i < n; i++ {
@@ -136,7 +136,7 @@ func randomTools(rng *rand.Rand, min, max int) []string {
 	return out
 }
 
-func randToken(rng *rand.Rand) string {
+func randToken(rng *proptest.Rand) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz"
 	b := make([]byte, 4+rng.Intn(4))
 	for i := range b {

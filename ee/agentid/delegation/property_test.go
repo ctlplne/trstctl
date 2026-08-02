@@ -3,8 +3,8 @@
 package delegation
 
 import (
-	"math/rand"
 	"testing"
+	"trstctl.com/trstctl/ee/proptest"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
@@ -18,7 +18,7 @@ import (
 // inside the signer, not merely trusted.
 func TestProperty_ComparatorMonotonicityReCheckedInSigner(t *testing.T) {
 	reg := (*ToolRegistry)(nil)
-	rng := rand.New(rand.NewSource(0xA61D04B))
+	rng := proptest.New(0xA61D04B)
 
 	scopeUniverse := []string{"read", "write", "admin", "delete", "list"}
 	randScopes := func() []string {
