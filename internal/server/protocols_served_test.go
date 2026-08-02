@@ -49,7 +49,7 @@ import (
 // cover it.
 func dnsProviderWASMFor(dir string) []byte {
 	target := filepath.Join(dir, "txt-record")
-	args := []int32{0, int32(len(target)), int32(len(target)), int32(len("v"))}
+	args := wasmgen.WriteArgs(target, "v")
 	return wasmgen.Module("cap_write", 4, []byte(target+"v"), []wasmgen.Export{
 		{Name: "run", Const: 0},
 		{Name: "present_txt", Args: args},

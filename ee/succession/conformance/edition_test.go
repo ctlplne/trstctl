@@ -97,15 +97,20 @@ func firstNonBlankLine(s string) string {
 // reading runtime.GOROOT(), which is deprecated since Go 1.24: it reports the
 // root used at BUILD time, which is meaningless once a test binary is copied to
 // another machine.
+//
+// It FAILS rather than skips when the toolchain cannot be located. This is a
+// conformance gate (pcas-no-skip-gate / vdec equivalent enforce exactly this): a
+// skipped edition check reports green while proving nothing about the boundary
+// it exists to police.
 func goRoot(t *testing.T) string {
 	t.Helper()
 	out, err := exec.Command("go", "env", "GOROOT").Output() // #nosec G204 -- fixed argv, no user input (CWE-78)
 	if err != nil {
-		t.Skipf("go env GOROOT: %v", err)
+		t.Fatalf("go env GOROOT: %v", err)
 	}
 	root := strings.TrimSpace(string(out))
 	if root == "" {
-		t.Skip("go env GOROOT is empty")
+		t.Fatal("go env GOROOT is empty")
 	}
 	return root
 }

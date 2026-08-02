@@ -5,6 +5,7 @@ package pluginhost
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync/atomic"
 
 	"github.com/tetratelabs/wazero"
@@ -199,8 +200,17 @@ func (s *sandbox) hostRead(_ context.Context, m api.Module, pathPtr, pathLen, ou
 	if status != statusOK {
 		return status
 	}
+	// The read is bounded by outCap, itself capped at maxReadBytes above, so this
+	// cannot truncate. The check is written out rather than argued in a comment,
+	// because "provably in range" and "in range as far as anyone remembered" look
+	// identical six months later.
+	n := len(data)
+	if n < 0 || n > math.MaxUint32 {
+		return s.refuse(errBadGuestPointer)
+	}
+	readLen := uint32(n)
 	mem := m.Memory()
-	if mem == nil || !mem.Write(outPtr, data) || !mem.WriteUint32Le(outLenPtr, uint32(len(data))) {
+	if mem == nil || !mem.Write(outPtr, data) || !mem.WriteUint32Le(outLenPtr, readLen) {
 		return s.refuse(errBadGuestPointer)
 	}
 	return statusOK

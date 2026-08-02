@@ -60,10 +60,7 @@ func caWASMFor(dir string) []byte {
 			// run() performs no privileged call, so the plugin stays conformant at
 			// zero capabilities; issue() does the one granted host operation.
 			{Name: "run", Const: 0},
-			{Name: "issue", Args: []int32{
-				0, int32(len(filepath.Join(dir, "issued.pem"))),
-				int32(len(filepath.Join(dir, "issued.pem"))), int32(len("issued")),
-			}},
+			{Name: "issue", Args: wasmgen.WriteArgs(filepath.Join(dir, "issued.pem"), "issued")},
 		})
 }
 

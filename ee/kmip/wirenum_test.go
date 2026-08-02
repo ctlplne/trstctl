@@ -8,43 +8,83 @@ import (
 	"testing"
 )
 
-// TestWireNumIsExactlyTheStdlibConversion is the safety argument for wirenum.go.
+// TestWireNumMatchesKnownEncodings is the safety argument for wirenum.go.
 //
 // These helpers exist so no #nosec is needed at the KMIP wire boundary, which is
 // only legitimate if they are BIT-IDENTICAL to the conversions they replace. A
 // helper that is merely "probably right" would be worse than the inline
 // conversion it replaced, because it hides the narrowing behind a friendly name.
 //
-// The boundary values are the ones that actually break: MinInt32 (whose negation
-// overflows), MaxInt32/MaxInt32+1 (the sign flip), and -1 (all bits set).
-func TestWireNumIsExactlyTheStdlibConversion(t *testing.T) {
-	for _, u := range []uint32{
-		0, 1, 2, math.MaxInt32 - 1, math.MaxInt32, math.MaxInt32 + 1,
-		math.MaxUint32 - 1, math.MaxUint32, 0xDEADBEEF, 0x80000000,
+// The expected values are written out as literals rather than computed from the
+// stdlib conversion. That is deliberate twice over: the repository forbids
+// nolint escape hatches, so the oracle cannot be int32(u) itself; and a
+// hand-checked table cannot drift along with the implementation the way a
+// computed oracle can.
+//
+// The cases are the ones that actually break: MinInt32 (whose negation
+// overflows), MaxInt32 and MaxInt32+1 (the sign flip), -1 (all bits set), and
+// MaxUint32.
+func TestWireNumMatchesKnownEncodings(t *testing.T) {
+	for _, tc := range []struct {
+		in   uint32
+		want int32
+	}{
+		{0x00000000, 0},
+		{0x00000001, 1},
+		{0x00000002, 2},
+		{0x7FFFFFFE, 2147483646},
+		{0x7FFFFFFF, 2147483647},
+		{0x80000000, -2147483648},
+		{0xFFFFFFFE, -2},
+		{0xFFFFFFFF, -1},
+		{0xDEADBEEF, -559038737},
+		{0x80000000, -2147483648},
 	} {
-		if got, want := wireInt32(u), int32(u); got != want { //nolint:gosec // the oracle IS the conversion under test
-			t.Errorf("wireInt32(%#x) = %d, want %d", u, got, want)
+		if got := wireInt32(tc.in); got != tc.want {
+			t.Errorf("wireInt32(%#08x) = %d, want %d", tc.in, got, tc.want)
 		}
 	}
-	for _, v := range []int32{
-		0, 1, -1, 2, -2, math.MaxInt32, math.MinInt32, math.MinInt32 + 1, -12345, 0x7EADBEE,
+
+	for _, tc := range []struct {
+		in   int32
+		want [4]byte
+	}{
+		{0, [4]byte{0x00, 0x00, 0x00, 0x00}},
+		{1, [4]byte{0x00, 0x00, 0x00, 0x01}},
+		{-1, [4]byte{0xff, 0xff, 0xff, 0xff}},
+		{2, [4]byte{0x00, 0x00, 0x00, 0x02}},
+		{-2, [4]byte{0xff, 0xff, 0xff, 0xfe}},
+		{2147483647, [4]byte{0x7f, 0xff, 0xff, 0xff}},
+		{-2147483648, [4]byte{0x80, 0x00, 0x00, 0x00}},
+		{-12345, [4]byte{0xff, 0xff, 0xcf, 0xc7}},
+		{132832238, [4]byte{0x07, 0xea, 0xdb, 0xee}},
 	} {
-		var got, want [4]byte
-		putInt32(got[:], v)
-		binary.BigEndian.PutUint32(want[:], uint32(v)) //nolint:gosec // the oracle IS the conversion under test
-		if got != want {
-			t.Errorf("putInt32(%d) = % x, want % x", v, got, want)
+		var got [4]byte
+		putInt32(got[:], tc.in)
+		if got != tc.want {
+			t.Errorf("putInt32(%d) = % x, want % x", tc.in, got, tc.want)
 		}
-		if rt := wireInt32(binary.BigEndian.Uint32(got[:])); rt != v {
-			t.Errorf("round trip %d -> % x -> %d", v, got, rt)
+		if rt := wireInt32(binary.BigEndian.Uint32(got[:])); rt != tc.in {
+			t.Errorf("round trip %d -> % x -> %d", tc.in, got, rt)
 		}
 	}
-	for _, v := range []int64{0, 1, -1, math.MaxInt64, math.MinInt64, 1767225600, -2208988800} {
-		var got, want [8]byte
-		putInt64(got[:], v)
-		binary.BigEndian.PutUint64(want[:], uint64(v)) //nolint:gosec // the oracle IS the conversion under test
-		if got != want {
-			t.Errorf("putInt64(%d) = % x, want % x", v, got, want)
+
+	for _, tc := range []struct {
+		in   int64
+		want [8]byte
+	}{
+		{0, [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+		{1, [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}},
+		{-1, [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+		{9223372036854775807, [8]byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+		{-9223372036854775808, [8]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+		{1767225600, [8]byte{0x00, 0x00, 0x00, 0x00, 0x69, 0x55, 0xb9, 0x00}},
+		{-2208988800, [8]byte{0xff, 0xff, 0xff, 0xff, 0x7c, 0x55, 0x81, 0x80}},
+	} {
+		var got [8]byte
+		putInt64(got[:], tc.in)
+		if got != tc.want {
+			t.Errorf("putInt64(%d) = % x, want % x", tc.in, got, tc.want)
 		}
 	}
 }

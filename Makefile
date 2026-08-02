@@ -37,6 +37,20 @@ LDFLAGS   := -s -w \
 GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAGS)'
 # npm installs may include Go helper packages inside web/node_modules. web/ is
 # gated by npm scripts; Go gates enumerate first-party Go roots by construction.
+# ./ee/... is DELIBERATELY ABSENT, and this is a ratchet, not an oversight.
+#
+# ee/ currently carries ~145 pre-existing gosec findings (see
+# audit-harness/evidence/ee-gosec-remaining.txt). Adding ./ee/... here today
+# turns main red on work nobody has done yet, and a red main that everyone
+# learns to force past is worse than no gate.
+#
+# So ee/ is gated by `make ee-lint-ratchet` instead: it lints ee/ UNCAPPED and
+# fails if the count GROWS. New ee/ code cannot add findings, while the existing
+# backlog is burned down. When it reaches zero, move ./ee/... into GO_PACKAGES
+# and delete the ratchet -- docs/golangci_caps_test.go fails if both exist, so
+# the two cannot silently overlap.
+#
+# TODO(AH-57d4ba74): burn .ee-lint-baseline to 0, then fold ee/ in here.
 GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...
 GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...
 GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
@@ -331,7 +345,7 @@ spine-burst: ## Capture and analyze an event-spine burst artifact (SPINE-002; de
 lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools are absent
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1
 
-lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, and action-pin checks
+lint: ee-lint-ratchet ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, and action-pin checks
 	@echo ">> gofmt"
 	@unformatted=$$(git ls-files -z --cached --others --exclude-standard -- '*.go' ':!:**/testdata/**' | xargs -0 sh -c 'for file do [ ! -f "$$file" ] || gofmt -l -s "$$file"; done' sh); \
 	if [ -n "$$unformatted" ]; then \
@@ -768,3 +782,28 @@ helm-lint: ## Lint + render the control-plane Helm chart (requires helm)
 		--set nats.url='nats://nats:4222' --set kek.generate=true \
 		--set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve >/dev/null
 	@echo ">> helm chart lints and renders"
+
+.PHONY: ee-lint-ratchet
+ee-lint-ratchet: ## Lint ee/ uncapped and fail if the finding count grew past .ee-lint-baseline
+	@echo ">> ee lint ratchet (ee/ is not yet in GO_PACKAGES; this stops it getting worse)"
+	@golangci_lint=""; \
+	if command -v golangci-lint >/dev/null 2>&1; then golangci_lint="golangci-lint"; \
+	elif [ -x "$(GO_TOOL_BIN)/golangci-lint" ]; then golangci_lint="$(GO_TOOL_BIN)/golangci-lint"; fi; \
+	if [ -z "$$golangci_lint" ]; then \
+		echo "FAIL: golangci-lint is required for the ee/ ratchet (make install-tools)" >&2; \
+		exit 1; \
+	fi; \
+	baseline=$$(cat .ee-lint-baseline); \
+	count=$$("$$golangci_lint" run --timeout 25m \
+		--max-issues-per-linter=0 --max-same-issues=0 ./ee/... 2>&1 \
+		| grep -cE '^[[:space:]]*ee/[^ ]*\.go:[0-9]+' || true); \
+	echo "   ee/ findings: $$count (baseline $$baseline)"; \
+	if [ "$$count" -gt "$$baseline" ]; then \
+		echo "FAIL: ee/ gosec findings grew from $$baseline to $$count." >&2; \
+		echo "      Fix the new finding. Do NOT raise the baseline -- it only moves down." >&2; \
+		exit 1; \
+	fi; \
+	if [ "$$count" -lt "$$baseline" ]; then \
+		echo "   ratchet tightened: update .ee-lint-baseline to $$count in this commit"; \
+		echo "$$count" > .ee-lint-baseline; \
+	fi

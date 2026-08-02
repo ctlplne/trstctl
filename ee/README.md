@@ -31,6 +31,7 @@ Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and th
   source. Core keeps audit export, privacy redaction/retention, OPA policy, and
   the server/API seams; the tagged attach seam supplies reports and policy
   overrides only when `FeatureGovernance` is licensed.
+- `ee/proptest`: deterministic pseudo-random source for the ee/ property and fuzz tests. Not a CSPRNG and never for key material; it exists so property failures stay reproducible from their printed seed, which crypto/rand would destroy.
 - `ee/provider`: Provider/MSP plane. Core keeps licensing and the HTTP handler
   seam; the tagged attach seam supplies tenant lifecycle, provider audit, tenant
   band enforcement, and consented break-glass only when `FeatureProviderPlane` is

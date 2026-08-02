@@ -133,7 +133,7 @@ func (s *sandbox) resolve(cap Capability, p string) (*os.Root, string, error) {
 			return nil, "", fr.err
 		}
 		pc := path.Clean(fr.prefix)
-		rel := clean
+		var rel string
 		if pc == "/" {
 			rel = strings.TrimPrefix(clean, "/")
 		} else {

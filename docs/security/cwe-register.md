@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1018 annotated sites across 24 rules. Each row is
+1023 annotated sites across 25 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -495,7 +495,14 @@ not this file.
 | `internal/projections/auth_resolver_test.go:159` | test cookie against the test's own local server (CWE-1004) |
 | `internal/server/scim_served_test.go:201` | test cookie against the test's own local server (CWE-1004) |
 
-### G204 — CWE-78 OS command injection (132 sites)
+### G203 — CWE-? (unmapped rule) (2 sites)
+
+| Location | Reason |
+|---|---|
+| `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
+| `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
+
+### G204 — CWE-78 OS command injection (135 sites)
 
 | Location | Reason |
 |---|---|
@@ -531,6 +538,9 @@ not this file.
 | `docs/lint_gate_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_gate_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/vuln_gate_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/decommission/conformance/release_test.go:413` | fixed argv, no user input (CWE-78) |
+| `ee/rpverify/verifier_test.go:372` | fixed argv, no user input (CWE-78) |
+| `ee/succession/conformance/edition_test.go:107` | fixed argv, no user input (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:153` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:179` | live-sshd test harness validating its own config with the resolved sshd binary (CWE-78) |

@@ -16,6 +16,8 @@
 // test to depend on.
 package wasmgen
 
+import "math"
+
 // Section ids from the WebAssembly binary format, in the order a module must
 // present them.
 const (
@@ -34,6 +36,26 @@ const (
 	opCall     byte = 0x10
 	opEnd      byte = 0x0b
 )
+
+// u32 narrows a Go length to the u32 the WASM binary format uses for every
+// count and size. It panics rather than returning an error: a module section
+// larger than 4 GiB cannot be produced by any caller here, and a silently
+// truncated length would emit a structurally invalid module that fails far from
+// the cause.
+func u32(n int) uint32 {
+	if n < 0 || int64(n) > math.MaxUint32 {
+		panic("wasmgen: length does not fit a WASM u32")
+	}
+	return uint32(n)
+}
+
+// i32 narrows a Go length to the i32 a guest passes as a pointer or length.
+func i32(n int) int32 {
+	if n < math.MinInt32 || n > math.MaxInt32 {
+		panic("wasmgen: value does not fit an i32")
+	}
+	return int32(n)
+}
 
 // ULEB encodes n as unsigned LEB128, the length/index encoding used throughout
 // the binary format.
@@ -64,15 +86,15 @@ func SLEB(n int32) []byte {
 	}
 }
 
-func vec(count int, body []byte) []byte { return append(ULEB(uint32(count)), body...) }
+func vec(count int, body []byte) []byte { return append(ULEB(u32(count)), body...) }
 
 func section(id byte, payload []byte) []byte {
 	out := []byte{id}
-	out = append(out, ULEB(uint32(len(payload)))...)
+	out = append(out, ULEB(u32(len(payload)))...)
 	return append(out, payload...)
 }
 
-func name(s string) []byte { return append(ULEB(uint32(len(s))), s...) }
+func name(s string) []byte { return append(ULEB(u32(len(s))), s...) }
 
 // Export is one exported entry point: its name, and the constant arguments the
 // generated body passes to the imported host function before returning its
@@ -116,8 +138,8 @@ func Module(fn string, nParams int, data []byte, exports []Export) []byte {
 	var exportEntries []byte
 	for i, e := range exports {
 		exportEntries = append(exportEntries, name(e.Name)...)
-		exportEntries = append(exportEntries, 0x00)                 // kind: func
-		exportEntries = append(exportEntries, ULEB(uint32(i+1))...) // index 0 is the import
+		exportEntries = append(exportEntries, 0x00)              // kind: func
+		exportEntries = append(exportEntries, ULEB(u32(i+1))...) // index 0 is the import
 	}
 	exportEntries = append(exportEntries, name("memory")...)
 	exportEntries = append(exportEntries, 0x02, 0x00) // kind: memory, index 0
@@ -137,13 +159,13 @@ func Module(fn string, nParams int, data []byte, exports []Export) []byte {
 			body = append(body, opCall, 0x00)
 		}
 		body = append(body, opEnd)
-		bodies = append(bodies, ULEB(uint32(len(body)))...)
+		bodies = append(bodies, ULEB(u32(len(body)))...)
 		bodies = append(bodies, body...)
 	}
 	code := section(sectionCode, vec(len(exports), bodies))
 
 	seg := []byte{0x00, opI32Const, 0x00, opEnd} // active, memory 0, offset 0
-	seg = append(seg, ULEB(uint32(len(data)))...)
+	seg = append(seg, ULEB(u32(len(data)))...)
 	seg = append(seg, data...)
 	dataSec := section(sectionData, vec(1, seg))
 
@@ -162,7 +184,7 @@ func WriteGuest(path, content string, entries ...string) []byte {
 	if len(entries) == 0 {
 		entries = []string{"run"}
 	}
-	args := []int32{0, int32(len(path)), int32(len(path)), int32(len(content))}
+	args := []int32{0, i32(len(path)), i32(len(path)), i32(len(content))}
 	exports := make([]Export, 0, len(entries))
 	for _, e := range entries {
 		exports = append(exports, Export{Name: e, Args: args})
@@ -177,7 +199,7 @@ func ReadGuest(path string, entries ...string) []byte {
 	if len(entries) == 0 {
 		entries = []string{"run"}
 	}
-	args := []int32{0, int32(len(path)), 1024, 256, 2048}
+	args := []int32{0, i32(len(path)), 1024, 256, 2048}
 	exports := make([]Export, 0, len(entries))
 	for _, e := range entries {
 		exports = append(exports, Export{Name: e, Args: args})
@@ -190,10 +212,18 @@ func DialGuest(addr string, entries ...string) []byte {
 	if len(entries) == 0 {
 		entries = []string{"run"}
 	}
-	args := []int32{0, int32(len(addr))}
+	args := []int32{0, i32(len(addr))}
 	exports := make([]Export, 0, len(entries))
 	for _, e := range entries {
 		exports = append(exports, Export{Name: e, Args: args})
 	}
 	return Module("cap_dial", 2, []byte(addr), exports)
+}
+
+// WriteArgs returns the four cap_write arguments for a module whose data segment
+// holds path followed by content at offset 0. It exists so callers building a
+// custom Export do not repeat the offset arithmetic — and, more usefully, do not
+// repeat the length narrowing that goes with it.
+func WriteArgs(path, content string) []int32 {
+	return []int32{0, i32(len(path)), i32(len(path)), i32(len(content))}
 }

@@ -94,7 +94,7 @@ func TestReferencePluginShapeInstantiates(t *testing.T) {
 	target := filepath.Join(outDir, "deployed.txt")
 	guest := wasmgen.Module("cap_write", 4, []byte(target+"deployed"), []wasmgen.Export{
 		{Name: "run", Const: 0},
-		{Name: "deploy", Args: []int32{0, int32(len(target)), int32(len(target)), int32(len("deployed"))}},
+		{Name: "deploy", Args: wasmgen.WriteArgs(target, "deployed")},
 	})
 
 	grant := pluginhost.NewGrant(pluginhost.CapFSWrite).

@@ -38,7 +38,11 @@ REGISTER_PATH = os.path.join("docs", "security", "cwe-register.md")
 COVERAGE_PATH = os.path.join("docs", "security", "cwe-coverage.md")
 
 # The same tree make lint's golangci-lint (and therefore gosec) runs over.
-SCAN_DIRS = ["clients", "cmd", "deploy", "docs", "internal", "scripts", "tools"]
+# "ee" is included even though ee/ is not yet in the Makefile's GO_PACKAGES: the
+# register must be ready to receive an ee/ waiver the day one is added, or the
+# first #nosec written under ee/ would silently never reach
+# docs/security/cwe-register.md. It is a no-op today (ee/ has zero #nosec).
+SCAN_DIRS = ["clients", "cmd", "deploy", "docs", "ee", "internal", "scripts", "tools"]
 
 # Matches only what gosec itself honors: #nosec as the first token of a
 # comment. A prose mention of the marker inside comment text is not an

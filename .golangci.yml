@@ -21,3 +21,21 @@ linters:
   default: standard
   enable:
     - gosec
+
+# Report EVERY finding, always.
+#
+# golangci-lint defaults to max-issues-per-linter: 50 and max-same-issues: 3, and
+# this file used to set neither. Those defaults are not cosmetic: they are a
+# silent exclusion that contradicts the "No exclusions" paragraph above. A run
+# can report green-ish while hiding a regression behind the cap, and reviewers
+# read the printed count as the total.
+#
+# This is not hypothetical. An audit of ee/ was filed as "73 issues (50 gosec)"
+# because that is what the capped run printed; the real count with the caps
+# removed was 197. Every conclusion drawn from the capped number was wrong by a
+# factor of nearly three.
+#
+# docs/golangci_caps_test.go asserts both stay 0, so this cannot silently revert.
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
