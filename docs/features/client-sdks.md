@@ -67,6 +67,11 @@ The Go SDK is its own module (`trstctl.com/sdk/go`) that imports nothing
 outside the standard library, so adding it never drags the control plane's
 dependency graph into your build.
 
+`trstctl.com/sdk/go` is a vanity import path and no `go-import` endpoint is
+served for it yet, so `go get trstctl.com/sdk/go` does not resolve on its own.
+Read the Install section of `clients/sdk/README.md` first: it gives the exact
+meta tag the path needs and the `replace` fallback that works today.
+
 ```go
 import (
     "context"

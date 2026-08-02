@@ -58,6 +58,49 @@ Module: `trstctl.com/sdk/go`. Imports nothing outside the standard library,
 so it never pulls the control plane's dependency graph into your build. It is a
 separate module from the server, so the server's `go.mod`/`go.sum` are untouched.
 
+### Install — `trstctl.com/sdk/go` is a vanity path, not a code host
+
+```bash
+go get trstctl.com/sdk/go
+```
+
+That command resolves only if `trstctl.com` serves a `go-import` meta tag for the
+path. **Nothing in this repository serves one today** — no tracked service or
+config emits that tag, and the code is hosted at
+`https://github.com/ctlplne/trstctl`, a host that does not match the module path.
+Until the endpoint exists, use the fallback below.
+
+**What the endpoint has to serve.** A GET of `https://trstctl.com/sdk/go?go-get=1`
+must return HTML whose `<head>` contains:
+
+```html
+<meta name="go-import" content="trstctl.com/sdk/go git https://REPO-ROOT-URL">
+```
+
+- The import prefix in the tag equals the **full module path**, so `go` clones
+  `REPO-ROOT-URL` and looks for that module's `go.mod`
+  at the root of that repository — not in a subdirectory.
+- `https://github.com/ctlplne/trstctl` therefore cannot be `REPO-ROOT-URL`: its
+  root `go.mod` declares `trstctl.com/trstctl`, while the SDK's `go.mod` lives in
+  `clients/sdk/go/`. Serving this path needs a repository (or a published
+  split-out mirror) whose root *is* the SDK module, carrying `vX.Y.Z` tags.
+- The same constraint applies to the server module `trstctl.com/trstctl`.
+- `proxy.golang.org` must be able to reach the endpoint too, or integrators need
+  `GOPRIVATE=trstctl.com/*` to bypass the proxy and the checksum database.
+
+**Fallback that works today** — clone the repository and point your own module at
+the SDK directory on disk:
+
+```bash
+git clone https://github.com/ctlplne/trstctl
+go mod edit -replace trstctl.com/sdk/go=./trstctl/clients/sdk/go
+go mod tidy   # adds the require line that the replace directive satisfies
+```
+
+Renumbering the module to `github.com/ctlplne/trstctl/clients/sdk/go` would make
+`go get` work with no hosting at all; that is a launch decision, not a doc fix,
+and it is recorded here so the trade-off is visible rather than implicit.
+
 The supported surface is the hand-written, dependency-free client
 (`client.go`, `resources.go`, `iterator.go`). `oapi-codegen.yaml` is a blessed
 config that can emit the full model set for forks that accept the extra

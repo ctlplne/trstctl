@@ -11,10 +11,13 @@
 # codified; codifying it here makes the gate provable from the artifact, and
 # docs/codeowners_test.go asserts every security-critical path below stays covered.
 #
-# Owner: @ctlplne/security is the maintainer team for these paths (the ctlplne org
-# is now the canonical namespace — the same one used for the module path, container
-# images, and clone URLs). This team must exist on GitHub — create @ctlplne/security
-# and add the maintainer(s) — or CODEOWNERS will not resolve to a valid reviewer.
+# Owner: @ctlplne/security is the maintainer team for these paths. `ctlplne` is the
+# canonical namespace for clone URLs and container images (github.com/ctlplne/trstctl,
+# ghcr.io/ctlplne/trstctl). It is NOT the module namespace: the Go module paths are
+# vanity paths under trstctl.com and deliberately do not match the code host — see
+# the Install section of clients/sdk/README.md for the go-import hosting that needs.
+# This team must exist on GitHub — create @ctlplne/security and add the
+# maintainer(s) — or CODEOWNERS will not resolve to a valid reviewer.
 # The coverage test only requires that each critical path resolves to a non-empty owner.
 
 # Default owner for everything not matched more specifically below.
