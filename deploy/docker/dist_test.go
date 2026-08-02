@@ -784,6 +784,11 @@ JSON
 {"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":1,"high":0,"critical":0,"total":1}}}
 JSON
     ;;
+  *trstctl-resources)
+    cat <<'JSON'
+{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":0,"total":0}}}
+JSON
+    ;;
   *)
     echo "unexpected prefix: $prefix" >&2
     exit 2
