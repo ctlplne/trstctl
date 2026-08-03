@@ -12084,7 +12084,7 @@
           ],
           "refs": [
             "internal/observ/middleware.go",
-            "internal/observ/otlp.go",
+            "internal/observ/otlp/otlp.go",
             "internal/server/otlp_served_test.go",
             "docs/observability.md"
           ]

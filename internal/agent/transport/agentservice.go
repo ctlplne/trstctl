@@ -509,9 +509,15 @@ type AgentJobServiceServer interface {
 	RedeemJobCredential(ctx context.Context, req *RedeemJobCredentialRequest) (*RedeemJobCredentialResponse, error)
 }
 
+// gRPC method names and their full paths. "RedeemJobCredential" names an RPC;
+// it holds no credential and never has — the material it returns is byte-backed
+// in RedeemedSecret.Value and wiped by the handler.
 const (
-	methodClaimJobs               = "ClaimJobs"
-	methodReportJobResult         = "ReportJobResult"
+	methodClaimJobs       = "ClaimJobs"
+	methodReportJobResult = "ReportJobResult"
+	// #nosec G101 -- an RPC method name, not a credential. The material this
+	// call returns is byte-backed in RedeemedSecret.Value and wiped by the
+	// handler; nothing here holds a secret (CWE-798).
 	methodRedeemJobCredential     = "RedeemJobCredential"
 	fullMethodClaimJobs           = "/" + agentServiceName + "/" + methodClaimJobs
 	fullMethodReportJobResult     = "/" + agentServiceName + "/" + methodReportJobResult

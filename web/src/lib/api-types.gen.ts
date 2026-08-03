@@ -325,6 +325,7 @@ export interface Agent {
   offboard_reason?: string;
   offboarded_at?: string;
   offboarded_by?: string;
+  relay_capabilities: AgentRelayCapability[];
   role_source: "certificate" | "unreported";
   roles: ("host" | "network")[];
   status: string;
@@ -390,6 +391,12 @@ export interface AgentOffboardRequest {
 export interface AgentOffboardResponse {
   agent: Agent;
   revocation_evidence: string;
+}
+
+export interface AgentRelayCapability {
+  connectors: string[];
+  enable_flags?: string[];
+  kind: string;
 }
 
 export interface AlertRecipient {

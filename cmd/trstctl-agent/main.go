@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/agent"
 	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/secretinject"
 	"trstctl.com/trstctl/internal/agent/sshdiscovery"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -59,6 +60,8 @@ func main() {
 	inventoryNSSTrustRoots := flag.String("inventory-nss-trust-roots", "", "comma-separated NSS profile export files/directories whose public CA certificates the agent inventories")
 	inventoryBrowserTrustRoots := flag.String("inventory-browser-trust-roots", "", "comma-separated browser profile export files/directories whose public CA certificates the agent inventories")
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
+	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
+	relayPollEvery := flag.Duration("relay-poll-every", 15*time.Second, "how often to ask for relay work when --relay-claim is set")
 	inventoryK8sSecrets := flag.Bool("inventory-k8s-secrets", false, "inventory the TLS Secrets in this pod's Kubernetes namespace (metadata only; reads tls.crt, never tls.key). Requires the in-cluster service-account mount and list access to Secrets in the namespace")
 	inventorySSHHostKeyGlobs := flag.String("inventory-ssh-host-key-globs", "", "comma-separated public host-key globs to inventory; empty disables this SSH source")
 	inventorySSHUserKeyGlobs := flag.String("inventory-ssh-user-key-globs", "", "comma-separated public user-key globs to inventory; empty disables this SSH source")
@@ -195,6 +198,8 @@ func main() {
 		inventoryBrowserTrustRoots:        splitList(*inventoryBrowserTrustRoots),
 		inventoryPrivateKeyRoots:          splitList(*inventoryPrivateKeyRoots),
 		inventoryK8sSecrets:               *inventoryK8sSecrets,
+		relayClaim:                        *relayClaim,
+		relayPollEvery:                    *relayPollEvery,
 		inventorySSH: sshdiscovery.Config{
 			HostKeyGlobs:        splitList(*inventorySSHHostKeyGlobs),
 			UserKeyGlobs:        splitList(*inventorySSHUserKeyGlobs),
@@ -255,6 +260,12 @@ type agentOptions struct {
 	inventoryPrivateKeyRoots                                                                           []string
 	inventorySSH                                                                                       sshdiscovery.Config
 	inventoryK8sSecrets                                                                                bool
+	// relayClaim turns on the A3 relay runtime: claim connector.deploy work for
+	// appliances in this segment, redeem its credential for one attempt, deploy,
+	// wipe. Off by default because it moves live credential material onto this
+	// host, which is an operator's decision to make explicitly.
+	relayClaim     bool
+	relayPollEvery time.Duration
 }
 
 func prepareIdentityDir(path string, uid, gid int) error {
@@ -372,6 +383,16 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	defer heartbeatTimer.Stop()
 	rotateTimer := time.NewTimer(o.rotateEvery)
 	defer rotateTimer.Stop()
+	// The relay loop (epic A3) runs beside the heartbeat and renewal timers
+	// rather than as its own scheduler, so one agent has one cadence story. It
+	// is armed only when the operator asked for it AND this agent's certificate
+	// actually carries the network role — a host agent that turned the flag on
+	// would poll forever and be handed nothing, which reads as a stalled fabric
+	// instead of a misconfiguration.
+	relayTimer, relayCh := relayLoopFor(o, a, conn)
+	if relayTimer != nil {
+		defer relayTimer.Stop()
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -390,6 +411,16 @@ func runAgent(ctx context.Context, o agentOptions) error {
 				heartbeatFailures = 0
 				resetTimer(heartbeatTimer, heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng))
 			}
+		case <-relayTimerChan(relayTimer):
+			// Claim, redeem, deploy, wipe, report — one pass. Failures are the
+			// job's business, not the loop's: every path inside reports, so work
+			// returns to the queue rather than waiting out its lease.
+			if executed, rerr := relay.RunOnce(ctx, relayCh, relayHTTPClient(), relayClaimBatch, int(relayLeaseFor(o.relayPollEvery).Seconds())); rerr != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent: relay claim failed:", rerr)
+			} else if executed > 0 {
+				fmt.Printf("trstctl-agent: relay executed %d connector deploy(s)\n", executed)
+			}
+			resetTimer(relayTimer, o.relayPollEvery)
 		case <-rotateTimer.C:
 			// Renew with jittered exponential backoff on failure (RESIL-006): a
 			// control-plane outage during the refresh window must not be a single missed

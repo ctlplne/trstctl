@@ -437,6 +437,7 @@ Agent = TypedDict(
         'offboard_reason': str,
         'offboarded_at': str,
         'offboarded_by': str,
+        'relay_capabilities': list[dict[str, Any]],
         'role_source': str,
         'roles': list[str],
         'status': str,
@@ -538,6 +539,16 @@ AgentOffboardResponse = TypedDict(
     {
         'agent': dict[str, Any],
         'revocation_evidence': str,
+    },
+    total=False,
+)
+
+AgentRelayCapability = TypedDict(
+    'AgentRelayCapability',
+    {
+        'connectors': list[str],
+        'enable_flags': list[str],
+        'kind': str,
     },
     total=False,
 )

@@ -13250,6 +13250,23 @@ export const messages = {
     defaultMessage: "Control plane",
     description: "A3: connector target vantage (executes-on) column on src/pages/Connectors.tsx.",
   },
+  "source.relay.executes.a3rel0001": {
+    defaultMessage: "Relay executes",
+    description: "A3: relay executor capability on the Agents detail pane.",
+  },
+  "source.relay.none.a3rel0002": {
+    defaultMessage: "This build carries no relay executor.",
+    description: "A3: relay executor capability on the Agents detail pane.",
+  },
+  "source.relay.flags.a3rel0003": {
+    defaultMessage: "Needs flag:",
+    description: "A3: relay executor capability on the Agents detail pane.",
+  },
+  "source.relay.help.a3rel0004": {
+    defaultMessage:
+      "What this server's agent build can execute as a relay. An agent claims this work only with the network role in its certificate, and redeems each credential for one attempt.",
+    description: "A3: relay executor capability on the Agents detail pane.",
+  },
   "source.status.920e413c7d": {
     defaultMessage: "Status",
     description:

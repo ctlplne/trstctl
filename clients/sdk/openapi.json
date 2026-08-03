@@ -1264,6 +1264,12 @@
           "offboarded_by": {
             "type": "string"
           },
+          "relay_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/AgentRelayCapability"
+            },
+            "type": "array"
+          },
           "role_source": {
             "enum": [
               "certificate",
@@ -1295,7 +1301,8 @@
           "inventory_report_path",
           "discovery_capabilities",
           "roles",
-          "role_source"
+          "role_source",
+          "relay_capabilities"
         ],
         "type": "object"
       },
@@ -1493,6 +1500,30 @@
         "required": [
           "agent",
           "revocation_evidence"
+        ],
+        "type": "object"
+      },
+      "AgentRelayCapability": {
+        "properties": {
+          "connectors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enable_flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "connectors"
         ],
         "type": "object"
       },

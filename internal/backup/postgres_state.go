@@ -448,6 +448,12 @@ func postgresStateRestoreOrder() ([]string, error) {
 	parentFirst := []string{
 		"api_tokens",
 		"agent_bootstrap_tokens",
+		// A3 redemptions reference outbox rows, but the outbox is a log-rebuilt
+		// projection restored separately, and the reference is by id with no
+		// foreign key — so ordering here is free. It restores beside the
+		// bootstrap tokens because both are single-use ledgers whose whole
+		// meaning is "this already happened once".
+		"agent_job_credential_redemptions",
 		"attestations",
 		"audit_checkpoints",
 		"credentials",

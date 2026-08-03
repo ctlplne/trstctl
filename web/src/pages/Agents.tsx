@@ -586,6 +586,31 @@ function AgentDetail({ agent }: { agent: Agent }) {
             <AgentRoleBadges agent={agent} />
             <span className="mt-1 block text-xs text-muted-foreground">{translateNow("source.agent.role.source.a2r0le0010")}</span>
           </dd>
+          {agent.roles?.includes("network") ? (
+            <>
+              <dt className="font-medium text-muted-foreground">{translateNow("source.relay.executes.a3rel0001")}</dt>
+              <dd>
+                {(agent.relay_capabilities ?? []).length === 0 ? (
+                  <span className="text-xs text-muted-foreground">{translateNow("source.relay.none.a3rel0002")}</span>
+                ) : (
+                  <ul className="grid gap-1">
+                    {(agent.relay_capabilities ?? []).map((capability) => (
+                      <li key={capability.kind}>
+                        <span className="font-mono text-xs">{capability.kind}</span>
+                        <span className="block text-xs text-muted-foreground">{(capability.connectors ?? []).join(", ")}</span>
+                        {(capability.enable_flags ?? []).length > 0 ? (
+                          <span className="block text-xs text-status-warning">
+                            {translateNow("source.relay.flags.a3rel0003")} <span className="font-mono">{(capability.enable_flags ?? []).join(" ")}</span>
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span className="mt-1 block text-xs text-muted-foreground">{translateNow("source.relay.help.a3rel0004")}</span>
+              </dd>
+            </>
+          ) : null}
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.version.dd167905de")}</dt>

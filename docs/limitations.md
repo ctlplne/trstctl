@@ -164,7 +164,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window enforced fail-closed, runtime disable. Rotation stays a config operation | [Protocols](#protocols) |
 | Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
-| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **No job kind is claimable yet** — each becomes claimable when its agent-side executor ships | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
+| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **`connector.deploy` now has a relay-side executor** (A3); the other five kinds become claimable when theirs ship. Nothing is claimable until an operator names a kind in `agent_channel.claimable_job_kinds` | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Relays redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
@@ -627,13 +627,49 @@ oldest live one has been held — counts and one age, never a tenant, agent,
 reference name or value. A live count that does not fall, or an age past the
 maximum claim lease, is a stuck attempt holding material.
 
-**What is not served: the relay executor.** No agent-side code claims a connector
-job, redeems its credential, and drives an F5 yet. The protocol, the custody, the
-single-use ledger and the console are real and provable end to end against the
-served binary; the thing that would use them ships with the relay runtime. Until
-then `connector.deploy` executes control-plane-side as it always has, and no job
-kind is claimable by default. Nothing here retains a predecessor credential
-either, so relay-side rollback remains receipt-only.
+**The relay executor ships.** `internal/agent/relay` in the agent binary claims
+`connector.deploy`, redeems the credential for that attempt, builds the same
+connector implementation the control plane would have built — same constructors,
+same sandbox, same capability grant — drives the appliance over its API from
+inside its own segment, wipes, and reports. It is armed by `--relay-claim` and
+only when the agent's certificate actually carries the network role; an agent
+without the role says so at startup instead of polling forever and presenting as
+a stalled queue.
+
+The order inside an attempt is deliberate. Work this build cannot execute is
+refused BEFORE redemption, because a credential redeemed for an attempt that was
+never going to run is material outside the seal for nothing — and it burns the
+attempt's one redemption, so no other agent can take the work either. Redeemed
+values are moved straight into locked buffers and the wire copies wiped, so the
+only surviving copy is the one destroyed on the way out, including on panic. What
+a connector or an appliance says on failure is never forwarded: the relay reports
+a closed phrase and keeps the target's words local, because an appliance can and
+does echo the credential it was just handed back in an error body. A sandbox
+denial is reported as a failure, not as a deploy with a footnote.
+
+Seven connectors are relay-executable — `f5`, `netscaler`, `a10`, `kemp`,
+`cisco`, `fortigate`, `paloalto` — and the Agents console shows exactly that set
+per relay, derived from the agent package's own census so the console cannot
+advertise an executor the binary lacks.
+
+**What is still not served.** Host-agent connector execution: the thirteen
+host-local connectors still deploy from the control plane, because their exec
+profile resolves paths and binaries on the machine it runs on, and moving that
+means moving the profile to an agent-side file. `connector.rollback` remains
+receipt-only — it would need the relay to retain a predecessor credential, and
+nothing keeps one. Plugin-backed connectors, `connector.right_size` and the TLS
+posture path stay control-plane-only. No job kind is claimable by default:
+`agent_channel.claimable_job_kinds` must name `connector.deploy` before any of
+this moves, which is deliberate rather than unfinished.
+
+**Egress policy does not travel with the work.** The control plane validates a
+target's endpoint at admission and drives it through an SSRF-blocking,
+egress-guarded transport. A relay does neither: it exists to reach devices on
+private, non-routable addresses inside its own segment, which is precisely what
+those controls refuse. Keeping validation at admission and not re-running it on
+the relay is the correct split, and it is a real reduction in what the control
+plane can promise about where a relay connects. An operator granting the network
+role is granting that.
 
 ### The agent job ledger: served fabric, no work yet
 
@@ -658,7 +694,10 @@ report on work another agent has since done. `GET /api/v1/operations/jobs` and t
 Operations console show per-kind waiting and held counts plus the oldest wait —
 counts only, never a tenant identifier, payload or credential.
 
-**What is not served: any actual job.** The claimable set is empty by default and
+**What is served, and what is not.** `connector.deploy` has a relay-side executor
+as of A3 — an agent with the network role claims it, redeems its credential for
+one attempt, and drives the appliance. The other five kinds still have no
+executor. The claimable set remains empty by default and
 `agent_channel.claimable_job_kinds` is the only way to fill it. That is deliberate
 rather than unfinished: a kind should become claimable when an agent-side executor
 for it exists, and handing out work nothing can perform fills a queue while the

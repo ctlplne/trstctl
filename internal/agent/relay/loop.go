@@ -1,0 +1,145 @@
+// SPDX-License-Identifier: MPL-2.0
+
+package relay
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"trstctl.com/trstctl/internal/connector"
+)
+
+// Channel is the slice of the agent channel a relay uses. It is an interface
+// held here — not an import of the transport package — so this package stays
+// testable without a gRPC server and so the agent core keeps its existing
+// no-transport-import shape.
+type Channel interface {
+	// ClaimJobs leases work. The returned payloads are reference-only intents.
+	ClaimJobs(ctx context.Context, kinds []string, limit, leaseSeconds int) ([]Job, error)
+	// RedeemJobCredential redeems this attempt's material, once.
+	RedeemJobCredential(ctx context.Context, jobID int64, attempt int) (map[string][]byte, error)
+	// ReportJobResult reports the outcome. detail must never carry credential
+	// material; the control plane withholds it from durable history anyway when
+	// the attempt redeemed anything, but the relay does not rely on that.
+	ReportJobResult(ctx context.Context, jobID int64, outcome, detail, evidenceDigest string) (bool, error)
+}
+
+// Job is one claimed unit of work as the relay sees it.
+type Job struct {
+	JobID   int64
+	Kind    string
+	Attempt int
+	Payload []byte
+}
+
+// Outcome values the relay reports.
+const (
+	OutcomeExecuted = "executed"
+	OutcomeFailed   = "failed"
+)
+
+// ClaimableKinds are the job kinds a relay asks for. Only connector work: a
+// relay's whole purpose is driving things that cannot host an agent, and asking
+// for host-local kinds would be asking for work it cannot do.
+func ClaimableKinds() []string { return []string{"connector.deploy"} }
+
+// RunOnce claims up to limit jobs, executes each, and reports. It returns how
+// many it executed. One pass, no timers: the caller owns the schedule, so a
+// relay's poll cadence stays with the agent's other loops rather than becoming
+// a second scheduler with its own opinions.
+func RunOnce(ctx context.Context, ch Channel, client *http.Client, limit, leaseSeconds int) (int, error) {
+	if ch == nil {
+		return 0, errors.New("relay: no channel")
+	}
+	jobs, err := ch.ClaimJobs(ctx, ClaimableKinds(), limit, leaseSeconds)
+	if err != nil {
+		return 0, fmt.Errorf("relay: claim: %w", err)
+	}
+	executed := 0
+	for _, job := range jobs {
+		if runJob(ctx, ch, client, job) {
+			executed++
+		}
+	}
+	return executed, nil
+}
+
+// runJob is one job's whole life. It reports true only when the deploy actually
+// happened.
+//
+// Every failure path reports, so the job returns to the queue promptly rather
+// than waiting out its lease: a relay that dies silently is indistinguishable
+// from a slow one, and the difference matters to whoever is waiting for the
+// certificate to land.
+func runJob(ctx context.Context, ch Channel, client *http.Client, job Job) bool {
+	var intent DeployIntent
+	if err := decodeIntent(job.Payload, &intent); err != nil {
+		report(ctx, ch, job, OutcomeFailed, "job payload is not a deploy intent")
+		return false
+	}
+	// Refuse work this build cannot perform BEFORE redeeming anything. A
+	// credential redeemed for an attempt that was never going to run is a
+	// credential outside the seal for no reason, and it burns the attempt's one
+	// redemption.
+	if !Executes(intent.Connector) {
+		report(ctx, ch, job, OutcomeFailed, "connector is not relay-executable by this agent")
+		return false
+	}
+
+	items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)
+	if err != nil {
+		// A refused or unavailable redemption is not this relay's failure to
+		// explain: the control plane holds the reason and has already recorded
+		// it. Reporting a closed phrase keeps the relay from guessing.
+		report(ctx, ch, job, OutcomeFailed, "credential redemption was not granted")
+		return false
+	}
+	material, destroy, err := AdoptMaterial(items)
+	if err != nil {
+		report(ctx, ch, job, OutcomeFailed, "redeemed material could not be taken into locked memory")
+		return false
+	}
+	// The material's life ends here, on every path out — including a panic
+	// inside a connector, which must not leave an appliance password sitting in
+	// unlocked memory for the rest of the process's life.
+	defer destroy()
+
+	stats, execErr := Execute(ctx, client, intent, material)
+	if execErr != nil {
+		// The connector's own error text can contain whatever the appliance
+		// echoed back, including the credential. It is never forwarded: the
+		// relay reports a closed phrase and keeps the detail local.
+		report(ctx, ch, job, OutcomeFailed, "connector deploy failed against the target")
+		return false
+	}
+	if stats.Denied > 0 {
+		// The sandbox refused something the connector tried. That is a
+		// capability-declaration bug, not a target problem, and it must not read
+		// as a clean deploy.
+		report(ctx, ch, job, OutcomeFailed, "connector attempted an operation outside its declared capabilities")
+		return false
+	}
+	report(ctx, ch, job, OutcomeExecuted, "")
+	return true
+}
+
+func report(ctx context.Context, ch Channel, job Job, outcome, detail string) {
+	// A failed report is not retried here: the claim lease is the safety net.
+	// If the control plane never hears, the lease lapses and the work returns.
+	_, _ = ch.ReportJobResult(ctx, job.JobID, outcome, detail, "")
+}
+
+func decodeIntent(payload []byte, out *DeployIntent) error {
+	if len(payload) == 0 {
+		return errors.New("relay: empty job payload")
+	}
+	return json.Unmarshal(payload, out)
+}
+
+// connectorStatsDenied exists so the sandbox contract is referenced by name in
+// this package's godoc: a relay reports a denied operation as a failure, never
+// as a success with a footnote.
+var _ = connector.Stats{}

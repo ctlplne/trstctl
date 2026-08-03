@@ -263,6 +263,10 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // A3 relay-executor re-pin: four source.relay.* keys add the relay
+      // capability panel to the Agents detail pane — what this build executes
+      // as a relay, which connectors it carries, and the flag that turns it on.
+      // Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
       // A3 redemption re-pin: five operations.jobs.redemptions.* keys add the
       // credential-custody readout to the Operations job ledger — how much
       // material relays hold outside the seal right now, how long the oldest
@@ -368,8 +372,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "a2c2c1059075f488bd53237ce1773a1933243b5511f1f2f592a581af8fb650bf",
-      "de-DE": "a63af785ce1d6d634bb1fdd9e3efa61004c82b8ab5f7424c8623622ed4168c9b",
+      "es-ES": "6bf401165cb790abecead52811a13afa84135f61c4b1af6e385bea618d3ca728",
+      "de-DE": "5501c909e1f45ab87633484a076a234442a8a523a87b630d8519f8ec6325c52c",
     });
   });
 

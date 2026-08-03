@@ -4698,6 +4698,7 @@ export interface components {
             /** Format: date-time */
             offboarded_at?: string;
             offboarded_by?: string;
+            relay_capabilities: components["schemas"]["AgentRelayCapability"][];
             /** @enum {string} */
             role_source: "certificate" | "unreported";
             roles: ("host" | "network")[];
@@ -4758,6 +4759,11 @@ export interface components {
         AgentOffboardResponse: {
             agent: components["schemas"]["Agent"];
             revocation_evidence: string;
+        };
+        AgentRelayCapability: {
+            connectors: string[];
+            enable_flags?: string[];
+            kind: string;
         };
         AlertRecipient: {
             display_name?: string;

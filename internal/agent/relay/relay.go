@@ -1,0 +1,257 @@
+// SPDX-License-Identifier: MPL-2.0
+
+// Package relay is the agent-side executor for network-relay connector work
+// (epic A3). It is what makes the credential lease mean something: a relay
+// claims a connector job, redeems its credential for exactly that attempt,
+// drives the appliance from inside its own network segment, and wipes.
+//
+// It runs in the agent binary, so it links only host-neutral packages — the
+// connector core, the crypto boundary, and the transport contract. It has no
+// database, no event log, no control-plane wiring; everything it learns arrives
+// over the mTLS channel the agent opened outbound, and everything it reports
+// goes back the same way. docs/agent_binary_import_boundary_test.go enforces
+// that structurally.
+//
+// The custody contract, in order:
+//
+//  1. Claim a job. Its payload is a reference-only intent — names, never values.
+//  2. Redeem, once, for this attempt. The material arrives and is moved
+//     immediately into locked buffers (AN-8).
+//  3. Execute inside secret.Buffer.Use, so the bytes are live only while the
+//     connector holds them.
+//  4. Destroy every buffer on every path, including panic and timeout.
+//  5. Report. The agent's own words never carry the material: the control plane
+//     withholds the detail of a credential-bearing attempt from durable history
+//     precisely because a short appliance password defeats every redactor.
+package relay
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"sort"
+	"strings"
+
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/a10"
+	"trstctl.com/trstctl/internal/connector/cisco"
+	"trstctl.com/trstctl/internal/connector/f5"
+	"trstctl.com/trstctl/internal/connector/fortigate"
+	"trstctl.com/trstctl/internal/connector/kemp"
+	"trstctl.com/trstctl/internal/connector/netscaler"
+	"trstctl.com/trstctl/internal/connector/paloalto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+)
+
+// DeployIntent is the reference-only envelope a relay receives when it claims a
+// connector job. It mirrors the control plane's projection: what to deploy and
+// where, plus the NAMES of the credentials this attempt may redeem.
+type DeployIntent struct {
+	Connector      string          `json:"connector"`
+	Target         string          `json:"target"`
+	TargetID       string          `json:"target_id,omitempty"`
+	Revision       string          `json:"target_revision,omitempty"`
+	IdentityID     string          `json:"identity_id,omitempty"`
+	Fingerprint    string          `json:"fingerprint,omitempty"`
+	TargetConfig   json.RawMessage `json:"target_config,omitempty"`
+	CredentialRefs []string        `json:"credential_refs,omitempty"`
+}
+
+// TargetConfig is the relay-side view of a deployment target: the routing
+// fields the seven relay-vantage connectors need, and the reference NAMES for
+// their credentials. It deliberately covers only relay-vantage connectors —
+// host-local targets are a host agent's business, and cloud stores are the
+// control plane's. RelayConnectorKinds is the census this must stay aligned
+// with, and a guard test fails if the two drift.
+type TargetConfig struct {
+	Endpoint         string `json:"endpoint,omitempty"`
+	Username         string `json:"username,omitempty"`
+	PasswordRef      string `json:"password_ref,omitempty"`
+	TokenRef         string `json:"token_ref,omitempty"`
+	APIKeyRef        string `json:"api_key_ref,omitempty"`
+	ObjectName       string `json:"object_name,omitempty"`
+	ClientSSLProfile string `json:"client_ssl_profile,omitempty"`
+	FileLocation     string `json:"file_location,omitempty"`
+	SecretName       string `json:"secret_name,omitempty"`
+}
+
+// RelayConnectorKinds is the closed set a relay can execute. It is exactly the
+// connectors the control plane's census declares VantageNetworkRelay; anything
+// else reaching a relay is a bug in the claim gate, and is refused here too
+// rather than trusted.
+func RelayConnectorKinds() []string {
+	return []string{"a10", "cisco", "f5", "fortigate", "kemp", "netscaler", "paloalto"}
+}
+
+// Executes reports whether this relay can execute the named connector.
+func Executes(name string) bool {
+	for _, kind := range RelayConnectorKinds() {
+		if kind == name {
+			return true
+		}
+	}
+	return false
+}
+
+// Material is the credential set redeemed for one attempt, keyed by reference
+// name. The values are borrowed, not owned: Execute reads them inside the
+// caller's locked-buffer lifetime and never retains them.
+type Material map[string][]byte
+
+// Execute drives one connector deploy against a real target and returns what
+// the sandbox denied along the way.
+//
+// client is the relay's own HTTP client. It deliberately does NOT carry the
+// control plane's egress guard or SSRF transport: a relay is inside the private
+// segment by design, and re-running a public-internet egress policy here would
+// block every appliance it exists to reach. That is a real reduction in what
+// the control plane can promise about where a relay connects, and it is stated
+// in docs/limitations.md rather than left to be discovered.
+func Execute(ctx context.Context, client *http.Client, intent DeployIntent, material Material) (connector.Stats, error) {
+	if !Executes(intent.Connector) {
+		return connector.Stats{}, fmt.Errorf("relay: connector %q is not relay-executable", intent.Connector)
+	}
+	certPEM, ok := material["credential.cert_pem"]
+	if !ok || len(certPEM) == 0 {
+		return connector.Stats{}, errors.New("relay: redeemed material carries no certificate")
+	}
+	keyPEM, ok := material["credential.key_pem"]
+	if !ok || len(keyPEM) == 0 {
+		return connector.Stats{}, errors.New("relay: redeemed material carries no private key")
+	}
+
+	var target TargetConfig
+	if len(intent.TargetConfig) > 0 {
+		if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {
+			return connector.Stats{}, fmt.Errorf("relay: decode target config: %w", err)
+		}
+	}
+	if strings.TrimSpace(target.Endpoint) == "" {
+		return connector.Stats{}, errors.New("relay: target config carries no endpoint")
+	}
+
+	built, err := buildRelayConnector(intent.Connector, target, material)
+	if err != nil {
+		return connector.Stats{}, err
+	}
+	return connector.Run(ctx, built, connector.NewHTTPOps(client), connector.Deployment{
+		Target:      intent.Target,
+		CertPEM:     certPEM,
+		KeyPEM:      keyPEM,
+		Fingerprint: intent.Fingerprint,
+	})
+}
+
+// buildRelayConnector constructs the named appliance connector from the target's
+// routing fields and the credential the relay redeemed for this attempt. It
+// mirrors the control plane's factory for the same seven kinds — same
+// constructors, same options — because they are the same implementations; only
+// the host differs.
+func buildRelayConnector(name string, target TargetConfig, material Material) (connector.Connector, error) {
+	// require pulls a redeemed value by reference name. A missing reference is a
+	// refusal, never an empty credential: deploying with no password would
+	// either fail confusingly or, worse, succeed against an unauthenticated
+	// appliance.
+	require := func(ref, what string) ([]byte, error) {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			return nil, fmt.Errorf("relay: %s connector needs a %s reference", name, what)
+		}
+		value, ok := material[ref]
+		if !ok || len(value) == 0 {
+			return nil, fmt.Errorf("relay: %s was not redeemed for this attempt", what)
+		}
+		return value, nil
+	}
+
+	switch name {
+	case "f5":
+		password, err := require(target.PasswordRef, "f5 password")
+		if err != nil {
+			return nil, err
+		}
+		options := []f5.Option{f5.WithBasicAuthBytes(target.Username, password)}
+		if target.ObjectName != "" {
+			options = append(options, f5.WithName(target.ObjectName))
+		}
+		return f5.New(target.Endpoint, target.ClientSSLProfile, options...), nil
+	case "netscaler":
+		password, err := require(target.PasswordRef, "netscaler password")
+		if err != nil {
+			return nil, err
+		}
+		var options []netscaler.Option
+		if target.FileLocation != "" {
+			options = append(options, netscaler.WithFileLocation(target.FileLocation))
+		}
+		return netscaler.New(target.Endpoint, target.Username, password, options...), nil
+	case "a10":
+		password, err := require(target.PasswordRef, "a10 password")
+		if err != nil {
+			return nil, err
+		}
+		return a10.New(target.Endpoint, target.Username, password), nil
+	case "kemp":
+		token, err := require(target.TokenRef, "kemp token")
+		if err != nil {
+			return nil, err
+		}
+		return kemp.New(target.Endpoint, token), nil
+	case "cisco":
+		password, err := require(target.PasswordRef, "cisco password")
+		if err != nil {
+			return nil, err
+		}
+		return cisco.New(target.Endpoint, target.Username, password), nil
+	case "fortigate":
+		token, err := require(target.TokenRef, "fortigate token")
+		if err != nil {
+			return nil, err
+		}
+		return fortigate.New(target.Endpoint, token), nil
+	case "paloalto":
+		apiKey, err := require(target.APIKeyRef, "palo alto api key")
+		if err != nil {
+			return nil, err
+		}
+		return paloalto.New(target.Endpoint, apiKey), nil
+	default:
+		return nil, fmt.Errorf("relay: connector %q is not relay-executable", name)
+	}
+}
+
+// AdoptMaterial moves redeemed values into locked, zeroized buffers (AN-8) and
+// returns them alongside the destroy that ends their life. The caller MUST
+// defer destroy on every path.
+//
+// The wire values are wiped as they are adopted, so the only surviving copies
+// are the locked ones. A failure part-way through destroys everything already
+// adopted rather than leaking the ones that succeeded.
+func AdoptMaterial(items map[string][]byte) (Material, func(), error) {
+	buffers := make([]*secret.Buffer, 0, len(items))
+	destroy := func() {
+		for _, buffer := range buffers {
+			buffer.Destroy()
+		}
+	}
+	out := make(Material, len(items))
+	names := make([]string, 0, len(items))
+	for name := range items {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		value := items[name]
+		buffer, err := secret.NewFrom(value)
+		secret.Wipe(value)
+		if err != nil {
+			destroy()
+			return nil, func() {}, fmt.Errorf("relay: adopt %s: %w", name, err)
+		}
+		buffers = append(buffers, buffer)
+		out[name] = buffer.Bytes()
+	}
+	return out, destroy, nil
+}

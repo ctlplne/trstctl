@@ -153,6 +153,25 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	"internal/crypto/mtls/server.go": {
 		"LoopbackProbeClient": true,
 	},
+	// A3 relay runtime. This is the one outbound surface in the tree that
+	// deliberately does NOT carry the SSRF transport or the egress guard, and
+	// the reason is architectural rather than convenient: a network relay exists
+	// to reach appliances on private, non-routable addresses inside its own
+	// segment — an F5 management interface on 10.x, a NetScaler on a management
+	// VLAN — which is precisely the destination class those controls are built
+	// to refuse. Wrapping this client would not harden the relay; it would stop
+	// it working at all, and the pressure would then be to punch holes in the
+	// guard for private ranges globally, which is worse.
+	//
+	// What replaces the control here is placement: the endpoint is validated at
+	// target-config ADMISSION on the control plane (validateConnectorEndpoint),
+	// the relay only ever receives targets that passed it, and an operator
+	// granting the network role is granting reachability into that segment
+	// explicitly. docs/limitations.md states the reduction rather than leaving
+	// it to be discovered.
+	"cmd/trstctl-agent/relayloop.go": {
+		"relayHTTPClient": true,
+	},
 	// Moved from internal/observ/otlp.go (same construction, same rationale)
 	// when the exporter was split out so the observ metrics core could stay
 	// linkable by the agent binary (A3 import boundary). The exporter's endpoint

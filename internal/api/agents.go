@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/discovery"
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -108,12 +109,50 @@ type agentResponse struct {
 	// RoleSource says where the roles above came from, so the console never
 	// presents a projection as if it were the authority.
 	RoleSource string `json:"role_source"`
+	// RelayCapabilities is what a network relay build can actually execute
+	// (epic A3), derived from the agent package's own shipped census — the same
+	// C1a discipline as the discovery capabilities above. It is what THIS
+	// server's agent build ships, not what a given enrolled agent is running:
+	// an agent reports its version, and matching that to capability is the
+	// fleet-drift question, not this one.
+	RelayCapabilities []agentRelayCapabilityResponse `json:"relay_capabilities"`
+}
+
+// agentRelayCapabilityResponse is one job kind a relay build executes.
+type agentRelayCapabilityResponse struct {
+	// Kind is the job kind claimed over the channel.
+	Kind string `json:"kind"`
+	// Connectors are the connector implementations this build carries for it.
+	Connectors []string `json:"connectors"`
+	// EnableFlags are the agent flags that switch it on. A capability with
+	// flags executes nothing until an operator sets them, so listing the
+	// capability without its flags would read as coverage that is not running.
+	EnableFlags []string `json:"enable_flags,omitempty"`
 }
 
 // agentListResponse is the envelope for GET /api/v1/agents.
 type agentListResponse struct {
 	Agents     []agentResponse `json:"agents"`
 	NextCursor string          `json:"next_cursor,omitempty"`
+}
+
+// agentRelayCapabilities reports what a relay build executes, from the agent
+// package's shipped census. Like the discovery capabilities, it is derived
+// rather than hand-listed so the console cannot advertise a capability the
+// binary does not carry (C1a) — and here the stakes are higher, because a
+// falsely advertised relay capability would take a claim and burn a credential
+// redemption before failing.
+func agentRelayCapabilities() []agentRelayCapabilityResponse {
+	shipped := relay.ShippedJobKinds()
+	out := make([]agentRelayCapabilityResponse, 0, len(shipped))
+	for _, kind := range shipped {
+		out = append(out, agentRelayCapabilityResponse{
+			Kind:        kind.Kind,
+			Connectors:  append([]string(nil), kind.Connectors...),
+			EnableFlags: append([]string(nil), kind.Flags...),
+		})
+	}
+	return out
 }
 
 func toAgentResponse(a store.Agent) agentResponse {
@@ -123,6 +162,7 @@ func toAgentResponse(a store.Agent) agentResponse {
 		DiscoveryCapabilities: agentDiscoveryCapabilities(),
 		Roles:                 a.Roles,
 		RoleSource:            agentRoleSourceCertificate,
+		RelayCapabilities:     agentRelayCapabilities(),
 	}
 	if len(out.Roles) == 0 {
 		out.Roles = []string{}

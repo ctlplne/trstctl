@@ -21,5 +21,16 @@ func serviceArguments(o agentOptions) []string {
 	if o.serverName != "" {
 		args = append(args, "--server-name", o.serverName)
 	}
+	// A3: a relay installed as a Windows service must still be a relay when the
+	// SCM restarts it. A flag omitted here is silently dropped on every
+	// service-managed start — the agent comes back up looking healthy and
+	// claiming nothing, which reads as a stalled queue rather than as lost
+	// configuration.
+	if o.relayClaim {
+		args = append(args, "--relay-claim")
+		if o.relayPollEvery > 0 {
+			args = append(args, "--relay-poll-every", o.relayPollEvery.String())
+		}
+	}
 	return args
 }

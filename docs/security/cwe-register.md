@@ -41,11 +41,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1026 annotated sites across 25 rules. Each row is
+1029 annotated sites across 25 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (221 sites)
+### G101 — CWE-798 Use of hardcoded credentials (224 sites)
 
 | Location | Reason |
 |---|---|
@@ -69,6 +69,9 @@ not this file.
 | `deploy/helm/helm_test.go:1528` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:89` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:29` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/relay/relay_test.go:116` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:158` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/transport/agentservice.go:518` | an RPC method name, not a credential. The material this |
 | `internal/aimodel/redactor_test.go:39` | fixture: AWS's documented example key id; the redactor must catch it (CWE-798) |
 | `internal/aimodel/redactor_test.go:69` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:82` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -81,7 +84,7 @@ not this file.
 | `internal/aimodel/redactor_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/acme_dns01.go:495` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/agents.go:57` | source-kind label naming where key material was located; no credential value present (CWE-798) |
+| `internal/api/agents.go:58` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/idempotency_binding_test.go:19` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/itsm_test.go:11` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -698,7 +701,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:277` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:288` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:82` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
@@ -1121,7 +1124,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:370` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:376` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:384` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:334` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:345` | reconnect jitter, not a security decision (CWE-338) |
 | `internal/cli/cli.go:417` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/orchestrator/outbox.go:402` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |

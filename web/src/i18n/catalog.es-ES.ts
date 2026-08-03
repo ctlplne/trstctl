@@ -3446,6 +3446,11 @@ const esESCatalog = {
   "source.vantage.host.a3vant0002": "Agente de host",
   "source.vantage.relay.a3vant0003": "Relé de red",
   "source.vantage.control.plane.a3vant0004": "Plano de control",
+  "source.relay.executes.a3rel0001": "El relé ejecuta",
+  "source.relay.none.a3rel0002": "Esta versión no incluye ningún ejecutor de relé.",
+  "source.relay.flags.a3rel0003": "Requiere el indicador:",
+  "source.relay.help.a3rel0004":
+    "Lo que la versión del agente de este servidor puede ejecutar como relé. Un agente solicita este trabajo únicamente con el rol de red en su certificado y canjea cada credencial para un solo intento.",
   "source.status.920e413c7d": "Estado",
   "source.status.filter.9bfe8b184f": "Filtro de estado",
   "source.structured.query.preview.706d53d9be": "Vista previa de consulta estructurada",

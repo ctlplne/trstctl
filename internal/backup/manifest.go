@@ -35,6 +35,13 @@ var RecoveredByLogRebuild = append([]string(nil), store.ReadModelTables...)
 var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
 	"agent_bootstrap_tokens",
+	// A3 credential redemptions. Independent persistent state, not a log
+	// projection: nothing in the event log can rebuild WHICH attempt already
+	// redeemed, and that fact is the single-use gate itself. Losing it would
+	// make every in-flight attempt redeemable a second time after a restore —
+	// so it is restored from the PostgreSQL dump like the bootstrap tokens it
+	// sits beside, and for the same reason.
+	"agent_job_credential_redemptions",
 	"attestations",
 	// audit_checkpoints is a dual-recovery receiver. The PostgreSQL copy is paired
 	// with the event artifact so full restore can prove hidden tenant prefixes are

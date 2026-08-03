@@ -3,12 +3,14 @@
 package docs
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/discovery"
+	"trstctl.com/trstctl/internal/agent/relay"
 )
 
 // Advertised agent capability must equal shipped agent capability
@@ -115,6 +117,80 @@ func agentBinaryText(t *testing.T) string {
 	}
 	if b.Len() == 0 {
 		t.Fatal("agent capability gate found no agent source files; the scan list has drifted from the tree")
+	}
+	return b.String()
+}
+
+// TestShippedRelayJobKindsAreExecutableByTheBinary applies the C1a contract to
+// the relay runtime (epic A3).
+//
+// It bites harder here than for discovery. A discovery kind advertised but not
+// shipped merely fails to collect something. A relay JOB kind advertised but not
+// executable takes a claim, burns the attempt's one credential redemption —
+// moving material outside the seal for nothing — and hands the work back, while
+// the queue looks like it is being served.
+func TestShippedRelayJobKindsAreExecutableByTheBinary(t *testing.T) {
+	t.Parallel()
+	shipped := relay.ShippedJobKinds()
+	if len(shipped) == 0 {
+		t.Fatal("relay declares no shipped job kinds; the census must be explicit, not empty by accident")
+	}
+	sources := readAgentBinarySources(t)
+	for _, kind := range shipped {
+		if len(kind.Connectors) == 0 {
+			t.Errorf("relay job kind %q declares no connectors; a kind with no executor is not shipped", kind.Kind)
+		}
+		// The binary must actually run the loop for a declared kind, not merely
+		// link the package.
+		if !strings.Contains(sources, "relay.RunOnce(") {
+			t.Errorf("relay job kind %q is declared but the agent binary never calls relay.RunOnce", kind.Kind)
+		}
+		for _, connectorName := range kind.Connectors {
+			if !relay.Executes(connectorName) {
+				t.Errorf("relay job kind %q declares connector %q, which the executor refuses", kind.Kind, connectorName)
+			}
+		}
+	}
+	// Every unshipped kind must carry a reason. "It does not work yet" is a
+	// sentence an operator can act on; silence is not.
+	for kind, reason := range relay.UnshippedJobKinds() {
+		if strings.TrimSpace(reason) == "" {
+			t.Errorf("unshipped relay job kind %q has no reason recorded", kind)
+		}
+		for _, s := range shipped {
+			if s.Kind == kind {
+				t.Errorf("job kind %q is listed as both shipped and unshipped", kind)
+			}
+		}
+	}
+}
+
+// readAgentBinarySources concatenates the agent binary's sources so a test can
+// assert what the binary actually calls, not merely what it could.
+func readAgentBinarySources(t *testing.T) string {
+	t.Helper()
+	var b strings.Builder
+	for _, dir := range agentBinarySources {
+		root := filepath.Join("..", dir)
+		if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			// #nosec G304,G122 -- repo-relative walk of this repository's own
+			// committed source in a test; there is no attacker-controlled path
+			// and no symlink race to lose (CWE-22).
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			b.Write(data)
+			return nil
+		}); err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
 	}
 	return b.String()
 }

@@ -3457,6 +3457,11 @@ const deDECatalog = {
   "source.vantage.host.a3vant0002": "Host-Agent",
   "source.vantage.relay.a3vant0003": "Netzwerk-Relais",
   "source.vantage.control.plane.a3vant0004": "Steuerungsebene",
+  "source.relay.executes.a3rel0001": "Relais führt aus",
+  "source.relay.none.a3rel0002": "Dieser Build enthält keinen Relais-Executor.",
+  "source.relay.flags.a3rel0003": "Benötigt Flag:",
+  "source.relay.help.a3rel0004":
+    "Was der Agenten-Build dieses Servers als Relais ausführen kann. Ein Agent fordert diese Arbeit nur mit der Netzwerkrolle in seinem Zertifikat an und löst jede Anmeldeinformation für genau einen Versuch ein.",
   "source.status.920e413c7d": "Status",
   "source.status.filter.9bfe8b184f": "Statusfilter",
   "source.structured.query.preview.706d53d9be": "Vorschau der strukturierten Abfrage",
