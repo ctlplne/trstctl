@@ -1144,6 +1144,13 @@ func componentSchemas() map[string]*Schema {
 		"status":            {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
 		"revoked_at":        timestamp(),
 		"revocation_reason": str(),
+		// B5: per-certificate key custody. Empty means UNRECORDED, which is a
+		// distinct answer from any observation.
+		"key_origin":       {Type: "string", Enum: []string{"", "requester", "host_agent", "device", "control_plane", "signer"}},
+		"key_storage":      {Type: "string", Enum: []string{"", "locked_memory", "file", "os_store", "pkcs11", "device_bound"}},
+		"key_exportable":   {Type: "string", Enum: []string{"", "exportable", "non_exportable"}},
+		"key_generated_by": str(),
+		"custody_summary":  str(),
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
 	certificateIngest := object(map[string]*Schema{
 		"pem": str(), "owner_id": uuid(), "deployment_location": str(), "source": str(),

@@ -164,6 +164,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window enforced fail-closed, runtime disable. Rotation stays a config operation | [Protocols](#protocols) |
 | Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
+| Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **`connector.deploy` now has a relay-side executor** (A3); the other five kinds become claimable when theirs ship. Nothing is claimable until an operator names a kind in `agent_channel.claimable_job_kinds` | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Relays redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
@@ -2269,6 +2270,37 @@ of your flows still rely on it. An identity issued from your own CSR cannot
 be deployed by a control-plane connector — the key that deployment needs is
 on your side, which is the correct consequence and the reason host-executed
 renewal is the next piece of work.
+
+**And stated per credential, not only per kind.** The table above is the right
+level for a design review and the wrong level for an audit, because an auditor
+is not asking about a kind — they are asking about the certificate in front of
+them, and a kind-level table cannot tell them whether that one took the modern
+path or the deprecated one. So custody is also recorded on each certificate at
+issuance, from what the issuing code did rather than from what the table says
+it should: an identity issued from your CSR records that the control plane
+never held the key; one issued through the deprecated server-keygen path
+records that it did. The certificate API returns it and the console shows it on
+the certificate.
+
+Two honest gaps. Certificates issued before this shipped have no custody
+recorded, and so does every certificate found by discovery — trstctl did not
+witness their issuance and has no basis for a claim about it. Both read as
+**not recorded**, which is deliberately a different value from any custody
+claim rather than a default that quietly resembles the good one. And what is
+recorded is the control plane's own account of what it did; it is evidence, not
+an attestation, and it is not signed by the hardware that holds the key. A
+device-bound custody claim you can verify cryptographically is a different and
+larger piece of work.
+
+Recording it per certificate also made a fourth control-plane keygen path
+visible that the kind-level table had not named: automated renewal builds the
+successor's CSR itself, so every certificate produced by the scheduled
+renew-before-expiry pass or by rotate reads `control_plane`. Worse than the
+custody label, the key is destroyed once the successor is recorded — so an
+automated renewal produces a correct inventory row and a certificate no endpoint
+can serve with. [Key custody](custody.md) states this in full. Host-executed
+renewal is what fixes it, and until it lands the count of successors reading
+`control_plane` is the honest measure of the gap.
 
 ## Kubernetes deployment
 

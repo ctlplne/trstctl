@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -249,6 +250,11 @@ func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, t
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "ephemeral:" + issued.Attestation.Method, CertificateDER: append([]byte(nil), issued.CertDER...),
 		IssuanceIdempotencyKey: issueKey,
+		// B5: the workload presented its own public key, so the control plane
+		// signed for a key it never saw the private half of. Storage stays
+		// unrecorded — the key lives wherever the attested workload put it, and
+		// this side has no basis for a claim about that.
+		KeyOrigin: string(custody.OriginRequester),
 	})
 	if err != nil {
 		return api.EphemeralCredential{}, err

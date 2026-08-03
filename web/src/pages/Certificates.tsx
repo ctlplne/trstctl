@@ -1576,6 +1576,17 @@ export function Certificates() {
                   </div>
                 </>
               )}
+              <div className="sm:col-span-2">
+                <dt className="font-medium text-muted-foreground">{translateNow("source.custody.key.b5cust0001")}</dt>
+                <dd className={detail.key_origin === "control_plane" ? "text-status-warning" : undefined}>{detail.custody_summary}</dd>
+                {!detail.key_origin ? (
+                  // Unrecorded is a third answer, not a default. A certificate a
+                  // scan found has an origin nobody watched, and rendering that
+                  // as reassurance is exactly what an auditor should not be
+                  // handed.
+                  <dd className="mt-1 text-xs text-muted-foreground">{translateNow("source.custody.unrecorded.b5cust0002")}</dd>
+                ) : null}
+              </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
                 <dd>{detail.source || "-"}</dd>

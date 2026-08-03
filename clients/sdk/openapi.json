@@ -3861,6 +3861,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "custody_summary": {
+            "type": "string"
+          },
           "deployment_location": {
             "type": "string"
           },
@@ -3875,6 +3878,39 @@
             "type": "string"
           },
           "key_algorithm": {
+            "type": "string"
+          },
+          "key_exportable": {
+            "enum": [
+              "",
+              "exportable",
+              "non_exportable"
+            ],
+            "type": "string"
+          },
+          "key_generated_by": {
+            "type": "string"
+          },
+          "key_origin": {
+            "enum": [
+              "",
+              "requester",
+              "host_agent",
+              "device",
+              "control_plane",
+              "signer"
+            ],
+            "type": "string"
+          },
+          "key_storage": {
+            "enum": [
+              "",
+              "locked_memory",
+              "file",
+              "os_store",
+              "pkcs11",
+              "device_bound"
+            ],
             "type": "string"
           },
           "not_after": {

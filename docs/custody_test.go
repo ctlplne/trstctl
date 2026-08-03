@@ -33,6 +33,8 @@ var custodyKinds = []string{
 	"SSH host / user certificate",
 	"SPIFFE X.509-SVID",
 	"PKI-as-a-secret",
+	"Automated renewal successor",
+	"Ephemeral workload credential",
 }
 
 // custodyControlPlaneKeygen are the paths that still generate a subject key
@@ -42,6 +44,12 @@ var custodyControlPlaneKeygen = map[string]string{
 	"Identity leaf without a CSR": "subject_csr_pem",
 	"SPIFFE X.509-SVID":           "host agent",
 	"PKI-as-a-secret":             "brain-local convenience",
+	// Automated renewal builds its own CSR, so it generates a subject key like
+	// the others — and unlike the others it then destroys it, which makes the
+	// successor unusable rather than merely control-plane-custodied. Naming the
+	// successor is what stops that being discovered by an operator whose
+	// renewed endpoint stopped serving.
+	"Automated renewal successor": "Host-executed renewal",
 }
 
 func TestCustodyTableCoversEveryCredentialKind(t *testing.T) {

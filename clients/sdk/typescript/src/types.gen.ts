@@ -5419,12 +5419,20 @@ export interface components {
         Certificate: {
             /** Format: date-time */
             created_at?: string;
+            custody_summary?: string;
             deployment_location?: string;
             fingerprint: string;
             /** Format: uuid */
             id: string;
             issuer?: string;
             key_algorithm?: string;
+            /** @enum {string} */
+            key_exportable?: "" | "exportable" | "non_exportable";
+            key_generated_by?: string;
+            /** @enum {string} */
+            key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
+            /** @enum {string} */
+            key_storage?: "" | "locked_memory" | "file" | "os_store" | "pkcs11" | "device_bound";
             /** Format: date-time */
             not_after?: string;
             /** Format: date-time */

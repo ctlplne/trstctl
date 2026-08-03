@@ -39,10 +39,7 @@ func (s *Store) ListExpiringActiveCertificates(ctx context.Context, tenantID str
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
-			        certificate_der, issuance_idempotency_key, created_at,
-			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
+			`SELECT `+certificateColumns+`
 			   FROM certificates
 			  WHERE tenant_id = $1 AND status = 'active'
 			    AND not_after IS NOT NULL AND not_after < $2
@@ -72,10 +69,7 @@ func (s *Store) ListAlertableCertificates(ctx context.Context, tenantID string, 
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
-			        certificate_der, issuance_idempotency_key, created_at,
-			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
+			`SELECT `+certificateColumns+`
 			   FROM certificates
 			  WHERE tenant_id = $1 AND status = 'active' AND alerted_at IS NULL
 			    AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $3

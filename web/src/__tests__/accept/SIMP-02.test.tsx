@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
+import { AppQueryProvider } from "@/lib/query";
 import { Protocols } from "@/pages/Protocols";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -23,9 +24,11 @@ vi.mock("@/lib/api", async (orig) => {
 function renderProtocols() {
   return render(
     <MemoryRouter>
-      <ToastProvider>
-        <Protocols />
-      </ToastProvider>
+      <AppQueryProvider>
+        <ToastProvider>
+          <Protocols />
+        </ToastProvider>
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -136,7 +139,12 @@ describe("SIMP-02 lean protocol setup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy TSA HTTP POST command" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("https://trstctl.example.test/tsa")));
 
-    expect(screen.queryByRole("heading", { name: "ACME Renewal Information (ARI)" })).not.toBeInTheDocument();
+    // ARI posture was absent from this page when this test was written and is
+    // served now, so the assertion is the presence of the panel rather than its
+    // absence. Leanness is not "fewer panels" — it is no panel that shows
+    // something the binary does not do, which the fixture/preview assertions
+    // below are what actually enforce.
+    expect(screen.getByRole("heading", { name: "ACME Renewal Information (ARI)" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "DNS-01 providers" })).toBeInTheDocument();
     expect(screen.getByText("AWS Route 53")).toBeInTheDocument();
     expect(screen.getByText("No raw secret fields")).toBeInTheDocument();

@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -135,6 +136,14 @@ func (m *Manager) renew(ctx context.Context, tenantID string, old store.Certific
 		TenantID: tenantID, OwnerID: old.OwnerID, Subject: info.Subject, SANs: info.DNSNames,
 		Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na, Source: "lifecycle",
+		// B5: automated renewal builds its own CSR here (buildCSR), so the key
+		// was made by the control plane, held in locked memory, and destroyed.
+		// Recording that on the successor is the point: a fleet whose renewals
+		// all read control_plane is a fleet that has not moved to host-executed
+		// renewal yet, and that is a question an operator should be able to ask
+		// of their inventory rather than of the source.
+		KeyOrigin:  string(custody.OriginControlPlane),
+		KeyStorage: string(custody.StorageLockedMemory),
 	}
 
 	// Record the successor and retire the predecessor through event-sourced

@@ -3490,6 +3490,9 @@ const deDECatalog = {
   "source.adcs.sev.none.f1adcs0021": "Unauffällig",
   "source.adcs.observedby.f1adcs0022": "durch Relais",
   "source.adcs.evidence.f3adcs0001": "Aus dem Verzeichnis gelesen:",
+  "source.custody.key.b5cust0001": "Schlüsselverwahrung",
+  "source.custody.unrecorded.b5cust0002":
+    "Dieses Zertifikat stammt aus der Zeit vor der Verwahrungserfassung oder wurde per Ermittlung gefunden statt hier ausgestellt. Nicht erfasst bedeutet nicht sicher.",
   "source.status.920e413c7d": "Status",
   "source.status.filter.9bfe8b184f": "Statusfilter",
   "source.structured.query.preview.706d53d9be": "Vorschau der strukturierten Abfrage",

@@ -44,6 +44,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	101: true,
 	102: true,
 	105: true,
+	106: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -415,6 +416,63 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 		}
 		if fabricated != 0 {
 			t.Errorf("%d pre-existing rows came out carrying a fabricated observation; every one must come out empty so the next sweep re-baselines instead of alarming", fabricated)
+		}
+	})
+
+	// 0106 adds per-certificate key custody (epic B5). The property that matters
+	// is what the DEFAULT encodes: every pre-existing certificate must come out
+	// UNRECORDED. Backfilling any origin would be inventing an audit claim — the
+	// whole point of recording custody per certificate is that it reflects what
+	// the issuing code did, and nobody observed the issuance of a row that
+	// predates the column. Unrecorded is the only honest value, and the console
+	// renders it as unknown rather than as reassurance.
+	t.Run("0106_certificate_key_custody", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 106)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedMigrationContent(t, ctx, pool, tenantA)
+		seedMigrationContent(t, ctx, pool, tenantB)
+
+		const projection = `
+			SELECT tenant_id::text, subject, fingerprint
+			  FROM certificates
+			 ORDER BY tenant_id, fingerprint`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, projection)
+		if beforeCount == 0 {
+			t.Fatal("precondition: the content case needs seeded certificates to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, projection)
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0106 disturbed existing certificates: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var claimed int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM certificates
+			  WHERE key_origin <> '' OR key_storage <> '' OR key_exportable <> ''`).
+			Scan(&claimed); err != nil {
+			t.Fatalf("read post-0106 custody: %v", err)
+		}
+		if claimed != 0 {
+			t.Errorf("%d pre-existing certificates came out carrying a custody claim nobody observed; every one must come out unrecorded", claimed)
+		}
+
+		// The vocabulary is closed at the database, because a custody claim is
+		// evidence an auditor reads.
+		if _, err := pool.Exec(ctx,
+			`UPDATE certificates SET key_origin = 'somewhere' WHERE true`); err == nil {
+			t.Error("0106 accepted an unknown key origin; certificates_key_origin_known must reject it")
 		}
 	})
 

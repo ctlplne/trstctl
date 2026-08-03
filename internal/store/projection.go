@@ -229,10 +229,7 @@ func (s *Store) GetCertificateByFingerprint(ctx context.Context, tenantID, finge
 	var c Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanCertificate(tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
-			        certificate_der, issuance_idempotency_key, created_at,
-			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
+			`SELECT `+certificateColumns+`
 			   FROM certificates WHERE tenant_id = $1 AND fingerprint = $2`, tenantID, fingerprint), &c)
 	})
 	return c, err

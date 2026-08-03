@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
@@ -576,6 +577,13 @@ func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantI
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+			// B5: the deprecated path. The key was held in locked memory and
+			// wiped, but it existed outside the requester, and a credential on
+			// this path is one an operator should plan to replace. They cannot
+			// plan for what is not written down, so it is written down here
+			// rather than only in a deprecation event nobody queries.
+			KeyOrigin:  string(custody.OriginControlPlane),
+			KeyStorage: string(custody.StorageLockedMemory),
 		},
 		CertPEM: append([]byte(nil), leafPEM...),
 		KeyPEM:  keyPEM,
@@ -1554,6 +1562,11 @@ func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+			// B5: the requester generated this key and the control plane never
+			// held it. That is a fact about THIS certificate, recorded from what
+			// the code did rather than from what the documentation says the
+			// system does — which is the difference an auditor is asking about.
+			KeyOrigin: string(custody.OriginRequester),
 		},
 		CertPEM: append([]byte(nil), leafPEM...),
 		// The material field is left zero on purpose: the subject key was never

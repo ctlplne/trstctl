@@ -36,7 +36,15 @@ type Certificate struct {
 	IssuanceResponse       []byte
 	IssuanceIdempotencyKey string
 	IssuanceRequestBinding string
-	CreatedAt              time.Time
+	// KeyOrigin, KeyStorage, KeyExportable and KeyGeneratedBy record where this
+	// certificate's private key was generated and what holds it (epic B5).
+	// Empty means UNRECORDED, which is a distinct answer from any observation —
+	// a certificate found by a network scan has an origin nobody watched.
+	KeyOrigin      string
+	KeyStorage     string
+	KeyExportable  string
+	KeyGeneratedBy string
+	CreatedAt      time.Time
 
 	// Lifecycle bookkeeping (S4.5). Status is one of active, superseded,
 	// revoked. ReplacesID links a rotation's successor to the credential it
@@ -134,8 +142,9 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 			        (id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint,
 			         key_algorithm, not_before, not_after, deployment_location, source,
 			         certificate_der, certificate_pem, issuance_response,
-			         issuance_idempotency_key, issuance_request_binding)
-			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			         issuance_idempotency_key, issuance_request_binding,
+			         key_origin, key_storage, key_exportable, key_generated_by)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 			 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
 			    SET owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, sans = EXCLUDED.sans,
 			        issuer = EXCLUDED.issuer, serial = EXCLUDED.serial, key_algorithm = EXCLUDED.key_algorithm,
@@ -145,11 +154,21 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 			        certificate_pem = CASE WHEN octet_length(EXCLUDED.certificate_pem) > 0 THEN EXCLUDED.certificate_pem ELSE certificates.certificate_pem END,
 			        issuance_response = CASE WHEN octet_length(EXCLUDED.issuance_response) > 0 THEN EXCLUDED.issuance_response ELSE certificates.issuance_response END,
 			        issuance_idempotency_key = CASE WHEN EXCLUDED.issuance_idempotency_key <> '' THEN EXCLUDED.issuance_idempotency_key ELSE certificates.issuance_idempotency_key END,
-			        issuance_request_binding = CASE WHEN EXCLUDED.issuance_request_binding <> '' THEN EXCLUDED.issuance_request_binding ELSE certificates.issuance_request_binding END
+			        issuance_request_binding = CASE WHEN EXCLUDED.issuance_request_binding <> '' THEN EXCLUDED.issuance_request_binding ELSE certificates.issuance_request_binding END,
+			        -- Custody is recorded at ISSUANCE and never overwritten by a
+			        -- later observation (B5). A discovery scan re-upserting this
+			        -- fingerprint knows nothing about where the key was made, and
+			        -- letting it blank the recorded origin would quietly turn an
+			        -- audit fact into an unknown. A row that has custody keeps it.
+			        key_origin = CASE WHEN EXCLUDED.key_origin <> '' THEN EXCLUDED.key_origin ELSE certificates.key_origin END,
+			        key_storage = CASE WHEN EXCLUDED.key_storage <> '' THEN EXCLUDED.key_storage ELSE certificates.key_storage END,
+			        key_exportable = CASE WHEN EXCLUDED.key_exportable <> '' THEN EXCLUDED.key_exportable ELSE certificates.key_exportable END,
+			        key_generated_by = CASE WHEN EXCLUDED.key_generated_by <> '' THEN EXCLUDED.key_generated_by ELSE certificates.key_generated_by END
 			 RETURNING id::text, created_at`,
 			c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 			c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source,
-			certDER, certPEM, issuanceResponse, c.IssuanceIdempotencyKey, c.IssuanceRequestBinding).
+			certDER, certPEM, issuanceResponse, c.IssuanceIdempotencyKey, c.IssuanceRequestBinding,
+			c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy).
 			Scan(&c.ID, &c.CreatedAt)
 	})
 	c.SANs = sans
@@ -282,12 +301,8 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 			return err
 		}
 
-		const cols = `id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-		        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
-		        certificate_der, issuance_idempotency_key, created_at,
-		        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at`
 		expiringRows, err := tx.Query(ctx,
-			`SELECT `+cols+`
+			`SELECT `+certificateColumns+`
 			   FROM certificates
 			  WHERE tenant_id = $1 AND not_after IS NOT NULL AND not_after < $2
 			  ORDER BY not_after, id LIMIT $3`,
@@ -313,11 +328,28 @@ func certificateSourceExternal(source string) bool {
 	return source == "" || source != "issued"
 }
 
+// certificateColumns is every column scanCertificate reads, in its order.
+//
+// One list, because the alternative is what this replaced: eight copies across
+// three files, each of which had to be found and edited whenever a column was
+// added. Missing one is not a compile error — it is a 500 on a read path, at
+// runtime, in whichever query nobody exercised locally. The list and the scan
+// that consumes it now sit together, and a column added to one without the
+// other fails the store tests immediately.
+const certificateColumns = `id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
+        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+        certificate_der, issuance_idempotency_key, created_at,
+        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at,
+        key_origin, key_storage, key_exportable, key_generated_by`
+
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
 		&c.Fingerprint, &c.KeyAlgorithm, &c.NotBefore, &c.NotAfter, &c.DeploymentLocation, &c.Source,
 		&c.CertificateDER, &c.IssuanceIdempotencyKey, &c.CreatedAt,
-		&c.Status, &c.ReplacesID, &c.RevokedAt, &c.RevocationReason, &c.RenewedAt, &c.AlertedAt)
+		&c.Status, &c.ReplacesID, &c.RevokedAt, &c.RevocationReason, &c.RenewedAt, &c.AlertedAt,
+		// B5: custody, recorded at issuance. Every read goes through here, so
+		// the three SELECTs that share this helper stay in step by construction.
+		&c.KeyOrigin, &c.KeyStorage, &c.KeyExportable, &c.KeyGeneratedBy)
 }
 
 // GetCertificate loads a certificate in its tenant context.
@@ -325,10 +357,7 @@ func (s *Store) GetCertificate(ctx context.Context, tenantID, id string) (Certif
 	var c Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanCertificate(tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
-			        certificate_der, issuance_idempotency_key, created_at,
-			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
+			`SELECT `+certificateColumns+`
 			   FROM certificates WHERE tenant_id = $1 AND id = $2`, tenantID, id), &c)
 	})
 	return c, err
@@ -368,10 +397,7 @@ func (s *Store) ListActiveIssuedCertificatesForIdentity(ctx context.Context, ten
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
-			        certificate_der, issuance_idempotency_key, created_at,
-			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
+			`SELECT `+certificateColumns+`
 			   FROM certificates
 			  WHERE tenant_id = $1 AND owner_id = $2 AND $3 = ANY(sans)
 			    AND source = 'issued' AND status = 'active'
@@ -404,10 +430,7 @@ func (s *Store) ListCertificatesByIssuanceIdempotencyKey(ctx context.Context, te
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
-			        certificate_der, issuance_idempotency_key, created_at,
-			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
+			`SELECT `+certificateColumns+`
 			   FROM certificates
 			  WHERE tenant_id = $1 AND issuance_idempotency_key = $2
 			  ORDER BY created_at, id`,
@@ -476,10 +499,6 @@ func (s *Store) GetIssuedCertificateRecovery(ctx context.Context, tenantID, key 
 // returns all certificates ordered by id, keyset on id alone (the plain page rides
 // the primary key). Tenant-scoped under RLS (AN-1).
 func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID string, afterNotAfter *time.Time, limit int, expiringBefore *time.Time) ([]Certificate, error) {
-	const cols = `id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-	        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
-	        certificate_der, issuance_idempotency_key, created_at,
-	        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at`
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		var rows pgx.Rows
@@ -493,7 +512,7 @@ func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID stri
 			// never satisfies "< expiringBefore", so only non-NULL rows are returned and
 			// the comparison is well-defined.
 			rows, qerr = tx.Query(ctx,
-				`SELECT `+cols+`
+				`SELECT `+certificateColumns+`
 				   FROM certificates
 				  WHERE tenant_id = $1 AND not_after < $2
 				    AND (not_after, id) > ($3, $4)
@@ -503,7 +522,7 @@ func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID stri
 			// Expiry-ordered first page: no keyset lower bound yet, just the filter,
 			// ordered by (not_after, id) so it rides the same composite index.
 			rows, qerr = tx.Query(ctx,
-				`SELECT `+cols+`
+				`SELECT `+certificateColumns+`
 				   FROM certificates
 				  WHERE tenant_id = $1 AND not_after < $2
 				  ORDER BY not_after, id LIMIT $3`,
@@ -511,7 +530,7 @@ func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID stri
 		default:
 			// Plain page: keyset on id alone, riding the primary key.
 			rows, qerr = tx.Query(ctx,
-				`SELECT `+cols+`
+				`SELECT `+certificateColumns+`
 				   FROM certificates
 				  WHERE tenant_id = $1 AND id > $2
 				  ORDER BY id LIMIT $3`,

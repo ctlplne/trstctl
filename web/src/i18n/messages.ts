@@ -13373,6 +13373,14 @@ export const messages = {
     defaultMessage: "Read from the directory:",
     description: "F3: falsifiable evidence references on an AD CS posture finding.",
   },
+  "source.custody.key.b5cust0001": {
+    defaultMessage: "Key custody",
+    description: "B5: per-certificate key custody line on the certificate detail pane.",
+  },
+  "source.custody.unrecorded.b5cust0002": {
+    defaultMessage: "This certificate predates custody recording, or was found by discovery rather than issued here. Unrecorded is not the same as safe.",
+    description: "B5: per-certificate key custody line on the certificate detail pane.",
+  },
   "source.status.920e413c7d": {
     defaultMessage: "Status",
     description:

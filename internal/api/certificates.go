@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -42,6 +43,20 @@ type certificateResponse struct {
 	Status           string     `json:"status"`
 	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
 	RevocationReason string     `json:"revocation_reason,omitempty"`
+	// Custody: where this certificate's private key was generated and what
+	// holds it (epic B5). An auditor asks about the certificate in front of
+	// them, not about the system in general, so this is recorded per
+	// certificate from what the issuing code did.
+	//
+	// Every field may be empty, and empty means UNRECORDED rather than any
+	// particular answer — a certificate discovered by a network scan has an
+	// origin nobody observed. CustodySummary states that in words so a surface
+	// cannot render the gap as reassurance by accident.
+	KeyOrigin      string `json:"key_origin,omitempty"`
+	KeyStorage     string `json:"key_storage,omitempty"`
+	KeyExportable  string `json:"key_exportable,omitempty"`
+	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
+	CustodySummary string `json:"custody_summary"`
 }
 
 type certificateHealthDashboard struct {
@@ -110,6 +125,17 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 		NotBefore: c.NotBefore, NotAfter: c.NotAfter, DeploymentLocation: c.DeploymentLocation,
 		Source: c.Source, CreatedAt: c.CreatedAt,
 		Status: c.Status, RevokedAt: c.RevokedAt, RevocationReason: c.RevocationReason,
+		KeyOrigin: c.KeyOrigin, KeyStorage: c.KeyStorage,
+		KeyExportable: c.KeyExportable, KeyGeneratedBy: c.KeyGeneratedBy,
+		// The summary is computed rather than stored, so a surface cannot render
+		// custody by concatenating fields and accidentally imply something the
+		// record does not say. The vocabulary owns the sentence.
+		CustodySummary: custody.Record{
+			Origin:      custody.KeyOrigin(c.KeyOrigin),
+			Storage:     custody.StorageClass(c.KeyStorage),
+			Exportable:  custody.Exportability(c.KeyExportable),
+			GeneratedBy: c.KeyGeneratedBy,
+		}.Summary(),
 	}
 }
 

@@ -1034,11 +1034,16 @@ export interface CTMonitoringSummary {
 
 export interface Certificate {
   created_at?: string;
+  custody_summary?: string;
   deployment_location?: string;
   fingerprint: string;
   id: string;
   issuer?: string;
   key_algorithm?: string;
+  key_exportable?: "" | "exportable" | "non_exportable";
+  key_generated_by?: string;
+  key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
+  key_storage?: "" | "locked_memory" | "file" | "os_store" | "pkcs11" | "device_bound";
   not_after?: string;
   not_before?: string;
   owner_id?: string;
