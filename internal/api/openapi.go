@@ -330,6 +330,34 @@ func componentSchemas() map[string]*Schema {
 	}, "kind", "enabled", "pending", "claimed")
 	// A3: credential-custody health. Counts and one age; no tenant, agent,
 	// reference name or value appears anywhere in this shape.
+	// F1: AD CS template posture. Verdict first, directory attributes as
+	// supporting detail — what an operator needs is "which templates can be
+	// used to become someone else", not a template list.
+	adcsTemplateFinding := object(map[string]*Schema{
+		"id":          str(),
+		"severity":    {Type: "string", Enum: []string{"medium", "high", "critical"}},
+		"summary":     str(),
+		"remediation": str(),
+		"published":   {Type: "boolean"},
+	}, "id", "severity", "summary", "remediation")
+	adcsTemplate := object(map[string]*Schema{
+		"domain": str(), "template": str(), "display_name": str(),
+		"schema_version": {Type: "integer"},
+		"published_by":   {Type: "array", Items: str()},
+		// Empty severity means no findings, which is a real state; the console
+		// renders it clean rather than unknown.
+		"worst_severity": {Type: "string", Enum: []string{"", "medium", "high", "critical"}},
+		"findings":       {Type: "array", Items: ref("ADCSTemplateFinding")},
+		"observed_by":    str(), "observed_at": timestamp(),
+	}, "domain", "template", "published_by", "worst_severity", "findings", "observed_at")
+	adcsPosture := object(map[string]*Schema{
+		// observed distinguishes "no AD CS estate" from "nobody has looked",
+		// which are opposite facts an empty list cannot tell apart.
+		"observed":  {Type: "boolean"},
+		"templates": {Type: "array", Items: ref("ADCSTemplate")},
+		"critical":  {Type: "integer"}, "high": {Type: "integer"}, "medium": {Type: "integer"},
+		"guidance": str(),
+	}, "observed", "templates", "critical", "high", "medium", "guidance")
 	agentJobRedemptions := object(map[string]*Schema{
 		"live":                {Type: "integer"},
 		"total":               {Type: "integer"},
@@ -4040,6 +4068,9 @@ func componentSchemas() map[string]*Schema {
 		"AgentJobQueue":                            agentJobQueue,
 		"AgentJobPosture":                          agentJobPosture,
 		"AgentJobRedemptions":                      agentJobRedemptions,
+		"ADCSPosture":                              adcsPosture,
+		"ADCSTemplate":                             adcsTemplate,
+		"ADCSTemplateFinding":                      adcsTemplateFinding,
 		"CAAuthorityList":                          list("CAAuthority"),
 		"CADiscoveryItem":                          caDiscoveryItem,
 		"CADiscoverySummary":                       caDiscoverySummary,

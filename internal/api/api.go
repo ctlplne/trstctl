@@ -113,6 +113,7 @@ type API struct {
 	acmeEAB                   ACMEEABProvider
 	agentJobPosture           AgentJobPostureProvider
 	enqueueConnectorTest      ConnectorTestEnqueuer
+	adcsPosture               ADCSPostureProvider
 	acmeEABDisable            ACMEEABDisabler
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
@@ -198,6 +199,7 @@ type config struct {
 	acmeEAB                   ACMEEABProvider
 	agentJobPosture           AgentJobPostureProvider
 	enqueueConnectorTest      ConnectorTestEnqueuer
+	adcsPosture               ADCSPostureProvider
 	acmeEABDisable            ACMEEABDisabler
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
@@ -459,6 +461,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeEAB:                   cfg.acmeEAB,
 		agentJobPosture:           cfg.agentJobPosture,
 		enqueueConnectorTest:      cfg.enqueueConnectorTest,
+		adcsPosture:               cfg.adcsPosture,
 		acmeEABDisable:            cfg.acmeEABDisable,
 		featureObserver:           cfg.featureObserver,
 		privacyRetentionPolicy:    policy.WithDefaults(),
@@ -897,6 +900,7 @@ func (a *API) routes() []route {
 		{name: "subject_ref", typ: "string", desc: "tenant-bound subject reference to filter evidence"},
 	}
 	routes := []route{
+		{method: "GET", path: "/api/v1/posture/adcs", opID: "getADCSPosture", summary: "AD CS certificate template posture observed by an in-domain relay", handler: a.getADCSPosture, resSchema: "ADCSPosture", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
 		// B-5: what is running and is the spine reachable — the readout an
 		// operator wants on /admin/system, which only /healthz answered.

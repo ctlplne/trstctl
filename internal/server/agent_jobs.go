@@ -271,6 +271,13 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 		if destination == "connector.test" && a.recordDryRun != nil {
 			a.recordDryRun(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
 		}
+		// F1: an AD CS observation becomes the Posture console's template view.
+		// Same shape as the dry-run receipt: the relay produced an answer, and
+		// it belongs somewhere an operator will look tomorrow rather than only
+		// in the report from the run that found it.
+		if destination == "adcs.inventory" && a.recordADCSPosture != nil {
+			a.recordADCSPosture(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+		}
 		return &transport.ReportJobResultResponse{Accepted: true}, nil
 
 	case transport.JobOutcomeFailed:

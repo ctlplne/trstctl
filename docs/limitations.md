@@ -617,11 +617,23 @@ anyone on the segment. Anonymous binds are refused rather than attempted —
 where they would succeed, the directory is misconfigured in a way worth
 reporting rather than quietly relying on.
 
+The Posture console shows it: templates worst-first, what each one permits and
+the specific fix, whether a CA publishes it, and which relay observed it when.
+The empty state distinguishes "no relay has read a directory yet" from "no AD CS
+estate", because those are opposite facts an empty table cannot tell apart. The
+posture read model is **ephemeral by classification** — a restore does not bring
+it back, deliberately: a relay re-reads the directory on its next sweep, and
+restoring yesterday's template list as current would keep a template someone has
+since fixed reading dangerous.
+
 **What is not served:** enrollment ACLs. The template's security descriptor
 (`nTSecurityDescriptor`) says *who* holds the enrollment right, and that is most
-of how dangerous a template is. It is not yet decoded, so findings report the
-dangerous properties of a template without reporting who can use it, and say so
-rather than implying the answer is "nobody".
+of how dangerous a template is — a supplies-subject template restricted to two
+PKI admins is a different risk from the same template open to Domain Users. It
+is not yet decoded, so findings report what a template PERMITS without reporting
+who may use it. The console carries that caveat on the page itself rather than
+only here, because an operator reading a critical finding needs to know what it
+does not account for at the moment they read it.
 
 ### Segment sweeps run from inside the segment
 

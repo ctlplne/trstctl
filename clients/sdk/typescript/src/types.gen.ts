@@ -2927,6 +2927,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/posture/adcs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** AD CS certificate template posture observed by an in-domain relay */
+        get: operations["getADCSPosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pqc/campaigns": {
         parameters: {
             query?: never;
@@ -4521,6 +4538,35 @@ export interface components {
             items: components["schemas"]["ACMEEABCredential"][];
             required: boolean;
             served: boolean;
+        };
+        ADCSPosture: {
+            critical: number;
+            guidance: string;
+            high: number;
+            medium: number;
+            observed: boolean;
+            templates: components["schemas"]["ADCSTemplate"][];
+        };
+        ADCSTemplate: {
+            display_name?: string;
+            domain: string;
+            findings: components["schemas"]["ADCSTemplateFinding"][];
+            /** Format: date-time */
+            observed_at: string;
+            observed_by?: string;
+            published_by: string[];
+            schema_version?: number;
+            template: string;
+            /** @enum {string} */
+            worst_severity: "" | "medium" | "high" | "critical";
+        };
+        ADCSTemplateFinding: {
+            id: string;
+            published?: boolean;
+            remediation: string;
+            /** @enum {string} */
+            severity: "medium" | "high" | "critical";
+            summary: string;
         };
         AIAnswer: {
             citations?: string[];
@@ -18000,6 +18046,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyVersion"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getADCSPosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSPosture"];
                 };
             };
             /** @description client error */

@@ -216,6 +216,47 @@ ACMEEABPosture = TypedDict(
     total=False,
 )
 
+ADCSPosture = TypedDict(
+    'ADCSPosture',
+    {
+        'critical': int,
+        'guidance': str,
+        'high': int,
+        'medium': int,
+        'observed': bool,
+        'templates': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ADCSTemplate = TypedDict(
+    'ADCSTemplate',
+    {
+        'display_name': str,
+        'domain': str,
+        'findings': list[dict[str, Any]],
+        'observed_at': str,
+        'observed_by': str,
+        'published_by': list[str],
+        'schema_version': int,
+        'template': str,
+        'worst_severity': str,
+    },
+    total=False,
+)
+
+ADCSTemplateFinding = TypedDict(
+    'ADCSTemplateFinding',
+    {
+        'id': str,
+        'published': bool,
+        'remediation': str,
+        'severity': str,
+        'summary': str,
+    },
+    total=False,
+)
+
 AIAnswer = TypedDict(
     'AIAnswer',
     {

@@ -13279,6 +13279,96 @@ export const messages = {
     defaultMessage: "Deploy would fail (nothing changed)",
     description: "D5: relay-executed dry-run outcome labels on the connector delivery receipt badge.",
   },
+  "source.adcs.heading.f1adcs0001": {
+    defaultMessage: "AD CS certificate templates",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.description.f1adcs0002": {
+    defaultMessage:
+      "A Windows PKI's real attack surface is its template list. These are the templates an in-domain relay found, with what each one permits — not who may use it.",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.loading.f1adcs0003": {
+    defaultMessage: "Loading template posture",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.error.f1adcs0004": {
+    defaultMessage: "Could not load AD CS template posture",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.unobserved.title.f1adcs0005": {
+    defaultMessage: "No relay has read a directory yet",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.unobserved.body.f1adcs0006": {
+    defaultMessage:
+      "This is not the same as having no AD CS estate. Enable adcs.inventory and enrol a network-role agent inside the domain; a domain controller's directory is not reachable from here.",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.critical.f1adcs0007": {
+    defaultMessage: "Critical templates",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.high.f1adcs0008": {
+    defaultMessage: "High-risk templates",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.templates.f1adcs0009": {
+    defaultMessage: "Templates observed",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.col.template.f1adcs0010": {
+    defaultMessage: "Template",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.col.risk.f1adcs0011": {
+    defaultMessage: "Risk",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.col.published.f1adcs0012": {
+    defaultMessage: "Published by",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.col.findings.f1adcs0013": {
+    defaultMessage: "What it permits",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.unpublished.f1adcs0014": {
+    defaultMessage: "Not published by any CA",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.clean.f1adcs0015": {
+    defaultMessage: "No dangerous combination found",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.remediation.f1adcs0016": {
+    defaultMessage: "Fix:",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.observed.f1adcs0017": {
+    defaultMessage: "Observed",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.sev.critical.f1adcs0018": {
+    defaultMessage: "Critical",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.sev.high.f1adcs0019": {
+    defaultMessage: "High",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.sev.medium.f1adcs0020": {
+    defaultMessage: "Medium",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.sev.none.f1adcs0021": {
+    defaultMessage: "Clean",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
+  "source.adcs.observedby.f1adcs0022": {
+    defaultMessage: "by relay",
+    description: "F1: AD CS certificate template posture panel on the Posture page.",
+  },
   "source.status.920e413c7d": {
     defaultMessage: "Status",
     description:

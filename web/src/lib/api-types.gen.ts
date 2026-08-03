@@ -162,6 +162,35 @@ export interface ACMEEABPosture {
   served: boolean;
 }
 
+export interface ADCSPosture {
+  critical: number;
+  guidance: string;
+  high: number;
+  medium: number;
+  observed: boolean;
+  templates: ADCSTemplate[];
+}
+
+export interface ADCSTemplate {
+  display_name?: string;
+  domain: string;
+  findings: ADCSTemplateFinding[];
+  observed_at: string;
+  observed_by?: string;
+  published_by: string[];
+  schema_version?: number;
+  template: string;
+  worst_severity: "" | "medium" | "high" | "critical";
+}
+
+export interface ADCSTemplateFinding {
+  id: string;
+  published?: boolean;
+  remediation: string;
+  severity: "medium" | "high" | "critical";
+  summary: string;
+}
+
 export interface AIAnswer {
   citations?: string[];
   grounded?: boolean;

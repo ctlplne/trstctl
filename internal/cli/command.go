@@ -332,6 +332,11 @@ var coreCommandTable = []Command{
 
 	// B4: external account bindings are authorizations, so they are listable and
 	// revocable from the same place the rest of the estate is driven.
+	// F1: AD CS template posture beside the other discovery reads. An operator
+	// triaging a dangerous template wants it in the same place they already run
+	// discovery from, not only in a browser.
+	{Name: []string{"posture", "adcs"}, Method: "GET", Path: "/api/v1/posture/adcs", Summary: "Show AD CS certificate template posture observed by an in-domain relay"},
+
 	{Name: []string{"acme", "eab", "list"}, Method: "GET", Path: "/api/v1/acme/eab-credentials", Summary: "List ACME external account binding credentials and their authorization scope"},
 	{Name: []string{"acme", "eab", "disable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/disable", Body: bodyNone, Summary: "Disable an ACME external account binding credential"},
 	{Name: []string{"acme", "eab", "enable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/enable", Body: bodyNone, Summary: "Re-enable a disabled ACME external account binding credential"},

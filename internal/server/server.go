@@ -1156,6 +1156,7 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// D5: the console's target test becomes a relay-executed dry-run when the
 	// operator has enabled connector.test. Otherwise the route keeps the honest
 	// local answer rather than queueing work nothing will claim.
+	*defaults = append(*defaults, api.WithADCSPosture(s.adcsPostureView))
 	*defaults = append(*defaults, api.WithConnectorTestEnqueuer(
 		s.connectorTestEnqueuer(AgentClaimableJobKinds(d.AgentClaimableJobKinds))))
 	// B-5: the console's system readout reuses the same probes as /readyz, so
@@ -1554,7 +1555,8 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto},
 		// D5: a relay's dry-run plan becomes a delivery receipt an operator can
 		// read on the Connectors page.
-		recordDryRun: s.dryRunReceipt,
+		recordDryRun:      s.dryRunReceipt,
+		recordADCSPosture: s.recordADCSPosture,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {

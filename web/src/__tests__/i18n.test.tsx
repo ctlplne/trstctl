@@ -263,6 +263,11 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // F1 AD CS re-pin: twenty-two source.adcs.* keys add the certificate
+      // template posture panel — the risk verdict, what each template permits
+      // and the fix, whether a CA publishes it, and the empty state that
+      // distinguishes "no AD CS estate" from "nobody has looked". Machine-
+      // authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
       // D5 dry-run re-pin: three source.dry.run.* keys label the relay-executed
       // target test. dry_run_planned is the first status on this surface that
       // reads as success and it earns it — a relay reached the target and
@@ -377,8 +382,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "64d2cc8d6cc7d1434d8c8e09499d4224524df461dcbf00a98abac8bb72464138",
-      "de-DE": "f64caa7f0c2b07a1e6d98bbfaa4b3dc537052461dca099233271f7f99336e65d",
+      "es-ES": "ee235d7947854d6901b135a97f0667a6eedbe9a3bb1c5719e59d67bd9898897e",
+      "de-DE": "d4a7f353b3147e1b14766aa6dc970f6495fd1a06d85208820e34a4a5bd57c78d",
     });
   });
 

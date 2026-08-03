@@ -616,6 +616,124 @@
         ],
         "type": "object"
       },
+      "ADCSPosture": {
+        "properties": {
+          "critical": {
+            "type": "integer"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "observed": {
+            "type": "boolean"
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSTemplate"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "observed",
+          "templates",
+          "critical",
+          "high",
+          "medium",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "ADCSTemplate": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSTemplateFinding"
+            },
+            "type": "array"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_by": {
+            "type": "string"
+          },
+          "published_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "template": {
+            "type": "string"
+          },
+          "worst_severity": {
+            "enum": [
+              "",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "template",
+          "published_by",
+          "worst_severity",
+          "findings",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "ADCSTemplateFinding": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "remediation": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "summary",
+          "remediation"
+        ],
+        "type": "object"
+      },
       "AIAnswer": {
         "properties": {
           "citations": {
@@ -31446,6 +31564,53 @@
         ],
         "summary": "Rollback the active lifecycle policy version to its prior module",
         "x-trstctl-permission": "policy:write"
+      }
+    },
+    "/api/v1/posture/adcs": {
+      "get": {
+        "operationId": "getADCSPosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "AD CS certificate template posture observed by an in-domain relay",
+        "x-trstctl-permission": "discovery:read"
       }
     },
     "/api/v1/pqc/campaigns": {

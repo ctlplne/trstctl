@@ -223,6 +223,9 @@ type agentService struct {
 	// D5). Nil means dry-run receipts are not recorded and the plan lives only
 	// in the event log.
 	recordDryRun func(ctx context.Context, tenantID, agent, idempotencyKey, plan string)
+	// recordADCSPosture turns a relay's AD CS observation into the Posture
+	// console's read model (epic F1).
+	recordADCSPosture func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
 }
 
 // bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC

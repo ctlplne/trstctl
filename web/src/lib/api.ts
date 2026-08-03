@@ -30,6 +30,8 @@ import type {
   ACMEDNS01ProviderConfigList,
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
+  ADCSPosture as GenADCSPosture,
+  ADCSTemplate as GenADCSTemplate,
   Agent as GenAgent,
   AgentCertRevocation,
   AgentCertRevocationRequest,
@@ -363,6 +365,8 @@ export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
 export type CADiscovery = CADiscoveryInventory;
 export type Identity = GenIdentity;
+export type ADCSPosture = GenADCSPosture;
+export type ADCSTemplate = GenADCSTemplate;
 export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
 export type EnrollmentTokenRequest = GenEnrollmentTokenRequest;
@@ -1235,6 +1239,8 @@ export interface Api {
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
   discoveryMonitoring(): Promise<DiscoveryMonitoring>;
+  /** F1: AD CS certificate template posture observed by an in-domain relay. */
+  adcsPosture(): Promise<ADCSPosture>;
   discoveryCoverage(options?: { class?: string; sourceKind?: string }): Promise<DiscoveryCoverage>;
   driftRemediation(): Promise<DriftRemediation>;
   decideDriftRemediation(id: string, input: DriftRemediationDecisionRequest): Promise<DriftRemediationDecision>;
@@ -1573,6 +1579,7 @@ const liveApi: Api = {
   getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
+  adcsPosture: () => req<ADCSPosture>("/api/v1/posture/adcs"),
   discoveryCoverage: (options) => {
     const qs = new URLSearchParams();
     if (options?.class) qs.set("class", options.class);
