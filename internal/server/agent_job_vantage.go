@@ -49,6 +49,8 @@ func connectorSideEffectRoleClassifier(registry *connector.Registry) func(destin
 		switch destination {
 		case "connector.deploy", "connector.rollback", "connector.test":
 		default:
+			// Non-connector kinds carry no per-row demand from the connector
+			// census; their vantage is decided by the kind-level table.
 			return ""
 		}
 		var p connector.DeployPayload

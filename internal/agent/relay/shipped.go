@@ -73,6 +73,15 @@ func ShippedJobKinds() []ShippedJobKind {
 			Kind:  KindDiscoveryRun,
 			Flags: []string{"--relay-claim"},
 		},
+		{
+			// F1: AD CS template posture. It must run in-domain — a domain
+			// controller's LDAP is not reachable from a hosted control plane and
+			// should not be — so an in-domain relay is the only vantage from
+			// which this inventory exists at all. It redeems a bind credential,
+			// unlike the other read-only kinds.
+			Kind:  KindADCSInventory,
+			Flags: []string{"--relay-claim"},
+		},
 	}
 }
 

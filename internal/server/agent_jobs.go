@@ -60,6 +60,10 @@ var agentJobKindAllowlist = map[string]bool{
 	"endpoint.verify":  true,
 	"discovery.run":    true,
 	"revocation.probe": true,
+	// F1: AD CS template inventory. In-domain only — a domain controller's LDAP
+	// is not reachable from a hosted control plane, which is why this is a job
+	// rather than something the brain does itself.
+	"adcs.inventory":   true,
 	"trust.distribute": true,
 }
 
@@ -463,6 +467,10 @@ func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, err
 	switch job.Destination {
 	case "connector.deploy", "connector.rollback", "connector.test":
 	default:
+		// Every other kind's payload is already reference-only by construction:
+		// a sweep names ranges, a revocation probe names URLs, an AD CS
+		// inventory names a directory and a credential REFERENCE. None carries
+		// material, so none needs projecting.
 		return job.Payload, nil
 	}
 	intent, err := relayDeployIntentFromSealed(job)

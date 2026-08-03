@@ -1,0 +1,279 @@
+// SPDX-License-Identifier: MPL-2.0
+
+// Package adcs inventories an Active Directory Certificate Services deployment's
+// certificate templates and enrollment services over LDAP (epic F1).
+//
+// A Windows PKI's real attack surface is not its CA — it is the template list.
+// A template that lets the enrollee supply their own subject, grants enrollment
+// to a broad group, and carries a client-authentication EKU is a domain
+// escalation path that looks, in every console the organization owns, like an
+// ordinary certificate template. Nobody has an inventory of these because the
+// information lives in the directory rather than anywhere a PKI product looked.
+//
+// This reads it. Every attribute captured is one that changes whether a template
+// is dangerous, and the dangerous combinations are named rather than left for an
+// operator to spot across four columns.
+//
+// READ-ONLY, structurally. The package performs LDAP Search operations and
+// nothing else — there is no Add, Modify, Delete, or ModifyDN call in it, and a
+// test asserts that by inspecting the connection interface it depends on. That
+// interface is deliberately narrow for exactly this reason: an inventory tool
+// pointed at a domain controller must not be able to change one, even by bug.
+package adcs
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// Well-known AD CS container and object classes.
+const (
+	// PublicKeyServicesDN is the container, relative to the forest
+	// configuration naming context, that holds templates and enrollment
+	// services.
+	PublicKeyServicesRDN = "CN=Public Key Services,CN=Services"
+	// ClassCertificateTemplate is the object class of a certificate template.
+	ClassCertificateTemplate = "pKICertificateTemplate"
+	// ClassEnrollmentService is the object class of a published CA.
+	ClassEnrollmentService = "pKIEnrollmentService"
+)
+
+// msPKI-Certificate-Name-Flag bits that matter for safety. There are more; these
+// are the ones that decide whether a template can be used to impersonate.
+const (
+	// NameFlagEnrolleeSuppliesSubject lets the requester choose the subject.
+	// Combined with a client-auth EKU and broad enrollment rights, this is the
+	// canonical AD CS escalation: request a certificate naming a domain admin.
+	NameFlagEnrolleeSuppliesSubject = 0x00000001
+	// NameFlagEnrolleeSuppliesSubjectAltName lets the requester choose the SAN,
+	// which is what modern clients actually authenticate on.
+	NameFlagEnrolleeSuppliesSubjectAltName = 0x00010000
+)
+
+// msPKI-Enrollment-Flag bits that matter.
+const (
+	// EnrollmentFlagPendManagerApproval requires a human to approve each
+	// issuance. Its ABSENCE is what makes an enrollee-supplies-subject template
+	// immediately exploitable rather than merely alarming.
+	EnrollmentFlagPendManagerApproval = 0x00000002
+)
+
+// msPKI-Private-Key-Flag bits that matter.
+const (
+	// PrivateKeyFlagExportableKey allows the private key to be exported. A
+	// certificate whose key can be copied off the machine is one whose identity
+	// can be, too.
+	PrivateKeyFlagExportableKey = 0x00000010
+)
+
+// Client-authentication EKUs. A template that can impersonate is one that can be
+// used to authenticate AS someone.
+const (
+	EKUClientAuth       = "1.3.6.1.5.5.7.3.2"
+	EKUSmartcardLogon   = "1.3.6.1.4.1.311.20.2.2"
+	EKUPKINITClientAuth = "1.3.6.1.5.2.3.4"
+	EKUAnyPurpose       = "2.5.29.37.0"
+)
+
+// Entry is one LDAP object as this package needs it: a DN and its attributes.
+// Declaring it here rather than importing the LDAP library's type keeps the
+// analysis testable without a directory, and keeps the wire library at one
+// well-defined edge.
+type Entry struct {
+	DN         string
+	Attributes map[string][]string
+}
+
+// Searcher is the narrow LDAP surface this package depends on.
+//
+// One method, and it reads. There is deliberately no Modify, Add, Delete or
+// ModifyDN here: an inventory tool pointed at a domain controller must be
+// structurally incapable of changing one, not merely careful not to. A test
+// asserts this interface has exactly one method for that reason.
+type Searcher interface {
+	Search(ctx context.Context, baseDN string, filter string, attributes []string) ([]Entry, error)
+}
+
+// Template is one certificate template and the facts that decide whether it is
+// dangerous.
+type Template struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	OID         string `json:"oid,omitempty"`
+	// SchemaVersion 1 templates cannot express many of the modern controls at
+	// all — they have no enrollment flags an admin can tighten — so a v1
+	// template with a client-auth EKU is a different conversation from a v4 one.
+	SchemaVersion int `json:"schema_version,omitempty"`
+	// EnrolleeSuppliesSubject and EnrolleeSuppliesSAN are the two flags that
+	// turn a template into an impersonation primitive.
+	EnrolleeSuppliesSubject bool `json:"enrollee_supplies_subject"`
+	EnrolleeSuppliesSAN     bool `json:"enrollee_supplies_san"`
+	// RequiresManagerApproval is the control that makes the above survivable.
+	RequiresManagerApproval bool `json:"requires_manager_approval"`
+	// ExportableKey means the private key can leave the machine it was issued to.
+	ExportableKey bool `json:"exportable_key"`
+	// EKUs are the extended key usages, by OID.
+	EKUs []string `json:"ekus,omitempty"`
+	// EnrollmentPrincipals are the security principals granted enrollment
+	// rights, as the directory reports them. Who can use a dangerous template
+	// is most of how dangerous it is.
+	EnrollmentPrincipals []string `json:"enrollment_principals,omitempty"`
+	// PublishedBy names the enrollment services (CAs) that offer this template.
+	// A dangerous template nobody publishes is a latent risk; one published by
+	// an issuing CA is a live one.
+	PublishedBy []string `json:"published_by,omitempty"`
+}
+
+// AllowsClientAuthentication reports whether this template can produce a
+// certificate usable to authenticate as someone.
+func (t Template) AllowsClientAuthentication() bool {
+	for _, eku := range t.EKUs {
+		switch eku {
+		case EKUClientAuth, EKUSmartcardLogon, EKUPKINITClientAuth, EKUAnyPurpose:
+			return true
+		}
+	}
+	// A template with NO EKUs is unrestricted, which is the same thing as any
+	// purpose. Treating an empty list as harmless is a mistake worth not making.
+	return len(t.EKUs) == 0
+}
+
+// EnrollmentService is one published CA.
+type EnrollmentService struct {
+	Name      string   `json:"name"`
+	DNSName   string   `json:"dns_name,omitempty"`
+	Templates []string `json:"templates,omitempty"`
+}
+
+// Inventory is one domain's AD CS posture.
+type Inventory struct {
+	Templates          []Template          `json:"templates"`
+	EnrollmentServices []EnrollmentService `json:"enrollment_services"`
+}
+
+// templateAttributes are the attributes read for each template. It is an
+// explicit list rather than a wildcard so the query returns what the analysis
+// uses and nothing else — an inventory tool should not be pulling attributes it
+// has no reason to hold.
+var templateAttributes = []string{
+	"cn",
+	"displayName",
+	"msPKI-Cert-Template-OID",
+	"msPKI-Template-Schema-Version",
+	"msPKI-Certificate-Name-Flag",
+	"msPKI-Enrollment-Flag",
+	"msPKI-Private-Key-Flag",
+	"pKIExtendedKeyUsage",
+}
+
+var enrollmentServiceAttributes = []string{
+	"cn",
+	"dNSHostName",
+	"certificateTemplates",
+}
+
+// Collect reads the templates and enrollment services under the given
+// configuration naming context.
+//
+// configurationDN is the forest's configuration naming context (for example
+// "CN=Configuration,DC=corp,DC=example"). The Public Key Services container is
+// resolved relative to it rather than guessed from a domain name, because a
+// forest root and a domain are not the same thing and guessing gets it wrong in
+// exactly the multi-domain estates this matters most in.
+func Collect(ctx context.Context, s Searcher, configurationDN string) (Inventory, error) {
+	if s == nil {
+		return Inventory{}, errors.New("adcs: no directory searcher")
+	}
+	if strings.TrimSpace(configurationDN) == "" {
+		return Inventory{}, errors.New("adcs: the forest configuration naming context is required")
+	}
+	base := PublicKeyServicesRDN + "," + strings.TrimSpace(configurationDN)
+
+	templateEntries, err := s.Search(ctx,
+		"CN=Certificate Templates,"+base,
+		"(objectClass="+ClassCertificateTemplate+")",
+		templateAttributes)
+	if err != nil {
+		return Inventory{}, fmt.Errorf("adcs: read certificate templates: %w", err)
+	}
+	serviceEntries, err := s.Search(ctx,
+		"CN=Enrollment Services,"+base,
+		"(objectClass="+ClassEnrollmentService+")",
+		enrollmentServiceAttributes)
+	if err != nil {
+		return Inventory{}, fmt.Errorf("adcs: read enrollment services: %w", err)
+	}
+
+	inventory := Inventory{}
+	publishedBy := map[string][]string{}
+	for _, entry := range serviceEntries {
+		service := EnrollmentService{
+			Name:      first(entry.Attributes["cn"]),
+			DNSName:   first(entry.Attributes["dNSHostName"]),
+			Templates: append([]string(nil), entry.Attributes["certificateTemplates"]...),
+		}
+		sort.Strings(service.Templates)
+		for _, name := range service.Templates {
+			publishedBy[name] = append(publishedBy[name], service.Name)
+		}
+		inventory.EnrollmentServices = append(inventory.EnrollmentServices, service)
+	}
+	sort.Slice(inventory.EnrollmentServices, func(i, j int) bool {
+		return inventory.EnrollmentServices[i].Name < inventory.EnrollmentServices[j].Name
+	})
+
+	for _, entry := range templateEntries {
+		t := templateFromEntry(entry)
+		if names := publishedBy[t.Name]; len(names) > 0 {
+			sort.Strings(names)
+			t.PublishedBy = names
+		}
+		inventory.Templates = append(inventory.Templates, t)
+	}
+	sort.Slice(inventory.Templates, func(i, j int) bool {
+		return inventory.Templates[i].Name < inventory.Templates[j].Name
+	})
+	return inventory, nil
+}
+
+// templateFromEntry decodes one template object.
+func templateFromEntry(entry Entry) Template {
+	nameFlag := intAttr(entry.Attributes["msPKI-Certificate-Name-Flag"])
+	enrollFlag := intAttr(entry.Attributes["msPKI-Enrollment-Flag"])
+	keyFlag := intAttr(entry.Attributes["msPKI-Private-Key-Flag"])
+	ekus := append([]string(nil), entry.Attributes["pKIExtendedKeyUsage"]...)
+	sort.Strings(ekus)
+	return Template{
+		Name:                    first(entry.Attributes["cn"]),
+		DisplayName:             first(entry.Attributes["displayName"]),
+		OID:                     first(entry.Attributes["msPKI-Cert-Template-OID"]),
+		SchemaVersion:           intAttr(entry.Attributes["msPKI-Template-Schema-Version"]),
+		EnrolleeSuppliesSubject: nameFlag&NameFlagEnrolleeSuppliesSubject != 0,
+		EnrolleeSuppliesSAN:     nameFlag&NameFlagEnrolleeSuppliesSubjectAltName != 0,
+		RequiresManagerApproval: enrollFlag&EnrollmentFlagPendManagerApproval != 0,
+		ExportableKey:           keyFlag&PrivateKeyFlagExportableKey != 0,
+		EKUs:                    ekus,
+	}
+}
+
+func first(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(values[0])
+}
+
+// intAttr parses a numeric LDAP attribute. AD stores these flags as decimal
+// strings; a value that does not parse is treated as zero, which is the safe
+// direction — it under-claims a flag rather than inventing one.
+func intAttr(values []string) int {
+	v, err := strconv.Atoi(first(values))
+	if err != nil {
+		return 0
+	}
+	return v
+}

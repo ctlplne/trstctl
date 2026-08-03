@@ -45,7 +45,10 @@ const (
 // relay's whole purpose is driving things that cannot host an agent, and asking
 // for host-local kinds would be asking for work it cannot do.
 func ClaimableKinds() []string {
-	return []string{"connector.deploy", "connector.test", KindRevocationProbe, KindDiscoveryRun}
+	return []string{
+		"connector.deploy", "connector.test",
+		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory,
+	}
 }
 
 // KindConnectorTest is the dry-run kind (epic D5): resolve everything a deploy
@@ -127,7 +130,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// relay handed a filesystem deploy, must not burn the attempt's one
 	// credential redemption discovering that.
 	hostJob := ExecutesOnHost(intent.Connector)
-	if !hostJob && !Executes(intent.Connector) {
+	if job.Kind == KindADCSInventory {
+		// An AD CS inventory names no connector; its executor is the directory
+		// reader. Skip the connector checks rather than failing it for not
+		// naming one it has no use for.
+		hostJob = false
+	} else if !hostJob && !Executes(intent.Connector) {
 		report(ctx, ch, job, OutcomeFailed, "connector is not executable by this agent")
 		return false
 	}
@@ -177,6 +185,13 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		}
 		report(ctx, ch, job, OutcomeExecuted, string(detail))
 		return plan.Ready
+	}
+
+	if job.Kind == KindADCSInventory {
+		// Unlike the other probe kinds this one redeems: reading a domain's
+		// template posture needs a directory bind, and anonymous reads are
+		// refused. So it runs here, after the material is in locked memory.
+		return runADCSInventory(ctx, ch, job, material)
 	}
 
 	var stats connector.Stats

@@ -579,6 +579,50 @@ MAY claim the row once executors ship with the relay runtime. The `roles` column
 **projection** for the console only: writing `network` into it grants nothing,
 because the certificate still says host and the claim path still refuses.
 
+### AD CS template posture, read from inside the domain
+
+A Windows PKI's real attack surface is not its CA — it is the template list. A
+template that lets the enrollee supply their own subject, grants enrollment to a
+broad group, and carries a client-authentication EKU is a domain escalation path
+that looks, in every console the organization owns, like an ordinary certificate
+template. Nobody has an inventory of these, because the information lives in the
+directory rather than anywhere a PKI product looked.
+
+`adcs.inventory` is a relay job that reads it: `pKICertificateTemplate` and
+`pKIEnrollmentService` objects under `CN=Public Key Services`, capturing schema
+version, `msPKI-Certificate-Name-Flag`, the enrollment and private-key flags,
+EKUs, and which CAs publish each template. It runs in-domain because a domain
+controller's LDAP is not reachable from a hosted control plane and should not
+be — an in-domain relay is the only vantage from which this inventory exists.
+
+**The combinations are named, not the flags.** Nobody spots an escalation path
+by scanning four boolean columns across ninety templates, so the analysis reports
+consequences: `ADCS-ESC1` fires only when supplies-subject, an authenticating
+EKU, and the absence of manager approval are all present, because removing any
+one of them changes the answer. The SAN variant is reported separately and is the
+more urgent of the two, since SAN-based mapping is what Windows authentication
+actually reads. An empty EKU list counts as authenticating, because unrestricted
+is not harmless. Every finding names the specific change that removes it, and
+reports whether a CA actually publishes the template — a dangerous template
+nobody publishes is a latent risk an operator can fix calmly.
+
+**Read-only, structurally.** The directory interface has exactly one method and
+it is `Search`; a test asserts that. An inventory tool pointed at a domain
+controller must be incapable of modifying one, not merely careful. The queries
+name the attributes they use rather than requesting a wildcard, and are scoped to
+the Public Key Services container. A plain `ldap://` connection is upgraded with
+StartTLS or the read does not happen: a template inventory is the map of a
+domain's escalation paths, and reading it in the clear publishes that map to
+anyone on the segment. Anonymous binds are refused rather than attempted —
+where they would succeed, the directory is misconfigured in a way worth
+reporting rather than quietly relying on.
+
+**What is not served:** enrollment ACLs. The template's security descriptor
+(`nTSecurityDescriptor`) says *who* holds the enrollment right, and that is most
+of how dangerous a template is. It is not yet decoded, so findings report the
+dangerous properties of a template without reporting who can use it, and say so
+rather than implying the answer is "nobody".
+
 ### Segment sweeps run from inside the segment
 
 Network scanning ran from the control plane's worker, which meant it could only

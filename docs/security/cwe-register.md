@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1033 annotated sites across 25 rules. Each row is
+1034 annotated sites across 25 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1099,10 +1099,11 @@ not this file.
 | `internal/crypto/opaque_x509.go:221` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 
-### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (4 sites)
+### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (5 sites)
 
 | Location | Reason |
 |---|---|
+| `internal/crypto/mtls/mtls.go:373` | operator-selected lab escape hatch, off by default, and |
 | `internal/crypto/mtls/reload_test.go:64` | reload probe of the test's own loopback listener; reads only the served serial, carries no data (CWE-295) |
 | `internal/crypto/mtls/server.go:189` | localhost liveness probe of this process's own ephemeral self-signed listener; no credential, no data (CWE-295) |
 | `internal/crypto/mtls/server_test.go:131` | test TLS client speaking to the test's own server (CWE-295) |

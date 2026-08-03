@@ -354,3 +354,25 @@ func init() {
 		panic(err)
 	}
 }
+
+// DirectoryClientTLSConfig is the TLS configuration for reading a directory
+// (LDAPS, or StartTLS over a plain LDAP connection).
+//
+// It lives here because AN-3 keeps crypto/tls inside this boundary: a caller
+// obtains the value and hands it to its LDAP library without ever naming the
+// type, so the wire library stays at one edge and the TLS policy stays in one
+// place.
+//
+// insecureSkipVerify is a lab escape hatch for a directory using a self-signed
+// certificate. It is the caller's job to report which mode was used — an
+// inventory taken without verifying the directory's identity is weaker evidence
+// and must not read identically to one taken with it.
+func DirectoryClientTLSConfig(insecureSkipVerify bool) *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		// #nosec G402 -- operator-selected lab escape hatch, off by default, and
+		// the caller reports which mode was used so an unverified read is never
+		// mistaken for a verified one (CWE-295).
+		InsecureSkipVerify: insecureSkipVerify,
+	}
+}

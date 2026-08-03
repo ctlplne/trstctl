@@ -59,6 +59,11 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	job store.AgentJobForRedemption,
 ) (redeemedMaterial, error) {
 	switch job.Destination {
+	case "adcs.inventory":
+		// F1: an AD CS inventory redeems a directory bind credential. Its
+		// payload is not a sealed connector deploy, so it resolves the
+		// secret:// references named in the job payload directly.
+		return r.resolveJobReferences(ctx, tenantID, job)
 	case "connector.deploy", "connector.rollback", "connector.test":
 		// connector.test redeems too (D5). A dry-run exists to find out whether
 		// the credential works; one that skipped redemption would pass right up
@@ -103,6 +108,34 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		refNames = append(refNames, ref)
 	}
 	return redeemedMaterial{items: items, refNames: refNames, wipe: wipeAll}, nil
+}
+
+// resolveJobReferences resolves the secret:// references a non-connector job
+// names, without opening a sealed connector container — there is none. It is
+// the same tenant-sealed secret-store read the connector path uses, so a
+// reference behaves identically whichever kind of job named it.
+func (r *relayCredentialResolver) resolveJobReferences(
+	ctx context.Context,
+	tenantID string,
+	job store.AgentJobForRedemption,
+) (redeemedMaterial, error) {
+	refs := collectSecretRefs(job.Payload)
+	if len(refs) == 0 {
+		return redeemedMaterial{}, errors.New("job names no credential references to redeem")
+	}
+	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.tenantCrypto, tenantID: tenantID}
+	var items []transport.RedeemedSecret
+	var refNames []string
+	for _, ref := range refs {
+		value, err := lease.require(ctx, ref)
+		if err != nil {
+			lease.Close()
+			return redeemedMaterial{}, fmt.Errorf("resolve credential reference: %w", err)
+		}
+		items = append(items, transport.RedeemedSecret{Name: ref, Value: secret.JSONBytes(value)})
+		refNames = append(refNames, ref)
+	}
+	return redeemedMaterial{items: items, refNames: refNames, wipe: lease.Close}, nil
 }
 
 // openSealedDeploy opens the sealed container the dispatcher wrote at enqueue,
