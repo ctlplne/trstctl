@@ -738,7 +738,7 @@ string that bypassed the registry.
 | `dry_run_queued` | connector delivery | A relay-executed dry-run was queued for the agent bound to this target. | That anything is yet known about the target. No relay has reported. |
 | `dry_run_planned` | connector delivery | A relay reached the target, resolved every credential a real deploy needs, and returned the mutation plan. | That anything was deployed. The dry-run path never invokes a connector's `Deploy`, so zero writes is structural, not promised. |
 | `dry_run_blocked` | connector delivery | A relay ran the dry-run and a real deploy would **not** proceed. The reason names the step that stopped it. | That the target is broken in every respect — one step failed, and the plan says which. |
-| `rollback_recorded` | connector delivery | `POST /api/v1/connectors/targets/{id}/rollback` recorded an operator-attested rollback intent as durable evidence. | That a rollback executed. The predecessor credential is **not** restored on the target; the `rollback_ref` names the outstanding manual action. |
+| `rollback_recorded` | connector delivery | `POST /api/v1/connectors/targets/{id}/rollback` recorded an operator-attested rollback intent as durable evidence, with the `rollback_ref` naming the predecessor by **serial and fingerprint** resolved from the certificate's replacement chain. | That a rollback executed. The predecessor is **not** restored on the target. |
 | `not_evaluated` | fleet re-issuance health gate | No evidence exists from which a verdict could be computed, so trstctl asserts none. | It is **not** a pass. |
 | `passed` / `failed` | fleet re-issuance health gate | An operator attested this verdict on the request. | That trstctl computed it. trstctl never fills in `passed` itself. |
 | `planned` | fleet re-issuance batch | A partition of the affected identity set. | That the run executes batch by batch. It issues every replacement in one pass. |
@@ -763,9 +763,19 @@ right up until the deploy that mattered. Without a relay enabled the route keeps
 the honest local answer, `config_validated`, rather than queueing work nothing
 will claim.
 
-Restoring a predecessor is still not served: it needs an on-host predecessor
-bundle and an executed restore transcript, which is why `rollback_recorded`
-remains an attested intent.
+Restoring a predecessor is still not served, and the reason is worth stating
+because it constrains the design rather than merely postponing it. A rollback
+cannot be a re-upload: after CSR-first issuance (B1) the control plane never
+holds the subject key, so it has nothing to push back. The executable form is a
+re-**bind** — pointing the target at the predecessor object that is still
+installed on it — which needs a rollback operation on the connector interface
+that does not exist yet. What did improve is the instruction: the `rollback_ref`
+now resolves the certificate's replacement chain and names the predecessor by
+serial and fingerprint, so the manual restore it still requires is a task an
+operator can actually perform. On a target renewed several times, "restore the
+previous credential" was a question, not an instruction. Where no predecessor
+exists — a first deployment — it says that instead, rather than sending someone
+looking for a credential that was never there.
 
 - Remaining private CA hierarchy operator flows beyond root/intermediate/leaf
   issuance. Root/intermediate CA creation, existing signer-backed CA chain

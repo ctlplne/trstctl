@@ -451,15 +451,27 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		// Nothing is restored here. This records the operator's rollback intent in
 		// the evidence chain; the predecessor credential is not put back on the
-		// target and the target is not contacted — truth-integrity 4. The
-		// RollbackRef states the outstanding action rather than describing it as
-		// done. Epic D4 makes this a connector.rollback job the bound agent
-		// executes from its local predecessor bundle, with a restore transcript.
+		// target and the target is not contacted — truth-integrity 4.
+		//
+		// What the ref names is now SPECIFIC (D4, partial). It used to say
+		// "pending manual restore of the previous credential", which told an
+		// operator nothing they could act on: on a target that has been renewed
+		// several times, "the previous credential" is a question, not an
+		// instruction. The predecessor is resolved from the certificate's own
+		// replacement chain and named by serial and fingerprint, so the manual
+		// restore this still requires is a task someone can actually perform.
+		//
+		// Executing it is the remaining half. It cannot be a re-upload: after
+		// B1 the control plane never holds the subject key, so it has nothing to
+		// push. The executable form is a re-BIND — pointing the target back at
+		// the predecessor object that is still installed on it — which needs a
+		// rollback operation on the connector interface that does not exist yet.
+		rollbackRef := predecessorRollbackRef(ctx, a.store, tenantID, identityID, target.Name)
 		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 			IdentityID: identityID, Destination: "connector.rollback", Connector: target.Type, Target: target.Name,
 			Fingerprint: fingerprint, Status: servedstatus.ConnectorRollbackRecorded, Attempts: 1, Reason: "rollback_attested_not_executed",
 			Detail:      reason,
-			RollbackRef: "pending manual restore of the previous credential for " + target.Name, IdempotencyKey: idempotencyKey,
+			RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -799,4 +811,43 @@ func replaySafetyLabel(safety connector.ReplaySafety) string {
 		return "reconciled"
 	}
 	return "at-most-once"
+}
+
+// predecessorRollbackRef names the exact credential a manual rollback must
+// restore (epic D4, partial).
+//
+// The previous ref said "pending manual restore of the previous credential",
+// which on a target renewed several times is a question rather than an
+// instruction. This resolves the replacement chain and names the predecessor by
+// serial and fingerprint — the two identifiers an operator can match against
+// what is installed on the appliance.
+//
+// When there is no predecessor it says so plainly. A first deployment has
+// nothing to roll back to, and an operator told to "restore the previous
+// credential" for one would waste their time looking for it.
+func predecessorRollbackRef(ctx context.Context, st *store.Store, tenantID string, identityID *string, targetName string) string {
+	if st == nil || identityID == nil || strings.TrimSpace(*identityID) == "" {
+		return "no predecessor is resolvable: this rollback names no identity, so there is no replacement chain to walk"
+	}
+	identity, err := st.GetIdentity(ctx, tenantID, *identityID)
+	if err != nil {
+		return "no predecessor is resolvable: the identity could not be loaded"
+	}
+	certs, err := st.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, identity.OwnerID, identity.Name)
+	if err != nil || len(certs) == 0 {
+		return "no predecessor is resolvable: no issued certificate history for this identity"
+	}
+	current := certs[len(certs)-1]
+	if current.ReplacesID == nil || strings.TrimSpace(*current.ReplacesID) == "" {
+		return "no predecessor exists: the credential on " + targetName +
+			" is the first issued for this identity, so there is nothing to roll back to"
+	}
+	previous, err := st.GetCertificate(ctx, tenantID, *current.ReplacesID)
+	if err != nil {
+		return "a predecessor is recorded but could not be loaded; the replacement chain names certificate " + *current.ReplacesID
+	}
+	return "pending manual restore on " + targetName + ": rebind to the predecessor certificate serial " +
+		previous.Serial + " (fingerprint " + previous.Fingerprint + "), which replaced-by serial " + current.Serial +
+		". trstctl cannot execute this: after CSR-first issuance the control plane holds no subject key to re-upload, " +
+		"and no connector yet exposes a rebind-only operation"
 }
