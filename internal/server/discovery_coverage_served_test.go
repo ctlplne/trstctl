@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestServedDiscoveryCoverageThreeBuckets proves the coverage surface through
@@ -142,5 +144,119 @@ func TestServedDiscoveryCoverageThreeBuckets(t *testing.T) {
 	}
 	if len(got.Classes) != 1 || got.Classes[0].Class != "ct-exposed-certificate" {
 		t.Fatalf("source_kind filter returned %+v, want exactly ct-exposed-certificate", got.Classes)
+	}
+}
+
+// Coverage measured against a DECLARATION, and the honest zero (epic C3).
+//
+// The property that matters most is the one that reads as unhelpful: an estate
+// with nothing declared must report NO coverage, not full coverage. A system
+// that declares itself complete because nobody told it what it was missing is
+// the exact failure this epic exists to remove — and it is the natural
+// behaviour of any coverage number computed from findings alone, because what
+// was never looked at leaves no trace in what was found.
+func TestServedCoverageMeasuresAgainstDeclaredSegments(t *testing.T) {
+	ctx := context.Background()
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	// Nothing declared: the surface must not claim coverage it cannot support.
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/coverage", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("coverage: status %d body %s", status, body)
+	}
+	var empty struct {
+		SegmentCoveragePercent int `json:"segment_coverage_percent"`
+		Segments               []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"segments"`
+	}
+	if err := json.Unmarshal(body, &empty); err != nil {
+		t.Fatalf("decode coverage: %v", err)
+	}
+	if len(empty.Segments) != 0 {
+		t.Fatalf("coverage invented %d segments nobody declared", len(empty.Segments))
+	}
+	if empty.SegmentCoveragePercent != 0 {
+		t.Errorf("an estate with no declared segments reported %d%% coverage; "+
+			"a system that calls itself complete because nobody told it what it was missing "+
+			"is the defect this epic removes", empty.SegmentCoveragePercent)
+	}
+
+	// Three declarations: one never swept, one swept inside its window, one
+	// deliberately excluded.
+	for _, seg := range []store.DiscoverySegment{
+		{Name: "dmz", Ranges: []string{"10.0.1.0/24"}, StalenessHours: 24},
+		{Name: "core", Ranges: []string{"10.0.2.0/24"}, StalenessHours: 24},
+		{Name: "lab", Ranges: []string{"10.9.0.0/16"}, StalenessHours: 24,
+			Excluded: true, ExclusionReason: "non-production, no customer data"},
+	} {
+		if _, err := h.store.UpsertDiscoverySegment(ctx, h.tenant, seg); err != nil {
+			t.Fatalf("declare %s: %v", seg.Name, err)
+		}
+	}
+	if err := h.store.RecordSegmentSweep(ctx, h.tenant, "core", "relay-1", 12, time.Now().UTC()); err != nil {
+		t.Fatalf("record sweep: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/coverage", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("coverage: status %d body %s", status, body)
+	}
+	var got struct {
+		SegmentCoveragePercent int `json:"segment_coverage_percent"`
+		Segments               []struct {
+			Name            string `json:"name"`
+			Status          string `json:"status"`
+			ExclusionReason string `json:"exclusion_reason"`
+		} `json:"segments"`
+		Unknowns []struct {
+			Kind    string `json:"kind"`
+			Subject string `json:"subject"`
+			Action  string `json:"action"`
+		} `json:"unknowns"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode coverage: %v", err)
+	}
+
+	byName := map[string]string{}
+	for _, seg := range got.Segments {
+		byName[seg.Name] = seg.Status
+	}
+	if byName["core"] != "swept" {
+		t.Errorf("core = %q, want swept", byName["core"])
+	}
+	if byName["dmz"] != "never" {
+		t.Errorf("dmz = %q, want never — a declared segment nothing has swept is the "+
+			"blind spot this whole surface exists to report", byName["dmz"])
+	}
+	if byName["lab"] != "excluded" {
+		t.Errorf("lab = %q, want excluded", byName["lab"])
+	}
+
+	// One of two in-scope segments swept. The excluded one is in NEITHER half:
+	// a coverage number that rose because somebody excluded something would
+	// reward exactly the wrong behaviour.
+	if got.SegmentCoveragePercent != 50 {
+		t.Errorf("coverage = %d%%, want 50%% (core swept, dmz not, lab excluded from both halves)",
+			got.SegmentCoveragePercent)
+	}
+
+	// And the blind spots are NAMED, with what closes each.
+	kinds := map[string]string{}
+	for _, u := range got.Unknowns {
+		kinds[u.Kind+":"+u.Subject] = u.Action
+	}
+	if _, ok := kinds["segment_never_swept:dmz"]; !ok {
+		t.Errorf("the never-swept segment is not in the blind-spot register: %+v", got.Unknowns)
+	}
+	if _, ok := kinds["segment_excluded:lab"]; !ok {
+		t.Errorf("the excluded segment is not in the blind-spot register; a declared exclusion "+
+			"is a blind spot an operator chose, and it still belongs on the list: %+v", got.Unknowns)
+	}
+	if action := kinds["segment_never_swept:dmz"]; action == "" {
+		t.Error("the never-swept blind spot names no action; a gap an operator cannot close is a complaint")
 	}
 }

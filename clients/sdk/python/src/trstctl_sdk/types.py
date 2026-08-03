@@ -2051,7 +2051,11 @@ DiscoveryCoverage = TypedDict(
         'classes': list[dict[str, Any]],
         'generated_at': str,
         'observed': int,
+        'provenance': dict[str, Any],
+        'segment_coverage_percent': int,
+        'segments': list[dict[str, Any]],
         'structurally_unobservable': int,
+        'unknowns': list[dict[str, Any]],
         'unobserved': int,
     },
     total=False,
@@ -2172,6 +2176,18 @@ DiscoveryMonitoringSummary = TypedDict(
     total=False,
 )
 
+DiscoveryProvenanceSummary = TypedDict(
+    'DiscoveryProvenanceSummary',
+    {
+        'never_observed': int,
+        'observed': int,
+        'stale': int,
+        'stale_after_hours': int,
+        'total': int,
+    },
+    total=False,
+)
+
 DiscoveryRun = TypedDict(
     'DiscoveryRun',
     {
@@ -2248,6 +2264,21 @@ DiscoveryScheduleRequest = TypedDict(
     total=False,
 )
 
+DiscoverySegmentCoverage = TypedDict(
+    'DiscoverySegmentCoverage',
+    {
+        'exclusion_reason': str,
+        'last_found_count': int,
+        'last_swept_at': str,
+        'last_swept_by': str,
+        'name': str,
+        'ranges': list[str],
+        'staleness_hours': int,
+        'status': str,
+    },
+    total=False,
+)
+
 DiscoverySource = TypedDict(
     'DiscoverySource',
     {
@@ -2277,6 +2308,17 @@ DiscoverySourceRequest = TypedDict(
         'config': dict[str, Any],
         'kind': str,
         'name': str,
+    },
+    total=False,
+)
+
+DiscoveryUnknown = TypedDict(
+    'DiscoveryUnknown',
+    {
+        'action': str,
+        'detail': str,
+        'kind': str,
+        'subject': str,
     },
     total=False,
 )

@@ -84,6 +84,9 @@ var TenantScopedTables = []string{
 	// material, but they name the tenant's agents and the work they did, which
 	// is tenant history and must leave with the tenant.
 	"agent_job_receipts",
+	// C3: declared segments. An operator's own description of the networks
+	// they own is tenant data and leaves with the tenant.
+	"discovery_segments",
 	// F1: AD CS template posture is a tenant's own directory observation and
 	// leaves with the tenant.
 	"adcs_template_posture",

@@ -5509,8 +5509,26 @@
           "observed": {
             "type": "integer"
           },
+          "provenance": {
+            "$ref": "#/components/schemas/DiscoveryProvenanceSummary"
+          },
+          "segment_coverage_percent": {
+            "type": "integer"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverySegmentCoverage"
+            },
+            "type": "array"
+          },
           "structurally_unobservable": {
             "type": "integer"
+          },
+          "unknowns": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryUnknown"
+            },
+            "type": "array"
           },
           "unobserved": {
             "type": "integer"
@@ -5521,7 +5539,11 @@
           "observed",
           "unobserved",
           "structurally_unobservable",
-          "classes"
+          "classes",
+          "segments",
+          "segment_coverage_percent",
+          "provenance",
+          "unknowns"
         ],
         "type": "object"
       },
@@ -5869,6 +5891,33 @@
         ],
         "type": "object"
       },
+      "DiscoveryProvenanceSummary": {
+        "properties": {
+          "never_observed": {
+            "type": "integer"
+          },
+          "observed": {
+            "type": "integer"
+          },
+          "stale": {
+            "type": "integer"
+          },
+          "stale_after_hours": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "observed",
+          "stale",
+          "never_observed",
+          "stale_after_hours"
+        ],
+        "type": "object"
+      },
       "DiscoveryRun": {
         "properties": {
           "completed_at": {
@@ -6063,6 +6112,51 @@
         ],
         "type": "object"
       },
+      "DiscoverySegmentCoverage": {
+        "properties": {
+          "exclusion_reason": {
+            "type": "string"
+          },
+          "last_found_count": {
+            "type": "integer"
+          },
+          "last_swept_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_swept_by": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ranges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "staleness_hours": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "swept",
+              "stale",
+              "never",
+              "excluded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "ranges",
+          "status",
+          "staleness_hours"
+        ],
+        "type": "object"
+      },
       "DiscoverySource": {
         "properties": {
           "config": {
@@ -6170,6 +6264,36 @@
         "required": [
           "kind",
           "name"
+        ],
+        "type": "object"
+      },
+      "DiscoveryUnknown": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "segment_never_swept",
+              "segment_stale",
+              "segment_excluded",
+              "segment_read_failed",
+              "class_unobservable",
+              "inventory_unobserved"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "subject",
+          "detail"
         ],
         "type": "object"
       },

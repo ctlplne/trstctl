@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -207,6 +208,65 @@ type DiscoveryCoverageResponse struct {
 	Unobserved               int                      `json:"unobserved"`
 	StructurallyUnobservable int                      `json:"structurally_unobservable"`
 	Classes                  []DiscoveryCoverageClass `json:"classes"`
+	// Segments is coverage measured against what an operator DECLARED they own
+	// (epic C3), rather than against what discovery happened to find. It is the
+	// only way to report a network nobody has looked at: an inventory built
+	// from findings can describe what it found and nothing else.
+	Segments []DiscoverySegmentCoverage `json:"segments"`
+	// SegmentCoveragePercent is the share of declared, non-excluded segments
+	// swept within their own staleness SLO. Excluded segments are left out of
+	// both halves rather than counted as covered — an operator who declares a
+	// lab out of scope has not thereby observed it.
+	SegmentCoveragePercent int `json:"segment_coverage_percent"`
+	// Provenance is how much of the certificate inventory has an observation
+	// behind it. It is what stops a certificate count reading as an inventory.
+	Provenance DiscoveryProvenanceSummary `json:"provenance"`
+	// Unknowns is the register of things this deployment cannot see and knows
+	// it cannot. Naming them is the entire point of the epic: a coverage number
+	// with no denominator is a reassurance, not a measurement.
+	Unknowns []DiscoveryUnknown `json:"unknowns"`
+}
+
+// DiscoverySegmentCoverage is one declared segment's observation state.
+type DiscoverySegmentCoverage struct {
+	Name   string   `json:"name"`
+	Ranges []string `json:"ranges"`
+	// Status is one of: swept (within SLO), stale (swept, but longer ago than
+	// this segment's own SLO), never (declared and never swept), excluded
+	// (declared out of scope, with a reason).
+	Status          string     `json:"status"`
+	StalenessHours  int        `json:"staleness_hours"`
+	LastSweptAt     *time.Time `json:"last_swept_at,omitempty"`
+	LastSweptBy     string     `json:"last_swept_by,omitempty"`
+	LastFoundCount  int        `json:"last_found_count,omitempty"`
+	ExclusionReason string     `json:"exclusion_reason,omitempty"`
+}
+
+// DiscoveryProvenanceSummary counts inventory rows by observation freshness.
+type DiscoveryProvenanceSummary struct {
+	Total    int `json:"total"`
+	Observed int `json:"observed"`
+	Stale    int `json:"stale"`
+	// NeverObserved rows have no observation at all — typically certificates
+	// this control plane issued that nothing has since scanned. Legitimate, and
+	// not verified inventory: the row is evidence of an issuance, not of a
+	// deployment.
+	NeverObserved int `json:"never_observed"`
+	// StaleAfterHours is the window this summary was computed against, so the
+	// numbers are interpretable without guessing.
+	StaleAfterHours int `json:"stale_after_hours"`
+}
+
+// DiscoveryUnknown is one named blind spot.
+type DiscoveryUnknown struct {
+	// Kind distinguishes the reasons, because they need different responses:
+	// segment_never_swept, segment_stale, segment_excluded, class_unobservable,
+	// inventory_unobserved.
+	Kind    string `json:"kind"`
+	Subject string `json:"subject"`
+	Detail  string `json:"detail"`
+	// Action names what closes the gap, or says plainly that nothing does.
+	Action string `json:"action,omitempty"`
 }
 
 // DiscoveryCoverageClass is one asset class's computed coverage bucket.
@@ -262,9 +322,114 @@ func (a *API) getDiscoveryCoverage(w http.ResponseWriter, r *http.Request) {
 			out.Unobserved++
 		case coverage.StatusStructural:
 			out.StructurallyUnobservable++
+			// A class no configured source can ever see is a permanent blind
+			// spot, and belongs in the register beside the temporary ones.
+			out.Unknowns = append(out.Unknowns, DiscoveryUnknown{
+				Kind: "class_unobservable", Subject: string(c.Class),
+				Detail: c.Reason, Action: c.Action,
+			})
 		}
 	}
+	a.appendSegmentCoverage(r.Context(), tenantID, &out)
+	a.appendProvenance(r.Context(), tenantID, &out)
+	if out.Segments == nil {
+		out.Segments = []DiscoverySegmentCoverage{}
+	}
+	if out.Unknowns == nil {
+		out.Unknowns = []DiscoveryUnknown{}
+	}
 	a.writeJSON(w, http.StatusOK, out)
+}
+
+// appendSegmentCoverage measures declared segments against reality.
+//
+// Excluded segments are removed from BOTH halves of the percentage rather than
+// counted as covered. An operator who declares a lab out of scope has not
+// observed it, and a coverage number that rose when somebody excluded something
+// would reward exactly the wrong behaviour.
+func (a *API) appendSegmentCoverage(ctx context.Context, tenantID string, out *DiscoveryCoverageResponse) {
+	segments, err := a.store.ListDiscoverySegments(ctx, tenantID)
+	if err != nil {
+		// A coverage surface that fails closed to "no segments" would report
+		// 100% for an estate it could not read. Leave the percentage at its
+		// zero value and say why in the register instead.
+		out.Unknowns = append(out.Unknowns, DiscoveryUnknown{
+			Kind: "segment_read_failed", Subject: "declared segments",
+			Detail: "the declared segments could not be read, so segment coverage is not computed",
+			Action: "retry; if it persists this is a control-plane fault, not an estate gap",
+		})
+		return
+	}
+	now := time.Now().UTC()
+	inScope, covered := 0, 0
+	for _, seg := range segments {
+		row := DiscoverySegmentCoverage{
+			Name: seg.Name, Ranges: seg.Ranges, StalenessHours: seg.StalenessHours,
+			LastSweptAt: seg.LastSweptAt, LastSweptBy: seg.LastSweptBy,
+			LastFoundCount: seg.LastFoundCount, ExclusionReason: seg.ExclusionReason,
+		}
+		if row.Ranges == nil {
+			row.Ranges = []string{}
+		}
+		switch {
+		case seg.Excluded:
+			row.Status = "excluded"
+			out.Unknowns = append(out.Unknowns, DiscoveryUnknown{
+				Kind: "segment_excluded", Subject: seg.Name,
+				Detail: "declared out of scope: " + seg.ExclusionReason,
+				Action: "remove the exclusion to bring this segment into coverage",
+			})
+		case seg.LastSweptAt == nil:
+			inScope++
+			row.Status = "never"
+			out.Unknowns = append(out.Unknowns, DiscoveryUnknown{
+				Kind: "segment_never_swept", Subject: seg.Name,
+				Detail: "declared, and nothing has ever swept it",
+				Action: "enrol a network-role agent that can reach it and run a discovery sweep",
+			})
+		case now.Sub(*seg.LastSweptAt) > time.Duration(seg.StalenessHours)*time.Hour:
+			inScope++
+			row.Status = "stale"
+			out.Unknowns = append(out.Unknowns, DiscoveryUnknown{
+				Kind: "segment_stale", Subject: seg.Name,
+				Detail: "last swept outside this segment's own " +
+					strconv.Itoa(seg.StalenessHours) + "h staleness window",
+				Action: "run a discovery sweep, or widen the window if it is wrong",
+			})
+		default:
+			inScope++
+			covered++
+			row.Status = "swept"
+		}
+		out.Segments = append(out.Segments, row)
+	}
+	if inScope > 0 {
+		out.SegmentCoveragePercent = covered * 100 / inScope
+	}
+}
+
+// appendProvenance summarizes how much of the inventory has an observation
+// behind it.
+func (a *API) appendProvenance(ctx context.Context, tenantID string, out *DiscoveryCoverageResponse) {
+	const staleAfterHours = 168
+	counts, err := a.store.CertificateProvenance(ctx, tenantID,
+		time.Now().UTC().Add(-staleAfterHours*time.Hour))
+	if err != nil {
+		return
+	}
+	out.Provenance = DiscoveryProvenanceSummary{
+		Total: counts.Total, Observed: counts.Observed, Stale: counts.Stale,
+		NeverObserved: counts.NeverObserved, StaleAfterHours: staleAfterHours,
+	}
+	if counts.NeverObserved > 0 {
+		out.Unknowns = append(out.Unknowns, DiscoveryUnknown{
+			Kind: "inventory_unobserved", Subject: "certificate inventory",
+			Detail: strconv.Itoa(counts.NeverObserved) + " of " + strconv.Itoa(counts.Total) +
+				" certificates have no observation behind them — they are evidence of an " +
+				"issuance, not of a deployment",
+			Action: "run discovery over the networks those certificates should be deployed on",
+		})
+	}
 }
 
 func sourceKindsContain(xs []string, want string) bool {

@@ -389,8 +389,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "aee3c97100e3ef5106f7fb358fe1b47e7ffbf05ba8ee5ab968f70c0633b73dc7",
-      "de-DE": "5871a1ba16992e65acb4ad4d5ec07e9a11bbe446c5df5c7fecac497a1dc85ba2",
+      "es-ES": "bd84ad5c1ba5bb620ce61da4bf1954e041777d117646f09ca91e326f15853388",
+      "de-DE": "9fca96232243704b878a4a30f0fb5fe5f6a895e9b037f9625ffb282a3dd2fe72",
     });
   });
 

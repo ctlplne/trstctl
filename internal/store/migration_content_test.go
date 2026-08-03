@@ -25,6 +25,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	108: true,
 	62:  true,
 	72:  true,
 	75:  true,
@@ -426,6 +427,68 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	// the issuing code did, and nobody observed the issuance of a row that
 	// predates the column. Unrecorded is the only honest value, and the console
 	// renders it as unknown rather than as reassurance.
+	// 0108 adds declared segments and per-certificate provenance (epic C3). The
+	// property that matters is the same one 0106 protects, for a sharper
+	// reason: provenance is a claim that something OBSERVED a certificate, and
+	// a migration cannot observe anything. Every pre-existing row must come out
+	// with no observation at all, because none was made — a default that
+	// stamped "seen now" on the whole inventory would turn a migration into
+	// evidence of a scan that never ran.
+	t.Run("0108_discovery_segments_and_provenance", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 108)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedMigrationContent(t, ctx, pool, tenantA)
+		seedMigrationContent(t, ctx, pool, tenantB)
+
+		const projection = `
+			SELECT tenant_id::text, subject, fingerprint
+			  FROM certificates
+			 ORDER BY tenant_id, fingerprint`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, projection)
+		if beforeCount == 0 {
+			t.Fatal("precondition: the content case needs seeded certificates to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, projection)
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0108 disturbed existing certificates: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var observed int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM certificates
+			  WHERE observed_by <> '' OR observed_kind <> '' OR last_seen_at IS NOT NULL`).
+			Scan(&observed); err != nil {
+			t.Fatalf("read post-0108 provenance: %v", err)
+		}
+		if observed != 0 {
+			t.Errorf("%d pre-existing certificates came out claiming an observation nobody made; "+
+				"a migration cannot observe a certificate, and stamping one would make a stale "+
+				"inventory read as freshly verified", observed)
+		}
+
+		// And the segment table starts empty: coverage must open at "nothing
+		// declared", not at a fabricated segment nobody owns.
+		var segments int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM discovery_segments`).Scan(&segments); err != nil {
+			t.Fatalf("read post-0108 segments: %v", err)
+		}
+		if segments != 0 {
+			t.Errorf("0108 invented %d declared segments", segments)
+		}
+	})
+
 	t.Run("0106_certificate_key_custody", func(t *testing.T) {
 		ctx := context.Background()
 		prefix, target := splitMigrationsAtVersion(t, 106)

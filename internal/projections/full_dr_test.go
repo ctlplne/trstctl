@@ -482,6 +482,10 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			// projector rebuilds it — so a restore that lost it would lose the
 			// record of what agents reported and what was refused.
 			{`INSERT INTO agent_job_receipts (tenant_id, job_id, attempt, agent, kind, outcome, state, reason, signer_fingerprint, statement, signature, observed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{tenantA, int64(4242), 1, "edge-relay-1", "connector.deploy", "executed", "verified", "", "full-dr-signer-fp", "full-dr-statement", "ZnVsbC1kci1zaWduYXR1cmU=", now}},
+			// C3: declared segments. Operator declarations that no replay
+			// rebuilds — a restore that lost them would silently discard real
+			// operator work and make an estate look unmeasured.
+			{`INSERT INTO discovery_segments (tenant_id, id, name, ranges, staleness_hours, excluded, exclusion_reason, last_swept_at, last_swept_by, last_found_count) VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)`, []any{tenantA, "00000000-0000-0000-0000-00000000a00d", "full-dr-dmz", []string{"10.0.1.0/24"}, 24, false, "", now, "full-dr-relay", 7}},
 			{`INSERT INTO attestations (id, tenant_id, kind, evidence, verified_at) VALUES ($1, $2, $3, $4::jsonb, $5)`, []any{"00000000-0000-0000-0000-00000000a003", tenantA, "oidc", `{"issuer":"ci"}`, now}},
 			{`INSERT INTO audit_checkpoints (tenant_id, boundary_seq, boundary_hash, record_count, archive_uri) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, int64(10), "full-dr-boundary", int64(3), "s3://archive/full-dr"}},
 			{`INSERT INTO ca_authorities (id, tenant_id, common_name, kind, status, certificate_pem, serial, not_after, max_path_len, permitted_dns_names, ekus) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, []any{caID, tenantA, "Full DR Root", "root", "active", "-----BEGIN CERTIFICATE-----\nFULLDR\n-----END CERTIFICATE-----", "ca-01", now.Add(365 * 24 * time.Hour), 1, []string{"example.com"}, []string{"serverAuth"}}},

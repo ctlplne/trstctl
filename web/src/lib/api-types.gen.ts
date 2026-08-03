@@ -1431,7 +1431,11 @@ export interface DiscoveryCoverage {
   classes: DiscoveryCoverageClass[];
   generated_at: string;
   observed: number;
+  provenance: DiscoveryProvenanceSummary;
+  segment_coverage_percent: number;
+  segments: DiscoverySegmentCoverage[];
   structurally_unobservable: number;
+  unknowns: DiscoveryUnknown[];
   unobserved: number;
 }
 
@@ -1522,6 +1526,14 @@ export interface DiscoveryMonitoringSummary {
   source_count: number;
 }
 
+export interface DiscoveryProvenanceSummary {
+  never_observed: number;
+  observed: number;
+  stale: number;
+  stale_after_hours: number;
+  total: number;
+}
+
 export interface DiscoveryRun {
   completed_at?: string;
   created_at: string;
@@ -1574,6 +1586,17 @@ export interface DiscoveryScheduleRequest {
   source_id: string;
 }
 
+export interface DiscoverySegmentCoverage {
+  exclusion_reason?: string;
+  last_found_count?: number;
+  last_swept_at?: string;
+  last_swept_by?: string;
+  name: string;
+  ranges: string[];
+  staleness_hours: number;
+  status: "swept" | "stale" | "never" | "excluded";
+}
+
 export interface DiscoverySource {
   config: Record<string, unknown>;
   created_at: string;
@@ -1593,6 +1616,13 @@ export interface DiscoverySourceRequest {
   config?: Record<string, unknown>;
   kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
   name: string;
+}
+
+export interface DiscoveryUnknown {
+  action?: string;
+  detail: string;
+  kind: "segment_never_swept" | "segment_stale" | "segment_excluded" | "segment_read_failed" | "class_unobservable" | "inventory_unobserved";
+  subject: string;
 }
 
 export interface DriftRemediation {

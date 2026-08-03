@@ -550,7 +550,7 @@ function discoveryTabFromSearchParam(value: string | null): DiscoveryTab {
 }
 
 export function Discovery() {
-  const { t } = useTranslation();
+  const { formatDateTime, t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<DiscoveryTab>(() => discoveryTabFromSearchParam(searchParams.get("tab")));
   const [pendingFocus, setPendingFocus] = useState<"source" | "schedule" | null>(null);
@@ -957,6 +957,87 @@ export function Discovery() {
                     structural: coverageReport.structurally_unobservable,
                   })}
                 </p>
+
+                {/* C3: the headline is the honest number, not a total count.
+                    A certificate count answers "how many did we find"; an
+                    operator being audited is asked "how much did you look at",
+                    and those are different questions with different answers. */}
+                <dl className="grid gap-2 rounded-md border border-border p-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <dt className="text-caption text-muted-foreground">{t("discovery.coverage.segmentPercent")}</dt>
+                    <dd
+                      className={
+                        coverageReport.segment_coverage_percent >= 100
+                          ? "font-medium"
+                          : "font-medium text-status-warning"
+                      }
+                    >
+                      {(coverageReport.segments ?? []).length === 0
+                        ? t("discovery.coverage.noSegments")
+                        : t("discovery.coverage.percentValue", { percent: coverageReport.segment_coverage_percent })}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-muted-foreground">{t("discovery.coverage.provenance")}</dt>
+                    <dd className={coverageReport.provenance?.never_observed ? "font-medium text-status-warning" : "font-medium"}>
+                      {t("discovery.coverage.provenanceValue", {
+                        observed: coverageReport.provenance?.observed ?? 0,
+                        total: coverageReport.provenance?.total ?? 0,
+                      })}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-muted-foreground">{t("discovery.coverage.unknowns")}</dt>
+                    <dd className={(coverageReport.unknowns ?? []).length ? "font-medium text-status-warning" : "font-medium"}>
+                      {(coverageReport.unknowns ?? []).length}
+                    </dd>
+                  </div>
+                  <p className="text-caption text-muted-foreground sm:col-span-3">{t("discovery.coverage.help")}</p>
+                </dl>
+
+                {(coverageReport.segments ?? []).length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="ui-table min-w-[48rem]">
+                      <caption className="sr-only">{t("discovery.coverage.segmentsCaption")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("discovery.coverage.segment")}</th>
+                          <th scope="col">{t("discovery.coverage.status")}</th>
+                          <th scope="col">{t("discovery.coverage.lastSwept")}</th>
+                          <th scope="col">{t("discovery.coverage.detail")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(coverageReport.segments ?? []).map((seg) => (
+                          <tr key={seg.name}>
+                            <td className="font-mono text-xs">{seg.name}</td>
+                            <td className={seg.status === "swept" ? undefined : "text-status-warning"}>{seg.status}</td>
+                            <td className="text-sm">
+                              {seg.last_swept_at ? formatDateTime(seg.last_swept_at) : t("discovery.coverage.never")}
+                            </td>
+                            <td className="max-w-[28rem] text-sm text-muted-foreground">
+                              {seg.status === "excluded" ? seg.exclusion_reason : (seg.ranges ?? []).join(", ")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {(coverageReport.unknowns ?? []).length > 0 && (
+                  <div className="rounded-md border border-status-warning/40 p-3">
+                    <p className="text-sm font-medium">{t("discovery.coverage.unknownsHeading")}</p>
+                    <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                      {(coverageReport.unknowns ?? []).map((u, i) => (
+                        <li key={`${u.kind}-${u.subject}-${i}`}>
+                          <span className="font-mono text-xs">{u.subject}</span> — {u.detail}
+                          {u.action ? <span className="block text-xs">{u.action}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="ui-table min-w-[54rem]">
                     <caption className="sr-only">{t("discovery.coverage.caption")}</caption>

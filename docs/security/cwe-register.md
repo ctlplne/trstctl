@@ -1239,8 +1239,8 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/ca/letsencrypt/acmefake/acmefake.go:108` | test-support package compiled only into test binaries (CWE-79) |
-| `internal/ca/letsencrypt/acmefake/acmefake.go:131` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:134` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:157` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/connector/fortigate/fortigate_test.go:127` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/operator/reconcile_test.go:217` | test writes fixture bytes to its own recorder/local server (CWE-79) |

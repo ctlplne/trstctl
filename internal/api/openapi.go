@@ -1408,13 +1408,46 @@ func componentSchemas() map[string]*Schema {
 		"reason":           str(),
 		"action":           str(),
 	}, "class", "status")
+	// C3: coverage measured against DECLARED segments, plus inventory
+	// provenance and the register of named blind spots.
+	discoverySegmentCoverage := object(map[string]*Schema{
+		"name":             str(),
+		"ranges":           {Type: "array", Items: str()},
+		"status":           {Type: "string", Enum: []string{"swept", "stale", "never", "excluded"}},
+		"staleness_hours":  {Type: "integer"},
+		"last_swept_at":    timestamp(),
+		"last_swept_by":    str(),
+		"last_found_count": {Type: "integer"},
+		"exclusion_reason": str(),
+	}, "name", "ranges", "status", "staleness_hours")
+	discoveryProvenanceSummary := object(map[string]*Schema{
+		"total":             {Type: "integer"},
+		"observed":          {Type: "integer"},
+		"stale":             {Type: "integer"},
+		"never_observed":    {Type: "integer"},
+		"stale_after_hours": {Type: "integer"},
+	}, "total", "observed", "stale", "never_observed", "stale_after_hours")
+	discoveryUnknown := object(map[string]*Schema{
+		"kind": {Type: "string", Enum: []string{
+			"segment_never_swept", "segment_stale", "segment_excluded",
+			"segment_read_failed", "class_unobservable", "inventory_unobserved",
+		}},
+		"subject": str(),
+		"detail":  str(),
+		"action":  str(),
+	}, "kind", "subject", "detail")
 	discoveryCoverage := object(map[string]*Schema{
 		"generated_at":              timestamp(),
 		"observed":                  {Type: "integer"},
 		"unobserved":                {Type: "integer"},
 		"structurally_unobservable": {Type: "integer"},
 		"classes":                   {Type: "array", Items: ref("DiscoveryCoverageClass")},
-	}, "generated_at", "observed", "unobserved", "structurally_unobservable", "classes")
+		"segments":                  {Type: "array", Items: ref("DiscoverySegmentCoverage")},
+		"segment_coverage_percent":  {Type: "integer"},
+		"provenance":                ref("DiscoveryProvenanceSummary"),
+		"unknowns":                  {Type: "array", Items: ref("DiscoveryUnknown")},
+	}, "generated_at", "observed", "unobserved", "structurally_unobservable", "classes",
+		"segments", "segment_coverage_percent", "provenance", "unknowns")
 	ctMonitoringReq := object(map[string]*Schema{
 		"source_id":              uuid(),
 		"name":                   str(),
@@ -3840,6 +3873,9 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoringSource":                discoveryMonitoringSource,
 		"DiscoveryMonitoring":                      discoveryMonitoring,
 		"DiscoveryCoverage":                        discoveryCoverage,
+		"DiscoverySegmentCoverage":                 discoverySegmentCoverage,
+		"DiscoveryProvenanceSummary":               discoveryProvenanceSummary,
+		"DiscoveryUnknown":                         discoveryUnknown,
 		"DiscoveryCoverageClass":                   discoveryCoverageClass,
 		"CTMonitoringRequest":                      ctMonitoringReq,
 		"CTMonitoringLog":                          ctMonitoringLog,

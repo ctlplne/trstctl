@@ -5841,7 +5841,11 @@ export interface components {
             /** Format: date-time */
             generated_at: string;
             observed: number;
+            provenance: components["schemas"]["DiscoveryProvenanceSummary"];
+            segment_coverage_percent: number;
+            segments: components["schemas"]["DiscoverySegmentCoverage"][];
             structurally_unobservable: number;
+            unknowns: components["schemas"]["DiscoveryUnknown"][];
             unobserved: number;
         };
         DiscoveryCoverageClass: {
@@ -5939,6 +5943,13 @@ export interface components {
             scheduled_source_count: number;
             source_count: number;
         };
+        DiscoveryProvenanceSummary: {
+            never_observed: number;
+            observed: number;
+            stale: number;
+            stale_after_hours: number;
+            total: number;
+        };
         DiscoveryRun: {
             /** Format: date-time */
             completed_at?: string;
@@ -6001,6 +6012,18 @@ export interface components {
             /** Format: uuid */
             source_id: string;
         };
+        DiscoverySegmentCoverage: {
+            exclusion_reason?: string;
+            last_found_count?: number;
+            /** Format: date-time */
+            last_swept_at?: string;
+            last_swept_by?: string;
+            name: string;
+            ranges: string[];
+            staleness_hours: number;
+            /** @enum {string} */
+            status: "swept" | "stale" | "never" | "excluded";
+        };
         DiscoverySource: {
             config: Record<string, never>;
             /** Format: date-time */
@@ -6024,6 +6047,13 @@ export interface components {
             /** @enum {string} */
             kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
             name: string;
+        };
+        DiscoveryUnknown: {
+            action?: string;
+            detail: string;
+            /** @enum {string} */
+            kind: "segment_never_swept" | "segment_stale" | "segment_excluded" | "segment_read_failed" | "class_unobservable" | "inventory_unobserved";
+            subject: string;
         };
         DriftRemediation: {
             capability: string;

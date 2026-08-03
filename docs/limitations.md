@@ -41,6 +41,7 @@ receipt cannot certify it.
 | F35 | Secret store discovery | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
 | F36 | API key / token inventory | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
 | F17 | Certificate Transparency monitoring | docs/features/observability-and-risk.md |
+| Discovery coverage & provenance | Served: coverage is measured against **operator-declared segments** rather than against what discovery happened to find, with a per-segment staleness SLO, declared exclusions carrying their reason, and a named blind-spot register. Every certificate carries provenance — which source last observed it, of what kind, and when — distinct from when trstctl first recorded it. Headlined on the Discovery console. **Nothing is rollable into coverage until an operator declares a segment**: an inventory built from findings can describe what it found and nothing else, so an estate with no declarations reports no coverage rather than 100% | [Coverage, provenance and blind spots](#coverage-provenance-and-blind-spots) |
 | F18 | Drift detection | docs/features/observability-and-risk.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
 | F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
@@ -2406,6 +2407,48 @@ automated renewal produces a correct inventory row and a certificate no endpoint
 can serve with. [Key custody](custody.md) states this in full. Host-executed
 renewal is what fixes it, and until it lands the count of successors reading
 `control_plane` is the honest measure of the gap.
+
+## Coverage, provenance and blind spots
+
+A certificate count is not an inventory, and the difference is the whole of this
+section. "We found 4,312 certificates" answers how many discovery happened to
+turn up. An auditor asks a different question — how much of the estate did you
+look at, and when — and a system built only from findings cannot answer it,
+because what it never looked at leaves no trace in what it found.
+
+**Coverage is measured against a declaration.** An operator names the segments
+they own, with the ranges, an exclusion flag and reason where a segment is
+deliberately out of scope, and a staleness window that is theirs to set — a DMZ
+and a lab do not deserve the same answer. Coverage is then the share of
+declared, non-excluded segments swept inside their own window. Excluded segments
+are removed from **both** halves rather than counted as covered; a number that
+rose when somebody excluded something would reward exactly the wrong behaviour.
+
+The consequence is worth stating plainly: **an estate with nothing declared
+reports no coverage, not full coverage.** That reads as unhelpful on day one and
+is the only defensible answer — the alternative is a system that declares itself
+complete because nobody told it what it was missing.
+
+**Every certificate carries provenance.** Which source last observed it, of what
+kind, and when. `last_seen_at` is deliberately distinct from `created_at`: the
+first says something confirmed the certificate still exists, the second only
+says trstctl once recorded it. Conflating them makes a stale inventory look
+freshly verified. A certificate this control plane issued that nothing has since
+scanned has **no observation at all**, and is reported that way — it is evidence
+of an issuance, not of a deployment.
+
+**The blind spots are named, not implied.** The register lists segments never
+swept, segments outside their own staleness window, segments declared out of
+scope with the reason, asset classes no configured source can ever see, and the
+count of inventory rows with no observation behind them. Each carries the action
+that closes it, or says plainly that nothing does.
+
+What this does not do: it does not verify that a certificate found at an address
+is the certificate that address serves to a real client — that is verification,
+and it is a separate claim. It does not detect a segment an operator forgot to
+declare; nothing can, which is why the declaration is the operator's
+responsibility and why the console says how many segments exist rather than
+implying the list is complete.
 
 ## Kubernetes deployment
 

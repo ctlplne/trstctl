@@ -4,6 +4,7 @@ package cloudcert
 
 import (
 	"context"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/store"
@@ -27,6 +28,7 @@ func NewStoreSink(s *store.Store, tenantID string) *StoreSink {
 
 // Record upserts the discovered certificate into the inventory.
 func (ss *StoreSink) Record(ctx context.Context, f Found) error {
+	observedAt := time.Now().UTC()
 	info := f.Cert
 	notBefore, notAfter := info.NotBefore, info.NotAfter
 	location := f.ResourceID
@@ -45,6 +47,14 @@ func (ss *StoreSink) Record(ctx context.Context, f Found) error {
 		NotAfter:           &notAfter,
 		DeploymentLocation: location,
 		Source:             "cloud-" + f.Provider,
+		// C3: provenance. This scan is the thing that just confirmed the
+		// certificate exists, so it records WHICH source saw it and WHEN —
+		// separately from created_at, which only says when trstctl first heard
+		// of it. Without this a four-month-old cloud finding and this morning's
+		// look identical in the inventory.
+		ObservedBy:   "cloud-" + f.Provider,
+		ObservedKind: "cloud",
+		LastSeenAt:   &observedAt,
 	})
 	return err
 }

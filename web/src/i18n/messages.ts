@@ -1004,6 +1004,55 @@ export const messages = {
     defaultMessage: "Rolled back (re-bound to predecessor)",
     description: "D4: a relay re-bound the target to the predecessor certificate already installed on it.",
   },
+  "discovery.coverage.segmentPercent": {
+    defaultMessage: "Declared segments swept",
+    description: "C3: share of declared, non-excluded network segments swept within their own staleness window.",
+  },
+  "discovery.coverage.percentValue": {
+    defaultMessage: "{percent}%",
+    description: "C3: segment coverage as a percentage.",
+  },
+  "discovery.coverage.noSegments": {
+    defaultMessage: "No segments declared",
+    description: "C3: coverage cannot be measured until an operator declares the networks they own.",
+  },
+  "discovery.coverage.provenance": {
+    defaultMessage: "Inventory with an observation",
+    description: "C3: how many certificates have a recorded last-seen behind them.",
+  },
+  "discovery.coverage.provenanceValue": {
+    defaultMessage: "{observed} of {total}",
+    description: "C3: observed-over-total certificate provenance.",
+  },
+  "discovery.coverage.unknowns": {
+    defaultMessage: "Known blind spots",
+    description: "C3: count of named things this deployment cannot see.",
+  },
+  "discovery.coverage.unknownsHeading": {
+    defaultMessage: "What this deployment cannot see",
+    description: "C3: heading of the register of named blind spots.",
+  },
+  "discovery.coverage.segment": {
+    defaultMessage: "Segment",
+    description: "C3: declared network segment column.",
+  },
+  "discovery.coverage.lastSwept": {
+    defaultMessage: "Last swept",
+    description: "C3: when a segment was last observed.",
+  },
+  "discovery.coverage.never": {
+    defaultMessage: "Never",
+    description: "C3: a declared segment nothing has ever swept.",
+  },
+  "discovery.coverage.segmentsCaption": {
+    defaultMessage: "Declared network segments and their sweep freshness",
+    description: "C3: screen-reader caption for the segment coverage table.",
+  },
+  "discovery.coverage.help": {
+    defaultMessage:
+      "Coverage is measured against the segments you declared, not against what discovery happened to find — an inventory built only from findings can describe what it found and nothing else. Excluded segments are left out of both halves rather than counted as covered. A certificate with no observation behind it is evidence of an issuance, not of a deployment.",
+    description: "C3: explains why the coverage headline is the honest number rather than a total count.",
+  },
   "operations.jobs.receipts.verified": {
     defaultMessage: "Receipts verified",
     description: "A1: signed agent job receipt health on the Operations agent job ledger panel.",

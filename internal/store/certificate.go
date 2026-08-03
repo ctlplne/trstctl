@@ -44,7 +44,18 @@ type Certificate struct {
 	KeyStorage     string
 	KeyExportable  string
 	KeyGeneratedBy string
-	CreatedAt      time.Time
+	// ObservedBy, ObservedKind and LastSeenAt are provenance (epic C3): which
+	// source last confirmed this certificate exists, of what kind, and when.
+	//
+	// LastSeenAt is nil for a certificate nothing has observed — typically one
+	// this control plane issued and no scan has since found. That is a real and
+	// common state, and it must not read as "verified recently": an inventory
+	// row with no observation behind it is evidence of an issuance, not
+	// evidence of a deployment.
+	ObservedBy   string
+	ObservedKind string
+	LastSeenAt   *time.Time
+	CreatedAt    time.Time
 
 	// Lifecycle bookkeeping (S4.5). Status is one of active, superseded,
 	// revoked. ReplacesID links a rotation's successor to the credential it
@@ -143,8 +154,9 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 			         key_algorithm, not_before, not_after, deployment_location, source,
 			         certificate_der, certificate_pem, issuance_response,
 			         issuance_idempotency_key, issuance_request_binding,
-			         key_origin, key_storage, key_exportable, key_generated_by)
-			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+			         key_origin, key_storage, key_exportable, key_generated_by,
+			         observed_by, observed_kind, last_seen_at)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 			 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
 			    SET owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, sans = EXCLUDED.sans,
 			        issuer = EXCLUDED.issuer, serial = EXCLUDED.serial, key_algorithm = EXCLUDED.key_algorithm,
@@ -163,12 +175,22 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 			        key_origin = CASE WHEN EXCLUDED.key_origin <> '' THEN EXCLUDED.key_origin ELSE certificates.key_origin END,
 			        key_storage = CASE WHEN EXCLUDED.key_storage <> '' THEN EXCLUDED.key_storage ELSE certificates.key_storage END,
 			        key_exportable = CASE WHEN EXCLUDED.key_exportable <> '' THEN EXCLUDED.key_exportable ELSE certificates.key_exportable END,
-			        key_generated_by = CASE WHEN EXCLUDED.key_generated_by <> '' THEN EXCLUDED.key_generated_by ELSE certificates.key_generated_by END
+			        key_generated_by = CASE WHEN EXCLUDED.key_generated_by <> '' THEN EXCLUDED.key_generated_by ELSE certificates.key_generated_by END,
+			        -- C3: provenance MOVES FORWARD on re-observation, unlike
+			        -- custody, which is fixed at issuance. A scan finding this
+			        -- certificate again is exactly the event last_seen_at
+			        -- exists to record. An upsert carrying no observation (a
+			        -- re-issue, a status change) leaves the previous one
+			        -- standing rather than blanking it.
+			        observed_by   = CASE WHEN EXCLUDED.observed_by   <> '' THEN EXCLUDED.observed_by   ELSE certificates.observed_by END,
+			        observed_kind = CASE WHEN EXCLUDED.observed_kind <> '' THEN EXCLUDED.observed_kind ELSE certificates.observed_kind END,
+			        last_seen_at  = CASE WHEN EXCLUDED.last_seen_at IS NOT NULL THEN EXCLUDED.last_seen_at ELSE certificates.last_seen_at END
 			 RETURNING id::text, created_at`,
 			c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 			c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source,
 			certDER, certPEM, issuanceResponse, c.IssuanceIdempotencyKey, c.IssuanceRequestBinding,
-			c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy).
+			c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy,
+			c.ObservedBy, c.ObservedKind, c.LastSeenAt).
 			Scan(&c.ID, &c.CreatedAt)
 	})
 	c.SANs = sans
@@ -340,7 +362,8 @@ const certificateColumns = `id::text, tenant_id::text, owner_id::text, subject, 
         fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
         certificate_der, issuance_idempotency_key, created_at,
         status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at,
-        key_origin, key_storage, key_exportable, key_generated_by`
+        key_origin, key_storage, key_exportable, key_generated_by,
+        observed_by, observed_kind, last_seen_at`
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
@@ -349,7 +372,11 @@ func scanCertificate(row pgx.Row, c *Certificate) error {
 		&c.Status, &c.ReplacesID, &c.RevokedAt, &c.RevocationReason, &c.RenewedAt, &c.AlertedAt,
 		// B5: custody, recorded at issuance. Every read goes through here, so
 		// the three SELECTs that share this helper stay in step by construction.
-		&c.KeyOrigin, &c.KeyStorage, &c.KeyExportable, &c.KeyGeneratedBy)
+		&c.KeyOrigin, &c.KeyStorage, &c.KeyExportable, &c.KeyGeneratedBy,
+		// C3: provenance. Which source last confirmed this certificate exists,
+		// and when — distinct from created_at, which only says when trstctl
+		// first recorded it.
+		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt)
 }
 
 // GetCertificate loads a certificate in its tenant context.
