@@ -4785,6 +4785,7 @@ export interface components {
             /** Format: date-time */
             generated_at: string;
             queues: components["schemas"]["AgentJobQueue"][];
+            receipts: components["schemas"]["AgentJobReceipts"];
             redemptions: components["schemas"]["AgentJobRedemptions"];
             served: boolean;
         };
@@ -4794,6 +4795,13 @@ export interface components {
             kind: string;
             oldest_unclaimed_seconds?: number;
             pending: number;
+        };
+        AgentJobReceipts: {
+            /** Format: date-time */
+            last_rejected_at?: string;
+            last_rejected_reason?: string;
+            rejected: number;
+            verified: number;
         };
         AgentJobRedemptions: {
             live: number;

@@ -42,6 +42,16 @@ var RecoveredFromPostgresBackup = []string{
 	// so it is restored from the PostgreSQL dump like the bootstrap tokens it
 	// sits beside, and for the same reason.
 	"agent_job_credential_redemptions",
+	// A1 signed job receipts. The event log carries every receipt — statement,
+	// signature and signer fingerprint travel on agent.job.executed,
+	// agent.job.failed and agent.job.receipt.rejected — so in principle this
+	// could be rebuilt from a replay. There is no projector that does it: the
+	// rows are written by the report handler alongside the event. Classifying
+	// it as a log projection would therefore be a claim about a rebuild that
+	// does not happen, and the first person to find out would be an operator
+	// whose receipt history came back empty after a restore. It is restored
+	// from the PostgreSQL dump, honestly, until a projector exists.
+	"agent_job_receipts",
 	"attestations",
 	// audit_checkpoints is a dual-recovery receiver. The PostgreSQL copy is paired
 	// with the event artifact so full restore can prove hidden tenant prefixes are

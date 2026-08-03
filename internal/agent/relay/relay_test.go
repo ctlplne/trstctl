@@ -40,7 +40,11 @@ type fakeChannel struct {
 }
 
 type report struct {
-	jobID   int64
+	jobID int64
+	// attempt is recorded because the receipt signature commits to it (A1): a
+	// relay reporting the wrong generation would produce a receipt the server
+	// refuses, and the refusal would look like a forgery rather than a bug.
+	attempt int
 	outcome string
 	detail  string
 }
@@ -63,8 +67,8 @@ func (f *fakeChannel) RedeemJobCredential(context.Context, int64, int) (map[stri
 	return out, nil
 }
 
-func (f *fakeChannel) ReportJobResult(_ context.Context, jobID int64, outcome, detail, _ string) (bool, error) {
-	f.reports = append(f.reports, report{jobID: jobID, outcome: outcome, detail: detail})
+func (f *fakeChannel) ReportJobResult(_ context.Context, jobID int64, attempt int, outcome, detail, _ string) (bool, error) {
+	f.reports = append(f.reports, report{jobID: jobID, attempt: attempt, outcome: outcome, detail: detail})
 	return true, nil
 }
 

@@ -4,9 +4,12 @@ package main
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // relayChannel adapts the transport client to the relay runtime's Channel
@@ -14,7 +17,18 @@ import (
 // interface so it can be exercised without a gRPC server, and this binary owns
 // the translation — the same shape channelAdapter uses for the heartbeat and
 // renewal loops.
-type relayChannel struct{ c *transport.AgentClient }
+type relayChannel struct {
+	c *transport.AgentClient
+	// id yields the identity that signs job receipts, read fresh on each report
+	// rather than captured. It is the SAME identity behind the channel
+	// certificate, which is what makes the signature checkable: the server
+	// verifies against the certificate the connection presented, so a receipt
+	// signed by any other key is refused (epic A1). A renewal swaps the
+	// identity mid-flight, which is why this is a function and not a value.
+	id func() *mtls.AgentIdentity
+	// now is injectable so the receipt's issued-at can be exercised.
+	now func() time.Time
+}
 
 func (r relayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leaseSeconds int) ([]relay.Job, error) {
 	resp, err := r.c.ClaimJobs(ctx, &transport.ClaimJobsRequest{
@@ -48,12 +62,30 @@ func (r relayChannel) RedeemJobCredential(ctx context.Context, jobID int64, atte
 	return items, nil
 }
 
-func (r relayChannel) ReportJobResult(ctx context.Context, jobID int64, outcome, detail, evidenceDigest string) (bool, error) {
-	resp, err := r.c.ReportJobResult(ctx, &transport.ReportJobResultRequest{
-		JobID: jobID, Outcome: outcome, Detail: detail, EvidenceDigest: evidenceDigest,
-	})
+func (r relayChannel) ReportJobResult(ctx context.Context, jobID int64, attempt int, outcome, detail, evidenceDigest string) (bool, error) {
+	// The tenant and the name come off the agent's OWN certificate, not off
+	// config: the server rebuilds the signed statement from the certificate it
+	// verified, so anything else would produce a receipt that cannot verify —
+	// and an agent signing for a tenant it was not issued for.
+	id := r.id()
+	if id == nil {
+		return false, errors.New("trstctl-agent: cannot sign a job receipt before enrollment")
+	}
+	req, err := transport.SignedReport(id, id.TenantID(), id.CommonName(),
+		jobID, attempt, outcome, detail, evidenceDigest, r.clock().Unix())
+	if err != nil {
+		return false, err
+	}
+	resp, err := r.c.ReportJobResult(ctx, req)
 	if err != nil {
 		return false, err
 	}
 	return resp.Accepted, nil
+}
+
+func (r relayChannel) clock() time.Time {
+	if r.now != nil {
+		return r.now()
+	}
+	return time.Now().UTC()
 }

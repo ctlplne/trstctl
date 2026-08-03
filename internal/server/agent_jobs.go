@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"sort"
 	"strings"
@@ -240,7 +241,17 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 	agentID := agentRowID(info.TenantID, info.CommonName)
 	now := time.Now().UTC()
 
-	switch strings.TrimSpace(req.Outcome) {
+	outcome := strings.TrimSpace(req.Outcome)
+	// A terminal report is a claim about the world and must be signed. An
+	// "extend" is a lease request that claims nothing, so it is not — see the
+	// note on ReportJobResultRequest.Signature.
+	if outcome != transport.JobOutcomeExtend {
+		if err := a.verifyJobReceipt(ctx, info, req, now); err != nil {
+			return nil, err
+		}
+	}
+
+	switch outcome {
 	case transport.JobOutcomeExecuted:
 		// Two leases have to agree: the agent still holds its claim, and no
 		// dispatch worker holds the entry. Closing the claim proves the first;
@@ -259,10 +270,19 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 				return nil, status.Errorf(codes.Internal, "complete outbox entry: %v", err)
 			}
 		}
-		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.executed", map[string]any{
+		// The receipt travels WITH the event, not beside it. An event that says
+		// an agent executed a deploy, with the agent's own signature over that
+		// exact claim in the same row, is checkable by anyone later. Store the
+		// signature and the statement it covers: without the statement a reader
+		// has to reconstruct the signed bytes from other columns and trust their
+		// own reconstruction, which is the sort of verification nobody performs.
+		executed := map[string]any{
 			"agent": info.CommonName, "job_id": req.JobID, "kind": destination,
 			"evidence_digest": req.EvidenceDigest,
-		})
+		}
+		a.attachJobReceipt(executed, info, req)
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.executed", executed)
+		a.recordVerifiedReceipt(ctx, info, req, destination, now)
 		// D5: a dry-run's whole output is its plan, and the relay carries it in
 		// Detail. It becomes a delivery receipt an operator can read rather than
 		// an event nobody looks at, and the status distinguishes "a deploy would
@@ -286,10 +306,16 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 			return nil, status.Errorf(codes.Internal, "release agent job: %v", err)
 		}
 		if ok {
-			a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", map[string]any{
+			failed := map[string]any{
 				"agent": info.CommonName, "job_id": req.JobID,
 				"detail": a.agentDetailForHistory(ctx, info.TenantID, agentID, req),
-			})
+			}
+			// A failure receipt matters more than a success one, not less: it is
+			// the record that says a machine tried and could not, and it is the
+			// record somebody will dispute.
+			a.attachJobReceipt(failed, info, req)
+			a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
+			a.recordVerifiedReceipt(ctx, info, req, "", now)
 		}
 		return &transport.ReportJobResultResponse{Accepted: ok}, nil
 
@@ -369,6 +395,147 @@ func AgentClaimableJobKinds(configured []string) map[string]bool {
 // Best-effort by design: failing to record the note must not fail the job the
 // operator is waiting on, and the ledger row is the authoritative state either
 // way.
+// receiptSkew bounds how far a receipt's own timestamp may sit from the
+// server's clock.
+//
+// It is wide enough that ordinary drift on an unsynchronized host does not
+// reject honest work, and narrow enough that a captured receipt cannot be held
+// and replayed later in the day. A signature stays valid forever; this is what
+// gives it an expiry.
+const receiptSkew = 10 * time.Minute
+
+// verifyJobReceipt checks that a terminal report was signed by the agent whose
+// certificate is on this connection, over exactly the facts it is reporting.
+//
+// Everything identifying goes into the statement from the CERTIFICATE, not from
+// the request: tenant and agent name. So there is no forged-receipt case to
+// handle separately and no cross-tenant case to handle separately — both are
+// the same check. A receipt signed by a different key does not verify. A receipt
+// signed for a different tenant was signed over different bytes than the ones
+// rebuilt here, and does not verify either. Fail-closed, with an audit event,
+// because a rejected receipt is a security event whether it was an attack or a
+// clock: somebody's agent believes it did work the ledger will not record.
+func (a *agentService) verifyJobReceipt(ctx context.Context, info mtls.PeerCertInfo,
+	req *transport.ReportJobResultRequest, now time.Time) error {
+	reject := func(reason string) error {
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.receipt.rejected", map[string]any{
+			"agent": info.CommonName, "job_id": req.JobID,
+			"outcome": strings.TrimSpace(req.Outcome), "reason": reason,
+			"agent_fingerprint": info.FingerprintSHA256,
+		})
+		// And into the read model, so a refusal is a number on the Operations
+		// page rather than a line in a stream nobody replays. reason comes from
+		// this closed set, never from the agent.
+		//
+		// Only for work this agent actually holds. The audit event above takes
+		// every refusal unconditionally — it is the security record — but the
+		// ledger drives an operator-facing count of refused work, and an agent
+		// naming job ids it never claimed would fill that count with jobs that
+		// do not exist.
+		if a.store != nil {
+			if held, herr := a.store.AgentJobIsClaimedBy(ctx, info.TenantID,
+				agentRowID(info.TenantID, info.CommonName), req.JobID); herr == nil && held {
+				_ = a.store.RecordAgentJobReceipt(ctx, info.TenantID, store.AgentJobReceipt{
+					JobID: req.JobID, Attempt: req.Attempt, Agent: info.CommonName,
+					Outcome: strings.TrimSpace(req.Outcome), State: store.AgentJobReceiptRejected,
+					Reason: reason, SignerFingerprint: info.FingerprintSHA256, ObservedAt: now,
+				})
+			}
+		}
+		return status.Errorf(codes.PermissionDenied, "job receipt rejected: %s", reason)
+	}
+	if len(req.Signature) == 0 {
+		return reject("unsigned")
+	}
+	if req.IssuedAtUnix <= 0 {
+		return reject("no issued-at")
+	}
+	issued := time.Unix(req.IssuedAtUnix, 0).UTC()
+	if delta := now.Sub(issued); delta > receiptSkew || delta < -receiptSkew {
+		return reject("issued-at outside the accepted window")
+	}
+	statement := transport.JobReceiptStatement{
+		TenantID:        info.TenantID,
+		AgentCommonName: info.CommonName,
+		JobID:           req.JobID,
+		Attempt:         req.Attempt,
+		Outcome:         strings.TrimSpace(req.Outcome),
+		EvidenceDigest:  req.EvidenceDigest,
+		DetailDigest:    transport.DetailDigest(req.Detail),
+		IssuedAtUnix:    req.IssuedAtUnix,
+	}
+	if err := statement.Validate(); err != nil {
+		return reject("statement is not canonicalizable")
+	}
+	if err := mtls.VerifyStatement(info.LeafDER, statement.Canonical(), req.Signature); err != nil {
+		return reject("signature does not verify against the presented certificate")
+	}
+	return nil
+}
+
+// attachJobReceipt adds the verified receipt to an event payload.
+//
+// The statement is stored as the canonical bytes the agent actually signed,
+// rebuilt from the certificate exactly as verifyJobReceipt rebuilt them, so a
+// reader verifies what was signed rather than a paraphrase of it. The detail
+// digest inside it is what lets an operator prove the failure text they are
+// reading is the text the agent committed to — the text itself is stored
+// separately and can be edited by anyone with database access; the digest
+// cannot be edited to match without the agent's key.
+func (a *agentService) attachJobReceipt(payload map[string]any, info mtls.PeerCertInfo,
+	req *transport.ReportJobResultRequest) {
+	if len(req.Signature) == 0 {
+		return
+	}
+	statement := transport.JobReceiptStatement{
+		TenantID:        info.TenantID,
+		AgentCommonName: info.CommonName,
+		JobID:           req.JobID,
+		Attempt:         req.Attempt,
+		Outcome:         strings.TrimSpace(req.Outcome),
+		EvidenceDigest:  req.EvidenceDigest,
+		DetailDigest:    transport.DetailDigest(req.Detail),
+		IssuedAtUnix:    req.IssuedAtUnix,
+	}
+	payload["receipt_statement"] = string(statement.Canonical())
+	payload["receipt_signature"] = base64.StdEncoding.EncodeToString(req.Signature)
+	// The certificate fingerprint names WHICH key to verify against. An agent
+	// re-enrolls and gets a new certificate; without this, a receipt signed by
+	// the old one becomes unverifiable the moment the new one is issued.
+	payload["receipt_signer_fingerprint"] = info.FingerprintSHA256
+}
+
+// recordVerifiedReceipt stores a receipt that passed verification.
+//
+// It is stored whole — statement, signature, signer fingerprint — so the check
+// can be repeated later by someone who does not trust that it happened. A read
+// model that recorded only "verified: true" would be the control plane vouching
+// for itself again, which is the exact thing the signature exists to replace.
+func (a *agentService) recordVerifiedReceipt(ctx context.Context, info mtls.PeerCertInfo,
+	req *transport.ReportJobResultRequest, kind string, now time.Time) {
+	if a.store == nil || len(req.Signature) == 0 {
+		return
+	}
+	statement := transport.JobReceiptStatement{
+		TenantID:        info.TenantID,
+		AgentCommonName: info.CommonName,
+		JobID:           req.JobID,
+		Attempt:         req.Attempt,
+		Outcome:         strings.TrimSpace(req.Outcome),
+		EvidenceDigest:  req.EvidenceDigest,
+		DetailDigest:    transport.DetailDigest(req.Detail),
+		IssuedAtUnix:    req.IssuedAtUnix,
+	}
+	_ = a.store.RecordAgentJobReceipt(ctx, info.TenantID, store.AgentJobReceipt{
+		JobID: req.JobID, Attempt: req.Attempt, Agent: info.CommonName, Kind: kind,
+		Outcome: strings.TrimSpace(req.Outcome), State: store.AgentJobReceiptVerified,
+		SignerFingerprint: info.FingerprintSHA256,
+		Statement:         string(statement.Canonical()),
+		Signature:         base64.StdEncoding.EncodeToString(req.Signature),
+		ObservedAt:        now,
+	})
+}
+
 func (a *agentService) recordAgentJobEvent(ctx context.Context, tenantID, eventType string, data map[string]any) {
 	if a.log == nil {
 		return
@@ -432,6 +599,17 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 			if age := int(now.Sub(*redemptions.OldestLiveAt).Seconds()); age > 0 {
 				out.Redemptions.OldestLiveSeconds = age
 			}
+		}
+	}
+
+	// Receipt integrity (A1). It sits beside credential custody because the two
+	// answer the same kind of question about the fabric: what is outside the
+	// seal right now, and is what comes back trustworthy.
+	if receipts, recErr := s.store.AgentJobReceiptSummary(ctx); recErr == nil {
+		out.Receipts = api.AgentJobReceipts{
+			Verified: receipts.Verified, Rejected: receipts.Rejected,
+			LastRejectedReason: receipts.LastRejectedReason,
+			LastRejectedAt:     receipts.LastRejectedAt,
 		}
 	}
 

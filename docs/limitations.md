@@ -166,6 +166,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **`connector.deploy` now has a relay-side executor** (A3); the other five kinds become claimable when theirs ship. Nothing is claimable until an operator names a kind in `agent_channel.claimable_job_kinds` | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
+| Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Relays redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
@@ -888,6 +889,41 @@ the ROLE the waiting work demands — usually the answer, since work demanding a
 role no enrolled agent holds waits forever and looks exactly like a busy queue.
 It sits beside `DUR-2` rather than inside it because a control plane that is not
 delivering and a fleet that is not claiming need different runbooks.
+
+**Reports are signed, and the signature is what an auditor gets.** Every terminal
+report — executed or failed — carries a detached signature the agent made with
+the same key behind its channel certificate, over a canonical statement naming
+the tenant, the agent, the job, the claim attempt, the outcome, the evidence
+digest, a digest of the report's text and when it was signed. The tenant and the
+agent name in that statement come from the certificate the caller authenticated
+with, never from a request field, which is why a forged receipt and a
+cross-tenant receipt are the same refusal: both were signed over different bytes
+than the ones the server rebuilds.
+
+This is worth being precise about, because mTLS already authenticates the
+connection. What the signature adds is evidence at rest. Without it, "agent-7
+executed this deploy" is a sentence the control plane wrote about itself, and
+anyone who can write to the event store can write that sentence. With it, the
+record is one the control plane could not have produced. The statement and the
+signature are stored on the event and in a receipt ledger, so the check can be
+repeated later by someone who does not trust that it happened the first time.
+
+Anything that does not verify is refused fail-closed, with an
+`agent.job.receipt.rejected` audit event and a counter on Operations: unsigned,
+signed by a key that is not the connection's certificate, altered after signing,
+or signed outside a ten-minute window against the server's clock. That last one
+is what stops a captured receipt being replayed later — a signature does not
+expire on its own. Lease extensions are deliberately NOT signed: an extend
+claims nothing about the world, and signing every keepalive would put the
+agent's key on the heartbeat path for no evidentiary gain.
+
+Two honest limits. The signature attests what the agent SAID, not what the
+appliance did — an agent that is lying, or that is wrong about its own outcome,
+produces a perfectly valid receipt for a false statement; making the claim
+checkable against the endpoint itself is the verification work (WS-D), not this.
+And the transcript behind `evidence_digest` stays on the agent: the receipt
+binds to a digest of something the control plane has never seen, which is a real
+binding and not the same as holding the evidence.
 
 **What is served, and what is not.** `connector.deploy` has a relay-side executor
 as of A3 — an agent with the network role claims it, redeems its credential for

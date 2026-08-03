@@ -143,6 +143,38 @@ func (a *AgentIdentity) Roles() []string {
 	return roles
 }
 
+// CertificateDER is the issued leaf certificate (DER), or nil before issuance.
+//
+// It is what a receipt is verified against (epic A1) — the public half, which
+// is the only half anyone but this identity ever needs.
+func (a *AgentIdentity) CertificateDER() []byte {
+	if a.leaf == nil {
+		return nil
+	}
+	return append([]byte(nil), a.leaf.Raw...)
+}
+
+// TenantID is the tenant this identity's certificate attributes it to, read
+// from the SPIFFE SAN.
+//
+// An agent needs this to sign a job receipt (epic A1), and it must come from
+// the certificate rather than from the agent's config file: the server rebuilds
+// the signed statement from the certificate it verified, so a config-supplied
+// tenant that disagrees would produce a receipt that never verifies — and,
+// worse, an agent that believes it is signing for a tenant it was not issued
+// for. Empty for an unissued identity; a caller signing with an unissued
+// identity has nothing to sign with either.
+func (a *AgentIdentity) TenantID() string {
+	if a.leaf == nil {
+		return ""
+	}
+	tenantID, err := TenantFromClientCert(a.leaf.Raw)
+	if err != nil {
+		return ""
+	}
+	return tenantID
+}
+
 // NotAfter is the issued certificate's expiry.
 func (a *AgentIdentity) NotAfter() time.Time {
 	if a.leaf == nil {

@@ -96,7 +96,7 @@
           "presence": "optional"
         },
         {
-          "go_type": "map\u003cstring,int64\u003e",
+          "go_type": "map<string,int64>",
           "name": "inventory",
           "presence": "optional"
         }
@@ -144,7 +144,7 @@
           "presence": "optional"
         },
         {
-          "go_type": "map\u003cstring,string\u003e",
+          "go_type": "map<string,string>",
           "name": "metadata",
           "presence": "optional"
         }
@@ -342,6 +342,21 @@
         {
           "go_type": "int",
           "name": "lease_seconds",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int",
+          "name": "attempt",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int64",
+          "name": "issued_at_unix",
+          "presence": "optional"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "signature",
           "presence": "optional"
         }
       ]

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"strings"
+	"trstctl.com/trstctl/internal/agent"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 
@@ -35,6 +36,14 @@ type roleHarness struct {
 	*servedHarness
 	client *transport.AgentClient
 	agent  string
+	// identity signs this harness's job receipts (epic A1).
+	identity *agent.Agent
+}
+
+func (h *roleHarness) report(t *testing.T, jobID int64, attempt int,
+	outcome, detail, evidenceDigest string) *transport.ReportJobResultRequest {
+	t.Helper()
+	return signedJobReport(t, h.identity, jobID, attempt, outcome, detail, evidenceDigest)
 }
 
 func newRoleHarness(t *testing.T, roles []string, claimable ...string) *roleHarness {
@@ -66,7 +75,7 @@ func newRoleHarness(t *testing.T, roles []string, claimable ...string) *roleHarn
 		t.Fatalf("dial agent channel: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return &roleHarness{servedHarness: h, client: transport.NewAgentClient(conn), agent: cn}
+	return &roleHarness{servedHarness: h, client: transport.NewAgentClient(conn), agent: cn, identity: a}
 }
 
 // TestServedHostAgentCannotClaimRelayWork is the point of the epic. The operator
@@ -326,9 +335,8 @@ func TestServedDryRunProducesAPlanAndChangesNothing(t *testing.T) {
 	// which is the case that must NOT read as a passing test.
 	plan := `{"connector":"f5","target":"edge-f5","ready":false,` +
 		`"steps":[{"name":"reachability","status":"failed","detail":"connection refused"}]}`
-	if _, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
-		JobID: job.JobID, Outcome: transport.JobOutcomeExecuted, Detail: plan,
-	}); err != nil {
+	if _, err := h.client.ReportJobResult(ctx,
+		h.report(t, job.JobID, job.Attempt, transport.JobOutcomeExecuted, plan, "")); err != nil {
 		t.Fatalf("report: %v", err)
 	}
 

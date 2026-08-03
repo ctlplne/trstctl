@@ -71,7 +71,7 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 	if hasHost && len(hostProfile.AllowedRoots) > 0 {
 		fmt.Printf("trstctl-agent: host connector execution enabled for %v\n", relay.HostConnectorKinds())
 		return time.NewTimer(o.relayPollEvery),
-			relayChannel{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))},
+			relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity},
 			hostProfile
 	}
 	if !hasNetwork {
@@ -84,7 +84,7 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 	fmt.Printf("trstctl-agent: relay claiming enabled for %v every %s\n",
 		relay.ClaimableKinds(), o.relayPollEvery)
 	return time.NewTimer(o.relayPollEvery),
-		relayChannel{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))},
+		relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity},
 		hostProfile
 }
 

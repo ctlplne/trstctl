@@ -24,7 +24,12 @@ type Channel interface {
 	// ReportJobResult reports the outcome. detail must never carry credential
 	// material; the control plane withholds it from durable history anyway when
 	// the attempt redeemed anything, but the relay does not rely on that.
-	ReportJobResult(ctx context.Context, jobID int64, outcome, detail, evidenceDigest string) (bool, error)
+	//
+	// attempt is the claim generation the report belongs to. It travels because
+	// the report is SIGNED over it (epic A1): without the attempt, a receipt for
+	// one attempt at a job would verify against a later attempt at the same job
+	// after a lease lapse requeued it.
+	ReportJobResult(ctx context.Context, jobID int64, attempt int, outcome, detail, evidenceDigest string) (bool, error)
 }
 
 // Job is one claimed unit of work as the relay sees it.
@@ -222,7 +227,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 func report(ctx context.Context, ch Channel, job Job, outcome, detail string) {
 	// A failed report is not retried here: the claim lease is the safety net.
 	// If the control plane never hears, the lease lapses and the work returns.
-	_, _ = ch.ReportJobResult(ctx, job.JobID, outcome, detail, "")
+	_, _ = ch.ReportJobResult(ctx, job.JobID, job.Attempt, outcome, detail, "")
 }
 
 func decodeIntent(payload []byte, out *DeployIntent) error {

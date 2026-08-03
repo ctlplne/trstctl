@@ -80,6 +80,10 @@ var TenantScopedTables = []string{
 	// it does record which agent redeemed which job attempt and when — tenant
 	// history that must leave with the tenant.
 	"agent_job_credential_redemptions",
+	// A1: the signed receipt ledger. Statements and signatures are public
+	// material, but they name the tenant's agents and the work they did, which
+	// is tenant history and must leave with the tenant.
+	"agent_job_receipts",
 	// F1: AD CS template posture is a tenant's own directory observation and
 	// leaves with the tenant.
 	"adcs_template_posture",

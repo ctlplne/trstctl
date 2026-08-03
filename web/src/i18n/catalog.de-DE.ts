@@ -256,6 +256,12 @@ const deDECatalog = {
   "operations.jobs.redemptions.none": "Keine",
   "operations.jobs.redemptions.help":
     "Ein Relais löst Anmeldematerial für genau einen Auftragsversuch ein und löscht es am Ende des Versuchs. Ein aktiver Zähler, der nicht sinkt, oder ein Alter jenseits der maximalen Claim-Laufzeit bedeutet, dass ein Versuch feststeckt und Material hält.",
+  "operations.jobs.receipts.verified": "Verifizierte Quittungen",
+  "operations.jobs.receipts.rejected": "Abgelehnte Quittungen",
+  "operations.jobs.receipts.lastRejected": "Jüngste Ablehnung",
+  "operations.jobs.receipts.none": "Keine",
+  "operations.jobs.receipts.help":
+    "Jeder abschließende Bericht wird vom Agenten mit dem Schlüssel signiert, der hinter seinem Kanalzertifikat steht. Damit ist die Aufzeichnung dessen, was ein Agent getan hat, ein Nachweis, den diese Steuerungsebene nicht selbst hätte erzeugen können. Eine Ablehnung bedeutet, dass ein Agent glaubt, Arbeit geleistet zu haben, die dieses Verzeichnis nicht festhalten wird — entweder ist seine Uhr abgewichen, oder seine Signatur stammt nicht von dem Zertifikat, mit dem er sich verbunden hat.",
   "operations.jobs.heading": "Agent-Auftragsregister",
   "operations.jobs.inFlight": "Von einem Agenten gehalten",
   "operations.jobs.kind": "Auftragsart",

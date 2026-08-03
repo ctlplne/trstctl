@@ -60,6 +60,7 @@ export function AgentJobLedgerPanel() {
   // defensively for the same reason the arrays are — a health readout that
   // crashes the page it reports on is worse than one that shows nothing.
   const redemptions = posture?.redemptions;
+  const receipts = posture?.receipts;
 
   return (
     <section aria-labelledby="agent-job-ledger-heading" className="grid content-start gap-3 border-t border-border pt-4">
@@ -91,6 +92,31 @@ export function AgentJobLedgerPanel() {
             <dd className="font-medium">{redemptions.oldest_live_seconds ? waitLabel(redemptions.oldest_live_seconds) : t("operations.jobs.redemptions.none")}</dd>
           </div>
           <p className="text-caption text-muted-foreground sm:col-span-3">{t("operations.jobs.redemptions.help")}</p>
+        </dl>
+      ) : null}
+
+      {posture?.served && receipts ? (
+        <dl className="grid gap-2 rounded-md border border-border p-3 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.verified")}</dt>
+            <dd className="font-medium">{receipts.verified}</dd>
+          </div>
+          <div>
+            <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.rejected")}</dt>
+            {/* A refusal is worth an operator's attention even when the queue
+                looks healthy: an agent believes it did work this ledger will
+                not record, so that work is neither done nor requeued. */}
+            <dd className={receipts.rejected > 0 ? "font-medium text-status-warning" : "font-medium"}>{receipts.rejected}</dd>
+          </div>
+          <div>
+            <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.lastRejected")}</dt>
+            <dd className="font-medium">
+              {receipts.rejected > 0 && receipts.last_rejected_reason
+                ? receipts.last_rejected_reason
+                : t("operations.jobs.receipts.none")}
+            </dd>
+          </div>
+          <p className="text-caption text-muted-foreground sm:col-span-3">{t("operations.jobs.receipts.help")}</p>
         </dl>
       ) : null}
 

@@ -200,6 +200,14 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// two counts and one timestamp, never a tenant, agent, job, reference
 		// name or value.
 		"internal/store/agent_jobs.go": 3,
+		// A1: two process-wide reads of the signed receipt ledger for the same
+		// operations surface. "Is the evidence on this control plane intact" is
+		// a question about the deployment, not about one tenant's certificates —
+		// a per-tenant view would show a clean page to nine tenants while the
+		// tenth's agents are being refused. What crosses the boundary is two
+		// counts, one timestamp, and one refusal reason from this server's own
+		// closed set; no tenant, agent, job, statement or signature.
+		"internal/store/agent_job_receipts.go": 2,
 	}
 	found := map[string]int{}
 

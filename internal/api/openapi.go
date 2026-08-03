@@ -369,13 +369,22 @@ func componentSchemas() map[string]*Schema {
 		"total":               {Type: "integer"},
 		"oldest_live_seconds": {Type: "integer"},
 	}, "live", "total")
+	// A1: signed receipt health. Counts and one closed-set refusal reason — the
+	// statement and signature themselves stay in the ledger, not on a summary.
+	agentJobReceipts := object(map[string]*Schema{
+		"verified":             {Type: "integer"},
+		"rejected":             {Type: "integer"},
+		"last_rejected_reason": str(),
+		"last_rejected_at":     timestamp(),
+	}, "verified", "rejected")
 	agentJobPosture := object(map[string]*Schema{
 		"served":          {Type: "boolean"},
 		"claimable_kinds": {Type: "array", Items: str()},
 		"generated_at":    timestamp(),
 		"queues":          {Type: "array", Items: ref("AgentJobQueue")},
 		"redemptions":     ref("AgentJobRedemptions"),
-	}, "served", "claimable_kinds", "generated_at", "queues", "redemptions")
+		"receipts":        ref("AgentJobReceipts"),
+	}, "served", "claimable_kinds", "generated_at", "queues", "redemptions", "receipts")
 	// The ACME external account binding operator surface (B4). No field here
 	// carries the HMAC key in any form — the credential's secret stays byte-backed
 	// in locked memory where configuration put it (AN-8).
@@ -4081,6 +4090,7 @@ func componentSchemas() map[string]*Schema {
 		"AgentJobQueue":                            agentJobQueue,
 		"AgentJobPosture":                          agentJobPosture,
 		"AgentJobRedemptions":                      agentJobRedemptions,
+		"AgentJobReceipts":                         agentJobReceipts,
 		"ADCSPosture":                              adcsPosture,
 		"ADCSTemplate":                             adcsTemplate,
 		"ADCSTemplateFinding":                      adcsTemplateFinding,

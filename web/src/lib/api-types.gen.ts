@@ -396,6 +396,7 @@ export interface AgentJobPosture {
   claimable_kinds: string[];
   generated_at: string;
   queues: AgentJobQueue[];
+  receipts: AgentJobReceipts;
   redemptions: AgentJobRedemptions;
   served: boolean;
 }
@@ -406,6 +407,13 @@ export interface AgentJobQueue {
   kind: string;
   oldest_unclaimed_seconds?: number;
   pending: number;
+}
+
+export interface AgentJobReceipts {
+  last_rejected_at?: string;
+  last_rejected_reason?: string;
+  rejected: number;
+  verified: number;
 }
 
 export interface AgentJobRedemptions {

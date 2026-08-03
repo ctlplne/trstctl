@@ -1542,6 +1542,9 @@
             },
             "type": "array"
           },
+          "receipts": {
+            "$ref": "#/components/schemas/AgentJobReceipts"
+          },
           "redemptions": {
             "$ref": "#/components/schemas/AgentJobRedemptions"
           },
@@ -1554,7 +1557,8 @@
           "claimable_kinds",
           "generated_at",
           "queues",
-          "redemptions"
+          "redemptions",
+          "receipts"
         ],
         "type": "object"
       },
@@ -1581,6 +1585,28 @@
           "enabled",
           "pending",
           "claimed"
+        ],
+        "type": "object"
+      },
+      "AgentJobReceipts": {
+        "properties": {
+          "last_rejected_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_rejected_reason": {
+            "type": "string"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "verified": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "verified",
+          "rejected"
         ],
         "type": "object"
       },

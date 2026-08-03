@@ -452,6 +452,63 @@ type ReportJobResultRequest struct {
 	EvidenceDigest string `json:"evidence_digest,omitempty"`
 	// LeaseSeconds is how much more time an "extend" is asking for.
 	LeaseSeconds int `json:"lease_seconds,omitempty"`
+	// Attempt echoes the claim generation this report belongs to. It is part of
+	// the signed statement, so a receipt cannot be replayed against a later
+	// attempt of the same job after a lease lapse requeued it.
+	Attempt int `json:"attempt,omitempty"`
+	// IssuedAtUnix is when the agent signed. The server bounds it against its
+	// own clock: a receipt held and replayed hours later is refused even though
+	// its signature is perfectly valid.
+	IssuedAtUnix int64 `json:"issued_at_unix,omitempty"`
+	// Signature is the agent's detached signature over the canonical receipt
+	// statement (epic A1), made with the same key behind its channel
+	// certificate.
+	//
+	// mTLS already proved who is on the connection; this is what survives it.
+	// Without it, "agent-7 executed this deploy" is a sentence the control plane
+	// wrote about itself, and anyone who can write to the event store can write
+	// that sentence. With it, the record is evidence the control plane could not
+	// have produced.
+	//
+	// It is required for terminal outcomes. An "extend" is a lease request, not
+	// a claim about the world, and is left unsigned deliberately: signing a
+	// keepalive would put the agent's key on the hot path of every heartbeat for
+	// no evidentiary gain.
+	Signature []byte `json:"signature,omitempty"`
+}
+
+// SignedReport builds a signed terminal report for a claimed job.
+//
+// Both sides construct the statement through JobReceiptStatement so the bytes
+// cannot drift apart, and the agent's tenant and name come from its own
+// identity rather than from anything it was told — the server independently
+// rebuilds them from the certificate on the connection and will not match a
+// statement that claims otherwise.
+func SignedReport(id StatementSigner, tenantID, commonName string, jobID int64, attempt int,
+	outcome, detail, evidenceDigest string, issuedAtUnix int64) (*ReportJobResultRequest, error) {
+	statement := JobReceiptStatement{
+		TenantID: tenantID, AgentCommonName: commonName, JobID: jobID, Attempt: attempt,
+		Outcome: outcome, EvidenceDigest: evidenceDigest,
+		DetailDigest: DetailDigest(detail), IssuedAtUnix: issuedAtUnix,
+	}
+	if err := statement.Validate(); err != nil {
+		return nil, err
+	}
+	sig, err := id.SignStatement(statement.Canonical())
+	if err != nil {
+		return nil, err
+	}
+	return &ReportJobResultRequest{
+		JobID: jobID, Outcome: outcome, Detail: detail, EvidenceDigest: evidenceDigest,
+		Attempt: attempt, IssuedAtUnix: issuedAtUnix, Signature: sig,
+	}, nil
+}
+
+// StatementSigner is the agent identity's signing capability, named as an
+// interface so this package never touches a private key or imports a crypto
+// package (AN-3).
+type StatementSigner interface {
+	SignStatement(statement []byte) ([]byte, error)
 }
 
 type ReportJobResultResponse struct {

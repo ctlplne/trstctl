@@ -247,6 +247,12 @@ const esESCatalog = {
   "operations.jobs.redemptions.none": "Ninguno",
   "operations.jobs.redemptions.help":
     "Un relé canjea material de credenciales para un único intento de trabajo y lo borra al finalizar. Un recuento activo que no disminuye, o una antigüedad superior al arrendamiento máximo de reclamación, indica que un intento se ha quedado reteniendo material.",
+  "operations.jobs.receipts.verified": "Recibos verificados",
+  "operations.jobs.receipts.rejected": "Recibos rechazados",
+  "operations.jobs.receipts.lastRejected": "Rechazo más reciente",
+  "operations.jobs.receipts.none": "Ninguno",
+  "operations.jobs.receipts.help":
+    "Cada informe final lo firma el agente con la clave que respalda su certificado de canal, de modo que el registro de lo que hizo un agente es una prueba que este plano de control no podría haber producido por sí solo. Un rechazo significa que un agente cree haber realizado un trabajo que este registro no anotará: o su reloj se ha desviado, o su firma no procede del certificado con el que se conectó.",
   "operations.jobs.heading": "Registro de trabajos del agente",
   "operations.jobs.inFlight": "En manos de un agente",
   "operations.jobs.kind": "Tipo de trabajo",

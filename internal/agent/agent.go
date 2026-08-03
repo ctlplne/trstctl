@@ -143,6 +143,20 @@ func (a *Agent) Credentials() (credentials.TransportCredentials, error) {
 // certificate an operator caused to be issued rather than from a startup flag, so
 // what it asks the control plane for and what the control plane will hand it come
 // from the same place.
+// Identity returns the agent's current identity, or nil before enrollment.
+//
+// It is read under the lock and returned live rather than copied, because the
+// caller that needs it — receipt signing (epic A1) — must sign with whatever
+// certificate the channel is presenting RIGHT NOW. A renewal swaps the identity
+// mid-flight; a caller holding a stale one would sign with a key the server no
+// longer verifies against, and the receipt would be refused for what looks like
+// a forgery.
+func (a *Agent) Identity() *mtls.AgentIdentity {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.identity
+}
+
 func (a *Agent) Roles() []string {
 	a.mu.Lock()
 	defer a.mu.Unlock()

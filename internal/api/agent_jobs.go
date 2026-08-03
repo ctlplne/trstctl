@@ -54,6 +54,30 @@ type AgentJobPosture struct {
 	// out, and how long the oldest live one has been held. Counts and one age,
 	// never a tenant, agent, reference name or value.
 	Redemptions AgentJobRedemptions `json:"redemptions"`
+	// Receipts is the signed-receipt ledger (epic A1): how many terminal reports
+	// carried a signature this control plane could verify, and how many were
+	// refused because it could not.
+	Receipts AgentJobReceipts `json:"receipts"`
+}
+
+// AgentJobReceipts is the served receipt-verification view.
+//
+// Every terminal report must carry a signature the agent made with the key
+// behind its channel certificate, so this is the number that says whether the
+// fabric's evidence is intact — not whether jobs are succeeding.
+type AgentJobReceipts struct {
+	// Verified receipts checked out against the presenting certificate.
+	Verified int `json:"verified"`
+	// Rejected reports were refused. Non-zero is worth looking at even when the
+	// queue is healthy: somebody's agent believes it did work this ledger will
+	// not record, and until the cause is fixed that work is neither done nor
+	// requeued in anyone's understanding.
+	Rejected int `json:"rejected"`
+	// LastRejectedReason distinguishes the two very different causes — a clock
+	// that has drifted, and a signature that is not from the certificate on the
+	// connection. A count alone cannot, and they need opposite responses.
+	LastRejectedReason string     `json:"last_rejected_reason,omitempty"`
+	LastRejectedAt     *time.Time `json:"last_rejected_at,omitempty"`
 }
 
 // AgentJobRedemptions is the served credential-custody view.

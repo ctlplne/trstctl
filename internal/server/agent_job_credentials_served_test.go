@@ -111,11 +111,9 @@ func TestServedRelayRedeemsOnceAndTheCredentialNeverLeaks(t *testing.T) {
 	// The agent reports failure with a hostile detail: a real appliance can echo
 	// the credential it was just handed back in an error body, and the closed-set
 	// last_error discipline exists for exactly that.
-	if _, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
-		JobID:   job.JobID,
-		Outcome: transport.JobOutcomeFailed,
-		Detail:  "appliance rejected the upload: " + canaryPassword + " / " + canaryKeyPEM,
-	}); err != nil {
+	if _, err := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt,
+		transport.JobOutcomeFailed,
+		"appliance rejected the upload: "+canaryPassword+" / "+canaryKeyPEM, "")); err != nil {
 		t.Fatalf("report: %v", err)
 	}
 

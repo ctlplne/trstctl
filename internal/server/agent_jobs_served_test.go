@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/agent"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 )
@@ -30,6 +31,34 @@ import (
 type agentChannelHarness struct {
 	*servedHarness
 	client *transport.AgentClient
+	// agent is the enrolled agent behind the channel. Tests need it to SIGN
+	// their reports (epic A1): the server rebuilds the receipt statement from
+	// the certificate on the connection, so only this identity can produce a
+	// report the served channel will accept.
+	agent *agent.Agent
+}
+
+// report builds a signed report exactly as the shipping agent does, so a test
+// that passes proves the two sides agree on the canonical statement — which is
+// the failure mode a hand-built test fixture would hide.
+func (h *agentChannelHarness) report(t *testing.T, jobID int64, attempt int,
+	outcome, detail, evidenceDigest string) *transport.ReportJobResultRequest {
+	t.Helper()
+	return signedJobReport(t, h.agent, jobID, attempt, outcome, detail, evidenceDigest)
+}
+
+// signedJobReport is the one place a test signs a receipt, shared by every
+// harness so none of them can drift into building the statement by hand.
+func signedJobReport(t *testing.T, a *agent.Agent, jobID int64, attempt int,
+	outcome, detail, evidenceDigest string) *transport.ReportJobResultRequest {
+	t.Helper()
+	id := a.Identity()
+	req, err := transport.SignedReport(id, id.TenantID(), id.CommonName(),
+		jobID, attempt, outcome, detail, evidenceDigest, time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatalf("sign job receipt: %v", err)
+	}
+	return req
 }
 
 func newAgentChannelHarness(t *testing.T, opts ...func(*Deps)) *agentChannelHarness {
@@ -60,7 +89,7 @@ func newAgentChannelHarness(t *testing.T, opts ...func(*Deps)) *agentChannelHarn
 		t.Fatalf("dial agent channel: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return &agentChannelHarness{servedHarness: h, client: transport.NewAgentClient(conn)}
+	return &agentChannelHarness{servedHarness: h, client: transport.NewAgentClient(conn), agent: a}
 }
 
 func agentJobHarness(t *testing.T, kinds ...string) *agentChannelHarness {
@@ -119,9 +148,8 @@ func TestServedAgentClaimsExecutesAndReportsAJob(t *testing.T) {
 
 	// Report success. The entry leaves the queue the same way a control-plane
 	// delivery would, so the outbox's existing accounting keeps working.
-	report, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
-		JobID: job.JobID, Outcome: transport.JobOutcomeExecuted, EvidenceDigest: "sha256:transcript",
-	})
+	report, err := h.client.ReportJobResult(ctx,
+		h.report(t, job.JobID, job.Attempt, transport.JobOutcomeExecuted, "", "sha256:transcript"))
 	if err != nil {
 		t.Fatalf("report: %v", err)
 	}
@@ -130,9 +158,8 @@ func TestServedAgentClaimsExecutesAndReportsAJob(t *testing.T) {
 	}
 
 	// A replayed report is refused rather than applied a second time.
-	replay, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
-		JobID: job.JobID, Outcome: transport.JobOutcomeExecuted,
-	})
+	replay, err := h.client.ReportJobResult(ctx,
+		h.report(t, job.JobID, job.Attempt, transport.JobOutcomeExecuted, "", ""))
 	if err != nil {
 		t.Fatalf("replayed report: %v", err)
 	}
@@ -221,9 +248,8 @@ func TestServedAgentLeaseLapseReturnsTheWork(t *testing.T) {
 
 	// ...and the original claim is stale. Reporting on it now must be refused,
 	// because another agent may already have done the work.
-	stale, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
-		JobID: job.JobID, Outcome: transport.JobOutcomeExecuted,
-	})
+	stale, err := h.client.ReportJobResult(ctx,
+		h.report(t, job.JobID, job.Attempt, transport.JobOutcomeExecuted, "", ""))
 	if err != nil {
 		t.Fatalf("stale report: %v", err)
 	}
@@ -271,9 +297,8 @@ func TestServedAgentFailureReturnsTheJob(t *testing.T) {
 	if err != nil || len(claimed.Jobs) != 1 {
 		t.Fatalf("claim = %d (err %v)", len(claimed.Jobs), err)
 	}
-	reported, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
-		JobID: claimed.Jobs[0].JobID, Outcome: transport.JobOutcomeFailed, Detail: "nginx -t rejected the config",
-	})
+	reported, err := h.client.ReportJobResult(ctx, h.report(t, claimed.Jobs[0].JobID,
+		claimed.Jobs[0].Attempt, transport.JobOutcomeFailed, "nginx -t rejected the config", ""))
 	if err != nil || !reported.Accepted {
 		t.Fatalf("failure report = %+v (err %v)", reported, err)
 	}

@@ -988,6 +988,27 @@ export const messages = {
       "A relay redeems credential material for one job attempt and wipes it when the attempt ends. A live count that does not fall, or an age past the maximum claim lease, means an attempt is stuck holding material.",
     description: "A3: credential-redemption custody health on the Operations agent job ledger panel.",
   },
+  "operations.jobs.receipts.verified": {
+    defaultMessage: "Receipts verified",
+    description: "A1: signed agent job receipt health on the Operations agent job ledger panel.",
+  },
+  "operations.jobs.receipts.rejected": {
+    defaultMessage: "Receipts refused",
+    description: "A1: signed agent job receipt health on the Operations agent job ledger panel.",
+  },
+  "operations.jobs.receipts.lastRejected": {
+    defaultMessage: "Most recent refusal",
+    description: "A1: signed agent job receipt health on the Operations agent job ledger panel.",
+  },
+  "operations.jobs.receipts.none": {
+    defaultMessage: "None",
+    description: "A1: signed agent job receipt health on the Operations agent job ledger panel.",
+  },
+  "operations.jobs.receipts.help": {
+    defaultMessage:
+      "Every terminal report is signed by the agent with the key behind its channel certificate, so the record of what an agent did is evidence this control plane could not have produced on its own. A refusal means an agent believes it did work this ledger will not record — either its clock has drifted or its signature is not from the certificate it connected with.",
+    description: "A1: signed agent job receipt health on the Operations agent job ledger panel.",
+  },
   "operations.jobs.heading": {
     defaultMessage: "Agent job ledger",
     description: "A1: heading of the Operations panel showing estate-touching work agents claim over the channel.",

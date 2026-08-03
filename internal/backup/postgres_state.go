@@ -454,6 +454,11 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// bootstrap tokens because both are single-use ledgers whose whole
 		// meaning is "this already happened once".
 		"agent_job_credential_redemptions",
+		// A1 receipts reference outbox rows by id with no foreign key, same as
+		// the redemptions above, so ordering is free here too. It restores
+		// beside them because the two together are the fabric's memory of what
+		// agents were handed and what they reported back.
+		"agent_job_receipts",
 		"attestations",
 		"audit_checkpoints",
 		"credentials",
