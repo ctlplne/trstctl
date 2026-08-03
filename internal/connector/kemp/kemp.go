@@ -57,7 +57,11 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 // Deploy uploads the renewed cert/key and binds it to the virtual service named
 // by dep.Target.
 func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {
-	certName := dep.Target + "-trstctl"
+	// D4: the certificate object name carries the fingerprint, so a second
+	// deployment does not overwrite the first. The predecessor stays on the
+	// LoadMaster and Rollback can bind the virtual service back to it without
+	// the control plane holding a key it deliberately does not have.
+	certName := connector.DeployedObjectName(dep.Target+"-trstctl", dep.Fingerprint)
 	if err := c.call(ctx, sb, http.MethodPut, "/access/certificates/"+url.PathEscape(certName), certificateReq{
 		Name:        certName,
 		Certificate: dep.CertPEM,
@@ -65,10 +69,58 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}); err != nil {
 		return fmt.Errorf("kemp: upload certificate: %w", err)
 	}
-	if err := c.call(ctx, sb, http.MethodPatch, "/access/virtual-services/"+url.PathEscape(dep.Target)+"/certificate", bindReq{
-		CertName: certName,
-	}); err != nil {
+	if err := c.bind(ctx, sb, dep.Target, certName); err != nil {
 		return fmt.Errorf("kemp: bind virtual service %q: %w", dep.Target, err)
+	}
+	return nil
+}
+
+// Rollback re-binds a virtual service to an already-uploaded predecessor
+// certificate (epic D4). Nothing is uploaded — the object is there because the
+// deploy that installed it named it after its own fingerprint.
+func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if strings.TrimSpace(rb.PredecessorFingerprint) == "" || strings.TrimSpace(rb.Target) == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	certName := connector.RollbackObjectName(rb.Target+"-trstctl", rb.PredecessorFingerprint)
+	// Confirm the object exists before re-binding. A LoadMaster that accepts a
+	// bind naming a missing certificate would leave the service in a state
+	// nobody chose, behind a receipt claiming the rollback worked.
+	if err := c.mustExist(ctx, sb, "/access/certificates/"+url.PathEscape(certName)); err != nil {
+		return fmt.Errorf("kemp: predecessor certificate %q: %w", certName, err)
+	}
+	if err := c.bind(ctx, sb, rb.Target, certName); err != nil {
+		return fmt.Errorf("kemp: re-bind virtual service %q to predecessor: %w", rb.Target, err)
+	}
+	return nil
+}
+
+// bind points a virtual service at a named certificate. Deploy and Rollback
+// share it so the two cannot drift into binding differently.
+func (c *Connector) bind(ctx context.Context, sb connector.Sandbox, target, certName string) error {
+	return c.call(ctx, sb, http.MethodPatch,
+		"/access/virtual-services/"+url.PathEscape(target)+"/certificate", bindReq{CertName: certName})
+}
+
+// mustExist distinguishes "there is nothing to roll back to" from "the
+// appliance did not answer". Only the second is worth retrying.
+func (c *Connector) mustExist(ctx context.Context, sb connector.Sandbox, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_ = secret.DrainBounded(resp.Body, 4<<10)
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return connector.ErrNoPredecessorInstalled
+	case resp.StatusCode/100 != 2:
+		return fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
 	}
 	return nil
 }

@@ -223,6 +223,21 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleRevoke(ctx, m)
 	case "connector.deploy":
 		return d.handleDeploy(ctx, m)
+	case orchestrator.DestinationConnectorRollback, "connector.test":
+		// Relay-executed kinds. This dispatcher sweeps every "connector." row
+		// (see outboxDispatchFamilies) and does not filter on
+		// required_agent_role, so without this case the default branch below
+		// returns a hard error, the row burns its attempt budget, and it lands
+		// in status='failed' — where ClaimAgentJobs, which requires 'pending',
+		// can never see it. The work is dead-lettered before any relay has a
+		// chance to claim it, while the API has already told the operator it is
+		// queued.
+		//
+		// DeferDelivery is attempt-budget-neutral: it proves no receiver I/O
+		// began, so the row re-pends indefinitely and stays claimable by the
+		// agent that is actually supposed to run it.
+		return orchestrator.DeferDelivery(fmt.Errorf(
+			"server: %s executes on a relay, not the control plane", m.Destination))
 	case orchestrator.DestinationConnectorRightSize:
 		return d.handleConnectorRightSize(ctx, m)
 	case "discovery.run":

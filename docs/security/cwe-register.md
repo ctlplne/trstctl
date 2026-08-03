@@ -41,11 +41,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1034 annotated sites across 25 rules. Each row is
+1035 annotated sites across 25 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (226 sites)
+### G101 — CWE-798 Use of hardcoded credentials (227 sites)
 
 | Location | Reason |
 |---|---|
@@ -71,9 +71,10 @@ not this file.
 | `internal/agent/k8s/client.go:29` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/relay/relay_test.go:123` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:165` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:279` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:337` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:303` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:361` | reference NAME (CWE-798) |
 | `internal/agent/transport/agentservice.go:575` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/receipt.go:158` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/aimodel/redactor_test.go:39` | fixture: AWS's documented example key id; the redactor must catch it (CWE-798) |
 | `internal/aimodel/redactor_test.go:69` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:82` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -497,7 +498,7 @@ not this file.
 | `internal/api/csrf_test.go:70` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:71` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/rate_limit_guard_test.go:50` | test cookie against the test's own local server (CWE-1004) |
-| `internal/connector/netscaler/netscaler.go:197` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
+| `internal/connector/netscaler/netscaler.go:272` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:150` | test cookie against the test's own local server (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:159` | test cookie against the test's own local server (CWE-1004) |
 | `internal/server/scim_served_test.go:201` | test cookie against the test's own local server (CWE-1004) |
@@ -687,7 +688,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:469` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:1791` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:1792` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `scripts/perf/cmd/capacitycalibrate/main.go:137` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/perfgate/main.go:52` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
@@ -913,7 +914,7 @@ not this file.
 | `internal/server/run.go:883` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1236` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/server.go:1753` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:1754` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/hardening_contract_test.go:55` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1066,7 +1067,7 @@ not this file.
 | `internal/server/protocols_served_spiffe_ssh_test.go:518` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:453` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:36` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:1795` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:1796` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:172` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

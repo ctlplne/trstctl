@@ -988,6 +988,22 @@ export const messages = {
       "A relay redeems credential material for one job attempt and wipes it when the attempt ends. A live count that does not fall, or an age past the maximum claim lease, means an attempt is stuck holding material.",
     description: "A3: credential-redemption custody health on the Operations agent job ledger panel.",
   },
+  "source.executes.rebind.d4rb000003": {
+    defaultMessage: "trstctl executes this (re-bind)",
+    description: "D4: this connector family can perform its own rollback by re-binding to the installed predecessor.",
+  },
+  "source.manual.procedure.d4rb000004": {
+    defaultMessage: "Manual procedure",
+    description: "D4: this connector family cannot re-bind; the rollback text is a procedure for an operator to perform.",
+  },
+  "source.rollback.queued.d4rb000001": {
+    defaultMessage: "Rollback queued for a relay",
+    description: "D4: a connector rollback has been queued for relay execution; no relay has reported yet.",
+  },
+  "source.rolled.back.d4rb000002": {
+    defaultMessage: "Rolled back (re-bound to predecessor)",
+    description: "D4: a relay re-bound the target to the predecessor certificate already installed on it.",
+  },
   "operations.jobs.receipts.verified": {
     defaultMessage: "Receipts verified",
     description: "A1: signed agent job receipt health on the Operations agent job ledger panel.",

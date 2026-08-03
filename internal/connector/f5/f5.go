@@ -83,8 +83,17 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 // Deploy uploads the certificate and key, installs them, and binds them to the
 // Client SSL profile.
 func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {
-	certName := c.name + ".crt"
-	keyName := c.name + ".key"
+	// The object name carries the certificate's fingerprint (epic D4), so a
+	// second deployment installs a SECOND crypto object rather than overwriting
+	// the first. That is what leaves a predecessor on the appliance for
+	// Rollback to bind back to; before this, every deploy destroyed the only
+	// thing a rollback could have used.
+	//
+	// Idempotency is unchanged and comes for free: the same certificate hashes
+	// to the same name, so a retried deploy installs over itself.
+	base := connector.DeployedObjectName(c.name, dep.Fingerprint)
+	certName := base + ".crt"
+	keyName := base + ".key"
 
 	if err := c.call(ctx, sb, http.MethodPost, "/mgmt/shared/file-transfer/uploads/"+certName, "application/octet-stream", dep.CertPEM); err != nil {
 		return fmt.Errorf("f5: upload certificate: %w", err)
@@ -102,10 +111,78 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}); err != nil {
 		return fmt.Errorf("f5: install key: %w", err)
 	}
-	if err := c.callJSON(ctx, sb, http.MethodPatch, "/mgmt/tm/ltm/profile/client-ssl/"+c.profile, map[string]any{
-		"certKeyChain": []map[string]string{{"name": c.name, "cert": certName, "key": keyName}},
-	}); err != nil {
+	if err := c.bindProfile(ctx, sb, base, certName, keyName); err != nil {
 		return fmt.Errorf("f5: bind to profile %q: %w", c.profile, err)
+	}
+	return nil
+}
+
+// Rollback re-points the Client SSL profile at an already-installed
+// predecessor (epic D4).
+//
+// Nothing is uploaded and no key moves. That is not a limitation of this
+// implementation, it is the reason the operation exists at all: the control
+// plane holds no subject key after B1, so the only rollback it can perform is
+// one that needs nothing from it.
+//
+// The predecessor's presence is CHECKED before the bind. A PATCH naming a
+// missing crypto object can be accepted by the appliance and leave the profile
+// in a state nobody intended; worse, reporting success when the object is gone
+// would tell an operator a bad certificate had stopped serving traffic when it
+// had not.
+func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if strings.TrimSpace(rb.PredecessorFingerprint) == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	base := connector.RollbackObjectName(c.name, rb.PredecessorFingerprint)
+	certName := base + ".crt"
+	keyName := base + ".key"
+
+	if err := c.mustExist(ctx, sb, "/mgmt/tm/sys/crypto/cert/"+url.PathEscape(certName)); err != nil {
+		return fmt.Errorf("f5: predecessor certificate %q: %w", certName, err)
+	}
+	if err := c.mustExist(ctx, sb, "/mgmt/tm/sys/crypto/key/"+url.PathEscape(keyName)); err != nil {
+		return fmt.Errorf("f5: predecessor key %q: %w", keyName, err)
+	}
+	if err := c.bindProfile(ctx, sb, base, certName, keyName); err != nil {
+		return fmt.Errorf("f5: re-bind profile %q to predecessor: %w", c.profile, err)
+	}
+	return nil
+}
+
+// bindProfile points the Client SSL profile at a named cert/key pair. Deploy
+// and Rollback share it so the two cannot drift into binding differently — a
+// rollback that bound a profile in a subtly different shape than a deploy would
+// be a second code path nobody exercises until an incident.
+func (c *Connector) bindProfile(ctx context.Context, sb connector.Sandbox, chainName, certName, keyName string) error {
+	return c.callJSON(ctx, sb, http.MethodPatch, "/mgmt/tm/ltm/profile/client-ssl/"+c.profile, map[string]any{
+		"certKeyChain": []map[string]string{{"name": chainName, "cert": certName, "key": keyName}},
+	})
+}
+
+// mustExist reports ErrNoPredecessorInstalled when the object is absent, and
+// the transport error otherwise. The distinction matters to the operator: "there
+// is nothing to roll back to" is final, and "the appliance did not answer" is
+// worth retrying.
+func (c *Connector) mustExist(ctx context.Context, sb connector.Sandbox, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	if c.user != "" || len(c.pass) > 0 {
+		req.Header.Set("Authorization", c.basicAuth())
+	}
+	resp, err := sb.Request(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_ = secret.DrainBounded(resp.Body, 4<<10)
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return connector.ErrNoPredecessorInstalled
+	case resp.StatusCode/100 != 2:
+		return fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
 	}
 	return nil
 }

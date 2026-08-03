@@ -335,6 +335,26 @@ export const deliveryStatus: Record<string, StatusDescriptor> = {
     tone: "warning",
     order: 6,
   },
+  // D4: a rollback that will actually execute. Queued is deliberately NOT a
+  // success tone — no relay has reported, so the listener is unchanged so far
+  // as this control plane knows.
+  rollback_queued: {
+    get label() {
+      return translateNow("source.rollback.queued.d4rb000001");
+    },
+    tone: "info",
+    order: 7,
+  },
+  // Success, and the only rollback state that earns it: a relay re-bound the
+  // listener to the predecessor object. What the endpoint now serves has not
+  // been independently re-read — that is verification, a separate claim.
+  rolled_back: {
+    get label() {
+      return translateNow("source.rolled.back.d4rb000002");
+    },
+    tone: "success",
+    order: 8,
+  },
 };
 
 export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDescriptor>> = {

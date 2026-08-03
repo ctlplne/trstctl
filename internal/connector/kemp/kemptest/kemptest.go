@@ -62,6 +62,22 @@ func (s *Server) ObjectCounts() (certificates, bindings int) {
 	return len(s.certs), len(s.bindings)
 }
 
+// RemoveCert deletes an uploaded certificate object so a test can model the
+// "predecessor is gone" case a rollback must refuse.
+func (s *Server) RemoveCert(name string) {
+	s.mu.Lock()
+	delete(s.certs, name)
+	s.mu.Unlock()
+}
+
+// BoundCertName reports which certificate a virtual service is bound to.
+func (s *Server) BoundCertName(virtualService string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, ok := s.bindings[virtualService]
+	return b.CertName, ok
+}
+
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+s.token {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -71,6 +87,18 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/access/certificates/"):
 		s.upload(w, body, strings.TrimPrefix(r.URL.Path, "/access/certificates/"))
+	// D4: reading a certificate object. Rollback confirms the predecessor is
+	// present before re-binding, so the double must be able to say it is not.
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/access/certificates/"):
+		name := strings.TrimPrefix(r.URL.Path, "/access/certificates/")
+		s.mu.Lock()
+		_, exists := s.certs[name]
+		s.mu.Unlock()
+		if !exists {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		s.ok(w)
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/access/virtual-services/") && strings.HasSuffix(r.URL.Path, "/certificate"):
 		vs := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/access/virtual-services/"), "/certificate")
 		s.bind(w, body, vs)

@@ -57,12 +57,16 @@ func TestF5DeploysRenewedCertViaOutbox(t *testing.T) {
 		t.Fatalf("Dispatch n=%d err=%v, want 1", n, err)
 	}
 
-	gotCert, ok := srv.Uploaded(profile + ".crt")
+	// D4: crypto objects carry the certificate's fingerprint so a later deploy
+	// leaves the predecessor standing for a rollback to bind back to. The
+	// profile — what traffic actually resolves through — keeps its own name.
+	base := connector.DeployedObjectName(profile, connector.CertificateFingerprint(f5Cert))
+	gotCert, ok := srv.Uploaded(base + ".crt")
 	if !ok || !bytes.Equal(gotCert, f5Cert) {
 		t.Fatalf("BIG-IP did not receive the renewed certificate after outbox delivery")
 	}
 	chain, ok := srv.Profile(profile)
-	if !ok || chain.Cert != profile+".crt" || chain.Key != profile+".key" {
+	if !ok || chain.Cert != base+".crt" || chain.Key != base+".key" {
 		t.Fatalf("Client SSL profile not bound to the renewed credential: %+v ok=%v", chain, ok)
 	}
 

@@ -41,17 +41,21 @@ func TestDeployUploadsAndRebinds(t *testing.T) {
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(certkey, sampleCert, sampleKey)); err != nil {
 		t.Fatalf("deploy: %v", err)
 	}
-	gotCert, ok := srv.File(certkey + ".crt")
+	// D4: file names carry the certificate's fingerprint, so a later deploy
+	// cannot destroy the predecessor a rollback needs. The certkey object name
+	// is unchanged — vserver bindings point at it.
+	base := connector.DeployedObjectName(certkey, connector.NewDeployment(certkey, sampleCert, sampleKey).Fingerprint)
+	gotCert, ok := srv.File(base + ".crt")
 	if !ok || !bytes.Equal(gotCert, sampleCert) {
 		t.Errorf("uploaded cert = %q ok=%v; want %q", gotCert, ok, sampleCert)
 	}
-	gotKey, ok := srv.File(certkey + ".key")
+	gotKey, ok := srv.File(base + ".key")
 	if !ok || !bytes.Equal(gotKey, sampleKey) {
 		t.Errorf("uploaded key = %q ok=%v; want %q", gotKey, ok, sampleKey)
 	}
 	b, ok := srv.Binding(certkey)
-	if !ok || b.Cert != certkey+".crt" || b.Key != certkey+".key" {
-		t.Errorf("binding = %+v ok=%v; want cert=%q key=%q", b, ok, certkey+".crt", certkey+".key")
+	if !ok || b.Cert != base+".crt" || b.Key != base+".key" {
+		t.Errorf("binding = %+v ok=%v; want cert=%q key=%q", b, ok, base+".crt", base+".key")
 	}
 }
 
@@ -197,9 +201,13 @@ func TestDeployIsIdempotent(t *testing.T) {
 			t.Fatalf("deploy %d: %v", i, err)
 		}
 	}
-	gotCert, _ := srv.File(certkey + ".crt")
+	// The fingerprint-derived name is what makes this idempotent: the same
+	// certificate resolves to the same file, so a retry writes over itself
+	// rather than accumulating objects on the appliance.
+	base := connector.DeployedObjectName(certkey, dep.Fingerprint)
+	gotCert, _ := srv.File(base + ".crt")
 	b, ok := srv.Binding(certkey)
-	if !bytes.Equal(gotCert, sampleCert) || !ok || b.Cert != certkey+".crt" {
+	if !bytes.Equal(gotCert, sampleCert) || !ok || b.Cert != base+".crt" {
 		t.Errorf("after redeploy: cert=%q binding=%+v ok=%v", gotCert, b, ok)
 	}
 }

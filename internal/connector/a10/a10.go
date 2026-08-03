@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -65,8 +66,13 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 		return fmt.Errorf("a10: %w", err)
 	}
 	defer secret.Wipe(token)
-	certFile := dep.Target + ".crt"
-	keyFile := dep.Target + ".key"
+	// D4: file names carry the certificate's fingerprint so a second deploy
+	// leaves the first in place. The client-ssl TEMPLATE name is unchanged —
+	// virtual ports reference it, and renaming it would break bindings an
+	// operator already has.
+	base := connector.DeployedObjectName(dep.Target, dep.Fingerprint)
+	certFile := base + ".crt"
+	keyFile := base + ".key"
 	if err := c.upload(ctx, sb, token, "ssl-cert", certFile, dep.CertPEM); err != nil {
 		return fmt.Errorf("a10: upload certificate: %w", err)
 	}
@@ -75,6 +81,58 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 	if err := c.bind(ctx, sb, token, dep.Target, certFile, keyFile); err != nil {
 		return fmt.Errorf("a10: bind client-ssl template %q: %w", dep.Target, err)
+	}
+	return nil
+}
+
+// Rollback re-points a client-SSL template at the predecessor's already
+// uploaded files (epic D4). Nothing is uploaded; the template keeps its name so
+// every virtual port bound to it is unaffected.
+func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if strings.TrimSpace(rb.PredecessorFingerprint) == "" || strings.TrimSpace(rb.Target) == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	token, err := c.login(ctx, sb)
+	if err != nil {
+		return fmt.Errorf("a10: %w", err)
+	}
+	defer secret.Wipe(token)
+
+	base := connector.RollbackObjectName(rb.Target, rb.PredecessorFingerprint)
+	certFile := base + ".crt"
+	keyFile := base + ".key"
+	if err := c.mustExistFile(ctx, sb, token, "ssl-cert", certFile); err != nil {
+		return fmt.Errorf("a10: predecessor certificate %q: %w", certFile, err)
+	}
+	// The key too: the template binds both, the deploy uploads them separately,
+	// and binding a template to a key that is not present takes the virtual port
+	// down instead of restoring it.
+	if err := c.mustExistFile(ctx, sb, token, "ssl-key", keyFile); err != nil {
+		return fmt.Errorf("a10: predecessor key %q: %w", keyFile, err)
+	}
+	if err := c.bind(ctx, sb, token, rb.Target, certFile, keyFile); err != nil {
+		return fmt.Errorf("a10: re-bind client-ssl template %q to predecessor: %w", rb.Target, err)
+	}
+	return nil
+}
+
+// mustExistFile reports ErrNoPredecessorInstalled when the uploaded file is
+// absent. Binding a template to a file that is not there would take the virtual
+// port down rather than restore it — the opposite of what a rollback is for.
+func (c *Connector) mustExistFile(ctx context.Context, sb connector.Sandbox, token []byte, kind, filename string) error {
+	data, err := c.call(ctx, sb, http.MethodGet,
+		"/axapi/v3/file/"+kind+"/"+url.PathEscape(filename), token, nil)
+	secret.Wipe(data)
+	if err != nil {
+		var se *statusError
+		if errors.As(err, &se) && se.code == http.StatusNotFound {
+			return connector.ErrNoPredecessorInstalled
+		}
+		// Anything else — a transport failure, an auth failure, a 500 — is NOT
+		// "there is nothing to roll back to". It is worth retrying, and telling
+		// an operator otherwise sends them to reissue a certificate when the
+		// appliance was simply unreachable.
+		return err
 	}
 	return nil
 }
@@ -145,7 +203,7 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		_ = secret.DrainBounded(resp.Body, 4<<10)
-		return nil, fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+		return nil, &statusError{code: resp.StatusCode}
 	}
 	data, err := secret.ReadBounded(resp.Body, 1<<20)
 	if err != nil {
@@ -161,4 +219,21 @@ type authRequest struct {
 type credentials struct {
 	Username string                 `json:"username"`
 	Password secretjson.StringBytes `json:"password"`
+}
+
+// statusError carries the HTTP status a call failed with, so a caller can
+// classify on the CODE rather than on the text of a message.
+//
+// It exists because the text form is genuinely dangerous here. A transport
+// failure's error carries the request URL, and the URL now contains a
+// fingerprint-derived object name (epic D4) — so a "connection refused" against
+// an object whose 12 hex characters happen to contain "404" would match a
+// substring test and be reported as the definitive, non-retryable "the
+// predecessor is no longer installed." Roughly one fingerprint in four hundred.
+// The operator would be told to reissue when the appliance was merely
+// unreachable.
+type statusError struct{ code int }
+
+func (e *statusError) Error() string {
+	return fmt.Sprintf("status %d (response body redacted)", e.code)
 }

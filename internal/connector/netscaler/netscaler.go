@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -109,8 +110,14 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	defer secret.Wipe(token)
 	defer func() { _ = c.logout(ctx, sb, token) }()
 
-	certFile := dep.Target + ".crt"
-	keyFile := dep.Target + ".key"
+	// D4: the uploaded FILE names carry the certificate's fingerprint, so a
+	// second deployment does not overwrite the first. The sslcertkey object
+	// name stays dep.Target — that is what vservers are bound to, and changing
+	// it would break every binding an operator already has. Rollback re-points
+	// the same certkey at the predecessor's files.
+	base := connector.DeployedObjectName(dep.Target, dep.Fingerprint)
+	certFile := base + ".crt"
+	keyFile := base + ".key"
 	if err := c.upload(ctx, sb, token, certFile, dep.CertPEM); err != nil {
 		return fmt.Errorf("netscaler: upload certificate: %w", err)
 	}
@@ -119,6 +126,74 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 	if err := c.rebind(ctx, sb, token, dep.Target, certFile, keyFile); err != nil {
 		return fmt.Errorf("netscaler: rebind certkey %q: %w", dep.Target, err)
+	}
+	return nil
+}
+
+// Rollback re-points an existing sslcertkey at the predecessor's already
+// uploaded files (epic D4).
+//
+// Nothing is uploaded. The certkey object keeps its name, so every vserver
+// bound to it is unaffected — what changes is which file pair it resolves to,
+// which is exactly the state a deploy changed and the only thing that needs
+// undoing.
+func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if strings.TrimSpace(rb.PredecessorFingerprint) == "" || strings.TrimSpace(rb.Target) == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	token, err := c.login(ctx, sb)
+	if err != nil {
+		return fmt.Errorf("netscaler: %w", err)
+	}
+	defer secret.Wipe(token)
+	defer func() { _ = c.logout(ctx, sb, token) }()
+
+	base := connector.RollbackObjectName(rb.Target, rb.PredecessorFingerprint)
+	certFile := base + ".crt"
+	keyFile := base + ".key"
+	// Confirm the predecessor file is still on the appliance. A NITRO PUT that
+	// names a missing file can be accepted and leave the certkey unusable —
+	// which would take the listener down instead of restoring it.
+	if err := c.mustExistFile(ctx, sb, token, certFile); err != nil {
+		return fmt.Errorf("netscaler: predecessor file %q: %w", certFile, err)
+	}
+	// BOTH halves. The certkey is bound to a cert AND a key, and the deploy
+	// uploads them in two separate calls — so a deploy that failed between them
+	// leaves an orphan .crt with no matching .key. Checking only the certificate
+	// would then bind the certkey to a key that is not there, which by this
+	// connector's own account leaves the listener down: the rollback would take
+	// the service off the air rather than restore it, and report success.
+	if err := c.mustExistFile(ctx, sb, token, keyFile); err != nil {
+		return fmt.Errorf("netscaler: predecessor key file %q: %w", keyFile, err)
+	}
+	if err := c.rebind(ctx, sb, token, rb.Target, certFile, keyFile); err != nil {
+		return fmt.Errorf("netscaler: re-bind certkey %q to predecessor: %w", rb.Target, err)
+	}
+	return nil
+}
+
+// mustExistFile reports ErrNoPredecessorInstalled when the system file is
+// absent, and the transport error otherwise.
+func (c *Connector) mustExistFile(ctx context.Context, sb connector.Sandbox, token []byte, filename string) error {
+	// PathEscape, not QueryEscape: NITRO's args= is a comma-separated key:value
+	// list, not a form body, so QueryEscape's space-to-'+' substitution corrupts
+	// any target name containing a space — and the target name is free-form
+	// operator text. PathEscape leaves ':' and ',' literal, so the args syntax
+	// still parses.
+	path := "/nitro/v1/config/systemfile?args=filename:" + url.PathEscape(filename) +
+		",filelocation:" + url.PathEscape(c.fileLocation)
+	data, err := c.call(ctx, sb, http.MethodGet, path, token, nil)
+	secret.Wipe(data)
+	if err != nil {
+		var se *statusError
+		if errors.As(err, &se) && se.code == http.StatusNotFound {
+			return connector.ErrNoPredecessorInstalled
+		}
+		// Anything else — a transport failure, an auth failure, a 500 — is NOT
+		// "there is nothing to roll back to". It is worth retrying, and telling
+		// an operator otherwise sends them to reissue a certificate when the
+		// appliance was simply unreachable.
+		return err
 	}
 	return nil
 }
@@ -204,7 +279,7 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		_ = secret.DrainBounded(resp.Body, 4<<10)
-		return nil, fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+		return nil, &statusError{code: resp.StatusCode}
 	}
 	data, err := secret.ReadBounded(resp.Body, 1<<20)
 	if err != nil {
@@ -246,4 +321,21 @@ type sslcertkey struct {
 	Cert          string `json:"cert"`
 	Key           string `json:"key"`
 	NoDomainCheck bool   `json:"nodomaincheck"`
+}
+
+// statusError carries the HTTP status a call failed with, so a caller can
+// classify on the CODE rather than on the text of a message.
+//
+// It exists because the text form is genuinely dangerous here. A transport
+// failure's error carries the request URL, and the URL now contains a
+// fingerprint-derived object name (epic D4) — so a "connection refused" against
+// an object whose 12 hex characters happen to contain "404" would match a
+// substring test and be reported as the definitive, non-retryable "the
+// predecessor is no longer installed." Roughly one fingerprint in four hundred.
+// The operator would be told to reissue when the appliance was merely
+// unreachable.
+type statusError struct{ code int }
+
+func (e *statusError) Error() string {
+	return fmt.Sprintf("status %d (response body redacted)", e.code)
 }

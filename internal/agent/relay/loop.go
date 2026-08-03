@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 )
 
@@ -51,7 +53,7 @@ const (
 // for host-local kinds would be asking for work it cannot do.
 func ClaimableKinds() []string {
 	return []string{
-		"connector.deploy", "connector.test",
+		"connector.deploy", "connector.test", KindConnectorRollback,
 		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory,
 	}
 }
@@ -59,6 +61,15 @@ func ClaimableKinds() []string {
 // KindConnectorTest is the dry-run kind (epic D5): resolve everything a deploy
 // needs, probe the target, describe what would change, mutate nothing.
 const KindConnectorTest = "connector.test"
+
+// KindConnectorRollback is the executed re-bind (epic D4): point a listener
+// back at a predecessor object that is still installed on the appliance.
+//
+// It is a separate kind from connector.deploy because an operator must be able
+// to enable rolling back without enabling deploying, and because the payload is
+// genuinely different — a rollback names a fingerprint and carries no
+// certificate at all.
+const KindConnectorRollback = "connector.rollback"
 
 // RunOnce claims up to limit jobs, executes each, and reports. It returns how
 // many it executed. One pass, no timers: the caller owns the schedule, so a
@@ -119,6 +130,14 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// material it has no use for (C2).
 	if job.Kind == KindDiscoveryRun {
 		return runDiscoverySweep(ctx, ch, job)
+	}
+
+	// A rollback carries a rollback intent, not a deploy intent — no
+	// certificate and no key, by design. Routing it here keeps the deploy path
+	// from trying to decode a payload that will never have the fields it
+	// expects.
+	if job.Kind == KindConnectorRollback {
+		return runRollback(ctx, ch, client, job)
 	}
 
 	var intent DeployIntent
@@ -224,6 +243,69 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	return true
 }
 
+// runRollback executes one re-bind (epic D4).
+//
+// It still redeems: re-pointing a listener means authenticating to the
+// appliance's management interface. What it does NOT redeem is a subject key,
+// because there is none to redeem and none is needed — which is exactly why
+// this operation is available at all.
+func runRollback(ctx context.Context, ch Channel, client *http.Client, job Job) bool {
+	var intent RollbackIntent
+	if err := decodeJobPayload(job.Payload, &intent); err != nil {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedBadPayload)
+		return false
+	}
+	// Refuse before redeeming, same discipline as a deploy: a credential
+	// redeemed for an attempt that was never going to run is material outside
+	// the seal for nothing, and it burns the attempt's one redemption.
+	if !Executes(intent.Connector) {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNotExecutable)
+		return false
+	}
+	if !connector.CanRollback(intent.Connector) {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedCannotRebind)
+		return false
+	}
+	if strings.TrimSpace(intent.PredecessorFingerprint) == "" {
+		// A first deployment has no predecessor. Saying so is the useful answer;
+		// retrying would never produce one.
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoPredecessor)
+		return false
+	}
+
+	items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)
+	if err != nil {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoCredential)
+		return false
+	}
+	material, destroy, err := AdoptMaterial(items)
+	if err != nil {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoLockedMemory)
+		return false
+	}
+	defer destroy()
+
+	stats, execErr := Rollback(ctx, client, intent, material)
+	switch {
+	case errors.Is(execErr, connector.ErrNoPredecessorInstalled):
+		// The distinction an operator acts on: the object is not there, so no
+		// retry will help and somebody has to reissue rather than restore.
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackFailedPredecessorGone)
+		return false
+	case execErr != nil:
+		// The connector's error can carry whatever the appliance echoed,
+		// including the credential. Never forwarded.
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackFailedAtTarget)
+		return false
+	}
+	if stats.Denied > 0 {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedCapability)
+		return false
+	}
+	report(ctx, ch, job, OutcomeExecuted, "")
+	return true
+}
+
 func report(ctx context.Context, ch Channel, job Job, outcome, detail string) {
 	// A failed report is not retried here: the claim lease is the safety net.
 	// If the control plane never hears, the lease lapses and the work returns.
@@ -231,6 +313,13 @@ func report(ctx context.Context, ch Channel, job Job, outcome, detail string) {
 }
 
 func decodeIntent(payload []byte, out *DeployIntent) error {
+	return decodeJobPayload(payload, out)
+}
+
+// decodeJobPayload decodes any job intent. Generic because a rollback intent is
+// a different shape from a deploy intent — deliberately, since a rollback
+// carries no certificate — and both need the same empty-payload refusal.
+func decodeJobPayload[T any](payload []byte, out *T) error {
 	if len(payload) == 0 {
 		return errors.New("relay: empty job payload")
 	}

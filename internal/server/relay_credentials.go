@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -300,6 +301,50 @@ func relayDeployIntentFromSealed(job store.AgentJob) (RelayDeployIntent, error) 
 		TargetConfig:   append(json.RawMessage(nil), wrapped.TargetConfig...),
 		CredentialRefs: refs,
 	}, nil
+}
+
+// RelayRollbackIntent is what a relay receives when it claims a rollback job
+// (epic D4).
+//
+// It carries no certificate and no key, and it never needs to: a rollback
+// re-binds a listener to an object already installed on the appliance. The
+// credential reference names are the APPLIANCE credential — what authenticates
+// to the management interface — because a relay still has to log in to
+// re-point a listener.
+type RelayRollbackIntent struct {
+	Connector    string          `json:"connector"`
+	Target       string          `json:"target"`
+	TargetID     string          `json:"target_id,omitempty"`
+	IdentityID   string          `json:"identity_id,omitempty"`
+	TargetConfig json.RawMessage `json:"target_config,omitempty"`
+	// PredecessorFingerprint names the installed object to bind back to.
+	PredecessorFingerprint string   `json:"predecessor_fingerprint"`
+	Reason                 string   `json:"reason,omitempty"`
+	CredentialRefs         []string `json:"credential_refs,omitempty"`
+}
+
+// projectRollbackIntent builds the agent's view of a rollback job.
+//
+// A rollback payload is enqueued unsealed because it holds nothing to seal. The
+// projection still runs so credential REFERENCES are named — the agent refuses
+// work it cannot execute before redeeming anything — and so a payload that
+// somehow carried key material is refused rather than forwarded.
+func projectRollbackIntent(job store.AgentJob) ([]byte, error) {
+	var intent RelayRollbackIntent
+	if err := json.Unmarshal(job.Payload, &intent); err != nil {
+		return nil, fmt.Errorf("decode connector rollback payload: %w", err)
+	}
+	if strings.TrimSpace(intent.PredecessorFingerprint) == "" {
+		return nil, errors.New("connector rollback payload names no predecessor")
+	}
+	// Defensive, and cheap: nothing about a rollback should ever carry a key,
+	// so a payload that does is a bug worth failing on rather than shipping to
+	// a host in the estate.
+	if bytes.Contains(job.Payload, []byte("PRIVATE KEY")) {
+		return nil, errors.New("connector rollback payload carries key material")
+	}
+	intent.CredentialRefs = collectSecretRefs(intent.TargetConfig)
+	return json.Marshal(intent)
 }
 
 // sealRelayDeployForTest seals a connector deploy payload through the SAME

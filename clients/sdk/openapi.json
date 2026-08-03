@@ -5013,6 +5013,9 @@
           "delivery_mode": {
             "type": "string"
           },
+          "executes_rollback": {
+            "type": "boolean"
+          },
           "kind": {
             "type": "string"
           },
@@ -5101,6 +5104,10 @@
               "failed",
               "config_validated",
               "rollback_recorded",
+              "rollback_queued",
+              "rolled_back",
+              "rollback_refused",
+              "rollback_failed",
               "dry_run_queued",
               "dry_run_planned",
               "dry_run_blocked",

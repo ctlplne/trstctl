@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 )
@@ -76,6 +77,26 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.requireToken(w, r, func() { s.upload(w, body, "ssl-cert") })
 	case r.Method == http.MethodPost && r.URL.Path == "/axapi/v3/file/ssl-key":
 		s.requireToken(w, r, func() { s.upload(w, body, "ssl-key") })
+	// D4: reading an uploaded file, so a rollback can tell "the predecessor is
+	// gone" from "the appliance did not answer".
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/axapi/v3/file/"):
+		rest := strings.TrimPrefix(r.URL.Path, "/axapi/v3/file/")
+		parts := strings.SplitN(rest, "/", 2)
+		if len(parts) != 2 {
+			http.Error(w, `{"response":{"status":"fail"}}`, http.StatusNotFound)
+			return
+		}
+		name, _ := url.PathUnescape(parts[1])
+		s.mu.Lock()
+		_, isCert := s.certs[name]
+		_, isKey := s.keys[name]
+		exists := isCert || isKey
+		s.mu.Unlock()
+		if !exists {
+			http.Error(w, `{"response":{"status":"fail"}}`, http.StatusNotFound)
+			return
+		}
+		s.ok(w, map[string]any{"file": name})
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/axapi/v3/slb/template/client-ssl/"):
 		s.requireToken(w, r, func() { s.bind(w, body, strings.TrimPrefix(r.URL.Path, "/axapi/v3/slb/template/client-ssl/")) })
 	default:
@@ -156,6 +177,14 @@ func (s *Server) requireToken(w http.ResponseWriter, r *http.Request, next func(
 		return
 	}
 	next()
+}
+
+// RemoveCert deletes an uploaded certificate file so a test can model the
+// "predecessor is gone" case a rollback must refuse.
+func (s *Server) RemoveCert(name string) {
+	s.mu.Lock()
+	delete(s.certs, name)
+	s.mu.Unlock()
 }
 
 func (s *Server) ok(w http.ResponseWriter, body any) {

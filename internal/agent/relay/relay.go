@@ -144,6 +144,81 @@ func Execute(ctx context.Context, client *http.Client, intent DeployIntent, mate
 	})
 }
 
+// RollbackIntent is a re-bind the relay executes (epic D4).
+//
+// It carries no certificate and no key. That is not an omission — it is the
+// reason a rollback is executable at all: the control plane holds no subject
+// key after B1, and a rollback that needed one could not be performed by
+// anybody. What travels is the predecessor's FINGERPRINT, which names an object
+// already installed on the appliance.
+type RollbackIntent struct {
+	Connector    string          `json:"connector"`
+	Target       string          `json:"target"`
+	TargetID     string          `json:"target_id,omitempty"`
+	IdentityID   string          `json:"identity_id,omitempty"`
+	TargetConfig json.RawMessage `json:"target_config,omitempty"`
+	// PredecessorFingerprint identifies the installed object to bind back to.
+	PredecessorFingerprint string `json:"predecessor_fingerprint"`
+	// Reason is operator context for the transcript. It never reaches the
+	// appliance.
+	Reason string `json:"reason,omitempty"`
+}
+
+// Rollback drives one connector re-bind against a real target.
+//
+// The credential material it takes is the APPLIANCE credential — the password
+// or token that authenticates to the management interface — never a subject
+// key. A relay still has to log in to re-point a listener; it just has nothing
+// to upload once it is there.
+func Rollback(ctx context.Context, client *http.Client, intent RollbackIntent, material Material) (connector.Stats, error) {
+	if !Executes(intent.Connector) {
+		return connector.Stats{}, fmt.Errorf("relay: connector %q is not relay-executable", intent.Connector)
+	}
+	if !connector.CanRollback(intent.Connector) {
+		// Refused rather than attempted. A connector whose API cannot address an
+		// installed object separately from uploading one has no re-bind to
+		// perform, and pretending otherwise would report a rollback that did
+		// nothing while a bad certificate kept serving traffic.
+		return connector.Stats{}, connector.ErrRollbackUnsupported
+	}
+	if strings.TrimSpace(intent.PredecessorFingerprint) == "" {
+		return connector.Stats{}, connector.ErrNoPredecessorInstalled
+	}
+
+	var target TargetConfig
+	if len(intent.TargetConfig) > 0 {
+		if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {
+			return connector.Stats{}, fmt.Errorf("relay: decode target config: %w", err)
+		}
+	}
+	if strings.TrimSpace(target.Endpoint) == "" {
+		return connector.Stats{}, errors.New("relay: target config carries no endpoint")
+	}
+
+	built, err := buildRelayConnector(intent.Connector, target, material)
+	if err != nil {
+		return connector.Stats{}, err
+	}
+	return connector.RunRollback(ctx, built, connector.NewHTTPOps(client), connector.Rollback{
+		Target:                 intent.Target,
+		PredecessorFingerprint: intent.PredecessorFingerprint,
+		Reason:                 intent.Reason,
+	})
+}
+
+// RollbackCapableKinds is the relay-side census: connectors this relay can both
+// reach AND re-bind. It is the intersection, because either half missing means
+// the same thing to an operator — this rollback will not execute here.
+func RollbackCapableKinds() []string {
+	var out []string
+	for _, kind := range RelayConnectorKinds() {
+		if connector.CanRollback(kind) {
+			out = append(out, kind)
+		}
+	}
+	return out
+}
+
 // buildRelayConnector constructs the named appliance connector from the target's
 // routing fields and the credential the relay redeemed for this attempt. It
 // mirrors the control plane's factory for the same seven kinds — same

@@ -61,12 +61,16 @@ func TestNetScalerDeploysRenewedCertViaOutbox(t *testing.T) {
 		t.Fatalf("Dispatch n=%d err=%v, want 1", n, err)
 	}
 
-	gotCert, ok := srv.File(certkey + ".crt")
+	// D4: uploaded FILE names carry the fingerprint so a later deploy leaves the
+	// predecessor for a rollback. The certkey object — what vservers bind to —
+	// keeps its name.
+	base := connector.DeployedObjectName(certkey, connector.CertificateFingerprint(nsCert))
+	gotCert, ok := srv.File(base + ".crt")
 	if !ok || !bytes.Equal(gotCert, nsCert) {
 		t.Fatalf("NetScaler did not receive the renewed certificate after outbox delivery")
 	}
 	b, ok := srv.Binding(certkey)
-	if !ok || b.Cert != certkey+".crt" || b.Key != certkey+".key" {
+	if !ok || b.Cert != base+".crt" || b.Key != base+".key" {
 		t.Fatalf("SSL certkey not rebound to the renewed files: %+v ok=%v", b, ok)
 	}
 

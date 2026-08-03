@@ -444,7 +444,18 @@ export function Connectors() {
                       <td>
                         <VantageBadge vantage={connector.target_vantage} />
                       </td>
-                      <td>{connector.rollback}</td>
+                      <td>
+                        {/* D4: whether trstctl PERFORMS the rollback beside it
+                            or only describes it. An operator reaching for this
+                            during an incident needs the difference before they
+                            reach, not after. */}
+                        <span className={connector.executes_rollback ? "font-medium text-status-success" : "text-muted-foreground"}>
+                          {connector.executes_rollback
+                            ? translateNow("source.executes.rebind.d4rb000003")
+                            : translateNow("source.manual.procedure.d4rb000004")}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">{connector.rollback}</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

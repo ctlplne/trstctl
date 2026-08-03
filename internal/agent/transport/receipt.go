@@ -136,3 +136,76 @@ func DetailDigest(detail string) string {
 	}
 	return crypto.SHA256Hex([]byte(detail))
 }
+
+// Closed-set rollback failure reasons (epic D4).
+//
+// A relay's failure detail is not free text — it is one of these — because the
+// control plane classifies it into a served status, and a status must never
+// claim more than happened. The specific thing that must not be claimed is
+// CONTACT: five of these reasons are refusals the relay makes before it opens a
+// socket, and recording them as "the attempt ran against the target" would tell
+// an operator the appliance rejected something it never heard about.
+//
+// The set lives here, in the wire contract, for the same reason the canonical
+// receipt statement does: the side that emits these and the side that
+// interprets them cannot be allowed to drift.
+const (
+	// Refusals made locally, before any connection to the target.
+	RollbackRefusedBadPayload     = "job payload is not a rollback intent"
+	RollbackRefusedNotExecutable  = "connector is not executable by this agent"
+	RollbackRefusedCannotRebind   = "this connector cannot roll back by re-binding"
+	RollbackRefusedNoPredecessor  = "no predecessor is recorded for this target"
+	RollbackRefusedNoCredential   = "credential redemption was not granted" // #nosec G101 -- an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798)
+	RollbackRefusedNoLockedMemory = "redeemed material could not be taken into locked memory"
+	// A denied capability means the sandbox blocked the operation — including,
+	// for a network connector, the dial itself. It is classified as no-contact
+	// because claiming contact on a blocked dial would be the same lie.
+	RollbackRefusedCapability = "connector attempted an operation outside its declared capabilities"
+
+	// Failures that happened AGAINST the target: the relay reached it.
+	RollbackFailedPredecessorGone = "the predecessor certificate is no longer installed on the target"
+	RollbackFailedAtTarget        = "connector rollback failed against the target"
+)
+
+// RollbackReasonContactedTarget reports whether a rollback failure reason means
+// the relay actually reached the appliance.
+//
+// An unrecognized reason answers FALSE. That is the fail-closed direction: an
+// unknown phrase from a newer or older agent must not cause the control plane to
+// assert contact it cannot substantiate.
+func RollbackReasonContactedTarget(reason string) bool {
+	switch reason {
+	case RollbackFailedPredecessorGone, RollbackFailedAtTarget:
+		return true
+	default:
+		return false
+	}
+}
+
+// RollbackReasonIsPermanent reports whether a rollback failure will fail the same
+// way on every future attempt.
+//
+// The claim path has no attempts predicate, so work that is requeued is retried
+// on every poll — and each rollback attempt redeems an appliance credential out
+// of the seal. A failure that can never succeed must therefore leave the queue,
+// or the system holds credential material outside the seal forever in service of
+// an operation that cannot complete.
+//
+// An unrecognized reason answers FALSE: retrying costs a poll cycle, whereas
+// wrongly retiring work that would have succeeded loses it silently.
+func RollbackReasonIsPermanent(reason string) bool {
+	switch reason {
+	case RollbackFailedPredecessorGone,
+		RollbackRefusedBadPayload,
+		RollbackRefusedNotExecutable,
+		RollbackRefusedCannotRebind,
+		RollbackRefusedNoPredecessor:
+		return true
+	default:
+		// Not permanent: a credential that was not granted may be granted, a
+		// locked-memory failure may pass, a capability denial may be a
+		// misconfiguration an operator fixes, and a failure at the target may
+		// be transient.
+		return false
+	}
+}

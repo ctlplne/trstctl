@@ -20,6 +20,13 @@ type connectorCatalogItem struct {
 	Kind         string `json:"kind"`
 	DeliveryMode string `json:"delivery_mode"`
 	Rollback     string `json:"rollback"`
+	// ExecutesRollback reports whether trstctl can PERFORM the rollback above
+	// rather than describe it (epic D4). It is read from the connector census,
+	// never written beside the prose, because the prose is a procedure and this
+	// is a claim about the binary — and an operator reading "we can roll this
+	// back" during an incident and finding out otherwise is the specific
+	// failure the truth-integrity work exists to prevent.
+	ExecutesRollback bool `json:"executes_rollback"`
 	// B-6: the catalog described WHAT each connector deploys but not what it
 	// is permitted to do or how it behaves on a redelivery — the two facts an
 	// operator actually needs before authorizing a privileged deployment.
@@ -449,27 +456,72 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if reason == "" {
 			reason = "operator rollback"
 		}
-		// Nothing is restored here. This records the operator's rollback intent in
-		// the evidence chain; the predecessor credential is not put back on the
-		// target and the target is not contacted — truth-integrity 4.
+		// D4: this EXECUTES where it can.
 		//
-		// What the ref names is now SPECIFIC (D4, partial). It used to say
-		// "pending manual restore of the previous credential", which told an
-		// operator nothing they could act on: on a target that has been renewed
-		// several times, "the previous credential" is a question, not an
-		// instruction. The predecessor is resolved from the certificate's own
-		// replacement chain and named by serial and fingerprint, so the manual
-		// restore this still requires is a task someone can actually perform.
+		// The predecessor is resolved from the certificate's own replacement
+		// chain. Where the connector family can address an installed object
+		// separately from uploading one, the rollback is queued as a real
+		// connector.rollback job a relay claims and performs — a re-bind, which
+		// is the only executable form available once the control plane holds no
+		// subject key to re-upload.
 		//
-		// Executing it is the remaining half. It cannot be a re-upload: after
-		// B1 the control plane never holds the subject key, so it has nothing to
-		// push. The executable form is a re-BIND — pointing the target back at
-		// the predecessor object that is still installed on it — which needs a
-		// rollback operation on the connector interface that does not exist yet.
+		// Where it cannot, the old attested-intent receipt stands, with the
+		// predecessor named by serial and fingerprint so the manual restore is a
+		// task someone can actually perform. Both outcomes are recorded with a
+		// status that says which happened; a route that reported "rolled back"
+		// for both would be the memo-only receipt this epic exists to remove.
+		predecessor := resolvePredecessorCertificate(ctx, a.store, tenantID, identityID)
 		rollbackRef := predecessorRollbackRef(ctx, a.store, tenantID, identityID, target.Name)
+		status := servedstatus.ConnectorRollbackRecorded
+		statusReason := "rollback_attested_not_executed"
+
+		if connector.CanRollback(target.Type) && predecessor.Fingerprint != "" && a.orch != nil {
+			// The SAME string a deploy routes on. target.Name is the display
+			// name; the connectors derive their installed object from the
+			// routing attribute, and using the display name here would make
+			// every rollback look for an object that was never created.
+			rollbackTarget := orchestrator.DeploymentRoute(target)
+			if strings.TrimSpace(rollbackTarget) == "" {
+				rollbackTarget = target.Name
+			}
+			queued, qErr := a.orch.RequestConnectorRollback(ctx, tenantID, orchestrator.ConnectorRollbackRequest{
+				Connector: target.Type, Target: rollbackTarget, TargetID: target.ID,
+				IdentityID: strings.TrimSpace(req.IdentityID), TargetConfig: target.Config,
+				PredecessorFingerprint: predecessor.Fingerprint,
+				PredecessorSerial:      predecessor.Serial,
+				Reason:                 reason,
+			})
+			if qErr != nil {
+				return 0, nil, qErr
+			}
+			// Only claim "queued" when a relay can actually pick it up. The
+			// orchestrator re-arms a terminal row rather than silently finding
+			// it, but if it could not, saying so beats telling an operator
+			// mid-incident that a rollback is under way when nothing will run.
+			if !queued.Queued {
+				return 0, nil, errStatus(http.StatusConflict,
+					"a rollback for this target and predecessor exists and could not be re-queued; "+
+						"inspect the connector delivery receipts for its outcome before retrying")
+			}
+			status = servedstatus.ConnectorRollbackQueued
+			statusReason = "rollback_queued_for_relay_execution"
+			// Deliberately does NOT assert the object is on the appliance. All
+			// this side checked is its own replacement chain; whether the
+			// fingerprint-named object is actually installed is something only
+			// the relay can see, and it checks before binding. Stating it as
+			// fact here would be the control plane vouching for a machine it
+			// has never looked at.
+			rollbackRef = "queued for relay execution on " + target.Name +
+				": re-bind to the predecessor certificate serial " + predecessor.Serial +
+				" (fingerprint " + predecessor.Fingerprint + "), outbox key " + queued.IdempotencyKey +
+				". No key is uploaded. Whether that object is still installed on the target is " +
+				"verified by the relay when it runs; if it is gone the rollback fails rather than " +
+				"reporting success."
+		}
+
 		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 			IdentityID: identityID, Destination: "connector.rollback", Connector: target.Type, Target: target.Name,
-			Fingerprint: fingerprint, Status: servedstatus.ConnectorRollbackRecorded, Attempts: 1, Reason: "rollback_attested_not_executed",
+			Fingerprint: fingerprint, Status: status, Attempts: 1, Reason: statusReason,
 			Detail:      reason,
 			RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,
 		})
@@ -478,6 +530,42 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusOK, toConnectorDeliveryResponse(receipt), nil
 	})
+}
+
+// predecessorCertificate is the credential a rollback binds back to.
+type predecessorCertificate struct {
+	Serial      string
+	Fingerprint string
+}
+
+// resolvePredecessorCertificate walks the replacement chain to the certificate
+// the current one replaced.
+//
+// It returns an empty value rather than an error when there is no predecessor,
+// because "this is the first credential on this target" is an ordinary state
+// and the caller renders it as such — the alternative is a 500 for a target
+// that has simply never been renewed.
+func resolvePredecessorCertificate(ctx context.Context, st *store.Store, tenantID string, identityID *string) predecessorCertificate {
+	if st == nil || identityID == nil || strings.TrimSpace(*identityID) == "" {
+		return predecessorCertificate{}
+	}
+	identity, err := st.GetIdentity(ctx, tenantID, *identityID)
+	if err != nil {
+		return predecessorCertificate{}
+	}
+	certs, err := st.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, identity.OwnerID, identity.Name)
+	if err != nil || len(certs) == 0 {
+		return predecessorCertificate{}
+	}
+	current := certs[len(certs)-1]
+	if current.ReplacesID == nil || strings.TrimSpace(*current.ReplacesID) == "" {
+		return predecessorCertificate{}
+	}
+	previous, err := st.GetCertificate(ctx, tenantID, *current.ReplacesID)
+	if err != nil {
+		return predecessorCertificate{}
+	}
+	return predecessorCertificate{Serial: previous.Serial, Fingerprint: previous.Fingerprint}
 }
 
 //trstctl:mutation
@@ -793,6 +881,7 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		item.Capabilities = []string{}
 		item.ReplaySafety = replaySafetyLabel(connector.ReplaySafetyAtMostOnce)
 		item.TargetVantage = string(connector.VantageControlPlane)
+		item.ExecutesRollback = connector.CanRollback(item.Name)
 		if a.connectorRegistry != nil {
 			item.Native = a.connectorRegistry.Has(item.Name)
 			if caps := a.connectorRegistry.CapabilitiesFor(item.Name); len(caps) > 0 {

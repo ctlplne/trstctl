@@ -1556,6 +1556,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// D5: a relay's dry-run plan becomes a delivery receipt an operator can
 		// read on the Connectors page.
 		recordDryRun:      s.dryRunReceipt,
+		recordRollback:    s.rollbackReceipt,
 		recordADCSPosture: s.recordADCSPosture,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)

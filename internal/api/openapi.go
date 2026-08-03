@@ -1869,6 +1869,8 @@ func componentSchemas() map[string]*Schema {
 	}, "generated_at", "items", "summary", "coverage")
 	connectorCatalogItem := object(map[string]*Schema{
 		"name": str(), "kind": str(), "delivery_mode": str(), "rollback": str(),
+		// D4: whether trstctl can PERFORM that rollback or only describe it.
+		"executes_rollback": {Type: "boolean"},
 		// B-6: live sandbox facts from the connector registry.
 		"native":        {Type: "boolean"},
 		"capabilities":  {Type: "array", Items: str()},

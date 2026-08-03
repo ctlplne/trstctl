@@ -232,8 +232,32 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 	if !kinds["connector.deploy"] || !kinds[relay.KindConnectorTest] {
 		t.Fatalf("shipped job kinds = %+v, want connector.deploy and connector.test", shipped)
 	}
-	if _, ok := relay.UnshippedJobKinds()["connector.rollback"]; !ok {
-		t.Error("connector.rollback must be named as unshipped with its reason")
+	// D4: rollback ships now, for the families whose API can re-bind. The
+	// assertion moved from "named as unshipped" to "shipped for exactly the
+	// rollback-capable subset" — advertising the rest would take a claim, burn
+	// a redemption, and change nothing while a bad certificate kept serving.
+	if !kinds[relay.KindConnectorRollback] {
+		t.Fatalf("shipped job kinds = %+v, want connector.rollback", shipped)
+	}
+	if _, ok := relay.UnshippedJobKinds()["connector.rollback"]; ok {
+		t.Error("connector.rollback is shipped and must not also be listed as unshipped")
+	}
+	capable := relay.RollbackCapableKinds()
+	if len(capable) == 0 {
+		t.Fatal("no relay connector can roll back; connector.rollback must not be advertised")
+	}
+	for _, kind := range capable {
+		if !relay.Executes(kind) {
+			t.Errorf("rollback census names %q, which this relay cannot even reach", kind)
+		}
+	}
+	for _, s := range shipped {
+		if s.Kind != relay.KindConnectorRollback {
+			continue
+		}
+		if len(s.Connectors) != len(capable) {
+			t.Errorf("connector.rollback advertises %v but only %v can re-bind", s.Connectors, capable)
+		}
 	}
 }
 

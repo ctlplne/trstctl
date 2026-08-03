@@ -247,6 +247,10 @@ const esESCatalog = {
   "operations.jobs.redemptions.none": "Ninguno",
   "operations.jobs.redemptions.help":
     "Un relé canjea material de credenciales para un único intento de trabajo y lo borra al finalizar. Un recuento activo que no disminuye, o una antigüedad superior al arrendamiento máximo de reclamación, indica que un intento se ha quedado reteniendo material.",
+  "source.executes.rebind.d4rb000003": "trstctl lo ejecuta (revinculación)",
+  "source.manual.procedure.d4rb000004": "Procedimiento manual",
+  "source.rollback.queued.d4rb000001": "Reversión en cola para un relé",
+  "source.rolled.back.d4rb000002": "Revertido (revinculado al predecesor)",
   "operations.jobs.receipts.verified": "Recibos verificados",
   "operations.jobs.receipts.rejected": "Recibos rechazados",
   "operations.jobs.receipts.lastRejected": "Rechazo más reciente",

@@ -393,3 +393,133 @@ func TestARefusalForUnclaimedWorkIsAuditedButNotCounted(t *testing.T) {
 			before.Receipts.Rejected, after.Receipts.Rejected)
 	}
 }
+
+// A rollback the relay refused before contact must not be recorded as contact.
+//
+// The served status vocabulary declares ContactedTarget on the generic failure
+// status, so recording a pre-flight refusal there would tell an operator the
+// appliance rejected something it never heard about — and send them to check an
+// appliance that is fine while a bad certificate keeps serving.
+func TestRollbackContactClassificationMatchesWhatTheRelayDid(t *testing.T) {
+	t.Parallel()
+	refusedBeforeContact := []string{
+		transport.RollbackRefusedBadPayload,
+		transport.RollbackRefusedNotExecutable,
+		transport.RollbackRefusedCannotRebind,
+		transport.RollbackRefusedNoPredecessor,
+		transport.RollbackRefusedNoCredential,
+		transport.RollbackRefusedNoLockedMemory,
+		transport.RollbackRefusedCapability,
+	}
+	for _, reason := range refusedBeforeContact {
+		if transport.RollbackReasonContactedTarget(reason) {
+			t.Errorf("reason %q is a local refusal but classifies as having contacted the target", reason)
+		}
+	}
+	reachedTarget := []string{
+		transport.RollbackFailedPredecessorGone,
+		transport.RollbackFailedAtTarget,
+	}
+	for _, reason := range reachedTarget {
+		if !transport.RollbackReasonContactedTarget(reason) {
+			t.Errorf("reason %q means the relay reached the target but classifies as no contact", reason)
+		}
+	}
+	// An unknown phrase — a newer or older agent — must fail closed to NO
+	// contact. Asserting contact we cannot substantiate is the failure this
+	// classification exists to prevent.
+	if transport.RollbackReasonContactedTarget("something a future agent says") {
+		t.Error("an unrecognized reason asserted contact; it must fail closed")
+	}
+}
+
+// Relay-executed work must survive the control plane's own outbox sweep.
+//
+// This is the defect that made D4 non-functional end to end and had already
+// made D5's connector.test non-functional in production without anyone
+// noticing. The control plane sweeps every "connector." outbox row and does not
+// filter on required_agent_role, so a destination with no dispatcher case hits
+// the default branch, burns its attempt budget on a hard error, and lands in
+// status='failed'. ClaimAgentJobs requires status='pending', so the row becomes
+// permanently invisible to the relay that was supposed to execute it — while
+// the API has already told the operator it is queued.
+//
+// Nothing failed anywhere. Every unit test passed, because none of them ran the
+// control-plane dispatcher and the relay claim path against the same row.
+func TestRelayExecutedWorkSurvivesTheControlPlaneDispatcher(t *testing.T) {
+	ctx := context.Background()
+	for _, destination := range []string{"connector.rollback", "connector.test"} {
+		t.Run(destination, func(t *testing.T) {
+			h := agentJobHarness(t, destination)
+			seedRelayExecutedJob(t, ctx, h, destination, "dispatcher-survives:"+destination)
+
+			// The real dispatcher and the real handler — not a stand-in. A test
+			// with its own handler could not see this defect, because the
+			// defect IS which destinations the production handler recognizes.
+			if _, err := h.srv.outbox.Dispatch(ctx, h.srv.obHandler); err != nil {
+				t.Fatalf("dispatch: %v", err)
+			}
+
+			// The precise property, not a proxy for it: the dispatcher must not
+			// consume an ATTEMPT. Asserting only that the row is still
+			// claimable proves nothing here — retry backoff keeps a row pending
+			// long after the first failure, so a hard error looks identical to a
+			// correct deferral until the budget finally runs out in production,
+			// hours later, with the operator already told the work was queued.
+			var status string
+			var attempts int
+			var lastError string
+			if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+				return tx.QueryRow(ctx,
+					`SELECT status, attempts, COALESCE(last_error, '') FROM outbox
+					  WHERE tenant_id = $1 AND destination = $2`,
+					h.tenant, destination).Scan(&status, &attempts, &lastError)
+			}); err != nil {
+				t.Fatalf("read outbox row: %v", err)
+			}
+			if attempts != 0 {
+				t.Errorf("the control-plane dispatcher consumed %d attempt(s) on %s (last_error %q); "+
+					"work only a relay can execute must be deferred without burning the budget, or "+
+					"the row dead-letters into status='failed' where ClaimAgentJobs can never see it",
+					attempts, destination, lastError)
+			}
+			if status != "pending" {
+				t.Errorf("%s row is %q after the control-plane dispatcher ran, want pending", destination, status)
+			}
+
+			// And it is still claimable by the agent that should run it.
+			claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{
+				Kinds: []string{destination}, Limit: 1,
+			})
+			if err != nil {
+				t.Fatalf("claim: %v", err)
+			}
+			if len(claimed.Jobs) != 1 {
+				t.Fatalf("%s was not claimable after the control-plane dispatcher ran: the "+
+					"dispatcher consumed work only a relay can execute, and the operator was "+
+					"already told it was queued", destination)
+			}
+		})
+	}
+}
+
+// seedRelayExecutedJob enqueues a row a relay could genuinely execute, so the
+// claim path's envelope projection accepts it. A placeholder payload would be
+// refused by projectRollbackIntent and the test would fail for the wrong reason.
+func seedRelayExecutedJob(t *testing.T, ctx context.Context, h *agentChannelHarness, destination, idemKey string) {
+	t.Helper()
+	payload := []byte(`{"connector":"f5","target":"edge-1","target_config":{"endpoint":"https://f5.example.internal"}}`)
+	if destination == "connector.rollback" {
+		payload = []byte(`{"connector":"f5","target":"edge-1","predecessor_fingerprint":"abcdef0123456789",` +
+			`"predecessor_serial":"01","target_config":{"endpoint":"https://f5.example.internal"}}`)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
+			 VALUES ($1, $2, $3, $4)`,
+			h.tenant, destination, payload, idemKey)
+		return err
+	}); err != nil {
+		t.Fatalf("seed relay-executed job: %v", err)
+	}
+}

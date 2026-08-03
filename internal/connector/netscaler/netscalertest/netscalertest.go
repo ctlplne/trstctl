@@ -16,6 +16,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"sync"
 )
 
@@ -88,6 +90,30 @@ func (s *Server) OpenSessions() int {
 	return len(s.tokens)
 }
 
+// fileNameFromArgs pulls filename out of NITRO's args=filename:x,filelocation:y
+// query form, which is not a normal query string.
+func fileNameFromArgs(rawQuery string) string {
+	q, err := url.PathUnescape(rawQuery)
+	if err != nil {
+		q = rawQuery
+	}
+	q = strings.TrimPrefix(q, "args=")
+	for _, part := range strings.Split(q, ",") {
+		if name, ok := strings.CutPrefix(strings.TrimSpace(part), "filename:"); ok {
+			return name
+		}
+	}
+	return ""
+}
+
+// RemoveFile deletes an uploaded system file so a test can model the
+// "predecessor is gone" case.
+func (s *Server) RemoveFile(name string) {
+	s.mu.Lock()
+	delete(s.files, name)
+	s.mu.Unlock()
+}
+
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 	switch {
@@ -97,6 +123,20 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.requireSession(w, r, func() { s.logout(w, r) })
 	case r.URL.Path == "/nitro/v1/config/systemfile" && r.Method == http.MethodPost:
 		s.requireSession(w, r, func() { s.systemfile(w, body) })
+	// D4: reading a system file. Rollback confirms the predecessor file is
+	// present before re-pointing the certkey at it — a NITRO PUT naming a
+	// missing file can be accepted and leave the certkey unusable, which takes
+	// the listener down instead of restoring it.
+	case r.URL.Path == "/nitro/v1/config/systemfile" && r.Method == http.MethodGet:
+		name := fileNameFromArgs(r.URL.RawQuery)
+		s.mu.Lock()
+		_, exists := s.files[name]
+		s.mu.Unlock()
+		if !exists {
+			http.Error(w, `{"message":"file not found"}`, http.StatusNotFound)
+			return
+		}
+		s.ok(w)
 	case r.URL.Path == "/nitro/v1/config/sslcertkey" && r.Method == http.MethodPut:
 		s.requireSession(w, r, func() { s.sslcertkey(w, body) })
 	default:

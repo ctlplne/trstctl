@@ -253,71 +253,10 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 
 	switch outcome {
 	case transport.JobOutcomeExecuted:
-		// Two leases have to agree: the agent still holds its claim, and no
-		// dispatch worker holds the entry. Closing the claim proves the first;
-		// the orchestrator's CompleteByKey proves the second and records the
-		// destination's circuit success, which a hand-rolled status flip here
-		// would skip (AN-6).
-		destination, idemKey, ok, err := a.store.MarkAgentJobCompleted(ctx, info.TenantID, agentID, req.JobID, now)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "close agent job claim: %v", err)
-		}
-		if !ok {
-			return &transport.ReportJobResultResponse{Accepted: false}, nil
-		}
-		if a.outbox != nil {
-			if _, err := a.outbox.CompleteByKey(ctx, info.TenantID, destination, idemKey); err != nil {
-				return nil, status.Errorf(codes.Internal, "complete outbox entry: %v", err)
-			}
-		}
-		// The receipt travels WITH the event, not beside it. An event that says
-		// an agent executed a deploy, with the agent's own signature over that
-		// exact claim in the same row, is checkable by anyone later. Store the
-		// signature and the statement it covers: without the statement a reader
-		// has to reconstruct the signed bytes from other columns and trust their
-		// own reconstruction, which is the sort of verification nobody performs.
-		executed := map[string]any{
-			"agent": info.CommonName, "job_id": req.JobID, "kind": destination,
-			"evidence_digest": req.EvidenceDigest,
-		}
-		a.attachJobReceipt(executed, info, req)
-		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.executed", executed)
-		a.recordVerifiedReceipt(ctx, info, req, destination, now)
-		// D5: a dry-run's whole output is its plan, and the relay carries it in
-		// Detail. It becomes a delivery receipt an operator can read rather than
-		// an event nobody looks at, and the status distinguishes "a deploy would
-		// work" from "a deploy would not" — reporting only that the JOB
-		// succeeded would bury the answer the operator asked for.
-		if destination == "connector.test" && a.recordDryRun != nil {
-			a.recordDryRun(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
-		}
-		// F1: an AD CS observation becomes the Posture console's template view.
-		// Same shape as the dry-run receipt: the relay produced an answer, and
-		// it belongs somewhere an operator will look tomorrow rather than only
-		// in the report from the run that found it.
-		if destination == "adcs.inventory" && a.recordADCSPosture != nil {
-			a.recordADCSPosture(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
-		}
-		return &transport.ReportJobResultResponse{Accepted: true}, nil
+		return a.acceptExecutedReport(ctx, info, agentID, req, now)
 
 	case transport.JobOutcomeFailed:
-		ok, err := a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Detail)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "release agent job: %v", err)
-		}
-		if ok {
-			failed := map[string]any{
-				"agent": info.CommonName, "job_id": req.JobID,
-				"detail": a.agentDetailForHistory(ctx, info.TenantID, agentID, req),
-			}
-			// A failure receipt matters more than a success one, not less: it is
-			// the record that says a machine tried and could not, and it is the
-			// record somebody will dispute.
-			a.attachJobReceipt(failed, info, req)
-			a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
-			a.recordVerifiedReceipt(ctx, info, req, "", now)
-		}
-		return &transport.ReportJobResultResponse{Accepted: ok}, nil
+		return a.acceptFailedReport(ctx, info, agentID, req, now)
 
 	case transport.JobOutcomeExtend:
 		lease := time.Duration(req.LeaseSeconds) * time.Second
@@ -395,6 +334,121 @@ func AgentClaimableJobKinds(configured []string) map[string]bool {
 // Best-effort by design: failing to record the note must not fail the job the
 // operator is waiting on, and the ledger row is the authoritative state either
 // way.
+// acceptExecutedReport closes the claim for work an agent says it performed.
+//
+// Extracted from ReportJobResult so each terminal outcome is one thing with a
+// name. The switch above is the shape of the protocol; what each outcome means
+// belongs beside itself.
+func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerCertInfo,
+	agentID string, req *transport.ReportJobResultRequest, now time.Time) (*transport.ReportJobResultResponse, error) {
+
+	// Two leases have to agree: the agent still holds its claim, and no
+	// dispatch worker holds the entry. Closing the claim proves the first;
+	// the orchestrator's CompleteByKey proves the second and records the
+	// destination's circuit success, which a hand-rolled status flip here
+	// would skip (AN-6).
+	destination, idemKey, ok, err := a.store.MarkAgentJobCompleted(ctx, info.TenantID, agentID, req.JobID, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "close agent job claim: %v", err)
+	}
+	if !ok {
+		return &transport.ReportJobResultResponse{Accepted: false}, nil
+	}
+	if a.outbox != nil {
+		if _, err := a.outbox.CompleteByKey(ctx, info.TenantID, destination, idemKey); err != nil {
+			return nil, status.Errorf(codes.Internal, "complete outbox entry: %v", err)
+		}
+	}
+	// The receipt travels WITH the event, not beside it. An event that says
+	// an agent executed a deploy, with the agent's own signature over that
+	// exact claim in the same row, is checkable by anyone later. Store the
+	// signature and the statement it covers: without the statement a reader
+	// has to reconstruct the signed bytes from other columns and trust their
+	// own reconstruction, which is the sort of verification nobody performs.
+	executed := map[string]any{
+		"agent": info.CommonName, "job_id": req.JobID, "kind": destination,
+		"evidence_digest": req.EvidenceDigest,
+	}
+	a.attachJobReceipt(executed, info, req)
+	a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.executed", executed)
+	a.recordVerifiedReceipt(ctx, info, req, destination, now)
+	// D5: a dry-run's whole output is its plan, and the relay carries it in
+	// Detail. It becomes a delivery receipt an operator can read rather than
+	// an event nobody looks at, and the status distinguishes "a deploy would
+	// work" from "a deploy would not" — reporting only that the JOB
+	// succeeded would bury the answer the operator asked for.
+	if destination == "connector.test" && a.recordDryRun != nil {
+		a.recordDryRun(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+	}
+	// F1: an AD CS observation becomes the Posture console's template view.
+	// Same shape as the dry-run receipt: the relay produced an answer, and
+	// it belongs somewhere an operator will look tomorrow rather than only
+	// in the report from the run that found it.
+	if destination == "adcs.inventory" && a.recordADCSPosture != nil {
+		a.recordADCSPosture(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+	}
+	// D4: a re-bind that actually happened. The receipt is written from the
+	// JOB payload rather than from the agent's report, because the payload
+	// is what the control plane itself queued — an agent cannot name a
+	// different target in its result and have that recorded as fact.
+	if destination == "connector.rollback" && a.recordRollback != nil {
+		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, idemKey, "", true)
+	}
+	return &transport.ReportJobResultResponse{Accepted: true}, nil
+}
+
+// acceptFailedReport releases — or permanently retires — work an agent could not
+// perform.
+func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCertInfo,
+	agentID string, req *transport.ReportJobResultRequest, now time.Time) (*transport.ReportJobResultResponse, error) {
+
+	detail := strings.TrimSpace(req.Detail)
+	// A rollback that can never succeed leaves the queue instead of being
+	// retried forever. The claim path has no attempts predicate, so a
+	// requeued job is re-claimed every poll — and each rollback attempt
+	// redeems an appliance credential out of the seal. Retrying an
+	// impossible operation would hold material outside the seal
+	// indefinitely, which is exactly what single-use redemption exists to
+	// prevent.
+	permanent := false
+	if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil &&
+		dest == "connector.rollback" && transport.RollbackReasonIsPermanent(detail) {
+		permanent = true
+	}
+	var ok bool
+	var err error
+	if permanent {
+		ok, err = a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, detail, now)
+	} else {
+		ok, err = a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Detail)
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "release agent job: %v", err)
+	}
+	if ok && a.recordRollback != nil {
+		if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil && dest == "connector.rollback" {
+			// The agent's reported detail is a closed-set reason for this
+			// kind, so it classifies contact. It is not free text and is
+			// not rendered as the agent's words.
+			a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, "",
+				strings.TrimSpace(req.Detail), false)
+		}
+	}
+	if ok {
+		failed := map[string]any{
+			"agent": info.CommonName, "job_id": req.JobID,
+			"detail": a.agentDetailForHistory(ctx, info.TenantID, agentID, req),
+		}
+		// A failure receipt matters more than a success one, not less: it is
+		// the record that says a machine tried and could not, and it is the
+		// record somebody will dispute.
+		a.attachJobReceipt(failed, info, req)
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
+		a.recordVerifiedReceipt(ctx, info, req, "", now)
+	}
+	return &transport.ReportJobResultResponse{Accepted: ok}, nil
+}
+
 // receiptSkew bounds how far a receipt's own timestamp may sit from the
 // server's clock.
 //
@@ -511,6 +565,27 @@ func (a *agentService) attachJobReceipt(payload map[string]any, info mtls.PeerCe
 // can be repeated later by someone who does not trust that it happened. A read
 // model that recorded only "verified: true" would be the control plane vouching
 // for itself again, which is the exact thing the signature exists to replace.
+// recordRollbackFromJob reads the queued job's own payload and records the
+// re-bind result from it.
+//
+// From the PAYLOAD, never from the agent's report. The payload is what this
+// control plane queued; a receipt built from what an agent said would let an
+// agent name a target it was never given and have that written into the
+// tenant's evidence chain as fact.
+func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agentName string, jobID int64, idemKey, reason string, executed bool) {
+	if a.store == nil || a.recordRollback == nil {
+		return
+	}
+	payload, key, err := a.store.AgentJobPayload(ctx, tenantID, jobID)
+	if err != nil {
+		return
+	}
+	if idemKey == "" {
+		idemKey = key
+	}
+	a.recordRollback(ctx, tenantID, agentName, idemKey, string(payload), reason, executed)
+}
+
 func (a *agentService) recordVerifiedReceipt(ctx context.Context, info mtls.PeerCertInfo,
 	req *transport.ReportJobResultRequest, kind string, now time.Time) {
 	if a.store == nil || len(req.Signature) == 0 {
@@ -649,8 +724,15 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 // carries credential material, and rewriting their payloads would break A1's
 // contract for no gain.
 func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, error) {
+	// D4: a rollback payload is a different shape and carries no key material by
+	// construction — that is the whole reason it is executable. It is projected
+	// separately so the predecessor fingerprint, which is the ONE thing a
+	// rollback needs, is not dropped by a projection built for deploys.
+	if job.Destination == "connector.rollback" {
+		return projectRollbackIntent(job)
+	}
 	switch job.Destination {
-	case "connector.deploy", "connector.rollback", "connector.test":
+	case "connector.deploy", "connector.test":
 	default:
 		// Every other kind's payload is already reference-only by construction:
 		// a sweep names ranges, a revocation probe names URLs, an AD CS

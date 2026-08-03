@@ -478,6 +478,10 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			// it — a restore that lost it would make every in-flight attempt
 			// redeemable a second time.
 			{`INSERT INTO agent_job_credential_redemptions (tenant_id, job_id, attempt, agent_id, binding, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{tenantA, int64(4242), 1, "00000000-0000-0000-0000-00000000a003", []byte("full-dr-redemption-binding"), now.Add(time.Hour)}},
+			// D4/A1: the signed receipt ledger. It is not a log projection — no
+			// projector rebuilds it — so a restore that lost it would lose the
+			// record of what agents reported and what was refused.
+			{`INSERT INTO agent_job_receipts (tenant_id, job_id, attempt, agent, kind, outcome, state, reason, signer_fingerprint, statement, signature, observed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{tenantA, int64(4242), 1, "edge-relay-1", "connector.deploy", "executed", "verified", "", "full-dr-signer-fp", "full-dr-statement", "ZnVsbC1kci1zaWduYXR1cmU=", now}},
 			{`INSERT INTO attestations (id, tenant_id, kind, evidence, verified_at) VALUES ($1, $2, $3, $4::jsonb, $5)`, []any{"00000000-0000-0000-0000-00000000a003", tenantA, "oidc", `{"issuer":"ci"}`, now}},
 			{`INSERT INTO audit_checkpoints (tenant_id, boundary_seq, boundary_hash, record_count, archive_uri) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, int64(10), "full-dr-boundary", int64(3), "s3://archive/full-dr"}},
 			{`INSERT INTO ca_authorities (id, tenant_id, common_name, kind, status, certificate_pem, serial, not_after, max_path_len, permitted_dns_names, ekus) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, []any{caID, tenantA, "Full DR Root", "root", "active", "-----BEGIN CERTIFICATE-----\nFULLDR\n-----END CERTIFICATE-----", "ca-01", now.Add(365 * 24 * time.Hour), 1, []string{"example.com"}, []string{"serverAuth"}}},

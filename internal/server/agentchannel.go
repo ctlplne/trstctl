@@ -226,6 +226,9 @@ type agentService struct {
 	// recordADCSPosture turns a relay's AD CS observation into the Posture
 	// console's read model (epic F1).
 	recordADCSPosture func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
+	// recordRollback turns a relay's re-bind report into a delivery receipt
+	// (epic D4). Nil means rollback results live only in the event log.
+	recordRollback func(ctx context.Context, tenantID, agent, idempotencyKey, payload, reason string, executed bool)
 }
 
 // bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC

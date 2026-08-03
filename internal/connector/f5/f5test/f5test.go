@@ -75,6 +75,15 @@ func (s *Server) Profile(name string) (Chain, bool) {
 	return c, ok
 }
 
+// RemoveCert deletes an installed crypto cert object, so a test can model the
+// case that matters most: the predecessor is gone and a rollback must refuse
+// rather than report success.
+func (s *Server) RemoveCert(name string) {
+	s.mu.Lock()
+	delete(s.certs, name)
+	s.mu.Unlock()
+}
+
 // InstalledCert reports whether a crypto cert object of that name exists.
 func (s *Server) InstalledCert(name string) bool {
 	s.mu.Lock()
@@ -131,6 +140,31 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.keys[cmd.Name] = true
 		s.mu.Unlock()
 		s.ok(w, map[string]any{"name": cmd.Name})
+
+	// D4: reading a crypto object. Rollback checks the predecessor is present
+	// before re-binding to it, and a double that answered 200 to everything
+	// would let the "predecessor is gone" test pass for the wrong reason.
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/cert/"):
+		name := strings.TrimPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/cert/")
+		s.mu.Lock()
+		exists := s.certs[name]
+		s.mu.Unlock()
+		if !exists {
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+			return
+		}
+		s.ok(w, map[string]any{"name": name})
+
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/key/"):
+		name := strings.TrimPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/key/")
+		s.mu.Lock()
+		exists := s.keys[name]
+		s.mu.Unlock()
+		if !exists {
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+			return
+		}
+		s.ok(w, map[string]any{"name": name})
 
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/"):
 		profile := strings.TrimPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/")

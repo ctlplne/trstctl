@@ -37,26 +37,31 @@ func TestDeployInstallsAndBindsCertificate(t *testing.T) {
 		t.Fatalf("deploy: %v", err)
 	}
 
-	gotCert, ok := srv.Uploaded(profile + ".crt")
+	// D4: the object name carries the certificate's fingerprint, so a later
+	// deployment cannot overwrite this one — that is what leaves something for
+	// a rollback to bind back to.
+	dep := connector.NewDeployment("app", sampleCert, sampleKey)
+	base := connector.DeployedObjectName(profile, dep.Fingerprint)
+	gotCert, ok := srv.Uploaded(base + ".crt")
 	if !ok || string(gotCert) != string(sampleCert) {
 		t.Fatalf("uploaded cert = %q, ok=%v; want %q", gotCert, ok, sampleCert)
 	}
-	gotKey, ok := srv.Uploaded(profile + ".key")
+	gotKey, ok := srv.Uploaded(base + ".key")
 	if !ok || string(gotKey) != string(sampleKey) {
 		t.Fatalf("uploaded key = %q, ok=%v; want %q", gotKey, ok, sampleKey)
 	}
-	if !srv.InstalledCert(profile + ".crt") {
-		t.Errorf("crypto cert %q not installed", profile+".crt")
+	if !srv.InstalledCert(base + ".crt") {
+		t.Errorf("crypto cert %q not installed", base+".crt")
 	}
-	if !srv.InstalledKey(profile + ".key") {
-		t.Errorf("crypto key %q not installed", profile+".key")
+	if !srv.InstalledKey(base + ".key") {
+		t.Errorf("crypto key %q not installed", base+".key")
 	}
 	chain, ok := srv.Profile(profile)
 	if !ok {
 		t.Fatalf("profile %q not bound", profile)
 	}
-	if chain.Cert != profile+".crt" || chain.Key != profile+".key" {
-		t.Errorf("profile chain = %+v; want cert=%q key=%q", chain, profile+".crt", profile+".key")
+	if chain.Cert != base+".crt" || chain.Key != base+".key" {
+		t.Errorf("profile chain = %+v; want cert=%q key=%q", chain, base+".crt", base+".key")
 	}
 }
 
@@ -70,12 +75,13 @@ func TestDeployHonorsCustomName(t *testing.T) {
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment("app", sampleCert, sampleKey)); err != nil {
 		t.Fatalf("deploy: %v", err)
 	}
-	if _, ok := srv.Uploaded("renewed-2026.crt"); !ok {
-		t.Errorf("custom-named cert not uploaded")
+	base := connector.DeployedObjectName("renewed-2026", connector.NewDeployment("app", sampleCert, sampleKey).Fingerprint)
+	if _, ok := srv.Uploaded(base + ".crt"); !ok {
+		t.Errorf("custom-named cert not uploaded as %q", base+".crt")
 	}
 	chain, _ := srv.Profile(profile)
-	if chain.Cert != "renewed-2026.crt" {
-		t.Errorf("profile chain cert = %q; want renewed-2026.crt", chain.Cert)
+	if chain.Cert != base+".crt" {
+		t.Errorf("profile chain cert = %q; want %q", chain.Cert, base+".crt")
 	}
 }
 
@@ -109,9 +115,12 @@ func TestDeployIsIdempotent(t *testing.T) {
 			t.Fatalf("deploy %d: %v", i, err)
 		}
 	}
+	// Idempotent because the name is the fingerprint: the same certificate
+	// deployed twice installs over itself rather than accumulating objects.
+	base := connector.DeployedObjectName(profile, dep.Fingerprint)
 	chain, ok := srv.Profile(profile)
-	if !ok || chain.Cert != profile+".crt" || chain.Key != profile+".key" {
-		t.Errorf("after redeploy: chain=%+v ok=%v", chain, ok)
+	if !ok || chain.Cert != base+".crt" || chain.Key != base+".key" {
+		t.Errorf("after redeploy: chain=%+v ok=%v, want cert=%q", chain, ok, base+".crt")
 	}
 }
 

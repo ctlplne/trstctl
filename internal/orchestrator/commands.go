@@ -947,6 +947,18 @@ func (o *Orchestrator) BindIdentityDeploymentTarget(ctx context.Context, tenantI
 	return o.store.GetIdentity(ctx, tenantID, identityID)
 }
 
+// DeploymentRoute is the exported form, so a rollback derives the remote object
+// from the SAME string a deploy did (epic D4).
+//
+// This matters more than it looks. Three connector families derive the installed
+// object's name from the target string they are handed; a deploy is handed the
+// routing attribute resolved here, while the rollback route naturally reaches for
+// the target row's display Name. Where an operator set a routing key in the
+// target config, those differ — and a rollback would then look for an object
+// name that was never installed, reporting "the predecessor is not installed"
+// for one that is sitting right there.
+func DeploymentRoute(target store.DeploymentTarget) string { return deploymentRoute(target) }
+
 func deploymentRoute(target store.DeploymentTarget) string {
 	if len(target.Config) == 0 {
 		return ""

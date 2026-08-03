@@ -5709,6 +5709,7 @@ export interface components {
         ConnectorCatalogItem: {
             capabilities: string[];
             delivery_mode: string;
+            executes_rollback?: boolean;
             kind: string;
             name: string;
             native: boolean;
@@ -5735,7 +5736,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /** @enum {string} */
-            status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+            status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
             target: string;
             /** Format: uuid */
             tenant_id: string;

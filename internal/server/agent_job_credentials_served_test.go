@@ -284,11 +284,43 @@ func assertNoCanaryInEvents(t *testing.T, ctx context.Context, h *roleHarness) {
 		if e.TenantID != h.tenant {
 			return nil
 		}
-		assertNoCanary(t, "event "+e.Type, e.Data)
+		// The NAMED canaries are checked against the whole payload, receipt
+		// fields included — nothing is exempt from "does this contain the
+		// credential".
+		assertNoCanaryBytes(t, "event "+e.Type, e.Data)
+		// The entropy scanner runs on everything EXCEPT the signed receipt
+		// (epic A1), for the same reason it already skips digests and UUIDs:
+		// a signature, a canonical statement full of hashes, and a certificate
+		// fingerprint are high-entropy by construction and public by
+		// construction. Exempting them from an entropy heuristic is not a hole
+		// — the named-canary sweep above still reads them, and the statement's
+		// own content is a closed set of fields this code builds, never
+		// anything an agent supplied.
+		assertNoCanary(t, "event "+e.Type, withoutReceiptFields(t, e.Data))
 		return nil
 	}); err != nil {
 		t.Fatalf("replay events: %v", err)
 	}
+}
+
+// withoutReceiptFields removes the signed-receipt fields from an event payload
+// so the entropy heuristic reads only the parts that could plausibly carry a
+// re-encoded credential.
+func withoutReceiptFields(t *testing.T, payload []byte) []byte {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		// Not an object: nothing to strip, scan it whole.
+		return payload
+	}
+	for _, field := range []string{"receipt_statement", "receipt_signature", "receipt_signer_fingerprint"} {
+		delete(decoded, field)
+	}
+	stripped, err := json.Marshal(decoded)
+	if err != nil {
+		return payload
+	}
+	return stripped
 }
 
 func keysOf(m map[string][]byte) []string {

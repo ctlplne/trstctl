@@ -97,6 +97,23 @@ func TestAmbientHTTPBurnDownLedgerOnlyShrinks(t *testing.T) {
 // silently re-introduce an ambient client at a site whose debt was already paid
 // and stay under the total. It also pins the post-migration total, so the ledger
 // cannot creep back up toward 27.
+// permanentAmbientHTTPClients are reviewed sites that are NOT burn-down
+// candidates, because no policy-bearing client from internal/netsec can serve
+// them.
+//
+// Exactly one so far. A relay's whole purpose is reaching devices on private,
+// non-routable addresses inside its own segment — the destinations the control
+// plane's egress guard and SSRF transport exist to refuse. netsec offers a
+// loopback client and an origin-bound transport; neither fits, and forcing one
+// would either break the relay or dilute the guard for everything else.
+//
+// Named rather than counted. Simply raising the burn-down number for this would
+// have hidden a permanent exception inside a total that is supposed to fall,
+// and the next person would have had no way to tell the two apart.
+var permanentAmbientHTTPClients = map[string]map[string]bool{
+	"cmd/trstctl-agent/relayloop.go": {"relayHTTPClient": true},
+}
+
 func TestAmbientHTTPBurnDownLedgerKeepsTheMigratedSitesOut(t *testing.T) {
 	const sizeAfterTheFirstBurnDown = 20
 	migrated := []string{
@@ -112,12 +129,31 @@ func TestAmbientHTTPBurnDownLedgerKeepsTheMigratedSitesOut(t *testing.T) {
 			t.Errorf("%s was migrated off ambient http.Client construction but is back in the burn-down ledger as %#v; take its client from internal/netsec instead of re-adding the row", file, functions)
 		}
 	}
+	// Every permanent exception must actually be in the ledger — an exemption
+	// for a site that no longer exists is a hole waiting for a future function
+	// of the same name.
+	for file, functions := range permanentAmbientHTTPClients {
+		for fn := range functions {
+			if !reviewedAmbientHTTPClients[file][fn] {
+				t.Errorf("%s:%s is exempted from the burn-down but is not in the reviewed ledger; "+
+					"remove the exemption when the site goes", file, fn)
+			}
+		}
+	}
 	total := 0
-	for _, functions := range reviewedAmbientHTTPClients {
-		total += len(functions)
+	for file, functions := range reviewedAmbientHTTPClients {
+		for fn := range functions {
+			if permanentAmbientHTTPClients[file][fn] {
+				continue
+			}
+			total++
+		}
 	}
 	if total != sizeAfterTheFirstBurnDown {
-		t.Fatalf("reviewedAmbientHTTPClients holds %d reviewed sites, want exactly %d after the first burn-down pass; lower this constant when you migrate another site, never raise it", total, sizeAfterTheFirstBurnDown)
+		t.Fatalf("reviewedAmbientHTTPClients holds %d migratable reviewed sites, want exactly %d after "+
+			"the first burn-down pass; lower this constant when you migrate another site, never raise "+
+			"it. A site that genuinely cannot take a netsec client belongs in "+
+			"permanentAmbientHTTPClients with its reason, not in this total", total, sizeAfterTheFirstBurnDown)
 	}
 }
 

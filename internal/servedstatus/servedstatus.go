@@ -149,6 +149,31 @@ const (
 	// and no predecessor bundle was restored (truth-integrity 4). Epic D4 makes
 	// this an executed job with a restore transcript.
 	ConnectorRollbackRecorded = "rollback_recorded"
+	// ConnectorRollbackQueued means an executable rollback has been QUEUED for a
+	// relay (epic D4). Deliberately not a result: the relay has not reported
+	// yet, and a status that read as an outcome here would repeat the defect
+	// rollback_recorded was created to expose, one step further along.
+	ConnectorRollbackQueued = "rollback_queued"
+	// ConnectorRolledBack means a relay reported that it re-bound the target to
+	// the predecessor object. The listener was contacted and its binding was
+	// changed; what it now serves has not been independently re-read, which is
+	// verification and a separate state.
+	ConnectorRolledBack = "rolled_back"
+	// ConnectorRollbackRefused means the relay declined the rollback WITHOUT
+	// reaching the target — it could not execute the connector, the connector
+	// cannot re-bind, no predecessor was named, the credential was not granted,
+	// or the sandbox blocked the operation.
+	//
+	// It exists because the alternative was recording these as a generic
+	// failure whose registry entry asserts ContactedTarget. That would tell an
+	// operator the appliance rejected something it never heard about, and send
+	// them to check an appliance that is fine.
+	ConnectorRollbackRefused = "rollback_refused"
+	// ConnectorRollbackFailed means the relay REACHED the target and the
+	// re-bind did not succeed — including the case where the predecessor object
+	// is no longer installed, which is the reason an operator most needs
+	// distinguished, since no retry will produce one.
+	ConnectorRollbackFailed = "rollback_failed"
 	// ConnectorTestQueued means a relay-executed dry-run has been QUEUED (epic
 	// D5). It is deliberately not a result: the relay has not reported yet. A
 	// status that read as an outcome here would repeat the defect
@@ -190,6 +215,25 @@ var ConnectorDelivery = Registry{
 		{
 			Value:   ConnectorRollbackRecorded,
 			Meaning: "An operator-attested rollback intent is recorded as evidence. No rollback was executed against the target.",
+		},
+		{
+			Value:   ConnectorRollbackQueued,
+			Meaning: "An executable rollback was queued for a relay. No relay has reported yet, so the target is unchanged so far as this control plane knows.",
+		},
+		{
+			Value:           ConnectorRolledBack,
+			ContactedTarget: true,
+			MutatedTarget:   true,
+			Meaning:         "A relay re-bound the target to the predecessor certificate already installed on it. No key was uploaded. What the endpoint now serves has not been independently re-read.",
+		},
+		{
+			Value:   ConnectorRollbackRefused,
+			Meaning: "A relay declined the rollback before contacting the target. The reason names which precondition it failed; the target was not reached and is unchanged.",
+		},
+		{
+			Value:           ConnectorRollbackFailed,
+			ContactedTarget: true,
+			Meaning:         "A relay reached the target and the re-bind did not succeed. The reason distinguishes a predecessor that is no longer installed — which no retry will fix — from a failure at the appliance.",
 		},
 		{
 			Value:   ConnectorTestQueued,

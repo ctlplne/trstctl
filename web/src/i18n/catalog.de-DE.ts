@@ -256,6 +256,10 @@ const deDECatalog = {
   "operations.jobs.redemptions.none": "Keine",
   "operations.jobs.redemptions.help":
     "Ein Relais löst Anmeldematerial für genau einen Auftragsversuch ein und löscht es am Ende des Versuchs. Ein aktiver Zähler, der nicht sinkt, oder ein Alter jenseits der maximalen Claim-Laufzeit bedeutet, dass ein Versuch feststeckt und Material hält.",
+  "source.executes.rebind.d4rb000003": "trstctl führt dies aus (erneute Bindung)",
+  "source.manual.procedure.d4rb000004": "Manuelles Verfahren",
+  "source.rollback.queued.d4rb000001": "Rücknahme für ein Relais eingereiht",
+  "source.rolled.back.d4rb000002": "Zurückgenommen (erneut an Vorgänger gebunden)",
   "operations.jobs.receipts.verified": "Verifizierte Quittungen",
   "operations.jobs.receipts.rejected": "Abgelehnte Quittungen",
   "operations.jobs.receipts.lastRejected": "Jüngste Ablehnung",

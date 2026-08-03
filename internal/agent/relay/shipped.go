@@ -31,11 +31,7 @@ type ShippedJobKind struct {
 	Flags []string
 }
 
-// ShippedJobKinds is what this build performs. connector.deploy is the only
-// one: a relay drives appliances, and everything else in the job allowlist is
-// either host-local work (discovery.run, trust.distribute), observation the
-// verification epics own (endpoint.verify, revocation.probe), or rollback,
-// which needs a retained predecessor credential that nothing yet keeps.
+// ShippedJobKinds is what this build performs.
 func ShippedJobKinds() []ShippedJobKind {
 	return []ShippedJobKind{
 		{
@@ -54,6 +50,17 @@ func ShippedJobKinds() []ShippedJobKind {
 			// not a promise, because the mutating path is not on it.
 			Kind:       KindConnectorTest,
 			Connectors: RelayConnectorKinds(),
+			Flags:      []string{"--relay-claim"},
+		},
+		{
+			// D4: the executed re-bind. NOT every relay connector — only the
+			// families whose API can address an installed object separately
+			// from uploading one, because that is the property a re-bind needs.
+			// Advertising the rest would take a claim, redeem a credential, and
+			// hand the work back having changed nothing while a bad certificate
+			// kept serving traffic.
+			Kind:       KindConnectorRollback,
+			Connectors: RollbackCapableKinds(),
 			Flags:      []string{"--relay-claim"},
 		},
 		{
@@ -91,8 +98,7 @@ func ShippedJobKinds() []ShippedJobKind {
 // here why nothing happens, rather than watching a queue not drain.
 func UnshippedJobKinds() map[string]string {
 	return map[string]string{
-		"connector.rollback": "needs a retained predecessor credential; nothing keeps one yet",
-		"trust.distribute":   "host-local work: installs roots in a host's own trust store",
-		"endpoint.verify":    "owned by the verification epics; no relay-side prober ships yet",
+		"trust.distribute": "host-local work: installs roots in a host's own trust store",
+		"endpoint.verify":  "owned by the verification epics; no relay-side prober ships yet",
 	}
 }
