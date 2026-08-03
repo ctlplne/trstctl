@@ -49,6 +49,24 @@ type AgentJobPosture struct {
 	ClaimableKinds []string        `json:"claimable_kinds"`
 	GeneratedAt    time.Time       `json:"generated_at"`
 	Queues         []AgentJobQueue `json:"queues"`
+	// Redemptions is credential-custody health (epic A3): how many redeemed
+	// credentials are held by relays right now, how many have ever been handed
+	// out, and how long the oldest live one has been held. Counts and one age,
+	// never a tenant, agent, reference name or value.
+	Redemptions AgentJobRedemptions `json:"redemptions"`
+}
+
+// AgentJobRedemptions is the served credential-custody view.
+type AgentJobRedemptions struct {
+	// Live credentials are held by some relay right now. Each one is material
+	// outside the seal, so this is the number an operator watches.
+	Live int `json:"live"`
+	// Total is every redemption ever recorded.
+	Total int `json:"total"`
+	// OldestLiveSeconds is how long the oldest live redemption has been held. A
+	// value past the maximum claim lease means a relay is holding material for a
+	// claim that should have lapsed — the shape of a stuck attempt.
+	OldestLiveSeconds int `json:"oldest_live_seconds,omitempty"`
 }
 
 // AgentJobPostureProvider reads live job-ledger health. It is evaluated at request

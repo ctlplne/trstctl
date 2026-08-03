@@ -329,3 +329,108 @@ func TestClaimHonorsPerRowRoleDemand(t *testing.T) {
 		}
 	}
 }
+
+// TestRedeemAgentJobCredentialIsSingleUsePerAttempt is A3 acceptance #2 at the
+// store: one redemption per (job, agent, attempt), bound to the live lease.
+// Every refusal path returns the same ok=false; the classifier then names the
+// cause for the audit event only.
+func TestRedeemAgentJobCredentialIsSingleUsePerAttempt(t *testing.T) {
+	st, tenantID := newStore(t), tenantA
+	ctx := context.Background()
+	now := time.Now().UTC()
+	holder := "bbbbbbbb-0000-0000-0000-000000000001"
+	impostor := "bbbbbbbb-0000-0000-0000-000000000002"
+
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
+			 VALUES ($1, $2, $3, $4, 'network')`,
+			tenantID, jobDeploy, []byte(`{}`), "redeem:f5-1")
+		return err
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	claimed, err := st.ClaimAgentJobs(ctx, tenantID, holder, []string{jobDeploy}, []string{"network"}, 1, time.Minute, now)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim: %v (%d)", err, len(claimed))
+	}
+	job := claimed[0]
+	binding := []byte("test-binding-digest")
+
+	// First redemption by the lease holder at the current attempt: granted.
+	first, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, binding, now)
+	if err != nil || !ok {
+		t.Fatalf("first redemption refused: ok=%v err=%v", ok, err)
+	}
+	if first.AuditRef == "" {
+		t.Fatal("granted redemption carries no audit ref")
+	}
+	if !first.ExpiresAt.Equal(job.ClaimExpiresAt.UTC()) {
+		t.Fatalf("redemption expiry %v is not bound to the claim lease %v", first.ExpiresAt, job.ClaimExpiresAt)
+	}
+
+	// Replay by the same holder: refused, and classified as replayed.
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, binding, now); err != nil || ok {
+		t.Fatalf("replayed redemption was granted: ok=%v err=%v", ok, err)
+	}
+	if reason, err := st.AgentJobRedemptionRefusalReason(ctx, tenantID, holder, job.ID, job.ClaimAttempts, now); err != nil || reason != store.AgentRedemptionRefusedReplayed {
+		t.Fatalf("replay classified %q (%v), want %q", reason, err, store.AgentRedemptionRefusedReplayed)
+	}
+
+	// A second agent that does not hold the lease: refused, lease-not-held.
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, impostor, job.ID, job.ClaimAttempts, binding, now); err != nil || ok {
+		t.Fatalf("impostor redemption was granted: ok=%v err=%v", ok, err)
+	}
+
+	// A stale attempt from the holder: refused, attempt-stale.
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts+7, binding, now); err != nil || ok {
+		t.Fatalf("stale-attempt redemption was granted: ok=%v err=%v", ok, err)
+	}
+	if reason, err := st.AgentJobRedemptionRefusalReason(ctx, tenantID, holder, job.ID, job.ClaimAttempts+7, now); err != nil || reason != store.AgentRedemptionRefusedAttemptStale {
+		t.Fatalf("stale attempt classified %q (%v), want %q", reason, err, store.AgentRedemptionRefusedAttemptStale)
+	}
+}
+
+// TestRedemptionAfterLeaseLapseGoesToTheNewHolder: the lease lapses, another
+// agent claims the SAME job — a new attempt — and redemption follows the lease:
+// the new holder redeems its attempt, the old holder is refused everywhere.
+func TestRedemptionAfterLeaseLapseGoesToTheNewHolder(t *testing.T) {
+	st, tenantID := newStore(t), tenantA
+	ctx := context.Background()
+	start := time.Now().UTC()
+	dead := "cccccccc-0000-0000-0000-000000000001"
+	alive := "cccccccc-0000-0000-0000-000000000002"
+
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
+			 VALUES ($1, $2, $3, $4, 'network')`,
+			tenantID, jobDeploy, []byte(`{}`), "redeem:lapse-1")
+		return err
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	firstClaim, err := st.ClaimAgentJobs(ctx, tenantID, dead, []string{jobDeploy}, []string{"network"}, 1, 10*time.Second, start)
+	if err != nil || len(firstClaim) != 1 {
+		t.Fatalf("first claim: %v (%d)", err, len(firstClaim))
+	}
+	// The dead agent never redeems; its lease lapses; a live agent claims.
+	after := start.Add(time.Minute)
+	secondClaim, err := st.ClaimAgentJobs(ctx, tenantID, alive, []string{jobDeploy}, []string{"network"}, 1, time.Minute, after)
+	if err != nil || len(secondClaim) != 1 {
+		t.Fatalf("reclaim after lapse: %v (%d)", err, len(secondClaim))
+	}
+	fresh := secondClaim[0]
+	if fresh.ClaimAttempts != firstClaim[0].ClaimAttempts+1 {
+		t.Fatalf("reclaim attempt = %d, want %d", fresh.ClaimAttempts, firstClaim[0].ClaimAttempts+1)
+	}
+
+	// The dead agent's redemption at its old attempt: refused.
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, dead, fresh.ID, firstClaim[0].ClaimAttempts, []byte("b"), after); err != nil || ok {
+		t.Fatalf("dead agent redeemed after losing the lease: ok=%v err=%v", ok, err)
+	}
+	// The live holder's redemption at the fresh attempt: granted.
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, alive, fresh.ID, fresh.ClaimAttempts, []byte("b"), after); err != nil || !ok {
+		t.Fatalf("new holder's redemption refused: ok=%v err=%v", ok, err)
+	}
+}

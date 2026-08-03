@@ -56,6 +56,10 @@ export function AgentJobLedgerPanel() {
   // worse than one that shows nothing.
   const kinds = posture?.claimable_kinds ?? [];
   const queues = posture?.queues ?? [];
+  // A3: how much credential material is outside the seal right now. Read
+  // defensively for the same reason the arrays are — a health readout that
+  // crashes the page it reports on is worse than one that shows nothing.
+  const redemptions = posture?.redemptions;
 
   return (
     <section aria-labelledby="agent-job-ledger-heading" className="grid content-start gap-3 border-t border-border pt-4">
@@ -70,6 +74,24 @@ export function AgentJobLedgerPanel() {
         <p className="text-sm text-muted-foreground">{t("operations.jobs.notServed")}</p>
       ) : posture && kinds.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("operations.jobs.noneEnabled")}</p>
+      ) : null}
+
+      {posture?.served && redemptions ? (
+        <dl className="grid gap-2 rounded-md border border-border p-3 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.live")}</dt>
+            <dd className={redemptions.live > 0 ? "font-medium text-status-warning" : "font-medium"}>{redemptions.live}</dd>
+          </div>
+          <div>
+            <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.total")}</dt>
+            <dd className="font-medium">{redemptions.total}</dd>
+          </div>
+          <div>
+            <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.oldest")}</dt>
+            <dd className="font-medium">{redemptions.oldest_live_seconds ? waitLabel(redemptions.oldest_live_seconds) : t("operations.jobs.redemptions.none")}</dd>
+          </div>
+          <p className="text-caption text-muted-foreground sm:col-span-3">{t("operations.jobs.redemptions.help")}</p>
+        </dl>
       ) : null}
 
       {queues.length > 0 ? (

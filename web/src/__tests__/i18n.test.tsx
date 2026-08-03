@@ -263,6 +263,11 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // A3 redemption re-pin: five operations.jobs.redemptions.* keys add the
+      // credential-custody readout to the Operations job ledger — how much
+      // material relays hold outside the seal right now, how long the oldest
+      // has been held, and what a count that does not fall means. Machine-
+      // authored es/de translations - FLAGGED FOR HUMAN TRANSLATION REVIEW.
       // A3 vantage re-pin: four source.*.a3vant* keys add the connector
       // registry's "Executes on" column — host agent / network relay / control
       // plane — read from the live vantage census. Machine-authored es/de
@@ -363,8 +368,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "a3cefd440a4a0864597cff19fc56617f43be3a58754da65eded734a2a49f8468",
-      "de-DE": "48ab50f9d2b50352bc22a2223ca57cf148380eb3b2181c191baf2030f0db1388",
+      "es-ES": "a2c2c1059075f488bd53237ce1773a1933243b5511f1f2f592a581af8fb650bf",
+      "de-DE": "a63af785ce1d6d634bb1fdd9e3efa61004c82b8ab5f7424c8623622ed4168c9b",
     });
   });
 

@@ -328,12 +328,20 @@ func componentSchemas() map[string]*Schema {
 		"pending": {Type: "integer"}, "claimed": {Type: "integer"},
 		"oldest_unclaimed_seconds": {Type: "integer"},
 	}, "kind", "enabled", "pending", "claimed")
+	// A3: credential-custody health. Counts and one age; no tenant, agent,
+	// reference name or value appears anywhere in this shape.
+	agentJobRedemptions := object(map[string]*Schema{
+		"live":                {Type: "integer"},
+		"total":               {Type: "integer"},
+		"oldest_live_seconds": {Type: "integer"},
+	}, "live", "total")
 	agentJobPosture := object(map[string]*Schema{
 		"served":          {Type: "boolean"},
 		"claimable_kinds": {Type: "array", Items: str()},
 		"generated_at":    timestamp(),
 		"queues":          {Type: "array", Items: ref("AgentJobQueue")},
-	}, "served", "claimable_kinds", "generated_at", "queues")
+		"redemptions":     ref("AgentJobRedemptions"),
+	}, "served", "claimable_kinds", "generated_at", "queues", "redemptions")
 	// The ACME external account binding operator surface (B4). No field here
 	// carries the HMAC key in any form — the credential's secret stays byte-backed
 	// in locked memory where configuration put it (AN-8).
@@ -4022,6 +4030,7 @@ func componentSchemas() map[string]*Schema {
 		"ACMEEABPosture":                           acmeEABPosture,
 		"AgentJobQueue":                            agentJobQueue,
 		"AgentJobPosture":                          agentJobPosture,
+		"AgentJobRedemptions":                      agentJobRedemptions,
 		"CAAuthorityList":                          list("CAAuthority"),
 		"CADiscoveryItem":                          caDiscoveryItem,
 		"CADiscoverySummary":                       caDiscoverySummary,

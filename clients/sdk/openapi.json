@@ -1396,6 +1396,9 @@
             },
             "type": "array"
           },
+          "redemptions": {
+            "$ref": "#/components/schemas/AgentJobRedemptions"
+          },
           "served": {
             "type": "boolean"
           }
@@ -1404,7 +1407,8 @@
           "served",
           "claimable_kinds",
           "generated_at",
-          "queues"
+          "queues",
+          "redemptions"
         ],
         "type": "object"
       },
@@ -1431,6 +1435,24 @@
           "enabled",
           "pending",
           "claimed"
+        ],
+        "type": "object"
+      },
+      "AgentJobRedemptions": {
+        "properties": {
+          "live": {
+            "type": "integer"
+          },
+          "oldest_live_seconds": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "live",
+          "total"
         ],
         "type": "object"
       },

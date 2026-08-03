@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/protocol"
 )
 
@@ -57,9 +58,14 @@ const (
 	// (A1). An agent that does not advertise it is never handed estate-touching
 	// work, which is how a fleet upgrades one host at a time.
 	AgentCapabilityJobs = "jobs"
+	// AgentCapabilityRelay advertises that this side speaks the just-in-time
+	// credential redemption protocol (A3) — the agent can take a job that
+	// carries only references and redeem the material for one attempt. An agent
+	// that does not advertise it is never handed credential-bearing work.
+	AgentCapabilityRelay = "relay"
 )
 
-const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew + "," + AgentCapabilityInventory + "," + AgentCapabilityKubernetesPosture + "," + AgentCapabilityJobs
+const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew + "," + AgentCapabilityInventory + "," + AgentCapabilityKubernetesPosture + "," + AgentCapabilityJobs + "," + AgentCapabilityRelay
 
 // HeartbeatRequest is what an agent reports on each steady-state beat: its identity
 // and the inventory/status snapshot the control plane records. The authorizing
@@ -189,6 +195,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodKubernetesPosture, Handler: kubernetesPostureHandler},
 		{MethodName: methodClaimJobs, Handler: claimJobsHandler},
 		{MethodName: methodReportJobResult, Handler: reportJobResultHandler},
+		{MethodName: methodRedeemJobCredential, Handler: redeemJobCredentialHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",
@@ -456,6 +463,42 @@ type ReportJobResultResponse struct {
 	LeaseExpiresUnix int64 `json:"lease_expires_unix,omitempty"`
 }
 
+// RedeemJobCredentialRequest asks for the credential material a claimed job
+// references (epic A3). It carries ONLY the job id and the claim attempt: the
+// tenant and the agent identity come from the certificate the caller
+// authenticated with, exactly like every other call on this channel — a request
+// field naming either would be a request field an attacker chooses.
+type RedeemJobCredentialRequest struct {
+	JobID int64 `json:"job_id"`
+	// Attempt echoes the claim generation from ClaimedJob.Attempt. A redemption
+	// is single-use per (job, agent, attempt): a stale generation — the lease
+	// lapsed and someone else reclaimed — fails closed.
+	Attempt int `json:"attempt"`
+}
+
+// RedeemedSecret is one named piece of credential material, alive for one
+// attempt. Value is secret.JSONBytes so decoding never materializes a Go string
+// (AN-8): the receiver moves it into a locked buffer and wipes it.
+type RedeemedSecret struct {
+	// Name says which reference this item satisfies: "credential.cert_pem",
+	// "credential.key_pem", or the secret:// name from the target config.
+	Name  string           `json:"name"`
+	Value secret.JSONBytes `json:"value"`
+}
+
+// RedeemJobCredentialResponse hands over the material for exactly one attempt.
+type RedeemJobCredentialResponse struct {
+	// AuditRef is the public reference of the redemption row the control plane
+	// recorded before answering. The console shows it; the agent includes it in
+	// its evidence.
+	AuditRef string `json:"audit_ref"`
+	// ExpiresUnix is when this material's authorization lapses — bound to the
+	// claim lease, never longer. The agent must wipe by then regardless of
+	// where the attempt stands.
+	ExpiresUnix int64            `json:"expires_unix"`
+	Items       []RedeemedSecret `json:"items,omitempty"`
+}
+
 // AgentJobServiceServer is the optional job-claim extension of AgentService. It
 // is a separate interface so an older service implementation stays
 // source-compatible while a newer server exposes these methods on the same
@@ -463,13 +506,16 @@ type ReportJobResultResponse struct {
 type AgentJobServiceServer interface {
 	ClaimJobs(ctx context.Context, req *ClaimJobsRequest) (*ClaimJobsResponse, error)
 	ReportJobResult(ctx context.Context, req *ReportJobResultRequest) (*ReportJobResultResponse, error)
+	RedeemJobCredential(ctx context.Context, req *RedeemJobCredentialRequest) (*RedeemJobCredentialResponse, error)
 }
 
 const (
-	methodClaimJobs           = "ClaimJobs"
-	methodReportJobResult     = "ReportJobResult"
-	fullMethodClaimJobs       = "/" + agentServiceName + "/" + methodClaimJobs
-	fullMethodReportJobResult = "/" + agentServiceName + "/" + methodReportJobResult
+	methodClaimJobs               = "ClaimJobs"
+	methodReportJobResult         = "ReportJobResult"
+	methodRedeemJobCredential     = "RedeemJobCredential"
+	fullMethodClaimJobs           = "/" + agentServiceName + "/" + methodClaimJobs
+	fullMethodReportJobResult     = "/" + agentServiceName + "/" + methodReportJobResult
+	fullMethodRedeemJobCredential = "/" + agentServiceName + "/" + methodRedeemJobCredential
 )
 
 func claimJobsHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -487,6 +533,25 @@ func claimJobsHandler(srv any, ctx context.Context, dec func(any) error, interce
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodClaimJobs}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return jobs.ClaimJobs(ctx, req.(*ClaimJobsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func redeemJobCredentialHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(RedeemJobCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	jobs, ok := srv.(AgentJobServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not serve the agent job ledger")
+	}
+	if interceptor == nil {
+		return jobs.RedeemJobCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodRedeemJobCredential}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return jobs.RedeemJobCredential(ctx, req.(*RedeemJobCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -514,6 +579,19 @@ func reportJobResultHandler(srv any, ctx context.Context, dec func(any) error, i
 func (c *AgentClient) ClaimJobs(ctx context.Context, req *ClaimJobsRequest) (*ClaimJobsResponse, error) {
 	out := new(ClaimJobsResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodClaimJobs, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RedeemJobCredential asks for the credential material a claimed job
+// references (epic A3). It is callable once per (job, attempt): a replay, or a
+// call after the lease lapsed, returns PermissionDenied with no detail. The
+// caller must move each returned value into a locked buffer and wipe it when
+// the attempt ends.
+func (c *AgentClient) RedeemJobCredential(ctx context.Context, req *RedeemJobCredentialRequest) (*RedeemJobCredentialResponse, error) {
+	out := new(RedeemJobCredentialResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodRedeemJobCredential, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

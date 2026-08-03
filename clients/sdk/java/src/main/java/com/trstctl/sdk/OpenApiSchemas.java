@@ -46,6 +46,7 @@ public final class OpenApiSchemas {
       "AgentDiscoveryCapability",
       "AgentJobPosture",
       "AgentJobQueue",
+      "AgentJobRedemptions",
       "AgentList",
       "AgentOffboardRequest",
       "AgentOffboardResponse",

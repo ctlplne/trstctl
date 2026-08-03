@@ -4733,6 +4733,7 @@ export interface components {
             /** Format: date-time */
             generated_at: string;
             queues: components["schemas"]["AgentJobQueue"][];
+            redemptions: components["schemas"]["AgentJobRedemptions"];
             served: boolean;
         };
         AgentJobQueue: {
@@ -4741,6 +4742,11 @@ export interface components {
             kind: string;
             oldest_unclaimed_seconds?: number;
             pending: number;
+        };
+        AgentJobRedemptions: {
+            live: number;
+            oldest_live_seconds?: number;
+            total: number;
         };
         AgentList: {
             agents: components["schemas"]["Agent"][];

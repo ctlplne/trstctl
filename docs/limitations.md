@@ -165,7 +165,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **No job kind is claimable yet** — each becomes claimable when its agent-side executor ships | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
-| Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
+| Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Relays redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -578,6 +578,62 @@ every connector deploy still executes control-plane-side; the stamp decides who
 MAY claim the row once executors ship with the relay runtime. The `roles` column on the agents read model is a
 **projection** for the console only: writing `network` into it grants nothing,
 because the certificate still says host and the claim path still refuses.
+
+### Just-in-time credential leases: the brain ships references, not secrets
+
+A relay executes against things that cannot run an agent — an F5, a NetScaler —
+which means it needs the credentials that drive them. Handing a relay standing
+credentials would put a copy of the estate's admin passwords on a machine in the
+estate, permanently, whether or not any work was pending. So nothing standing is
+shipped at all.
+
+A claimed connector job carries a **reference-only intent**: what to deploy,
+where, and the NAMES of the credentials it may redeem. Not the credential, and
+not the sealed container holding it — the agent has no key for that seal, so
+shipping it would be pointless, and would leave the tenant's credential
+ciphertext sitting on a host waiting for a future key compromise. At execution
+time the relay calls `RedeemJobCredential` over the same mTLS channel it claimed
+on, and the control plane resolves the references — opening the sealed payload
+and reading each `secret://` name out of the tenant secret store — into locked
+buffers that are wiped as soon as the response is encoded.
+
+**Redemption is once per attempt, ever.** It is a single statement: an
+`INSERT ... ON CONFLICT DO NOTHING` keyed `(tenant, job, attempt)`, performed only
+if the caller currently holds the job's claim lease. A replay inserts nothing. So
+does a second agent that stole a lapsed lease, and so does a stale attempt
+number. All three get the same coarse `PermissionDenied` with nothing to
+distinguish them; the reason is classified afterwards for the audit event only,
+so probing the endpoint cannot map the claim table. Material is resolved BEFORE
+the gate is taken, so a custody outage refuses the call without burning the
+attempt's one redemption — the relay retries rather than failing the job. The
+redemption's expiry is bound to the claim lease and never chosen independently:
+a credential must not outlive the claim, or a second agent could take the job
+while the first still holds live material.
+
+**The agent's own words no longer become durable history when it held a
+credential.** A1 already kept agent free-text out of `outbox.last_error` behind a
+closed set; the event log took it raw, which was safe only while agents held no
+secrets. An appliance password is short and word-shaped — no redactor recognizes
+`hunter2-lab`, and no entropy floor fires on it — so any attempt that redeemed
+material records a closed-set marker instead of the agent's text. The operator
+still gets the failure reason, the redemption's audit reference, and the evidence
+digest; the transcript stays on the relay, where an operator with access to that
+host can read it. An attempt that redeemed nothing never held a secret to echo,
+so its detail flows through redaction as before.
+
+Operations shows credential custody directly: how many redeemed credentials are
+held by relays right now, how many have ever been handed out, and how long the
+oldest live one has been held — counts and one age, never a tenant, agent,
+reference name or value. A live count that does not fall, or an age past the
+maximum claim lease, is a stuck attempt holding material.
+
+**What is not served: the relay executor.** No agent-side code claims a connector
+job, redeems its credential, and drives an F5 yet. The protocol, the custody, the
+single-use ledger and the console are real and provable end to end against the
+served binary; the thing that would use them ships with the relay runtime. Until
+then `connector.deploy` executes control-plane-side as it always has, and no job
+kind is claimable by default. Nothing here retains a predecessor credential
+either, so relay-side rollback remains receipt-only.
 
 ### The agent job ledger: served fabric, no work yet
 

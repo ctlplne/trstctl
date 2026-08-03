@@ -360,6 +360,7 @@ export interface AgentJobPosture {
   claimable_kinds: string[];
   generated_at: string;
   queues: AgentJobQueue[];
+  redemptions: AgentJobRedemptions;
   served: boolean;
 }
 
@@ -369,6 +370,12 @@ export interface AgentJobQueue {
   kind: string;
   oldest_unclaimed_seconds?: number;
   pending: number;
+}
+
+export interface AgentJobRedemptions {
+  live: number;
+  oldest_live_seconds?: number;
+  total: number;
 }
 
 export interface AgentList {

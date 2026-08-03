@@ -250,6 +250,12 @@ const deDECatalog = {
   "operations.jobs.description":
     "Arbeit, die Ihren Bestand ber\u00fchrt, wird hier entschieden und von einem Agenten in Ihrer Umgebung ausgef\u00fchrt. Dies zeigt, was wartet, was ein Agent gerade h\u00e4lt und wie lange der \u00e4lteste Auftrag gewartet hat \u2014 die Zahl, die eine geleerte von einer blockierten Warteschlange unterscheidet.",
   "operations.jobs.disabled": "nicht aktiviert",
+  "operations.jobs.redemptions.live": "Von Relais gehaltene Anmeldeinformationen",
+  "operations.jobs.redemptions.total": "Erfasste Einlösungen",
+  "operations.jobs.redemptions.oldest": "Ältestes noch gehalten",
+  "operations.jobs.redemptions.none": "Keine",
+  "operations.jobs.redemptions.help":
+    "Ein Relais löst Anmeldematerial für genau einen Auftragsversuch ein und löscht es am Ende des Versuchs. Ein aktiver Zähler, der nicht sinkt, oder ein Alter jenseits der maximalen Claim-Laufzeit bedeutet, dass ein Versuch feststeckt und Material hält.",
   "operations.jobs.heading": "Agent-Auftragsregister",
   "operations.jobs.inFlight": "Von einem Agenten gehalten",
   "operations.jobs.kind": "Auftragsart",

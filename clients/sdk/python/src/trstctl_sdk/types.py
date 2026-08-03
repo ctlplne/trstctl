@@ -488,6 +488,7 @@ AgentJobPosture = TypedDict(
         'claimable_kinds': list[str],
         'generated_at': str,
         'queues': list[dict[str, Any]],
+        'redemptions': dict[str, Any],
         'served': bool,
     },
     total=False,
@@ -501,6 +502,16 @@ AgentJobQueue = TypedDict(
         'kind': str,
         'oldest_unclaimed_seconds': int,
         'pending': int,
+    },
+    total=False,
+)
+
+AgentJobRedemptions = TypedDict(
+    'AgentJobRedemptions',
+    {
+        'live': int,
+        'oldest_live_seconds': int,
+        'total': int,
     },
     total=False,
 )

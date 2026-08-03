@@ -351,6 +351,23 @@ type sealedConnectorDeployPayload struct {
 	IdentityID  string `json:"identity_id,omitempty"`
 	Fingerprint string `json:"fingerprint,omitempty"`
 	Sealed      []byte `json:"sealed"`
+	// Routing fields carried OUTSIDE the seal (epic A3) so a relay can be told
+	// what it is being asked to do without holding ciphertext it cannot open.
+	// None of these is a secret: the connector kind and target name appear in
+	// the tenant's own deployment-target configuration, and target_config holds
+	// secret:// REFERENCES, never values — it is stored unsealed in
+	// deployment_targets.config for exactly that reason.
+	//
+	// They are not bound into the AAD, because changing the AAD would make every
+	// already-sealed in-flight row fail to open. Instead the resolver verifies
+	// them against the sealed copy at redemption and refuses on mismatch, so
+	// tampering with the public routing is caught before any credential moves.
+	// Rows sealed before this field existed carry it empty and skip the check.
+	Connector    string          `json:"connector,omitempty"`
+	Target       string          `json:"target,omitempty"`
+	TargetID     string          `json:"target_id,omitempty"`
+	Revision     string          `json:"target_revision,omitempty"`
+	TargetConfig json.RawMessage `json:"target_config,omitempty"`
 }
 
 type issuedLeafMaterial struct {
@@ -1209,11 +1226,16 @@ func (d *issuanceDispatcher) sealConnectorDeployBytes(ctx context.Context, tenan
 		return nil, fmt.Errorf("server: seal connector deploy payload: %w", err)
 	}
 	out, err := json.Marshal(sealedConnectorDeployPayload{
-		Format:      connectorDeploySealedFormat,
-		Version:     connectorDeploySealedVersion,
-		IdentityID:  identityID,
-		Fingerprint: fingerprint,
-		Sealed:      sealed,
+		Format:       connectorDeploySealedFormat,
+		Version:      connectorDeploySealedVersion,
+		IdentityID:   identityID,
+		Fingerprint:  fingerprint,
+		Sealed:       sealed,
+		Connector:    p.Connector,
+		Target:       p.Target,
+		TargetID:     p.TargetID,
+		Revision:     p.TargetRevision,
+		TargetConfig: append(json.RawMessage(nil), p.TargetConfig...),
 	})
 	if err != nil {
 		return nil, err

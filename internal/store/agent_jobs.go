@@ -279,3 +279,210 @@ func agentFailureReason(detail string) string {
 	}
 	return AgentFailureReported
 }
+
+// AgentJobRedemption is the record of one just-in-time credential hand-over
+// (epic A3): which agent redeemed which job attempt, when it expires, and the
+// public reference the console shows. Never the material itself.
+type AgentJobRedemption struct {
+	AuditRef  string
+	ExpiresAt time.Time
+}
+
+// RedeemAgentJobCredential authorizes exactly one credential hand-over for one
+// job attempt. In a single statement it (a) verifies the caller CURRENTLY holds
+// the job's claim lease at the presented attempt, and (b) inserts the redemption
+// row keyed (tenant, job, attempt) — so a replay, a raced lease steal, or a
+// stale attempt all insert nothing and return ok=false with no distinguishing
+// detail. The row is the audit trail: append-only, RLS-confined, its expiry
+// bound to the claim lease so redeemed material can never outlive the claim.
+//
+// binding is the caller-computed, non-secret digest tying this redemption to
+// the exact work it authorizes; it is stored as evidence, not consulted as a
+// key.
+func (s *Store) RedeemAgentJobCredential(
+	ctx context.Context,
+	tenantID, agentID string,
+	jobID int64,
+	attempt int,
+	binding []byte,
+	now time.Time,
+) (AgentJobRedemption, bool, error) {
+	var out AgentJobRedemption
+	ok := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		scanErr := tx.QueryRow(ctx,
+			`WITH held AS (
+			        SELECT o.id, o.claim_attempts, o.claim_expires_at
+			          FROM outbox AS o
+			         WHERE o.tenant_id = $1
+			           AND o.id = $2
+			           AND o.claimed_by_agent_id = $3::uuid
+			           AND o.claim_completed_at IS NULL
+			           AND o.claim_expires_at > $6
+			           AND o.claim_attempts = $4
+			 ), ins AS (
+			    INSERT INTO agent_job_credential_redemptions
+			           (tenant_id, job_id, attempt, agent_id, binding, expires_at)
+			    SELECT $1, held.id, held.claim_attempts, $3::uuid, $5, held.claim_expires_at
+			      FROM held
+			    ON CONFLICT (tenant_id, job_id, attempt) DO NOTHING
+			    RETURNING audit_ref::text, expires_at
+			 )
+			 SELECT audit_ref, expires_at FROM ins`,
+			tenantID, jobID, agentID, attempt, binding, now.UTC()).
+			Scan(&out.AuditRef, &out.ExpiresAt)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return nil
+		}
+		if scanErr != nil {
+			return scanErr
+		}
+		ok = true
+		return nil
+	})
+	return out, ok, err
+}
+
+// AgentJobRedemptionRefusalReason classifies, AFTER a refused redemption, why it
+// was refused — for the audit event only. The wire answer is always the same
+// coarse denial; these reasons never reach the agent, so an attacker probing the
+// endpoint cannot map the claim table's state from refusal shapes.
+func (s *Store) AgentJobRedemptionRefusalReason(
+	ctx context.Context,
+	tenantID, agentID string,
+	jobID int64,
+	attempt int,
+	now time.Time,
+) (string, error) {
+	reason := AgentRedemptionRefusedLeaseNotHeld
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var redeemed bool
+		if scanErr := tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM agent_job_credential_redemptions
+			     WHERE tenant_id = $1 AND job_id = $2 AND attempt = $3
+			 )`, tenantID, jobID, attempt).Scan(&redeemed); scanErr != nil {
+			return scanErr
+		}
+		if redeemed {
+			reason = AgentRedemptionRefusedReplayed
+			return nil
+		}
+		var held bool
+		if scanErr := tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM outbox
+			     WHERE tenant_id = $1 AND id = $2
+			       AND claimed_by_agent_id = $3::uuid
+			       AND claim_completed_at IS NULL
+			       AND claim_expires_at > $4
+			 )`, tenantID, jobID, agentID, now.UTC()).Scan(&held); scanErr != nil {
+			return scanErr
+		}
+		if held {
+			// The lease is held but the attempt number does not match: the
+			// caller presented a stale claim generation.
+			reason = AgentRedemptionRefusedAttemptStale
+		}
+		return nil
+	})
+	return reason, err
+}
+
+// Closed-set refusal reasons for the redemption audit event. Like the job
+// failure markers, these are the only strings that may describe a refusal in
+// durable state.
+const (
+	AgentRedemptionRefusedReplayed     = "redemption_replayed"
+	AgentRedemptionRefusedLeaseNotHeld = "redemption_lease_not_held"
+	AgentRedemptionRefusedAttemptStale = "redemption_attempt_stale"
+)
+
+// AgentJobForRedemption is the row material the redemption handler needs to
+// resolve a claimed job's credential references: never handed to the agent —
+// the payload here is still sealed.
+type AgentJobForRedemption struct {
+	Destination    string
+	IdempotencyKey string
+	Payload        []byte
+	ClaimAttempts  int
+}
+
+// GetAgentJobForRedemption loads a job's sealed payload if — at this instant —
+// agentID holds its live claim. This is a fail-fast PREcheck and a data read;
+// the atomic single-use authorization is RedeemAgentJobCredential, which
+// re-verifies holdership in the same statement as the redemption insert.
+func (s *Store) GetAgentJobForRedemption(
+	ctx context.Context,
+	tenantID, agentID string,
+	jobID int64,
+	now time.Time,
+) (AgentJobForRedemption, bool, error) {
+	var out AgentJobForRedemption
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		scanErr := tx.QueryRow(ctx,
+			`SELECT destination, idempotency_key, payload, claim_attempts
+			   FROM outbox
+			  WHERE tenant_id = $1 AND id = $2
+			    AND claimed_by_agent_id = $3::uuid
+			    AND claim_completed_at IS NULL
+			    AND claim_expires_at > $4`,
+			tenantID, jobID, agentID, now.UTC()).
+			Scan(&out.Destination, &out.IdempotencyKey, &out.Payload, &out.ClaimAttempts)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return nil
+		}
+		if scanErr != nil {
+			return scanErr
+		}
+		found = true
+		return nil
+	})
+	return out, found, err
+}
+
+// AgentJobAttemptRedeemedCredential reports whether ANY attempt of this job has
+// redeemed credential material. It is what decides whether an agent's own words
+// may enter the tenant's permanent history: an agent that has held a credential
+// can echo it back, and no redactor recognizes a short appliance password.
+func (s *Store) AgentJobAttemptRedeemedCredential(ctx context.Context, tenantID string, jobID int64) (bool, error) {
+	redeemed := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM agent_job_credential_redemptions
+			     WHERE tenant_id = $1 AND job_id = $2
+			 )`, tenantID, jobID).Scan(&redeemed)
+	})
+	return redeemed, err
+}
+
+// AgentJobRedemptionPosture is process-wide credential-redemption health for the
+// operations surface (epic A3). Counts and one age only — never a tenant, an
+// agent, a job, a reference name or a value.
+type AgentJobRedemptionPosture struct {
+	// Live is the number of redemptions whose authorization has not yet lapsed.
+	// Each one is a credential currently held by some relay: the single most
+	// operationally interesting number this epic produces.
+	Live int
+	// Total is every redemption ever recorded.
+	Total int
+	// OldestLiveAt is when the oldest still-live redemption was granted. A
+	// redemption older than the maximum lease means a relay is holding material
+	// past a claim that should have lapsed — the shape of a stuck attempt.
+	OldestLiveAt *time.Time
+}
+
+// AgentJobRedemptions reads redemption posture for the operations surface.
+func (s *Store) AgentJobRedemptions(ctx context.Context, now time.Time) (AgentJobRedemptionPosture, error) {
+	var out AgentJobRedemptionPosture
+	err := s.SystemPool().QueryRow(ctx,
+		//trstctl:system-query — cross-tenant by design: process-wide credential-redemption health for the operations surface. It returns two counts and one timestamp; no tenant id, agent id, job id, reference name or credential value leaves this query.
+		`SELECT count(*) FILTER (WHERE expires_at > $1)::int,
+		        count(*)::int,
+		        min(redeemed_at) FILTER (WHERE expires_at > $1)
+		   FROM agent_job_credential_redemptions`, now.UTC()).
+		Scan(&out.Live, &out.Total, &out.OldestLiveAt)
+	return out, err
+}

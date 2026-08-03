@@ -40,6 +40,10 @@ func (stubAgentChannelService) ReportJobResult(context.Context, *transport.Repor
 	return &transport.ReportJobResultResponse{Accepted: true}, nil
 }
 
+func (stubAgentChannelService) RedeemJobCredential(context.Context, *transport.RedeemJobCredentialRequest) (*transport.RedeemJobCredentialResponse, error) {
+	return &transport.RedeemJobCredentialResponse{}, nil
+}
+
 func TestAgentBulkheadShedsWithoutStarvingOtherSubsystems(t *testing.T) {
 	set := bulkhead.NewSet(
 		bulkhead.Config{Name: bulkhead.SubsystemAgent, Workers: 1, Queue: 0},

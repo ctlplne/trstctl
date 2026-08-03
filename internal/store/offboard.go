@@ -76,6 +76,10 @@ var TenantScopedTables = []string{
 	"agent_cert_revocations",
 	"agents",
 	"agent_bootstrap_tokens",
+	// A3: the credential-redemption ledger. It holds no credential values, but
+	// it does record which agent redeemed which job attempt and when — tenant
+	// history that must leave with the tenant.
+	"agent_job_credential_redemptions",
 	"policy_bindings",
 	"tenant_members",
 	"api_tokens",

@@ -187,8 +187,14 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// served, and it touches lease bookkeeping only. The queue-depth read is
 		// process-wide by construction — it aggregates counts and one timestamp per
 		// destination for the operations surface and returns no tenant id, payload
-		// or credential.
-		"internal/store/agent_jobs.go": 2,
+		// or credential. A3 adds a third: process-wide credential-redemption
+		// health (how many redeemed credentials are live right now, and how long
+		// the oldest has been held). That number is only meaningful across the
+		// whole process — one tenant's view cannot tell an operator the fabric is
+		// holding material past a lapsed lease — and like its siblings it returns
+		// two counts and one timestamp, never a tenant, agent, job, reference
+		// name or value.
+		"internal/store/agent_jobs.go": 3,
 	}
 	found := map[string]int{}
 

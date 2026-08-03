@@ -413,6 +413,12 @@
         "name": "ReportJobResult",
         "request": "ReportJobResultRequest",
         "response": "ReportJobResultResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/RedeemJobCredential",
+        "name": "RedeemJobCredential",
+        "request": "",
+        "response": ""
       }
     ],
     "name": "trstctl.agent.v1.AgentService"

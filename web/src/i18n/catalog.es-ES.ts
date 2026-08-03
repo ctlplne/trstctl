@@ -241,6 +241,12 @@ const esESCatalog = {
   "operations.jobs.description":
     "El trabajo que afecta a su patrimonio se decide aqu\u00ed y lo ejecuta un agente en su entorno. Esto es lo que est\u00e1 esperando, lo que un agente tiene ahora mismo y cu\u00e1nto ha esperado el trabajo m\u00e1s antiguo: el n\u00famero que distingue una cola vaciada de una atascada.",
   "operations.jobs.disabled": "no habilitado",
+  "operations.jobs.redemptions.live": "Credenciales en manos de relés",
+  "operations.jobs.redemptions.total": "Canjes registrados",
+  "operations.jobs.redemptions.oldest": "El más antiguo aún retenido",
+  "operations.jobs.redemptions.none": "Ninguno",
+  "operations.jobs.redemptions.help":
+    "Un relé canjea material de credenciales para un único intento de trabajo y lo borra al finalizar. Un recuento activo que no disminuye, o una antigüedad superior al arrendamiento máximo de reclamación, indica que un intento se ha quedado reteniendo material.",
   "operations.jobs.heading": "Registro de trabajos del agente",
   "operations.jobs.inFlight": "En manos de un agente",
   "operations.jobs.kind": "Tipo de trabajo",

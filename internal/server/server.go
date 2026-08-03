@@ -1543,6 +1543,10 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// agent-side executor for it exists. Empty is the honest default.
 		claimableJobKinds: AgentClaimableJobKinds(d.AgentClaimableJobKinds),
 		outbox:            s.outbox,
+		// The redemption resolver seals with the SAME KEK and tenant custody the
+		// issuance dispatcher sealed with — constructed from the same Deps, so
+		// the two sides of the seal cannot drift apart (epic A3).
+		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto},
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {

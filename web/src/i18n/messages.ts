@@ -967,6 +967,27 @@ export const messages = {
     defaultMessage: "not enabled",
     description: "A1: marks a job kind that exists but which no operator has made claimable.",
   },
+  "operations.jobs.redemptions.live": {
+    defaultMessage: "Credentials held by relays",
+    description: "A3: credential-redemption custody health on the Operations agent job ledger panel.",
+  },
+  "operations.jobs.redemptions.total": {
+    defaultMessage: "Redemptions recorded",
+    description: "A3: credential-redemption custody health on the Operations agent job ledger panel.",
+  },
+  "operations.jobs.redemptions.oldest": {
+    defaultMessage: "Oldest still held",
+    description: "A3: credential-redemption custody health on the Operations agent job ledger panel.",
+  },
+  "operations.jobs.redemptions.none": {
+    defaultMessage: "None",
+    description: "A3: credential-redemption custody health on the Operations agent job ledger panel.",
+  },
+  "operations.jobs.redemptions.help": {
+    defaultMessage:
+      "A relay redeems credential material for one job attempt and wipes it when the attempt ends. A live count that does not fall, or an age past the maximum claim lease, means an attempt is stuck holding material.",
+    description: "A3: credential-redemption custody health on the Operations agent job ledger panel.",
+  },
   "operations.jobs.heading": {
     defaultMessage: "Agent job ledger",
     description: "A1: heading of the Operations panel showing estate-touching work agents claim over the channel.",

@@ -215,6 +215,10 @@ type agentService struct {
 	// outbox completes a job's delivery through the orchestrator so the dispatch
 	// lease predicate and the destination's circuit accounting both run (AN-6).
 	outbox *orchestrator.Outbox
+	// relayCredentials resolves a claimed job's credential references at
+	// redemption time (epic A3). Nil means the channel serves everything except
+	// RedeemJobCredential, which fails closed as unconfigured.
+	relayCredentials *relayCredentialResolver
 }
 
 // bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC
@@ -263,6 +267,15 @@ func (b *bulkheadedAgentService) ReportInventory(ctx context.Context, req *trans
 func (b *bulkheadedAgentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRequest) (*transport.ClaimJobsResponse, error) {
 	return runAgentBulkhead(ctx, b.pool, "claim_jobs", b.metrics, func(ctx context.Context) (*transport.ClaimJobsResponse, error) {
 		return b.next.ClaimJobs(ctx, req)
+	})
+}
+
+// RedeemJobCredential shares the job bulkhead: a fleet redeeming in lockstep is
+// bounded by the same pool that bounds its claims, so a redemption storm cannot
+// starve the channel's heartbeats (AN-7).
+func (b *bulkheadedAgentService) RedeemJobCredential(ctx context.Context, req *transport.RedeemJobCredentialRequest) (*transport.RedeemJobCredentialResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "redeem_job_credential", b.metrics, func(ctx context.Context) (*transport.RedeemJobCredentialResponse, error) {
+		return b.next.RedeemJobCredential(ctx, req)
 	})
 }
 

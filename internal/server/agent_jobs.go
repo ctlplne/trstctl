@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
@@ -170,8 +171,22 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 	}
 	out := &transport.ClaimJobsResponse{NextPollSeconds: agentJobPollSeconds}
 	for _, job := range claimed {
+		// A claimed job carries a REFERENCE, never credential material or the
+		// sealed container holding it (epic A3). The agent cannot open the seal
+		// and must never hold it: shipping ciphertext it has no key for is
+		// pointless at best, and at worst it is a copy of the credential sitting
+		// on a host, waiting for a future key compromise to make it readable.
+		payload, projectErr := a.projectClaimedJobPayload(job)
+		if projectErr != nil {
+			// A job whose envelope cannot be built is not handed out at all.
+			// Leaving it claimed is correct: the lease lapses and it returns.
+			a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.envelope_refused", map[string]any{
+				"agent": info.CommonName, "job_id": job.ID, "kind": job.Destination,
+			})
+			continue
+		}
 		out.Jobs = append(out.Jobs, transport.ClaimedJob{
-			JobID: job.ID, Kind: job.Destination, Payload: job.Payload,
+			JobID: job.ID, Kind: job.Destination, Payload: payload,
 			IdempotencyKey: job.IdempotencyKey, Attempt: job.ClaimAttempts,
 			LeaseExpiresUnix: job.ClaimExpiresAt.Unix(),
 		})
@@ -236,7 +251,8 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 		}
 		if ok {
 			a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", map[string]any{
-				"agent": info.CommonName, "job_id": req.JobID, "detail": req.Detail,
+				"agent": info.CommonName, "job_id": req.JobID,
+				"detail": a.agentDetailForHistory(ctx, info.TenantID, agentID, req),
 			})
 		}
 		return &transport.ReportJobResultResponse{Accepted: ok}, nil
@@ -371,6 +387,18 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 	}
 	sort.Strings(kinds)
 
+	// Credential custody first: how much material is outside the seal right now
+	// is the number an operator most needs when relays hold credentials (A3).
+	now := time.Now().UTC()
+	if redemptions, redErr := s.store.AgentJobRedemptions(ctx, now); redErr == nil {
+		out.Redemptions = api.AgentJobRedemptions{Live: redemptions.Live, Total: redemptions.Total}
+		if redemptions.OldestLiveAt != nil {
+			if age := int(now.Sub(*redemptions.OldestLiveAt).Seconds()); age > 0 {
+				out.Redemptions.OldestLiveSeconds = age
+			}
+		}
+	}
+
 	depths, err := s.store.AgentJobQueueDepths(ctx, kinds)
 	if err != nil {
 		return out, err
@@ -379,7 +407,6 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 	for _, d := range depths {
 		byKind[d.Destination] = d
 	}
-	now := time.Now().UTC()
 	for _, kind := range kinds {
 		q := api.AgentJobQueue{Kind: kind, Enabled: enabled[kind]}
 		if d, ok := byKind[kind]; ok {
@@ -394,3 +421,90 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 	}
 	return out, nil
 }
+
+// projectClaimedJobPayload builds the envelope an agent actually receives.
+//
+// Connector jobs are projected to a reference-only intent: what to deploy and
+// where, with every credential replaced by the name of a reference the agent can
+// redeem for one attempt. Everything else passes through — no other job kind
+// carries credential material, and rewriting their payloads would break A1's
+// contract for no gain.
+func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, error) {
+	switch job.Destination {
+	case "connector.deploy", "connector.rollback":
+	default:
+		return job.Payload, nil
+	}
+	intent, err := relayDeployIntentFromSealed(job)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(intent)
+}
+
+// agentDetailForHistory decides what an agent's own words may become in the
+// tenant's permanent event log (epic A3).
+//
+// The rule is about what the agent was HOLDING, not about what it wrote. If this
+// attempt redeemed a credential, the agent's free text is untrusted in a way no
+// redactor can repair: an appliance password is short and word-shaped, so it is
+// indistinguishable from ordinary prose, and an appliance that echoes it back in
+// an error body would write it into history that cannot be wiped (AN-8). No
+// entropy floor catches "hunter2-lab", and pretending otherwise would be the
+// kind of control that reads as protection while providing none.
+//
+// So a credential-bearing attempt records a closed-set marker instead. The
+// operator is not left blind: the failure reason, the redemption's audit ref,
+// and the evidence digest all remain, and the agent's transcript stays on the
+// agent where an operator with access to that host can read it.
+//
+// An attempt that redeemed nothing never held a secret to echo, so its detail
+// flows through redaction as before.
+func (a *agentService) agentDetailForHistory(ctx context.Context, tenantID, agentID string, req *transport.ReportJobResultRequest) string {
+	if a.store != nil {
+		redeemed, err := a.store.AgentJobAttemptRedeemedCredential(ctx, tenantID, req.JobID)
+		if err != nil || redeemed {
+			// A classification error fails closed: unknown custody is treated as
+			// credential-bearing.
+			return agentDetailCredentialBearing
+		}
+	}
+	return redactAgentDetail(req.Detail)
+}
+
+// redactAgentDetail strips secret-shaped material out of agent-supplied text
+// before it becomes durable history.
+//
+// It deliberately uses only the secret redactor, NOT the PII redactor: an
+// operator debugging a failed deploy needs to read "connect to
+// lb-01.prod.internal:443 refused", and rewriting hostnames and addresses would
+// turn the one field that explains a failure into noise. If the redactor still
+// leaves secret-like material, the text is dropped entirely rather than stored —
+// the same fail-closed stance the support bundle takes with a whole artifact.
+func redactAgentDetail(detail string) string {
+	detail = strings.TrimSpace(detail)
+	if detail == "" {
+		return ""
+	}
+	if len(detail) > agentDetailMaxRunes {
+		detail = detail[:agentDetailMaxRunes]
+	}
+	redacted := aimodel.DefaultRedactor(detail)
+	if aimodel.ResidualSecret(redacted) {
+		return agentDetailWithheld
+	}
+	return redacted
+}
+
+const (
+	// agentDetailMaxRunes bounds how much agent-supplied text becomes durable.
+	// An appliance that returns its whole configuration in an error body should
+	// not be able to write it into the event log.
+	agentDetailMaxRunes = 2048
+	// agentDetailWithheld replaces text that still looks secret-bearing after
+	// redaction. It is a closed-set marker, like the failure reasons.
+	agentDetailWithheld = "withheld: agent detail still contained secret-like material after redaction"
+	// agentDetailCredentialBearing replaces the detail of an attempt that
+	// redeemed a credential. See agentDetailForHistory.
+	agentDetailCredentialBearing = "withheld: this attempt held redeemed credential material; see the redemption audit ref and the agent's local transcript"
+)
