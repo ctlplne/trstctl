@@ -120,7 +120,7 @@ func agentPeerTLSState(t *testing.T, ttl time.Duration) *crypto.TLSConnectionSta
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, err := ca.SignClientCSRWithTenant(csr, "11111111-1111-1111-1111-111111111111", ttl)
+	chain, err := ca.SignClientCSRWithTenant(csr, "11111111-1111-1111-1111-111111111111", nil, ttl)
 	if err != nil {
 		t.Fatal(err)
 	}

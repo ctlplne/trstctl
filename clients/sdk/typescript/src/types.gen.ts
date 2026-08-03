@@ -4698,6 +4698,9 @@ export interface components {
             /** Format: date-time */
             offboarded_at?: string;
             offboarded_by?: string;
+            /** @enum {string} */
+            role_source: "certificate" | "unreported";
+            roles: ("host" | "network")[];
             status: string;
             version?: string;
         };
@@ -6093,10 +6096,12 @@ export interface components {
         };
         EnrollmentToken: {
             enroll_path?: string;
+            roles: ("host" | "network")[];
             token: string;
         };
         EnrollmentTokenRequest: {
             allowed_identity?: string;
+            roles?: ("host" | "network")[];
         };
         EnterpriseProfessionalService: {
             deliverables: string[];

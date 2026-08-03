@@ -145,13 +145,25 @@ type agentCAIssuer struct {
 	caCertDER []byte
 }
 
-func (i agentCAIssuer) SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Duration) ([]byte, error) {
-	spiffeURI := mtls.AgentSPIFFEID(tenantID, "")
-	cn, err := mtls.CSRCommonName(csrDER)
-	if err == nil && cn != "" {
-		spiffeURI = mtls.AgentSPIFFEID(tenantID, cn)
+func (i agentCAIssuer) SignClientCSRWithTenant(
+	csrDER []byte,
+	tenantID string,
+	roles []string,
+	ttl time.Duration,
+) ([]byte, error) {
+	cn := ""
+	if parsed, err := mtls.CSRCommonName(csrDER); err == nil {
+		cn = parsed
 	}
-	return crypto.SignAgentClientCSR(i.caCertDER, i.caSigner, csrDER, spiffeURI, ttl)
+	spiffeURI := mtls.AgentSPIFFEID(tenantID, cn)
+	// The capability SANs (epic A2) are built from the roles the CALLER was
+	// granted — the redeemed bootstrap token, or the certificate being renewed —
+	// so the CSR has no say in what the resulting certificate is allowed to do.
+	roleURIs := make([]string, 0, len(roles))
+	for _, role := range mtls.NormalizeAgentRoles(roles) {
+		roleURIs = append(roleURIs, mtls.AgentRoleSPIFFEID(tenantID, cn, role))
+	}
+	return crypto.SignAgentClientCSR(i.caCertDER, i.caSigner, csrDER, spiffeURI, roleURIs, ttl)
 }
 
 func (i agentCAIssuer) BundlePEM() []byte {
@@ -386,6 +398,10 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 	}
 	payload, err := json.Marshal(projections.AgentHeartbeat{
 		ID: agentRowID(info.TenantID, name), Agent: name, Version: req.Version, Status: status_, CertSerial: info.Serial,
+		// The roles come off the certificate this heartbeat authenticated with
+		// (epic A2), never off the request — the same source the claim path reads,
+		// so the console cannot show a capability the fabric would refuse.
+		Roles: info.Roles,
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
@@ -429,11 +445,18 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 	// The renewed certificate is attributed to the certificate's tenant via the
 	// SPIFFE SAN — built from info.TenantID (the verified cert), never the CSR.
 	spiffeURI := mtls.AgentSPIFFEID(info.TenantID, info.CommonName)
+	// Roles ride across the rotation unchanged (epic A2): they are read off the
+	// certificate the agent just authenticated with, so a renewal neither grants
+	// a capability nor — the likelier accident — strips one.
+	roleURIs := make([]string, 0, len(info.Roles))
+	for _, role := range mtls.NormalizeAgentRoles(info.Roles) {
+		roleURIs = append(roleURIs, mtls.AgentRoleSPIFFEID(info.TenantID, info.CommonName, role))
+	}
 	// AN-5: dedupe on the agent + the serial it presented. A retried Renew over the
 	// same current cert returns the original new chain rather than minting again.
 	key := "agent-renew:" + info.CommonName + ":" + info.Serial
 	out, err := a.idem.Do(ctx, info.TenantID, key, func(ctx context.Context) ([]byte, error) {
-		chainPEM, serr := crypto.SignAgentClientCSR(a.caCertDER, a.caSigner, req.CSRDER, spiffeURI, agentClientCertTTL)
+		chainPEM, serr := crypto.SignAgentClientCSR(a.caCertDER, a.caSigner, req.CSRDER, spiffeURI, roleURIs, agentClientCertTTL)
 		if serr != nil {
 			return nil, serr
 		}

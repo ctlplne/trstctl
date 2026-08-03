@@ -138,6 +138,20 @@ func (a *Agent) Credentials() (credentials.TransportCredentials, error) {
 	return mtls.AgentClientCredentials(src, a.cfg.ServerCAPEM, a.cfg.ServerName, nil)
 }
 
+// Roles is what this agent's certificate says it may be asked to do (epic A2):
+// host, network relay, or both. The agent reads its own capability off the
+// certificate an operator caused to be issued rather than from a startup flag, so
+// what it asks the control plane for and what the control plane will hand it come
+// from the same place.
+func (a *Agent) Roles() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.identity == nil {
+		return nil
+	}
+	return a.identity.Roles()
+}
+
 // CertificateSerial is the current certificate's serial (hex), for observability.
 func (a *Agent) CertificateSerial() string {
 	a.mu.Lock()

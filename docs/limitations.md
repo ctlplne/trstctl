@@ -165,6 +165,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **No job kind is claimable yet** — each becomes claimable when its agent-side executor ships | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
+| Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. **Per-target locality for connector work is not gated** — `connector.deploy`/`connector.rollback` are open to both roles at the kind level | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -508,6 +509,54 @@ compression check is forward-looking (it says new leaves are being truncated); i
 does not retrospectively scan already-issued leaves to report which ones were
 shortened. Nothing here schedules or performs the renewal — it tells you when to
 start, and the re-key and rotation routes remain the operator's action.
+
+### Agent roles: a vantage in the certificate
+
+An agent runs in one of two places, and where it runs decides what it can be asked
+to do. On a host, it acts on the machine it lives on. In a network segment, it
+acts for things that cannot run an agent at all — load balancers, appliances,
+cloud certificate stores — and probes endpoints the way a client would. The second
+kind holds the credentials that drive those devices, which is exactly why it is a
+grant and not a startup flag.
+
+An operator picks the roles when they mint the enrollment token. The grant is
+recorded with the token, and at redemption the **CA** stamps it into the issued
+certificate as an additional SPIFFE URI SAN
+(`spiffe://trstctl.example/tenant/<id>/agent/<cn>/role/<role>`). It is never read
+from the CSR: an agent that could put a role in its own certificate request would
+be choosing its own capability, and the whole control is that it cannot. A CSR
+that tries gets a certificate carrying only what the operator granted.
+
+At claim time the served channel reads the roles off the certificate the agent
+authenticated with — the same certificate the tenant is derived from — and
+intersects them with the vantage each job kind needs. `discovery.run` and
+`trust.distribute` act on the agent's own machine and are host work. `endpoint.verify`
+and `revocation.probe` are observations from a vantage and are relay work. A host
+agent reaching for relay work is handed nothing and the reach is recorded as
+`agent.jobs.role_refused`, because it is either a misconfiguration or the thing
+the gate exists to catch.
+
+Granting the network role additionally requires the `agents:relay.grant`
+permission, separately from `agents:write`. Enrolling a host agent is routine
+fleet work; placing a relay puts appliance credentials on a machine of the
+operator's choosing, and those are different decisions.
+
+An agent enrolled before roles existed carries no role SAN, and is read as
+**host-only** rather than as capability-less. That is what those agents already
+were, and reading them any other way would strand a live fleet mid-upgrade. A
+renewal carries the roles across unchanged — it cannot gain a capability, and it
+cannot silently lose one either. Changing an agent's role is a re-enrollment,
+because the role lives in a signed SAN.
+
+**What is not gated: per-target locality.** `connector.deploy` and
+`connector.rollback` are legitimately both roles' work — a host agent deploys to
+services on its own machine, a relay deploys to an appliance it can reach. Which
+one a given job needs is a property of the connector's target, not of the job
+kind, so the kind-level gate cannot decide it and both roles may claim it. Closing
+that requires connectors to declare whether their target can host an agent, and it
+lands with the relay runtime. The `roles` column on the agents read model is a
+**projection** for the console only: writing `network` into it grants nothing,
+because the certificate still says host and the claim path still refuses.
 
 ### The agent job ledger: served fabric, no work yet
 

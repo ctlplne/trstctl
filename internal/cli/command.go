@@ -325,6 +325,17 @@ var coreCommandTable = []Command{
 	// circuit view it complements.
 	{Name: []string{"operations", "bulkheads"}, Method: "GET", Path: "/api/v1/operations/bulkheads", Summary: "Show bounded worker-pool saturation and rejection counters"},
 
+	// A1: the agent job ledger's health beside the pool pressure it depends on. A
+	// queue that has stopped draining looks exactly like a quiet estate until
+	// something expires, so this belongs where an operator already looks.
+	{Name: []string{"operations", "jobs"}, Method: "GET", Path: "/api/v1/operations/jobs", Summary: "Show agent job queue depth, claims held, and the oldest unclaimed wait"},
+
+	// B4: external account bindings are authorizations, so they are listable and
+	// revocable from the same place the rest of the estate is driven.
+	{Name: []string{"acme", "eab", "list"}, Method: "GET", Path: "/api/v1/acme/eab-credentials", Summary: "List ACME external account binding credentials and their authorization scope"},
+	{Name: []string{"acme", "eab", "disable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/disable", Body: bodyNone, Summary: "Disable an ACME external account binding credential"},
+	{Name: []string{"acme", "eab", "enable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/enable", Body: bodyNone, Summary: "Re-enable a disabled ACME external account binding credential"},
+
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
 	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and crypto migration posture"},
 	{Name: []string{"pqc", "campaigns", "create"}, Method: "POST", Path: "/api/v1/pqc/campaigns", Body: bodyFile, Summary: "Start a core PQC migration tracking campaign"},

@@ -326,7 +326,7 @@ func issueAgentClientLeaf(t *testing.T, caDER []byte, caKey crypto.DigestSigner)
 	if err != nil {
 		return nil, err
 	}
-	chain, err := crypto.SignAgentClientCSR(caDER, caKey, csr, "spiffe://trstctl.example/tenant/profile-lint/agent/fixture", 24*time.Hour)
+	chain, err := crypto.SignAgentClientCSR(caDER, caKey, csr, "spiffe://trstctl.example/tenant/profile-lint/agent/fixture", nil, 24*time.Hour)
 	if err != nil {
 		return nil, fmt.Errorf("SignAgentClientCSR: %w", err)
 	}

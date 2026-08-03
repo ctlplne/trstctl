@@ -3,6 +3,7 @@
 package projections_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -24,12 +25,25 @@ type stubTokenIssuer struct {
 	calls             int
 	tenants           []string
 	allowedIdentities []string
+	// roles records the capability grant each mint carried (epic A2), so a test
+	// can prove the handler passes the operator's grant through rather than
+	// dropping it on the way to the authority.
+	roles [][]string
 }
 
-func (s *stubTokenIssuer) IssueBootstrapToken(_ context.Context, tenantID, allowedIdentity string) ([]byte, error) {
+func (s *stubTokenIssuer) IssueBootstrapToken(ctx context.Context, tenantID, allowedIdentity string) ([]byte, error) {
+	return s.IssueBootstrapTokenWithRoles(ctx, tenantID, allowedIdentity, nil)
+}
+
+func (s *stubTokenIssuer) IssueBootstrapTokenWithRoles(
+	_ context.Context,
+	tenantID, allowedIdentity string,
+	roles []string,
+) ([]byte, error) {
 	s.calls++
 	s.tenants = append(s.tenants, tenantID)
 	s.allowedIdentities = append(s.allowedIdentities, allowedIdentity)
+	s.roles = append(s.roles, roles)
 	return []byte("bootstrap-token-fixed"), nil
 }
 
@@ -175,5 +189,112 @@ func TestEnrollmentTokenUnconfigured(t *testing.T) {
 	}
 	if d, _ := body["detail"].(string); !strings.Contains(d, "enroll") {
 		t.Errorf("detail = %q, want it to mention enrollment", d)
+	}
+}
+
+// doJSONBody is doJSON with a request body, for the routes whose behaviour depends
+// on what the operator asked for rather than only on who they are.
+func doJSONBody(
+	t *testing.T,
+	srv *httptest.Server,
+	method, path, token, idempotencyKey string,
+	payload any,
+) (int, map[string]any) {
+	t.Helper()
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(method, srv.URL+path, bytes.NewReader(encoded))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &out); err != nil {
+			t.Fatalf("decode %s %s body %q: %v", method, path, body, err)
+		}
+	}
+	return resp.StatusCode, out
+}
+
+// TestEnrollmentTokenCarriesTheOperatorsGrant: the roles an operator picks reach
+// the authority, and the response reports the grant that will actually be stamped
+// rather than echoing what was typed (epic A2).
+func TestEnrollmentTokenCarriesTheOperatorsGrant(t *testing.T) {
+	issuer := &stubTokenIssuer{}
+	srv, s := newAgentsAPI(t, issuer)
+	token := mintToken(t, s, "agents:write", "agents:relay.grant")
+
+	code, body := doJSONBody(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens", token, "key-roles-1",
+		map[string]any{"roles": []string{"network", "host"}})
+	if code != http.StatusCreated {
+		t.Fatalf("POST enrollment-tokens = %d, want 201 (body %v)", code, body)
+	}
+	if len(issuer.roles) != 1 || len(issuer.roles[0]) != 2 ||
+		issuer.roles[0][0] != "host" || issuer.roles[0][1] != "network" {
+		t.Fatalf("authority received roles %v, want [host network]", issuer.roles)
+	}
+	roles, _ := body["roles"].([]any)
+	if len(roles) != 2 {
+		t.Fatalf("response roles = %v, want two", body["roles"])
+	}
+}
+
+// TestEnrollmentTokenRelayRoleNeedsItsOwnPermission is the separation this epic
+// added: agents:write enrolls host agents all day, but placing a relay — which
+// holds the credentials for the appliances it fronts — is a distinct authority.
+func TestEnrollmentTokenRelayRoleNeedsItsOwnPermission(t *testing.T) {
+	issuer := &stubTokenIssuer{}
+	srv, s := newAgentsAPI(t, issuer)
+	token := mintToken(t, s, "agents:write") // no agents:relay.grant
+
+	code, _ := doJSONBody(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens", token, "key-roles-2",
+		map[string]any{"roles": []string{"network"}})
+	if code != http.StatusForbidden {
+		t.Fatalf("relay grant without agents:relay.grant = %d, want 403", code)
+	}
+	if issuer.calls != 0 {
+		t.Errorf("authority minted %d tokens for a refused relay grant, want 0", issuer.calls)
+	}
+
+	// The same caller can still enroll a host agent, so the gate is on the
+	// capability and not on the route.
+	hostCode, _ := doJSONBody(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens", token, "key-roles-3",
+		map[string]any{"roles": []string{"host"}})
+	if hostCode != http.StatusCreated {
+		t.Fatalf("host-only mint without the relay permission = %d, want 201", hostCode)
+	}
+}
+
+// TestEnrollmentTokenRejectsAnUnknownRole: an operator who asks for a capability
+// that does not exist is told so, rather than handed a token that quietly grants
+// less than they believe.
+func TestEnrollmentTokenRejectsAnUnknownRole(t *testing.T) {
+	issuer := &stubTokenIssuer{}
+	srv, s := newAgentsAPI(t, issuer)
+	token := mintToken(t, s, "agents:write", "agents:relay.grant")
+
+	code, _ := doJSONBody(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens", token, "key-roles-4",
+		map[string]any{"roles": []string{"admin"}})
+	if code != http.StatusBadRequest {
+		t.Fatalf("unknown role = %d, want 400", code)
+	}
+	if issuer.calls != 0 {
+		t.Errorf("authority minted %d tokens for an unknown role, want 0", issuer.calls)
 	}
 }

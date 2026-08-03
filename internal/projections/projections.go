@@ -633,6 +633,11 @@ type AgentHeartbeat struct {
 	Version    string `json:"version"`
 	Status     string `json:"status"`
 	CertSerial string `json:"cert_serial,omitempty"`
+	// Roles is the capability grant read off the certificate the agent presented
+	// on this call (epic A2), so the fleet view reflects what the agent actually
+	// holds rather than what it was granted at some earlier enrollment. It is
+	// carried on the event so a replay reconstructs the same row.
+	Roles []string `json:"roles,omitempty"`
 }
 
 // AgentCertRenewed is the payload of an agent.cert.renewed event. The projector
@@ -2059,7 +2064,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		lastSeen := e.Time
 		return p.store.ApplyAgentHeartbeatTx(ctx, tx, store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: pl.Status,
-			Version: pl.Version, LastSeenAt: &lastSeen, CreatedAt: e.Time,
+			Version: pl.Version, Roles: pl.Roles, LastSeenAt: &lastSeen, CreatedAt: e.Time,
 		})
 	case EventAgentCertRenewed:
 		var pl AgentCertRenewed

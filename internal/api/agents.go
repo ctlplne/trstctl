@@ -6,15 +6,32 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/discovery"
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/store"
 )
 
 const agentInventoryReportPath = "agent.mtls.ReportInventory"
+
+// Where an agent's reported roles came from (epic A2). The console shows this so
+// an operator can tell a real grant from a gap in reporting.
+const (
+	// agentRoleSourceCertificate: read off the SANs of the certificate the agent
+	// presented on its last heartbeat. This is the same source the claim path
+	// authorizes against.
+	agentRoleSourceCertificate = "certificate"
+	// agentRoleSourceUnreported: the agent has not heartbeated since roles
+	// shipped, so nothing is known. Not the same as having no capability.
+	agentRoleSourceUnreported = "unreported"
+)
 
 type agentDiscoveryCapabilityResponse struct {
 	SourceKind      string `json:"source_kind"`
@@ -80,6 +97,17 @@ type agentResponse struct {
 	OffboardReason        string                             `json:"offboard_reason,omitempty"`
 	InventoryReportPath   string                             `json:"inventory_report_path"`
 	DiscoveryCapabilities []agentDiscoveryCapabilityResponse `json:"discovery_capabilities"`
+	// Roles is the capability grant read off the certificate the agent last
+	// presented (epic A2): host, network, or both. It is a projection of the
+	// certificate, not an editable field — changing an agent's role is a
+	// re-enrollment, because the role lives in a signed SAN.
+	//
+	// Empty means the agent has not heartbeated since roles shipped, which is not
+	// the same as host-only and is shown differently.
+	Roles []string `json:"roles"`
+	// RoleSource says where the roles above came from, so the console never
+	// presents a projection as if it were the authority.
+	RoleSource string `json:"role_source"`
 }
 
 // agentListResponse is the envelope for GET /api/v1/agents.
@@ -93,6 +121,12 @@ func toAgentResponse(a store.Agent) agentResponse {
 		ID: a.ID, Name: a.Name, Status: a.Status, Version: a.Version,
 		InventoryReportPath:   agentInventoryReportPath,
 		DiscoveryCapabilities: agentDiscoveryCapabilities(),
+		Roles:                 a.Roles,
+		RoleSource:            agentRoleSourceCertificate,
+	}
+	if len(out.Roles) == 0 {
+		out.Roles = []string{}
+		out.RoleSource = agentRoleSourceUnreported
 	}
 	if a.LastSeenAt != nil {
 		s := a.LastSeenAt.UTC().Format(time.RFC3339)
@@ -174,6 +208,11 @@ func decodeAgentCursor(c string) (*time.Time, string, error) {
 type enrollmentTokenResponse struct {
 	Token     secretJSONBytes `json:"token"`
 	EnrollURL string          `json:"enroll_path"`
+	// Roles echoes the grant recorded with the token, so the operator can see what
+	// they just authorized rather than inferring it from what they typed. It is
+	// the effective grant after normalization — an empty request comes back as
+	// ["host"], because that is what the certificate will actually say.
+	Roles []string `json:"roles"`
 }
 
 func (r enrollmentTokenResponse) wipeSecrets() { r.Token.wipe() }
@@ -183,6 +222,10 @@ func (r enrollmentTokenResponse) wipeSecrets() { r.Token.wipe() }
 // identity within the tenant" behavior for existing clients.
 type enrollmentTokenRequest struct {
 	AllowedIdentity string `json:"allowed_identity,omitempty"`
+	// Roles is the capability grant the enrolled agent's certificate will carry
+	// (epic A2): "host", "network", or both. Empty means host-only, which is what
+	// every agent enrolled before roles existed effectively had.
+	Roles []string `json:"roles,omitempty"`
 }
 
 // agentCertRevocationRequest identifies one public certificate selector to deny
@@ -235,12 +278,29 @@ func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 		}
 		req.AllowedIdentity = strings.TrimSpace(req.AllowedIdentity)
 	}
+	roles, err := normalizeEnrollmentRoles(req.Roles)
+	if err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	// Granting the network role is a separate authority from enrolling agents: a
+	// relay holds the credentials for the appliances it fronts, so placing one is
+	// a different decision from adding a host agent (epic A2).
+	if slices.Contains(roles, mtls.AgentRoleNetwork) && !a.canGrantRelayRole(r) {
+		a.writeProblem(w, problem.New(http.StatusForbidden,
+			"granting an agent the network relay role requires the agents:relay.grant permission"))
+		return
+	}
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		token, err := a.agentTokens.IssueBootstrapToken(ctx, tenantID, req.AllowedIdentity)
+		token, err := a.agentTokens.IssueBootstrapTokenWithRoles(ctx, tenantID, req.AllowedIdentity, roles)
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusCreated, enrollmentTokenResponse{Token: secretJSONBytes(token), EnrollURL: "/enroll/bootstrap"}, nil
+		return http.StatusCreated, enrollmentTokenResponse{
+			Token:     secretJSONBytes(token),
+			EnrollURL: "/enroll/bootstrap",
+			Roles:     effectiveAgentRoles(roles),
+		}, nil
 	})
 }
 
@@ -321,4 +381,44 @@ func normalizeAgentCertFingerprint(v string) string {
 	v = strings.ToLower(strings.TrimSpace(v))
 	v = strings.TrimPrefix(v, "sha256:")
 	return strings.ReplaceAll(v, ":", "")
+}
+
+// normalizeEnrollmentRoles validates an operator's requested capability grant. An
+// unknown role is rejected rather than dropped: an operator who asked for a
+// capability that does not exist should be told, not handed a token that quietly
+// grants less than they believe it does.
+func normalizeEnrollmentRoles(requested []string) ([]string, error) {
+	for _, role := range requested {
+		if strings.TrimSpace(role) == "" {
+			continue
+		}
+		if !mtls.ValidAgentRole(role) {
+			return nil, fmt.Errorf("unknown agent role %q: expected %q or %q",
+				role, mtls.AgentRoleHost, mtls.AgentRoleNetwork)
+		}
+	}
+	return mtls.NormalizeAgentRoles(requested), nil
+}
+
+// effectiveAgentRoles is what the issued certificate will actually say. An empty
+// grant is reported as host rather than as nothing, because host is what a
+// certificate with no role SAN is read as — reporting "no roles" would describe a
+// capability-less agent that does not exist.
+func effectiveAgentRoles(roles []string) []string {
+	if len(roles) == 0 {
+		return []string{mtls.AgentRoleHost}
+	}
+	return roles
+}
+
+// canGrantRelayRole reports whether the calling principal may mint a token that
+// carries the network relay role (epic A2). The route itself is already gated on
+// AgentsWrite; this is the additional authority, checked against the principal
+// guard placed in the request context.
+func (a *API) canGrantRelayRole(r *http.Request) bool {
+	principal, ok := a.principalFor(r)
+	if !ok {
+		return false
+	}
+	return principal.Can(authz.AgentsGrantRelay, authz.Scope{TenantID: principal.TenantID})
 }

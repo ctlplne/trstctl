@@ -325,6 +325,8 @@ export interface Agent {
   offboard_reason?: string;
   offboarded_at?: string;
   offboarded_by?: string;
+  role_source: "certificate" | "unreported";
+  roles: ("host" | "network")[];
   status: string;
   version?: string;
 }
@@ -1678,11 +1680,13 @@ export interface EndpointBindingRequest {
 
 export interface EnrollmentToken {
   enroll_path?: string;
+  roles: ("host" | "network")[];
   token: string;
 }
 
 export interface EnrollmentTokenRequest {
   allowed_identity?: string;
+  roles?: ("host" | "network")[];
 }
 
 export interface EnterpriseProfessionalService {

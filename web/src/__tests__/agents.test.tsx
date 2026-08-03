@@ -108,7 +108,10 @@ describe("agent fleet surface", () => {
     fireEvent.click(screen.getByRole("button", { name: /mint enrollment token/i }));
 
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledTimes(1));
-    expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01" });
+    // A2: the mint carries the capability grant the operator selected. Host is
+    // the default because it is what an agent with no grant already is — the
+    // form cannot offer "no capability", because no such agent exists.
+    expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01", roles: ["host"] });
     expect(await screen.findByText("BOOT-TOKEN-XYZ")).toBeInTheDocument();
     expect(screen.getByText(/shown once/i)).toBeInTheDocument();
     expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("/enroll/bootstrap");

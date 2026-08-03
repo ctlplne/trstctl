@@ -202,8 +202,16 @@ func TestServedAgentSSHInventoryAuthorizedKeysEndToEnd(t *testing.T) {
 // agent can connect to the steady-state channel with the cert it bootstrap-enrolled.
 func enrollAgent(t *testing.T, h *servedHarness, cn, serverName string) *agent.Agent {
 	t.Helper()
+	return enrollAgentWithRoles(t, h, cn, serverName, nil)
+}
+
+// enrollAgentWithRoles enrolls an agent whose bootstrap token carries a capability
+// grant (epic A2), so a test can hold a real network-role certificate rather than
+// asserting against a hand-built one.
+func enrollAgentWithRoles(t *testing.T, h *servedHarness, cn, serverName string, roles []string) *agent.Agent {
+	t.Helper()
 	ctx := context.Background()
-	tok, err := h.srv.agentEnroll.IssueBootstrapToken(ctx, h.tenant, "")
+	tok, err := h.srv.agentEnroll.IssueBootstrapTokenWithRoles(ctx, h.tenant, "", roles)
 	if err != nil {
 		t.Fatalf("issue bootstrap token: %v", err)
 	}

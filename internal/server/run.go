@@ -19,7 +19,9 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -458,35 +460,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("code-signing: %w", err)
 	}
-	connectorRegistry, err := connectorRegistryFromConfig(cfg.Connectors, st, sec.kek, egressGuard, tenantCrypto)
-	if err != nil {
-		return Deps{}, fmt.Errorf("connectors: %w", err)
-	}
-	connectorRightSize, err := connectorRightSizeHandler(cfg.Connectors, st, sec.kek, egressGuard, tenantCrypto)
-	if err != nil {
-		return Deps{}, fmt.Errorf("connector right-size: %w", err)
-	}
-	externalCAs, err := externalCAsFromConfig(ctx, cfg.ExternalCAs, signer.signer, signer.tokenProvider, egressGuard)
-	if err != nil {
-		return Deps{}, fmt.Errorf("external CAs: %w", err)
-	}
-	dynamicSecretProviders, err := dynamicSecretProvidersFromConfig(ctx, cfg.SecretIntegrations.DynamicProviders, st, sec.kek, egressGuard, tenantCrypto)
-	if err != nil {
-		return Deps{}, fmt.Errorf("dynamic-secret providers: %w", err)
-	}
-	secretSyncTargets, cloudTokenMinter, err := secretSyncTargetsFromConfig(ctx, cfg.SecretIntegrations.SyncTargets, st, sec.kek, egressGuard, log, tenantCrypto)
-	if err != nil {
-		return Deps{}, fmt.Errorf("secret-sync targets: %w", err)
-	}
-	defer closeCloudTokenMinterOnError(&err, cloudTokenMinter)
-	telemetryReporter, err := telemetryReporterFromConfig(cfg.Telemetry, st, egressGuard)
-	if err != nil {
-		return Deps{}, fmt.Errorf("telemetry: %w", err)
-	}
-	otlpExporter, err := otlpExporterFromConfig(cfg.OTLP, egressGuard)
+	outbound, err := buildRunOutboundDeps(ctx, cfg, st, log, signer, sec, egressGuard, tenantCrypto)
 	if err != nil {
 		return Deps{}, err
 	}
+	defer closeCloudTokenMinterOnError(&err, outbound.cloudTokenMinter)
 	protocols, err := evalProtocolProfileFromConfig(cfg)
 	if err != nil {
 		return Deps{}, err
@@ -497,7 +475,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		EgressGuard:               egressGuard,
 		ServiceNowBindings:        serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
-		TelemetryReporter:         telemetryReporter,
+		TelemetryReporter:         outbound.telemetryReporter,
 		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st)},
 		CACertFile:                cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
@@ -515,14 +493,14 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		NotificationChannels:         notificationChannels,
 		notificationChannelOwner:     notificationOwner,
 		CodeSigning:                  codeSigning,
-		ConnectorRegistry:            connectorRegistry,
-		ConnectorRightSize:           connectorRightSize,
-		ExternalCAs:                  externalCAs,
-		TenantDynamicSecretProviders: dynamicSecretProviders,
-		TenantSecretSyncTargets:      secretSyncTargets,
-		CloudTokenMinter:             cloudTokenMinter,
+		ConnectorRegistry:            outbound.connectorRegistry,
+		ConnectorRightSize:           outbound.connectorRightSize,
+		ExternalCAs:                  outbound.externalCAs,
+		TenantDynamicSecretProviders: outbound.dynamicSecretProviders,
+		TenantSecretSyncTargets:      outbound.secretSyncTargets,
+		CloudTokenMinter:             outbound.cloudTokenMinter,
 		Logger:                       logger, RateLimiter: rateLimiter,
-		OTLPExporter:    otlpExporter,
+		OTLPExporter:    outbound.otlpExporter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       protocols, Plugins: pluginCfg,
@@ -543,6 +521,70 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentCACertFile:        agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
+}
+
+// runOutboundDeps is everything the control plane builds that will eventually
+// reach OUTSIDE this process: connectors that deploy to an estate, external CAs,
+// dynamic secret providers, secret-sync targets, and the two telemetry exporters.
+// They are grouped because they share a property that matters — each one takes the
+// egress guard, and each is a place where a misconfiguration becomes an outbound
+// call to somewhere it should not go (AN-6).
+type runOutboundDeps struct {
+	connectorRegistry      *connector.Registry
+	connectorRightSize     RightSizeMutator
+	externalCAs            []ExternalCA
+	dynamicSecretProviders DynamicSecretProviderRegistry
+	secretSyncTargets      SecretSyncTargetRegistry
+	cloudTokenMinter       *cloudauth.Minter
+	telemetryReporter      *telemetry.Reporter
+	otlpExporter           *observ.OTLPExporter
+}
+
+// buildRunOutboundDeps constructs the outbound-integration stage. Split out of
+// buildRunDeps so that function stays under the startup-hotspot limit and so this
+// stage — the one where every external effect originates — is named and readable
+// on its own.
+//
+// The caller owns closing cloudTokenMinter on a later failure: this returns it
+// live, exactly as the inline code did.
+func buildRunOutboundDeps(
+	ctx context.Context,
+	cfg *config.Config,
+	st *store.Store,
+	log *events.Log,
+	signer runSigner,
+	sec runSecrets,
+	egressGuard *egress.Guard,
+	tenantCrypto tenantseal.Access,
+) (runOutboundDeps, error) {
+	var out runOutboundDeps
+	var err error
+	if out.connectorRegistry, err = connectorRegistryFromConfig(cfg.Connectors, st, sec.kek, egressGuard, tenantCrypto); err != nil {
+		return runOutboundDeps{}, fmt.Errorf("connectors: %w", err)
+	}
+	if out.connectorRightSize, err = connectorRightSizeHandler(cfg.Connectors, st, sec.kek, egressGuard, tenantCrypto); err != nil {
+		return runOutboundDeps{}, fmt.Errorf("connector right-size: %w", err)
+	}
+	if out.externalCAs, err = externalCAsFromConfig(ctx, cfg.ExternalCAs, signer.signer, signer.tokenProvider, egressGuard); err != nil {
+		return runOutboundDeps{}, fmt.Errorf("external CAs: %w", err)
+	}
+	if out.dynamicSecretProviders, err = dynamicSecretProvidersFromConfig(ctx, cfg.SecretIntegrations.DynamicProviders, st, sec.kek, egressGuard, tenantCrypto); err != nil {
+		return runOutboundDeps{}, fmt.Errorf("dynamic-secret providers: %w", err)
+	}
+	if out.secretSyncTargets, out.cloudTokenMinter, err = secretSyncTargetsFromConfig(ctx, cfg.SecretIntegrations.SyncTargets, st, sec.kek, egressGuard, log, tenantCrypto); err != nil {
+		return runOutboundDeps{}, fmt.Errorf("secret-sync targets: %w", err)
+	}
+	if out.telemetryReporter, err = telemetryReporterFromConfig(cfg.Telemetry, st, egressGuard); err != nil {
+		// A minter built above must not leak when a later constructor in this
+		// stage fails; the caller's deferred close only sees what is returned.
+		closeCloudTokenMinter(out.cloudTokenMinter)
+		return runOutboundDeps{}, fmt.Errorf("telemetry: %w", err)
+	}
+	if out.otlpExporter, err = otlpExporterFromConfig(cfg.OTLP, egressGuard); err != nil {
+		closeCloudTokenMinter(out.cloudTokenMinter)
+		return runOutboundDeps{}, err
+	}
+	return out, nil
 }
 
 func runNotifications(cfg config.Notifications, guard *egress.Guard) ([]notify.Notifier, *notificationChannelOwnership, error) {

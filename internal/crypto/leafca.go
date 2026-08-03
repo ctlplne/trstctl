@@ -388,7 +388,14 @@ func SignServerCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byt
 // before return, so a signer that returns a non-verifying signature fails closed
 // rather than yielding an unusable client cert. The returned chain is leaf || CA
 // (DER list), suitable for the agent to adopt directly.
-func SignAgentClientCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, spiffeURI string, ttl time.Duration) ([]byte, error) {
+func SignAgentClientCSR(
+	caCertDER []byte,
+	caSigner DigestSigner,
+	csrDER []byte,
+	spiffeURI string,
+	roleURIs []string,
+	ttl time.Duration,
+) ([]byte, error) {
 	if strings.TrimSpace(spiffeURI) == "" {
 		return nil, errors.New("crypto: refusing to sign agent client CSR without a tenant SPIFFE SAN")
 	}
@@ -407,6 +414,21 @@ func SignAgentClientCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, 
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse agent tenant SPIFFE SAN: %w", err)
 	}
+	// Capability SANs (epic A2) are built by the caller from the GRANT — the
+	// redeemed token, or the roles the presenting certificate already carries —
+	// never from the CSR. An agent that could put a role in its own CSR would be
+	// choosing its own capability, which is the whole thing this prevents.
+	uris := []*url.URL{uri}
+	for _, roleURI := range roleURIs {
+		if strings.TrimSpace(roleURI) == "" {
+			continue
+		}
+		parsed, perr := url.Parse(roleURI)
+		if perr != nil {
+			return nil, fmt.Errorf("crypto: parse agent role SAN: %w", perr)
+		}
+		uris = append(uris, parsed)
+	}
 	adapter, err := newX509Signer(caSigner)
 	if err != nil {
 		return nil, err
@@ -423,7 +445,7 @@ func SignAgentClientCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, 
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               csr.Subject,
-		URIs:                  []*url.URL{uri},
+		URIs:                  uris,
 		NotBefore:             IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              x509.KeyUsageDigitalSignature,

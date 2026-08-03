@@ -143,8 +143,10 @@ const esESCatalog = {
   "nav.group.secretsDelivery": "Entrega y escaneo",
   "discovery.ct.alertChannels": "{count} canales de alerta",
   "discovery.ct.cadence": "Tama\u00f1o de lote",
-  "discovery.ct.coverageHonesty": "Esto cubre solo los dominios y registros configurados a continuaci\u00f3n. No es una cobertura autom\u00e1tica del patrimonio completo: un dominio que no haya listado, o un registro que no consulte, no produce ning\u00fan hallazgo.",
-  "discovery.ct.description": "Sepa en el momento en que alguien emite un certificado para sus dominios, en cualquier lugar. trstctl consulta los registros RFC 6962 que configure, marca un punto de control en cada uno y genera un hallazgo de emisi\u00f3n inesperada para un dominio vigilado que no esperaba.",
+  "discovery.ct.coverageHonesty":
+    "Esto cubre solo los dominios y registros configurados a continuaci\u00f3n. No es una cobertura autom\u00e1tica del patrimonio completo: un dominio que no haya listado, o un registro que no consulte, no produce ning\u00fan hallazgo.",
+  "discovery.ct.description":
+    "Sepa en el momento en que alguien emite un certificado para sus dominios, en cualquier lugar. trstctl consulta los registros RFC 6962 que configure, marca un punto de control en cada uno y genera un hallazgo de emisi\u00f3n inesperada para un dominio vigilado que no esperaba.",
   "discovery.ct.heading": "Monitorizaci\u00f3n de Certificate Transparency",
   "discovery.ct.investigate": "Investigar",
   "discovery.ct.logHealth": "Puntos de control de registros",
@@ -152,7 +154,8 @@ const esESCatalog = {
   "discovery.ct.neverPolled": "nunca consultado",
   "discovery.ct.nextIndex": "siguiente \u00edndice {value}",
   "discovery.ct.noFindings": "Ninguna emisi\u00f3n inesperada para los dominios vigilados, en los registros configurados.",
-  "discovery.ct.notConfigured": "A\u00fan no hay ninguna fuente de monitorizaci\u00f3n CT configurada. A\u00f1ada los dominios que posee y al menos un registro RFC 6962.",
+  "discovery.ct.notConfigured":
+    "A\u00fan no hay ninguna fuente de monitorizaci\u00f3n CT configurada. A\u00f1ada los dominios que posee y al menos un registro RFC 6962.",
   "discovery.ct.openFindings": "{count} abiertos",
   "discovery.ct.save": "Guardar y ejecutar ahora",
   "discovery.ct.unexpectedIssuance": "Emisi\u00f3n inesperada",
@@ -177,10 +180,12 @@ const esESCatalog = {
   "admin.editions.description": "Estado de licencia sin conexión, filas de ediciones y funciones, postura FIPS y distribución.",
   "identities.decommission.heading": "Retirada por señal",
   "request.csr.generate": "Genere una en ese host:",
-  "request.csr.help": "Pegue una CSR que haya generado en el host que usar\u00e1 este certificado. trstctl la firma y nunca ve su clave privada. Esta es la alternativa para hosts sin agente: donde hay un agente inscrito, este genera la clave y env\u00eda la solicitud por s\u00ed mismo, y usted no maneja material de clave en absoluto.",
+  "request.csr.help":
+    "Pegue una CSR que haya generado en el host que usar\u00e1 este certificado. trstctl la firma y nunca ve su clave privada. Esta es la alternativa para hosts sin agente: donde hay un agente inscrito, este genera la clave y env\u00eda la solicitud por s\u00ed mismo, y usted no maneja material de clave en absoluto.",
   "request.csr.invalid": "Eso no parece una solicitud de certificado PEM. Deber\u00eda comenzar con -----BEGIN CERTIFICATE REQUEST-----.",
   "request.csr.label": "Solicitud de firma de certificado (PKCS#10)",
-  "request.csr.omitted": "Deje esto vac\u00edo y trstctl generar\u00e1 la clave privada por s\u00ed mismo y la devolver\u00e1: una v\u00eda obsoleta que registra un evento issuance.server_side_keygen cada vez que se ejecuta.",
+  "request.csr.omitted":
+    "Deje esto vac\u00edo y trstctl generar\u00e1 la clave privada por s\u00ed mismo y la devolver\u00e1: una v\u00eda obsoleta que registra un evento issuance.server_side_keygen cada vez que se ejecuta.",
   "request.wizard.profile.label": "Elegir perfil",
   "request.wizard.profile.description": "El perfil de emisión determina el tipo de clave, la vigencia y cuántas aprobaciones necesita la solicitud.",
   "request.wizard.details.label": "Nombrar la credencial",
@@ -233,13 +238,16 @@ const esESCatalog = {
   "codesign.receipt.transparencyDestination": "Destino de transparencia",
   "codesign.receipt.signatureBase64": "Firma (base64)",
   "codesign.receipt.downloadSignature": "Descargar firma",
-  "operations.jobs.description": "El trabajo que afecta a su patrimonio se decide aqu\u00ed y lo ejecuta un agente en su entorno. Esto es lo que est\u00e1 esperando, lo que un agente tiene ahora mismo y cu\u00e1nto ha esperado el trabajo m\u00e1s antiguo: el n\u00famero que distingue una cola vaciada de una atascada.",
+  "operations.jobs.description":
+    "El trabajo que afecta a su patrimonio se decide aqu\u00ed y lo ejecuta un agente en su entorno. Esto es lo que est\u00e1 esperando, lo que un agente tiene ahora mismo y cu\u00e1nto ha esperado el trabajo m\u00e1s antiguo: el n\u00famero que distingue una cola vaciada de una atascada.",
   "operations.jobs.disabled": "no habilitado",
   "operations.jobs.heading": "Registro de trabajos del agente",
   "operations.jobs.inFlight": "En manos de un agente",
   "operations.jobs.kind": "Tipo de trabajo",
-  "operations.jobs.noneEnabled": "No hay ning\u00fan tipo de trabajo habilitado, por lo que no se entrega nada a los agentes. Un tipo pasa a ser reclamable cuando su ejecutor se publica y usted lo habilita en agent_channel.claimable_job_kinds.",
-  "operations.jobs.notServed": "El canal del agente no est\u00e1 montado, por lo que no hay registro de trabajos que mostrar. Habilite agent_channel para que los agentes reclamen trabajo.",
+  "operations.jobs.noneEnabled":
+    "No hay ning\u00fan tipo de trabajo habilitado, por lo que no se entrega nada a los agentes. Un tipo pasa a ser reclamable cuando su ejecutor se publica y usted lo habilita en agent_channel.claimable_job_kinds.",
+  "operations.jobs.notServed":
+    "El canal del agente no est\u00e1 montado, por lo que no hay registro de trabajos que mostrar. Habilite agent_channel para que los agentes reclamen trabajo.",
   "operations.jobs.oldest": "Espera m\u00e1s antigua",
   "operations.jobs.waiting": "En espera",
   "operations.status.queued": "En cola",
@@ -1017,7 +1025,8 @@ const esESCatalog = {
   "agents.endpointDiscovery.metadataOnly": "solo metadatos",
   "agents.endpointDiscovery.payload": "carga",
   "agents.endpointDiscovery.noKeyBytes": "sin bytes de clave",
-  "agents.endpointDiscovery.none": "Esta versión del agente no anuncia fuentes de descubrimiento de puntos finales. No se recopila nada hasta que se configure una.",
+  "agents.endpointDiscovery.none":
+    "Esta versión del agente no anuncia fuentes de descubrimiento de puntos finales. No se recopila nada hasta que se configure una.",
   "agents.endpointDiscovery.filesystem": "Certificados del sistema de archivos",
   "agents.endpointDiscovery.pkcs11": "Certificados de token PKCS#11",
   "agents.endpointDiscovery.windowsStore": "Almacén de certificados de Windows",
@@ -1410,7 +1419,8 @@ const esESCatalog = {
   "protocols.dns01.configEmptyTitle": "Configuraciones de proveedor DNS-01 no disponibles",
   "protocols.dns01.configEmpty": "No se devolvieron configuraciones de proveedor.",
   "protocols.eab.accountsBound": "{count} cuentas",
-  "protocols.eab.description": "Cada credencial es una autorizaci\u00f3n, no solo una llave: una cuenta recuerda qu\u00e9 credencial la admiti\u00f3, y cada pedido bajo esa cuenta se comprueba contra el alcance de la credencial. Deshabilitar una detiene las nuevas cuentas y pedidos bajo ella y deja v\u00e1lidos los certificados ya emitidos.",
+  "protocols.eab.description":
+    "Cada credencial es una autorizaci\u00f3n, no solo una llave: una cuenta recuerda qu\u00e9 credencial la admiti\u00f3, y cada pedido bajo esa cuenta se comprueba contra el alcance de la credencial. Deshabilitar una detiene las nuevas cuentas y pedidos bajo ella y deja v\u00e1lidos los certificados ya emitidos.",
   "protocols.eab.disable": "Deshabilitar",
   "protocols.eab.enable": "Habilitar",
   "protocols.eab.heading": "Vinculaciones de cuenta externa",
@@ -1422,7 +1432,8 @@ const esESCatalog = {
   "protocols.eab.ordersDenied": "{count} denegados",
   "protocols.eab.quota": "{used} de {max} pedidos",
   "protocols.eab.required": "Se requiere vinculaci\u00f3n de cuenta externa para nuevas cuentas",
-  "protocols.eab.rotation": "La rotaci\u00f3n es una operaci\u00f3n de configuraci\u00f3n: a\u00f1ada el nuevo ID de clave a protocols.acme_eab y luego deshabilite el antiguo aqu\u00ed mientras los clientes migran. trstctl no genera credenciales de cuenta externa a trav\u00e9s de la API, porque eso significar\u00eda devolver un secreto MAC compartido en una respuesta.",
+  "protocols.eab.rotation":
+    "La rotaci\u00f3n es una operaci\u00f3n de configuraci\u00f3n: a\u00f1ada el nuevo ID de clave a protocols.acme_eab y luego deshabilite el antiguo aqu\u00ed mientras los clientes migran. trstctl no genera credenciales de cuenta externa a trav\u00e9s de la API, porque eso significar\u00eda devolver un secreto MAC compartido en una respuesta.",
   "protocols.eab.scope": "Alcance",
   "protocols.eab.unavailable": "ACME no est\u00e1 montado para este inquilino, por lo que no hay estado de vinculaci\u00f3n de cuenta externa que mostrar.",
   "protocols.eab.unscoped": "Sin alcance: cualquier identificador que este servidor permitir\u00eda",
@@ -2251,7 +2262,8 @@ const esESCatalog = {
   "source.open.ca.hierarchy.and.issuer.catalog.a303297c19": "Abrir la jerarquía de CA y el catálogo de emisores",
   "source.open.command.palette.c022b19a38": "Abrir paleta de comandos",
   "source.open.the.self.service.request.workflow.a5dd4f8af7": "Abrir el flujo de solicitud de autoservicio",
-  "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2": "openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj \"/CN={value1}\"",
+  "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2":
+    'openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}"',
   "source.operate.58c3939c4c": "Operar",
   "source.organization.id.1f46632263": "ID de organización",
   "source.orphaned.credentials.0e9e535cd8": "Credenciales huérfanas",
@@ -3410,6 +3422,20 @@ const esESCatalog = {
   "source.start.with.a.profile.bound.request.or.conn.19cdbff548":
     "Comience con una solicitud vinculada a un perfil o conecte un emisor antes de emitir el primer certificado.",
   "source.state.a3b50c4767": "Estado",
+  "source.agent.role.a2r0le0001": "Rol",
+  "source.agent.role.help.a2r0le0002":
+    "El lugar donde se ejecuta este agente determina el trabajo que recibe. El rol se graba en el certificado con el que se inscribe, por lo que no puede cambiarse sin volver a inscribirlo.",
+  "source.agent.role.host.a2r0le0003": "Host",
+  "source.agent.role.host.help.a2r0le0004": "Actúa en la máquina donde se ejecuta: enumera las credenciales de este host y despliega en sus servicios.",
+  "source.agent.role.network.a2r0le0005": "Relé de red",
+  "source.agent.role.network.help.a2r0le0006":
+    "Actúa sobre elementos de su segmento que no pueden ejecutar un agente (balanceadores de carga, dispositivos, almacenes de certificados en la nube) y verifica los extremos desde la perspectiva de un cliente.",
+  "source.agent.role.relay.warning.a2r0le0007":
+    "Un relé conserva las credenciales de los dispositivos que representa. Conceder este rol requiere el permiso agents:relay.grant.",
+  "source.agent.role.empty.a2r0le0008":
+    "No se ha seleccionado ningún rol. El agente inscrito será solo de host, que es el valor predeterminado para un agente sin concesión.",
+  "source.agent.role.unreported.a2r0le0009": "Aún no informado",
+  "source.agent.role.source.a2r0le0010": "Leído del certificado que este agente presentó por última vez. Cambiar un rol implica volver a inscribirlo.",
   "source.status.920e413c7d": "Estado",
   "source.status.filter.9bfe8b184f": "Filtro de estado",
   "source.structured.query.preview.706d53d9be": "Vista previa de consulta estructurada",

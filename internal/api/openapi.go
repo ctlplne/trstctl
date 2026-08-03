@@ -2949,16 +2949,30 @@ func componentSchemas() map[string]*Schema {
 		"offboarded_at": timestamp(), "offboarded_by": str(), "offboard_reason": str(),
 		"inventory_report_path":  str(),
 		"discovery_capabilities": {Type: "array", Items: ref("AgentDiscoveryCapability")},
-	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities")
+		// Capability grant projected from the agent's certificate SANs (epic A2).
+		// Not editable: the role lives in a signed SAN, so changing it is a
+		// re-enrollment.
+		"roles":       {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
+		"role_source": {Type: "string", Enum: []string{"certificate", "unreported"}},
+	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities", "roles", "role_source")
 	agentList := object(map[string]*Schema{
 		"agents":      {Type: "array", Items: ref("Agent")},
 		"next_cursor": str(),
 	}, "agents")
 	enrollmentToken := object(map[string]*Schema{
 		"token": str(), "enroll_path": str(),
-	}, "token")
+		// The effective grant this token carries into the enrolled certificate,
+		// after normalization — so an operator sees what they authorized rather
+		// than what they typed (epic A2).
+		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
+	}, "token", "roles")
 	enrollmentTokenReq := object(map[string]*Schema{
 		"allowed_identity": str(),
+		// Capability grant for the enrolled agent. Empty means host-only.
+		// Requesting "network" additionally requires the agents:relay.grant
+		// permission, because a relay holds the credentials for the appliances it
+		// fronts.
+		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
 	})
 	agentCertRevocationReq := object(map[string]*Schema{
 		"agent": str(), "serial": str(), "fingerprint": str(), "reason": str(),

@@ -1264,6 +1264,23 @@
           "offboarded_by": {
             "type": "string"
           },
+          "role_source": {
+            "enum": [
+              "certificate",
+              "unreported"
+            ],
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "enum": [
+                "host",
+                "network"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "status": {
             "type": "string"
           },
@@ -1276,7 +1293,9 @@
           "name",
           "status",
           "inventory_report_path",
-          "discovery_capabilities"
+          "discovery_capabilities",
+          "roles",
+          "role_source"
         ],
         "type": "object"
       },
@@ -6474,12 +6493,23 @@
           "enroll_path": {
             "type": "string"
           },
+          "roles": {
+            "items": {
+              "enum": [
+                "host",
+                "network"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "token": {
             "type": "string"
           }
         },
         "required": [
-          "token"
+          "token",
+          "roles"
         ],
         "type": "object"
       },
@@ -6487,6 +6517,16 @@
         "properties": {
           "allowed_identity": {
             "type": "string"
+          },
+          "roles": {
+            "items": {
+              "enum": [
+                "host",
+                "network"
+              ],
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"

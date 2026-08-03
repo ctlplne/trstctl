@@ -437,7 +437,7 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 			http.Error(w, "bad csr", http.StatusBadRequest)
 			return
 		}
-		chain, err := agentCA.SignClientCSRWithTenant(csr, "tenant-a", time.Hour)
+		chain, err := agentCA.SignClientCSRWithTenant(csr, "tenant-a", nil, time.Hour)
 		if err != nil {
 			http.Error(w, "sign csr", http.StatusBadRequest)
 			return

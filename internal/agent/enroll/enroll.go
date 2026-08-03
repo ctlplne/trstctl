@@ -45,7 +45,12 @@ type MintedToken struct {
 	TokenHash       string
 	TenantID        string
 	AllowedIdentity string
-	ExpiresAt       time.Time
+	// Roles is the capability grant this token carries into the issued
+	// certificate (epic A2): mtls.AgentRoleHost, mtls.AgentRoleNetwork, or both.
+	// Empty means host-only. It is recorded at MINT — an operator's decision made
+	// when they hand the token out — so redemption has nothing to negotiate.
+	Roles     []string
+	ExpiresAt time.Time
 }
 
 // RedeemedToken is what a TokenStore returns when a token is consumed: the
@@ -53,6 +58,9 @@ type MintedToken struct {
 type RedeemedToken struct {
 	TenantID        string
 	AllowedIdentity string
+	// Roles is the capability grant recorded at mint. The CA stamps these into
+	// the certificate; the agent never gets to name its own (epic A2).
+	Roles []string
 }
 
 // TokenStore persists tenant-bound, single-use bootstrap tokens durably. The
@@ -82,7 +90,9 @@ type CAIssuer interface {
 	// SignClientCSRWithTenant signs csrDER as a ClientAuth certificate valid for ttl,
 	// stamped with tenantID's SPIFFE SAN (refusing an empty tenant). Returns leaf||CA
 	// in PEM.
-	SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Duration) ([]byte, error)
+	// roles are the capability SANs to stamp alongside the identity (epic A2),
+	// taken from the operator's grant and never from the CSR. Empty is host-only.
+	SignClientCSRWithTenant(csrDER []byte, tenantID string, roles []string, ttl time.Duration) ([]byte, error)
 	// BundlePEM is the CA certificate (PEM) agents pin and that anchors issued certs.
 	BundlePEM() []byte
 }
@@ -136,9 +146,32 @@ func (a *Authority) IssueBootstrapToken(
 	ctx context.Context,
 	tenantID, allowedIdentity string,
 ) ([]byte, error) {
+	return a.IssueBootstrapTokenWithRoles(ctx, tenantID, allowedIdentity, nil)
+}
+
+// IssueBootstrapTokenWithRoles mints a bootstrap token that additionally carries a
+// capability grant (epic A2). The roles are recorded with the token and stamped
+// into the issued certificate by the CA, so what an agent may be asked to do is
+// decided by the operator who minted the token — not by a flag the agent passes
+// at startup, and not by anything it puts in its CSR.
+//
+// An unknown role is refused here rather than dropped silently: an operator who
+// asked for a capability that does not exist should be told so, not handed a
+// token that quietly grants less than they think.
+func (a *Authority) IssueBootstrapTokenWithRoles(
+	ctx context.Context,
+	tenantID, allowedIdentity string,
+	roles []string,
+) ([]byte, error) {
 	if tenantID == "" {
 		return nil, errors.New("enroll: refusing to mint a bootstrap token without a tenant")
 	}
+	for _, role := range roles {
+		if !mtls.ValidAgentRole(role) {
+			return nil, fmt.Errorf("enroll: unknown agent role %q", role)
+		}
+	}
+	granted := mtls.NormalizeAgentRoles(roles)
 	b, err := crypto.RandomBytes(24)
 	if err != nil {
 		return nil, err
@@ -150,6 +183,7 @@ func (a *Authority) IssueBootstrapToken(
 		TokenHash:       hash,
 		TenantID:        tenantID,
 		AllowedIdentity: allowedIdentity,
+		Roles:           granted,
 		ExpiresAt:       time.Now().Add(a.ttl),
 	}); err != nil {
 		secret.Wipe(token)
@@ -182,7 +216,7 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []
 			return nil, ErrBadToken
 		}
 	}
-	return a.ca.SignClientCSRWithTenant(csrDER, redeemed.TenantID, mtls.ClientCertTTL)
+	return a.ca.SignClientCSRWithTenant(csrDER, redeemed.TenantID, redeemed.Roles, mtls.ClientCertTTL)
 }
 
 // ErrUnauthenticatedRenewal is returned when a renewal arrives without a verified
@@ -214,7 +248,16 @@ func (a *Authority) EnrollRenewal(_ context.Context, peerCertsDER [][]byte, csrD
 		// identity this CA issued; refuse rather than mint an unattributed cert.
 		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
 	}
-	return a.ca.SignClientCSRWithTenant(csrDER, tenantID, mtls.ClientCertTTL)
+	// Roles are carried over from the certificate being renewed, never re-derived
+	// and never taken from the CSR (epic A2). A renewal is a rotation of the same
+	// identity: it cannot gain a capability, and — just as importantly — it cannot
+	// lose one, which is what would happen if renewal signed with no roles at all.
+	// Changing an agent's role is a re-enrollment, not a rotation.
+	roles, err := mtls.AgentRolesFromClientCert(peerCertsDER[0])
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
+	}
+	return a.ca.SignClientCSRWithTenant(csrDER, tenantID, roles, mtls.ClientCertTTL)
 }
 
 // CABundlePEM is the CA certificate (PEM) an agent trusts to verify the control
@@ -280,5 +323,9 @@ func (m *MemoryTokenStore) Redeem(
 	if time.Now().After(t.ExpiresAt) {
 		return RedeemedToken{}, ErrBadToken
 	}
-	return RedeemedToken{TenantID: t.TenantID, AllowedIdentity: t.AllowedIdentity}, nil
+	return RedeemedToken{
+		TenantID:        t.TenantID,
+		AllowedIdentity: t.AllowedIdentity,
+		Roles:           t.Roles,
+	}, nil
 }

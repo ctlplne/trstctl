@@ -136,11 +136,14 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// B-1 (`operations bulkheads`), B-5 (`platform system`), B-2 (`ssh fleet`), B-4
 	// (`code-signing identities`), B-3 (`migration plan`), and the five AWS
 	// workload-identity source commands, the ARI posture read, and the four tenant
-	// The discovery coverage command raised this to 308.
+	// The discovery coverage command raised this to 308. A1's `operations jobs`
+	// and B4's three `acme eab` commands raised it to 312: both epics added served
+	// routes whose CLI parity was owed and had gone unpaid, which is precisely the
+	// gap this ratchet and TestEveryAPIOperationHasACLICommand exist to catch.
 	// Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 308 {
-		t.Fatalf("CLI commands = %d, want 308", len(out))
+	if len(out) != 312 {
+		t.Fatalf("CLI commands = %d, want 312", len(out))
 	}
 	return out
 }

@@ -27,6 +27,29 @@ var ErrInvalidBootstrapToken = errors.New("api: invalid or already-used bootstra
 // request is not authenticated by a verified current agent client certificate.
 var ErrUnauthenticatedAgentRenewal = errors.New("api: agent renewal requires a verified client certificate")
 
+// BootstrapTokenIssuer mints one-time agent bootstrap tokens (S5.1) bound to the
+// authorizing tenant (WIRE-003/AN-1). The web first-run wizard (S7.3) uses it to
+// build the agent install command; the agent presents the token once to enroll,
+// and the issued certificate is attributed to tenantID. The API depends only on
+// this minimal interface so it never imports the enrollment authority's transport
+// stack.
+type BootstrapTokenIssuer interface {
+	IssueBootstrapToken(
+		ctx context.Context,
+		tenantID, allowedIdentity string,
+	) ([]byte, error)
+	// IssueBootstrapTokenWithRoles mints a token carrying a capability grant
+	// (epic A2). The roles are recorded with the token and stamped by the CA into
+	// the certificate the agent receives, so what an agent may be asked to do is
+	// fixed by the operator who enrolled it rather than by anything the agent
+	// says about itself later. Empty roles mean host-only.
+	IssueBootstrapTokenWithRoles(
+		ctx context.Context,
+		tenantID, allowedIdentity string,
+		roles []string,
+	) ([]byte, error)
+}
+
 // BootstrapEnroller consumes a one-time agent bootstrap token and signs the
 // agent's CSR into a client-certificate chain (PEM), and exposes the CA bundle an
 // agent trusts. Agents generate keys locally and submit only a CSR, so private

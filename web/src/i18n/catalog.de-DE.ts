@@ -152,8 +152,10 @@ const deDECatalog = {
   "nav.group.secretsDelivery": "Auslieferung & Scanning",
   "discovery.ct.alertChannels": "{count} Alarmkan\u00e4le",
   "discovery.ct.cadence": "Batchgr\u00f6\u00dfe",
-  "discovery.ct.coverageHonesty": "Dies deckt nur die unten konfigurierten Domains und Logs ab. Es ist keine automatische Abdeckung des gesamten Bestands: Eine nicht aufgef\u00fchrte Domain oder ein nicht abgefragtes Log erzeugt keinen Befund.",
-  "discovery.ct.description": "Erfahren Sie sofort, wenn irgendwo ein Zertifikat f\u00fcr Ihre Domains ausgestellt wird. trstctl fragt die von Ihnen konfigurierten RFC-6962-Logs ab, setzt f\u00fcr jedes einen Checkpoint und meldet eine unerwartete Ausstellung f\u00fcr eine \u00fcberwachte Domain, die es nicht erwartet hat.",
+  "discovery.ct.coverageHonesty":
+    "Dies deckt nur die unten konfigurierten Domains und Logs ab. Es ist keine automatische Abdeckung des gesamten Bestands: Eine nicht aufgef\u00fchrte Domain oder ein nicht abgefragtes Log erzeugt keinen Befund.",
+  "discovery.ct.description":
+    "Erfahren Sie sofort, wenn irgendwo ein Zertifikat f\u00fcr Ihre Domains ausgestellt wird. trstctl fragt die von Ihnen konfigurierten RFC-6962-Logs ab, setzt f\u00fcr jedes einen Checkpoint und meldet eine unerwartete Ausstellung f\u00fcr eine \u00fcberwachte Domain, die es nicht erwartet hat.",
   "discovery.ct.heading": "Certificate-Transparency-\u00dcberwachung",
   "discovery.ct.investigate": "Untersuchen",
   "discovery.ct.logHealth": "Log-Checkpoints",
@@ -161,7 +163,8 @@ const deDECatalog = {
   "discovery.ct.neverPolled": "nie abgefragt",
   "discovery.ct.nextIndex": "n\u00e4chster Index {value}",
   "discovery.ct.noFindings": "Keine unerwartete Ausstellung f\u00fcr die \u00fcberwachten Domains in den konfigurierten Logs.",
-  "discovery.ct.notConfigured": "Es ist noch keine CT-\u00dcberwachungsquelle konfiguriert. F\u00fcgen Sie die Domains hinzu, die Ihnen geh\u00f6ren, und mindestens ein RFC-6962-Log.",
+  "discovery.ct.notConfigured":
+    "Es ist noch keine CT-\u00dcberwachungsquelle konfiguriert. F\u00fcgen Sie die Domains hinzu, die Ihnen geh\u00f6ren, und mindestens ein RFC-6962-Log.",
   "discovery.ct.openFindings": "{count} offen",
   "discovery.ct.save": "Speichern und jetzt ausf\u00fchren",
   "discovery.ct.unexpectedIssuance": "Unerwartete Ausstellung",
@@ -186,10 +189,12 @@ const deDECatalog = {
   "admin.editions.description": "Offline-Lizenzstatus, Editions- und Funktionszeilen, FIPS-Lage und Distribution.",
   "identities.decommission.heading": "Stilllegung per Signal",
   "request.csr.generate": "Erzeugen Sie eine auf diesem Host:",
-  "request.csr.help": "F\u00fcgen Sie eine CSR ein, die Sie auf dem Host erzeugt haben, der dieses Zertifikat verwenden wird. trstctl signiert sie und sieht Ihren privaten Schl\u00fcssel nie. Dies ist der Ausweichweg f\u00fcr Hosts ohne Agent \u2014 wo ein Agent registriert ist, erzeugt dieser den Schl\u00fcssel und reicht die Anforderung selbst ein, und Sie fassen kein Schl\u00fcsselmaterial an.",
+  "request.csr.help":
+    "F\u00fcgen Sie eine CSR ein, die Sie auf dem Host erzeugt haben, der dieses Zertifikat verwenden wird. trstctl signiert sie und sieht Ihren privaten Schl\u00fcssel nie. Dies ist der Ausweichweg f\u00fcr Hosts ohne Agent \u2014 wo ein Agent registriert ist, erzeugt dieser den Schl\u00fcssel und reicht die Anforderung selbst ein, und Sie fassen kein Schl\u00fcsselmaterial an.",
   "request.csr.invalid": "Das sieht nicht nach einer PEM-Zertifikatsanforderung aus. Sie sollte mit -----BEGIN CERTIFICATE REQUEST----- beginnen.",
   "request.csr.label": "Zertifikatsignieranforderung (PKCS#10)",
-  "request.csr.omitted": "Lassen Sie dies leer, erzeugt trstctl den privaten Schl\u00fcssel selbst und gibt ihn zur\u00fcck \u2014 ein veralteter Weg, der bei jeder Ausf\u00fchrung ein issuance.server_side_keygen-Ereignis aufzeichnet.",
+  "request.csr.omitted":
+    "Lassen Sie dies leer, erzeugt trstctl den privaten Schl\u00fcssel selbst und gibt ihn zur\u00fcck \u2014 ein veralteter Weg, der bei jeder Ausf\u00fchrung ein issuance.server_side_keygen-Ereignis aufzeichnet.",
   "request.wizard.profile.label": "Profil wählen",
   "request.wizard.profile.description": "Das Ausstellungsprofil bestimmt Schlüsseltyp, Laufzeit und wie viele Freigaben die Anforderung benötigt.",
   "request.wizard.details.label": "Credential benennen",
@@ -242,13 +247,16 @@ const deDECatalog = {
   "codesign.receipt.transparencyDestination": "Transparenzziel",
   "codesign.receipt.signatureBase64": "Signatur (Base64)",
   "codesign.receipt.downloadSignature": "Signatur herunterladen",
-  "operations.jobs.description": "Arbeit, die Ihren Bestand ber\u00fchrt, wird hier entschieden und von einem Agenten in Ihrer Umgebung ausgef\u00fchrt. Dies zeigt, was wartet, was ein Agent gerade h\u00e4lt und wie lange der \u00e4lteste Auftrag gewartet hat \u2014 die Zahl, die eine geleerte von einer blockierten Warteschlange unterscheidet.",
+  "operations.jobs.description":
+    "Arbeit, die Ihren Bestand ber\u00fchrt, wird hier entschieden und von einem Agenten in Ihrer Umgebung ausgef\u00fchrt. Dies zeigt, was wartet, was ein Agent gerade h\u00e4lt und wie lange der \u00e4lteste Auftrag gewartet hat \u2014 die Zahl, die eine geleerte von einer blockierten Warteschlange unterscheidet.",
   "operations.jobs.disabled": "nicht aktiviert",
   "operations.jobs.heading": "Agent-Auftragsregister",
   "operations.jobs.inFlight": "Von einem Agenten gehalten",
   "operations.jobs.kind": "Auftragsart",
-  "operations.jobs.noneEnabled": "Es ist keine Auftragsart aktiviert, daher wird den Agenten nichts \u00fcbergeben. Eine Art wird \u00fcbernehmbar, wenn ihr Executor ausgeliefert wird und Sie sie in agent_channel.claimable_job_kinds aktivieren.",
-  "operations.jobs.notServed": "Der Agentenkanal ist nicht eingebunden, daher gibt es kein Auftragsregister anzuzeigen. Aktivieren Sie agent_channel, damit Agenten Arbeit \u00fcbernehmen k\u00f6nnen.",
+  "operations.jobs.noneEnabled":
+    "Es ist keine Auftragsart aktiviert, daher wird den Agenten nichts \u00fcbergeben. Eine Art wird \u00fcbernehmbar, wenn ihr Executor ausgeliefert wird und Sie sie in agent_channel.claimable_job_kinds aktivieren.",
+  "operations.jobs.notServed":
+    "Der Agentenkanal ist nicht eingebunden, daher gibt es kein Auftragsregister anzuzeigen. Aktivieren Sie agent_channel, damit Agenten Arbeit \u00fcbernehmen k\u00f6nnen.",
   "operations.jobs.oldest": "L\u00e4ngste Wartezeit",
   "operations.jobs.waiting": "Wartend",
   "operations.status.queued": "Eingereiht",
@@ -1419,7 +1427,8 @@ const deDECatalog = {
   "protocols.dns01.configEmptyTitle": "DNS-01-Anbieterkonfigurationen nicht verfügbar",
   "protocols.dns01.configEmpty": "Es wurden keine Anbieterkonfigurationen zurückgegeben.",
   "protocols.eab.accountsBound": "{count} Konten",
-  "protocols.eab.description": "Jede Berechtigung ist eine Autorisierung, nicht nur ein T\u00fcrschl\u00fcssel: Ein Konto merkt sich, welche Berechtigung es zugelassen hat, und jede Bestellung dieses Kontos wird gegen deren Geltungsbereich gepr\u00fcft. Das Deaktivieren stoppt neue Konten und Bestellungen; bereits ausgestellte Zertifikate bleiben g\u00fcltig.",
+  "protocols.eab.description":
+    "Jede Berechtigung ist eine Autorisierung, nicht nur ein T\u00fcrschl\u00fcssel: Ein Konto merkt sich, welche Berechtigung es zugelassen hat, und jede Bestellung dieses Kontos wird gegen deren Geltungsbereich gepr\u00fcft. Das Deaktivieren stoppt neue Konten und Bestellungen; bereits ausgestellte Zertifikate bleiben g\u00fcltig.",
   "protocols.eab.disable": "Deaktivieren",
   "protocols.eab.enable": "Aktivieren",
   "protocols.eab.heading": "Externe Kontobindungen",
@@ -1431,7 +1440,8 @@ const deDECatalog = {
   "protocols.eab.ordersDenied": "{count} abgelehnt",
   "protocols.eab.quota": "{used} von {max} Bestellungen",
   "protocols.eab.required": "Externe Kontobindung ist f\u00fcr neue Konten erforderlich",
-  "protocols.eab.rotation": "Die Rotation ist ein Konfigurationsvorgang: F\u00fcgen Sie die neue Schl\u00fcssel-ID zu protocols.acme_eab hinzu und deaktivieren Sie hier die alte, w\u00e4hrend die Clients migrieren. trstctl erzeugt keine externen Kontoberechtigungen \u00fcber die API, da dies bedeuten w\u00fcrde, ein gemeinsames MAC-Geheimnis in einer Antwort zur\u00fcckzugeben.",
+  "protocols.eab.rotation":
+    "Die Rotation ist ein Konfigurationsvorgang: F\u00fcgen Sie die neue Schl\u00fcssel-ID zu protocols.acme_eab hinzu und deaktivieren Sie hier die alte, w\u00e4hrend die Clients migrieren. trstctl erzeugt keine externen Kontoberechtigungen \u00fcber die API, da dies bedeuten w\u00fcrde, ein gemeinsames MAC-Geheimnis in einer Antwort zur\u00fcckzugeben.",
   "protocols.eab.scope": "Geltungsbereich",
   "protocols.eab.unavailable": "ACME ist f\u00fcr diesen Mandanten nicht eingebunden, daher gibt es keinen Status externer Kontobindungen anzuzeigen.",
   "protocols.eab.unscoped": "Ohne Geltungsbereich \u2013 jeder Bezeichner, den dieser Server zulassen w\u00fcrde",
@@ -2255,7 +2265,8 @@ const deDECatalog = {
   "source.open.ca.hierarchy.and.issuer.catalog.a303297c19": "CA-Hierarchie und Ausstellerkatalog öffnen",
   "source.open.command.palette.c022b19a38": "Befehlspalette öffnen",
   "source.open.the.self.service.request.workflow.a5dd4f8af7": "Self-Service-Anforderungsworkflow öffnen",
-  "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2": "openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj \"/CN={value1}\"",
+  "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2":
+    'openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}"',
   "source.operate.58c3939c4c": "Betreiben",
   "source.organization.id.1f46632263": "Organisations-ID",
   "source.orphaned.credentials.0e9e535cd8": "Verwaiste Credentials",
@@ -3422,6 +3433,20 @@ const deDECatalog = {
   "source.start.with.a.profile.bound.request.or.conn.19cdbff548":
     "Beginnen Sie mit einer profilgebundenen Anfrage oder verbinden Sie einen Aussteller, bevor das erste Zertifikat ausgestellt wird.",
   "source.state.a3b50c4767": "Zustand",
+  "source.agent.role.a2r0le0001": "Rolle",
+  "source.agent.role.help.a2r0le0002":
+    "Wo dieser Agent läuft, bestimmt, welche Arbeit er erhält. Die Rolle wird in das Zertifikat eingeprägt, mit dem er sich registriert, und kann ohne erneute Registrierung nicht geändert werden.",
+  "source.agent.role.host.a2r0le0003": "Host",
+  "source.agent.role.host.help.a2r0le0004":
+    "Wirkt auf dem Rechner, auf dem er läuft: erfasst die Anmeldeinformationen dieses Hosts und stellt für dessen Dienste bereit.",
+  "source.agent.role.network.a2r0le0005": "Netzwerk-Relais",
+  "source.agent.role.network.help.a2r0le0006":
+    "Wirkt auf Geräte in seinem Segment, die selbst keinen Agenten ausführen können — Load Balancer, Appliances, Cloud-Zertifikatspeicher — und prüft Endpunkte aus Sicht eines Clients.",
+  "source.agent.role.relay.warning.a2r0le0007":
+    "Ein Relais hält die Anmeldeinformationen der Geräte, für die es einsteht. Die Vergabe dieser Rolle erfordert die Berechtigung agents:relay.grant.",
+  "source.agent.role.empty.a2r0le0008": "Keine Rolle ausgewählt. Der registrierte Agent ist reiner Host-Agent — der Standard für einen Agenten ohne Zuweisung.",
+  "source.agent.role.unreported.a2r0le0009": "Noch nicht gemeldet",
+  "source.agent.role.source.a2r0le0010": "Aus dem zuletzt vorgelegten Zertifikat dieses Agenten gelesen. Eine Rollenänderung ist eine erneute Registrierung.",
   "source.status.920e413c7d": "Status",
   "source.status.filter.9bfe8b184f": "Statusfilter",
   "source.structured.query.preview.706d53d9be": "Vorschau der strukturierten Abfrage",

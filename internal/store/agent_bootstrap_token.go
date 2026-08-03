@@ -17,9 +17,13 @@ type BootstrapTokenRecord struct {
 	TenantID        string
 	TokenHash       string
 	AllowedIdentity string
-	ExpiresAt       time.Time
-	UsedAt          *time.Time
-	CreatedAt       time.Time
+	// GrantedRoles is the capability grant an operator attached at mint (epic A2):
+	// "host", "network", or both. It is stamped into the issued certificate at
+	// redemption. Empty means host-only.
+	GrantedRoles []string
+	ExpiresAt    time.Time
+	UsedAt       *time.Time
+	CreatedAt    time.Time
 }
 
 // CreateBootstrapToken inserts a one-time agent bootstrap token bound to its
@@ -30,10 +34,12 @@ type BootstrapTokenRecord struct {
 func (s *Store) CreateBootstrapToken(ctx context.Context, r BootstrapTokenRecord) (BootstrapTokenRecord, error) {
 	err := s.WithTenant(ctx, r.TenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`INSERT INTO agent_bootstrap_tokens (id, tenant_id, token_hash, allowed_identity, expires_at)
-			 VALUES (gen_random_uuid(), $1, $2, $3, $4)
+			`INSERT INTO agent_bootstrap_tokens
+			     (id, tenant_id, token_hash, allowed_identity, granted_roles, expires_at)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4::text[], $5)
 			 RETURNING id::text, created_at`,
-			r.TenantID, r.TokenHash, r.AllowedIdentity, r.ExpiresAt).Scan(&r.ID, &r.CreatedAt)
+			r.TenantID, r.TokenHash, r.AllowedIdentity, roleArray(r.GrantedRoles), r.ExpiresAt).
+			Scan(&r.ID, &r.CreatedAt)
 	})
 	return r, err
 }
@@ -58,10 +64,22 @@ func (s *Store) RedeemBootstrapToken(ctx context.Context, tokenHash string) (Boo
 		`UPDATE agent_bootstrap_tokens
 		    SET used_at = now()
 		  WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
-		RETURNING id::text, tenant_id::text, token_hash, allowed_identity, expires_at, used_at, created_at`,
+		RETURNING id::text, tenant_id::text, token_hash, allowed_identity,
+		          granted_roles, expires_at, used_at, created_at`,
 		tokenHash).
-		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.AllowedIdentity, &r.ExpiresAt, &r.UsedAt, &r.CreatedAt)
+		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.AllowedIdentity,
+			&r.GrantedRoles, &r.ExpiresAt, &r.UsedAt, &r.CreatedAt)
 	return r, err
+}
+
+// roleArray normalizes a grant for storage. A nil slice would be written as SQL
+// NULL against a NOT NULL column; an empty array is the honest representation of
+// "host-only", which is what no grant means.
+func roleArray(roles []string) []string {
+	if roles == nil {
+		return []string{}
+	}
+	return roles
 }
 
 // NOTE: a background purge of used/expired bootstrap tokens (to keep the table

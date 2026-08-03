@@ -597,6 +597,12 @@ func closeCloudTokenMinterOnError(err *error, minter *cloudauth.Minter) {
 	}
 }
 
+// closeCloudTokenMinter releases a minter unconditionally. The outbound-dependency
+// stage uses it when a constructor AFTER the minter fails: the caller's deferred
+// close only sees what was returned, so a minter built and then abandoned inside
+// the stage has to be released there.
+func closeCloudTokenMinter(minter *cloudauth.Minter) { minter.Close() }
+
 type configuredSyncPusher struct {
 	tenantID    string
 	cfg         config.SecretSyncTargetConfig

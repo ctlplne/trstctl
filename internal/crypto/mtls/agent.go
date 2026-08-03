@@ -125,6 +125,24 @@ func (a *AgentIdentity) Serial() string {
 	return a.leaf.SerialNumber.Text(16)
 }
 
+// Roles is the capability grant this identity's certificate carries (epic A2).
+// An agent reads it to know what it is: a host agent asks for host work, a relay
+// asks for relay work. It is the same value the control plane reads off the
+// presented certificate, so the two cannot disagree — and an agent that asked for
+// more than its certificate carries would simply be handed nothing.
+//
+// An unissued identity, or one whose certificate predates roles, reports host.
+func (a *AgentIdentity) Roles() []string {
+	if a.leaf == nil {
+		return []string{AgentRoleHost}
+	}
+	roles, err := AgentRolesFromClientCert(a.leaf.Raw)
+	if err != nil {
+		return []string{AgentRoleHost}
+	}
+	return roles
+}
+
 // NotAfter is the issued certificate's expiry.
 func (a *AgentIdentity) NotAfter() time.Time {
 	if a.leaf == nil {
@@ -285,7 +303,12 @@ func AgentSPIFFEID(tenantID, cn string) string {
 // the CSR. The common name still comes from the CSR's subject, but tenant
 // attribution does not (WIRE-003 / AN-1). An empty tenantID is rejected — this
 // signing path must always carry tenant attribution.
-func (c *CA) SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Duration) ([]byte, error) {
+func (c *CA) SignClientCSRWithTenant(
+	csrDER []byte,
+	tenantID string,
+	roles []string,
+	ttl time.Duration,
+) ([]byte, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, errors.New("mtls: refusing to sign agent CSR without a tenant attribution")
 	}
@@ -300,6 +323,22 @@ func (c *CA) SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Du
 	if err != nil {
 		return nil, fmt.Errorf("mtls: build tenant SPIFFE ID: %w", err)
 	}
+	// Capability SANs come from the caller's grant, never the CSR (epic A2). An
+	// unknown role is refused rather than stamped: a certificate carrying a role
+	// nothing reads is worse than no role at all, because it reads as a grant.
+	uris := []*url.URL{spiffeURI}
+	for _, role := range NormalizeAgentRoles(roles) {
+		roleURI, rerr := url.Parse(AgentRoleSPIFFEID(tenantID, csr.Subject.CommonName, role))
+		if rerr != nil {
+			return nil, fmt.Errorf("mtls: build agent role SPIFFE ID: %w", rerr)
+		}
+		uris = append(uris, roleURI)
+	}
+	for _, role := range roles {
+		if strings.TrimSpace(role) != "" && !ValidAgentRole(role) {
+			return nil, fmt.Errorf("mtls: refusing to stamp unknown agent role %q", role)
+		}
+	}
 	serial, err := randomSerial()
 	if err != nil {
 		return nil, err
@@ -308,7 +347,7 @@ func (c *CA) SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Du
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               csr.Subject,
-		URIs:                  []*url.URL{spiffeURI},
+		URIs:                  uris,
 		NotBefore:             boundary.IssuanceNotBefore(now),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
@@ -417,6 +456,12 @@ type PeerCertInfo struct {
 	// LeafDER is the verified leaf certificate (DER), so a caller can sign a renewal
 	// CSR for the SAME tenant without re-extracting it.
 	LeafDER []byte
+	// Roles is the capability grant the presented certificate carries (epic A2).
+	// It is what the served channel authorizes work against: an agent's roles are
+	// read off the certificate an operator caused to be issued, not off anything
+	// the agent says about itself at call time. A certificate with no role SAN
+	// reads as host-only.
+	Roles []string
 }
 
 // PeerCertInfoFromAuthInfo extracts the agent identity from a gRPC peer's AuthInfo
@@ -447,12 +492,17 @@ func PeerCertInfoFromAuthInfo(authInfo credentials.AuthInfo) (PeerCertInfo, erro
 	if err != nil {
 		return PeerCertInfo{}, err
 	}
+	roles, err := AgentRolesFromClientCert(leaf.Raw)
+	if err != nil {
+		return PeerCertInfo{}, err
+	}
 	return PeerCertInfo{
 		TenantID:          tenantID,
 		CommonName:        leaf.Subject.CommonName,
 		Serial:            leaf.SerialNumber.Text(16),
 		FingerprintSHA256: fingerprint,
 		LeafDER:           leaf.Raw,
+		Roles:             roles,
 	}, nil
 }
 
@@ -684,4 +734,100 @@ func LooksLikePrivateKey(der []byte) bool {
 		return block.Type == "PRIVATE KEY" || block.Type == "EC PRIVATE KEY" || block.Type == "RSA PRIVATE KEY"
 	}
 	return false
+}
+
+// Agent roles (epic A2).
+//
+// An agent's capability has to live in its enrolled identity, not in a flag it
+// passes at startup. A flag is something the agent chooses; a certificate is
+// something an operator granted. The difference matters most for the network
+// role, because a relay holds the credentials that drive appliances — an agent
+// that could name itself a relay could name itself into a credential lease.
+//
+// The role travels as an ADDITIONAL SPIFFE URI SAN alongside the existing
+// tenant identity:
+//
+//	spiffe://trstctl.example/tenant/<tenantID>/agent/<cn>          (identity)
+//	spiffe://trstctl.example/tenant/<tenantID>/agent/<cn>/role/... (capability)
+//
+// Extending the identity SAN's own path would have changed how every already
+// enrolled agent's certificate parses. A second SAN is additive: older parsers
+// ignore it, and an agent presenting none is read as host-only — the
+// conservative default, and the role every agent shipped before A2 actually had.
+const (
+	// AgentRoleHost executes work on the machine it runs on: deploy a credential
+	// to this host's services, verify this host's listeners, restore this host's
+	// predecessor bundle.
+	AgentRoleHost = "host"
+	// AgentRoleNetwork executes work against things in its network segment that
+	// cannot run an agent themselves — load balancers, appliances, cloud
+	// certificate stores — and probes endpoints from a client's vantage. It holds
+	// redeemed appliance credentials, which is why granting it is a deliberate
+	// operator act rather than a default.
+	AgentRoleNetwork = "network"
+)
+
+// AgentRoleSPIFFEID is the capability SAN for one role.
+func AgentRoleSPIFFEID(tenantID, cn, role string) string {
+	return (&url.URL{
+		Scheme: "spiffe",
+		Host:   tenantTrustDomain,
+		Path:   "/tenant/" + tenantID + "/agent/" + cn + "/role/" + role,
+	}).String()
+}
+
+// ValidAgentRole reports whether role is one this system grants. Anything else is
+// refused at enrollment rather than stamped and puzzled over later.
+func ValidAgentRole(role string) bool {
+	switch strings.TrimSpace(role) {
+	case AgentRoleHost, AgentRoleNetwork:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeAgentRoles cleans an operator-supplied role list: trimmed, unique,
+// known values only, in a stable order. An empty result means host-only, which is
+// what an agent with no explicit grant gets.
+func NormalizeAgentRoles(roles []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, role := range []string{AgentRoleHost, AgentRoleNetwork} {
+		for _, candidate := range roles {
+			if strings.TrimSpace(candidate) == role && !seen[role] {
+				seen[role] = true
+				out = append(out, role)
+			}
+		}
+	}
+	return out
+}
+
+// AgentRolesFromClientCert reads the capability SANs off a verified agent
+// certificate. A certificate carrying none yields host — every agent enrolled
+// before roles existed did host work, and reading them as capability-less would
+// strand a fleet mid-upgrade.
+func AgentRolesFromClientCert(der []byte) ([]string, error) {
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: parse agent certificate: %w", err)
+	}
+	var roles []string
+	for _, uri := range cert.URIs {
+		if uri == nil || uri.Scheme != "spiffe" || uri.Host != tenantTrustDomain {
+			continue
+		}
+		_, role, found := strings.Cut(uri.Path, "/role/")
+		if !found {
+			continue
+		}
+		if ValidAgentRole(role) {
+			roles = append(roles, strings.TrimSpace(role))
+		}
+	}
+	if len(roles) == 0 {
+		return []string{AgentRoleHost}, nil
+	}
+	return NormalizeAgentRoles(roles), nil
 }

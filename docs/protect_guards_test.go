@@ -4192,8 +4192,17 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"func AgentSPIFFEID(tenantID, cn string) string",
 		"func (c *CA) SignClientCSRWithTenant",
 		"refusing to sign agent CSR without a tenant attribution",
-		"URIs:                  []*url.URL{spiffeURI}",
+		// The certificate's SANs were a single-element literal until agent roles
+		// landed (epic A2), which added an ADDITIVE capability SAN beside the
+		// identity one. The property the guard protects is unchanged and is what
+		// these anchors pin: the SAN list is built by the CA from the CALLER's
+		// tenant and the CALLER's grant, and never from the CSR.
+		"uris := []*url.URL{spiffeURI}",
+		"URIs:                  uris,",
+		"Capability SANs come from the caller's grant, never the CSR",
+		"refusing to stamp unknown agent role",
 		"func TenantFromClientCert",
+		"func AgentRolesFromClientCert",
 		"client certificate carries no tenant SPIFFE SAN",
 	)
 	agentChannel := read(t, "../internal/server/agentchannel.go")
@@ -4217,6 +4226,11 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"a.store.Save(ctx, MintedToken{",
 		"redeemed, err := a.store.Redeem(ctx, hash)",
 		"SignClientCSRWithTenant(csrDER, redeemed.TenantID",
+		// A2: the grant travels with the token and is carried across a renewal
+		// from the presenting certificate — never re-derived and never taken from
+		// the CSR, so a rotation can neither escalate nor silently demote.
+		"redeemed.Roles, mtls.ClientCertTTL",
+		"roles, err := mtls.AgentRolesFromClientCert(peerCertsDER[0])",
 	)
 	bootstrapStore := read(t, "../internal/store/agent_bootstrap_token.go")
 	check("internal/store/agent_bootstrap_token.go single-use redemption", bootstrapStore,

@@ -437,6 +437,8 @@ Agent = TypedDict(
         'offboard_reason': str,
         'offboarded_at': str,
         'offboarded_by': str,
+        'role_source': str,
+        'roles': list[str],
         'status': str,
         'version': str,
     },
@@ -2394,6 +2396,7 @@ EnrollmentToken = TypedDict(
     'EnrollmentToken',
     {
         'enroll_path': str,
+        'roles': list[str],
         'token': str,
     },
     total=False,
@@ -2403,6 +2406,7 @@ EnrollmentTokenRequest = TypedDict(
     'EnrollmentTokenRequest',
     {
         'allowed_identity': str,
+        'roles': list[str],
     },
     total=False,
 )

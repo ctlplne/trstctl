@@ -263,6 +263,14 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // A2 agent-roles re-pin: ten source.agent.role.* keys add the enrollment
+      // role selector (host / network relay with per-role help), the relay
+      // credential-custody warning, the empty-selection note, the fleet role
+      // badges, and the not-yet-reported label that distinguishes an agent with
+      // no grant from one that has not heartbeated since the upgrade. Machine-
+      // authored es/de translations - FLAGGED FOR HUMAN TRANSLATION REVIEW
+      // before release; "agents:relay.grant" stays byte-identical as a
+      // technical identifier in every locale.
       // I18N-ca357ca0 re-pin: 223 source keys move strings, conditional
       // fallbacks, interpolated accessibility labels, and warning copy from
       // renderable JSX expressions into the typed catalog. Technical
@@ -351,8 +359,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "6bc7d2183d86f87498f59ca094714b69685962709c2152e42635a87df9ecc5b4",
-      "de-DE": "eb24155c06c0b01c45900e76e937e4f4a065bfa91ce582db6d1d9ea70bc4c957",
+      "es-ES": "63dc5b4c11d5f81f5927574592bf51f8af8a1665a1fef77ddf0b3976c3c35de8",
+      "de-DE": "965f06c4bb5a75d07e752b2a191493c054b25bcdf59e49a6c0ea757915f831b6",
     });
   });
 

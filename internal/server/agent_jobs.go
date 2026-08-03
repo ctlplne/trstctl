@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -56,6 +57,54 @@ var agentJobKindAllowlist = map[string]bool{
 	"trust.distribute":   true,
 }
 
+// agentJobKindVantage declares, per job kind, which agent roles can execute it
+// (epic A2). This is what makes the role stamped in an agent's certificate mean
+// something at claim time rather than just being a label on the Agents page.
+//
+// The cut follows what the work physically is, not what it is called:
+//
+//   - discovery.run and trust.distribute act on the machine the agent runs on —
+//     enumerate this filesystem, install these roots in this trust store. A relay
+//     sitting in front of an F5 has no filesystem of the F5's to scan and no
+//     business installing roots on its own box on someone else's behalf.
+//   - endpoint.verify and revocation.probe are observations made from a vantage:
+//     connect to this listener as a client would, reach this responder across the
+//     segment. That vantage is the entire reason a network agent exists.
+//   - connector.deploy and connector.rollback are legitimately both. A host agent
+//     deploys to the services on its own machine; a network agent deploys to an
+//     appliance it can reach. Which one a given job needs is a property of the
+//     connector's target, not of the kind — so the kind-level gate cannot decide
+//     it. Narrowing this to per-target locality is A3's job, once connectors
+//     declare whether their target can host an agent at all. Until then this is
+//     open at the kind level and the honest thing is to say so rather than to
+//     invent a restriction that does not hold.
+var agentJobKindVantage = map[string][]string{
+	"discovery.run":      {mtls.AgentRoleHost},
+	"trust.distribute":   {mtls.AgentRoleHost},
+	"endpoint.verify":    {mtls.AgentRoleNetwork},
+	"revocation.probe":   {mtls.AgentRoleNetwork},
+	"connector.deploy":   {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+	"connector.rollback": {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+}
+
+// agentRolePermitsKind reports whether an agent holding roles may execute kind.
+// A kind with no declared vantage is refused rather than allowed: adding a job
+// kind and forgetting to say who may run it should fail closed.
+func agentRolePermitsKind(roles []string, kind string) bool {
+	permitted, declared := agentJobKindVantage[kind]
+	if !declared {
+		return false
+	}
+	for _, role := range roles {
+		for _, allowed := range permitted {
+			if role == allowed {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 const (
 	// agentJobMaxBatch caps one claim. A small batch keeps work spread across a
 	// fleet and keeps a lease short enough to be meaningful.
@@ -81,6 +130,18 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		return nil, status.Error(codes.FailedPrecondition, "agent job ledger is not configured")
 	}
 	kinds := allowedAgentJobKinds(a.claimableJobKinds, agentClaimKinds(req))
+	// The role comes off the certificate the agent authenticated with — issued
+	// against an operator's grant — never off the request (epic A2). An agent that
+	// reaches for work outside its vantage gets that work withheld and the reach
+	// recorded, because a host agent asking for relay work is either misconfigured
+	// or is the thing this gate exists to catch, and both are worth seeing.
+	permitted, refused := partitionByAgentRole(info.Roles, kinds)
+	if len(refused) > 0 {
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.role_refused", map[string]any{
+			"agent": info.CommonName, "roles": info.Roles, "refused_kinds": refused,
+		})
+	}
+	kinds = permitted
 	if len(kinds) == 0 {
 		// Not an error: an agent that can execute nothing this control plane
 		// hands out should keep heartbeating, not crash-loop on a refusal.
@@ -216,6 +277,20 @@ func allowedAgentJobKinds(enabled map[string]bool, requested []string) []string 
 		out = append(out, kind)
 	}
 	return out
+}
+
+// partitionByAgentRole splits requested kinds into those the agent's roles permit
+// and those they do not, preserving order so the refusal event names exactly what
+// was asked for.
+func partitionByAgentRole(roles []string, kinds []string) (permitted, refused []string) {
+	for _, kind := range kinds {
+		if agentRolePermitsKind(roles, kind) {
+			permitted = append(permitted, kind)
+			continue
+		}
+		refused = append(refused, kind)
+	}
+	return permitted, refused
 }
 
 // AgentClaimableJobKinds turns operator configuration into the enabled set,

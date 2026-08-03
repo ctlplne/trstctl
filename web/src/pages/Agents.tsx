@@ -7,11 +7,13 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
 import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 
 const staleAfterMs = 24 * 60 * 60 * 1000;
 const certRevocationReasons = [
@@ -27,6 +29,44 @@ const certRevocationReasons = [
   "aaCompromise",
 ] as const;
 
+// A2: the two capability grants an operator can attach at enrollment. They are
+// vantages, not ranks: a host agent acts on the machine it runs on, a network
+// agent acts on things in its segment that cannot run an agent at all. An agent
+// can hold both — that is the F5-beside-a-server case.
+type AgentRole = "host" | "network";
+
+const AGENT_ROLE_CHOICES = [
+  { value: "host", labelKey: "source.agent.role.host.a2r0le0003", helpKey: "source.agent.role.host.help.a2r0le0004" },
+  { value: "network", labelKey: "source.agent.role.network.a2r0le0005", helpKey: "source.agent.role.network.help.a2r0le0006" },
+] as const satisfies readonly { value: AgentRole; labelKey: MessageKey; helpKey: MessageKey }[];
+
+// AgentRoleBadges renders what an agent's CERTIFICATE says it may do. An agent
+// that has not heartbeated since roles shipped reports nothing, which is shown as
+// unreported rather than as host — the console should not fill a gap in evidence
+// with a guess.
+function AgentRoleBadges({ agent }: { agent: Agent }) {
+  const roles = agent.roles ?? [];
+  if (agent.role_source !== "certificate" || roles.length === 0) {
+    return <span className="text-xs text-muted-foreground">{translateNow("source.agent.role.unreported.a2r0le0009")}</span>;
+  }
+  return (
+    <span className="flex flex-wrap gap-1">
+      {roles.map((role) => (
+        <span
+          key={role}
+          className={
+            role === "network"
+              ? "rounded-full border border-status-warning px-2 py-0.5 text-xs text-status-warning"
+              : "rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
+          }
+        >
+          {role === "network" ? translateNow("source.agent.role.network.a2r0le0005") : translateNow("source.agent.role.host.a2r0le0003")}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function Agents() {
   const { t } = useTranslation();
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -35,6 +75,10 @@ export function Agents() {
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [token, setToken] = useState<EnrollmentToken | null>(null);
   const [tokenAllowedIdentity, setTokenAllowedIdentity] = useState("");
+  // The capability grant this token will carry into the enrolled certificate
+  // (epic A2). Host is the default because it is what an agent with no grant
+  // already is — offering "none" would offer something that does not exist.
+  const [tokenRoles, setTokenRoles] = useState<AgentRole[]>(["host"]);
   const [tokenIdentity, setTokenIdentity] = useState("");
   const [tokenBusy, setTokenBusy] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
@@ -78,7 +122,12 @@ export function Agents() {
     setTokenBusy(true);
     try {
       const allowedIdentity = tokenAllowedIdentity.trim();
-      setToken(await api.createEnrollmentToken(allowedIdentity ? { allowed_identity: allowedIdentity } : undefined));
+      setToken(
+        await api.createEnrollmentToken({
+          ...(allowedIdentity ? { allowed_identity: allowedIdentity } : {}),
+          roles: tokenRoles,
+        }),
+      );
       setTokenIdentity(allowedIdentity);
     } catch (err) {
       setTokenError(err instanceof Error ? err.message : String(err));
@@ -160,6 +209,11 @@ export function Agents() {
   const agentColumns: DataGridColumn<Agent>[] = [
     { id: "name", header: "Name", className: "font-medium", cell: (agent) => agent.name },
     { id: "status", header: "Status", cell: (agent) => <StatusBadge vocabulary="agent" value={agent.status} /> },
+    {
+      id: "roles",
+      header: translateNow("source.agent.role.a2r0le0001"),
+      cell: (agent: Agent) => <AgentRoleBadges agent={agent} />,
+    },
     { id: "version", header: "Version", className: "font-mono text-xs", cell: (agent) => agent.version || "-" },
     {
       id: "lastSeen",
@@ -262,6 +316,35 @@ export function Agents() {
             </Button>
           </div>
         </div>
+
+        <fieldset className="mt-4 grid gap-2 rounded-md border border-border p-3">
+          <legend className="px-1 text-sm font-medium">{translateNow("source.agent.role.a2r0le0001")}</legend>
+          <p className="text-sm text-muted-foreground">{translateNow("source.agent.role.help.a2r0le0002")}</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {AGENT_ROLE_CHOICES.map((choice) => (
+              <label key={choice.value} className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  className="mt-1"
+                  checked={tokenRoles.includes(choice.value)}
+                  onChange={(event) =>
+                    setTokenRoles((current) =>
+                      event.target.checked
+                        ? [...current.filter((role) => role !== choice.value), choice.value]
+                        : current.filter((role) => role !== choice.value),
+                    )
+                  }
+                  disabled={tokenBusy}
+                />
+                <span>
+                  <span className="font-medium">{translateNow(choice.labelKey)}</span>
+                  <span className="block text-muted-foreground">{translateNow(choice.helpKey)}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {tokenRoles.includes("network") && <p className="text-sm text-status-warning">{translateNow("source.agent.role.relay.warning.a2r0le0007")}</p>}
+          {tokenRoles.length === 0 && <p className="text-sm text-muted-foreground">{translateNow("source.agent.role.empty.a2r0le0008")}</p>}
+        </fieldset>
 
         {tokenError && <ErrorState title={translateNow("source.could.not.mint.enrollment.token.7b0b6374e9")}>{tokenError}</ErrorState>}
 
@@ -498,6 +581,11 @@ function AgentDetail({ agent }: { agent: Agent }) {
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
           <dd>{agent.status}</dd>
+          <dt className="font-medium text-muted-foreground">{translateNow("source.agent.role.a2r0le0001")}</dt>
+          <dd>
+            <AgentRoleBadges agent={agent} />
+            <span className="mt-1 block text-xs text-muted-foreground">{translateNow("source.agent.role.source.a2r0le0010")}</span>
+          </dd>
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.version.dd167905de")}</dt>
@@ -541,9 +629,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
             <dd className="break-all font-mono text-xs">{reportPath}</dd>
           </div>
         </dl>
-        {capabilities.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("agents.endpointDiscovery.none")}</p>
-        ) : null}
+        {capabilities.length === 0 ? <p className="text-sm text-muted-foreground">{t("agents.endpointDiscovery.none")}</p> : null}
         <ul className="grid gap-2">
           {capabilities.map((capability) => (
             <li key={capability.source_kind} className="grid gap-1 border-l-2 border-brand-accent/60 pl-2">
@@ -555,9 +641,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
                 {!capability.private_key_bytes && <span className="text-xs text-muted-foreground">{t("agents.endpointDiscovery.noKeyBytes")}</span>}
               </div>
               <span className="text-muted-foreground">{capability.label}</span>
-              {capability.enable_flags?.length ? (
-                <span className="font-mono text-2xs text-muted-foreground">{capability.enable_flags.join(" ")}</span>
-              ) : null}
+              {capability.enable_flags?.length ? <span className="font-mono text-2xs text-muted-foreground">{capability.enable_flags.join(" ")}</span> : null}
             </li>
           ))}
         </ul>

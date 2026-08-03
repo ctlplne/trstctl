@@ -28,6 +28,14 @@ func (e enrollAuthority) IssueBootstrapToken(
 	return e.a.IssueBootstrapToken(ctx, tenantID, allowedIdentity)
 }
 
+func (e enrollAuthority) IssueBootstrapTokenWithRoles(
+	ctx context.Context,
+	tenantID, allowedIdentity string,
+	roles []string,
+) ([]byte, error) {
+	return e.a.IssueBootstrapTokenWithRoles(ctx, tenantID, allowedIdentity, roles)
+}
+
 func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
 	chain, err := e.a.EnrollBootstrap(ctx, token, csrDER)
 	if errors.Is(err, enroll.ErrBadToken) {
@@ -58,6 +66,7 @@ func (s storeTokenStore) Save(ctx context.Context, t enroll.MintedToken) error {
 		TenantID:        t.TenantID,
 		TokenHash:       t.TokenHash,
 		AllowedIdentity: t.AllowedIdentity,
+		GrantedRoles:    t.Roles,
 		ExpiresAt:       t.ExpiresAt,
 	})
 	return err
@@ -74,5 +83,9 @@ func (s storeTokenStore) Redeem(
 		}
 		return enroll.RedeemedToken{}, err
 	}
-	return enroll.RedeemedToken{TenantID: rec.TenantID, AllowedIdentity: rec.AllowedIdentity}, nil
+	return enroll.RedeemedToken{
+		TenantID:        rec.TenantID,
+		AllowedIdentity: rec.AllowedIdentity,
+		Roles:           rec.GrantedRoles,
+	}, nil
 }

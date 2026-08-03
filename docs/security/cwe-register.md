@@ -81,7 +81,7 @@ not this file.
 | `internal/aimodel/redactor_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/acme_dns01.go:495` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/agents.go:40` | source-kind label naming where key material was located; no credential value present (CWE-798) |
+| `internal/api/agents.go:57` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/idempotency_binding_test.go:19` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/itsm_test.go:11` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -250,7 +250,7 @@ not this file.
 | `internal/server/response_integrations_served_test.go:53` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:55` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/scim_served_test.go:33` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secret_integrations.go:913` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:919` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:125` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_served_test.go:384` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -446,7 +446,7 @@ not this file.
 | `docs/protect_guards_completeness_test.go:236` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:847` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:910` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4422` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4436` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:69` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -672,7 +672,7 @@ not this file.
 | `internal/protocols/acme/certbot_client_test.go:291` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/cmp/openssl_client_test.go:165` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/agentchannel_served_test.go:1216` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/agentchannel_served_test.go:1224` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/java_sdk_served_test.go:44` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pam_served_test.go:209` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:50` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -766,7 +766,7 @@ not this file.
 | `docs/protect_guards_completeness_test.go:236` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:847` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:910` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4422` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4436` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/destination/destination_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
@@ -824,8 +824,8 @@ not this file.
 | `internal/connector/localops.go:147` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:180` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/crypto/mtls/agent.go:164` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/agent.go:182` | operator-configured certificate/key path from deployment config (CWE-22) |
+| `internal/crypto/mtls/agent.go:200` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/server.go:101` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/signer.go:107` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
 | `internal/crypto/mtls/signer_test.go:47` | test reads its own fixture/tempdir path (CWE-22) |
@@ -903,8 +903,8 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:112` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/run.go:840` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1193` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:882` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1235` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/server.go:1730` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1035,7 +1035,7 @@ not this file.
 | `internal/cli/secret_scan_local.go:135` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/crypto/mtls/agent.go:155` | certificate chain PEM is public material; the key is written 0600 separately (CWE-276) |
+| `internal/crypto/mtls/agent.go:173` | certificate chain PEM is public material; the key is written 0600 separately (CWE-276) |
 | `internal/crypto/mtls/signer.go:217` | writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276) |
 | `internal/crypto/mtls/signer.go:264` | writes the PUBLIC leaf certificate chain; the private key beside it is written 0600 (CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:48` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1088,7 +1088,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:362` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
-| `internal/crypto/leafca.go:545` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/leafca.go:567` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/opaque_x509.go:221` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 

@@ -25,21 +25,23 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
-	62: true,
-	72: true,
-	75: true,
-	77: true,
-	78: true,
-	79: true,
-	80: true,
-	81: true,
-	82: true,
-	83: true,
-	89: true,
-	90: true,
-	92: true,
-	94: true,
-	98: true,
+	62:  true,
+	72:  true,
+	75:  true,
+	77:  true,
+	78:  true,
+	79:  true,
+	80:  true,
+	81:  true,
+	82:  true,
+	83:  true,
+	89:  true,
+	90:  true,
+	92:  true,
+	94:  true,
+	98:  true,
+	100: true,
+	101: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -207,6 +209,106 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 		if _, err := pool.Exec(ctx, `
 			UPDATE outbox SET claimed_by_agent_id = gen_random_uuid() WHERE true`); err == nil {
 			t.Error("0098 accepted a claim with no lease expiry; outbox_claim_lease_present must reject it")
+		}
+	})
+
+	// 0100 attaches the capability grant to bootstrap tokens (epic A2). Two things
+	// have to hold across it, and only one of them is about shape. A token minted
+	// before the migration must come out with an EMPTY grant — a pre-existing token
+	// that silently acquired the relay role would be a real escalation handed to
+	// whoever holds it — and the rest of the row, above all its single-use state,
+	// must be untouched.
+	t.Run("0100_agent_bootstrap_token_roles", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 100)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedBootstrapTokenContent(t, ctx, pool)
+
+		const tokenProjection = `
+			SELECT tenant_id::text, token_hash, allowed_identity,
+			       (used_at IS NOT NULL)::text, expires_at::text
+			  FROM agent_bootstrap_tokens
+			 ORDER BY tenant_id, token_hash`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, tokenProjection)
+		if beforeCount == 0 {
+			t.Fatal("precondition: the content case needs seeded bootstrap tokens to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, tokenProjection)
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0100 disturbed existing bootstrap tokens: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var granted int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM agent_bootstrap_tokens WHERE cardinality(granted_roles) > 0`).
+			Scan(&granted); err != nil {
+			t.Fatalf("read post-0100 grants: %v", err)
+		}
+		if granted != 0 {
+			t.Errorf("%d pre-existing tokens came out of the migration carrying a capability grant; every one must come out ungranted", granted)
+		}
+
+		// The closed set is enforced by the database, not only by application
+		// code: no repair script or psql session can leave a row carrying a role
+		// the certificate stamper has no meaning for.
+		if _, err := pool.Exec(ctx,
+			`UPDATE agent_bootstrap_tokens SET granted_roles = ARRAY['admin']::text[] WHERE true`); err == nil {
+			t.Error("0100 accepted an unknown agent role; agent_bootstrap_tokens_roles_known must reject it")
+		}
+	})
+
+	// 0101 adds the fleet-view role projection. A pre-existing agent must come out
+	// with NO roles rather than with host: the console shows an empty projection as
+	// "not yet reported", and backfilling it to host would turn a gap in evidence
+	// into a claim about an agent nobody has heard from.
+	t.Run("0101_agent_roles", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 101)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedAgentRoleContent(t, ctx, pool)
+
+		const agentProjection = `
+			SELECT tenant_id::text, name, status, version, (last_seen_at IS NOT NULL)::text
+			  FROM agents
+			 ORDER BY tenant_id, name`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, agentProjection)
+		if beforeCount == 0 {
+			t.Fatal("precondition: the content case needs seeded agents to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, agentProjection)
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0101 disturbed existing agents: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var projected int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM agents WHERE cardinality(roles) > 0`).Scan(&projected); err != nil {
+			t.Fatalf("read post-0101 roles: %v", err)
+		}
+		if projected != 0 {
+			t.Errorf("%d pre-existing agents came out with a projected role; every one must read as not-yet-reported until it heartbeats", projected)
 		}
 	})
 
@@ -1987,6 +2089,60 @@ func seedOutboxClaimContent(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), `+delivered+`)`,
 			r.tenantID, r.destination, r.payload, r.idemKey, r.status, r.attempts, r.lastError); err != nil {
 			t.Fatalf("seed outbox %s/%s: %v", r.tenantID, r.idemKey, err)
+		}
+	}
+}
+
+// seedBootstrapTokenContent populates agent_bootstrap_tokens across two tenants
+// with a live token, an already-redeemed one, and an identity-pinned one, so the
+// 0100 content case has real single-use state to protect.
+func seedBootstrapTokenContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	rows := []struct {
+		tenantID string
+		hash     string
+		identity string
+		used     bool
+	}{
+		{tenantID: tenantA, hash: "hash-a-live", identity: ""},
+		{tenantID: tenantA, hash: "hash-a-used", identity: "", used: true},
+		{tenantID: tenantA, hash: "hash-a-pinned", identity: "node-a-1"},
+		{tenantID: tenantB, hash: "hash-b-live", identity: "edge-b-1"},
+	}
+	for _, r := range rows {
+		used := "NULL"
+		if r.used {
+			used = "'2026-02-01T00:00:00Z'::timestamptz"
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO agent_bootstrap_tokens (id, tenant_id, token_hash, allowed_identity, expires_at, used_at)
+			VALUES (gen_random_uuid(), $1, $2, $3, '2026-12-01T00:00:00Z'::timestamptz, `+used+`)`,
+			r.tenantID, r.hash, r.identity); err != nil {
+			t.Fatalf("seed bootstrap token %s/%s: %v", r.tenantID, r.hash, err)
+		}
+	}
+}
+
+// seedAgentRoleContent populates the agents read model across two tenants so the
+// 0101 content case has a real fleet to protect.
+func seedAgentRoleContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	rows := []struct {
+		tenantID string
+		name     string
+		status   string
+		version  string
+	}{
+		{tenantID: tenantA, name: "node-a-1", status: "active", version: "1.4.0"},
+		{tenantID: tenantA, name: "node-a-2", status: "stale", version: "1.3.9"},
+		{tenantID: tenantB, name: "edge-b-1", status: "active", version: "1.4.0"},
+	}
+	for _, r := range rows {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, '2026-02-01T00:00:00Z'::timestamptz)`,
+			r.tenantID, r.name, r.status, r.version); err != nil {
+			t.Fatalf("seed agent %s/%s: %v", r.tenantID, r.name, err)
 		}
 	}
 }

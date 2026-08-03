@@ -40,19 +40,6 @@ const (
 	defaultRESTJSONBodyLimit = 1 << 20 // 1 MiB caps the shared authenticated REST JSON surface.
 )
 
-// BootstrapTokenIssuer mints one-time agent bootstrap tokens (S5.1) bound to the
-// authorizing tenant (WIRE-003/AN-1). The web first-run wizard (S7.3) uses it to
-// build the agent install command; the agent presents the token once to enroll,
-// and the issued certificate is attributed to tenantID. The API depends only on
-// this minimal interface so it never imports the enrollment authority's transport
-// stack.
-type BootstrapTokenIssuer interface {
-	IssueBootstrapToken(
-		ctx context.Context,
-		tenantID, allowedIdentity string,
-	) ([]byte, error)
-}
-
 // API is the REST surface. It holds the read store, the idempotency recorder
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.

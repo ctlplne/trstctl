@@ -13157,6 +13157,46 @@ export const messages = {
     defaultMessage: "State",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx, src/pages/Platform.tsx, src/pages/secrets/SecretsPageParts.tsx.",
   },
+  "source.agent.role.a2r0le0001": {
+    defaultMessage: "Role",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.help.a2r0le0002": {
+    defaultMessage: "Where this agent runs decides what work it is handed. The role is stamped into the certificate it enrolls with, so it cannot be changed without re-enrolling.",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.host.a2r0le0003": {
+    defaultMessage: "Host",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.host.help.a2r0le0004": {
+    defaultMessage: "Acts on the machine it runs on: enumerates this host's credentials, deploys to this host's services.",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.network.a2r0le0005": {
+    defaultMessage: "Network relay",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.network.help.a2r0le0006": {
+    defaultMessage: "Acts on things in its segment that cannot run an agent — load balancers, appliances, cloud certificate stores — and verifies endpoints from a client's vantage.",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.relay.warning.a2r0le0007": {
+    defaultMessage: "A relay holds the credentials for the devices it fronts. Granting this role requires the agents:relay.grant permission.",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.empty.a2r0le0008": {
+    defaultMessage: "No role selected. The enrolled agent will be host-only, which is the default for an agent with no grant.",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.unreported.a2r0le0009": {
+    defaultMessage: "Not yet reported",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.agent.role.source.a2r0le0010": {
+    defaultMessage: "Read from the certificate this agent last presented. Changing a role is a re-enrollment.",
+    description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
   "source.status.920e413c7d": {
     defaultMessage: "Status",
     description:

@@ -82,6 +82,18 @@ const (
 	KeysRead    Permission = "keys:read"
 	KeysWrite   Permission = "keys:write"
 	KeysApprove Permission = "keys:approve"
+
+	// AgentsGrantRelay authorizes minting an enrollment token that carries the
+	// NETWORK role (epic A2) — an agent that relays for devices which cannot host
+	// an agent themselves, and therefore holds the credentials that drive them.
+	//
+	// It is deliberately separate from AgentsWrite, on the same reasoning as
+	// KeysApprove being separate from KeysWrite: enrolling a host agent is
+	// routine fleet work, while creating a relay places appliance credentials on
+	// a machine of the operator's choosing. Those are different decisions and
+	// should be grantable to different people. Anyone holding only AgentsWrite can
+	// still enroll host agents all day.
+	AgentsGrantRelay Permission = "agents:relay.grant"
 )
 
 // Wildcard is a permission that allows every action; it is held by admin.
@@ -93,7 +105,7 @@ func allResourcePermissions() []Permission {
 		OwnersRead, OwnersWrite, IssuersRead, IssuersWrite,
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
 		AuditWrite, PrivacyRead, PrivacyWrite,
-		GraphRead, RiskRead, AgentsRead, AgentsWrite,
+		GraphRead, RiskRead, AgentsRead, AgentsWrite, AgentsGrantRelay,
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
@@ -127,7 +139,13 @@ func BuiltinRoles() map[string]Role {
 	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, SecretsRead, KeysRead}
 	agent := []Permission{CertsRead, AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport, DiscoveryWrite}
 	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, CertsRequest, SecretsRead, KeysRead}
-	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign), AuditRead)
+	// The CLI machine role is broad but not sovereign. AccessRoleAssign is withheld
+	// because a CLI token that can hand out roles can hand itself more. A2's
+	// AgentsGrantRelay is withheld on the same reasoning: it authorizes placing an
+	// agent that will hold appliance credentials, and that is a decision an
+	// operator should make deliberately in the console rather than one a CLI token
+	// carries by default. Enrolling host agents is still in.
+	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AgentsGrantRelay), AuditRead)
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
