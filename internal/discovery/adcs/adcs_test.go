@@ -332,3 +332,142 @@ func TestEveryFindingCarriesFalsifiableEvidence(t *testing.T) {
 		}
 	}
 }
+
+// TestDriftIsSemanticNotTextual is F2's point. "msPKI-Certificate-Name-Flag
+// changed from 0 to 1" is technically a diff and tells nobody anything; what an
+// operator needs is that somebody turned on supplies-subject.
+func TestDriftIsSemanticNotTextual(t *testing.T) {
+	before := []adcs.Template{{
+		Name: "UserAuth", SchemaVersion: 4,
+		RequiresManagerApproval: true,
+		EKUs:                    []string{adcs.EKUClientAuth},
+		PublishedBy:             []string{"CORP-CA"},
+	}}
+	after := []adcs.Template{{
+		Name: "UserAuth", SchemaVersion: 4,
+		EnrolleeSuppliesSubject: true,
+		RequiresManagerApproval: false,
+		EKUs:                    []string{adcs.EKUClientAuth},
+		PublishedBy:             []string{"CORP-CA"},
+	}}
+	drift := adcs.DiffTemplates(before, after)
+	if !drift.Worsened() {
+		t.Fatal("a template that gained supplies-subject and lost manager approval did not read as worse")
+	}
+	var sawSupplies, sawApproval bool
+	for _, c := range drift.Changes {
+		if c.Direction != adcs.DriftWorse {
+			continue
+		}
+		if strings.Contains(c.Change, "supply their own subject") {
+			sawSupplies = true
+		}
+		if strings.Contains(c.Change, "Manager approval was REMOVED") {
+			sawApproval = true
+		}
+		// The audit trail behind the sentence: a claim about someone's
+		// directory they cannot check is one they will not act on.
+		if c.Attribute == "" || c.Before == "" || c.After == "" {
+			t.Errorf("change %q carries no before/after audit trail", c.Change)
+		}
+	}
+	if !sawSupplies || !sawApproval {
+		t.Fatalf("the two security-relevant changes were not both reported: %+v", drift.Changes)
+	}
+}
+
+// TestHardeningDoesNotAlert: an operator who just fixed a template does not need
+// waking. Worsened() is the gate, and better changes are recorded without it.
+func TestHardeningDoesNotAlert(t *testing.T) {
+	before := []adcs.Template{{
+		Name: "Vuln", SchemaVersion: 4, EnrolleeSuppliesSubject: true,
+		ExportableKey: true, EKUs: []string{adcs.EKUClientAuth},
+	}}
+	after := []adcs.Template{{
+		Name: "Vuln", SchemaVersion: 4,
+		RequiresManagerApproval: true, EKUs: []string{adcs.EKUClientAuth},
+	}}
+	drift := adcs.DiffTemplates(before, after)
+	if drift.Worsened() {
+		t.Fatal("hardening a template alerted as drift")
+	}
+	if len(drift.Changes) == 0 {
+		t.Fatal("hardening produced no recorded change at all; the timeline needs it even though the alert does not")
+	}
+	for _, c := range drift.Changes {
+		if c.Direction == adcs.DriftWorse {
+			t.Errorf("hardening change reported as worse: %q", c.Change)
+		}
+	}
+}
+
+// TestFirstSweepIsNotDrift: reporting an entire estate as "added" the first time
+// anyone looks would bury the real change that comes next under ninety
+// notifications.
+func TestFirstSweepIsNotDrift(t *testing.T) {
+	current := []adcs.Template{
+		{Name: "A", EnrolleeSuppliesSubject: true, EKUs: []string{adcs.EKUClientAuth}},
+		{Name: "B", EKUs: []string{"1.3.6.1.5.5.7.3.1"}},
+	}
+	drift := adcs.DiffTemplates(nil, current)
+	if len(drift.Changes) != 0 || len(drift.Lifecycle) != 0 {
+		t.Fatalf("a first sweep produced drift: %+v", drift)
+	}
+	if drift.Worsened() {
+		t.Fatal("a first sweep alerted")
+	}
+}
+
+// TestPublishingADangerousTemplateIsDrift: no attribute of the template moved,
+// but a latent risk became an offered one.
+func TestPublishingADangerousTemplateIsDrift(t *testing.T) {
+	vuln := adcs.Template{
+		Name: "Vuln", SchemaVersion: 4, EnrolleeSuppliesSubject: true,
+		EKUs: []string{adcs.EKUClientAuth},
+	}
+	published := vuln
+	published.PublishedBy = []string{"CORP-CA"}
+
+	drift := adcs.DiffTemplates([]adcs.Template{vuln}, []adcs.Template{published})
+	if !drift.Worsened() {
+		t.Fatal("publishing a template that carries findings did not read as worse")
+	}
+	// And unpublishing it is an improvement, not a new alarm.
+	back := adcs.DiffTemplates([]adcs.Template{published}, []adcs.Template{vuln})
+	if back.Worsened() {
+		t.Fatal("unpublishing a dangerous template alerted")
+	}
+}
+
+// TestNewDangerousTemplateIsTheLoudestSignal: a template that arrives already
+// exploitable is the most alarming thing this epic can observe.
+func TestNewDangerousTemplateIsTheLoudestSignal(t *testing.T) {
+	before := []adcs.Template{{Name: "Existing", EKUs: []string{"1.3.6.1.5.5.7.3.1"}}}
+	after := append(append([]adcs.Template(nil), before...), adcs.Template{
+		Name: "BrandNew", SchemaVersion: 4, EnrolleeSuppliesSubject: true,
+		EKUs: []string{adcs.EKUClientAuth}, PublishedBy: []string{"CORP-CA"},
+	})
+	drift := adcs.DiffTemplates(before, after)
+	if !drift.Worsened() {
+		t.Fatal("a newly added exploitable template did not alert")
+	}
+	found := false
+	for _, life := range drift.Lifecycle {
+		if life.Template == "BrandNew" && life.Lifecycle == adcs.TemplateAdded && life.NowDangerous {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the new template was not reported as added-and-dangerous: %+v", drift.Lifecycle)
+	}
+
+	// Removing a dangerous template is recorded, and says it was dangerous, so
+	// an incident timeline can tell "deleted an unused template" from "removed
+	// the escalation path we reported".
+	gone := adcs.DiffTemplates(after, before)
+	for _, life := range gone.Lifecycle {
+		if life.Template == "BrandNew" && life.Lifecycle == adcs.TemplateRemoved && !life.WasDangerous {
+			t.Error("a removed dangerous template was not recorded as having been dangerous")
+		}
+	}
+}

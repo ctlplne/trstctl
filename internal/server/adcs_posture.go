@@ -10,6 +10,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -65,6 +66,12 @@ func (s *Server) recordADCSPosture(ctx context.Context, tenantID, agentName, _, 
 		byTemplate[finding.Template] = append(byTemplate[finding.Template], finding)
 	}
 
+	// F2: what changed since the last sweep, in security terms. This runs BEFORE
+	// the replace, because after it the previous state is gone — and the whole
+	// value of a template inventory over time is noticing the moment somebody
+	// turned on supplies-subject, not the fact that it is on now.
+	s.recordADCSDrift(ctx, tenantID, domain, agentName, report.Inventory.Templates)
+
 	rows := make([]store.ADCSTemplatePosture, 0, len(report.Inventory.Templates))
 	for _, tpl := range report.Inventory.Templates {
 		findings := byTemplate[tpl.Name]
@@ -72,15 +79,23 @@ func (s *Server) recordADCSPosture(ctx context.Context, tenantID, agentName, _, 
 		if err != nil {
 			continue
 		}
+		// The template is stored as observed so the NEXT sweep can diff against
+		// what the directory really said (F2), not against a reconstruction
+		// that would report every flag as newly set.
+		observed, err := json.Marshal(tpl)
+		if err != nil {
+			continue
+		}
 		rows = append(rows, store.ADCSTemplatePosture{
-			Domain:        domain,
-			Template:      tpl.Name,
-			DisplayName:   tpl.DisplayName,
-			SchemaVersion: tpl.SchemaVersion,
-			PublishedBy:   tpl.PublishedBy,
-			WorstSeverity: worstADCSSeverity(findings),
-			FindingCount:  len(findings),
-			Findings:      encoded,
+			Domain:           domain,
+			Template:         tpl.Name,
+			DisplayName:      tpl.DisplayName,
+			SchemaVersion:    tpl.SchemaVersion,
+			PublishedBy:      tpl.PublishedBy,
+			WorstSeverity:    worstADCSSeverity(findings),
+			FindingCount:     len(findings),
+			Findings:         encoded,
+			ObservedTemplate: observed,
 		})
 	}
 	_ = s.store.ReplaceADCSTemplatePosture(ctx, tenantID, domain, agentName, rows, time.Now().UTC())
@@ -152,4 +167,62 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 		})
 	}
 	return out, nil
+}
+
+// recordADCSDrift compares this sweep against the stored one and records the
+// semantic difference (epic F2).
+//
+// Only a change for the WORSE produces an alerting event. An operator who has
+// just hardened a template does not need waking for it, and a tool that alerts
+// on improvement teaches people to mute it — after which it will not reach them
+// on the day it matters. Better and neutral changes are still recorded, because
+// an incident timeline needs them.
+func (s *Server) recordADCSDrift(ctx context.Context, tenantID, domain, agentName string, current []adcs.Template) {
+	if s.store == nil || s.log == nil {
+		return
+	}
+	previousRows, err := s.store.ListADCSTemplatePosture(ctx, tenantID, 1000)
+	if err != nil {
+		return
+	}
+	previous := make([]adcs.Template, 0, len(previousRows))
+	for _, row := range previousRows {
+		if row.Domain != domain {
+			continue
+		}
+		// The template as the directory reported it last time. A row written
+		// before 0105 has none, and is SKIPPED rather than reconstructed:
+		// diffing against a template whose flags all read false would report it
+		// as having just turned dangerous, which is precisely the false alarm
+		// this epic must not produce. One quiet sweep to re-baseline is the
+		// right cost.
+		if len(row.ObservedTemplate) == 0 || string(row.ObservedTemplate) == "{}" {
+			continue
+		}
+		var tpl adcs.Template
+		if err := json.Unmarshal(row.ObservedTemplate, &tpl); err != nil {
+			continue
+		}
+		previous = append(previous, tpl)
+	}
+	drift := adcs.DiffTemplates(previous, current)
+	if len(drift.Changes) == 0 && len(drift.Lifecycle) == 0 {
+		return
+	}
+	payload := map[string]any{
+		"domain": domain, "agent": agentName,
+		"changes": drift.Changes, "lifecycle": drift.Lifecycle,
+		"worsened": drift.Worsened(),
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	eventType := "adcs.template.drift"
+	if drift.Worsened() {
+		// A distinct type so the notify matrix can route the alerting case
+		// without having to reason about the payload.
+		eventType = "adcs.template.drift.worsened"
+	}
+	_, _ = s.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: encoded})
 }

@@ -43,6 +43,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	100: true,
 	101: true,
 	102: true,
+	105: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -365,6 +366,55 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 		if _, err := pool.Exec(ctx,
 			`UPDATE outbox SET required_agent_role = 'admin' WHERE true`); err == nil {
 			t.Error("0102 accepted an unknown role demand; outbox_required_agent_role_known must reject it")
+		}
+	})
+
+	// 0105 adds the observed-template column that makes drift real (epic F2).
+	// The property that matters is the one the DEFAULT encodes: an existing row
+	// must come out with an EMPTY observation, not a fabricated one. The drift
+	// path skips rows with no observation and re-baselines quietly on the next
+	// sweep; a backfilled '{}' that looked like a real template would make every
+	// flag read false and report the whole estate as newly dangerous, which is
+	// the false alarm this epic exists to avoid producing.
+	t.Run("0105_adcs_template_observed", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 105)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedADCSPostureContent(t, ctx, pool)
+
+		const projection = `
+			SELECT tenant_id::text, domain, template, worst_severity,
+			       finding_count::text, findings::text
+			  FROM adcs_template_posture
+			 ORDER BY tenant_id, domain, template`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, projection)
+		if beforeCount == 0 {
+			t.Fatal("precondition: the content case needs seeded posture rows to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, projection)
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0105 disturbed existing posture rows: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var fabricated int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM adcs_template_posture WHERE observed_template <> '{}'::jsonb`).
+			Scan(&fabricated); err != nil {
+			t.Fatalf("read post-0105 observations: %v", err)
+		}
+		if fabricated != 0 {
+			t.Errorf("%d pre-existing rows came out carrying a fabricated observation; every one must come out empty so the next sweep re-baselines instead of alarming", fabricated)
 		}
 	})
 
@@ -2199,6 +2249,32 @@ func seedAgentRoleContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 			VALUES (gen_random_uuid(), $1, $2, $3, $4, '2026-02-01T00:00:00Z'::timestamptz)`,
 			r.tenantID, r.name, r.status, r.version); err != nil {
 			t.Fatalf("seed agent %s/%s: %v", r.tenantID, r.name, err)
+		}
+	}
+}
+
+// seedADCSPostureContent populates the AD CS posture read model across two
+// tenants so the 0105 content case has real rows to protect.
+func seedADCSPostureContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	rows := []struct {
+		tenantID string
+		domain   string
+		template string
+		severity string
+		count    int
+	}{
+		{tenantA, "CORP-CA", "WebServer", "", 0},
+		{tenantA, "CORP-CA", "UserAuth", "critical", 2},
+		{tenantB, "OTHER-CA", "WebServer", "high", 1},
+	}
+	for _, r := range rows {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO adcs_template_posture
+			    (tenant_id, domain, template, worst_severity, finding_count, findings)
+			VALUES ($1, $2, $3, $4, $5, '[]'::jsonb)`,
+			r.tenantID, r.domain, r.template, r.severity, r.count); err != nil {
+			t.Fatalf("seed adcs posture %s/%s: %v", r.domain, r.template, err)
 		}
 	}
 }

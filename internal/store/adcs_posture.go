@@ -37,6 +37,11 @@ type ADCSTemplatePosture struct {
 	// answer.
 	ObservedBy string
 	ObservedAt time.Time
+	// ObservedTemplate is the template exactly as the directory reported it
+	// (epic F2), so the next sweep can compute a semantic diff against what was
+	// really there rather than against a reconstruction. Without it a second
+	// sweep would report the whole estate as newly dangerous.
+	ObservedTemplate json.RawMessage
 }
 
 // ReplaceADCSTemplatePosture writes one relay observation of one domain.
@@ -62,15 +67,19 @@ func (s *Store) ReplaceADCSTemplatePosture(ctx context.Context, tenantID, domain
 			if published == nil {
 				published = []string{}
 			}
+			observed := row.ObservedTemplate
+			if len(observed) == 0 {
+				observed = json.RawMessage("{}")
+			}
 			if _, err := tx.Exec(ctx,
 				`INSERT INTO adcs_template_posture
 				     (tenant_id, domain, template, display_name, schema_version,
 				      published_by, worst_severity, finding_count, findings,
-				      observed_by, observed_at)
-				 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9::jsonb, $10, $11)`,
+				      observed_by, observed_at, observed_template)
+				 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9::jsonb, $10, $11, $12::jsonb)`,
 				tenantID, domain, row.Template, row.DisplayName, row.SchemaVersion,
 				published, row.WorstSeverity, row.FindingCount, string(findings),
-				observedBy, at.UTC()); err != nil {
+				observedBy, at.UTC(), string(observed)); err != nil {
 				return err
 			}
 		}
@@ -92,7 +101,7 @@ func (s *Store) ListADCSTemplatePosture(ctx context.Context, tenantID string, li
 			// before both, which is the wrong order presented confidently.
 			`SELECT tenant_id::text, domain, template, display_name, schema_version,
 			        published_by, worst_severity, finding_count, findings,
-			        observed_by, observed_at
+			        observed_by, observed_at, observed_template
 			   FROM adcs_template_posture
 			  WHERE tenant_id = $1
 			  ORDER BY CASE worst_severity
@@ -108,13 +117,14 @@ func (s *Store) ListADCSTemplatePosture(ctx context.Context, tenantID string, li
 		defer rows.Close()
 		for rows.Next() {
 			var row ADCSTemplatePosture
-			var findings []byte
+			var findings, observed []byte
 			if err := rows.Scan(&row.TenantID, &row.Domain, &row.Template, &row.DisplayName,
 				&row.SchemaVersion, &row.PublishedBy, &row.WorstSeverity, &row.FindingCount,
-				&findings, &row.ObservedBy, &row.ObservedAt); err != nil {
+				&findings, &row.ObservedBy, &row.ObservedAt, &observed); err != nil {
 				return err
 			}
 			row.Findings = json.RawMessage(findings)
+			row.ObservedTemplate = json.RawMessage(observed)
 			out = append(out, row)
 		}
 		return rows.Err()

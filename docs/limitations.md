@@ -639,6 +639,26 @@ it back, deliberately: a relay re-reads the directory on its next sweep, and
 restoring yesterday's template list as current would keep a template someone has
 since fixed reading dangerous.
 
+**Changes between sweeps are reported semantically.** A textual diff of two
+directory dumps is useless — attribute values are bit fields, and
+"msPKI-Certificate-Name-Flag changed from 0 to 1" tells nobody anything. Each
+change says what it means and which way it moved: somebody turning on
+enrollee-supplies-subject, or removing manager approval, or publishing a
+template that carries findings so a latent risk became an offered one. Only a
+change for the WORSE emits an alerting event. An operator who has just hardened
+a template does not need waking, and a tool that alerts on improvement teaches
+people to mute it — after which it will not reach them on the day it matters.
+Better and neutral changes are still recorded, because an incident timeline
+needs them.
+
+A first sweep is deliberately not drift. Reporting an entire estate as "added"
+the first time anyone looks would bury the real change that comes next under
+ninety notifications. The template is stored exactly as the directory reported
+it so the next sweep diffs against what was really there; a row written before
+that column existed is skipped and re-baselines on one quiet sweep, rather than
+being reconstructed into a template whose flags all read false and reported as
+having just turned dangerous.
+
 **What is not served:** enrollment ACLs. The template's security descriptor
 (`nTSecurityDescriptor`) says *who* holds the enrollment right, and that is most
 of how dangerous a template is — a supplies-subject template restricted to two
