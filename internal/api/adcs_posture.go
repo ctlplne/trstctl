@@ -4,7 +4,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 )
@@ -28,6 +27,23 @@ type ADCSTemplateFinding struct {
 	Summary     string `json:"summary"`
 	Remediation string `json:"remediation"`
 	Published   bool   `json:"published"`
+	// Evidence names the exact directory attributes and values that produced
+	// this finding (epic F3). It is what makes the finding falsifiable: an
+	// operator can open the template's own property page and check, rather than
+	// taking the verdict on faith. The first false positive an operator cannot
+	// check destroys their trust in every true finding that follows.
+	Evidence []ADCSFindingEvidence `json:"evidence,omitempty"`
+}
+
+// ADCSFindingEvidence is one attribute reference behind a finding.
+//
+// Observed rather than Value: what is recorded here is a directory attribute's
+// state — a flag bit, an EKU OID, a schema version — never a credential. The
+// name says so, which also keeps it clear of the AN-8 secret-surface
+// vocabulary, where a field called Value is assumed to carry material.
+type ADCSFindingEvidence struct {
+	Attribute string `json:"attribute"`
+	Observed  string `json:"observed"`
 }
 
 // ADCSTemplate is one observed certificate template.
@@ -109,19 +125,4 @@ func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	a.writeJSON(w, http.StatusOK, out)
-}
-
-// decodeADCSFindings turns the stored analysis output into the served shape. A
-// row whose findings do not decode is rendered with none rather than dropped:
-// the template itself is still a fact worth showing.
-func decodeADCSFindings(raw json.RawMessage) []ADCSTemplateFinding {
-	out := []ADCSTemplateFinding{}
-	if len(raw) == 0 {
-		return out
-	}
-	var decoded []ADCSTemplateFinding
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return out
-	}
-	return append(out, decoded...)
 }

@@ -117,6 +117,17 @@ export function ADCSTemplatePanel() {
                               <span className="block text-xs text-muted-foreground">
                                 {translateNow("source.adcs.remediation.f1adcs0016")} {finding.remediation}
                               </span>
+                              {(finding.evidence ?? []).length > 0 ? (
+                                // F3: what was actually read. A finding an
+                                // operator cannot check against the template's
+                                // own property page is one they have to take on
+                                // faith, and the first false positive then costs
+                                // every true finding that follows.
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  {translateNow("source.adcs.evidence.f3adcs0001")}{" "}
+                                  {(finding.evidence ?? []).map((ref) => `${ref.attribute} = ${ref.observed}`).join(" · ")}
+                                </span>
+                              ) : null}
                             </li>
                           ))}
                         </ul>

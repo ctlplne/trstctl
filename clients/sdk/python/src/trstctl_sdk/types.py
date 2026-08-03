@@ -216,6 +216,15 @@ ACMEEABPosture = TypedDict(
     total=False,
 )
 
+ADCSFindingEvidence = TypedDict(
+    'ADCSFindingEvidence',
+    {
+        'attribute': str,
+        'observed': str,
+    },
+    total=False,
+)
+
 ADCSPosture = TypedDict(
     'ADCSPosture',
     {
@@ -248,6 +257,7 @@ ADCSTemplate = TypedDict(
 ADCSTemplateFinding = TypedDict(
     'ADCSTemplateFinding',
     {
+        'evidence': list[dict[str, Any]],
         'id': str,
         'published': bool,
         'remediation': str,

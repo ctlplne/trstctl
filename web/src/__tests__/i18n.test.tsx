@@ -263,6 +263,10 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // F3 evidence re-pin: one source.adcs.evidence key renders the attributes
+      // and values a finding was derived from, so an operator can check it
+      // against the template's own property page instead of taking it on faith.
+      // Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
       // F1 AD CS re-pin: twenty-two source.adcs.* keys add the certificate
       // template posture panel — the risk verdict, what each template permits
       // and the fix, whether a CA publishes it, and the empty state that
@@ -382,8 +386,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "ee235d7947854d6901b135a97f0667a6eedbe9a3bb1c5719e59d67bd9898897e",
-      "de-DE": "d4a7f353b3147e1b14766aa6dc970f6495fd1a06d85208820e34a4a5bd57c78d",
+      "es-ES": "604534e3f8bbee1655e4d3dd57df24bd846b92ff0bdc636afc262ec89a4eb076",
+      "de-DE": "972f52389e7b9390d7567667253ce2a7532b0dc84bc371cead79bf6ec5e7e796",
     });
   });
 

@@ -51,6 +51,22 @@ type Finding struct {
 	// unpublished dangerous template is a latent risk an operator can fix
 	// calmly; a published one is not.
 	Published bool `json:"published"`
+	// Evidence names the exact directory attributes that produced this finding,
+	// with the values that were read (epic F3). Without it a posture finding is
+	// an assertion an operator has to take on faith and cannot check against
+	// their own console — and the first false positive destroys trust in every
+	// true one. With it, the finding is falsifiable.
+	Evidence []EvidenceRef `json:"evidence,omitempty"`
+}
+
+// EvidenceRef is one directory attribute and what was read from it.
+//
+// Observed rather than Value: this records an attribute's state — a flag bit,
+// an EKU OID, a schema version — and never a credential. Naming it Value would
+// put it in the AN-8 secret-surface vocabulary, where that word means material.
+type EvidenceRef struct {
+	Attribute string `json:"attribute"`
+	Observed  string `json:"observed"`
 }
 
 // Findings returns every dangerous combination in the inventory, most severe
@@ -88,6 +104,7 @@ func findingsForTemplate(t Template) []Finding {
 			Summary:     "Anyone holding enrollment rights on this template can request a certificate naming any subject — including a domain administrator — and use it to authenticate as them. The template supplies no manager approval to interrupt that.",
 			Remediation: "Clear msPKI-Certificate-Name-Flag's enrollee-supplies-subject bit so the CA builds the subject from the directory, or set the pend-manager-approval enrollment flag so a human sees each request. Removing the client-authentication EKU also closes it, if the template does not need to authenticate.",
 			Published:   published,
+			Evidence:    ekuEvidence(t, evidenceRef("msPKI-Certificate-Name-Flag", "ENROLLEE_SUPPLIES_SUBJECT is set"), evidenceRef("msPKI-Enrollment-Flag", "PEND_ALL_REQUESTS is not set")),
 		})
 	}
 
@@ -99,6 +116,7 @@ func findingsForTemplate(t Template) []Finding {
 			Summary:     "The requester may supply the subject alternative name, which is what Windows authentication actually reads. A certificate carrying another account's UPN authenticates as that account.",
 			Remediation: "Clear the enrollee-supplies-subject-alt-name bit in msPKI-Certificate-Name-Flag, or require manager approval. This is the more urgent of the two supplies-subject variants, because SAN-based mapping is the default path.",
 			Published:   published,
+			Evidence:    ekuEvidence(t, evidenceRef("msPKI-Certificate-Name-Flag", "ENROLLEE_SUPPLIES_SUBJECT_ALT_NAME is set"), evidenceRef("msPKI-Enrollment-Flag", "PEND_ALL_REQUESTS is not set")),
 		})
 	}
 
@@ -111,6 +129,7 @@ func findingsForTemplate(t Template) []Finding {
 			Summary:     "The requester may supply their own subject or SAN, but manager approval is required, so issuance is not automatic. The risk is now whoever approves — and whether they can tell a legitimate request from an escalation.",
 			Remediation: "Keep approval in place, and make sure approvers can see the requested subject. Clearing the enrollee-supplies-subject bits removes the risk entirely where the enrollment does not need them.",
 			Published:   published,
+			Evidence:    []EvidenceRef{evidenceRef("msPKI-Certificate-Name-Flag", "an enrollee-supplies bit is set"), evidenceRef("msPKI-Enrollment-Flag", "PEND_ALL_REQUESTS is set")},
 		})
 	}
 
@@ -121,6 +140,7 @@ func findingsForTemplate(t Template) []Finding {
 			Summary:     "This is a schema version 1 template that can issue authentication certificates. Version 1 templates cannot express the enrollment and key controls later versions have, so several hardening options simply do not exist for it.",
 			Remediation: "Duplicate it as a version 2 or later template, apply the controls there, republish, and unpublish the version 1 original. Duplicating rather than editing is the point — version 1 templates cannot be upgraded in place.",
 			Published:   published,
+			Evidence:    ekuEvidence(t, evidenceRef("msPKI-Template-Schema-Version", "1")),
 		})
 	}
 
@@ -132,6 +152,35 @@ func findingsForTemplate(t Template) []Finding {
 			Summary:     "Certificates from this template authenticate, and their private keys can be exported. An identity that can be copied off its machine can be used from anywhere, and the theft leaves no trace on the CA.",
 			Remediation: "Clear the exportable-key bit in msPKI-Private-Key-Flag so the key is generated non-exportable, and prefer a TPM or smart-card key storage provider where the platform supports it.",
 			Published:   published,
+			Evidence:    ekuEvidence(t, evidenceRef("msPKI-Private-Key-Flag", "CT_FLAG_EXPORTABLE_KEY is set")),
+		})
+	}
+
+	// The enrollment-agent primitive. This is not impersonation of one account;
+	// it is the ability to request certificates on behalf of ANY principal, so
+	// a single such certificate is a master key to every template that accepts
+	// agent-signed requests. It is worth its own finding rather than being
+	// folded into the client-auth checks, because the remediation is different:
+	// restricting who may enrol is not enough, the CA must also restrict which
+	// templates accept agent requests and from which agents.
+	if containsEKU(t.EKUs, EKUCertificateRequestAgent) && !t.RequiresManagerApproval {
+		out = append(out, Finding{
+			Template: t.Name, ID: "ADCS-ESC3-AGENT", Severity: SeverityCritical,
+			Summary:     "This template issues enrollment-agent certificates without manager approval. An enrollment agent can request certificates on behalf of any principal, so one of these is not an impersonation of a single account — it is a master key to every template that accepts agent-signed requests.",
+			Remediation: "Require manager approval on this template, and on the CA restrict enrollment-agent rights (Enrollment Agent Restrictions) so agents may only request specific templates for specific groups. Removing the Certificate Request Agent EKU closes it entirely where the workflow does not need delegated enrollment.",
+			Published:   published,
+			Evidence:    ekuEvidence(t, evidenceRef("pKIExtendedKeyUsage", EKUCertificateRequestAgent), evidenceRef("msPKI-Enrollment-Flag", "PEND_ALL_REQUESTS is not set")),
+		})
+	}
+	// Even with approval, an enrollment-agent template is worth naming: the
+	// control now rests entirely on whoever approves.
+	if containsEKU(t.EKUs, EKUCertificateRequestAgent) && t.RequiresManagerApproval {
+		out = append(out, Finding{
+			Template: t.Name, ID: "ADCS-ESC3-AGENT-APPROVED", Severity: SeverityMedium,
+			Summary:     "This template issues enrollment-agent certificates, gated by manager approval. Delegated enrollment is legitimate, but the certificates it produces can request on behalf of others, so the approval step is now the only thing standing between a request and a master key.",
+			Remediation: "Confirm the CA's Enrollment Agent Restrictions actually bound which templates and which principals these agents may request for. Approval alone does not scope what an issued agent certificate can go on to do.",
+			Published:   published,
+			Evidence:    []EvidenceRef{evidenceRef("pKIExtendedKeyUsage", EKUCertificateRequestAgent), evidenceRef("msPKI-Enrollment-Flag", "PEND_ALL_REQUESTS is set")},
 		})
 	}
 
@@ -142,6 +191,7 @@ func findingsForTemplate(t Template) []Finding {
 			Summary:     "This template restricts no extended key usage, so certificates it issues are valid for every purpose — client authentication, server authentication, code signing, and anything else a relying party checks for.",
 			Remediation: "Set pKIExtendedKeyUsage to the specific purposes this template exists to serve. An unrestricted certificate is a credential whose blast radius nobody has decided.",
 			Published:   published,
+			Evidence:    []EvidenceRef{evidenceRef("pKIExtendedKeyUsage", "no values")},
 		})
 	}
 	if containsEKU(t.EKUs, EKUAnyPurpose) {
@@ -150,9 +200,27 @@ func findingsForTemplate(t Template) []Finding {
 			Summary:     "This template carries the any-purpose EKU, which explicitly permits every use. It is the same blast radius as no EKU at all, stated deliberately.",
 			Remediation: "Replace the any-purpose OID with the specific EKUs this template needs.",
 			Published:   published,
+			Evidence:    []EvidenceRef{evidenceRef("pKIExtendedKeyUsage", EKUAnyPurpose)},
 		})
 	}
 	return out
+}
+
+// evidenceRef builds one attribute reference.
+func evidenceRef(attribute, observed string) EvidenceRef {
+	return EvidenceRef{Attribute: attribute, Observed: observed}
+}
+
+// ekuEvidence appends the template's EKU list to the given references, since
+// almost every dangerous combination depends on what the certificate may be
+// used FOR. Naming the OIDs read means an operator can match the finding
+// against the template's own property page rather than trusting it.
+func ekuEvidence(t Template, refs ...EvidenceRef) []EvidenceRef {
+	observed := strings.Join(t.EKUs, ", ")
+	if observed == "" {
+		observed = "no values (unrestricted, therefore includes authentication)"
+	}
+	return append(refs, evidenceRef("pKIExtendedKeyUsage", observed))
 }
 
 func containsEKU(ekus []string, want string) bool {

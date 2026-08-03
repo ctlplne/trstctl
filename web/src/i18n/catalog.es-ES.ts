@@ -3478,6 +3478,7 @@ const esESCatalog = {
   "source.adcs.sev.medium.f1adcs0020": "Medio",
   "source.adcs.sev.none.f1adcs0021": "Limpio",
   "source.adcs.observedby.f1adcs0022": "por el relé",
+  "source.adcs.evidence.f3adcs0001": "Leído del directorio:",
   "source.status.920e413c7d": "Estado",
   "source.status.filter.9bfe8b184f": "Filtro de estado",
   "source.structured.query.preview.706d53d9be": "Vista previa de consulta estructurada",

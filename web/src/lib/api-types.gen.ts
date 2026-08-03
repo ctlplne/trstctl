@@ -162,6 +162,11 @@ export interface ACMEEABPosture {
   served: boolean;
 }
 
+export interface ADCSFindingEvidence {
+  attribute: string;
+  observed: string;
+}
+
 export interface ADCSPosture {
   critical: number;
   guidance: string;
@@ -184,6 +189,7 @@ export interface ADCSTemplate {
 }
 
 export interface ADCSTemplateFinding {
+  evidence?: ADCSFindingEvidence[];
   id: string;
   published?: boolean;
   remediation: string;

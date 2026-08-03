@@ -26,6 +26,7 @@ public final class OpenApiSchemas {
       "ACMEDeviceAttestationPolicy",
       "ACMEEABCredential",
       "ACMEEABPosture",
+      "ADCSFindingEvidence",
       "ADCSPosture",
       "ADCSTemplate",
       "ADCSTemplateFinding",

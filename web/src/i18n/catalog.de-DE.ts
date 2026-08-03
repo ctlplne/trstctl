@@ -3489,6 +3489,7 @@ const deDECatalog = {
   "source.adcs.sev.medium.f1adcs0020": "Mittel",
   "source.adcs.sev.none.f1adcs0021": "Unauffällig",
   "source.adcs.observedby.f1adcs0022": "durch Relais",
+  "source.adcs.evidence.f3adcs0001": "Aus dem Verzeichnis gelesen:",
   "source.status.920e413c7d": "Status",
   "source.status.filter.9bfe8b184f": "Statusfilter",
   "source.structured.query.preview.706d53d9be": "Vorschau der strukturierten Abfrage",

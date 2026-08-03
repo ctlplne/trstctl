@@ -77,6 +77,11 @@ const (
 	EKUSmartcardLogon   = "1.3.6.1.4.1.311.20.2.2"
 	EKUPKINITClientAuth = "1.3.6.1.5.2.3.4"
 	EKUAnyPurpose       = "2.5.29.37.0"
+	// EKUCertificateRequestAgent is the enrollment-agent EKU. A certificate
+	// carrying it may request certificates ON BEHALF OF other principals, which
+	// makes it a master key to every template that accepts enrollment-agent
+	// requests — a distinct and worse primitive than impersonating one account.
+	EKUCertificateRequestAgent = "1.3.6.1.4.1.311.20.2.1"
 )
 
 // Entry is one LDAP object as this package needs it: a DN and its attributes.

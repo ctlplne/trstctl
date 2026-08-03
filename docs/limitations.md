@@ -599,7 +599,20 @@ be — an in-domain relay is the only vantage from which this inventory exists.
 by scanning four boolean columns across ninety templates, so the analysis reports
 consequences: `ADCS-ESC1` fires only when supplies-subject, an authenticating
 EKU, and the absence of manager approval are all present, because removing any
-one of them changes the answer. The SAN variant is reported separately and is the
+one of them changes the answer. Enrollment-agent templates get their own rule
+(`ADCS-ESC3-AGENT`) rather than being folded into the client-auth checks,
+because the primitive is different — an agent certificate requests on behalf of
+*any* principal, so one of them is a master key rather than an impersonation of
+one account — and so is the remediation: restricting who may enrol is not
+enough, the CA must also bound which templates accept agent-signed requests.
+
+**Every finding carries the attributes and values it was derived from.** A
+posture finding an operator cannot check against the template's own property
+page is one they have to take on faith, and the first false positive they cannot
+check costs the credibility of every true finding after it. A test asserts a
+deliberately hardened template set produces *no* findings at all, which is the
+harder half of getting this right: rules that fire are easy, rules that stay
+quiet are what make the output worth reading. The SAN variant is reported separately and is the
 more urgent of the two, since SAN-based mapping is what Windows authentication
 actually reads. An empty EKU list counts as authenticating, because unrestricted
 is not harmless. Every finding names the specific change that removes it, and

@@ -339,7 +339,13 @@ func componentSchemas() map[string]*Schema {
 		"summary":     str(),
 		"remediation": str(),
 		"published":   {Type: "boolean"},
+		// F3: the attributes and values that produced the finding, so an
+		// operator can check it against the template's own property page.
+		"evidence": {Type: "array", Items: ref("ADCSFindingEvidence")},
 	}, "id", "severity", "summary", "remediation")
+	adcsFindingEvidence := object(map[string]*Schema{
+		"attribute": str(), "observed": str(),
+	}, "attribute", "observed")
 	adcsTemplate := object(map[string]*Schema{
 		"domain": str(), "template": str(), "display_name": str(),
 		"schema_version": {Type: "integer"},
@@ -4071,6 +4077,7 @@ func componentSchemas() map[string]*Schema {
 		"ADCSPosture":                              adcsPosture,
 		"ADCSTemplate":                             adcsTemplate,
 		"ADCSTemplateFinding":                      adcsTemplateFinding,
+		"ADCSFindingEvidence":                      adcsFindingEvidence,
 		"CAAuthorityList":                          list("CAAuthority"),
 		"CADiscoveryItem":                          caDiscoveryItem,
 		"CADiscoverySummary":                       caDiscoverySummary,

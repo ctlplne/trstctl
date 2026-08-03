@@ -4539,6 +4539,10 @@ export interface components {
             required: boolean;
             served: boolean;
         };
+        ADCSFindingEvidence: {
+            attribute: string;
+            observed: string;
+        };
         ADCSPosture: {
             critical: number;
             guidance: string;
@@ -4561,6 +4565,7 @@ export interface components {
             worst_severity: "" | "medium" | "high" | "critical";
         };
         ADCSTemplateFinding: {
+            evidence?: components["schemas"]["ADCSFindingEvidence"][];
             id: string;
             published?: boolean;
             remediation: string;

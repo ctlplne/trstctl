@@ -13369,6 +13369,10 @@ export const messages = {
     defaultMessage: "by relay",
     description: "F1: AD CS certificate template posture panel on the Posture page.",
   },
+  "source.adcs.evidence.f3adcs0001": {
+    defaultMessage: "Read from the directory:",
+    description: "F3: falsifiable evidence references on an AD CS posture finding.",
+  },
   "source.status.920e413c7d": {
     defaultMessage: "Status",
     description:

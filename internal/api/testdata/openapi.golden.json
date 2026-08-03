@@ -616,6 +616,21 @@
         ],
         "type": "object"
       },
+      "ADCSFindingEvidence": {
+        "properties": {
+          "attribute": {
+            "type": "string"
+          },
+          "observed": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attribute",
+          "observed"
+        ],
+        "type": "object"
+      },
       "ADCSPosture": {
         "properties": {
           "critical": {
@@ -705,6 +720,12 @@
       },
       "ADCSTemplateFinding": {
         "properties": {
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSFindingEvidence"
+            },
+            "type": "array"
+          },
           "id": {
             "type": "string"
           },

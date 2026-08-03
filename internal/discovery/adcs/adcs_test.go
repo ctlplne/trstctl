@@ -242,3 +242,93 @@ func hasFinding(findings []adcs.Finding, id string) bool {
 	}
 	return false
 }
+
+// TestHardenedTemplatesProduceNoFindings is F3's acceptance and the harder half
+// of it. A rule that fires on a vulnerable template is easy; a rule set that
+// stays SILENT on a hardened one is what makes the findings worth reading,
+// because the first false positive destroys an operator's trust in every true
+// one that follows.
+func TestHardenedTemplatesProduceNoFindings(t *testing.T) {
+	hardened := []adcs.Template{
+		{
+			// The ordinary web server template: the CA builds the subject, it
+			// authenticates servers rather than users, and its key stays put.
+			Name: "WebServerHardened", SchemaVersion: 4,
+			EKUs:        []string{"1.3.6.1.5.5.7.3.1"},
+			PublishedBy: []string{"CORP-CA"},
+		},
+		{
+			// A user authentication template done correctly: supplies-subject
+			// is off, so the CA names the requester from the directory.
+			Name: "UserAuthHardened", SchemaVersion: 4,
+			EKUs:        []string{adcs.EKUClientAuth},
+			PublishedBy: []string{"CORP-CA"},
+		},
+		{
+			// Code signing, non-exportable, no authentication purpose.
+			Name: "CodeSigning", SchemaVersion: 3,
+			EKUs: []string{"1.3.6.1.5.5.7.3.3"},
+		},
+	}
+	if findings := adcs.Findings(adcs.Inventory{Templates: hardened}); len(findings) != 0 {
+		t.Fatalf("hardened templates produced %d findings, want none: %+v", len(findings), findings)
+	}
+}
+
+// TestEnrollmentAgentIsItsOwnFinding: an enrollment agent can request on behalf
+// of ANY principal, which is a different and worse primitive than impersonating
+// one account — and it has a different remediation.
+func TestEnrollmentAgentIsItsOwnFinding(t *testing.T) {
+	agent := adcs.Template{
+		Name: "EnrollmentAgent", SchemaVersion: 4,
+		EKUs:        []string{adcs.EKUCertificateRequestAgent},
+		PublishedBy: []string{"CORP-CA"},
+	}
+	got := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{agent}})
+	if !hasFinding(got, "ADCS-ESC3-AGENT") {
+		t.Fatalf("an unapproved enrollment-agent template produced no ESC3 finding: %+v", got)
+	}
+
+	approved := agent
+	approved.RequiresManagerApproval = true
+	gotApproved := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{approved}})
+	if hasFinding(gotApproved, "ADCS-ESC3-AGENT") {
+		t.Error("ESC3 reported despite manager approval")
+	}
+	// Approval does not make it uninteresting: the control now rests entirely
+	// on whoever approves, and the CA's agent restrictions.
+	if !hasFinding(gotApproved, "ADCS-ESC3-AGENT-APPROVED") {
+		t.Error("an approved enrollment-agent template produced no finding at all")
+	}
+}
+
+// TestEveryFindingCarriesFalsifiableEvidence is F3's evidence requirement. A
+// posture finding an operator cannot check against their own console is an
+// assertion taken on faith; one that names the attributes and values read is
+// falsifiable, which is what makes it worth acting on.
+func TestEveryFindingCarriesFalsifiableEvidence(t *testing.T) {
+	inv := adcs.Inventory{Templates: []adcs.Template{
+		{Name: "Everything", SchemaVersion: 1, EnrolleeSuppliesSubject: true,
+			EnrolleeSuppliesSAN: true, ExportableKey: true,
+			EKUs:        []string{adcs.EKUAnyPurpose, adcs.EKUCertificateRequestAgent},
+			PublishedBy: []string{"CORP-CA"}},
+		{Name: "Approved", SchemaVersion: 4, EnrolleeSuppliesSubject: true,
+			RequiresManagerApproval: true, EKUs: []string{adcs.EKUClientAuth}},
+		{Name: "NoEKU", SchemaVersion: 2},
+	}}
+	findings := adcs.Findings(inv)
+	if len(findings) == 0 {
+		t.Fatal("no findings to check")
+	}
+	for _, f := range findings {
+		if len(f.Evidence) == 0 {
+			t.Errorf("%s on %s carries no evidence; an operator cannot check it", f.ID, f.Template)
+			continue
+		}
+		for _, ev := range f.Evidence {
+			if ev.Attribute == "" || ev.Observed == "" {
+				t.Errorf("%s on %s has an empty evidence reference %+v", f.ID, f.Template, ev)
+			}
+		}
+	}
+}
