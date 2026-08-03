@@ -1,3 +1,34 @@
+SCOPE OF THIS LICENSE
+=====================
+
+This repository is dual-licensed. Which license applies depends on where a file
+sits, and nothing about being able to read a file grants a right to use it.
+
+  * Everything OUTSIDE the top-level `ee/` directory is the trstctl core and is
+    licensed under the Mozilla Public License, Version 2.0, reproduced in full
+    below. Core files carry `SPDX-License-Identifier: MPL-2.0`.
+
+  * Everything INSIDE the top-level `ee/` directory is proprietary trstctl
+    Enterprise Edition and Provider Edition material. It is NOT licensed under
+    the MPL — ee/ material is not licensed under the MPL in any form. It carries `SPDX-License-Identifier: LicenseRef-trstctl-EE`, and
+    its terms are in `ee/LICENSE`: use is governed solely by a separate
+    commercial agreement together with a valid offline Ed25519-signed trstctl
+    license. Possession of this source grants no right to use, copy, modify,
+    distribute, sublicense, or operate the `ee/` material.
+
+The MPL is a file-level copyleft, which is what makes this split work: an
+MPL-2.0 file stays MPL-2.0 no matter what it is combined with. Enterprise
+features are therefore never implemented by editing a core file. They live in
+their own files under `ee/` and are bound to the core through narrow, tagged
+attach seams, each with a core-only twin so a core build links no `ee/` package
+at all. A CI analyzer enforces this: core may not import `ee/`, and every file
+must carry the SPDX identifier matching the tree it is in.
+
+The text that follows is the unmodified Mozilla Public License 2.0 and applies
+to the core as described above. It does not apply to `ee/`.
+
+----------------------------------------------------------------------------
+
 Mozilla Public License Version 2.0
 ==================================
 

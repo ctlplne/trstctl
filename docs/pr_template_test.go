@@ -79,9 +79,9 @@ func TestPullRequestTemplateSpeaksToOutsideReaders(t *testing.T) {
 		{"## What this changes", "a reviewer reads the summary before the diff"},
 		{"## How to verify", "a reviewer needs the command that demonstrates the change, not a claim that it works"},
 		{"## Checklist", "the merge requirements belong on the page where they are met"},
-		{"git commit -s", "the DCO sign-off is a real gate on every core commit (CONTRIBUTING.md)"},
-		{"CLA", "an ee/ contribution needs a signed CLA; this template is where the author first learns that"},
-		{"ee/", "the core-vs-ee/ split decides which paperwork applies, so the template must name the tree"},
+		{"not accepting contributions", "the project is closed to outside contributions and the template is where somebody about to open a pull request finds that out"},
+		{"CONTRIBUTING.md", "the template must point at the page carrying the reasoning and what IS welcome"},
+		{"ee/", "the core-vs-ee/ split is part of why the project is closed, so the template must name the tree"},
 		{"make lint test", "the lint and test gate, including the architecture linter, is what CI runs"},
 		{"CHANGELOG", "a release note that is not written with the change is not written at all"},
 		{"[Unreleased]", "the CHANGELOG section a contributor is expected to edit"},
@@ -100,9 +100,9 @@ func TestPullRequestTemplateSpeaksToOutsideReaders(t *testing.T) {
 	// Checklist items must ship unticked. A pre-ticked box is an assertion the
 	// author never made, and a reviewer who spots one stops trusting the rest.
 	boxes := regexp.MustCompile(`(?m)^- \[(.)\] `).FindAllStringSubmatch(tpl, -1)
-	if len(boxes) < 6 {
-		t.Errorf("pull-request template has %d checklist items, want at least the 6 that map to gates "+
-			"(DCO, ee/ CLA, tests first, make lint test, docs+CHANGELOG, one scoped change)", len(boxes))
+	if len(boxes) < 4 {
+		t.Errorf("pull-request template has %d checklist items, want at least the 4 that map to real gates "+
+			"(tests first, make lint test, docs+CHANGELOG, one scoped change)", len(boxes))
 	}
 	for _, box := range boxes {
 		if box[1] != " " {
@@ -110,22 +110,33 @@ func TestPullRequestTemplateSpeaksToOutsideReaders(t *testing.T) {
 		}
 	}
 
-	// Anti-drift, both directions: the template is where CONTRIBUTING.md's two
-	// contribution workflows are enforced, so retiring one in either file without
-	// the other leaves an author following an instruction nobody honours.
+	// Anti-drift, both directions. The project is closed to contributions, and
+	// the two files that a would-be contributor reads must agree about that.
+	//
+	// The check is on whether a workflow is OPERATED, not on whether the words
+	// appear: CONTRIBUTING.md legitimately explains that there is no CLA, and a
+	// naive substring match on "contributor license agreement" would read that
+	// sentence as evidence the project runs one.
 	lower := strings.ToLower(tpl)
 	contributing := strings.ToLower(read(t, "../CONTRIBUTING.md"))
-	for _, w := range []struct{ workflow, tplPhrase, contribPhrase string }{
-		{"DCO", "dco", "developer certificate of origin"},
-		{"CLA", "cla", "contributor license agreement"},
+	closed := strings.Contains(contributing, "not accepting contributions")
+	if !closed {
+		t.Fatal("CONTRIBUTING.md no longer states that the project is closed to contributions; " +
+			"if that changed deliberately, this guard and the pull-request template both need " +
+			"rewriting to describe whatever replaced it")
+	}
+	for _, w := range []struct{ workflow, tplPhrase string }{
+		{"DCO", "git commit -s"},
+		{"CLA", "signed cla"},
 	} {
-		switch {
-		case strings.Contains(contributing, w.contribPhrase) && !strings.Contains(lower, w.tplPhrase):
-			t.Errorf("CONTRIBUTING.md operates the %s workflow (%q) but the pull-request template never mentions it; "+
-				"the checklist is where that requirement is actually enforced", w.workflow, w.contribPhrase)
-		case !strings.Contains(contributing, w.contribPhrase) && strings.Contains(lower, w.tplPhrase):
-			t.Errorf("the pull-request template requires %s but CONTRIBUTING.md no longer operates it; "+
-				"retire it in both files or in neither", w.workflow)
+		if strings.Contains(lower, strings.ToLower(w.tplPhrase)) {
+			t.Errorf("the pull-request template still asks for %s, but the project is not accepting "+
+				"contributions; asking an outside author for paperwork on a change nobody will read "+
+				"is worse than saying no", w.workflow)
 		}
+	}
+	if !strings.Contains(lower, "closed unread") {
+		t.Error("the pull-request template does not say outside pull requests are closed unread; " +
+			"somebody deserves to learn that before they write the patch, not after")
 	}
 }

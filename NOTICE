@@ -9,8 +9,11 @@ Copyright (c) 2026 certctl LLC.
 This product includes third-party open-source components. Their notices and
 licenses remain with the dependency manifests and lockfiles for each component.
 
-The project has a single author today. Contributions are still governed by
-CONTRIBUTING.md: core (everything outside ee/) is accepted under the
-Developer Certificate of Origin 1.1, certified by a Signed-off-by line on
-every commit, and any contribution to the proprietary ee/ tree requires a
-signed Contributor License Agreement.
+The project has a single author, and is NOT accepting contributions or
+contributors at this time. CONTRIBUTING.md states the position and the reasons:
+the codebase is dual-licensed with a proprietary ee/ tree and is the subject of
+pending patent applications, so outside code would create ownership questions
+that are cheap to avoid now and expensive to unpick later. Pull requests are
+closed unread. Issues and security reports are welcome. There is no Contributor
+License Agreement and no DCO workflow, because neither is needed while nothing
+is being accepted.

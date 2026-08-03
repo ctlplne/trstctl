@@ -1,44 +1,53 @@
 # Contributing to trstctl
 
-Thanks for considering a contribution. trstctl is open core: the platform under
-`LICENSE` is MPL-2.0 and free, while the `ee/` tree is proprietary,
-license-gated material. That split decides how contributions are handled, so it
-is the first thing this page explains.
+**trstctl is not accepting contributions or contributors at this time.**
 
-## Two trees, two rules
+That is a deliberate position, not an oversight, and this page exists to say so
+plainly rather than leave someone to discover it after writing a patch.
 
-**Core (everything outside `ee/`) — MPL-2.0, sign off with the DCO.**
-Contributions to core are accepted under the
-[Developer Certificate of Origin 1.1](https://developercertificate.org/): a
-lightweight statement that you wrote the patch, or have the right to submit it
-under the project's license. You certify it by adding a `Signed-off-by` line to
-each commit, which `git` writes for you:
+## Why
 
-```bash
-git commit -s -m "fix(store): ..."
-```
+trstctl is dual-licensed source-available software. The core outside `ee/` is
+MPL-2.0; the `ee/` tree is proprietary and commercially licensed (see
+[LICENSE](LICENSE) and [ee/LICENSE](ee/LICENSE)). Parts of the mechanism are also
+the subject of pending patent applications.
 
-The line must carry your real name and an email you can be reached at:
+Accepting outside code into a codebase in that position creates ownership
+questions that are cheap to avoid now and expensive to unpick later: who holds
+the copyright in a given line, whether it can be relicensed into the commercial
+tree, and whether a contribution encumbers a claim. Refusing contributions
+outright is the cleanest answer available while that remains true.
 
-```
-Signed-off-by: Jane Doe <jane@example.com>
-```
+It is also honest about capacity. The project has a single author. A review
+queue nobody can service is worse for a would-be contributor than a clear no.
 
-No copyright assignment is requested and none is implied. Your contribution
-stays yours, licensed to everyone under MPL-2.0 like the rest of core.
+## What to do instead
 
-**Enterprise (`ee/`) — proprietary, requires a signed CLA.**
-Because `ee/` ships under a commercial license, a contribution there must come
-with a signed Contributor License Agreement granting the rights needed to
-distribute it under that license. Open an issue before writing `ee/` code and a
-maintainer will send the CLA. If you would rather not sign one — an entirely
-reasonable position — say so in the issue: most `ee/` requests can be met by a
-change in core plus a seam, which stays DCO-only.
+- **Found a bug, or something the documentation gets wrong?** Open an issue.
+  Issues are welcome and are the most useful thing anyone outside the project can
+  send. A good reproduction is worth more than a patch here.
+- **Found a security problem?** Do not open an issue. Follow
+  [SECURITY.md](SECURITY.md).
+- **Want a capability that does not exist?** Open an issue describing the
+  problem rather than the solution. What an operator actually needs is more
+  useful than an implementation of what they think would provide it.
+- **Want to use the core in your own work?** You already may, under MPL-2.0,
+  without asking. The `ee/` tree is separate and needs a commercial agreement.
 
-This split is deliberate. A blanket CLA over the whole project would tax every
-drive-by fix in core; DCO-only everywhere would make the commercial tree
-undistributable. Core stays cheap to contribute to; only the proprietary tree
-carries paperwork.
+## Unsolicited pull requests
+
+Pull requests will be closed unread, with a pointer to this page. That is not a
+judgment of the code; it is that reading it creates exactly the ownership
+ambiguity described above.
+
+If this position changes, this page changes with it, and it will say so here
+first. Until then, treat the absence of a Contributor License Agreement as
+meaning contributions are not being taken — not as an invitation to send one.
+
+## If you are reading this as a maintainer
+
+The engineering contract below still governs every change, including the
+author's own.
 
 ## Before you write code
 

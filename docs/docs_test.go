@@ -3513,6 +3513,30 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 			t.Fatalf("%s must exist for production packaging: %v", path, err)
 		}
 	}
+	// The root LICENSE must state the SCOPE, not merely be the MPL text.
+	//
+	// A reader who opens LICENSE and finds the bare Mozilla Public License can
+	// reasonably conclude the whole repository is MPL-2.0 — including ee/,
+	// which is proprietary. ee/LICENSE says otherwise, but only to someone who
+	// already knows to look for it. The first file anyone reads has to carry
+	// the split, and a scope notice is easy to lose in a future edit that
+	// "restores the license to its official text", so CI holds it.
+	scope := strings.ToLower(read(t, "../LICENSE"))
+	for _, want := range []string{
+		"scope of this license",
+		"outside the top-level `ee/` directory",
+		"inside the top-level `ee/` directory",
+		"not licensed under the mpl",
+		"licenseref-trstctl-ee",
+		"grants no right to use",
+	} {
+		if !strings.Contains(scope, want) {
+			t.Errorf("LICENSE scope notice missing %q; the root license must state which tree "+
+				"each license covers, or a reader concludes the proprietary tree is MPL-2.0", want)
+		}
+	}
+	// And the MPL text itself must still be present and complete beneath it —
+	// the scope notice explains the split, it does not replace the license.
 	license := strings.ToLower(read(t, "../LICENSE"))
 	for _, want := range []string{"mozilla public license version 2.0", "mpl", "exhibit a - source code form license notice"} {
 		if !strings.Contains(license, want) {
