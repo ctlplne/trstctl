@@ -908,6 +908,13 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 	if d.outbox == nil || d.store == nil || identityID == "" || fingerprint == "" {
 		return nil
 	}
+	// Classify the claim demand from the raw payload BEFORE sealing makes the
+	// connector name unreadable (epic A3) — the same classifier the transition
+	// path uses, so the two enqueue routes cannot disagree about a target.
+	requiredAgentRole := ""
+	if d.connectorRegistry != nil {
+		requiredAgentRole = connectorSideEffectRoleClassifier(d.connectorRegistry)("connector.deploy", payload)
+	}
 	idemKey := "credential-deploy:" + identityID + ":" + fingerprint
 	sealedPayload, err := d.sealConnectorDeployBytes(ctx, tenantID, "connector.deploy", idemKey, payload)
 	if err != nil {
@@ -915,11 +922,12 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 	}
 	return d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		_, err := d.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-			TenantID:       tenantID,
-			Destination:    "connector.deploy",
-			IdempotencyKey: idemKey,
-			Payload:        sealedPayload,
-			EffectLane:     "connector.deploy:identity:" + identityID,
+			TenantID:          tenantID,
+			Destination:       "connector.deploy",
+			IdempotencyKey:    idemKey,
+			Payload:           sealedPayload,
+			EffectLane:        "connector.deploy:identity:" + identityID,
+			RequiredAgentRole: requiredAgentRole,
 		})
 		return err
 	})

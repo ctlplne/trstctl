@@ -263,6 +263,10 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // A3 vantage re-pin: four source.*.a3vant* keys add the connector
+      // registry's "Executes on" column — host agent / network relay / control
+      // plane — read from the live vantage census. Machine-authored es/de
+      // translations - FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
       // A2 agent-roles re-pin: ten source.agent.role.* keys add the enrollment
       // role selector (host / network relay with per-role help), the relay
       // credential-custody warning, the empty-selection note, the fleet role
@@ -359,8 +363,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "63dc5b4c11d5f81f5927574592bf51f8af8a1665a1fef77ddf0b3976c3c35de8",
-      "de-DE": "965f06c4bb5a75d07e752b2a191493c054b25bcdf59e49a6c0ea757915f831b6",
+      "es-ES": "a3cefd440a4a0864597cff19fc56617f43be3a58754da65eded734a2a49f8468",
+      "de-DE": "48ab50f9d2b50352bc22a2223ca57cf148380eb3b2181c191baf2030f0db1388",
     });
   });
 

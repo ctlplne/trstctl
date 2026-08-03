@@ -915,11 +915,19 @@ func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestra
 			s.mOutboxCircuitTransitions.WithLabelValues(tr.TenantID, tr.Destination, string(tr.From), string(tr.To)).Inc()
 		}),
 	)
+	orchOptions := historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)
+	if d.ConnectorRegistry != nil {
+		// Stamp each connector side effect's per-row agent-role demand from the
+		// shipped vantage census at enqueue (epic A3). Without a registry there
+		// is nothing to classify against, and rows keep the empty demand.
+		orchOptions = append(orchOptions,
+			orchestrator.WithSideEffectRoleClassifier(connectorSideEffectRoleClassifier(d.ConnectorRegistry)))
+	}
 	orch := orchestrator.NewOrchestrator(
 		d.Log,
 		d.Store,
 		s.outbox,
-		historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)...,
+		orchOptions...,
 	)
 	idem := orchestrator.NewIdempotency(
 		d.Store,

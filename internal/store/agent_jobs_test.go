@@ -68,7 +68,7 @@ func TestAgentJobClaimIsALeaseNotAnAssignment(t *testing.T) {
 	seedJobs(t, ctx, st, tenantID, 3, jobDeploy)
 	now := time.Now().UTC()
 
-	claimed, err := st.ClaimAgentJobs(ctx, tenantID, agentA, []string{jobDeploy}, 2, time.Minute, now)
+	claimed, err := st.ClaimAgentJobs(ctx, tenantID, agentA, []string{jobDeploy}, nil, 2, time.Minute, now)
 	if err != nil {
 		t.Fatalf("claim: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestAgentJobClaimIsALeaseNotAnAssignment(t *testing.T) {
 	// A second agent polling at the same moment takes different work — the whole
 	// point of SKIP LOCKED. A fleet must fan out across the queue, not serialize
 	// on its head or duplicate each other's jobs.
-	other, err := st.ClaimAgentJobs(ctx, tenantID, agentB, []string{jobDeploy}, 5, time.Minute, now)
+	other, err := st.ClaimAgentJobs(ctx, tenantID, agentB, []string{jobDeploy}, nil, 5, time.Minute, now)
 	if err != nil {
 		t.Fatalf("second claim: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestAgentJobClaimIsALeaseNotAnAssignment(t *testing.T) {
 	}
 
 	// Nothing is left, and a third poll is empty rather than an error.
-	empty, err := st.ClaimAgentJobs(ctx, tenantID, agentA, []string{jobDeploy}, 5, time.Minute, now)
+	empty, err := st.ClaimAgentJobs(ctx, tenantID, agentA, []string{jobDeploy}, nil, 5, time.Minute, now)
 	if err != nil || len(empty) != 0 {
 		t.Fatalf("third claim = %d jobs (err %v), want 0", len(empty), err)
 	}
@@ -119,14 +119,14 @@ func TestAgentJobLeaseExpiryReturnsWorkFromADeadAgent(t *testing.T) {
 	seedJobs(t, ctx, st, tenantID, 1, jobVerify)
 	start := time.Now().UTC()
 
-	claimed, err := st.ClaimAgentJobs(ctx, tenantID, dead, []string{jobVerify}, 1, 30*time.Second, start)
+	claimed, err := st.ClaimAgentJobs(ctx, tenantID, dead, []string{jobVerify}, nil, 1, 30*time.Second, start)
 	if err != nil || len(claimed) != 1 {
 		t.Fatalf("initial claim = %d (err %v)", len(claimed), err)
 	}
 
 	// While the lease holds, nobody else can take it. This is what stops two
 	// agents deploying to the same target at once.
-	if got, err := st.ClaimAgentJobs(ctx, tenantID, alive, []string{jobVerify}, 1, 30*time.Second, start.Add(time.Second)); err != nil || len(got) != 0 {
+	if got, err := st.ClaimAgentJobs(ctx, tenantID, alive, []string{jobVerify}, nil, 1, 30*time.Second, start.Add(time.Second)); err != nil || len(got) != 0 {
 		t.Fatalf("a held lease was claimable by another agent: %d (err %v)", len(got), err)
 	}
 
@@ -140,7 +140,7 @@ func TestAgentJobLeaseExpiryReturnsWorkFromADeadAgent(t *testing.T) {
 	if freed != 1 {
 		t.Fatalf("reclaimed %d lapsed leases, want 1", freed)
 	}
-	recovered, err := st.ClaimAgentJobs(ctx, tenantID, alive, []string{jobVerify}, 1, 30*time.Second, after)
+	recovered, err := st.ClaimAgentJobs(ctx, tenantID, alive, []string{jobVerify}, nil, 1, 30*time.Second, after)
 	if err != nil || len(recovered) != 1 {
 		t.Fatalf("a dead agent's work did not return to the queue: %d (err %v)", len(recovered), err)
 	}
@@ -162,7 +162,7 @@ func TestAgentJobExtendCompleteAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 
 	seedJobs(t, ctx, st, tenantID, 2, jobDeploy)
 	now := time.Now().UTC()
-	claimed, err := st.ClaimAgentJobs(ctx, tenantID, holder, []string{jobDeploy}, 2, time.Minute, now)
+	claimed, err := st.ClaimAgentJobs(ctx, tenantID, holder, []string{jobDeploy}, nil, 2, time.Minute, now)
 	if err != nil || len(claimed) != 2 {
 		t.Fatalf("claim = %d (err %v)", len(claimed), err)
 	}
@@ -214,7 +214,7 @@ func TestAgentJobExtendCompleteAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 	if persisted != store.AgentFailureReported {
 		t.Fatalf("persisted failure reason = %q, want the closed-set marker %q", persisted, store.AgentFailureReported)
 	}
-	requeued, err := st.ClaimAgentJobs(ctx, tenantID, impostor, []string{jobDeploy}, 5, time.Minute, now)
+	requeued, err := st.ClaimAgentJobs(ctx, tenantID, impostor, []string{jobDeploy}, nil, 5, time.Minute, now)
 	if err != nil || len(requeued) != 1 || requeued[0].ID != second.ID {
 		t.Fatalf("a released job did not become claimable again: %+v (err %v)", requeued, err)
 	}
@@ -238,7 +238,7 @@ func TestAgentJobQueueDepthsCarryNoTenantData(t *testing.T) {
 	seedJobs(t, ctx, st, tenantID, 3, jobDeploy)
 	seedJobs(t, ctx, st, tenantID, 1, jobVerify)
 	now := time.Now().UTC()
-	if _, err := st.ClaimAgentJobs(ctx, tenantID, agent, []string{jobDeploy}, 1, time.Minute, now); err != nil {
+	if _, err := st.ClaimAgentJobs(ctx, tenantID, agent, []string{jobDeploy}, nil, 1, time.Minute, now); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 
@@ -265,5 +265,67 @@ func seedAgentJobTenant(t *testing.T, ctx context.Context, st *store.Store, tena
 	t.Helper()
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "agent-jobs"}); err != nil {
 		t.Fatalf("seed tenant: %v", err)
+	}
+}
+
+// TestClaimHonorsPerRowRoleDemand is A3's row-level gate at the store: the same
+// kind, four different demands, and each agent receives exactly the rows its
+// certificate's roles satisfy. The 'control_plane' stamp matches no role, so a
+// cloud-store deploy is handed to nobody; the empty demand preserves pre-A3
+// behaviour for every row enqueued before the census existed.
+func TestClaimHonorsPerRowRoleDemand(t *testing.T) {
+	st, tenantID := newStore(t), tenantA
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	seed := func(idem, role string) {
+		t.Helper()
+		if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx,
+				`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
+				 VALUES ($1, $2, $3, $4, $5)`,
+				tenantID, jobDeploy, []byte(`{}`), idem, role)
+			return err
+		}); err != nil {
+			t.Fatalf("seed %s: %v", idem, err)
+		}
+	}
+	seed("legacy", "")
+	seed("nginx-deploy", "host")
+	seed("f5-deploy", "network")
+	seed("acm-deploy", "control_plane")
+
+	hostAgent := "aaaaaaaa-0000-0000-0000-000000000001"
+	relay := "aaaaaaaa-0000-0000-0000-000000000002"
+
+	hostGot, err := st.ClaimAgentJobs(ctx, tenantID, hostAgent, []string{jobDeploy}, []string{"host"}, 10, time.Minute, now)
+	if err != nil {
+		t.Fatalf("host claim: %v", err)
+	}
+	hostKeys := map[string]bool{}
+	for _, j := range hostGot {
+		hostKeys[j.IdempotencyKey] = true
+	}
+	if len(hostGot) != 2 || !hostKeys["legacy"] || !hostKeys["nginx-deploy"] {
+		t.Fatalf("host agent claimed %v, want exactly [legacy nginx-deploy]", hostKeys)
+	}
+
+	relayGot, err := st.ClaimAgentJobs(ctx, tenantID, relay, []string{jobDeploy}, []string{"network"}, 10, time.Minute, now)
+	if err != nil {
+		t.Fatalf("relay claim: %v", err)
+	}
+	if len(relayGot) != 1 || relayGot[0].IdempotencyKey != "f5-deploy" {
+		t.Fatalf("relay claimed %v, want exactly [f5-deploy]", relayGot)
+	}
+
+	// The cloud-store row is left for the control plane no matter who asks.
+	nobody, err := st.ClaimAgentJobs(ctx, tenantID, relay, []string{jobDeploy}, []string{"host", "network"}, 10, time.Minute, now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("dual-role claim: %v", err)
+	}
+	for _, j := range nobody {
+		if j.IdempotencyKey == "acm-deploy" {
+			t.Fatal("a control_plane-stamped row was handed to an agent")
+		}
 	}
 }

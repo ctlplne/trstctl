@@ -160,7 +160,11 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		lease = agentJobMaxLease
 	}
 
-	claimed, err := a.store.ClaimAgentJobs(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName), kinds, limit, lease, time.Now().UTC())
+	// The certificate's roles reach the row predicate too (epic A3): kind-level
+	// vantage said "connector.deploy may go to either role", and the per-row
+	// demand stamped at enqueue says which role THIS deploy needs. Both gates
+	// read the same certificate.
+	claimed, err := a.store.ClaimAgentJobs(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName), kinds, info.Roles, limit, lease, time.Now().UTC())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "claim agent jobs: %v", err)
 	}

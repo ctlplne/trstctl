@@ -145,4 +145,10 @@ type transitionSideEffect struct {
 	Destination    string `json:"destination"`
 	IdempotencyKey string `json:"idempotency_key"`
 	Payload        []byte `json:"payload"`
+	// RequiredAgentRole is the per-row claim demand stamped on the outbox entry
+	// (epic A3). It is durable HERE, in the event, because reconciliation
+	// rebuilds the outbox row from this record — a classifier consulted only at
+	// first enqueue would strand replayed rows unstamped. Classified once, from
+	// the pre-seal payload; replay copies, never re-derives.
+	RequiredAgentRole string `json:"required_agent_role,omitempty"`
 }

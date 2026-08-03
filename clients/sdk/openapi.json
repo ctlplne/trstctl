@@ -4777,6 +4777,14 @@
           },
           "rollback": {
             "type": "string"
+          },
+          "target_vantage": {
+            "enum": [
+              "control_plane",
+              "host_agent",
+              "network_relay"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -4786,7 +4794,8 @@
           "rollback",
           "native",
           "capabilities",
-          "replay_safety"
+          "replay_safety",
+          "target_vantage"
         ],
         "type": "object"
       },

@@ -42,6 +42,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	98:  true,
 	100: true,
 	101: true,
+	102: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -309,6 +310,61 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 		}
 		if projected != 0 {
 			t.Errorf("%d pre-existing agents came out with a projected role; every one must read as not-yet-reported until it heartbeats", projected)
+		}
+	})
+
+	// 0102 stamps the per-row agent-role demand onto the outbox (epic A3). Every
+	// row enqueued before it exists must come out with the EMPTY demand — the
+	// value that means "kind-level rules alone", which is precisely the rule those
+	// rows were enqueued under. A backfill that guessed a role from the payload
+	// would relocate committed work; a backfill to 'control_plane' would strand
+	// claimable rows. Empty is the only honest answer, and the whole row must
+	// otherwise survive byte-identical.
+	t.Run("0102_outbox_required_agent_role", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 102)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedOutboxClaimContent(t, ctx, pool)
+
+		const entryProjection = `
+			SELECT tenant_id::text, destination, encode(payload, 'hex'), idempotency_key,
+			       status, attempts::text, coalesce(last_error, ''), delivered_at::text
+			  FROM outbox
+			 ORDER BY tenant_id, idempotency_key`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, entryProjection)
+		if beforeCount == 0 {
+			t.Fatal("precondition: the content case needs seeded outbox entries to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, entryProjection)
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0102 disturbed in-flight outbox entries: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var demanded int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM outbox WHERE required_agent_role <> ''`).Scan(&demanded); err != nil {
+			t.Fatalf("read post-0102 demands: %v", err)
+		}
+		if demanded != 0 {
+			t.Errorf("%d pre-existing rows came out of the migration carrying a role demand; every one must come out with kind-level rules alone", demanded)
+		}
+
+		// The vocabulary is closed at the database: no repair script can stamp a
+		// demand the claim path has no meaning for.
+		if _, err := pool.Exec(ctx,
+			`UPDATE outbox SET required_agent_role = 'admin' WHERE true`); err == nil {
+			t.Error("0102 accepted an unknown role demand; outbox_required_agent_role_known must reject it")
 		}
 	})
 

@@ -87,6 +87,9 @@ func connectorRegistryFromConfig(cfg config.Connectors, st *store.Store, kek sea
 				return nil, err
 			}
 		}
+		if err := registry.DeclareTargetVantage(name, nativeConnectorVantage(name)); err != nil {
+			return nil, err
+		}
 	}
 	return registry, nil
 }
@@ -126,6 +129,47 @@ func nativeConnectorReplaySafety(name string) connector.ReplaySafety {
 		return connector.ReplaySafetyAtMostOnce
 	default:
 		return connector.ReplaySafetyAtMostOnce
+	}
+}
+
+// nativeConnectorVantage is the closed census of where each shipped connector's
+// work must execute (epic A3). It is written BY HAND, not derived from the
+// local-vs-HTTP factory split below: that split is a transport decision, and
+// transport does not decide vantage — envoy is driven over HTTP yet its xDS/SDS
+// admin socket is commonly co-resident with the workload, which is exactly the
+// kind of judgement a derivation would get wrong.
+//
+// The census answers one question per connector: what IS the target?
+//
+//   - A service on a host that could run an agent — nginx, apache, a JVM
+//     keystore, a database — is host-agent work: the connector mutates that
+//     machine's files and reloads that machine's services, and doing it from
+//     anywhere else is what doctrine D1 exists to end.
+//   - An appliance that cannot run an agent — an F5, a NetScaler, a FortiGate —
+//     is network-relay work: driven over its API from inside its segment, by a
+//     relay holding the credentials that drive it (A2's network role).
+//   - A cloud certificate store — ACM, Azure Key Vault, GCP Certificate
+//     Manager — is neither. There is no host and no segment; the API is public
+//     and the control plane's egress-guarded client is the right caller. These
+//     stay control-plane permanently, not as the deprecated interim.
+//
+// envoy is declared host-agent deliberately: its admin/SDS surface binds
+// loopback in the deployments we ship for, so the executor must be on the box
+// even though the bytes travel over HTTP.
+func nativeConnectorVantage(name string) connector.TargetVantage {
+	switch name {
+	case "nginx", "apache", "caddy", "iis", "haproxy", "postfix", "traefik",
+		"java-keystore", "postgresql", "mysql", "rabbitmq", "elasticsearch",
+		"tomcat", "envoy":
+		return connector.VantageHostAgent
+	case "f5", "netscaler", "a10", "kemp", "cisco", "fortigate", "paloalto":
+		return connector.VantageNetworkRelay
+	case "aws-acm", "azure-keyvault", "gcp-certificate-manager":
+		return connector.VantageControlPlane
+	default:
+		// Fail closed: an unlisted connector stays where it always ran until
+		// someone audits it for agent execution and adds it here.
+		return connector.VantageControlPlane
 	}
 }
 

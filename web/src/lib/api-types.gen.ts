@@ -1249,6 +1249,7 @@ export interface ConnectorCatalogItem {
   native: boolean;
   replay_safety: "at-most-once" | "reconciled";
   rollback: string;
+  target_vantage: "control_plane" | "host_agent" | "network_relay";
 }
 
 export interface ConnectorDelivery {

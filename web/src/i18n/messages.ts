@@ -483,11 +483,13 @@ export const messages = {
     description: "C5: how many CT log entries one run fetches per log.",
   },
   "discovery.ct.coverageHonesty": {
-    defaultMessage: "This covers only the domains and logs configured below. It is not automatic estate-wide coverage: a domain you have not listed, or a log you do not poll, produces no finding.",
+    defaultMessage:
+      "This covers only the domains and logs configured below. It is not automatic estate-wide coverage: a domain you have not listed, or a log you do not poll, produces no finding.",
     description: "C5 coverage honesty: states the boundary of CT monitoring so an empty finding list is not read as an all-clear.",
   },
   "discovery.ct.description": {
-    defaultMessage: "Know the moment anyone issues a certificate for your domains, anywhere. trstctl polls the RFC 6962 logs you configure, checkpoints each one, and raises an unexpected-issuance finding for a watched domain it did not expect.",
+    defaultMessage:
+      "Know the moment anyone issues a certificate for your domains, anywhere. trstctl polls the RFC 6962 logs you configure, checkpoints each one, and raises an unexpected-issuance finding for a watched domain it did not expect.",
     description: "C5: what CT monitoring does, in the terms an operator would search for.",
   },
   "discovery.ct.heading": {
@@ -747,8 +749,10 @@ export const messages = {
     description: "B1: introduces the copyable openssl command that produces a CSR on the requester's own machine.",
   },
   "request.csr.help": {
-    defaultMessage: "Paste a CSR you generated on the host that will use this certificate. trstctl signs it and never sees your private key. This is the fallback for hosts with no agent \u2014 where an agent is enrolled it generates the key and submits the request itself, and you do not touch key material at all.",
-    description: "B1: explains that pasting a CSR is the agentless fallback and that the agent path is the target, so the manual flow is not mistaken for the destination.",
+    defaultMessage:
+      "Paste a CSR you generated on the host that will use this certificate. trstctl signs it and never sees your private key. This is the fallback for hosts with no agent \u2014 where an agent is enrolled it generates the key and submits the request itself, and you do not touch key material at all.",
+    description:
+      "B1: explains that pasting a CSR is the agentless fallback and that the agent path is the target, so the manual flow is not mistaken for the destination.",
   },
   "request.csr.invalid": {
     defaultMessage: "That does not look like a PEM certificate request. It should start with -----BEGIN CERTIFICATE REQUEST-----.",
@@ -759,7 +763,8 @@ export const messages = {
     description: "B1: optional field where a requester pastes a CSR they generated on the host that will use the certificate.",
   },
   "request.csr.omitted": {
-    defaultMessage: "Leave this empty and trstctl generates the private key itself and returns it \u2014 a deprecated path that records an issuance.server_side_keygen event each time it runs.",
+    defaultMessage:
+      "Leave this empty and trstctl generates the private key itself and returns it \u2014 a deprecated path that records an issuance.server_side_keygen event each time it runs.",
     description: "B1: states plainly what happens when no CSR is supplied, so the deprecated path is a choice rather than a default nobody noticed.",
   },
   "request.wizard.profile.label": {
@@ -954,7 +959,8 @@ export const messages = {
     description: "Link that downloads the returned artifact signature.",
   },
   "operations.jobs.description": {
-    defaultMessage: "Work that touches your estate is decided here and executed by an agent in your environment. This is what is waiting, what an agent holds right now, and how long the oldest job has waited \u2014 the number that tells a drained queue from a stalled one.",
+    defaultMessage:
+      "Work that touches your estate is decided here and executed by an agent in your environment. This is what is waiting, what an agent holds right now, and how long the oldest job has waited \u2014 the number that tells a drained queue from a stalled one.",
     description: "A1: explains what the job ledger shows and why oldest-unclaimed age is the number that matters.",
   },
   "operations.jobs.disabled": {
@@ -974,7 +980,8 @@ export const messages = {
     description: "A1: column header for the job kind (the outbox destination).",
   },
   "operations.jobs.noneEnabled": {
-    defaultMessage: "No job kind is enabled, so nothing is handed to agents. A kind becomes claimable when an executor for it ships and you enable it in agent_channel.claimable_job_kinds.",
+    defaultMessage:
+      "No job kind is enabled, so nothing is handed to agents. A kind becomes claimable when an executor for it ships and you enable it in agent_channel.claimable_job_kinds.",
     description: "A1: states plainly that a served ledger with nothing enabled hands out nothing, so an empty panel is not read as a healthy drained queue.",
   },
   "operations.jobs.notServed": {
@@ -1725,7 +1732,8 @@ export const messages = {
   },
   "certificates.health.expiringLongHorizon": {
     defaultMessage: "Beyond 90d, inside 3y",
-    description: "H5 CA calendar: certificate health summary label for the long-horizon band the dashboard used to collapse into a single 'later' bucket, which is how multi-year CA expiry stayed invisible.",
+    description:
+      "H5 CA calendar: certificate health summary label for the long-horizon band the dashboard used to collapse into a single 'later' bucket, which is how multi-year CA expiry stayed invisible.",
   },
   "certificates.health.externalSources": {
     defaultMessage: "External sources",
@@ -3912,7 +3920,8 @@ export const messages = {
   },
   "agents.endpointDiscovery.none": {
     defaultMessage: "This agent version advertises no endpoint-discovery sources. Nothing is being collected until one is configured.",
-    description: "Truth-integrity 1: shown when the served agent response advertises no discovery capability, replacing a hardcoded console fallback that claimed sources the agent binary cannot collect.",
+    description:
+      "Truth-integrity 1: shown when the served agent response advertises no discovery capability, replacing a hardcoded console fallback that claimed sources the agent binary cannot collect.",
   },
   "agents.endpointDiscovery.filesystem": {
     defaultMessage: "Filesystem certificates",
@@ -5455,7 +5464,8 @@ export const messages = {
     description: "B4: how many ACME accounts this credential has admitted.",
   },
   "protocols.eab.description": {
-    defaultMessage: "Each credential is an authorization, not just a door key: an account remembers which credential admitted it, and every order under that account is checked against the credential's scope. Disabling one stops new accounts and orders under it and leaves certificates already issued under it valid.",
+    defaultMessage:
+      "Each credential is an authorization, not just a door key: an account remembers which credential admitted it, and every order under that account is checked against the credential's scope. Disabling one stops new accounts and orders under it and leaves certificates already issued under it valid.",
     description: "B4: explains what an external account binding credential controls and what disabling one does and does not do.",
   },
   "protocols.eab.disable": {
@@ -5503,7 +5513,8 @@ export const messages = {
     description: "B4: shown when the ACME directory advertises externalAccountRequired.",
   },
   "protocols.eab.rotation": {
-    defaultMessage: "Rotation is a configuration operation: add the new key id to protocols.acme_eab, then disable the old one here while clients migrate. trstctl does not mint external account credentials over the API, because that would mean returning a shared MAC secret in a response.",
+    defaultMessage:
+      "Rotation is a configuration operation: add the new key id to protocols.acme_eab, then disable the old one here while clients migrate. trstctl does not mint external account credentials over the API, because that would mean returning a shared MAC secret in a response.",
     description: "B4: states plainly that credential rotation stays in configuration, rather than implying an API that mints shared secrets.",
   },
   "protocols.eab.scope": {
@@ -8174,11 +8185,13 @@ export const messages = {
   },
   "source.config.validated.legacy.label.2387440f43": {
     defaultMessage: "Config validated (legacy label)",
-    description: "K2 truth-integrity sweep: renders receipts stored under the retired status test_succeeded, which claimed a successful test on a path that contacts nothing.",
+    description:
+      "K2 truth-integrity sweep: renders receipts stored under the retired status test_succeeded, which claimed a successful test on a path that contacts nothing.",
   },
   "source.config.validated.target.not.contacted.983573f318": {
     defaultMessage: "Config validated (target not contacted)",
-    description: "K2 truth-integrity sweep: connector delivery receipt status config_validated. States plainly that the route validated configuration locally and never reached the target.",
+    description:
+      "K2 truth-integrity sweep: connector delivery receipt status config_validated. States plainly that the route validated configuration locally and never reached the target.",
   },
   "source.configuration.drift.9e0db44c38": {
     defaultMessage: "Configuration drift",
@@ -8549,7 +8562,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/components/CommandPalette.tsx.",
   },
   "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2": {
-    defaultMessage: "openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj \"/CN={value1}\"",
+    defaultMessage: 'openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}"',
     description: "B1: the command that generates a keypair and CSR on the requester's own host. Technical identifiers stay byte-identical in every locale.",
   },
   "source.operate.58c3939c4c": {
@@ -8682,7 +8695,8 @@ export const messages = {
   },
   "source.rollback.attested.not.executed.7bf8b3ca82": {
     defaultMessage: "Rollback attested (not executed)",
-    description: "K2 truth-integrity sweep: connector delivery receipt status rollback_recorded. The intent is recorded as evidence; nothing was restored on the target.",
+    description:
+      "K2 truth-integrity sweep: connector delivery receipt status rollback_recorded. The intent is recorded as evidence; nothing was restored on the target.",
   },
   "source.rollback.c48b9dea6f": {
     defaultMessage: "rollback:",
@@ -13162,7 +13176,8 @@ export const messages = {
     description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
   },
   "source.agent.role.help.a2r0le0002": {
-    defaultMessage: "Where this agent runs decides what work it is handed. The role is stamped into the certificate it enrolls with, so it cannot be changed without re-enrolling.",
+    defaultMessage:
+      "Where this agent runs decides what work it is handed. The role is stamped into the certificate it enrolls with, so it cannot be changed without re-enrolling.",
     description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
   },
   "source.agent.role.host.a2r0le0003": {
@@ -13178,7 +13193,8 @@ export const messages = {
     description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
   },
   "source.agent.role.network.help.a2r0le0006": {
-    defaultMessage: "Acts on things in its segment that cannot run an agent — load balancers, appliances, cloud certificate stores — and verifies endpoints from a client's vantage.",
+    defaultMessage:
+      "Acts on things in its segment that cannot run an agent — load balancers, appliances, cloud certificate stores — and verifies endpoints from a client's vantage.",
     description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
   },
   "source.agent.role.relay.warning.a2r0le0007": {
@@ -13196,6 +13212,22 @@ export const messages = {
   "source.agent.role.source.a2r0le0010": {
     defaultMessage: "Read from the certificate this agent last presented. Changing a role is a re-enrollment.",
     description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
+  },
+  "source.executes.on.a3vant0001": {
+    defaultMessage: "Executes on",
+    description: "A3: connector target vantage (executes-on) column on src/pages/Connectors.tsx.",
+  },
+  "source.vantage.host.a3vant0002": {
+    defaultMessage: "Host agent",
+    description: "A3: connector target vantage (executes-on) column on src/pages/Connectors.tsx.",
+  },
+  "source.vantage.relay.a3vant0003": {
+    defaultMessage: "Network relay",
+    description: "A3: connector target vantage (executes-on) column on src/pages/Connectors.tsx.",
+  },
+  "source.vantage.control.plane.a3vant0004": {
+    defaultMessage: "Control plane",
+    description: "A3: connector target vantage (executes-on) column on src/pages/Connectors.tsx.",
   },
   "source.status.920e413c7d": {
     defaultMessage: "Status",

@@ -39,6 +39,13 @@ type connectorCatalogItem struct {
 	// receiver converges on retry, "at-most-once" otherwise. It fails closed
 	// to at-most-once for anything unregistered.
 	ReplaySafety string `json:"replay_safety"`
+	// TargetVantage is where this connector's deploy work executes (epic A3):
+	// "host_agent" for services on a machine an agent can run on,
+	// "network_relay" for appliances driven from inside their segment, and
+	// "control_plane" for cloud stores — and for anything undeclared, because
+	// unaudited work stays where it always ran. Read from the live registry
+	// census, never hardcoded beside the description.
+	TargetVantage string `json:"target_vantage"`
 }
 
 type connectorCatalogResponse struct {
@@ -761,12 +768,14 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 	for _, item := range servedConnectorCatalog {
 		item.Capabilities = []string{}
 		item.ReplaySafety = replaySafetyLabel(connector.ReplaySafetyAtMostOnce)
+		item.TargetVantage = string(connector.VantageControlPlane)
 		if a.connectorRegistry != nil {
 			item.Native = a.connectorRegistry.Has(item.Name)
 			if caps := a.connectorRegistry.CapabilitiesFor(item.Name); len(caps) > 0 {
 				item.Capabilities = caps
 			}
 			item.ReplaySafety = replaySafetyLabel(a.connectorRegistry.ReplaySafetyFor(item.Name))
+			item.TargetVantage = string(a.connectorRegistry.TargetVantageFor(item.Name))
 		}
 		out = append(out, item)
 	}

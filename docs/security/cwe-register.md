@@ -444,9 +444,9 @@ not this file.
 | `docs/docs_test.go:2509` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:236` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:847` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:910` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4436` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:852` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:915` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4441` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:69` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -682,7 +682,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:469` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:1769` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:1777` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `scripts/perf/cmd/capacitycalibrate/main.go:137` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/perfgate/main.go:52` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
@@ -764,9 +764,9 @@ not this file.
 | `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/protect_guards_completeness_test.go:236` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:847` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:910` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4436` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:852` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:915` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4441` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/destination/destination_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
@@ -906,7 +906,7 @@ not this file.
 | `internal/server/run.go:883` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1236` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/server.go:1731` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:1739` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/hardening_contract_test.go:55` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1059,7 +1059,7 @@ not this file.
 | `internal/server/protocols_served_spiffe_ssh_test.go:518` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:453` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:36` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:1773` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:1781` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:172` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1123,7 +1123,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:384` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/main.go:334` | reconnect jitter, not a security decision (CWE-338) |
 | `internal/cli/cli.go:417` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
-| `internal/orchestrator/outbox.go:395` | retry backoff jitter, not a security decision (CWE-338) |
+| `internal/orchestrator/outbox.go:402` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |
 | `internal/query/adversarial_test.go:223` | test jitter/shuffle, not a security decision (CWE-338) |
 

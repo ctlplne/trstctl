@@ -165,7 +165,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **No job kind is claimable yet** — each becomes claimable when its agent-side executor ships | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
-| Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. **Per-target locality for connector work is not gated** — `connector.deploy`/`connector.rollback` are open to both roles at the kind level | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
+| Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -556,13 +556,26 @@ renewal carries the roles across unchanged — it cannot gain a capability, and 
 cannot silently lose one either. Changing an agent's role is a re-enrollment,
 because the role lives in a signed SAN.
 
-**What is not gated: per-target locality.** `connector.deploy` and
-`connector.rollback` are legitimately both roles' work — a host agent deploys to
-services on its own machine, a relay deploys to an appliance it can reach. Which
-one a given job needs is a property of the connector's target, not of the job
-kind, so the kind-level gate cannot decide it and both roles may claim it. Closing
-that requires connectors to declare whether their target can host an agent, and it
-lands with the relay runtime. The `roles` column on the agents read model is a
+**Per-row locality is now gated at the kind the roles share.** `connector.deploy`
+and `connector.rollback` remain both roles' work at the kind level, and the row
+decides: at enqueue, the control plane reads the connector name out of the raw
+payload — the one moment it is not yet sealed — consults the shipped vantage
+census (`nativeConnectorVantage`), and stamps `required_agent_role` onto the
+outbox row. The claim SQL filters on that plain column, so a host agent asking
+for `connector.deploy` receives the nginx deploy and never the F5 deploy, and a
+cloud-store deploy (ACM, Azure Key Vault, GCP Certificate Manager) is stamped
+`control_plane` and handed to no agent ever. The stamp is durable in the
+lifecycle event's side-effect record, so reconcile-replay reproduces it rather
+than re-deriving it against a possibly-changed census; rows enqueued before the
+census existed carry the empty demand and behave exactly as they always did.
+
+The census is per connector KIND, written by hand in the composition root, and
+deliberately not derived from transport: envoy is HTTP-driven yet classified
+host-agent, because its admin surface binds loopback in the deployments we ship
+for. **What is still not served: per-target overrides** (declaring that one
+particular envoy is remote and needs a relay) **and agent execution itself** —
+every connector deploy still executes control-plane-side; the stamp decides who
+MAY claim the row once executors ship with the relay runtime. The `roles` column on the agents read model is a
 **projection** for the console only: writing `network` into it grants nothing,
 because the certificate still says host and the claim path still refuses.
 

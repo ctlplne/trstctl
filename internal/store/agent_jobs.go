@@ -47,9 +47,18 @@ type AgentJob struct {
 // across the queue, not serialize on its head. An entry whose lease has expired
 // is claimable again, which is how a dead agent's work comes back without anyone
 // intervening.
-func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, destinations []string, limit int, lease time.Duration, now time.Time) ([]AgentJob, error) {
+// ClaimAgentJobs leases up to limit pending jobs of the given kinds to agentID.
+// roles is the capability set from the agent's CERTIFICATE (epic A2/A3): a row
+// stamped with a required_agent_role is handed out only to an agent holding that
+// role, a row stamped 'control_plane' is handed to no agent ever, and a row with
+// the empty demand follows kind-level rules alone — which is every row enqueued
+// before the vantage census existed.
+func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, destinations, roles []string, limit int, lease time.Duration, now time.Time) ([]AgentJob, error) {
 	if limit <= 0 || len(destinations) == 0 || lease <= 0 {
 		return nil, nil
+	}
+	if roles == nil {
+		roles = []string{}
 	}
 	now = now.UTC()
 	expires := now.Add(lease)
@@ -70,6 +79,7 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			           AND c.status = 'pending'
 			           AND c.delivered_at IS NULL
 			           AND (c.claimed_by_agent_id IS NULL OR c.claim_expires_at < $5)
+			           AND (c.required_agent_role = '' OR c.required_agent_role = ANY($7::text[]))
 			         ORDER BY c.id
 			         LIMIT $4
 			         FOR UPDATE SKIP LOCKED
@@ -82,7 +92,7 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			  WHERE o.id = k.id
 			  RETURNING o.id, o.tenant_id::text, o.destination, o.payload, o.idempotency_key,
 			            o.attempts, o.claim_attempts, o.claim_expires_at, o.created_at`,
-			tenantID, agentID, destinations, limit, now, expires)
+			tenantID, agentID, destinations, limit, now, expires, roles)
 		if err != nil {
 			return err
 		}

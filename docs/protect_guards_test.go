@@ -141,7 +141,12 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 		"o.store.WithTenant(ctx, tenantID",
 		"o.proj.ApplyTx(ctx, tx, ev)",
 		"o.outbox.EnqueueIfAbsent(ctx, tx",
-		"Destination:    dest",
+		// A3 widened the reconcile Entry literal with RequiredAgentRole, which
+		// realigned gofmt's column padding — anchor on the field pair without
+		// pinning whitespace, so the guard keeps protecting the property (the
+		// intent enqueues with the transition's destination) rather than the
+		// formatting.
+		"Destination:       dest",
 		"IdempotencyKey: ev.ID",
 	} {
 		if !strings.Contains(orch, want) {

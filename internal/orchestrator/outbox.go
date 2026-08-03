@@ -40,6 +40,13 @@ type Entry struct {
 	// EffectLane partitions unrelated receivers that share one destination.
 	// Empty defaults to Destination for backward-compatible strict ordering.
 	EffectLane string
+	// RequiredAgentRole is the agent role this row demands if an agent claims it
+	// (epic A3): "" for kind-level rules only, "host"/"network" to demand that
+	// role, "control_plane" to make the row never agent-claimable. Stamped at
+	// enqueue from the target's vantage — the one moment the enqueuing code
+	// knows what the target is — and read back as a plain column by the claim
+	// SQL, which cannot decode a sealed payload.
+	RequiredAgentRole string
 }
 
 // Record is the observable state of an outbox row, including its retry bookkeeping.
@@ -404,10 +411,10 @@ func (o *Outbox) Enqueue(ctx context.Context, tx pgx.Tx, e Entry) (int64, error)
 	lane := effectiveOutboxLane(e.Destination, e.EffectLane)
 	var id int64
 	err := tx.QueryRow(ctx,
-		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
-		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane).Scan(&id)
+		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("orchestrator: enqueue outbox: %w", err)
 	}
@@ -436,12 +443,12 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 		return false, fmt.Errorf("orchestrator: lock enqueue-if-absent outbox: %w", err)
 	}
 	tag, err := tx.Exec(ctx,
-		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane)
-		 SELECT $1, $2, $3, $4, $5
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role)
+		 SELECT $1, $2, $3, $4, $5, $6
 		 WHERE NOT EXISTS (
 		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
 		 )`,
-		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane)
+		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole)
 	if err != nil {
 		return false, fmt.Errorf("orchestrator: enqueue-if-absent outbox: %w", err)
 	}

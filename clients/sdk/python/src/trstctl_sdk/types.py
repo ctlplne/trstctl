@@ -1793,6 +1793,7 @@ ConnectorCatalogItem = TypedDict(
         'native': bool,
         'replay_safety': str,
         'rollback': str,
+        'target_vantage': str,
     },
     total=False,
 )

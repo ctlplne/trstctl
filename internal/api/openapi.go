@@ -1815,7 +1815,9 @@ func componentSchemas() map[string]*Schema {
 		"native":        {Type: "boolean"},
 		"capabilities":  {Type: "array", Items: str()},
 		"replay_safety": {Type: "string", Enum: []string{"at-most-once", "reconciled"}},
-	}, "name", "kind", "delivery_mode", "rollback", "native", "capabilities", "replay_safety")
+		// A3: where this connector's deploy work executes, from the live census.
+		"target_vantage": {Type: "string", Enum: []string{"control_plane", "host_agent", "network_relay"}},
+	}, "name", "kind", "delivery_mode", "rollback", "native", "capabilities", "replay_safety", "target_vantage")
 	connectorCatalog := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ConnectorCatalogItem")},
 	}, "items")

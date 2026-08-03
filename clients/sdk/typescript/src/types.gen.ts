@@ -5636,6 +5636,8 @@ export interface components {
             /** @enum {string} */
             replay_safety: "at-most-once" | "reconciled";
             rollback: string;
+            /** @enum {string} */
+            target_vantage: "control_plane" | "host_agent" | "network_relay";
         };
         ConnectorDelivery: {
             attempts: number;

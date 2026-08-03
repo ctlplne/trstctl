@@ -53,11 +53,29 @@ type Orchestrator struct {
 	tenantDataRewrite    []events.TenantDataRewriteOption
 	profileEditApprovals map[string]approvalProfileEditRequest
 	profileEditMu        sync.Mutex
+	// effectRole classifies a transition side effect's per-row agent-role demand
+	// (epic A3) from its destination and RAW (pre-seal) payload. Injected by the
+	// composition root; nil means every row gets the empty demand, which is the
+	// pre-A3 behaviour.
+	effectRole func(destination string, payload []byte) string
 }
 
 // OrchestratorOption configures served command-side behavior while keeping the
 // long-standing NewOrchestrator call source-compatible.
 type OrchestratorOption func(*Orchestrator)
+
+// WithSideEffectRoleClassifier wires the function that stamps a transition side
+// effect's required agent role onto its outbox row (epic A3). The classifier
+// sees the destination and the raw payload BEFORE any sealing transform; for
+// connector deploys the composition root consults the shipped vantage census by
+// the payload's connector name. The result is durable in the lifecycle event's
+// side-effect record, so reconciliation replays the same stamp instead of
+// re-deriving it against a possibly-changed census.
+func WithSideEffectRoleClassifier(classify func(destination string, payload []byte) string) OrchestratorOption {
+	return func(orchestrator *Orchestrator) {
+		orchestrator.effectRole = classify
+	}
+}
 
 // WithTenantDataRewriteOptions wires the mandatory history-generation proof
 // walls used by subject erasure. The slice is copied so a caller cannot replace
@@ -184,6 +202,14 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		schemaVersion = projections.LifecycleSideEffectEventSchemaVersion
 	}
 	basePayload := transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey, SubjectCSRPEM: subjectCSRPEM}
+	// Classify the claim demand from the RAW side-effect payload, before any
+	// sealing transform makes it opaque (epic A3). The classifier is injected by
+	// the composition root because vantage is the connector registry's census,
+	// and the orchestrator must not import the registry.
+	requiredAgentRole := ""
+	if hasSideEffect && o.effectRole != nil {
+		requiredAgentRole = o.effectRole(sideEffectDest, sideEffectPayload)
+	}
 	payload, err := json.Marshal(basePayload)
 	if err != nil {
 		return err
@@ -205,9 +231,10 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 	if hasSideEffect {
 		basePayload.SideEffect = &transitionSideEffect{
-			Destination:    sideEffectDest,
-			IdempotencyKey: sideEffectKey,
-			Payload:        append([]byte(nil), outboxPayload...),
+			Destination:       sideEffectDest,
+			IdempotencyKey:    sideEffectKey,
+			Payload:           append([]byte(nil), outboxPayload...),
+			RequiredAgentRole: requiredAgentRole,
 		}
 		payload, err = json.Marshal(basePayload)
 		if err != nil {
@@ -232,11 +259,12 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			// If a prior attempt already enqueued the effect, EnqueueIfAbsent is a
 			// no-op, so the inline path and boot reconciliation cannot both enqueue it.
 			if _, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-				TenantID:       tenantID,
-				Destination:    sideEffectDest,
-				IdempotencyKey: sideEffectKey,
-				Payload:        outboxPayload,
-				EffectLane:     lifecycleEffectLane(sideEffectDest, identityID),
+				TenantID:          tenantID,
+				Destination:       sideEffectDest,
+				IdempotencyKey:    sideEffectKey,
+				Payload:           outboxPayload,
+				EffectLane:        lifecycleEffectLane(sideEffectDest, identityID),
+				RequiredAgentRole: requiredAgentRole,
 			}); err != nil {
 				return err
 			}
@@ -556,12 +584,20 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			return err
 		}
 		if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+			// The claim demand is COPIED from the durable side-effect record,
+			// never re-derived: a census change between enqueue and replay must
+			// not silently relocate work that was already committed (epic A3).
+			requiredAgentRole := ""
+			if pl.SideEffect != nil {
+				requiredAgentRole = pl.SideEffect.RequiredAgentRole
+			}
 			inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-				TenantID:       ev.TenantID,
-				Destination:    dest,
-				IdempotencyKey: idempotencyKey,
-				Payload:        outboxPayload,
-				EffectLane:     lifecycleEffectLane(dest, pl.IdentityID),
+				TenantID:          ev.TenantID,
+				Destination:       dest,
+				IdempotencyKey:    idempotencyKey,
+				Payload:           outboxPayload,
+				EffectLane:        lifecycleEffectLane(dest, pl.IdentityID),
+				RequiredAgentRole: requiredAgentRole,
 			})
 			if err != nil {
 				return err

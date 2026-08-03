@@ -233,3 +233,65 @@ func TestServedAgentRoleReachesTheConsole(t *testing.T) {
 		t.Fatalf("console fleet shows roles %v for a relay, want [network]", found.Roles)
 	}
 }
+
+// seedRoleJobWithDemand seeds a claimable job carrying a per-row role demand,
+// the way the enqueue classifier stamps one (epic A3).
+func seedRoleJobWithDemand(t *testing.T, ctx context.Context, h *roleHarness, destination, idemKey, demand string) {
+	t.Helper()
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			h.tenant, destination, []byte(`{"target":"edge-1"}`), idemKey, demand)
+		return err
+	}); err != nil {
+		t.Fatalf("seed claimable job: %v", err)
+	}
+}
+
+// TestServedPerRowDemandSplitsConnectorDeploys is the closing of A2's stated
+// gap, proven on the assembled binary: connector.deploy is claimable by both
+// roles at the KIND level, and the per-row demand stamped from the target's
+// vantage decides which deploys each agent actually receives. A host agent
+// asking for connector.deploy gets the nginx deploy and not the F5 deploy; the
+// ACM deploy — a cloud store with no host and no segment — goes to nobody.
+func TestServedPerRowDemandSplitsConnectorDeploys(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "connector.deploy")
+	seedRoleJobWithDemand(t, ctx, h, "connector.deploy", "deploy:nginx-1", "host")
+	seedRoleJobWithDemand(t, ctx, h, "connector.deploy", "deploy:f5-1", "network")
+	seedRoleJobWithDemand(t, ctx, h, "connector.deploy", "deploy:acm-1", "control_plane")
+
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{
+		Kinds: []string{"connector.deploy"}, Limit: 10, LeaseSeconds: 60,
+	})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(claimed.Jobs) != 1 {
+		t.Fatalf("host agent claimed %d connector deploys, want exactly the host-vantage one", len(claimed.Jobs))
+	}
+	if claimed.Jobs[0].IdempotencyKey != "deploy:nginx-1" {
+		t.Fatalf("host agent claimed %q, want deploy:nginx-1", claimed.Jobs[0].IdempotencyKey)
+	}
+}
+
+// TestServedRelayReceivesOnlyRelayDeploys is the same split from the relay's
+// side, and the ACM row stays unclaimable even for a dual-role agent.
+func TestServedRelayReceivesOnlyRelayDeploys(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t,
+		[]string{mtls.AgentRoleHost, mtls.AgentRoleNetwork}, "connector.deploy")
+	seedRoleJobWithDemand(t, ctx, h, "connector.deploy", "deploy:f5-2", "network")
+	seedRoleJobWithDemand(t, ctx, h, "connector.deploy", "deploy:acm-2", "control_plane")
+
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{
+		Kinds: []string{"connector.deploy"}, Limit: 10, LeaseSeconds: 60,
+	})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(claimed.Jobs) != 1 || claimed.Jobs[0].IdempotencyKey != "deploy:f5-2" {
+		t.Fatalf("dual-role agent claimed %v, want exactly [deploy:f5-2] — the cloud-store deploy must stay with the control plane", claimed.Jobs)
+	}
+}

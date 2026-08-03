@@ -72,6 +72,7 @@ type Registry struct {
 	factories    map[string]Factory
 	replaySafety map[string]ReplaySafety
 	tlsPosture   map[string]bool
+	vantage      map[string]TargetVantage
 }
 
 // ReplaySafety describes the receiver guarantee a connector offers across the
@@ -457,4 +458,85 @@ func (r *Registry) Handle(ctx context.Context, payload []byte) error {
 		return fmt.Errorf("connector: decode deploy payload: %w", err)
 	}
 	return r.Deploy(ctx, p)
+}
+
+// TargetVantage declares where a connector's deploy work must EXECUTE (epic A3).
+// It is a property of what the target physically is, decided at registration by
+// the shipped census in the control plane's composition root — never derived
+// from transport details and never taken from a tenant's request.
+//
+// The distinction matters because it decides which agent role may claim the
+// work (A2): a host agent acts on the machine it runs on, a network relay acts
+// on things that cannot run an agent at all.
+type TargetVantage string
+
+const (
+	// VantageControlPlane: the work executes inside the control plane process.
+	// This is the fail-closed default for anything undeclared, and the permanent
+	// home of targets that are neither a host nor an in-segment appliance (cloud
+	// certificate stores reached over public APIs). Control-plane execution for
+	// host/appliance targets is the deprecated interim (doctrine D5) — the
+	// declaration is what lets the claim path move the work out.
+	VantageControlPlane TargetVantage = "control_plane"
+	// VantageHostAgent: the connector mutates the machine it runs on — files,
+	// local exec, a co-resident service reload. The right executor is an agent
+	// ON that machine, holding the host role.
+	VantageHostAgent TargetVantage = "host_agent"
+	// VantageNetworkRelay: the target is an appliance or device that cannot host
+	// an agent (an F5, a NetScaler, a firewall) and is driven over its API from
+	// inside its network segment. The right executor is a relay holding the
+	// network role.
+	VantageNetworkRelay TargetVantage = "network_relay"
+)
+
+// validTargetVantage reports whether v is a declared vantage value.
+func validTargetVantage(v TargetVantage) bool {
+	switch v {
+	case VantageControlPlane, VantageHostAgent, VantageNetworkRelay:
+		return true
+	default:
+		return false
+	}
+}
+
+// DeclareTargetVantage records where a registered connector's work executes.
+// Like MarkTLSPostureCapable, it is a separate, auditable registration step
+// rather than a method on the Connector interface: the census is a closed claim
+// made by the composition root, not something connector code asserts about
+// itself. Declaring an unknown vantage or an unregistered connector errors so a
+// typo cannot silently leave a connector control-plane-bound.
+func (r *Registry) DeclareTargetVantage(name string, vantage TargetVantage) error {
+	if r == nil || name == "" {
+		return fmt.Errorf("connector: target vantage requires registry and connector name")
+	}
+	if !validTargetVantage(vantage) {
+		return fmt.Errorf("connector: %q declares unknown target vantage %q", name, vantage)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.factories[name] == nil && r.connectors[name] == nil {
+		return fmt.Errorf("connector: cannot declare vantage for unregistered connector %q", name)
+	}
+	if r.vantage == nil {
+		r.vantage = map[string]TargetVantage{}
+	}
+	r.vantage[name] = vantage
+	return nil
+}
+
+// TargetVantageFor returns where the named connector's work executes. Undeclared
+// or unknown names fail closed to VantageControlPlane: work nobody has audited
+// for agent execution stays where it always ran, rather than becoming claimable
+// by an agent that cannot perform it — mirroring how an undeclared job kind is
+// refused at claim time.
+func (r *Registry) TargetVantageFor(name string) TargetVantage {
+	if r == nil {
+		return VantageControlPlane
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if v, ok := r.vantage[name]; ok && validTargetVantage(v) {
+		return v
+	}
+	return VantageControlPlane
 }

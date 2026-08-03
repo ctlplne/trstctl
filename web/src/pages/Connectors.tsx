@@ -11,6 +11,31 @@ import { formatDateTime } from "@/i18n/format";
 import { api, type ConnectorCatalogItem, type ConnectorDelivery, type DeploymentTarget, type Identity, type OutboxCircuit } from "@/lib/api";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
+// VantageBadge names where a connector's deploy work executes (epic A3), read
+// from the live registry census. The distinction the operator cares about: work
+// on a host they can put an agent on, work a network relay fronts for an
+// appliance, or work the control plane keeps (cloud stores, and anything not
+// yet audited for agent execution).
+function VantageBadge({ vantage }: { vantage: string }) {
+  if (vantage === "host_agent") {
+    return (
+      <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">{translateNow("source.vantage.host.a3vant0002")}</span>
+    );
+  }
+  if (vantage === "network_relay") {
+    return (
+      <span className="rounded-full border border-status-warning px-2 py-0.5 text-xs text-status-warning">
+        {translateNow("source.vantage.relay.a3vant0003")}
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+      {translateNow("source.vantage.control.plane.a3vant0004")}
+    </span>
+  );
+}
+
 export function Connectors() {
   const { t } = useTranslation();
   const [catalog, setCatalog] = useState<ConnectorCatalogItem[] | null>(null);
@@ -406,6 +431,7 @@ export function Connectors() {
                     <th scope="col">{translateNow("source.connector.8f0d706fff")}</th>
                     <th scope="col">{translateNow("source.kind.f5387f9bb6")}</th>
                     <th scope="col">{translateNow("source.delivery.mode.c9585346ea")}</th>
+                    <th scope="col">{translateNow("source.executes.on.a3vant0001")}</th>
                     <th scope="col">{translateNow("source.rollback.evidence.bf960c995c")}</th>
                   </tr>
                 </thead>
@@ -415,6 +441,9 @@ export function Connectors() {
                       <td className="font-mono text-xs font-semibold">{connector.name}</td>
                       <td>{connector.kind}</td>
                       <td>{connector.delivery_mode}</td>
+                      <td>
+                        <VantageBadge vantage={connector.target_vantage} />
+                      </td>
                       <td>{connector.rollback}</td>
                     </tr>
                   ))}
