@@ -141,8 +141,17 @@ func TestShippedRelayJobKindsAreExecutableByTheBinary(t *testing.T) {
 	}
 	sources := readAgentBinarySources(t)
 	for _, kind := range shipped {
-		if len(kind.Connectors) == 0 {
-			t.Errorf("relay job kind %q declares no connectors; a kind with no executor is not shipped", kind.Kind)
+		// Connector work must name the connectors this build carries. Kinds that
+		// are not connector work legitimately name none: a revocation probe
+		// reads public distribution points and drives no connector at all, and
+		// demanding a fake one would be the kind of paperwork that teaches
+		// people to write fake entries.
+		connectorWork := strings.HasPrefix(kind.Kind, "connector.")
+		if connectorWork && len(kind.Connectors) == 0 {
+			t.Errorf("connector job kind %q declares no connectors; a kind with no executor is not shipped", kind.Kind)
+		}
+		if !connectorWork && len(kind.Connectors) != 0 {
+			t.Errorf("non-connector job kind %q declares connectors %v; that reads as connector work it does not do", kind.Kind, kind.Connectors)
 		}
 		// The binary must actually run the loop for a declared kind, not merely
 		// link the package. RunOnceWithHost is what the binary calls (D1 gave

@@ -88,7 +88,10 @@ var agentJobKindVantage = map[string][]string{
 	"discovery.run":      {mtls.AgentRoleHost},
 	"trust.distribute":   {mtls.AgentRoleHost},
 	"endpoint.verify":    {mtls.AgentRoleNetwork},
-	"revocation.probe":   {mtls.AgentRoleNetwork},
+	// R1: reads public distribution points from a vantage inside the segment,
+	// because the CDPs that matter most are internal ones a SaaS control plane
+	// cannot reach by design.
+	"revocation.probe": {mtls.AgentRoleNetwork},
 	"connector.deploy":   {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.rollback": {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.test":     {mtls.AgentRoleHost, mtls.AgentRoleNetwork},

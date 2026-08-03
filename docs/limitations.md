@@ -579,6 +579,44 @@ MAY claim the row once executors ship with the relay runtime. The `roles` column
 **projection** for the console only: writing `network` into it grants nothing,
 because the certificate still says host and the claim path still refuses.
 
+### Revocation distribution points are monitored, not just recorded
+
+Every inventoried certificate has carried its CDP and OCSP URLs since discovery
+shipped — `internal/crypto/certinfo` parses them — and until now nothing fetched
+one. That gap is quietly serious. A CRL whose `nextUpdate` has passed does not
+announce itself: relying parties either fail closed and break the service, or
+soft-fail and stop checking revocation at all. Neither appears on any dashboard
+until an incident, while the CA's operator believes revocation works because
+publishing succeeded once.
+
+`revocation.probe` is now a relay job. It fetches each distinct distribution
+point, parses the CRL, verifies its signature against the issuer when one is
+supplied, and reports `thisUpdate`/`nextUpdate`, latency, and revoked count.
+Endpoints are deduplicated before probing: one CA's CDP is named by every
+certificate it issued, and walking the raw list would be monitoring that causes
+the outage it watches for.
+
+It is a RELAY job deliberately. The distribution points that matter most are
+internal — an AD CS CRL on `http://pki.corp.internal/certenroll/` is unreachable
+from a SaaS control plane by design — so monitoring only what is reachable from
+outside would inventory exactly the endpoints least likely to break.
+
+Five outcomes, kept distinct because they need different people. **fresh** and
+**expiring** differ by a warning window, and expiring is the one worth alerting
+on: after `nextUpdate` passes, relying parties are already failing. **stale**
+means that has happened. **unreachable** is deliberately not the same as stale.
+And **unparseable** catches the case that fools status-code checks: a proxy or
+captive portal answering 200 with HTML. An LDAP CDP reports unparseable with its
+scheme named, rather than unreachable, because sending someone to check a
+network path that was never the problem wastes the hour that mattered. Whether
+the signature was checked is reported explicitly — "we did not check" and "it
+verified" must never read the same.
+
+**What is not served:** OCSP responder probing. This walks CRL distribution
+points only. The AIA OCSP URLs are parsed and stored but not yet fetched, so an
+estate that relies on OCSP rather than CRLs is not yet covered by this, and the
+revocation health view says so rather than showing an empty list as clean.
+
 ### Just-in-time credential leases: the brain ships references, not secrets
 
 A relay executes against things that cannot run an agent — an F5, a NetScaler —

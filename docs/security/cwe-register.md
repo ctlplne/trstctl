@@ -71,8 +71,8 @@ not this file.
 | `internal/agent/k8s/client.go:29` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/relay/relay_test.go:119` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:161` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:273` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:331` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:275` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:333` | reference NAME (CWE-798) |
 | `internal/agent/transport/agentservice.go:518` | an RPC method name, not a credential. The material this |
 | `internal/aimodel/redactor_test.go:39` | fixture: AWS's documented example key id; the redactor must catch it (CWE-798) |
 | `internal/aimodel/redactor_test.go:69` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

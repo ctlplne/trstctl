@@ -44,7 +44,9 @@ const (
 // ClaimableKinds are the job kinds a relay asks for. Only connector work: a
 // relay's whole purpose is driving things that cannot host an agent, and asking
 // for host-local kinds would be asking for work it cannot do.
-func ClaimableKinds() []string { return []string{"connector.deploy", "connector.test"} }
+func ClaimableKinds() []string {
+	return []string{"connector.deploy", "connector.test", KindRevocationProbe}
+}
 
 // KindConnectorTest is the dry-run kind (epic D5): resolve everything a deploy
 // needs, probe the target, describe what would change, mutate nothing.
@@ -98,6 +100,13 @@ func RunOnceWithHost(
 // from a slow one, and the difference matters to whoever is waiting for the
 // certificate to land.
 func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, job Job) bool {
+	// A revocation probe carries a different payload and needs no credential at
+	// all — it reads public distribution points. Routing it before the deploy
+	// path keeps it from redeeming material it has no use for (R1).
+	if job.Kind == KindRevocationProbe {
+		return runRevocationProbe(ctx, ch, client, job)
+	}
+
 	var intent DeployIntent
 	if err := decodeIntent(job.Payload, &intent); err != nil {
 		report(ctx, ch, job, OutcomeFailed, "job payload is not a deploy intent")

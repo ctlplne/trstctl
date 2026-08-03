@@ -219,8 +219,10 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 		if len(s.Flags) == 0 {
 			t.Errorf("shipped kind %q needs a flag and must name it, or it reads as coverage that is not running", s.Kind)
 		}
-		if len(s.Connectors) == 0 {
-			t.Errorf("shipped kind %q declares no connectors", s.Kind)
+		// Connector work must name its connectors; a revocation probe drives
+		// none and must not pretend otherwise.
+		if strings.HasPrefix(s.Kind, "connector.") && len(s.Connectors) == 0 {
+			t.Errorf("connector kind %q declares no connectors", s.Kind)
 		}
 	}
 	if !kinds["connector.deploy"] || !kinds[relay.KindConnectorTest] {
@@ -409,4 +411,99 @@ func TestHostExecutorRefusesWorkItCannotDo(t *testing.T) {
 func connectorLocalOpsForTest(t *testing.T) connector.LocalOpsConfig {
 	t.Helper()
 	return connector.LocalOpsConfig{AllowedRoots: []string{t.TempDir()}}
+}
+
+// TestRevocationProbeDistinguishesItsFailures is R1's point. "Unreachable",
+// "stale", and "answered but not a CRL" are three different problems needing
+// three different people, and a probe that reported them alike would be worse
+// than none — it would send operators confidently to the wrong place.
+func TestRevocationProbeDistinguishesItsFailures(t *testing.T) {
+	// A proxy or captive portal returning HTML with a 200. This is the case
+	// that looks like success to anything checking only the status code.
+	html := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("<html><body>Authentication required</body></html>"))
+	}))
+	defer html.Close()
+
+	notFound := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer notFound.Close()
+
+	dead := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	deadURL := dead.URL
+	dead.Close()
+
+	report, err := relay.ProbeRevocation(context.Background(), html.Client(), relay.RevocationProbeIntent{
+		Endpoints: []string{html.URL, notFound.URL, deadURL, "ldap://pki.corp.internal/cn=crl", "not a url at all"},
+	})
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if report.Healthy {
+		t.Fatal("a report full of broken endpoints claimed healthy")
+	}
+	byEndpoint := map[string]relay.RevocationFinding{}
+	for _, f := range report.Findings {
+		byEndpoint[f.Endpoint] = f
+	}
+	if got := byEndpoint[html.URL].Status; got != relay.RevocationUnparseable {
+		t.Errorf("a 200 of HTML classified %q, want unparseable — this is the captive-portal case", got)
+	}
+	if got := byEndpoint[notFound.URL].Status; got != relay.RevocationUnreachable {
+		t.Errorf("HTTP 404 classified %q, want unreachable", got)
+	}
+	if got := byEndpoint[deadURL].Status; got != relay.RevocationUnreachable {
+		t.Errorf("a closed port classified %q, want unreachable", got)
+	}
+	// An LDAP CDP is real in AD CS estates. Saying it is not fetchable beats
+	// reporting it unreachable, which sends someone to check a network path that
+	// was never the problem.
+	if got := byEndpoint["ldap://pki.corp.internal/cn=crl"].Status; got != relay.RevocationUnparseable {
+		t.Errorf("an LDAP CDP classified %q, want unparseable with a scheme explanation", got)
+	}
+	// Every endpoint is probed even after one fails: an operator needs the whole
+	// picture, not the first problem.
+	if len(report.Findings) != 5 {
+		t.Fatalf("probed %d of 5 endpoints; a failure must not stop the sweep", len(report.Findings))
+	}
+}
+
+// TestRevocationProbeDedupesEndpoints: one CA's CDP is named by every
+// certificate it issued. Probing the raw list would be monitoring that causes
+// the outage it watches for.
+func TestRevocationProbeDedupesEndpoints(t *testing.T) {
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	repeated := make([]string, 0, 50)
+	for i := 0; i < 50; i++ {
+		repeated = append(repeated, srv.URL)
+	}
+	report, err := relay.ProbeRevocation(context.Background(), srv.Client(), relay.RevocationProbeIntent{
+		Endpoints: repeated,
+	})
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if len(report.Findings) != 1 {
+		t.Fatalf("50 copies of one endpoint produced %d findings, want 1", len(report.Findings))
+	}
+	if hits != 1 {
+		t.Fatalf("the probe hit the endpoint %d times, want 1", hits)
+	}
+}
+
+// TestRevocationProbeNeedsEndpoints: an empty probe reporting healthy would be
+// the worst possible answer — a green revocation dashboard for an estate nobody
+// checked.
+func TestRevocationProbeNeedsEndpoints(t *testing.T) {
+	if _, err := relay.ProbeRevocation(context.Background(), http.DefaultClient,
+		relay.RevocationProbeIntent{}); err == nil {
+		t.Fatal("a probe with no endpoints succeeded; an empty green report is worse than none")
+	}
 }

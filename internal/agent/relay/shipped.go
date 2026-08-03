@@ -20,7 +20,10 @@ type ShippedJobKind struct {
 	// Kind is the outbox destination the agent claims.
 	Kind string
 	// Connectors are the connector implementations this build carries for that
-	// kind. A kind with no connectors is not shipped, whatever it claims.
+	// kind. A connector.* kind with none is not shipped, whatever it claims.
+	// Kinds that are not connector work legitimately have none — a revocation
+	// probe reads public distribution points and drives no connector at all —
+	// so the guard checks this only for the kinds it applies to.
 	Connectors []string
 	// Flags are the agent flags that switch this kind on. A kind with flags
 	// executes nothing until an operator sets them, so advertising it without
@@ -53,6 +56,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Connectors: RelayConnectorKinds(),
 			Flags:      []string{"--relay-claim"},
 		},
+		{
+			// R1: revocation distribution-point health. It carries no credential
+			// — CRLs are public — so it is the one shipped kind that redeems
+			// nothing, and the loop routes it before the redemption step for
+			// exactly that reason.
+			Kind:  KindRevocationProbe,
+			Flags: []string{"--relay-claim"},
+		},
 	}
 }
 
@@ -66,6 +77,5 @@ func UnshippedJobKinds() map[string]string {
 		"discovery.run":      "host-local work: a relay has no filesystem of the appliance's to enumerate",
 		"trust.distribute":   "host-local work: installs roots in a host's own trust store",
 		"endpoint.verify":    "owned by the verification epics; no relay-side prober ships yet",
-		"revocation.probe":   "owned by the verification epics; no relay-side prober ships yet",
 	}
 }
