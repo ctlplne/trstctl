@@ -3118,6 +3118,31 @@ Issuer = TypedDict(
     total=False,
 )
 
+IssuerCapability = TypedDict(
+    'IssuerCapability',
+    {
+        'discover': bool,
+        'issue': bool,
+        'issuer': str,
+        'key_handling': str,
+        'renew': bool,
+        'revoke': bool,
+        'revoke_note': str,
+        'validation': str,
+    },
+    total=False,
+)
+
+IssuerCapabilityMatrix = TypedDict(
+    'IssuerCapabilityMatrix',
+    {
+        'guidance': str,
+        'issuers': list[dict[str, Any]],
+        'revoke_capable_count': int,
+    },
+    total=False,
+)
+
 IssuerList = TypedDict(
     'IssuerList',
     {

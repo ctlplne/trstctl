@@ -83,6 +83,7 @@ var coreCommandTable = []Command{
 
 	{Name: []string{"issuers", "create"}, Method: "POST", Path: "/api/v1/issuers", Body: bodyFile, Summary: "Create an issuer"},
 	{Name: []string{"issuers", "list"}, Method: "GET", Path: "/api/v1/issuers", Query: []string{"limit", "cursor"}, Summary: "List issuers"},
+	{Name: []string{"issuers", "capabilities"}, Method: "GET", Path: "/api/v1/issuers/capabilities", Summary: "Show what each issuer kind can do: discover, issue, renew, revoke, key handling, validation"},
 	{Name: []string{"issuers", "get"}, Method: "GET", Path: "/api/v1/issuers/{id}", Summary: "Get an issuer"},
 
 	{Name: []string{"ca", "ceremonies", "start"}, Method: "POST", Path: "/api/v1/ca/ceremonies", Body: bodyFile, Summary: "Start an m-of-n CA key ceremony"},

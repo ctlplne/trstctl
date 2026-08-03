@@ -140,11 +140,12 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// and B4's three `acme eab` commands raised it to 312: both epics added served
 	// routes whose CLI parity was owed and had gone unpaid, which is precisely the
 	// gap this ratchet and TestEveryAPIOperationHasACLICommand exist to catch.
-	// F1's `posture adcs` raised it to 313.
+	// F1's `posture adcs` raised it to 314; R2's `issuers capabilities` raised
+	// it to 314 and is mapped onto the issuer feature rows in the same change.
 	// Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 313 {
-		t.Fatalf("CLI commands = %d, want 313", len(out))
+	if len(out) != 314 {
+		t.Fatalf("CLI commands = %d, want 314", len(out))
 	}
 	return out
 }

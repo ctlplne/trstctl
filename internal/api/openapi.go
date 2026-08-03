@@ -1436,6 +1436,21 @@ func componentSchemas() map[string]*Schema {
 		"detail":  str(),
 		"action":  str(),
 	}, "kind", "subject", "detail")
+	// R2: what each authority can actually do through trstctl.
+	issuerCapability := object(map[string]*Schema{
+		"issuer": str(), "discover": {Type: "boolean"}, "issue": {Type: "boolean"},
+		"renew": {Type: "boolean"}, "revoke": {Type: "boolean"},
+		"key_handling": {Type: "string", Enum: []string{"requester_csr", "authority_generated"}},
+		"validation": {Type: "string", Enum: []string{
+			"acme_challenge", "account_scoped", "organizational", "internal",
+		}},
+		"revoke_note": str(),
+	}, "issuer", "discover", "issue", "renew", "revoke", "key_handling", "validation")
+	issuerCapabilityMatrix := object(map[string]*Schema{
+		"issuers":              {Type: "array", Items: ref("IssuerCapability")},
+		"revoke_capable_count": {Type: "integer"},
+		"guidance":             str(),
+	}, "issuers", "revoke_capable_count", "guidance")
 	discoveryCoverage := object(map[string]*Schema{
 		"generated_at":              timestamp(),
 		"observed":                  {Type: "integer"},
@@ -3873,6 +3888,8 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoringSource":                discoveryMonitoringSource,
 		"DiscoveryMonitoring":                      discoveryMonitoring,
 		"DiscoveryCoverage":                        discoveryCoverage,
+		"IssuerCapability":                         issuerCapability,
+		"IssuerCapabilityMatrix":                   issuerCapabilityMatrix,
 		"DiscoverySegmentCoverage":                 discoverySegmentCoverage,
 		"DiscoveryProvenanceSummary":               discoveryProvenanceSummary,
 		"DiscoveryUnknown":                         discoveryUnknown,

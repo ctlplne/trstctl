@@ -184,6 +184,7 @@ func (v *vaultStub) handle(w http.ResponseWriter, r *http.Request) {
 		CommonName string `json:"common_name"`
 		AltNames   string `json:"alt_names"`
 		TTL        string `json:"ttl"`
+		Serial     string `json:"serial_number"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	v.mu.Lock()
@@ -194,6 +195,19 @@ func (v *vaultStub) handle(w http.ResponseWriter, r *http.Request) {
 	failWith := v.failWith
 	v.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
+	// R2: Vault's revoke endpoint. Answering it properly is what lets the
+	// revocation test assert that the authority was CONTACTED rather than
+	// asserting on an error, which would pass just as well if the request were
+	// malformed.
+	if strings.HasSuffix(r.URL.Path, "/revoke") {
+		if failWith != "" {
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]any{"errors": []string{failWith}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"revocation_time": 1}})
+		return
+	}
 	if failWith != "" {
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]any{"errors": []string{failWith}})

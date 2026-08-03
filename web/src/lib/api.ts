@@ -22,6 +22,7 @@ import type {
   ACMEEABCredential,
   ACMEEABPosture,
   AgentJobPosture,
+  IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
   ACMEDNS01ProviderCatalog,
@@ -500,6 +501,7 @@ export type {
   ACMEEABCredential,
   ACMEEABPosture,
   AgentJobPosture,
+  IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
   ACMEDNS01ProviderCatalog,
@@ -1205,6 +1207,7 @@ export interface Api {
   owners(): Promise<Owner[]>;
   createOwner(input: OwnerRequest): Promise<Owner>;
   issuers(): Promise<Issuer[]>;
+  issuerCapabilities(): Promise<IssuerCapabilityMatrix>;
   createIssuer(input: IssuerRequest): Promise<Issuer>;
   protocolProfileStatus(): Promise<ProtocolProfileStatus>;
   activateProtocolProfile(): Promise<ProtocolProfileStatus>;
@@ -1529,6 +1532,7 @@ const liveApi: Api = {
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),
   issuers: () => req<{ items: Issuer[] }>("/api/v1/issuers").then((r) => r.items ?? []),
+  issuerCapabilities: () => req<IssuerCapabilityMatrix>("/api/v1/issuers/capabilities"),
   createIssuer: (input) => mutate<Issuer>("POST", "/api/v1/issuers", input),
   protocolProfileStatus: () => req<ProtocolProfileStatus>("/api/v1/setup/protocols"),
   activateProtocolProfile: () => mutate<ProtocolProfileStatus>("POST", "/api/v1/setup/protocols/activate"),

@@ -8471,6 +8471,76 @@
         ],
         "type": "object"
       },
+      "IssuerCapability": {
+        "properties": {
+          "discover": {
+            "type": "boolean"
+          },
+          "issue": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "key_handling": {
+            "enum": [
+              "requester_csr",
+              "authority_generated"
+            ],
+            "type": "string"
+          },
+          "renew": {
+            "type": "boolean"
+          },
+          "revoke": {
+            "type": "boolean"
+          },
+          "revoke_note": {
+            "type": "string"
+          },
+          "validation": {
+            "enum": [
+              "acme_challenge",
+              "account_scoped",
+              "organizational",
+              "internal"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer",
+          "discover",
+          "issue",
+          "renew",
+          "revoke",
+          "key_handling",
+          "validation"
+        ],
+        "type": "object"
+      },
+      "IssuerCapabilityMatrix": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "issuers": {
+            "items": {
+              "$ref": "#/components/schemas/IssuerCapability"
+            },
+            "type": "array"
+          },
+          "revoke_capable_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issuers",
+          "revoke_capable_count",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "IssuerList": {
         "properties": {
           "items": {
@@ -27900,6 +27970,53 @@
         ],
         "summary": "Create an issuer",
         "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/issuers/capabilities": {
+      "get": {
+        "operationId": "listIssuerCapabilities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuerCapabilityMatrix"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List per-issuer capabilities: discover, issue, renew, revoke, key handling, validation model",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/issuers/{id}": {

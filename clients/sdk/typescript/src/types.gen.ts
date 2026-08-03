@@ -2030,6 +2030,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issuers/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List per-issuer capabilities: discover, issue, renew, revoke, key handling, validation model */
+        get: operations["listIssuerCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuers/{id}": {
         parameters: {
             query?: never;
@@ -6623,6 +6640,23 @@ export interface components {
             public_key?: string;
             /** Format: uuid */
             tenant_id?: string;
+        };
+        IssuerCapability: {
+            discover: boolean;
+            issue: boolean;
+            issuer: string;
+            /** @enum {string} */
+            key_handling: "requester_csr" | "authority_generated";
+            renew: boolean;
+            revoke: boolean;
+            revoke_note?: string;
+            /** @enum {string} */
+            validation: "acme_challenge" | "account_scoped" | "organizational" | "internal";
+        };
+        IssuerCapabilityMatrix: {
+            guidance: string;
+            issuers: components["schemas"]["IssuerCapability"][];
+            revoke_capable_count: number;
         };
         IssuerList: {
             items: components["schemas"]["Issuer"][];
@@ -15373,6 +15407,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Issuer"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listIssuerCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuerCapabilityMatrix"];
                 };
             };
             /** @description client error */

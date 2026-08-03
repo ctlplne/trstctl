@@ -1008,6 +1008,22 @@ export const messages = {
     defaultMessage: "Declared segments swept",
     description: "C3: share of declared, non-excluded network segments swept within their own staleness window.",
   },
+  "source.revocation.r2cap00001": {
+    defaultMessage: "Revocation",
+    description: "R2: column showing whether trstctl can revoke through this issuer.",
+  },
+  "source.revoke.supported.r2cap00002": {
+    defaultMessage: "trstctl can revoke here",
+    description: "R2: this issuer kind has a shipped, tested revocation implementation.",
+  },
+  "source.revoke.elsewhere.r2cap00003": {
+    defaultMessage: "Revoke at the authority",
+    description: "R2: trstctl ships no revocation for this issuer; the note says where to go instead.",
+  },
+  "source.unknown.r2cap00004": {
+    defaultMessage: "Unknown — capability matrix unavailable",
+    description: "R2: the capability matrix could not be read; an absent answer is not a negative answer.",
+  },
   "discovery.coverage.percentValue": {
     defaultMessage: "{percent}%",
     description: "C3: segment coverage as a percentage.",

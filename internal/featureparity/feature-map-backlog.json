@@ -2257,6 +2257,7 @@
       "notes": "Closed by route-level feature-map evidence. CLM-03 adds served configured external-CA registry and upstream issuance through listExternalCAs/issueExternalCA plus CLI parity; CLM-04 adds Venafi TPP/TLS Protect as a served registry backend. COMPETE-058 adds served CAP-K8S-04 native Kubernetes CertificateSigningRequest posture, controller signing for approved CSRs, status-only RBAC, CLI/API disclosure, Workloads UI disclosure, and execution tests. COMPETE-057 adds served CAP-ISS-11 requester intake plus distinct-approval certificate issuance through /request, /approvals, profile/identity APIs, signer-backed issuance, certificate inventory projection, and event evidence. COMPETE-059 adds served CAP-K8S-07 TrustBundle distribution, CRD/RBAC manifests, API/CLI posture disclosure, Workloads UI disclosure, public-cert-only validation, and execution tests. TRACE-002 adds CA Hierarchy direct external-CA issuance through api.issueExternalCA, rendering outbox-pending and external-ca-issued states without exposing issued certificate PEM.",
       "api_surface": [
         "createIssuer",
+        "listIssuerCapabilities",
         "listIssuers",
         "getIssuer",
         "createIdentity",
@@ -2270,6 +2271,7 @@
       "api_na": "",
       "cli_surface": [
         "issuers create",
+        "issuers capabilities",
         "issuers list",
         "issuers get",
         "identities create",
@@ -12173,6 +12175,7 @@
         "listAgents",
         "listCertificates",
         "listIdentities",
+        "listIssuerCapabilities",
         "listIssuers",
         "listMCPTools",
         "listOwners",
@@ -12403,6 +12406,7 @@
         "identities transition",
         "issuers create",
         "issuers get",
+        "issuers capabilities",
         "issuers list",
         "mcp call",
         "mcp tools",

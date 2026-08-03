@@ -246,6 +246,8 @@ public final class OpenApiSchemas {
       "IncidentExecutionRequest",
       "IssuanceRegion",
       "Issuer",
+      "IssuerCapability",
+      "IssuerCapabilityMatrix",
       "IssuerList",
       "IssuerRequest",
       "KubernetesCSRSupport",

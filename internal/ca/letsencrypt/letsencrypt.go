@@ -95,3 +95,28 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 		Issuer:         p.name,
 	}, nil
 }
+
+var _ ca.Revoker = (*Plugin)(nil)
+
+// Revoke revokes through the ACME authority (epic R2, RFC 8555 §7.6).
+//
+// ACME has no serial-based revocation: the request carries the certificate's
+// DER, signed with the account key. So this needs the certificate itself, and
+// says so when it does not have one rather than sending a request that cannot
+// identify anything. An operator revoking a compromised key needs to know
+// immediately that trstctl could not do it, not later.
+func (p *Plugin) Revoke(ctx context.Context, req ca.RevokeRequest) error {
+	if p == nil || p.driver == nil {
+		return errors.New("letsencrypt: plugin is destroyed")
+	}
+	if len(req.CertificatePEM) == 0 {
+		return fmt.Errorf("letsencrypt: %w: ACME identifies the certificate to revoke by its bytes, "+
+			"and this request carries none — revocation by serial alone is not something the "+
+			"protocol offers", ca.ErrRevocationUnsupported)
+	}
+	block, _ := pem.Decode(req.CertificatePEM)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return errors.New("letsencrypt: certificate material is not a PEM CERTIFICATE block")
+	}
+	return p.driver.RevokeChain(ctx, block.Bytes, req.ReasonCode)
+}

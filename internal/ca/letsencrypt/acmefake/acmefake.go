@@ -32,6 +32,8 @@ type Server struct {
 	nonce  int
 	orders int
 	certs  map[string][]byte // path -> PEM chain
+	// revocations records revoke-cert requests that actually arrived (epic R2).
+	revocations []string
 }
 
 // NewServer starts a fake ACME CA backed by a fresh internal CA.
@@ -57,6 +59,15 @@ func (s *Server) Close() { s.ts.Close() }
 
 func (s *Server) u(path string) string { return s.ts.URL + path }
 
+// Revocations returns the raw revoke-cert requests this authority received.
+// A test asserts on the COUNT: the point is whether the authority was actually
+// contacted, not what the JWS decoded to.
+func (s *Server) Revocations() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.revocations...)
+}
+
 func (s *Server) nextNonce() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -68,8 +79,12 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.URL.Path == "/directory" {
-		_, _ = fmt.Fprintf(w, `{"newNonce":%q,"newAccount":%q,"newOrder":%q,"meta":{"termsOfService":%q}}`,
-			s.u("/new-nonce"), s.u("/new-account"), s.u("/new-order"), s.u("/terms"))
+		// revokeCert is advertised because the client only attempts revocation
+		// when the directory offers it (RFC 8555 §7.1.1). A double that omitted
+		// it would make the revoke test pass for the wrong reason — by never
+		// reaching the endpoint at all.
+		_, _ = fmt.Fprintf(w, `{"newNonce":%q,"newAccount":%q,"newOrder":%q,"revokeCert":%q,"meta":{"termsOfService":%q}}`,
+			s.u("/new-nonce"), s.u("/new-account"), s.u("/new-order"), s.u("/revoke-cert"), s.u("/terms"))
 		return
 	}
 
@@ -97,6 +112,17 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprint(w, `{"status":"valid","identifier":{"type":"dns","value":"example.test"}}`)
 	case strings.HasSuffix(r.URL.Path, "/finalize"):
 		s.finalize(w, r)
+	case r.URL.Path == "/revoke-cert":
+		// RFC 8555 §7.6. The body is a JWS whose payload carries the
+		// base64url DER of the certificate and an optional reason. The double
+		// records that the request ARRIVED, which is the property the test
+		// needs: a Revoke that returns nil without reaching here is exactly
+		// what the epic exists to prevent.
+		body, _ := io.ReadAll(r.Body)
+		s.mu.Lock()
+		s.revocations = append(s.revocations, string(body))
+		s.mu.Unlock()
+		w.WriteHeader(http.StatusOK)
 	case strings.HasPrefix(r.URL.Path, "/cert/"):
 		s.mu.Lock()
 		pem := s.certs[r.URL.Path]

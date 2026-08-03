@@ -299,3 +299,32 @@ func assembleChain(data signData) ([]byte, error) {
 	}
 	return out, nil
 }
+
+var _ catemplate.RevokingBackend = (*backend)(nil)
+
+// Revoke revokes through Vault's PKI secrets engine (epic R2).
+//
+// Vault revokes by serial number — POST {mount}/revoke with a serial_number —
+// so unlike ACME this needs no copy of the certificate. The serial is required,
+// and a request without one is refused rather than sent: Vault would answer
+// with an error the operator would have to interpret, and "trstctl had nothing
+// to revoke with" is the more useful sentence.
+func (b *backend) Revoke(ctx context.Context, req ca.RevokeRequest) error {
+	serial := strings.TrimSpace(req.Serial)
+	if serial == "" {
+		return fmt.Errorf("vaultpki: revocation needs a serial number; none supplied")
+	}
+	if err := b.validateEndpoint(); err != nil {
+		return err
+	}
+	var env vaultEnvelope
+	defer env.destroy()
+	if err := b.postJSON(ctx, b.revokeURL(), map[string]string{"serial_number": serial}, &env); err != nil {
+		return fmt.Errorf("vaultpki: revoke %s: %w", serial, err)
+	}
+	return nil
+}
+
+func (b *backend) revokeURL() string {
+	return b.cfg.BaseURL + "/v1/" + b.cfg.Mount + "/revoke"
+}

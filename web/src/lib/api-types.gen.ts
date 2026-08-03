@@ -2184,6 +2184,23 @@ export interface Issuer {
   tenant_id?: string;
 }
 
+export interface IssuerCapability {
+  discover: boolean;
+  issue: boolean;
+  issuer: string;
+  key_handling: "requester_csr" | "authority_generated";
+  renew: boolean;
+  revoke: boolean;
+  revoke_note?: string;
+  validation: "acme_challenge" | "account_scoped" | "organizational" | "internal";
+}
+
+export interface IssuerCapabilityMatrix {
+  guidance: string;
+  issuers: IssuerCapability[];
+  revoke_capable_count: number;
+}
+
 export interface IssuerList {
   items: Issuer[];
   next_cursor?: string;

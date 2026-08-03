@@ -23,6 +23,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -236,6 +237,39 @@ func httpChallenge(authz *acme.Authorization) *acme.Challenge {
 		if c.Type == "http-01" {
 			return c
 		}
+	}
+	return nil
+}
+
+// RevokeChain revokes a certificate through the ACME authority (epic R2,
+// RFC 8555 §7.6).
+//
+// It lives here rather than in the issuer package for the same reason
+// IssueChain does: the request is JWS-signed with the account key, and account
+// keys stay behind the AN-3 boundary. The issuer package hands over the
+// certificate and a reason and never touches a key.
+//
+// ACME identifies the certificate by its DER, not by serial — the protocol has
+// no serial-based revocation — so the caller must supply the certificate
+// itself. That is a real constraint on the operation, not an implementation
+// choice: trstctl cannot revoke an ACME certificate it does not hold a copy of.
+func (d *Driver) RevokeChain(ctx context.Context, certDER []byte, reason int) error {
+	if d == nil || d.client == nil {
+		return errors.New("acmekey: driver is destroyed")
+	}
+	if len(certDER) == 0 {
+		return errors.New("acmekey: ACME revocation identifies the certificate by its bytes; none supplied")
+	}
+	// The account key authorizes the revocation. acme.CRLReasonUnspecified is
+	// the protocol default when a caller supplies no meaningful reason; passing
+	// a reason the authority rejects would fail the whole call, so an
+	// out-of-range value is normalized rather than sent.
+	crlReason := acme.CRLReasonCode(reason)
+	if reason < 0 || reason > 10 {
+		crlReason = acme.CRLReasonUnspecified
+	}
+	if err := d.client.RevokeCert(ctx, nil, certDER, crlReason); err != nil {
+		return fmt.Errorf("acmekey: revoke: %w", err)
 	}
 	return nil
 }

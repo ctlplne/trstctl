@@ -42,6 +42,7 @@ receipt cannot certify it.
 | F36 | API key / token inventory | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
 | F17 | Certificate Transparency monitoring | docs/features/observability-and-risk.md |
 | Discovery coverage & provenance | Served: coverage is measured against **operator-declared segments** rather than against what discovery happened to find, with a per-segment staleness SLO, declared exclusions carrying their reason, and a named blind-spot register. Every certificate carries provenance — which source last observed it, of what kind, and when — distinct from when trstctl first recorded it. Headlined on the Discovery console. **Nothing is rollable into coverage until an operator declares a segment**: an inventory built from findings can describe what it found and nothing else, so an estate with no declarations reports no coverage rather than 100% | [Coverage, provenance and blind spots](#coverage-provenance-and-blind-spots) |
+| Revocation through external issuers | Served for **letsencrypt (ACME), vaultpki and ejbca** — each proven end to end against that authority's own protocol, asserting the AUTHORITY was contacted rather than that the call returned nil. Every other issuer kind reports `revoke: false` on the served capability matrix with a note naming where to revoke instead. A documented vendor endpoint trstctl does not drive is **not** counted as a capability. Revocation that cannot reach the authority **fails visibly**; there is no silent no-op | [Per-issuer capabilities](#per-issuer-capabilities) |
 | F18 | Drift detection | docs/features/observability-and-risk.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
 | F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
@@ -2407,6 +2408,47 @@ automated renewal produces a correct inventory row and a certificate no endpoint
 can serve with. [Key custody](custody.md) states this in full. Host-executed
 renewal is what fixes it, and until it lands the count of successors reading
 `control_plane` is the honest measure of the gap.
+
+## Per-issuer capabilities
+
+`GET /api/v1/issuers/capabilities` and `trstctl issuers capabilities` serve one
+row per authority kind: discover, issue, renew, revoke, where the private key is
+generated, and what the authority validates before issuing. The console shows
+revocation beside each configured issuer.
+
+**Revoke is the field that matters, and it is deliberately conservative.** It is
+true only where this build ships an implementation that contacts the authority
+and is proven against that authority's protocol by a test:
+
+| Issuer | Revoke | How |
+|---|---|---|
+| `letsencrypt` | yes | RFC 8555 §7.6 `revokeCert`, JWS-signed with the account key |
+| `vaultpki` | yes | `POST {mount}/revoke` by serial number |
+| `ejbca` | yes | REST `PUT /certificate/{issuer_dn}/{serial}/revoke` |
+
+Everything else reports `false` with a note saying where to revoke instead.
+DigiCert, Sectigo, Venafi, AWS Private CA, Google CAS and step-ca all document a
+revocation API; trstctl does not drive any of them, and a documented endpoint
+nobody has implemented is a plan rather than a capability. AD CS revocation runs
+through the CA's own management interface, and Azure Key Vault disables
+certificates rather than revoking them.
+
+**No silent no-ops.** A revocation request to an authority that cannot revoke
+returns `ErrRevocationUnsupported`, and the console disables the path rather
+than offering it. This is the specific failure the epic exists to remove: an
+operator revoking a compromised key and being told it worked, while the
+authority still considers the certificate valid, is worse off than one told
+plainly that trstctl cannot do it — the second sends them to the vendor console,
+the first sends them home.
+
+ACME is worth one further note. The protocol identifies the certificate to
+revoke by its DER, not by serial, so trstctl cannot revoke an ACME certificate
+it does not hold a copy of. A request carrying only a serial is refused with the
+reason rather than sent as something the protocol cannot express.
+
+A CI guard parses every issuer package and fails the build if the matrix and the
+code disagree in either direction — a claimed capability with no implementation,
+or an implementation the matrix does not advertise.
 
 ## Coverage, provenance and blind spots
 

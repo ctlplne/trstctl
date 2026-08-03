@@ -44,6 +44,7 @@ import {
   type ExternalCAIssuedCertificate,
   type ExternalCAIssueRequest,
   type Issuer,
+  type IssuerCapabilityMatrix,
   type IssuerRequest,
   type ManagedKey,
   type Profile,
@@ -119,6 +120,10 @@ export function CAHierarchy() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = caWorkspaceTabFromSearchParam(searchParams.get("tab"));
   const [issuers, setIssuers] = useState<Issuer[]>([]);
+  // R2: the served capability matrix. Null means it could not be read, and the
+  // table says "unknown" rather than implying revocation is unavailable — an
+  // absent answer and a negative answer are different facts.
+  const [capabilities, setCapabilities] = useState<IssuerCapabilityMatrix | null>(null);
   const [caDiscovery, setCADiscovery] = useState<CADiscovery | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,7 +181,20 @@ export function CAHierarchy() {
   async function load() {
     setLoading(true);
     setNotice(null);
-    const [issuerResult, discoveryResult, authoritiesResult] = await Promise.allSettled([api.issuers(), api.caDiscoveryInventory(), api.caAuthorities()]);
+    // R2: the capability matrix is read defensively. A control plane that does
+    // not serve the route — an older one, or one where it is unavailable — must
+    // leave the column reading "unknown" rather than taking the page down. The
+    // console already treats an absent matrix as a different fact from a
+    // negative one, so this degrades to the honest answer.
+    const capabilityRead =
+      typeof api.issuerCapabilities === "function" ? api.issuerCapabilities() : Promise.reject(new Error("unavailable"));
+    const [issuerResult, discoveryResult, authoritiesResult, capabilityResult] = await Promise.allSettled([
+      api.issuers(),
+      api.caDiscoveryInventory(),
+      api.caAuthorities(),
+      capabilityRead,
+    ]);
+    setCapabilities(capabilityResult.status === "fulfilled" ? capabilityResult.value : null);
     if (issuerResult.status === "fulfilled") {
       setIssuers(issuerResult.value);
     } else {
@@ -717,7 +735,7 @@ export function CAHierarchy() {
           </EmptyState>
         )}
         {!loading && !notice && sortedIssuers.length > 0 && (
-          <IssuerTable issuers={sortedIssuers} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />
+          <IssuerTable issuers={sortedIssuers} capabilities={capabilities} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />
         )}
       </section>
 
@@ -2758,7 +2776,7 @@ function KeyValue({ label, mono = false, value }: { label: string; mono?: boolea
   );
 }
 
-function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; probe: ProbeState | null; onTestConnection: (issuer: Issuer) => void }) {
+function IssuerTable({ issuers, capabilities, onTestConnection, probe }: { issuers: Issuer[]; capabilities: IssuerCapabilityMatrix | null; probe: ProbeState | null; onTestConnection: (issuer: Issuer) => void }) {
   return (
     <div className="ui-panel overflow-x-auto">
       <table className="ui-table min-w-[60rem]">
@@ -2771,6 +2789,7 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
             <th scope="col">{translateNow("source.chain.dae0896cbc")}</th>
             <th scope="col">{translateNow("source.public.key.4ee252fb73")}</th>
             <th scope="col">{translateNow("source.certificates.16f637921e")}</th>
+            <th scope="col">{translateNow("source.revocation.r2cap00001")}</th>
             <th scope="col">{translateNow("source.connection.639a40e82b")}</th>
           </tr>
         </thead>
@@ -2786,6 +2805,24 @@ function IssuerTable({ issuers, onTestConnection, probe }: { issuers: Issuer[]; 
                 <a className="text-brand-accent underline" href={`/certificates?issuer=${encodeURIComponent(issuer.id)}`}>
                   {translateNow("source.certificates.for.143f183f89")} {issuer.name}
                 </a>
+              </td>
+              {/* R2: whether trstctl can revoke THROUGH this authority, from
+                  the served capability matrix. An operator holding a compromised
+                  key needs to know before they reach for the button, not after
+                  a revocation that went nowhere. */}
+              <td className="max-w-[22rem] text-sm">
+                {(() => {
+                  const cap = (capabilities?.issuers ?? []).find((c) => c.issuer === issuer.kind);
+                  if (!cap) return <span className="text-muted-foreground">{translateNow("source.unknown.r2cap00004")}</span>;
+                  return cap.revoke ? (
+                    <span className="font-medium text-status-success">{translateNow("source.revoke.supported.r2cap00002")}</span>
+                  ) : (
+                    <>
+                      <span className="text-status-warning">{translateNow("source.revoke.elsewhere.r2cap00003")}</span>
+                      {cap.revoke_note ? <span className="mt-1 block text-xs text-muted-foreground">{cap.revoke_note}</span> : null}
+                    </>
+                  );
+                })()}
               </td>
               <td>
                 <Button

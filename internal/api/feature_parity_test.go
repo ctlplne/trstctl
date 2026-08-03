@@ -91,11 +91,13 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// 301 and is mapped onto F5 in the same change; the agent job ledger's
 	// operations surface (A1) raised it to 302 and is mapped onto F3; the AD CS
 	// certificate template posture read (F1) raised it to 303 and is mapped
-	// onto the discovery/posture feature row in the same change.
+	// onto the discovery/posture feature row in the same change; the per-issuer
+	// capability matrix (R2) raised it to 304 and is mapped onto the issuer
+	// feature rows in the same change.
 	// The count is a deliberate ratchet: every new operation must be mapped to
 	// a feature-catalog row in the same change.
-	if len(out) != 303 {
-		t.Fatalf("OpenAPI operationIds = %d, want 303", len(out))
+	if len(out) != 304 {
+		t.Fatalf("OpenAPI operationIds = %d, want 304", len(out))
 	}
 	return out
 }

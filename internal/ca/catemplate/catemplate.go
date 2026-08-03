@@ -17,6 +17,7 @@ package catemplate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/ca"
@@ -34,6 +35,21 @@ type Backend interface {
 	// Issue submits req.CSR to the upstream CA, authorizing req.DNSNames and
 	// requesting req.TTL where the CA honours it, and returns the chain PEM.
 	Issue(ctx context.Context, req ca.IssueRequest) (chainPEM []byte, err error)
+}
+
+// RevokingBackend is the optional revocation capability of a Backend (epic R2).
+//
+// Optional, and the Plugin only forwards to a backend that implements it. A
+// Plugin whose backend cannot revoke does not implement ca.Revoker at all, so
+// the caller gets ErrRevocationUnsupported and can say so — rather than a
+// Revoke that returns nil while the authority still considers the certificate
+// valid.
+type RevokingBackend interface {
+	Backend
+	// Revoke asks the upstream authority to revoke. It must contact the
+	// authority; returning nil without a request is the failure this capability
+	// exists to prevent.
+	Revoke(ctx context.Context, req ca.RevokeRequest) error
 }
 
 // Plugin adapts a Backend to the ca.CA interface, contributing all the shared
@@ -89,4 +105,29 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 		NotAfter:       info.NotAfter,
 		Issuer:         name,
 	}, nil
+}
+
+// Revoke forwards to the backend when it can revoke.
+//
+// The Plugin always exposes this method, so a caller holding a *Plugin cannot
+// discover support by type assertion alone — CanRevoke below is the honest
+// check, and the error is explicit for anyone who calls straight through.
+func (p *Plugin) Revoke(ctx context.Context, req ca.RevokeRequest) error {
+	if p == nil || p.backend == nil {
+		return errors.New("catemplate: plugin is destroyed")
+	}
+	r, ok := p.backend.(RevokingBackend)
+	if !ok {
+		return fmt.Errorf("%w: %s", ca.ErrRevocationUnsupported, p.backend.CAName())
+	}
+	return r.Revoke(ctx, req)
+}
+
+// CanRevoke reports whether this plugin's backend can actually revoke.
+func (p *Plugin) CanRevoke() bool {
+	if p == nil || p.backend == nil {
+		return false
+	}
+	_, ok := p.backend.(RevokingBackend)
+	return ok
 }

@@ -928,6 +928,7 @@ func (a *API) routes() []route {
 
 		{method: "POST", path: "/api/v1/issuers", opID: "createIssuer", summary: "Create an issuer", handler: a.createIssuer, reqSchema: "IssuerRequest", resSchema: "Issuer", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/issuers", opID: "listIssuers", summary: "List issuers", handler: a.listIssuers, query: page, resSchema: "IssuerList", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/issuers/capabilities", opID: "listIssuerCapabilities", summary: "List per-issuer capabilities: discover, issue, renew, revoke, key handling, validation model", handler: a.listIssuerCapabilities, resSchema: "IssuerCapabilityMatrix", successCode: "200", perm: authz.IssuersRead},
 		{method: "GET", path: "/api/v1/setup/protocols", opID: "getProtocolProfile", summary: "Get the tenant-bound eval protocol profile status", handler: a.getProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/setup/protocols/activate", opID: "activateProtocolProfile", summary: "Activate the tenant-bound eval protocol profile", handler: a.activateProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead, scope: scopeIssuerPath("id")},

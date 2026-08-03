@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	neturl "net/url"
 	"strings"
 
 	"trstctl.com/trstctl/internal/ca"
@@ -37,7 +38,10 @@ import (
 
 const (
 	enrollPath = "/ejbca/ejbca-rest-api/v1/certificate/pkcs10enroll"
-	maxBody    = 1 << 20
+	// EJBCA revokes by issuer DN and serial, as a PUT with query parameters
+	// (REST API v1 /certificate/{issuer_dn}/{serial}/revoke).
+	revokePathFmt = "/ejbca/ejbca-rest-api/v1/certificate/%s/%s/revoke"
+	maxBody       = 1 << 20
 )
 
 // Config holds the EJBCA connection and enrollment settings.
@@ -187,6 +191,43 @@ func assembleChain(certs []string) ([]byte, error) {
 	return out, nil
 }
 
+// put issues a bodyless JSON PUT, used by revocation (epic R2). It shares the
+// post path's auth, bounded read, and status-only error normalization so a
+// revocation cannot leak an EJBCA response body that a post would have
+// redacted.
+func (b *backend) put(ctx context.Context, url string, out any) error {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, url, nil)
+	if err != nil {
+		return err
+	}
+	if len(b.cfg.Token) != 0 {
+		httpReq.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.cfg.Token))
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	resp, err := b.client.Do(httpReq)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return errors.New("ejbca: request failed")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	data, err := secret.ReadBounded(resp.Body, maxBody)
+	if err != nil {
+		return errors.New("ejbca: read response failed")
+	}
+	defer secret.Wipe(data)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return apiError(resp.StatusCode, data)
+	}
+	if out != nil {
+		if err := json.Unmarshal(data, out); err != nil {
+			return fmt.Errorf("ejbca: decode response: %w", err)
+		}
+	}
+	return nil
+}
+
 // post issues a JSON POST, attaching bearer auth when configured, decoding the
 // response into out and normalizing EJBCA failures to status-only errors.
 func (b *backend) post(ctx context.Context, url string, body, out any) error {
@@ -235,4 +276,61 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 // the bounded HTTP status is the only safe diagnostic allowed to escape.
 func apiError(status int, _ []byte) error {
 	return fmt.Errorf("ejbca: api error %d", status)
+}
+
+var _ catemplate.RevokingBackend = (*backend)(nil)
+
+// Revoke revokes through EJBCA's REST API (epic R2).
+//
+// EJBCA addresses a certificate by issuer DN and serial, so both are required.
+// The reason is mapped to EJBCA's own vocabulary rather than passed through as
+// a number: sending an RFC 5280 code EJBCA does not recognize fails the call,
+// and an operator revoking a compromised key should not have that turn on a
+// vocabulary mismatch.
+func (b *backend) Revoke(ctx context.Context, req ca.RevokeRequest) error {
+	serial := strings.TrimSpace(req.Serial)
+	if serial == "" {
+		return fmt.Errorf("ejbca: revocation needs a serial number; none supplied")
+	}
+	issuerDN := strings.TrimSpace(b.cfg.CAName)
+	if issuerDN == "" {
+		return fmt.Errorf("ejbca: revocation needs the issuing CA name; none configured")
+	}
+	if err := b.validateEndpoint(); err != nil {
+		return err
+	}
+	url := b.cfg.BaseURL + fmt.Sprintf(revokePathFmt, neturl.PathEscape(issuerDN), neturl.PathEscape(serial)) +
+		"?reason=" + neturl.QueryEscape(ejbcaReason(req.ReasonCode))
+	var out struct {
+		RevocationStatus string `json:"revocation_status"`
+	}
+	if err := b.put(ctx, url, &out); err != nil {
+		return fmt.Errorf("ejbca: revoke %s: %w", serial, err)
+	}
+	return nil
+}
+
+// ejbcaReason maps an RFC 5280 CRLReason to EJBCA's enumeration. Anything
+// unrecognized becomes UNSPECIFIED rather than failing the revocation: getting
+// the certificate revoked matters more than recording a precise reason, and the
+// reason is preserved in trstctl's own event either way.
+func ejbcaReason(code int) string {
+	switch code {
+	case 1:
+		return "KEY_COMPROMISE"
+	case 2:
+		return "CA_COMPROMISE"
+	case 3:
+		return "AFFILIATION_CHANGED"
+	case 4:
+		return "SUPERSEDED"
+	case 5:
+		return "CESSATION_OF_OPERATION"
+	case 6:
+		return "CERTIFICATE_HOLD"
+	case 9:
+		return "PRIVILEGE_WITHDRAWN"
+	default:
+		return "UNSPECIFIED"
+	}
 }
