@@ -568,7 +568,14 @@ func TestJourney005IssueFlowAndRouteParityStayWired(t *testing.T) {
 		"issueCertificate",
 		"api.createOwner(",
 		"api.createIdentity(",
-		`api.transitionIdentity(identity.id, "issued"`,
+		// B1 split this call across lines to pass the requester's own CSR, so the
+		// anchor is the call and its arguments rather than one formatted line.
+		// The chained flow the guard exists to protect is unchanged: the button
+		// still creates the owner, creates the identity, and transitions it to
+		// issued.
+		"api.transitionIdentity(",
+		"identity.id,",
+		`"issued",`,
 		`mutate<Identity>("POST", `+"`/api/v1/identities/${encodeURIComponent(id)}/transitions`",
 	)
 

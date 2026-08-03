@@ -9112,6 +9112,7 @@ export interface components {
         };
         TransitionRequest: {
             reason?: string;
+            subject_csr_pem?: string;
             /** @enum {string} */
             to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
         };

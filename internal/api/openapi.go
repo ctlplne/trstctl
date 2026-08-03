@@ -426,9 +426,15 @@ func componentSchemas() map[string]*Schema {
 		"issuer_id": uuid(), "attributes": {Type: "object"},
 	}, "kind", "name", "owner_id")
 
+	// subject_csr_pem is the CSR-first path (B1): supply your own PKCS#10 request
+	// on a transition to issued and the control plane signs it rather than
+	// generating a subject key, so the private key stays where you made it.
+	// Omitting it keeps the deprecated server-side-keygen path, which records an
+	// issuance.server_side_keygen event every time it runs.
 	transitionReq := object(map[string]*Schema{
-		"to":     {Type: "string", Enum: []string{"issued", "deployed", "renewing", "revoked", "retired"}},
-		"reason": str(),
+		"to":              {Type: "string", Enum: []string{"issued", "deployed", "renewing", "revoked", "retired"}},
+		"reason":          str(),
+		"subject_csr_pem": str(),
 	}, "to")
 	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "removeFromCRL", "privilegeWithdrawn", "aaCompromise"}
 	bulkRevokeReq := object(map[string]*Schema{

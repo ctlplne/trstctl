@@ -75,6 +75,7 @@ nav:
   - Air-gapped install: airgap.md
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
+  - Key custody: custody.md
   - Accessibility (VPAT): accessibility-vpat.md
   - Observability: observability.md
   - Performance:

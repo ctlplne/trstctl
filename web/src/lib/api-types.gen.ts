@@ -4631,6 +4631,7 @@ export interface TransitVerifyRequest {
 
 export interface TransitionRequest {
   reason?: string;
+  subject_csr_pem?: string;
   to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
 }
 

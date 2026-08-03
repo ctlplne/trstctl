@@ -162,6 +162,8 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Served status strings | Every status is registered with what the code actually did; CI blocks a status spelled stronger than its own flags | [Served status vocabulary](#served-status-vocabulary-what-each-status-claims) |
 | CA hierarchy expiry horizon | Served; year-scale bands, re-alerting on each tightening, leaf-validity-compression check, horizon on the CA API and console | [The CA calendar](#the-ca-calendar-year-scale-hierarchy-expiry) |
 | ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window enforced fail-closed, runtime disable. Rotation stays a config operation | [Protocols](#protocols) |
+| Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
+| Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -1796,12 +1798,28 @@ cutover for an existing hybrid certificate remains evidence-gated by
 succession/retirement policy; direct pure ML-DSA enrollment is served
 through EST (and as the SPIFFE Workload API's licensed second SVID), and
 CMP consults the same licensed parser for its carried CSR (PKIMessage
-protection stays classically verified). SCEP cannot by protocol, and the
-direct identity API intentionally has no CSR input at all — it generates
-classical keys server-side, so CSR-based enrollment, including licensed
-subject algorithms, belongs to the enrollment protocols. See
+protection stays classically verified). SCEP cannot by protocol. The direct
+identity API now accepts a caller-supplied CSR — supply `subject_csr_pem`
+on the transition to `issued` and trstctl signs that request rather than
+generating a subject key — so CSR-based enrollment, including licensed
+subject algorithms, is no longer confined to the enrollment protocols. See
 [Lifecycle & PQC](features/lifecycle-and-pqc.md) for operator flow and
 license placement.
+
+**Key custody, stated per credential kind.** Whose process created a private
+key and whose disk holds it is answered in one CI-checked table at
+[Key custody](custody.md), not in prose scattered across pages. The short
+version: every enrollment protocol, and the identity API when given a CSR,
+generate keys in your environment and the control plane never sees them; CA
+keys are created inside the isolated signer and never leave it; and three
+paths still generate a subject key in the control plane, each named there
+with what replaces it. The identity API without a CSR is one of those three:
+it still works for one release train and records an
+`issuance.server_side_keygen` event every time it runs, so you can find which
+of your flows still rely on it. An identity issued from your own CSR cannot
+be deployed by a control-plane connector — the key that deployment needs is
+on your side, which is the correct consequence and the reason host-executed
+renewal is the next piece of work.
 
 ## Kubernetes deployment
 

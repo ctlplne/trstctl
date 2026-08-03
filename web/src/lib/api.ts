@@ -477,6 +477,11 @@ export type IssueCertificateInput = {
   ownerId?: string;
   issuerId?: string;
   wildcardBlastRadiusAcknowledged?: boolean;
+  /** A PKCS#10 request the operator generated on the host that will use the
+   * certificate. When supplied, trstctl signs it and generates no key, so the
+   * private key never reaches the control plane. Omitting it uses the deprecated
+   * server-side keygen path. */
+  subjectCSRPEM?: string;
 };
 export type {
   SecretRotationScheduleRun,
@@ -1202,7 +1207,7 @@ export interface Api {
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
-  transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string): Promise<Identity>;
+  transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string): Promise<Identity>;
   approveIdentityAction(id: string, action: ApprovalRequest["action"]): Promise<Approval>;
   /** issueCertificate is the one-call convenience the wizard and the "issue"
    * action use: it ensures an owner, creates the identity, and issues it. */
@@ -1523,7 +1528,12 @@ const liveApi: Api = {
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
-  transitionIdentity: (id, to, reason) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/transitions`, { to, reason }),
+  transitionIdentity: (id, to, reason, subjectCSRPEM) =>
+    mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/transitions`, {
+      to,
+      reason,
+      ...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),
+    }),
   approveIdentityAction: (id, action) => mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, { action }),
   issueCertificate: async (input) => {
     let ownerId = input.ownerId;
@@ -1532,7 +1542,12 @@ const liveApi: Api = {
       ownerId = owner.id;
     }
     const identity = await api.createIdentity(firstCertificateIdentityRequest(input, ownerId));
-    return api.transitionIdentity(identity.id, "issued", "first issuance via UI");
+    return api.transitionIdentity(
+      identity.id,
+      "issued",
+      input.subjectCSRPEM ? "first issuance via UI from an operator-supplied CSR" : "first issuance via UI",
+      input.subjectCSRPEM,
+    );
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
   createEnrollmentToken: (input) => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens", enrollmentTokenRequest(input)),

@@ -17894,6 +17894,9 @@
           "reason": {
             "type": "string"
           },
+          "subject_csr_pem": {
+            "type": "string"
+          },
           "to": {
             "enum": [
               "issued",

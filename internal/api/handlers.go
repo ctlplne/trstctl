@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -104,6 +105,15 @@ func toIdentityResponse(it store.Identity) identityResponse {
 type transitionRequest struct {
 	To     string `json:"to"`
 	Reason string `json:"reason"`
+	// SubjectCSRPEM lets the caller supply their own PKCS#10 request on a
+	// transition to issued (epic B1). When present the control plane signs that
+	// request and generates no key, so the subject private key stays wherever the
+	// caller made it and never reaches this process.
+	//
+	// Absent keeps the legacy behaviour — the control plane generates the subject
+	// key — which is deprecated, records an `issuance.server_side_keygen` event
+	// each time it runs, and is retained for one release train.
+	SubjectCSRPEM string `json:"subject_csr_pem,omitempty"`
 }
 
 func validateTransitionRequest(req transitionRequest) error {
@@ -449,7 +459,20 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		// outcome signal. The labels come from a closed catalog map, never tenant or
 		// credential data.
 		start := time.Now()
-		terr := a.orch.TransitionWithIdempotency(ctx, tenantID, id, state, req.Reason, idempotencyKey)
+		// CSR-first (B1): a caller-supplied request is carried to the issuance
+		// dispatcher, which signs it rather than minting a key. It is validated
+		// here so a malformed request is a 400 to the caller instead of an opaque
+		// failure later in the outbox worker.
+		csrPEM := strings.TrimSpace(req.SubjectCSRPEM)
+		if csrPEM != "" {
+			if state != orchestrator.StateIssued {
+				return 0, nil, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued")
+			}
+			if err := validateSubjectCSRPEM(csrPEM); err != nil {
+				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+			}
+		}
+		terr := a.orch.TransitionWithSubjectCSR(ctx, tenantID, id, state, req.Reason, idempotencyKey, csrPEM)
 		if feature, action, ok := transitionFeatureAction(state); ok {
 			a.observeFeature(feature, action, start, terr)
 		}
@@ -500,4 +523,25 @@ func flattenABACResource(prefix string, attrs map[string]any, out map[string]str
 			out[key] = fmt.Sprint(x)
 		}
 	}
+}
+
+// validateSubjectCSRPEM rejects a caller-supplied certificate request that is not
+// a well-formed, self-signed PKCS#10 (epic B1). Parsing goes through the crypto
+// boundary (AN-3); this package names no crypto/* itself.
+//
+// The check is deliberately at the API edge. A CSR that cannot be parsed is a
+// caller mistake and belongs in the response to the request that carried it —
+// not surfaced minutes later as a failed outbox delivery nobody is watching.
+func validateSubjectCSRPEM(csrPEM string) error {
+	blk, _ := pem.Decode([]byte(csrPEM))
+	if blk == nil {
+		return errors.New("subject_csr_pem is not PEM")
+	}
+	if blk.Type != "CERTIFICATE REQUEST" && blk.Type != "NEW CERTIFICATE REQUEST" {
+		return fmt.Errorf("subject_csr_pem PEM block is %q, want CERTIFICATE REQUEST", blk.Type)
+	}
+	if _, err := crypto.InspectCSR(blk.Bytes); err != nil {
+		return fmt.Errorf("subject_csr_pem is not a valid, self-signed PKCS#10 request: %w", err)
+	}
+	return nil
 }

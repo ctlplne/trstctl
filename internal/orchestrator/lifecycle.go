@@ -118,12 +118,23 @@ type Transition struct {
 
 // transitionPayload is the JSON body of a lifecycle event.
 type transitionPayload struct {
-	IdentityID     string                `json:"identity_id"`
-	From           State                 `json:"from"`
-	To             State                 `json:"to"`
-	Reason         string                `json:"reason,omitempty"`
-	IdempotencyKey string                `json:"idempotency_key,omitempty"`
-	SideEffect     *transitionSideEffect `json:"side_effect,omitempty"`
+	IdentityID     string `json:"identity_id"`
+	From           State  `json:"from"`
+	To             State  `json:"to"`
+	Reason         string `json:"reason,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	// SubjectCSRPEM carries a caller-supplied PKCS#10 certificate request for a
+	// requested→issued transition (epic B1). When present, the issuance path
+	// signs THIS request and generates no key: the subject private key stays
+	// wherever the caller made it and never reaches the control plane. A CSR is
+	// public material, so it travels in the event log and outbox like any other
+	// transition field.
+	//
+	// Absent means the legacy path — the control plane generates the subject key
+	// itself — which is retained for one release train behind a recorded
+	// deprecation event.
+	SubjectCSRPEM string                `json:"subject_csr_pem,omitempty"`
+	SideEffect    *transitionSideEffect `json:"side_effect,omitempty"`
 }
 
 // transitionSideEffect carries the durable outbox intent for lifecycle events

@@ -742,6 +742,26 @@ export const messages = {
     defaultMessage: "Decommission by signal",
     description: "Heading for the identity decommission workflow section.",
   },
+  "request.csr.generate": {
+    defaultMessage: "Generate one on that host:",
+    description: "B1: introduces the copyable openssl command that produces a CSR on the requester's own machine.",
+  },
+  "request.csr.help": {
+    defaultMessage: "Paste a CSR you generated on the host that will use this certificate. trstctl signs it and never sees your private key. This is the fallback for hosts with no agent \u2014 where an agent is enrolled it generates the key and submits the request itself, and you do not touch key material at all.",
+    description: "B1: explains that pasting a CSR is the agentless fallback and that the agent path is the target, so the manual flow is not mistaken for the destination.",
+  },
+  "request.csr.invalid": {
+    defaultMessage: "That does not look like a PEM certificate request. It should start with -----BEGIN CERTIFICATE REQUEST-----.",
+    description: "B1: client-side hint for an obviously wrong paste; the server does the real validation.",
+  },
+  "request.csr.label": {
+    defaultMessage: "Certificate signing request (PKCS#10)",
+    description: "B1: optional field where a requester pastes a CSR they generated on the host that will use the certificate.",
+  },
+  "request.csr.omitted": {
+    defaultMessage: "Leave this empty and trstctl generates the private key itself and returns it \u2014 a deprecated path that records an issuance.server_side_keygen event each time it runs.",
+    description: "B1: states plainly what happens when no CSR is supplied, so the deprecated path is a choice rather than a default nobody noticed.",
+  },
   "request.wizard.profile.label": {
     defaultMessage: "Choose profile",
     description: "Request-credential wizard step 1 title.",
@@ -8491,6 +8511,10 @@ export const messages = {
   "source.open.the.self.service.request.workflow.a5dd4f8af7": {
     defaultMessage: "Open the self-service request workflow",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/CommandPalette.tsx.",
+  },
+  "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2": {
+    defaultMessage: "openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj \"/CN={value1}\"",
+    description: "B1: the command that generates a keypair and CSR on the requester's own host. Technical identifiers stay byte-identical in every locale.",
   },
   "source.operate.58c3939c4c": {
     defaultMessage: "Operate",

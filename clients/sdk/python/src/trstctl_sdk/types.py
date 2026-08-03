@@ -6539,6 +6539,7 @@ TransitionRequest = TypedDict(
     'TransitionRequest',
     {
         'reason': str,
+        'subject_csr_pem': str,
         'to': str,
     },
     total=False,

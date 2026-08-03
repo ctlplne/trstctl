@@ -335,8 +335,17 @@ describe("i18n boundary", () => {
       // empty-state strings must keep their negation, and the {count}/{value}
       // placeholders are preserved.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "44e0f0293e600dfdd5717f7a6ef0c34e594e281e2c7027d685090512cefba1f5",
-      "de-DE": "7f0453d1686c2f6b37344e101f20850417ddd4174e11b845cfa66c4eef8f5863",
+      // B1 re-pin: seven keys for the CSR-first request form — the field label,
+      // the help text stating that pasting a CSR is the fallback for a host with
+      // no agent (where an agent is enrolled it generates the key and submits the
+      // request itself), the openssl command that produces one, the sentence
+      // naming what happens if you leave it empty, and the invalid-paste hint.
+      // Reviewed for meaning in all three locales; the help and "omitted" strings
+      // must keep their qualifications, and the openssl command plus the PEM
+      // header stay byte-identical everywhere because they are protocol literals.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "17802ab12c1ee8ce6fc070943c1fffdc02a8bc15b9e62053cfd137fd7ebe7e04",
+      "de-DE": "33fa7652f7bd24b70a088d53c8db7aa82bfbbd5a8c5203768825da68d3c94d3b",
     });
   });
 

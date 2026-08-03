@@ -338,6 +338,11 @@ type transitionTrigger struct {
 	Reason                 string `json:"reason"`
 	Origin                 string `json:"origin,omitempty"`
 	PredecessorFingerprint string `json:"predecessor_fingerprint,omitempty"`
+	// SubjectCSRPEM is the caller's own PKCS#10 request (epic B1). When it is
+	// present the dispatcher signs it and generates no subject key, so the
+	// private key stays wherever the caller made it. The JSON tag matches
+	// orchestrator's transitionPayload, which is where the field is written.
+	SubjectCSRPEM string `json:"subject_csr_pem,omitempty"`
 }
 
 type sealedConnectorDeployPayload struct {
@@ -383,7 +388,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err := d.admitIssuance(ctx, m, p, ident, "issue"); err != nil {
 			return nil, err
 		}
-		material, err := d.mintServedLeafMaterial(ctx, m.TenantID, ident.OwnerID, ident.Name, []string{ident.Name})
+		material, err := d.mintServedLeafForTrigger(ctx, m.TenantID, ident, p)
 		if err != nil {
 			return nil, err
 		}
@@ -1421,4 +1426,156 @@ func sansOf(info certinfo.Info) []string {
 	sans = append(sans, info.EmailAddresses...)
 	sans = append(sans, info.URIs...)
 	return sans
+}
+
+// CSR-first issuance (epic B1).
+//
+// The direct identity API had no CSR input at all: transitioning an identity to
+// issued made the control plane generate the subject key, sign for it, and hand
+// the key onward. That is a custody claim nobody wants to defend — "your private
+// key was created in our process" — and it is the reason the served surface could
+// not say private keys never reach the control plane.
+//
+// A caller who supplies their own PKCS#10 request gets the other shape: we sign
+// what they made and never see a key. Both paths still enforce the same profile
+// gate before signing, because whose key it is does not change what the
+// certificate is allowed to say.
+
+// mintServedLeafForTrigger signs the caller's CSR when the transition carries
+// one, and otherwise falls back to generating the subject key. The fallback
+// records a deprecation event each time it is used, so an operator can see which
+// of their flows still hand key generation to the control plane before the path
+// is removed.
+func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenantID string, ident store.Identity, p transitionTrigger) (issuedLeafMaterial, error) {
+	// A CSR on the transition wins: it is the most specific statement of intent
+	// for this particular issuance.
+	if csr := strings.TrimSpace(p.SubjectCSRPEM); csr != "" {
+		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr))
+	}
+	// Otherwise the request's own CSR, recorded when the identity was created.
+	// The CSR belongs to the requester, not to whoever approves them: an approver
+	// pressing "approve" should not have to re-supply key material they never had.
+	if csr := subjectCSRFromIdentity(ident); csr != "" {
+		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr))
+	}
+	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
+	return d.mintServedLeafMaterial(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name})
+}
+
+// subjectCSRFromIdentity reads the CSR a requester attached when they created the
+// request. Attributes are free-form, so read defensively: a malformed attribute
+// block means no CSR, not a failed issuance.
+func subjectCSRFromIdentity(ident store.Identity) string {
+	if len(ident.Attributes) == 0 {
+		return ""
+	}
+	var attrs map[string]any
+	if err := json.Unmarshal(ident.Attributes, &attrs); err != nil {
+		return ""
+	}
+	csr, _ := attrs["subject_csr_pem"].(string)
+	return strings.TrimSpace(csr)
+}
+
+// mintServedLeafFromCSR signs a caller-supplied request. It returns no KeyPEM,
+// because there is no key here to return — which is the point. The connector
+// deploy path degrades to certificate-only for this identity, since the material
+// it would need is on the caller's side; host-executed renewal (epic B2) is what
+// closes that loop properly.
+func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID string, ident store.Identity, csrPEM []byte) (issuedLeafMaterial, error) {
+	if d.issue == nil {
+		return issuedLeafMaterial{}, errors.New("server: issuing CA is unavailable")
+	}
+	csrDER, dnsNames, err := decodeSubjectCSR(csrPEM)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	if len(dnsNames) == 0 {
+		dnsNames = []string{ident.Name}
+	}
+	// Same profile gate as the server-keygen path: the origin of the key does not
+	// change what the certificate may assert, and skipping it here would make
+	// "bring your own CSR" a way around policy.
+	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, leafTTL)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	leafPEM, err := d.issue(ctx, csrDER, leafTTL, leafProfile)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	blk, _ := pem.Decode(leafPEM)
+	if blk == nil {
+		return issuedLeafMaterial{}, errors.New("server: issued certificate is not PEM")
+	}
+	info, err := certinfo.Inspect(blk.Bytes)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	var ownerPtr *string
+	if ownerID := strings.TrimSpace(ident.OwnerID); ownerID != "" {
+		owner := ownerID
+		ownerPtr = &owner
+	}
+	nb, na := info.NotBefore, info.NotAfter
+	return issuedLeafMaterial{
+		Certificate: store.Certificate{
+			CAID: IssuingCAID(), OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
+			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
+			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
+			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+		},
+		CertPEM: append([]byte(nil), leafPEM...),
+		// The material field is left zero on purpose: the subject key was never
+		// here, so there is nothing to return, wipe, or leak.
+	}, nil
+}
+
+// recordServerSideKeygenDeprecation appends an audit event naming the identity
+// that used the legacy path. It is deliberately best-effort: failing to record
+// the deprecation must not fail the issuance an operator is relying on today.
+func (d *issuanceDispatcher) recordServerSideKeygenDeprecation(ctx context.Context, tenantID string, ident store.Identity) {
+	if d.log == nil {
+		return
+	}
+	body, err := json.Marshal(struct {
+		IdentityID string `json:"identity_id"`
+		Name       string `json:"name"`
+		Detail     string `json:"detail"`
+		Successor  string `json:"successor"`
+	}{
+		IdentityID: ident.ID, Name: ident.Name,
+		Detail:    "the control plane generated this identity's subject key because the issuance carried no CSR; this path is deprecated",
+		Successor: "supply subject_csr_pem on the transition to issued so the key is generated where it will be used",
+	})
+	if err != nil {
+		return
+	}
+	_, _ = d.log.Append(ctx, events.Event{Type: "issuance.server_side_keygen", TenantID: tenantID, Data: body})
+}
+
+// decodeSubjectCSR turns a caller-supplied PKCS#10 request into DER plus the
+// names it asks for, verifying the request's self-signature through the crypto
+// boundary (AN-3) before anything downstream trusts it.
+//
+// Rejecting here rather than at the signer is deliberate: a malformed or
+// unsigned CSR is a caller mistake, and it should come back as one instead of
+// surfacing as an opaque signing failure later in the outbox.
+func decodeSubjectCSR(csrPEM []byte) (der []byte, dnsNames []string, err error) {
+	blk, _ := pem.Decode(csrPEM)
+	if blk == nil {
+		return nil, nil, errors.New("server: subject CSR is not PEM")
+	}
+	if blk.Type != "CERTIFICATE REQUEST" && blk.Type != "NEW CERTIFICATE REQUEST" {
+		return nil, nil, fmt.Errorf("server: subject CSR PEM block is %q, want CERTIFICATE REQUEST", blk.Type)
+	}
+	info, err := crypto.InspectCSR(blk.Bytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("server: subject CSR is not a valid, self-signed PKCS#10 request: %w", err)
+	}
+	names := append([]string(nil), info.DNSNames...)
+	if len(names) == 0 && strings.TrimSpace(info.CommonName) != "" {
+		names = []string{info.CommonName}
+	}
+	return append([]byte(nil), blk.Bytes...), names, nil
 }

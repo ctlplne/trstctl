@@ -45,6 +45,19 @@ const requestFormSchema = z.object({
   name: z.string().trim().min(1, "Credential name is required."),
   ownerId: z.string().trim().min(1, "Owner id is required."),
   purpose: z.string().trim(),
+  // B1: the requester's own PKCS#10. Optional, because the deprecated
+  // server-side-keygen path still works for one release train — but supplying it
+  // is what makes "your private key never reaches the control plane" true for
+  // this request. The real validation is server-side; this only catches an
+  // obviously wrong paste before a round trip.
+  subjectCSRPEM: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || value.startsWith("-----BEGIN CERTIFICATE REQUEST-----"), {
+      get message() {
+        return translateNow("request.csr.invalid");
+      },
+    }),
 });
 type RequestFormValues = z.infer<typeof requestFormSchema>;
 
@@ -106,7 +119,7 @@ export function RequestCredential() {
   } = useForm<RequestFormValues>({
     resolver: zodResolver(requestFormSchema),
     mode: "onTouched",
-    defaultValues: { profileKey: "", name: "", ownerId: "", purpose: "" },
+    defaultValues: { profileKey: "", name: "", ownerId: "", purpose: "", subjectCSRPEM: "" },
   });
   // useWatch (not useForm's watch) is the subscription-safe read the React
   // Compiler lint accepts — each field re-renders on its own changes only.
@@ -214,6 +227,9 @@ export function RequestCredential() {
           profile_name: selectedProfile.name,
           profile_version: selectedProfile.version,
           purpose: values.purpose,
+          // The CSR belongs to the request, not to whoever approves it: an
+          // approver should not have to re-supply key material they never had.
+          ...(values.subjectCSRPEM ? { subject_csr_pem: values.subjectCSRPEM } : {}),
         },
       });
       setRequests((current) => {
@@ -338,6 +354,28 @@ export function RequestCredential() {
                       />
                     )}
                   </Field>
+                  {/* B1: pasting a CSR is the fallback for a host with no agent.
+                      The target shape is the agent generating the key on the host
+                      and submitting the request itself over its own outbound
+                      channel — the operator never touches key material. The help
+                      text says so, so this form is not mistaken for the
+                      destination. */}
+                  <Field label={t("request.csr.label")} description={t("request.csr.help")} error={errors.subjectCSRPEM?.message}>
+                    {(control) => (
+                      <Textarea
+                        {...control}
+                        {...register("subjectCSRPEM")}
+                        className="min-h-24 font-mono text-xs"
+                        placeholder={translateNow("source.begin.certificate.request.929bb0afef")}
+                        spellCheck={false}
+                      />
+                    )}
+                  </Field>
+                  <div className="grid gap-1 rounded-panel border border-border bg-muted/40 p-3 text-caption">
+                    <span className="text-muted-foreground">{t("request.csr.generate")}</span>
+                    <code className="break-all font-mono text-xs">{translateNow("source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2", { value1: name.trim() || "service" })}</code>
+                    <span className="text-muted-foreground">{t("request.csr.omitted")}</span>
+                  </div>
                 </div>
               )}
 
