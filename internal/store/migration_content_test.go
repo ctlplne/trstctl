@@ -39,6 +39,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	90: true,
 	92: true,
 	94: true,
+	98: true,
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
@@ -149,6 +150,66 @@ func TestMigrationsPreserveSeededContent(t *testing.T) {
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	// 0098 adds the agent claim columns to the outbox — the busiest table in the
+	// deployment, and one that is never empty in a running system. The property
+	// that matters is not that the columns appear: it is that adding them leaves
+	// every in-flight entry exactly as it was. An outbox row that was pending
+	// before the migration must still be pending after it, with the same payload,
+	// the same idempotency key and the same attempt count, and must land unclaimed
+	// rather than looking like an agent has already taken it.
+	t.Run("0098_outbox_agent_claims", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 98)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedOutboxClaimContent(t, ctx, pool)
+
+		const entryProjection = `
+			SELECT tenant_id::text, destination, encode(payload, 'hex'), idempotency_key,
+			       status, attempts::text, coalesce(last_error, ''), delivered_at::text
+			  FROM outbox
+			 ORDER BY tenant_id, idempotency_key`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, entryProjection)
+		if beforeCount == 0 {
+			t.Fatal("precondition: the content case needs seeded outbox entries to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, entryProjection)
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0098 disturbed in-flight outbox entries: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var claimed, badAttempts int
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*) FILTER (WHERE claimed_by_agent_id IS NOT NULL OR claim_expires_at IS NOT NULL OR claim_completed_at IS NOT NULL),
+			       count(*) FILTER (WHERE claim_attempts <> 0)
+			  FROM outbox`).Scan(&claimed, &badAttempts); err != nil {
+			t.Fatalf("read post-0098 claim columns: %v", err)
+		}
+		if claimed != 0 {
+			t.Errorf("%d pre-existing entries came out of the migration looking claimed; every one must be claimable", claimed)
+		}
+		if badAttempts != 0 {
+			t.Errorf("%d pre-existing entries came out with a non-zero claim count; none of them has ever been claimed", badAttempts)
+		}
+
+		// The lease invariant has to hold from the first row: an agent id without
+		// an expiry is a claim nothing can ever reclaim.
+		if _, err := pool.Exec(ctx, `
+			UPDATE outbox SET claimed_by_agent_id = gen_random_uuid() WHERE true`); err == nil {
+			t.Error("0098 accepted a claim with no lease expiry; outbox_claim_lease_present must reject it")
+		}
+	})
+
 	t.Run("0046_secret_store_versions", func(t *testing.T) {
 		ctx := context.Background()
 		prefix, target := splitMigrationsAtVersion(t, 46)
@@ -1891,6 +1952,41 @@ func seedMigrationContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool,
 	for _, s := range stmts {
 		if _, err := pool.Exec(ctx, s.sql, s.args...); err != nil {
 			t.Fatalf("seed content for %s: %v\n%s", tenantID, err, s.sql)
+		}
+	}
+}
+
+// seedOutboxClaimContent puts a realistic in-flight queue in front of migration
+// 0098: entries in different states, for different tenants, with the retry
+// metadata a real backlog carries. The migration must leave every byte of it
+// alone.
+func seedOutboxClaimContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	rows := []struct {
+		tenantID    string
+		destination string
+		payload     []byte
+		idemKey     string
+		status      string
+		attempts    int
+		lastError   string
+		delivered   bool
+	}{
+		{tenantID: tenantA, destination: "ca.issue", payload: []byte(`{"identity_id":"a1"}`), idemKey: "issue:a1", status: "pending"},
+		{tenantID: tenantA, destination: "connector.deploy", payload: []byte(`{"target":"edge"}`), idemKey: "deploy:a1", status: "pending", attempts: 2, lastError: "connector timeout"},
+		{tenantID: tenantA, destination: "notification.expiry", payload: []byte(`{"cert":"a2"}`), idemKey: "expiry:a2", status: "delivered", attempts: 1, delivered: true},
+		{tenantID: tenantB, destination: "ca.issue", payload: []byte(`{"identity_id":"b1"}`), idemKey: "issue:b1", status: "pending"},
+	}
+	for _, r := range rows {
+		delivered := "NULL"
+		if r.delivered {
+			delivered = "'2026-02-01T00:00:00Z'::timestamptz"
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, attempts, last_error, delivered_at)
+			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), `+delivered+`)`,
+			r.tenantID, r.destination, r.payload, r.idemKey, r.status, r.attempts, r.lastError); err != nil {
+			t.Fatalf("seed outbox %s/%s: %v", r.tenantID, r.idemKey, err)
 		}
 	}
 }
