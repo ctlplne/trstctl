@@ -454,6 +454,33 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ allowed_identity: "node-a" });
   });
 
+  it("carries the agent role grant to the wire, not just to the client", async () => {
+    // A2/A3 regression pin. The request builder once rebuilt the body from
+    // allowed_identity alone, so the console's role selector minted host-only
+    // tokens no matter what the operator chose — and the Agents page test could
+    // not see it, because it asserts against a mocked api client. This test
+    // asserts on the actual fetch body: the grant either reaches the wire here
+    // or the relay role does not exist.
+    document.cookie = "trstctl_csrf=csrf-token-agent-roles; path=/";
+    mockFetch(201, JSON.stringify({ token: "BOOT-TOKEN-RELAY", enroll_path: "/enroll/bootstrap", roles: ["host", "network"] }));
+
+    await api.createEnrollmentToken({ allowed_identity: "edge-f5-relay", roles: ["host", "network"] });
+
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      allowed_identity: "edge-f5-relay",
+      roles: ["host", "network"],
+    });
+  });
+
+  it("sends a roles-only grant even with no pinned identity", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-agent-roles2; path=/";
+    mockFetch(201, JSON.stringify({ token: "BOOT-TOKEN-NET", enroll_path: "/enroll/bootstrap", roles: ["network"] }));
+
+    await api.createEnrollmentToken({ roles: ["network"] });
+
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ roles: ["network"] });
+  });
+
   it("drives dynamic lease issue, renew, and revoke through served mutations", async () => {
     document.cookie = "trstctl_csrf=csrf-token-lease; path=/";
     mockFetchSequence([

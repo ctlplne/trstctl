@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/k8s"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const (
@@ -118,7 +119,7 @@ func TestAgentDiscoveryReconcilesAllSourcesIntoInventory(t *testing.T) {
 		discovery.NewPKCS11Source("hsm0", tok),
 		discovery.NewWindowsStoreSource("MY", mem),
 		discovery.NewKubernetesSource("apps", kc),
-	}, discovery.NewStoreSink(s, tenantA))
+	}, &testDiscoveryStoreSink{store: s, tenantID: tenantA})
 
 	if len(rep.Errors) != 0 {
 		t.Fatalf("unexpected discovery errors: %v", rep.Errors)
@@ -148,4 +149,40 @@ func TestAgentDiscoveryReconcilesAllSourcesIntoInventory(t *testing.T) {
 			t.Errorf("no inventory row tagged source %q", want)
 		}
 	}
+}
+
+// testDiscoveryStoreSink upserts discovered certificates straight into the
+// inventory, keyed by (tenant, fingerprint). It lives HERE, in a control-plane
+// test, and not in internal/agent/discovery, deliberately: the agent tree must
+// not import internal/store (the A3 import boundary — the agent binary links no
+// database), and the direct upsert this sink performs is a test harness for
+// store idempotency, not the production ingestion path (which is event-sourced
+// through the dispatcher's run sinks, AN-2).
+type testDiscoveryStoreSink struct {
+	store    *store.Store
+	tenantID string
+}
+
+func (ss *testDiscoveryStoreSink) Record(ctx context.Context, f discovery.Found) error {
+	info := f.Cert
+	notBefore, notAfter := info.NotBefore, info.NotAfter
+	sans := make([]string, 0, len(info.DNSNames)+len(info.IPAddresses)+len(info.URIs)+len(info.EmailAddresses))
+	sans = append(sans, info.DNSNames...)
+	sans = append(sans, info.IPAddresses...)
+	sans = append(sans, info.URIs...)
+	sans = append(sans, info.EmailAddresses...)
+	_, err := ss.store.UpsertCertificate(ctx, store.Certificate{
+		TenantID:           ss.tenantID,
+		Subject:            info.Subject,
+		SANs:               sans,
+		Issuer:             info.Issuer,
+		Serial:             info.SerialNumber,
+		Fingerprint:        info.SHA256Fingerprint,
+		KeyAlgorithm:       info.KeyAlgorithm,
+		NotBefore:          &notBefore,
+		NotAfter:           &notAfter,
+		DeploymentLocation: f.Location,
+		Source:             f.Source,
+	})
+	return err
 }

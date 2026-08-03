@@ -153,8 +153,14 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	"internal/crypto/mtls/server.go": {
 		"LoopbackProbeClient": true,
 	},
-	"internal/observ/otlp.go": {
-		"NewOTLPHTTPExporter": true,
+	// Moved from internal/observ/otlp.go (same construction, same rationale)
+	// when the exporter was split out so the observ metrics core could stay
+	// linkable by the agent binary (A3 import boundary). The exporter's endpoint
+	// comes from operator configuration and is egress-guarded by the caller
+	// (otlpExporterFromConfig wraps the transport); the ambient client here is
+	// the pre-guard base that the wrap replaces.
+	"internal/observ/otlp/otlp.go": {
+		"NewHTTPExporter": true,
 	},
 	"internal/operator/client.go": {
 		"InCluster": true,

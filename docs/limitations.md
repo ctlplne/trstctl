@@ -541,6 +541,14 @@ permission, separately from `agents:write`. Enrolling a host agent is routine
 fleet work; placing a relay puts appliance credentials on a machine of the
 operator's choosing, and those are different decisions.
 
+The agent binary itself is now held to the boundary the roles imply: a CI guard
+(`docs/agent_binary_import_boundary_test.go`) fails the build if `trstctl-agent`
+links the database driver, the store, the event spine, or any served
+control-plane package — before the guard existed, two dead store-backed sinks
+had already pulled all of those into the binary. A companion guard pins the
+connector core (`internal/connector/...`) to a host-neutral dependency set, which
+is what will let the same connector implementations execute on a relay.
+
 An agent enrolled before roles existed carries no role SAN, and is read as
 **host-only** rather than as capability-less. That is what those agents already
 were, and reading them any other way would strand a live fleet mid-upgrade. A

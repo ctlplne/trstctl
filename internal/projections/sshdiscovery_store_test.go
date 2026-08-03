@@ -47,7 +47,7 @@ func TestSSHHostKeyProbeReconcilesIntoInventory(t *testing.T) {
 	}
 	defer srv.Close()
 
-	sink := sshinv.NewStoreSink(s, tenantA)
+	sink := &testSSHStoreSink{store: s, tenantID: tenantA}
 	sc := sshscan.New(sink, sshscan.WithAllowLoopbackTargets(true))
 	defer sc.Close()
 
@@ -104,7 +104,7 @@ func TestAgentSSHMaterialReconcilesIntoInventory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sink := sshinv.NewStoreSink(s, tenantA)
+	sink := &testSSHStoreSink{store: s, tenantID: tenantA}
 	for _, f := range found {
 		if err := sink.Record(ctx, f); err != nil {
 			t.Fatalf("record: %v", err)
@@ -122,4 +122,28 @@ func TestAgentSSHMaterialReconcilesIntoInventory(t *testing.T) {
 	if orphan.Source != sshinv.SourceAuthorizedKeys {
 		t.Errorf("source = %q, want ssh-authorized-keys", orphan.Source)
 	}
+}
+
+// testSSHStoreSink upserts discovered SSH keys straight into the inventory. It
+// lives here and not in internal/sshinv for the same reason as
+// testDiscoveryStoreSink: internal/sshinv is linked by the agent binary for its
+// Found/Source types, so it must not import internal/store (the A3 import
+// boundary). The direct upsert is a test harness for store idempotency.
+type testSSHStoreSink struct {
+	store    *store.Store
+	tenantID string
+}
+
+func (ss *testSSHStoreSink) Record(ctx context.Context, f sshinv.Found) error {
+	_, err := ss.store.UpsertSSHKey(ctx, store.SSHKey{
+		TenantID:       ss.tenantID,
+		Fingerprint:    f.Fingerprint,
+		KeyType:        f.KeyType,
+		Comment:        f.Comment,
+		Source:         f.Source,
+		Location:       f.Location,
+		StandingAccess: f.StandingAccess,
+		Orphaned:       f.Orphaned,
+	})
+	return err
 }

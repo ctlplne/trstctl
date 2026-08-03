@@ -44,6 +44,7 @@ import (
 	"trstctl.com/trstctl/internal/lifecycle"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/observ"
+	"trstctl.com/trstctl/internal/observ/otlp"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/outboxgc"
 	"trstctl.com/trstctl/internal/privacy"
@@ -299,7 +300,7 @@ type Deps struct {
 	notificationChannelOwner *notificationChannelOwnership
 	Logger                   *slog.Logger    // structured access log sink (R2.2); nil discards
 	TraceExporter            observ.Exporter // completed-span sink (R2.2); nil is a no-op
-	OTLPExporter             *observ.OTLPExporter
+	OTLPExporter             *otlp.Exporter
 	Bulkhead                 *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
 	RateLimiter              api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
 	// SecurityHeaders configures the web-hardening response headers + CORS policy
@@ -663,8 +664,8 @@ type Server struct {
 	startedAt  time.Time
 	bulk       *bulkhead.Set
 	mBulkheads *observ.BulkheadMetrics
-	otlp       *observ.OTLPExporter
-	otlpAudit  *observ.OTLPAuditStreamer
+	otlp       *otlp.Exporter
+	otlpAudit  *otlp.AuditStreamer
 	egress     *egress.Guard
 	telemetry  *telemetry.Reporter
 	federation FederationWorker
@@ -1553,7 +1554,7 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	}
 	s.otlp = d.OTLPExporter
 	if s.otlp != nil {
-		s.otlpAudit = observ.NewOTLPAuditStreamer(d.Log, s.otlp)
+		s.otlpAudit = otlp.NewAuditStreamer(d.Log, s.otlp)
 	}
 	s.tracer = observ.NewTracer(observ.CombineExporters(d.TraceExporter, s.otlp))
 	s.mIdemPurged = s.registry.CounterVec("trstctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package observ
+// Package otlp is the OTLP trace/audit exporter, split out of internal/observ
+// so the metrics core stays linkable by the agent binary (epic A3): this
+// package imports internal/events (the audit streamer replays the event log),
+// which the agent must never link — see docs/agent_binary_import_boundary_test.go.
+// The parent observ package holds the host-neutral primitives (Registry,
+// CounterVec, observ.SpanData); this package holds the control-plane-only exporters.
+package otlp
 
 import (
 	"bytes"
@@ -26,6 +32,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/observ"
 )
 
 const (
@@ -40,8 +47,8 @@ const (
 	otlpContentTypeProtobuf = "application/x-protobuf"
 )
 
-// OTLPConfig configures OTLP/HTTP export to an operator-owned collector.
-type OTLPConfig struct {
+// Config configures OTLP/HTTP export to an operator-owned collector.
+type Config struct {
 	Endpoint    string
 	Token       []byte
 	Insecure    bool
@@ -51,15 +58,15 @@ type OTLPConfig struct {
 	Client      *http.Client
 }
 
-// OTLPExporter exports served traces and audit events as OTLP/HTTP protobuf.
-type OTLPExporter struct {
+// Exporter exports served traces and audit events as OTLP/HTTP protobuf.
+type Exporter struct {
 	endpoint    string
 	token       []byte
 	client      *http.Client
 	serviceName string
 	timeout     time.Duration
 
-	traces chan SpanData
+	traces chan observ.SpanData
 	stop   chan struct{}
 	done   chan struct{}
 	closed atomic.Bool
@@ -67,10 +74,10 @@ type OTLPExporter struct {
 	drops  atomic.Uint64
 }
 
-// NewOTLPHTTPExporter builds a bounded OTLP/HTTP exporter. Plaintext HTTP is
+// NewHTTPExporter builds a bounded OTLP/HTTP exporter. Plaintext HTTP is
 // allowed only when Insecure is true, so production cannot accidentally send
 // telemetry over cleartext.
-func NewOTLPHTTPExporter(cfg OTLPConfig) (*OTLPExporter, error) {
+func NewHTTPExporter(cfg Config) (*Exporter, error) {
 	if strings.TrimSpace(cfg.Endpoint) == "" {
 		return nil, errors.New("otlp: endpoint is required")
 	}
@@ -103,13 +110,13 @@ func NewOTLPHTTPExporter(cfg OTLPConfig) (*OTLPExporter, error) {
 	if client == nil {
 		client = &http.Client{Transport: cloneDefaultTransport()}
 	}
-	exp := &OTLPExporter{
+	exp := &Exporter{
 		endpoint:    strings.TrimRight(cfg.Endpoint, "/"),
 		token:       append([]byte(nil), cfg.Token...),
 		client:      client,
 		serviceName: serviceName,
 		timeout:     timeout,
-		traces:      make(chan SpanData, queueSize),
+		traces:      make(chan observ.SpanData, queueSize),
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
 	}
@@ -127,7 +134,7 @@ func cloneDefaultTransport() http.RoundTripper {
 // Export queues a completed span without blocking the served request path. When
 // the queue is full the span is dropped; this preserves API backpressure and the
 // collector can alert on missing telemetry by comparing audit/event sequences.
-func (e *OTLPExporter) Export(span SpanData) {
+func (e *Exporter) Export(span observ.SpanData) {
 	if e == nil || e.closed.Load() {
 		return
 	}
@@ -139,7 +146,7 @@ func (e *OTLPExporter) Export(span SpanData) {
 }
 
 // DroppedSpans returns spans dropped because the bounded export queue was full.
-func (e *OTLPExporter) DroppedSpans() uint64 {
+func (e *Exporter) DroppedSpans() uint64 {
 	if e == nil {
 		return 0
 	}
@@ -147,7 +154,7 @@ func (e *OTLPExporter) DroppedSpans() uint64 {
 }
 
 // Close stops the trace worker after draining queued spans.
-func (e *OTLPExporter) Close() error {
+func (e *Exporter) Close() error {
 	if e == nil {
 		return nil
 	}
@@ -160,7 +167,7 @@ func (e *OTLPExporter) Close() error {
 	return nil
 }
 
-func (e *OTLPExporter) runTraceWorker() {
+func (e *Exporter) runTraceWorker() {
 	defer close(e.done)
 	for {
 		select {
@@ -179,14 +186,14 @@ func (e *OTLPExporter) runTraceWorker() {
 	}
 }
 
-func (e *OTLPExporter) exportSpanWithTimeout(span SpanData) {
+func (e *Exporter) exportSpanWithTimeout(span observ.SpanData) {
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
 	_ = e.ExportTraces(ctx, span)
 }
 
 // ExportTraces sends a completed trstctl span as an OTLP trace export.
-func (e *OTLPExporter) ExportTraces(ctx context.Context, span SpanData) error {
+func (e *Exporter) ExportTraces(ctx context.Context, span observ.SpanData) error {
 	if e == nil {
 		return nil
 	}
@@ -203,7 +210,7 @@ func (e *OTLPExporter) ExportTraces(ctx context.Context, span SpanData) error {
 }
 
 // ExportEvent sends one event-sourced audit event as an OTLP log record.
-func (e *OTLPExporter) ExportEvent(ctx context.Context, ev events.Event) error {
+func (e *Exporter) ExportEvent(ctx context.Context, ev events.Event) error {
 	if e == nil {
 		return nil
 	}
@@ -238,14 +245,14 @@ func (e *OTLPExporter) ExportEvent(ctx context.Context, ev events.Event) error {
 	return e.post(ctx, e.signalURL("logs"), req)
 }
 
-func (e *OTLPExporter) resource(signal string) *resourcepb.Resource {
+func (e *Exporter) resource(signal string) *resourcepb.Resource {
 	return &resourcepb.Resource{Attributes: []*commonpb.KeyValue{
 		stringKV("service.name", e.serviceName),
 		stringKV("trstctl.signal", signal),
 	}}
 }
 
-func (e *OTLPExporter) post(ctx context.Context, target string, msg proto.Message) error {
+func (e *Exporter) post(ctx context.Context, target string, msg proto.Message) error {
 	body, err := proto.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("otlp: marshal: %w", err)
@@ -269,7 +276,7 @@ func (e *OTLPExporter) post(ctx context.Context, target string, msg proto.Messag
 	return nil
 }
 
-func (e *OTLPExporter) signalURL(signal string) string {
+func (e *Exporter) signalURL(signal string) string {
 	u := strings.TrimRight(e.endpoint, "/")
 	for _, s := range []string{"metrics", "traces", "logs"} {
 		if strings.HasSuffix(u, "/v1/"+s) {
@@ -282,7 +289,7 @@ func (e *OTLPExporter) signalURL(signal string) string {
 	return u + "/v1/" + signal
 }
 
-func otlpSpan(span SpanData) *tracepb.Span {
+func otlpSpan(span observ.SpanData) *tracepb.Span {
 	out := &tracepb.Span{
 		TraceId:           hexBytes(span.TraceID),
 		SpanId:            hexBytes(span.SpanID),
@@ -335,21 +342,21 @@ func zero(b []byte) {
 	}
 }
 
-// OTLPAuditStreamer tails the event log and exports events as OTLP log records.
-type OTLPAuditStreamer struct {
+// AuditStreamer tails the event log and exports events as OTLP log records.
+type AuditStreamer struct {
 	log      *events.Log
-	exporter *OTLPExporter
+	exporter *Exporter
 	next     uint64
 	poll     time.Duration
 }
 
-// NewOTLPAuditStreamer returns an event-log tailer for OTLP audit streaming.
-func NewOTLPAuditStreamer(log *events.Log, exporter *OTLPExporter) *OTLPAuditStreamer {
-	return &OTLPAuditStreamer{log: log, exporter: exporter, next: 1, poll: defaultOTLPAuditPoll}
+// NewAuditStreamer returns an event-log tailer for OTLP audit streaming.
+func NewAuditStreamer(log *events.Log, exporter *Exporter) *AuditStreamer {
+	return &AuditStreamer{log: log, exporter: exporter, next: 1, poll: defaultOTLPAuditPoll}
 }
 
 // Run exports new event-log records until ctx is cancelled.
-func (s *OTLPAuditStreamer) Run(ctx context.Context) error {
+func (s *AuditStreamer) Run(ctx context.Context) error {
 	if s == nil || s.log == nil || s.exporter == nil {
 		return nil
 	}
@@ -368,7 +375,7 @@ func (s *OTLPAuditStreamer) Run(ctx context.Context) error {
 }
 
 // ExportOnce exports any events from the current cursor through the current head.
-func (s *OTLPAuditStreamer) ExportOnce(ctx context.Context) (int, error) {
+func (s *AuditStreamer) ExportOnce(ctx context.Context) (int, error) {
 	if s == nil || s.log == nil || s.exporter == nil {
 		return 0, nil
 	}

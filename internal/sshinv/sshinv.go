@@ -14,8 +14,6 @@ package sshinv
 import (
 	"context"
 	"sync"
-
-	"trstctl.com/trstctl/internal/store"
 )
 
 // Discovery source kinds.
@@ -70,33 +68,4 @@ func (m *MemorySink) All() []Found {
 	out := make([]Found, len(m.found))
 	copy(out, m.found)
 	return out
-}
-
-// StoreSink reconciles discovered SSH keys into the inventory (the ssh_keys
-// table) via an idempotent upsert keyed by (tenant, fingerprint).
-type StoreSink struct {
-	store    *store.Store
-	tenantID string
-}
-
-var _ Sink = (*StoreSink)(nil)
-
-// NewStoreSink records discoveries for a tenant.
-func NewStoreSink(s *store.Store, tenantID string) *StoreSink {
-	return &StoreSink{store: s, tenantID: tenantID}
-}
-
-// Record upserts the discovered SSH key's metadata into the inventory.
-func (ss *StoreSink) Record(ctx context.Context, f Found) error {
-	_, err := ss.store.UpsertSSHKey(ctx, store.SSHKey{
-		TenantID:       ss.tenantID,
-		Fingerprint:    f.Fingerprint,
-		KeyType:        f.KeyType,
-		Comment:        f.Comment,
-		Source:         f.Source,
-		Location:       f.Location,
-		StandingAccess: f.StandingAccess,
-		Orphaned:       f.Orphaned,
-	})
-	return err
 }

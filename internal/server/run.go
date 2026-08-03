@@ -37,6 +37,7 @@ import (
 	"trstctl.com/trstctl/internal/notify/sms"
 	"trstctl.com/trstctl/internal/notify/teams"
 	"trstctl.com/trstctl/internal/observ"
+	"trstctl.com/trstctl/internal/observ/otlp"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/ratelimit"
@@ -537,7 +538,7 @@ type runOutboundDeps struct {
 	secretSyncTargets      SecretSyncTargetRegistry
 	cloudTokenMinter       *cloudauth.Minter
 	telemetryReporter      *telemetry.Reporter
-	otlpExporter           *observ.OTLPExporter
+	otlpExporter           *otlp.Exporter
 }
 
 // buildRunOutboundDeps constructs the outbound-integration stage. Split out of
@@ -794,7 +795,7 @@ func telemetryReporterFromConfig(cfg config.Telemetry, st *store.Store, guard *e
 	}, nil
 }
 
-func otlpExporterFromConfig(cfg config.OTLP, guard *egress.Guard) (*observ.OTLPExporter, error) {
+func otlpExporterFromConfig(cfg config.OTLP, guard *egress.Guard) (*otlp.Exporter, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -816,7 +817,7 @@ func otlpExporterFromConfig(cfg config.OTLP, guard *egress.Guard) (*observ.OTLPE
 	if guard != nil && guard.Enabled() {
 		client = guard.Client(timeout)
 	}
-	exp, err := observ.NewOTLPHTTPExporter(observ.OTLPConfig{
+	exp, err := otlp.NewHTTPExporter(otlp.Config{
 		Endpoint:    cfg.Endpoint,
 		Token:       token,
 		Insecure:    cfg.Insecure,

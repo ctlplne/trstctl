@@ -1123,7 +1123,17 @@ function mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
 
 function enrollmentTokenRequest(input?: EnrollmentTokenRequest): EnrollmentTokenRequest | undefined {
   const allowedIdentity = input?.allowed_identity?.trim();
-  return allowedIdentity ? { allowed_identity: allowedIdentity } : undefined;
+  const roles = input?.roles ?? [];
+  // A2: the capability grant must reach the wire. This builder once rebuilt the
+  // body from allowed_identity alone and silently dropped roles — the console's
+  // role selector minted host-only tokens no matter what the operator chose,
+  // and the page test missed it because it asserted against a mocked client.
+  // The wire-level test in api.test.ts is what pins this now.
+  if (!allowedIdentity && roles.length === 0) return undefined;
+  return {
+    ...(allowedIdentity ? { allowed_identity: allowedIdentity } : {}),
+    ...(roles.length > 0 ? { roles } : {}),
+  };
 }
 
 /** postRead sends a read-only POST. These endpoints accept structured bodies but do

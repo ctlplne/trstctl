@@ -20,7 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/observ"
+	"trstctl.com/trstctl/internal/observ/otlp"
 )
 
 // COMP-02 acceptance: the served control plane streams both HTTP traces and
@@ -29,7 +29,7 @@ import (
 // not wired into the running server path.
 func TestServedOTLPExporterStreamsTracesAndAuditEvents(t *testing.T) {
 	collector := newServedOTLPCapture(t)
-	exp, err := observ.NewOTLPHTTPExporter(observ.OTLPConfig{
+	exp, err := otlp.NewHTTPExporter(otlp.Config{
 		Endpoint:    collector.URL(),
 		Insecure:    true,
 		ServiceName: "trstctl-test",
