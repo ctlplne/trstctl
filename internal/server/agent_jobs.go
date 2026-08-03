@@ -197,6 +197,9 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 			LeaseExpiresUnix: job.ClaimExpiresAt.Unix(),
 		})
 	}
+	for _, job := range out.Jobs {
+		a.metrics.observeClaim(job.Kind, 1)
+	}
 	if len(out.Jobs) > 0 {
 		a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.claimed", map[string]any{
 			"agent": info.CommonName, "count": len(out.Jobs), "kinds": kinds,
@@ -433,6 +436,11 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 		}
 		out.Queues = append(out.Queues, q)
 	}
+	// A6: publish the same levels this read just computed, so the Prometheus
+	// series and the Operations console can never disagree about what the fabric
+	// is doing. Reusing the posture read rather than adding a second query also
+	// means the metrics carry the same tenant-free shape the API surface does.
+	s.agentMetrics.observeJobLedger(out)
 	return out, nil
 }
 

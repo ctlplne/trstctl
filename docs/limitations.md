@@ -711,9 +711,23 @@ than sticking, that work returns to the queue without anyone noticing the machin
 is gone. Claims use `SKIP LOCKED`, so a fleet polling in lockstep fans out across
 the queue instead of serializing on its head. Extend, complete and release all
 require the caller to hold the lease, so a stalled agent whose lease lapsed cannot
-report on work another agent has since done. `GET /api/v1/operations/jobs` and the
+report on work another agent has since done. `GET /api/v1/operations/jobs`, `trstctl-cli operations jobs` and the
 Operations console show per-kind waiting and held counts plus the oldest wait —
-counts only, never a tenant identifier, payload or credential.
+counts only, never a tenant identifier, payload or credential. The same posture
+read publishes Prometheus series (queue depth and oldest wait per kind, live
+credential redemptions and their oldest age, claims and refusals as counters),
+so the metrics and the console cannot disagree about what the fabric is doing.
+Three alert rules ship in `deploy/observability/alerts.yml`: a stalled queue
+alerts on the oldest WAIT rather than depth, because depth alone cannot
+distinguish a busy fabric from a stopped one; a credential held past the maximum
+claim lease is critical, because that is live material on a machine whose claim
+should already have lapsed; and refused redemptions alert at all, because each
+one is an agent asking for material it did not hold a claim for. `trstctl doctor`
+gains `FABRIC-1`, which sweeps agent-claimable work nobody has taken and names
+the ROLE the waiting work demands — usually the answer, since work demanding a
+role no enrolled agent holds waits forever and looks exactly like a busy queue.
+It sits beside `DUR-2` rather than inside it because a control plane that is not
+delivering and a fleet that is not claiming need different runbooks.
 
 **What is served, and what is not.** `connector.deploy` has a relay-side executor
 as of A3 — an agent with the network role claims it, redeems its credential for

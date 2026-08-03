@@ -71,6 +71,68 @@ func runOpsProbes(ctx context.Context, s *store.Store, opts options) []Probe {
 		}
 	}
 
+	// FABRIC-1: agent-claimable work that no agent has taken (epic A6).
+	//
+	// This sits beside DUR-2 rather than inside it because the two failures are
+	// different and need different answers. A stalled outbox LANE means the
+	// dispatcher is not delivering. A stalled agent-claimable QUEUE means the
+	// dispatcher is deliberately not touching it — the work is reserved for an
+	// agent — and nobody has claimed it. That happens when no agent holds the
+	// role the row demands, when the kind is not in claimable_job_kinds, or when
+	// the fleet has stopped polling. DUR-2 would report all three as one number
+	// and send an operator to the wrong runbook.
+	//
+	//trstctl:system-query — cross-tenant by design: aggregates the oldest unclaimed age per job kind across all tenants, the same whole-system view the operations job-ledger surface has; it reads ages and the role demand, never payloads or credentials, and reports no tenant_id.
+	fabricRows, fabricErr := s.SystemPool().Query(ctx, `
+		SELECT destination, COALESCE(NULLIF(required_agent_role, ''), 'any'), min(created_at), count(*)
+		FROM outbox
+		WHERE status = 'pending' AND delivered_at IS NULL
+		  AND claimed_by_agent_id IS NULL
+		  AND required_agent_role IN ('host', 'network')
+		GROUP BY 1, 2
+		ORDER BY 3`)
+	if fabricErr != nil {
+		out = append(out, Probe{ID: "FABRIC-1", Group: groupDurability, Status: StatusFail,
+			Detail: "could not sweep agent job queues: " + fabricErr.Error()})
+	} else {
+		defer fabricRows.Close()
+		now := opts.now().UTC()
+		waiting := map[string]string{}
+		kinds, scanFailed := 0, false
+		for fabricRows.Next() {
+			var kind, role string
+			var oldest time.Time
+			var depth int
+			if err := fabricRows.Scan(&kind, &role, &oldest, &depth); err != nil {
+				out = append(out, Probe{ID: "FABRIC-1", Group: groupDurability, Status: StatusFail,
+					Detail: "scan agent job queues: " + err.Error()})
+				scanFailed = true
+				break
+			}
+			kinds++
+			if age := now.Sub(oldest); age > stalledLaneThreshold {
+				// The role is named because it is usually the answer: work
+				// demanding a role no enrolled agent holds waits forever, and
+				// looks identical to a busy queue until someone says which role.
+				waiting[kind+" (needs "+role+" agent)"] = age.Truncate(time.Second).String()
+			}
+		}
+		switch {
+		case scanFailed:
+			// already reported
+		case len(waiting) > 0:
+			out = append(out, Probe{ID: "FABRIC-1", Group: groupDurability, Status: StatusWarn,
+				Detail: fmt.Sprintf("%d agent job queue(s) hold work unclaimed for longer than %s: %v. Check that an agent holds the demanded role, that the kind is in agent_channel.claimable_job_kinds, and that the fleet is polling",
+					len(waiting), stalledLaneThreshold, waiting),
+				Evidence: map[string]any{"kinds_with_unclaimed_work": kinds}})
+		default:
+			out = append(out, Probe{ID: "FABRIC-1", Group: groupDurability, Status: StatusPass,
+				Detail:   fmt.Sprintf("no agent-claimable job has waited longer than %s (%d kind(s) with any unclaimed work)", stalledLaneThreshold, kinds),
+				Limits:   "an age sweep at one instant, and only over rows an agent is meant to claim; control-plane delivery health is DUR-2's concern",
+				Evidence: map[string]any{"kinds_with_unclaimed_work": kinds}})
+		}
+	}
+
 	// POSTURE-1: RLS-relevant server settings.
 	var rowSecurity, version string
 	//trstctl:system-query — cross-tenant by design: reads only the server's row_security setting and version string to report deployment posture; no tenant rows and no tenant_id are involved in a SHOW-style catalog read.

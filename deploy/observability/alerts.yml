@@ -704,6 +704,43 @@ groups:
           summary: "trstctl agent channel is shedding load"
           description: "The agent-channel bulkhead rejected heartbeat or renewal RPCs. Slow or pause the rollout and follow docs/runbooks/fleet-rollout.md."
 
+      # A6: job-ledger health. A queue that has stopped draining looks exactly
+      # like a quiet estate until something expires, which is why the ALERT is on
+      # the oldest wait rather than on depth: depth alone cannot tell a busy
+      # fabric from a stalled one.
+      - alert: TrstctlAgentJobQueueStalled
+        expr: max(trstctl_agent_jobs_oldest_unclaimed_seconds) > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl agent job queue has stalled"
+          description: "A job has waited over 15 minutes for an agent to claim it. Either no agent holds the role that job demands, the kind is not in agent_channel.claimable_job_kinds, or the fleet has stopped polling. Check GET /api/v1/operations/jobs."
+
+      # Credential material held outside the seal. Each live redemption is real
+      # material on a real machine, so an age past the maximum claim lease
+      # (10 minutes) means an attempt is stuck holding it rather than working.
+      - alert: TrstctlCredentialRedemptionStuck
+        expr: trstctl_agent_credential_redemption_oldest_seconds > 900
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "a redeemed credential has been held past its claim lease"
+          description: "An agent has held redeemed credential material for longer than the maximum claim lease. The claim should have lapsed and the material been wiped. Investigate the holding agent before the next renewal window."
+
+      # Refused redemptions are not routine. Each one is an agent asking for
+      # material it was not entitled to at that moment — a replay, a lease it no
+      # longer holds, or a stale attempt.
+      - alert: TrstctlCredentialRedemptionsRefused
+        expr: sum(increase(trstctl_agent_credential_redemptions_refused_total[10m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl refused an agent credential redemption"
+          description: "An agent asked for credential material it did not hold a live claim for. A single refusal after a lease lapse is expected during a slow deploy; a sustained rate is not. The reason label distinguishes replay, lease-not-held, and stale-attempt."
+
       - alert: TrstctlAgentFleetStale
         expr: trstctl_agents_total > 0 and (trstctl_agents_stale_total / clamp_min(trstctl_agents_total, 1)) > 0.02
         for: 2m

@@ -98,9 +98,28 @@ than guess, those probes skip with the reason stated:
   checkpoint lag), and EVT-3 (read-model rows resolving to source events) all need
   the NATS event stream, which this seat has no credentials for. Verify the audit
   chain through the served audit export instead.
-- **Durability and backpressure (AN-5/6/7)** — DUR-2 (outbox lane age) runs from
-  the database. DUR-1, DUR-3, and DUR-4 live in the serving process; query
-  `GET /api/v1/operations/bulkheads` on the running control plane for pool depth.
+- **Durability and backpressure (AN-5/6/7)** — DUR-2 (outbox lane age) and
+  FABRIC-1 (agent job queue age) run from the database. DUR-1, DUR-3, and DUR-4
+  live in the serving process; query `GET /api/v1/operations/bulkheads` on the
+  running control plane for pool depth.
+
+  **FABRIC-1** sweeps work that is reserved for an agent and that no agent has
+  claimed, and warns when the oldest has waited longer than fifteen minutes. It
+  names the ROLE the waiting work demands, because that is usually the answer:
+  a job stamped for a network relay in a fleet of host-only agents waits
+  forever and looks exactly like a busy queue. Age rather than depth is the
+  signal, for the same reason as DUR-2 — a deep queue that is draining is
+  healthy, and a shallow one that is not is a stopped fabric.
+
+  It is deliberately separate from DUR-2 rather than folded into it. A stalled
+  outbox lane means the control plane is not delivering; a stalled agent queue
+  means the control plane is correctly not touching the work and the fleet is
+  not taking it. Those need different runbooks, and one number reporting both
+  would send an operator to the wrong one. **Its limit:** it is an age sweep at
+  one instant, over rows an agent is meant to claim. It cannot tell you whether
+  a claiming agent is making progress — that is the credential-redemption age
+  in `GET /api/v1/operations/jobs` and the `TrstctlCredentialRedemptionStuck`
+  alert.
 
 One probe outside those groups always runs: **POSTURE-1** reports the server's
 `row_security` setting and version string — the deployment posture that makes the

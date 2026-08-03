@@ -64,6 +64,17 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 	reg.CounterVec("trstctl_agent_enrollments_total", "Agent bootstrap enrollment attempts by result.", []string{"result"}).WithLabelValues("failed").Inc()
 	reg.CounterVec("trstctl_agent_heartbeats_total", "Agent steady-state heartbeat RPCs by result.", []string{"result"}).WithLabelValues("failed").Inc()
 	reg.CounterVec("trstctl_agent_bulkhead_rejections_total", "Agent-channel RPCs rejected by the agent bulkhead.", []string{"method"}).WithLabelValues("heartbeat").Inc()
+	// A6 job-ledger telemetry. These are induced here for the same reason as
+	// everything above: the alert file must reference metrics the code actually
+	// emits, and a rule watching a series nobody publishes is a rule that never
+	// fires — the quietest possible way for monitoring to be wrong.
+	reg.GaugeVec("trstctl_agent_jobs_oldest_unclaimed_seconds",
+		"How long the oldest unclaimed job of each kind has waited. This is the number that distinguishes a busy fabric from a stalled one; depth alone cannot.",
+		[]string{"kind"}).WithLabelValues("connector.deploy").Set(1200)
+	reg.Gauge("trstctl_agent_credential_redemption_oldest_seconds",
+		"Age of the oldest live credential redemption. Past the maximum claim lease this means an attempt is stuck holding material.").Set(1200)
+	reg.CounterVec("trstctl_agent_credential_redemptions_refused_total",
+		"Credential redemptions refused, by closed-set reason.", []string{"reason"}).WithLabelValues("redemption_replayed").Inc()
 	reg.Gauge("trstctl_agents_total", "Total agents currently known to the control plane.").Set(10)
 	reg.Gauge("trstctl_agents_stale_total", "Agents whose last heartbeat is older than two heartbeat intervals.").Set(1)
 

@@ -116,6 +116,7 @@ func (a *agentService) refuseRedemption(ctx context.Context, tenantID, agentCN, 
 	if classifyErr != nil {
 		reason = "redemption_refused"
 	}
+	a.metrics.observeRedemptionRefusal(reason)
 	a.recordAgentJobEvent(ctx, tenantID, "agent.job.credential.redemption_refused", map[string]any{
 		"agent": agentCN, "job_id": req.JobID, "attempt": req.Attempt, "reason": reason,
 	})

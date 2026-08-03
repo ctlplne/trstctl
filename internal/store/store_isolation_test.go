@@ -168,15 +168,20 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 	approved := map[string]int{
 		"internal/backup/postgres_state.go":       2,
 		"internal/cli/doctor/probes_isolation.go": 1,
-		"internal/cli/doctor/probes_ops.go":       2,
-		"internal/store/rls_inventory.go":         3,
-		"internal/idemgc/idemgc.go":               2,
-		"internal/perf/live.go":                   1,
-		"internal/orchestrator/outbox.go":         2,
-		"internal/outboxgc/outboxgc.go":           2,
-		"internal/server/server.go":               1,
-		"internal/store/connector_lifecycle.go":   1,
-		"internal/store/lifecycle.go":             1,
+		// A6 adds a third: the FABRIC-1 sweep over agent-claimable work that no
+		// agent has taken. It is cross-tenant for the same reason DUR-2 is —
+		// "is the fabric moving" is a whole-system question one tenant's view
+		// cannot answer — and it reads ages, kinds and the role demand, never a
+		// payload, a credential or a tenant id.
+		"internal/cli/doctor/probes_ops.go":     3,
+		"internal/store/rls_inventory.go":       3,
+		"internal/idemgc/idemgc.go":             2,
+		"internal/perf/live.go":                 1,
+		"internal/orchestrator/outbox.go":       2,
+		"internal/outboxgc/outboxgc.go":         2,
+		"internal/server/server.go":             1,
+		"internal/store/connector_lifecycle.go": 1,
+		"internal/store/lifecycle.go":           1,
 		// H5: the CA calendar's leader enumerator — "which tenants operate a CA
 		// authority with a known expiry" — mirrors the expiry-alert enumerator in
 		// lifecycle.go. It reads tenant ids only; the authority rows themselves are
