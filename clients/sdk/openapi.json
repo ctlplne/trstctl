@@ -4900,6 +4900,9 @@
               "failed",
               "config_validated",
               "rollback_recorded",
+              "dry_run_queued",
+              "dry_run_planned",
+              "dry_run_blocked",
               "test_succeeded"
             ],
             "type": "string"

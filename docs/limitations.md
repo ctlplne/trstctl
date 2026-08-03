@@ -734,7 +734,10 @@ string that bypassed the registry.
 | `queued` | connector delivery | Intent committed to the outbox in the same transaction as the state change. | That any connector has run. |
 | `delivered` | connector delivery | A connector reached the target and applied the credential. | That the endpoint was re-read and proven to serve it. Live verification is separate work (not yet served). |
 | `failed` | connector delivery | The attempt ran and did not succeed. | — |
-| `config_validated` | connector delivery | `POST /api/v1/connectors/targets/{id}/test` resolved target metadata, schema, and credential references **locally**. | That the target was contacted, reachable, or willing to accept the credential. Nothing was changed. |
+| `config_validated` | connector delivery | `POST /api/v1/connectors/targets/{id}/test` resolved target metadata, schema, and credential references **locally**, because no relay is enabled for `connector.test`. | That the target was contacted, reachable, or willing to accept the credential. Nothing was changed. |
+| `dry_run_queued` | connector delivery | A relay-executed dry-run was queued for the agent bound to this target. | That anything is yet known about the target. No relay has reported. |
+| `dry_run_planned` | connector delivery | A relay reached the target, resolved every credential a real deploy needs, and returned the mutation plan. | That anything was deployed. The dry-run path never invokes a connector's `Deploy`, so zero writes is structural, not promised. |
+| `dry_run_blocked` | connector delivery | A relay ran the dry-run and a real deploy would **not** proceed. The reason names the step that stopped it. | That the target is broken in every respect — one step failed, and the plan says which. |
 | `rollback_recorded` | connector delivery | `POST /api/v1/connectors/targets/{id}/rollback` recorded an operator-attested rollback intent as durable evidence. | That a rollback executed. The predecessor credential is **not** restored on the target; the `rollback_ref` names the outstanding manual action. |
 | `not_evaluated` | fleet re-issuance health gate | No evidence exists from which a verdict could be computed, so trstctl asserts none. | It is **not** a pass. |
 | `passed` / `failed` | fleet re-issuance health gate | An operator attested this verdict on the request. | That trstctl computed it. trstctl never fills in `passed` itself. |
@@ -747,10 +750,22 @@ ran per batch. Both remain in the served OpenAPI enum and render in the console,
 because receipts written before the correction still carry them and removing an
 enum member would put stored rows outside the contract that describes them.
 
-Making these statuses stronger is real work, not relabelling: contacting the
-target needs an agent-executed dry-run, and restoring a predecessor needs an
-on-host predecessor bundle and an executed restore transcript. Neither is served
-today, which is why the words changed instead of the flags.
+Making these statuses stronger is real work, not relabelling. The dry-run half
+is now served: with `connector.test` enabled, `POST
+/api/v1/connectors/targets/{id}/test` queues a job the bound relay claims,
+redeems the target's credential for that one attempt, probes the endpoint with a
+read-only GET, and reports whether a real deploy would proceed plus what it
+would change — `dry_run_planned` or `dry_run_blocked` with the failing step
+named. Zero writes is structural rather than promised: the dry-run path never
+calls a connector's `Deploy`, which is the only code that mutates a target. A
+test still redeems the credential, because a test that skipped it would pass
+right up until the deploy that mattered. Without a relay enabled the route keeps
+the honest local answer, `config_validated`, rather than queueing work nothing
+will claim.
+
+Restoring a predecessor is still not served: it needs an on-host predecessor
+bundle and an executed restore transcript, which is why `rollback_recorded`
+remains an attested intent.
 
 - Remaining private CA hierarchy operator flows beyond root/intermediate/leaf
   issuance. Root/intermediate CA creation, existing signer-backed CA chain

@@ -335,15 +335,27 @@ func (a *API) testConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		// D5: when a relay can take the work, this enqueues a real dry-run that
+		// reaches the target and returns a mutation plan. When it cannot — no
+		// job ledger, or connector.test not enabled — it falls back to the
+		// honest local answer rather than pretending, exactly as before.
+		if a.enqueueConnectorTest != nil {
+			queued, err := a.enqueueConnectorTest(ctx, tenantID, target, idempotencyKey)
+			if err != nil {
+				return 0, nil, err
+			}
+			if queued != nil {
+				return http.StatusAccepted, toConnectorDeliveryResponse(*queued), nil
+			}
+		}
 		// The target is not contacted here: this route resolves schema and
 		// credential references locally and nothing else. The status says exactly
 		// that (servedstatus.ConnectorConfigValidated) rather than claiming a
-		// successful test — truth-integrity 3. Epic D5 turns this into a real
-		// agent-executed dry-run that reaches the target and returns a mutation plan.
+		// successful test — truth-integrity 3.
 		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 			Destination: "connector.test", Connector: target.Type, Target: target.Name,
 			Status: servedstatus.ConnectorConfigValidated, Attempts: 1, Reason: "target_config_validated",
-			Detail:         "connector target metadata and credential references validated locally; the target was not contacted and nothing was changed. External mutation still travels through connector.deploy outbox",
+			Detail:         "connector target metadata and credential references validated locally; no relay is enabled for connector.test, so the target was not contacted and nothing was changed",
 			IdempotencyKey: idempotencyKey,
 		})
 		if err != nil {

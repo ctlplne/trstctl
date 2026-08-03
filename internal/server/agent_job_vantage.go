@@ -47,7 +47,7 @@ func agentRoleForVantage(v connector.TargetVantage) string {
 func connectorSideEffectRoleClassifier(registry *connector.Registry) func(destination string, payload []byte) string {
 	return func(destination string, payload []byte) string {
 		switch destination {
-		case "connector.deploy", "connector.rollback":
+		case "connector.deploy", "connector.rollback", "connector.test":
 		default:
 			return ""
 		}

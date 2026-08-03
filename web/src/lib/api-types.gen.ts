@@ -1279,7 +1279,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "test_succeeded";
+  status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
   target: string;
   tenant_id: string;
   updated_at: string;

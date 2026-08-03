@@ -9,9 +9,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"strings"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
+
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -293,5 +296,60 @@ func TestServedRelayReceivesOnlyRelayDeploys(t *testing.T) {
 	}
 	if len(claimed.Jobs) != 1 || claimed.Jobs[0].IdempotencyKey != "deploy:f5-2" {
 		t.Fatalf("dual-role agent claimed %v, want exactly [deploy:f5-2] — the cloud-store deploy must stay with the control plane", claimed.Jobs)
+	}
+}
+
+// TestServedDryRunProducesAPlanAndChangesNothing is D5's acceptance on the
+// assembled binary: a relay claims a connector.test job, redeems, reports its
+// plan, and the control plane records a receipt that says whether a deploy
+// would work — with no deploy having happened.
+func TestServedDryRunProducesAPlanAndChangesNothing(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, "connector.test")
+	seedRoleJobWithDemand(t, ctx, h, "connector.test", "test:edge-f5", "network")
+
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{
+		Kinds: []string{"connector.test"}, Limit: 5, LeaseSeconds: 60,
+	})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(claimed.Jobs) != 1 {
+		t.Fatalf("relay claimed %d test jobs, want 1", len(claimed.Jobs))
+	}
+	job := claimed.Jobs[0]
+
+	// The relay reports the plan it produced. Here it reports a blocked one,
+	// which is the case that must NOT read as a passing test.
+	plan := `{"connector":"f5","target":"edge-f5","ready":false,` +
+		`"steps":[{"name":"reachability","status":"failed","detail":"connection refused"}]}`
+	if _, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
+		JobID: job.JobID, Outcome: transport.JobOutcomeExecuted, Detail: plan,
+	}); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+
+	receipts, err := h.store.ListConnectorDeliveryReceiptsPage(ctx, h.tenant, "", store.ZeroUUID, 50)
+	if err != nil {
+		t.Fatalf("list receipts: %v", err)
+	}
+	var got *store.ConnectorDeliveryReceipt
+	for i := range receipts {
+		if receipts[i].Destination == "connector.test" && receipts[i].Status == servedstatus.ConnectorTestBlocked {
+			got = &receipts[i]
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("no blocked dry-run receipt was recorded; receipts = %+v", receipts)
+	}
+	if !strings.Contains(got.Detail, "connection refused") {
+		t.Errorf("the receipt does not name the cause: %q", got.Detail)
+	}
+	// A blocked dry-run must never read as a delivery.
+	for _, r := range receipts {
+		if r.Status == servedstatus.ConnectorDelivered {
+			t.Fatal("a dry-run produced a delivered receipt; nothing was deployed")
+		}
 	}
 }

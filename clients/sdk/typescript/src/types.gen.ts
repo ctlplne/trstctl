@@ -5668,7 +5668,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /** @enum {string} */
-            status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "test_succeeded";
+            status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
             target: string;
             /** Format: uuid */
             tenant_id: string;

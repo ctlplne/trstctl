@@ -112,6 +112,7 @@ type API struct {
 	acmeARIPosture            ACMEARIPostureProvider
 	acmeEAB                   ACMEEABProvider
 	agentJobPosture           AgentJobPostureProvider
+	enqueueConnectorTest      ConnectorTestEnqueuer
 	acmeEABDisable            ACMEEABDisabler
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
@@ -196,6 +197,7 @@ type config struct {
 	acmeARIPosture            ACMEARIPostureProvider
 	acmeEAB                   ACMEEABProvider
 	agentJobPosture           AgentJobPostureProvider
+	enqueueConnectorTest      ConnectorTestEnqueuer
 	acmeEABDisable            ACMEEABDisabler
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
@@ -456,6 +458,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeARIPosture:            cfg.acmeARIPosture,
 		acmeEAB:                   cfg.acmeEAB,
 		agentJobPosture:           cfg.agentJobPosture,
+		enqueueConnectorTest:      cfg.enqueueConnectorTest,
 		acmeEABDisable:            cfg.acmeEABDisable,
 		featureObserver:           cfg.featureObserver,
 		privacyRetentionPolicy:    policy.WithDefaults(),

@@ -3,8 +3,11 @@
 package api
 
 import (
+	"context"
+
 	"net/http"
 	"time"
+	"trstctl.com/trstctl/internal/store"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
@@ -246,4 +249,16 @@ func WithACMEDNS01Providers(items ...ACMEDNS01ProviderCatalogItem) Option {
 // deterministic resolver.
 func WithACMEDNS01CAAResolver(resolver acmesrv.CAAResolver) Option {
 	return func(c *config) { c.acmeCAAResolver = resolver }
+}
+
+// ConnectorTestEnqueuer queues a relay-executed dry-run for one deployment
+// target (epic D5) and returns the pending receipt, or (nil, nil) when no relay
+// can take it — in which case the route falls back to the local, honest
+// config-validated answer rather than claiming a test happened.
+type ConnectorTestEnqueuer func(ctx context.Context, tenantID string, target store.DeploymentTarget, idempotencyKey string) (*store.ConnectorDeliveryReceipt, error)
+
+// WithConnectorTestEnqueuer wires the served dry-run path into
+// POST /api/v1/connectors/targets/{id}/test.
+func WithConnectorTestEnqueuer(enqueue ConnectorTestEnqueuer) Option {
+	return func(c *config) { c.enqueueConnectorTest = enqueue }
 }

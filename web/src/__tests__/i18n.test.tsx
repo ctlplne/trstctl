@@ -263,6 +263,11 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // D5 dry-run re-pin: three source.dry.run.* keys label the relay-executed
+      // target test. dry_run_planned is the first status on this surface that
+      // reads as success and it earns it — a relay reached the target and
+      // resolved every credential — while still saying "would" rather than
+      // "did". Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
       // A3 relay-executor re-pin: four source.relay.* keys add the relay
       // capability panel to the Agents detail pane — what this build executes
       // as a relay, which connectors it carries, and the flag that turns it on.
@@ -372,8 +377,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "6bf401165cb790abecead52811a13afa84135f61c4b1af6e385bea618d3ca728",
-      "de-DE": "5501c909e1f45ab87633484a076a234442a8a523a87b630d8519f8ec6325c52c",
+      "es-ES": "64d2cc8d6cc7d1434d8c8e09499d4224524df461dcbf00a98abac8bb72464138",
+      "de-DE": "f64caa7f0c2b07a1e6d98bbfaa4b3dc537052461dca099233271f7f99336e65d",
     });
   });
 

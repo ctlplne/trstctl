@@ -294,6 +294,31 @@ export const deliveryStatus: Record<string, StatusDescriptor> = {
     tone: "info",
     order: 5,
   },
+  // D5 dry-run statuses. dry_run_planned is the first of these that may read as
+  // success, and it earns it honestly: a relay reached the target, resolved
+  // every credential a deploy needs, and returned the mutation plan. It still
+  // says "would" rather than "did", because nothing was changed.
+  dry_run_queued: {
+    get label() {
+      return translateNow("source.dry.run.queued.d5dry00001");
+    },
+    tone: "observe",
+    order: 2,
+  },
+  dry_run_planned: {
+    get label() {
+      return translateNow("source.dry.run.planned.d5dry00002");
+    },
+    tone: "success",
+    order: 6,
+  },
+  dry_run_blocked: {
+    get label() {
+      return translateNow("source.dry.run.blocked.d5dry00003");
+    },
+    tone: "critical",
+    order: 7,
+  },
   // Retired spelling, still stored on receipts written before the rename, so the
   // console must keep rendering it rather than falling back to a raw string.
   test_succeeded: {

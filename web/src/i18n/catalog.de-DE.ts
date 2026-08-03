@@ -3462,6 +3462,9 @@ const deDECatalog = {
   "source.relay.flags.a3rel0003": "Benötigt Flag:",
   "source.relay.help.a3rel0004":
     "Was der Agenten-Build dieses Servers als Relais ausführen kann. Ein Agent fordert diese Arbeit nur mit der Netzwerkrolle in seinem Zertifikat an und löst jede Anmeldeinformation für genau einen Versuch ein.",
+  "source.dry.run.queued.d5dry00001": "Probelauf in Warteschlange (noch kein Ergebnis)",
+  "source.dry.run.planned.d5dry00002": "Bereitstellung würde gelingen (nichts geändert)",
+  "source.dry.run.blocked.d5dry00003": "Bereitstellung würde fehlschlagen (nichts geändert)",
   "source.status.920e413c7d": "Status",
   "source.status.filter.9bfe8b184f": "Statusfilter",
   "source.structured.query.preview.706d53d9be": "Vorschau der strukturierten Abfrage",

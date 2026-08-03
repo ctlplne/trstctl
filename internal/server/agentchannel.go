@@ -219,6 +219,10 @@ type agentService struct {
 	// redemption time (epic A3). Nil means the channel serves everything except
 	// RedeemJobCredential, which fails closed as unconfigured.
 	relayCredentials *relayCredentialResolver
+	// recordDryRun turns a relay's reported plan into a delivery receipt (epic
+	// D5). Nil means dry-run receipts are not recorded and the plan lives only
+	// in the event log.
+	recordDryRun func(ctx context.Context, tenantID, agent, idempotencyKey, plan string)
 }
 
 // bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC

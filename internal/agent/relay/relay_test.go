@@ -210,11 +210,18 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 		}
 	}
 	shipped := relay.ShippedJobKinds()
-	if len(shipped) != 1 || shipped[0].Kind != "connector.deploy" {
-		t.Fatalf("shipped job kinds = %+v, want exactly connector.deploy", shipped)
+	kinds := map[string]bool{}
+	for _, s := range shipped {
+		kinds[s.Kind] = true
+		if len(s.Flags) == 0 {
+			t.Errorf("shipped kind %q needs a flag and must name it, or it reads as coverage that is not running", s.Kind)
+		}
+		if len(s.Connectors) == 0 {
+			t.Errorf("shipped kind %q declares no connectors", s.Kind)
+		}
 	}
-	if len(shipped[0].Flags) == 0 {
-		t.Error("a shipped kind that needs a flag must name it, or it reads as coverage that is not running")
+	if !kinds["connector.deploy"] || !kinds[relay.KindConnectorTest] {
+		t.Fatalf("shipped job kinds = %+v, want connector.deploy and connector.test", shipped)
 	}
 	if _, ok := relay.UnshippedJobKinds()["connector.rollback"]; !ok {
 		t.Error("connector.rollback must be named as unshipped with its reason")
@@ -237,4 +244,111 @@ func TestRelayReportsADeniedCapabilityAsFailure(t *testing.T) {
 	if strings.Contains(ch.reports[0].detail, "redemption refused") {
 		t.Fatal("the relay forwarded the redemption error text instead of a closed phrase")
 	}
+}
+
+// TestDryRunNeverMutatesAndNamesTheCause is D5's acceptance, both halves at
+// once: against a healthy target it returns the mutation plan, against a broken
+// one it names the specific cause — and in neither case does it write.
+func TestDryRunNeverMutatesAndNamesTheCause(t *testing.T) {
+	var writes int
+	healthy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writes++
+		}
+		// A management API answering 401 to a bare GET is the normal case, and
+		// must not read as unreachable.
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer healthy.Close()
+
+	material := map[string][]byte{
+		"credential.cert_pem":      []byte(testCertPEM),
+		"credential.key_pem":       []byte(testKeyPEM),
+		"secret://appliance-admin": []byte(appliancePassword),
+	}
+	config := func(endpoint string) []byte {
+		raw, err := json.Marshal(map[string]string{ // #nosec G101 -- reference NAME, not a credential (CWE-798)
+			"endpoint":     endpoint,
+			"username":     "admin",
+			"password_ref": "secret://appliance-admin",
+			"object_name":  "edge-cert",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+
+	plan, err := relay.DryRun(context.Background(), healthy.Client(), relay.DeployIntent{
+		Connector: "f5", Target: "edge-f5", TargetConfig: config(healthy.URL),
+	}, material)
+	if err != nil {
+		t.Fatalf("dry-run: %v", err)
+	}
+	if !plan.Ready {
+		t.Fatalf("healthy target is not ready: %+v", plan.Steps)
+	}
+	if len(plan.WouldMutate) == 0 {
+		t.Error("a ready plan must say what a real deploy would change")
+	}
+	if writes != 0 {
+		t.Fatalf("the dry-run made %d non-GET requests; zero writes is the whole point", writes)
+	}
+
+	// Unreachable: a specific cause, not "test failed".
+	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	closedURL := closed.URL
+	closed.Close()
+	broken, err := relay.DryRun(context.Background(), healthy.Client(), relay.DeployIntent{
+		Connector: "f5", Target: "edge-f5", TargetConfig: config(closedURL),
+	}, material)
+	if err != nil {
+		t.Fatalf("dry-run against a closed target returned a transport error instead of a plan: %v", err)
+	}
+	if broken.Ready {
+		t.Fatal("an unreachable target reported ready")
+	}
+	if len(broken.WouldMutate) != 0 {
+		t.Error("a plan that cannot run must not describe mutations it would make")
+	}
+	var reach relay.PlanStep
+	for _, step := range broken.Steps {
+		if step.Name == "reachability" {
+			reach = step
+		}
+	}
+	if reach.Status != relay.StepFailed || reach.Detail == "" {
+		t.Fatalf("reachability step = %+v, want a failure naming the cause", reach)
+	}
+}
+
+// TestDryRunFailsOnAnUnredeemedCredential: the test must not pass on a
+// credential set the deploy after it would reject.
+func TestDryRunFailsOnAnUnredeemedCredential(t *testing.T) {
+	raw, err := json.Marshal(map[string]string{ // #nosec G101 -- reference NAME (CWE-798)
+		"endpoint":     "https://f5.example.internal",
+		"username":     "admin",
+		"password_ref": "secret://appliance-admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := relay.DryRun(context.Background(), http.DefaultClient, relay.DeployIntent{
+		Connector: "f5", Target: "edge-f5", TargetConfig: raw,
+	}, map[string][]byte{"credential.cert_pem": []byte(testCertPEM)})
+	if err != nil {
+		t.Fatalf("dry-run: %v", err)
+	}
+	if plan.Ready {
+		t.Fatal("dry-run passed with an unredeemed credential reference")
+	}
+	for _, step := range plan.Steps {
+		if step.Name == "credentials" && step.Status == relay.StepFailed {
+			if strings.Contains(step.Detail, appliancePassword) {
+				t.Fatal("the credentials step leaked a credential value")
+			}
+			return
+		}
+	}
+	t.Fatal("no failed credentials step in the plan")
 }

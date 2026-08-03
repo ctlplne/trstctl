@@ -13267,6 +13267,18 @@ export const messages = {
       "What this server's agent build can execute as a relay. An agent claims this work only with the network role in its certificate, and redeems each credential for one attempt.",
     description: "A3: relay executor capability on the Agents detail pane.",
   },
+  "source.dry.run.queued.d5dry00001": {
+    defaultMessage: "Dry-run queued (no result yet)",
+    description: "D5: relay-executed dry-run outcome labels on the connector delivery receipt badge.",
+  },
+  "source.dry.run.planned.d5dry00002": {
+    defaultMessage: "Deploy would succeed (nothing changed)",
+    description: "D5: relay-executed dry-run outcome labels on the connector delivery receipt badge.",
+  },
+  "source.dry.run.blocked.d5dry00003": {
+    defaultMessage: "Deploy would fail (nothing changed)",
+    description: "D5: relay-executed dry-run outcome labels on the connector delivery receipt badge.",
+  },
   "source.status.920e413c7d": {
     defaultMessage: "Status",
     description:

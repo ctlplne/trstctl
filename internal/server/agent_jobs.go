@@ -52,10 +52,15 @@ import (
 var agentJobKindAllowlist = map[string]bool{
 	"connector.deploy":   true,
 	"connector.rollback": true,
-	"endpoint.verify":    true,
-	"discovery.run":      true,
-	"revocation.probe":   true,
-	"trust.distribute":   true,
+	// D5: the dry-run. It is a first-class job kind rather than a flag on
+	// connector.deploy so an operator can enable testing without enabling
+	// deploying — the whole point of a test is that you run it before you trust
+	// the thing that mutates.
+	"connector.test":   true,
+	"endpoint.verify":  true,
+	"discovery.run":    true,
+	"revocation.probe": true,
+	"trust.distribute": true,
 }
 
 // agentJobKindVantage declares, per job kind, which agent roles can execute it
@@ -86,6 +91,7 @@ var agentJobKindVantage = map[string][]string{
 	"revocation.probe":   {mtls.AgentRoleNetwork},
 	"connector.deploy":   {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.rollback": {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+	"connector.test":     {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 }
 
 // agentRolePermitsKind reports whether an agent holding roles may execute kind.
@@ -242,6 +248,14 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 			"agent": info.CommonName, "job_id": req.JobID, "kind": destination,
 			"evidence_digest": req.EvidenceDigest,
 		})
+		// D5: a dry-run's whole output is its plan, and the relay carries it in
+		// Detail. It becomes a delivery receipt an operator can read rather than
+		// an event nobody looks at, and the status distinguishes "a deploy would
+		// work" from "a deploy would not" — reporting only that the JOB
+		// succeeded would bury the answer the operator asked for.
+		if destination == "connector.test" && a.recordDryRun != nil {
+			a.recordDryRun(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+		}
 		return &transport.ReportJobResultResponse{Accepted: true}, nil
 
 	case transport.JobOutcomeFailed:
@@ -431,7 +445,7 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 // contract for no gain.
 func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, error) {
 	switch job.Destination {
-	case "connector.deploy", "connector.rollback":
+	case "connector.deploy", "connector.rollback", "connector.test":
 	default:
 		return job.Payload, nil
 	}

@@ -44,7 +44,11 @@ const (
 // ClaimableKinds are the job kinds a relay asks for. Only connector work: a
 // relay's whole purpose is driving things that cannot host an agent, and asking
 // for host-local kinds would be asking for work it cannot do.
-func ClaimableKinds() []string { return []string{"connector.deploy"} }
+func ClaimableKinds() []string { return []string{"connector.deploy", "connector.test"} }
+
+// KindConnectorTest is the dry-run kind (epic D5): resolve everything a deploy
+// needs, probe the target, describe what would change, mutate nothing.
+const KindConnectorTest = "connector.test"
 
 // RunOnce claims up to limit jobs, executes each, and reports. It returns how
 // many it executed. One pass, no timers: the caller owns the schedule, so a
@@ -89,6 +93,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, job Job) bool 
 		return false
 	}
 
+	// A dry-run still redeems: the point of testing a target is to find out
+	// whether the credential works, and a test that skipped it would pass right
+	// up until the deploy that mattered.
 	items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)
 	if err != nil {
 		// A refused or unavailable redemption is not this relay's failure to
@@ -106,6 +113,25 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, job Job) bool 
 	// inside a connector, which must not leave an appliance password sitting in
 	// unlocked memory for the rest of the process's life.
 	defer destroy()
+
+	if job.Kind == KindConnectorTest {
+		plan, planErr := DryRun(ctx, client, intent, material)
+		if planErr != nil {
+			report(ctx, ch, job, OutcomeFailed, "dry-run could not be evaluated")
+			return false
+		}
+		// The plan is the answer either way: a target that cannot be reached is
+		// a successful TEST with a failed step, not a failed job. Reporting it
+		// as a failure would put the job back on the queue to be retried
+		// forever against an appliance that is simply off.
+		detail, marshalErr := json.Marshal(plan)
+		if marshalErr != nil {
+			report(ctx, ch, job, OutcomeFailed, "dry-run plan could not be encoded")
+			return false
+		}
+		report(ctx, ch, job, OutcomeExecuted, string(detail))
+		return plan.Ready
+	}
 
 	stats, execErr := Execute(ctx, client, intent, material)
 	if execErr != nil {

@@ -1153,6 +1153,11 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// A1: job-ledger queue depth and claim health, read at request time because
 	// the counters are only useful fresh.
 	*defaults = append(*defaults, api.WithAgentJobPosture(s.agentJobPosture))
+	// D5: the console's target test becomes a relay-executed dry-run when the
+	// operator has enabled connector.test. Otherwise the route keeps the honest
+	// local answer rather than queueing work nothing will claim.
+	*defaults = append(*defaults, api.WithConnectorTestEnqueuer(
+		s.connectorTestEnqueuer(AgentClaimableJobKinds(d.AgentClaimableJobKinds))))
 	// B-5: the console's system readout reuses the same probes as /readyz, so
 	// the two can never disagree about whether the spine is up.
 	*defaults = append(*defaults, api.WithSystemReadout(func() api.SystemReadout {
@@ -1547,6 +1552,9 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// issuance dispatcher sealed with — constructed from the same Deps, so
 		// the two sides of the seal cannot drift apart (epic A3).
 		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto},
+		// D5: a relay's dry-run plan becomes a delivery receipt an operator can
+		// read on the Connectors page.
+		recordDryRun: s.dryRunReceipt,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {

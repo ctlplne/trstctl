@@ -149,6 +149,19 @@ const (
 	// and no predecessor bundle was restored (truth-integrity 4). Epic D4 makes
 	// this an executed job with a restore transcript.
 	ConnectorRollbackRecorded = "rollback_recorded"
+	// ConnectorTestQueued means a relay-executed dry-run has been QUEUED (epic
+	// D5). It is deliberately not a result: the relay has not reported yet. A
+	// status that read as an outcome here would repeat the defect
+	// config_validated was created to fix, one step further along.
+	ConnectorTestQueued = "dry_run_queued"
+	// ConnectorTestPlanned means a relay ran the dry-run and reported that a real
+	// deploy WOULD proceed: credentials resolved, endpoint answered, mutation
+	// plan returned. Nothing was changed — the dry-run path never invokes a
+	// connector's Deploy, so zero writes is structural rather than promised.
+	ConnectorTestPlanned = "dry_run_planned"
+	// ConnectorTestBlocked means a relay ran the dry-run and a real deploy would
+	// NOT proceed. The reason names the step that stopped it.
+	ConnectorTestBlocked = "dry_run_blocked"
 )
 
 // ConnectorDelivery is the served vocabulary for connector delivery receipts.
@@ -177,6 +190,20 @@ var ConnectorDelivery = Registry{
 		{
 			Value:   ConnectorRollbackRecorded,
 			Meaning: "An operator-attested rollback intent is recorded as evidence. No rollback was executed against the target.",
+		},
+		{
+			Value:   ConnectorTestQueued,
+			Meaning: "A relay-executed dry-run was queued. No relay has reported yet, so nothing is known about the target beyond its configuration.",
+		},
+		{
+			Value:           ConnectorTestPlanned,
+			ContactedTarget: true,
+			Meaning:         "A relay reached the target, resolved every credential a deploy needs, and returned the mutation plan. Nothing was changed: the dry-run path never invokes a connector's deploy.",
+		},
+		{
+			Value:           ConnectorTestBlocked,
+			ContactedTarget: true,
+			Meaning:         "A relay ran the dry-run and a real deploy would not proceed. The reason names the step that stopped it. Nothing was changed.",
 		},
 	},
 	Retired: []Retired{{

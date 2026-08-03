@@ -40,6 +40,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Connectors: RelayConnectorKinds(),
 			Flags:      []string{"--relay-claim"},
 		},
+		{
+			// D5: the dry-run. Same connectors, same credential redemption, and
+			// deliberately never connector.Run — zero writes is structural here,
+			// not a promise, because the mutating path is not on it.
+			Kind:       KindConnectorTest,
+			Connectors: RelayConnectorKinds(),
+			Flags:      []string{"--relay-claim"},
+		},
 	}
 }
 

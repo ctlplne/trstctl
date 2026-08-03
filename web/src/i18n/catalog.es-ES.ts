@@ -3451,6 +3451,9 @@ const esESCatalog = {
   "source.relay.flags.a3rel0003": "Requiere el indicador:",
   "source.relay.help.a3rel0004":
     "Lo que la versión del agente de este servidor puede ejecutar como relé. Un agente solicita este trabajo únicamente con el rol de red en su certificado y canjea cada credencial para un solo intento.",
+  "source.dry.run.queued.d5dry00001": "Simulación en cola (sin resultado aún)",
+  "source.dry.run.planned.d5dry00002": "El despliegue funcionaría (sin cambios)",
+  "source.dry.run.blocked.d5dry00003": "El despliegue fallaría (sin cambios)",
   "source.status.920e413c7d": "Estado",
   "source.status.filter.9bfe8b184f": "Filtro de estado",
   "source.structured.query.preview.706d53d9be": "Vista previa de consulta estructurada",

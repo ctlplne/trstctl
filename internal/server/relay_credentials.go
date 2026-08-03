@@ -59,7 +59,10 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	job store.AgentJobForRedemption,
 ) (redeemedMaterial, error) {
 	switch job.Destination {
-	case "connector.deploy", "connector.rollback":
+	case "connector.deploy", "connector.rollback", "connector.test":
+		// connector.test redeems too (D5). A dry-run exists to find out whether
+		// the credential works; one that skipped redemption would pass right up
+		// until the deploy that mattered.
 	default:
 		return redeemedMaterial{}, fmt.Errorf("job kind %q carries no redeemable credential", job.Destination)
 	}
