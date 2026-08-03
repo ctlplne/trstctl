@@ -652,10 +652,31 @@ Seven connectors are relay-executable — `f5`, `netscaler`, `a10`, `kemp`,
 per relay, derived from the agent package's own census so the console cannot
 advertise an executor the binary lacks.
 
-**What is still not served.** Host-agent connector execution: the thirteen
-host-local connectors still deploy from the control plane, because their exec
-profile resolves paths and binaries on the machine it runs on, and moving that
-means moving the profile to an agent-side file. `connector.rollback` remains
+**Host connector execution ships too.** The thirteen file/exec connectors —
+nginx, Apache, Caddy, HAProxy, IIS, Postfix, Traefik, Java keystore, PostgreSQL,
+MySQL, RabbitMQ, Elasticsearch, Tomcat — now execute on the host agent that
+serves the machine, not against the control plane's own filesystem. The
+connector implementations moved unchanged: they were always host-neutral, and
+what changed is which filesystem they resolve against.
+
+The exec profile moved with them, and had to. An allowlist naming
+`/usr/sbin/nginx` is a statement about a host; leaving it on the control plane
+while the exec happened on an agent would mean an operator authorizing a binary
+on one machine and a different binary running on another. It is now a file on
+the host (`--host-exec-profile`), read and validated at agent startup so a
+mistyped path surfaces when someone is watching rather than an hour later during
+a renewal. Without it an agent claims no file/reload deploys at all: there is no
+safe default for "which commands may run on this machine", so an absent profile
+refuses rather than permits. `NewLocalOps` re-canonicalizes the roots and
+re-`Lstat`s every command on the host that will run them, which is the point —
+the check and the execution finally happen on the same machine.
+
+One binary serves both vantages. A relay claims appliance work, a host agent
+claims file/exec work, an agent granted both roles claims both, and the
+per-row role demand stamped at enqueue decides which agent may take a given job.
+The two executor sets are disjoint by test.
+
+**What is still not served.** `connector.rollback` remains
 receipt-only — it would need the relay to retain a predecessor credential, and
 nothing keeps one. Plugin-backed connectors, `connector.right_size` and the TLS
 posture path stay control-plane-only. No job kind is claimable by default:

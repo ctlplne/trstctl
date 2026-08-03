@@ -36,9 +36,14 @@ type ShippedJobKind struct {
 func ShippedJobKinds() []ShippedJobKind {
 	return []ShippedJobKind{
 		{
-			Kind:       "connector.deploy",
-			Connectors: RelayConnectorKinds(),
-			Flags:      []string{"--relay-claim"},
+			Kind: "connector.deploy",
+			// Both vantages, because one binary serves both roles: the appliance
+			// connectors a relay drives over an API, and the file/exec
+			// connectors a host agent runs on its own machine (epic D1). Which
+			// one a given job needs is decided by the connector, and the control
+			// plane's per-row role demand decides which agent may claim it.
+			Connectors: append(append([]string(nil), RelayConnectorKinds()...), HostConnectorKinds()...),
+			Flags:      []string{"--relay-claim", "--host-exec-profile"},
 		},
 		{
 			// D5: the dry-run. Same connectors, same credential redemption, and

@@ -61,6 +61,7 @@ func main() {
 	inventoryBrowserTrustRoots := flag.String("inventory-browser-trust-roots", "", "comma-separated browser profile export files/directories whose public CA certificates the agent inventories")
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
+	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
 	relayPollEvery := flag.Duration("relay-poll-every", 15*time.Second, "how often to ask for relay work when --relay-claim is set")
 	inventoryPKCS11Module := flag.String("inventory-pkcs11-module", "", "path to a PKCS#11 module (softhsm2.so, libykcs11.so, opensc-pkcs11.so) whose tokens should be inventoried. Metadata only: reads certificate objects, never private keys, over a read-only session. Requires a cgo-enabled agent build — the default build is statically linked and reports an error rather than an empty token estate")
 	inventoryPKCS11Token := flag.String("inventory-pkcs11-token", "", "inventory only the PKCS#11 token with this label; empty inventories every token the module presents")
@@ -210,6 +211,7 @@ func main() {
 		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
 		relayPollEvery:                    *relayPollEvery,
+		hostExecProfile:                   strings.TrimSpace(*hostExecProfile),
 		inventorySSH: sshdiscovery.Config{
 			HostKeyGlobs:        splitList(*inventorySSHHostKeyGlobs),
 			UserKeyGlobs:        splitList(*inventorySSHUserKeyGlobs),
@@ -288,6 +290,10 @@ type agentOptions struct {
 	// host, which is an operator's decision to make explicitly.
 	relayClaim     bool
 	relayPollEvery time.Duration
+	// hostExecProfile is the path to this host's operator-owned exec allowlist
+	// (epic D1). Empty means this agent executes no file/reload connectors:
+	// without an authorized command set there is nothing safe to default to.
+	hostExecProfile string
 }
 
 func prepareIdentityDir(path string, uid, gid int) error {
@@ -426,7 +432,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	// actually carries the network role — a host agent that turned the flag on
 	// would poll forever and be handed nothing, which reads as a stalled fabric
 	// instead of a misconfiguration.
-	relayTimer, relayCh := relayLoopFor(o, a, conn)
+	relayTimer, relayCh, hostProfile := relayLoopFor(o, a, conn)
 	if relayTimer != nil {
 		defer relayTimer.Stop()
 	}
@@ -452,7 +458,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			// Claim, redeem, deploy, wipe, report — one pass. Failures are the
 			// job's business, not the loop's: every path inside reports, so work
 			// returns to the queue rather than waiting out its lease.
-			if executed, rerr := relay.RunOnce(ctx, relayCh, relayHTTPClient(), relayClaimBatch, int(relayLeaseFor(o.relayPollEvery).Seconds())); rerr != nil {
+			if executed, rerr := relay.RunOnceWithHost(ctx, relayCh, relayHTTPClient(), hostProfile, relayClaimBatch, int(relayLeaseFor(o.relayPollEvery).Seconds())); rerr != nil {
 				fmt.Fprintln(os.Stderr, "trstctl-agent: relay claim failed:", rerr)
 			} else if executed > 0 {
 				fmt.Printf("trstctl-agent: relay executed %d connector deploy(s)\n", executed)

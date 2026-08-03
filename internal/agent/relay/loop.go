@@ -55,6 +55,25 @@ const KindConnectorTest = "connector.test"
 // relay's poll cadence stays with the agent's other loops rather than becoming
 // a second scheduler with its own opinions.
 func RunOnce(ctx context.Context, ch Channel, client *http.Client, limit, leaseSeconds int) (int, error) {
+	return RunOnceWithHost(ctx, ch, client, connector.LocalOpsConfig{}, limit, leaseSeconds)
+}
+
+// RunOnceWithHost is RunOnce with a host exec profile, so one agent can serve
+// both roles in a single pass (epic D1). A relay claims appliance work, a host
+// agent claims file/exec work, and an agent granted both roles claims both —
+// which is the topology the roles were designed to describe.
+//
+// An empty profile means this agent executes no host-local connectors, which is
+// the correct default: without an operator-owned allowlist there is no
+// authorized set of commands, and inventing one would be the failure mode the
+// profile exists to prevent.
+func RunOnceWithHost(
+	ctx context.Context,
+	ch Channel,
+	client *http.Client,
+	hostProfile connector.LocalOpsConfig,
+	limit, leaseSeconds int,
+) (int, error) {
 	if ch == nil {
 		return 0, errors.New("relay: no channel")
 	}
@@ -64,7 +83,7 @@ func RunOnce(ctx context.Context, ch Channel, client *http.Client, limit, leaseS
 	}
 	executed := 0
 	for _, job := range jobs {
-		if runJob(ctx, ch, client, job) {
+		if runJob(ctx, ch, client, hostProfile, job) {
 			executed++
 		}
 	}
@@ -78,7 +97,7 @@ func RunOnce(ctx context.Context, ch Channel, client *http.Client, limit, leaseS
 // than waiting out its lease: a relay that dies silently is indistinguishable
 // from a slow one, and the difference matters to whoever is waiting for the
 // certificate to land.
-func runJob(ctx context.Context, ch Channel, client *http.Client, job Job) bool {
+func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, job Job) bool {
 	var intent DeployIntent
 	if err := decodeIntent(job.Payload, &intent); err != nil {
 		report(ctx, ch, job, OutcomeFailed, "job payload is not a deploy intent")
@@ -88,8 +107,20 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, job Job) bool 
 	// credential redeemed for an attempt that was never going to run is a
 	// credential outside the seal for no reason, and it burns the attempt's one
 	// redemption.
-	if !Executes(intent.Connector) {
-		report(ctx, ch, job, OutcomeFailed, "connector is not relay-executable by this agent")
+	// Which executor this job needs is decided by the connector, and refused
+	// before anything is redeemed. A host agent handed appliance work, or a
+	// relay handed a filesystem deploy, must not burn the attempt's one
+	// credential redemption discovering that.
+	hostJob := ExecutesOnHost(intent.Connector)
+	if !hostJob && !Executes(intent.Connector) {
+		report(ctx, ch, job, OutcomeFailed, "connector is not executable by this agent")
+		return false
+	}
+	if hostJob && len(hostProfile.AllowedRoots) == 0 {
+		// The connector is host-executable but this agent has no operator
+		// profile, so it has no authorized command set. Saying so is the point:
+		// silently doing nothing would look identical to a healthy agent.
+		report(ctx, ch, job, OutcomeFailed, "this agent has no host exec profile configured for file and reload deploys")
 		return false
 	}
 
@@ -133,7 +164,13 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, job Job) bool 
 		return plan.Ready
 	}
 
-	stats, execErr := Execute(ctx, client, intent, material)
+	var stats connector.Stats
+	var execErr error
+	if hostJob {
+		stats, execErr = ExecuteOnHost(ctx, hostProfile, intent, material)
+	} else {
+		stats, execErr = Execute(ctx, client, intent, material)
+	}
 	if execErr != nil {
 		// The connector's own error text can contain whatever the appliance
 		// echoed back, including the credential. It is never forwarded: the

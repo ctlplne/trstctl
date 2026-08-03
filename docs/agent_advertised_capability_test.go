@@ -145,13 +145,22 @@ func TestShippedRelayJobKindsAreExecutableByTheBinary(t *testing.T) {
 			t.Errorf("relay job kind %q declares no connectors; a kind with no executor is not shipped", kind.Kind)
 		}
 		// The binary must actually run the loop for a declared kind, not merely
-		// link the package.
-		if !strings.Contains(sources, "relay.RunOnce(") {
-			t.Errorf("relay job kind %q is declared but the agent binary never calls relay.RunOnce", kind.Kind)
+		// link the package. RunOnceWithHost is what the binary calls (D1 gave
+		// the loop a host exec profile); RunOnce remains as the relay-only
+		// wrapper, so either satisfies "the loop runs".
+		if !strings.Contains(sources, "relay.RunOnceWithHost(") && !strings.Contains(sources, "relay.RunOnce(") {
+			t.Errorf("relay job kind %q is declared but the agent binary never runs the job loop", kind.Kind)
 		}
+		// Every declared connector must be executable by ONE of the two
+		// executors — the relay for appliances, the host runner for file/exec
+		// targets (D1). A connector in neither is an advertised capability the
+		// binary cannot perform, which is what this guard exists to catch.
 		for _, connectorName := range kind.Connectors {
-			if !relay.Executes(connectorName) {
-				t.Errorf("relay job kind %q declares connector %q, which the executor refuses", kind.Kind, connectorName)
+			if !relay.Executes(connectorName) && !relay.ExecutesOnHost(connectorName) {
+				t.Errorf("relay job kind %q declares connector %q, which neither executor carries", kind.Kind, connectorName)
+			}
+			if relay.Executes(connectorName) && relay.ExecutesOnHost(connectorName) {
+				t.Errorf("connector %q is claimed by both executors; one job must have exactly one executor", connectorName)
 			}
 		}
 	}

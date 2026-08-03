@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
@@ -35,29 +36,56 @@ const (
 // regardless, so an agent polling without the role would generate load, log
 // nothing useful, and present as a stalled queue rather than as the
 // misconfiguration it is. Refusing here says so once, at startup, in words.
-func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.Timer, relay.Channel) {
+func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.Timer, relay.Channel, connector.LocalOpsConfig) {
+	var hostProfile connector.LocalOpsConfig
 	if !o.relayClaim {
-		return nil, nil
+		return nil, nil, hostProfile
+	}
+	// The host exec profile is loaded and VALIDATED at startup, not at first
+	// job. An operator who mistyped a path finds out when they start the agent,
+	// not an hour later when a renewal fails on a machine they are not watching.
+	if o.hostExecProfile != "" {
+		loaded, err := relay.LoadHostProfile(o.hostExecProfile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: host exec profile could not be loaded:", err)
+			fmt.Fprintln(os.Stderr, "trstctl-agent: file and reload deploys will not be claimed on this host")
+		} else {
+			hostProfile = loaded
+			fmt.Printf("trstctl-agent: host exec profile loaded (%d allowed roots, %d permitted commands)\n",
+				len(hostProfile.AllowedRoots), len(hostProfile.Actions))
+		}
 	}
 	roles := a.Roles()
-	hasNetwork := false
+	hasNetwork, hasHost := false, false
 	for _, role := range roles {
-		if role == mtls.AgentRoleNetwork {
+		switch role {
+		case mtls.AgentRoleNetwork:
 			hasNetwork = true
-			break
+		case mtls.AgentRoleHost:
+			hasHost = true
 		}
+	}
+	// A host agent with a profile claims file/reload work; a relay claims
+	// appliance work; an agent granted both claims both. Only an agent that can
+	// do neither is refused, and told which grant it is missing.
+	if hasHost && len(hostProfile.AllowedRoots) > 0 {
+		fmt.Printf("trstctl-agent: host connector execution enabled for %v\n", relay.HostConnectorKinds())
+		return time.NewTimer(o.relayPollEvery),
+			relayChannel{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))},
+			hostProfile
 	}
 	if !hasNetwork {
 		fmt.Fprintf(os.Stderr,
 			"trstctl-agent: --relay-claim was set but this agent's certificate carries roles %v, not %q; "+
 				"relay work will not be claimed. Re-enroll with a network-role bootstrap token to make this agent a relay.\n",
 			roles, mtls.AgentRoleNetwork)
-		return nil, nil
+		return nil, nil, hostProfile
 	}
 	fmt.Printf("trstctl-agent: relay claiming enabled for %v every %s\n",
 		relay.ClaimableKinds(), o.relayPollEvery)
 	return time.NewTimer(o.relayPollEvery),
-		relayChannel{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))}
+		relayChannel{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))},
+		hostProfile
 }
 
 // relayTimerChan is nil-safe: a nil timer yields a nil channel, which blocks

@@ -49,6 +49,11 @@ func serviceArguments(o agentOptions) []string {
 			args = append(args, "--inventory-windows-location", o.inventoryWindowsLocation)
 		}
 	}
+	if o.hostExecProfile != "" {
+		// D1: without the profile an SCM-restarted agent claims no file/reload
+		// deploys and looks perfectly healthy doing it.
+		args = append(args, "--host-exec-profile", o.hostExecProfile)
+	}
 	if o.relayClaim {
 		args = append(args, "--relay-claim")
 		if o.relayPollEvery > 0 {

@@ -8,10 +8,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/connector"
 )
 
 // The relay executor's contract (epic A3). What matters here is not that a
@@ -351,4 +354,59 @@ func TestDryRunFailsOnAnUnredeemedCredential(t *testing.T) {
 		}
 	}
 	t.Fatal("no failed credentials step in the plan")
+}
+
+// TestHostProfileRefusesToDefaultOpen is D1's security property. A host executor
+// that fell back to "any command" on a missing or empty profile would be the
+// most dangerous failure mode available, and one an operator would not discover
+// until it mattered.
+func TestHostProfileRefusesToDefaultOpen(t *testing.T) {
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty.json")
+	if err := os.WriteFile(empty, []byte(`{"allowed_roots":[],"actions":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := relay.LoadHostProfile(empty); err == nil {
+		t.Fatal("a profile with no allowed roots was accepted")
+	}
+	if _, err := relay.LoadHostProfile(filepath.Join(dir, "missing.json")); err == nil {
+		t.Fatal("a missing profile was accepted")
+	}
+	bad := filepath.Join(dir, "bad.json")
+	if err := os.WriteFile(bad, []byte(`{"allowed_roots":["/tmp"],"actions":[{"logical_name":"reload"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := relay.LoadHostProfile(bad); err == nil {
+		t.Fatal("an action with no command was accepted")
+	}
+}
+
+// TestHostExecutorRefusesWorkItCannotDo keeps the two vantages from bleeding
+// into each other: a host agent handed appliance work refuses it rather than
+// attempting a filesystem deploy against an F5.
+func TestHostExecutorRefusesWorkItCannotDo(t *testing.T) {
+	for _, name := range relay.HostConnectorKinds() {
+		if !relay.ExecutesOnHost(name) {
+			t.Errorf("declared host connector %q is not host-executable", name)
+		}
+		if relay.Executes(name) {
+			t.Errorf("%q is claimed by BOTH the host and relay executors; one job must have one executor", name)
+		}
+	}
+	for _, name := range relay.RelayConnectorKinds() {
+		if relay.ExecutesOnHost(name) {
+			t.Errorf("appliance connector %q is claimed by the host executor", name)
+		}
+	}
+	if _, err := relay.ExecuteOnHost(context.Background(),
+		connectorLocalOpsForTest(t), relay.DeployIntent{Connector: "f5", Target: "edge"},
+		map[string][]byte{"credential.cert_pem": []byte(testCertPEM), "credential.key_pem": []byte(testKeyPEM)},
+	); err == nil {
+		t.Fatal("the host executor accepted appliance work")
+	}
+}
+
+func connectorLocalOpsForTest(t *testing.T) connector.LocalOpsConfig {
+	t.Helper()
+	return connector.LocalOpsConfig{AllowedRoots: []string{t.TempDir()}}
 }
