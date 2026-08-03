@@ -480,6 +480,29 @@ AgentDiscoveryCapability = TypedDict(
     total=False,
 )
 
+AgentJobPosture = TypedDict(
+    'AgentJobPosture',
+    {
+        'claimable_kinds': list[str],
+        'generated_at': str,
+        'queues': list[dict[str, Any]],
+        'served': bool,
+    },
+    total=False,
+)
+
+AgentJobQueue = TypedDict(
+    'AgentJobQueue',
+    {
+        'claimed': int,
+        'enabled': bool,
+        'kind': str,
+        'oldest_unclaimed_seconds': int,
+        'pending': int,
+    },
+    total=False,
+)
+
 AgentList = TypedDict(
     'AgentList',
     {

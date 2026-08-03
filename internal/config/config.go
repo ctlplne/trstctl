@@ -1691,6 +1691,17 @@ type AgentChannel struct {
 	// HeartbeatInterval is the next-beat hint returned to agents (a Go duration, e.g.
 	// "30s"). Empty selects a conservative default.
 	HeartbeatInterval string `json:"heartbeat_interval,omitempty"`
+	// ClaimableJobKinds are the estate-touching job kinds enrolled agents may claim
+	// and execute (A1): connector.deploy, connector.rollback, endpoint.verify,
+	// discovery.run, revocation.probe, trust.distribute.
+	//
+	// Empty — the default — means the job ledger is served but hands nothing out.
+	// That is deliberate: a kind should be enabled when an agent-side executor for
+	// it exists, and handing out work nothing can perform fills a queue while the
+	// control plane's own worker stops doing it. Anything outside the allowlist is
+	// dropped rather than honoured, so naming ca.issue here does not move
+	// CA-adjacent effects onto a host.
+	ClaimableJobKinds []string `json:"claimable_job_kinds,omitempty"`
 }
 
 // HeartbeatIntervalDuration parses the agent channel's next-beat hint. An empty value

@@ -4,6 +4,7 @@ import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { api, ApiError, type ConnectorDelivery, type RotationRun } from "@/lib/api";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { AgentJobLedgerPanel } from "@/pages/operations/AgentJobLedgerPanel";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -169,6 +170,11 @@ export function Operations() {
 
       {notice && <OperationNotice notice={notice} onDismiss={() => setNotice(null)} />}
       {error && <ErrorState title={translateNow("source.operations.unavailable.b176555a53")}>{error.message}</ErrorState>}
+
+      {/* A1: estate-touching work is executed by agents, so the queue an operator
+          needs to watch is the one agents claim from — not only the control
+          plane's own execution queue below. */}
+      <AgentJobLedgerPanel />
 
       <div className="ui-panel grid gap-3 p-comfortable sm:grid-cols-2 lg:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
         <label className="grid gap-2 text-sm font-medium">

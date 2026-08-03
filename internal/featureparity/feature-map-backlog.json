@@ -482,12 +482,13 @@
         "web/src/pages/Agents.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence and advanced by DISC-01/DISC-03; COMPETE-017 makes CAP-DISC-02 explicit on the served API/UI. Backend evidence: served agent mTLS ReportInventory batches are bulkheaded, tenant-derived from the verified client certificate, projected into discovery source/run/finding rows, and exposed in the credential graph. The listAgents API now advertises agent.mtls.ReportInventory plus filesystem, pkcs11, windows-store, k8s-secret, trust-store, and private-key endpoint source kinds as metadata-only/no-key-byte capabilities. DISC-02 adds OS, Java JKS/cacerts, NSS, browser, and Windows trust-store collectors that report public trust anchors with private_key_present=false. DISC-03 adds private-key-material discovery that classifies key files locally, wipes file buffers, and reports private_key findings with key_bytes_present=false. The Agents console renders the endpoint-discovery capability list for each enrolled endpoint.",
+      "notes": "Closed by route-level feature-map evidence and advanced by DISC-01/DISC-03; COMPETE-017 makes CAP-DISC-02 explicit on the served API/UI. Backend evidence: served agent mTLS ReportInventory batches are bulkheaded, tenant-derived from the verified client certificate, projected into discovery source/run/finding rows, and exposed in the credential graph. The listAgents API now advertises agent.mtls.ReportInventory plus filesystem, pkcs11, windows-store, k8s-secret, trust-store, and private-key endpoint source kinds as metadata-only/no-key-byte capabilities. DISC-02 adds OS, Java JKS/cacerts, NSS, browser, and Windows trust-store collectors that report public trust anchors with private_key_present=false. DISC-03 adds private-key-material discovery that classifies key files locally, wipes file buffers, and reports private_key findings with key_bytes_present=false. The Agents console renders the endpoint-discovery capability list for each enrolled endpoint. A1 adds the agent job ledger: GET /api/v1/operations/jobs serves per-kind queue depth, claim counts and oldest-unclaimed age for the estate-touching work agents claim over the mTLS channel, with counts only and no tenant identifier, payload or credential. Proven by TestServedAgentClaimsExecutesAndReportsAJob and its siblings.",
       "api_surface": [
         "listAgents",
         "createEnrollmentToken",
         "listDiscoveryFindings",
-        "getGraph"
+        "getGraph",
+        "getAgentJobPosture"
       ],
       "api_na": "",
       "cli_surface": [
@@ -540,11 +541,15 @@
             "OpenAPI operationId: listAgents",
             "OpenAPI operationId: createEnrollmentToken",
             "OpenAPI operationId: listDiscoveryFindings",
-            "OpenAPI operationId: getGraph"
+            "OpenAPI operationId: getGraph",
+            "OpenAPI operationId getAgentJobPosture serves GET /api/v1/operations/jobs with access:read and the AgentJobPosture schema: per-kind pending/claimed counts, whether an operator has enabled the kind, and the oldest-unclaimed age that distinguishes a drained queue from a stalled one. It carries no tenant id, payload or credential."
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
-            "internal/api/feature_parity_test.go"
+            "internal/api/feature_parity_test.go",
+            "internal/api/agent_jobs.go",
+            "internal/server/agent_jobs.go",
+            "internal/store/agent_jobs.go"
           ]
         },
         "test": {

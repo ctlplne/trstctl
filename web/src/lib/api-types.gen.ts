@@ -354,6 +354,21 @@ export interface AgentDiscoveryCapability {
   source_kind: string;
 }
 
+export interface AgentJobPosture {
+  claimable_kinds: string[];
+  generated_at: string;
+  queues: AgentJobQueue[];
+  served: boolean;
+}
+
+export interface AgentJobQueue {
+  claimed: number;
+  enabled: boolean;
+  kind: string;
+  oldest_unclaimed_seconds?: number;
+  pending: number;
+}
+
 export interface AgentList {
   agents: Agent[];
   next_cursor?: string;

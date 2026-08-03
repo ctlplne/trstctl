@@ -182,6 +182,13 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// lifecycle.go. It reads tenant ids only; the authority rows themselves are
 		// then loaded under each tenant's RLS context.
 		"internal/store/ca_horizon.go": 1,
+		// A1: two leader-side job-ledger operations. The lapsed-lease sweep must
+		// cross tenants because a dead agent leaves work in whatever tenant it
+		// served, and it touches lease bookkeeping only. The queue-depth read is
+		// process-wide by construction — it aggregates counts and one timestamp per
+		// destination for the operations surface and returns no tenant id, payload
+		// or credential.
+		"internal/store/agent_jobs.go": 2,
 	}
 	found := map[string]int{}
 

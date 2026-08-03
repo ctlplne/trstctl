@@ -273,6 +273,13 @@ type Deps struct {
 	// channels (Slack, Teams, email, PagerDuty, OpsGenie, webhook). Zero disables
 	// expiry-alert sweeps.
 	LifecycleAlertBefore time.Duration
+	// AgentClaimableJobKinds are the estate-touching job kinds agents may claim
+	// over the channel (A1). Empty — the default — means the job ledger is served
+	// but hands nothing out, which is correct until an agent-side executor for a
+	// kind exists. Values outside the allowlist in AgentClaimableJobKinds are
+	// dropped: an operator cannot move the control plane's own effects onto a host
+	// by naming them here.
+	AgentClaimableJobKinds []string
 	// LifecycleLeafValidity is the reference leaf lifetime the CA calendar (H5)
 	// measures a parent authority's remaining horizon against, so it can say
 	// "this parent can no longer issue a full-length leaf" before anyone notices
@@ -1134,6 +1141,9 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// time because protocol construction follows API construction, and because
 	// the usage counters it exposes are live.
 	*defaults = append(*defaults, api.WithACMEEAB(s.acmeEABPosture, s.setACMEEABDisabled))
+	// A1: job-ledger queue depth and claim health, read at request time because
+	// the counters are only useful fresh.
+	*defaults = append(*defaults, api.WithAgentJobPosture(s.agentJobPosture))
 	// B-5: the console's system readout reuses the same probes as /readyz, so
 	// the two can never disagree about whether the spine is up.
 	*defaults = append(*defaults, api.WithSystemReadout(func() api.SystemReadout {
@@ -1520,6 +1530,10 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		store: d.Store, log: d.Log, orch: s.orch, idem: idem, caSigner: s.agentCASigner,
 		caCertDER: s.agentCACertDER, beatInterval: d.AgentHeartbeatInterval,
 		metrics: s.agentMetrics,
+		// A1: nothing is claimable until an operator enables a kind AND an
+		// agent-side executor for it exists. Empty is the honest default.
+		claimableJobKinds: AgentClaimableJobKinds(d.AgentClaimableJobKinds),
+		outbox:            s.outbox,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {

@@ -124,6 +124,7 @@ type API struct {
 	acmeCAAResolver           acmesrv.CAAResolver
 	acmeARIPosture            ACMEARIPostureProvider
 	acmeEAB                   ACMEEABProvider
+	agentJobPosture           AgentJobPostureProvider
 	acmeEABDisable            ACMEEABDisabler
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
@@ -207,6 +208,7 @@ type config struct {
 	acmeCAAResolver           acmesrv.CAAResolver
 	acmeARIPosture            ACMEARIPostureProvider
 	acmeEAB                   ACMEEABProvider
+	agentJobPosture           AgentJobPostureProvider
 	acmeEABDisable            ACMEEABDisabler
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
@@ -466,6 +468,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeCAAResolver:           cfg.acmeCAAResolver,
 		acmeARIPosture:            cfg.acmeARIPosture,
 		acmeEAB:                   cfg.acmeEAB,
+		agentJobPosture:           cfg.agentJobPosture,
 		acmeEABDisable:            cfg.acmeEABDisable,
 		featureObserver:           cfg.featureObserver,
 		privacyRetentionPolicy:    policy.WithDefaults(),
@@ -1059,6 +1062,7 @@ func (a *API) routes() []route {
 		// B-1: AN-7 backpressure readable from the served API, not only from
 		// the metrics endpoint. Pool counters are process-wide operational
 		// telemetry (subsystem names + counts), never tenant rows.
+		{method: "GET", path: "/api/v1/operations/jobs", opID: "getAgentJobPosture", summary: "Get agent job-ledger queue depth and claim health", handler: a.getAgentJobPosture, resSchema: "AgentJobPosture", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/operations/bulkheads", opID: "listBulkheadStats", summary: "List bounded worker-pool saturation and rejection counters", handler: a.listBulkheadStats, resSchema: "BulkheadStats", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/notification-channels", opID: "createNotificationChannel", summary: "Create a tenant-authored notification channel using secret references", handler: a.createNotificationChannel, reqSchema: "NotificationChannelRequest", resSchema: "NotificationChannel", successCode: "201", mutation: true, perm: authz.NotificationsWrite},
 		{method: "GET", path: "/api/v1/notification-channels", opID: "listNotificationChannels", summary: "List supported and configured notification channels", handler: a.listNotificationChannels, resSchema: "NotificationChannelList", successCode: "200", perm: authz.NotificationsRead},

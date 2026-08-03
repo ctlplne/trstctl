@@ -53,9 +53,13 @@ const (
 	AgentCapabilityRenew             = "renew"
 	AgentCapabilityInventory         = "inventory"
 	AgentCapabilityKubernetesPosture = "kubernetes-posture"
+	// AgentCapabilityJobs advertises that this side speaks the job claim protocol
+	// (A1). An agent that does not advertise it is never handed estate-touching
+	// work, which is how a fleet upgrades one host at a time.
+	AgentCapabilityJobs = "jobs"
 )
 
-const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew + "," + AgentCapabilityInventory + "," + AgentCapabilityKubernetesPosture
+const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew + "," + AgentCapabilityInventory + "," + AgentCapabilityKubernetesPosture + "," + AgentCapabilityJobs
 
 // HeartbeatRequest is what an agent reports on each steady-state beat: its identity
 // and the inventory/status snapshot the control plane records. The authorizing
@@ -183,6 +187,8 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodRenew, Handler: renewHandler},
 		{MethodName: methodInventory, Handler: inventoryHandler},
 		{MethodName: methodKubernetesPosture, Handler: kubernetesPostureHandler},
+		{MethodName: methodClaimJobs, Handler: claimJobsHandler},
+		{MethodName: methodReportJobResult, Handler: reportJobResultHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",
@@ -360,6 +366,163 @@ func (c *AgentClient) Renew(ctx context.Context, req *RenewRequest) (*RenewRespo
 func (c *AgentClient) ReportInventory(ctx context.Context, req *InventoryRequest) (*InventoryResponse, error) {
 	out := new(InventoryResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodInventory, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// The job claim protocol (epic A1).
+//
+// Estate-touching work is decided in the control plane and executed in the
+// customer's environment. The control plane has no route into a host and never
+// gets one, so the agent asks for work over the connection it already opened —
+// the same mTLS channel it heartbeats on, the same certificate-derived tenant, no
+// inbound port anywhere.
+//
+// ClaimJobs is a poll rather than a server-pushed stream. It is the same
+// property — the agent initiates, the control plane answers — with far less
+// machinery, and it degrades honestly: an agent that stops polling simply stops
+// taking work, and its leases lapse.
+
+// ClaimJobsRequest asks for up to Limit jobs of the given kinds. The tenant and
+// the agent identity come from the client certificate, never from these fields.
+type ClaimJobsRequest struct {
+	// Kinds are the job kinds this agent is willing to execute. The server
+	// intersects them with what the agent's certificate role permits; asking for
+	// a kind outside that role is refused rather than quietly ignored.
+	Kinds []string `json:"kinds,omitempty"`
+	// Limit caps the batch. The server clamps it — an agent cannot ask for the
+	// whole queue.
+	Limit int `json:"limit,omitempty"`
+	// LeaseSeconds is how long the agent expects to need. The server clamps this
+	// too: a lease long enough to hide a dead agent for an hour is not a lease.
+	LeaseSeconds int `json:"lease_seconds,omitempty"`
+}
+
+// ClaimedJob is one unit of work leased to this agent.
+type ClaimedJob struct {
+	JobID          int64  `json:"job_id"`
+	Kind           string `json:"kind"`
+	Payload        []byte `json:"payload,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	// LeaseExpiresUnix is when this claim lapses. Past it the job is claimable by
+	// anyone, so an agent that has not finished must extend or expect to lose it.
+	LeaseExpiresUnix int64 `json:"lease_expires_unix,omitempty"`
+	// Attempt counts how many times this job has been claimed, ever. An agent can
+	// use it to back off from work it has already failed.
+	Attempt int `json:"attempt,omitempty"`
+}
+
+type ClaimJobsResponse struct {
+	Jobs []ClaimedJob `json:"jobs,omitempty"`
+	// NextPollSeconds is the server's hint for when to ask again, jittered by the
+	// server so a fleet does not synchronize into a thundering herd.
+	NextPollSeconds int `json:"next_poll_seconds,omitempty"`
+}
+
+// JobResultOutcome values an agent may report.
+const (
+	// JobOutcomeExecuted means the agent performed the work.
+	JobOutcomeExecuted = "executed"
+	// JobOutcomeFailed means the agent tried and could not. The job returns to
+	// the queue: a failure on one host is not evidence the work is impossible.
+	JobOutcomeFailed = "failed"
+	// JobOutcomeExtend means the agent is still working and wants more lease.
+	JobOutcomeExtend = "extend"
+)
+
+// ReportJobResultRequest is the agent's report on a job it holds.
+type ReportJobResultRequest struct {
+	JobID   int64  `json:"job_id"`
+	Outcome string `json:"outcome"`
+	// Detail is operator-facing text explaining a failure. It must never carry
+	// credential material; the server treats it as opaque and stores it as the
+	// entry's last error.
+	Detail string `json:"detail,omitempty"`
+	// EvidenceDigest is a digest of whatever transcript the agent produced. The
+	// transcript itself stays on the agent until the verification work (WS-D)
+	// defines its shape; the digest is what binds this report to it.
+	EvidenceDigest string `json:"evidence_digest,omitempty"`
+	// LeaseSeconds is how much more time an "extend" is asking for.
+	LeaseSeconds int `json:"lease_seconds,omitempty"`
+}
+
+type ReportJobResultResponse struct {
+	// Accepted is false when the agent no longer holds the job — its lease
+	// lapsed and somebody else took the work. The agent must stop, not retry:
+	// two agents finishing the same deploy is the failure this prevents.
+	Accepted bool `json:"accepted"`
+	// LeaseExpiresUnix is the new lease after an accepted extend.
+	LeaseExpiresUnix int64 `json:"lease_expires_unix,omitempty"`
+}
+
+// AgentJobServiceServer is the optional job-claim extension of AgentService. It
+// is a separate interface so an older service implementation stays
+// source-compatible while a newer server exposes these methods on the same
+// service.
+type AgentJobServiceServer interface {
+	ClaimJobs(ctx context.Context, req *ClaimJobsRequest) (*ClaimJobsResponse, error)
+	ReportJobResult(ctx context.Context, req *ReportJobResultRequest) (*ReportJobResultResponse, error)
+}
+
+const (
+	methodClaimJobs           = "ClaimJobs"
+	methodReportJobResult     = "ReportJobResult"
+	fullMethodClaimJobs       = "/" + agentServiceName + "/" + methodClaimJobs
+	fullMethodReportJobResult = "/" + agentServiceName + "/" + methodReportJobResult
+)
+
+func claimJobsHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(ClaimJobsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	jobs, ok := srv.(AgentJobServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not serve the agent job ledger")
+	}
+	if interceptor == nil {
+		return jobs.ClaimJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodClaimJobs}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return jobs.ClaimJobs(ctx, req.(*ClaimJobsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func reportJobResultHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(ReportJobResultRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	jobs, ok := srv.(AgentJobServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not serve the agent job ledger")
+	}
+	if interceptor == nil {
+		return jobs.ReportJobResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodReportJobResult}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return jobs.ReportJobResult(ctx, req.(*ReportJobResultRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ClaimJobs asks the control plane for work this agent may execute.
+func (c *AgentClient) ClaimJobs(ctx context.Context, req *ClaimJobsRequest) (*ClaimJobsResponse, error) {
+	out := new(ClaimJobsResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodClaimJobs, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ReportJobResult reports the outcome of a job this agent holds.
+func (c *AgentClient) ReportJobResult(ctx context.Context, req *ReportJobResultRequest) (*ReportJobResultResponse, error) {
+	out := new(ReportJobResultResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodReportJobResult, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

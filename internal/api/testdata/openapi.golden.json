@@ -1359,6 +1359,62 @@
         ],
         "type": "object"
       },
+      "AgentJobPosture": {
+        "properties": {
+          "claimable_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "queues": {
+            "items": {
+              "$ref": "#/components/schemas/AgentJobQueue"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "served",
+          "claimable_kinds",
+          "generated_at",
+          "queues"
+        ],
+        "type": "object"
+      },
+      "AgentJobQueue": {
+        "properties": {
+          "claimed": {
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "oldest_unclaimed_seconds": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "enabled",
+          "pending",
+          "claimed"
+        ],
+        "type": "object"
+      },
       "AgentList": {
         "properties": {
           "agents": {
@@ -30208,6 +30264,53 @@
           }
         ],
         "summary": "List bounded worker-pool saturation and rejection counters",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/operations/jobs": {
+      "get": {
+        "operationId": "getAgentJobPosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentJobPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get agent job-ledger queue depth and claim health",
         "x-trstctl-permission": "access:read"
       }
     },

@@ -148,7 +148,11 @@ func TestAgentProtocolResponseHeaderAndLegacyMissingMetadata(t *testing.T) {
 	if got := hdr.Get(protocol.MetadataServerProtocol); len(got) != 1 || got[0] != protocol.VersionString() {
 		t.Fatalf("server protocol header = %v, want %s", got, protocol.VersionString())
 	}
-	wantCapabilities := transport.AgentCapabilityHeartbeat + "," + transport.AgentCapabilityRenew + "," + transport.AgentCapabilityInventory + "," + transport.AgentCapabilityKubernetesPosture
+	// A1 adds the job claim protocol to the advertised set. The capability list is
+	// how a mixed fleet negotiates: an agent that does not advertise "jobs" is
+	// never handed estate-touching work, so a rolling upgrade is safe by
+	// construction rather than by scheduling.
+	wantCapabilities := transport.AgentCapabilityHeartbeat + "," + transport.AgentCapabilityRenew + "," + transport.AgentCapabilityInventory + "," + transport.AgentCapabilityKubernetesPosture + "," + transport.AgentCapabilityJobs
 	if got := hdr.Get(protocol.MetadataServerCapabilities); len(got) != 1 || got[0] != wantCapabilities {
 		t.Fatalf("server capabilities header = %v, want %s", got, wantCapabilities)
 	}
@@ -182,7 +186,11 @@ func TestAgentClientSendsProtocolCapabilitiesAndVersionMetadata(t *testing.T) {
 	if got := md.Get(protocol.MetadataAgentProtocol); len(got) != 1 || got[0] != protocol.VersionString() {
 		t.Fatalf("agent protocol metadata = %v, want %s", got, protocol.VersionString())
 	}
-	wantCapabilities := transport.AgentCapabilityHeartbeat + "," + transport.AgentCapabilityRenew + "," + transport.AgentCapabilityInventory + "," + transport.AgentCapabilityKubernetesPosture
+	// A1 adds the job claim protocol to the advertised set. The capability list is
+	// how a mixed fleet negotiates: an agent that does not advertise "jobs" is
+	// never handed estate-touching work, so a rolling upgrade is safe by
+	// construction rather than by scheduling.
+	wantCapabilities := transport.AgentCapabilityHeartbeat + "," + transport.AgentCapabilityRenew + "," + transport.AgentCapabilityInventory + "," + transport.AgentCapabilityKubernetesPosture + "," + transport.AgentCapabilityJobs
 	if got := md.Get(protocol.MetadataAgentCapabilities); len(got) != 1 || got[0] != wantCapabilities {
 		t.Fatalf("agent capabilities metadata = %v, want %s", got, wantCapabilities)
 	}

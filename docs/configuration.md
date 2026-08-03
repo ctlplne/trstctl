@@ -1399,6 +1399,21 @@ custodied there) is a startup error.
 | `TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE` | `data/ca/agent-ca.crt` | Where the agent CA certificate is persisted, so the agent CA is stable across restarts (an agent's pinned CA does not change on restart). |
 | `TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL` | `30s` | Next-beat hint returned to agents. |
 
+**Which work agents may claim.** `agent_channel.claimable_job_kinds` (structured
+config only — no env shortcut, because it is a per-kind decision about what an
+agent may do to your infrastructure) lists the estate-touching job kinds enrolled
+agents may lease and execute: `connector.deploy`, `connector.rollback`,
+`endpoint.verify`, `discovery.run`, `revocation.probe`, `trust.distribute`.
+
+Empty is the default and means the job ledger is served but hands nothing out.
+Enable a kind when its agent-side executor ships; enabling one earlier fills the
+queue with work nothing can perform while the control plane's own worker stops
+doing it. Anything outside that list is dropped even if you write it here, so
+`ca.issue` and `notification.expiry` cannot be moved onto a host — those are the
+control plane's own effects. `GET /api/v1/operations/jobs` and the Operations
+console show what is waiting, what an agent holds, and how long the oldest job has
+waited.
+
 See [Getting started](getting-started.md) for the blank Compose stack's published
 agent-channel port and the local CA-pinning steps to reach it from an agent CLI.
 

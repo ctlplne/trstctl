@@ -30,6 +30,16 @@ func (stubAgentChannelService) ReportInventory(context.Context, *transport.Inven
 	return &transport.InventoryResponse{TenantID: "tenant-a", RunID: "run-a", Recorded: 1}, nil
 }
 
+// A1 put the job RPCs behind the same fire door: a fleet all asking for work at
+// once is the expected case, not the exceptional one.
+func (stubAgentChannelService) ClaimJobs(context.Context, *transport.ClaimJobsRequest) (*transport.ClaimJobsResponse, error) {
+	return &transport.ClaimJobsResponse{NextPollSeconds: 15}, nil
+}
+
+func (stubAgentChannelService) ReportJobResult(context.Context, *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error) {
+	return &transport.ReportJobResultResponse{Accepted: true}, nil
+}
+
 func TestAgentBulkheadShedsWithoutStarvingOtherSubsystems(t *testing.T) {
 	set := bulkhead.NewSet(
 		bulkhead.Config{Name: bulkhead.SubsystemAgent, Workers: 1, Queue: 0},

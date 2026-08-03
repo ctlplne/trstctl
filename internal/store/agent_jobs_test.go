@@ -177,23 +177,42 @@ func TestAgentJobExtendCompleteAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 		t.Fatalf("the holder could not extend its own lease: ok=%v err=%v", ok, err)
 	}
 
-	// Same for completion: a report from a non-holder changes nothing.
-	if ok, err := st.CompleteAgentJob(ctx, tenantID, impostor, first.ID, now); err != nil || ok {
-		t.Fatalf("an agent completed a job it does not hold: ok=%v err=%v", ok, err)
+	// Same for closing the claim: a report from a non-holder changes nothing.
+	if _, _, ok, err := st.MarkAgentJobCompleted(ctx, tenantID, impostor, first.ID, now); err != nil || ok {
+		t.Fatalf("an agent closed a claim it does not hold: ok=%v err=%v", ok, err)
 	}
-	if ok, err := st.CompleteAgentJob(ctx, tenantID, holder, first.ID, now); err != nil || !ok {
-		t.Fatalf("the holder could not complete its job: ok=%v err=%v", ok, err)
+	dest, idem, ok, err := st.MarkAgentJobCompleted(ctx, tenantID, holder, first.ID, now)
+	if err != nil || !ok {
+		t.Fatalf("the holder could not close its own claim: ok=%v err=%v", ok, err)
+	}
+	// The caller needs both to finish the delivery through the orchestrator,
+	// which is where the dispatch lease and circuit accounting live.
+	if dest != jobDeploy || idem == "" {
+		t.Fatalf("closing a claim did not return the delivery key: %q/%q", dest, idem)
 	}
 	// A replayed report is a no-op rather than a second delivery — which is what
 	// makes an at-least-once report safe to send twice.
-	if ok, err := st.CompleteAgentJob(ctx, tenantID, holder, first.ID, now); err != nil || ok {
+	if _, _, ok, err := st.MarkAgentJobCompleted(ctx, tenantID, holder, first.ID, now); err != nil || ok {
 		t.Fatalf("a replayed completion was applied again: ok=%v err=%v", ok, err)
 	}
 
 	// Releasing hands the work back immediately: a failure on one host is not
 	// evidence the work is impossible.
-	if ok, err := st.ReleaseAgentJob(ctx, tenantID, holder, second.ID, "nginx -t failed"); err != nil || !ok {
+	if ok, err := st.ReleaseAgentJob(ctx, tenantID, holder, second.ID, "nginx -t failed: /etc/nginx/tls.key is unreadable"); err != nil || !ok {
 		t.Fatalf("release: ok=%v err=%v", ok, err)
+	}
+	// The agent's own words must not land in the durable row: an agent executes
+	// against systems that echo credentials back in error strings, and an
+	// unbounded string on the queue is exactly where that becomes permanent.
+	var persisted string
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT coalesce(last_error, '') FROM outbox WHERE tenant_id = $1 AND id = $2`,
+			tenantID, second.ID).Scan(&persisted)
+	}); err != nil {
+		t.Fatalf("read persisted failure reason: %v", err)
+	}
+	if persisted != store.AgentFailureReported {
+		t.Fatalf("persisted failure reason = %q, want the closed-set marker %q", persisted, store.AgentFailureReported)
 	}
 	requeued, err := st.ClaimAgentJobs(ctx, tenantID, impostor, []string{jobDeploy}, 5, time.Minute, now)
 	if err != nil || len(requeued) != 1 || requeued[0].ID != second.ID {

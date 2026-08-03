@@ -320,6 +320,20 @@ func componentSchemas() map[string]*Schema {
 	// not_after, so it is a judgment about now rather than a stored value that
 	// would be wrong tomorrow. An authority with no recorded expiry carries no
 	// horizon at all rather than a fabricated one.
+	// The agent job ledger's operations surface (A1). Counts and one age, never
+	// tenant identifiers or payloads: an operator must be able to see the fabric
+	// is moving without being handed anyone's data to see it.
+	agentJobQueue := object(map[string]*Schema{
+		"kind": str(), "enabled": {Type: "boolean"},
+		"pending": {Type: "integer"}, "claimed": {Type: "integer"},
+		"oldest_unclaimed_seconds": {Type: "integer"},
+	}, "kind", "enabled", "pending", "claimed")
+	agentJobPosture := object(map[string]*Schema{
+		"served":          {Type: "boolean"},
+		"claimable_kinds": {Type: "array", Items: str()},
+		"generated_at":    timestamp(),
+		"queues":          {Type: "array", Items: ref("AgentJobQueue")},
+	}, "served", "claimable_kinds", "generated_at", "queues")
 	// The ACME external account binding operator surface (B4). No field here
 	// carries the HMAC key in any form — the credential's secret stays byte-backed
 	// in locked memory where configuration put it (AN-8).
@@ -3990,6 +4004,8 @@ func componentSchemas() map[string]*Schema {
 		"CAAuthorityHorizon":                       caAuthorityHorizon,
 		"ACMEEABCredential":                        acmeEABCredential,
 		"ACMEEABPosture":                           acmeEABPosture,
+		"AgentJobQueue":                            agentJobQueue,
+		"AgentJobPosture":                          agentJobPosture,
 		"CAAuthorityList":                          list("CAAuthority"),
 		"CADiscoveryItem":                          caDiscoveryItem,
 		"CADiscoverySummary":                       caDiscoverySummary,

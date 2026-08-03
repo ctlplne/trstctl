@@ -2685,6 +2685,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get agent job-ledger queue depth and claim health */
+        get: operations["getAgentJobPosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/owners": {
         parameters: {
             query?: never;
@@ -4707,6 +4724,20 @@ export interface components {
             private_key_bytes: boolean;
             reported_over: string;
             source_kind: string;
+        };
+        AgentJobPosture: {
+            claimable_kinds: string[];
+            /** Format: date-time */
+            generated_at: string;
+            queues: components["schemas"]["AgentJobQueue"][];
+            served: boolean;
+        };
+        AgentJobQueue: {
+            claimed: number;
+            enabled: boolean;
+            kind: string;
+            oldest_unclaimed_seconds?: number;
+            pending: number;
         };
         AgentList: {
             agents: components["schemas"]["Agent"][];
@@ -17195,6 +17226,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkheadStats"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAgentJobPosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentJobPosture"];
                 };
             };
             /** @description client error */

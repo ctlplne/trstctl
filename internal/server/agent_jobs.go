@@ -1,0 +1,317 @@
+// SPDX-License-Identifier: MPL-2.0
+
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"sort"
+	"strings"
+	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
+)
+
+// The served job claim protocol (epic A1).
+//
+// An agent asks for work over the channel it opened; the control plane answers
+// with a lease. Everything that decides who gets what comes from the client
+// certificate — tenant and agent identity are never request fields, because a
+// field is something an agent can choose and a certificate is not.
+//
+// Three bounds are enforced here rather than trusted from the request: the batch
+// size, the lease length, and the set of job kinds. An agent asking for a
+// thousand jobs on a one-hour lease is either broken or hostile, and neither is a
+// reason to give it the queue.
+
+// agentJobKinds are the outbox destinations an agent may claim. This is an
+// allowlist, not a filter: an agent cannot claim `ca.issue` or
+// `notification.expiry` no matter what it asks for, because those are the
+// control plane's own work and handing them to a host would move CA-adjacent
+// effects into the estate.
+//
+// The list is deliberately short. It grows one kind at a time as each
+// estate-executed capability is built, and every addition is a decision about
+// what an agent is allowed to do to a customer's infrastructure.
+// It is empty by default and populated only by explicit operator configuration
+// (agent.claimable_job_kinds). Nothing becomes claimable because a protocol
+// exists: a kind is claimable when an agent-side executor for it exists AND an
+// operator has enabled it. The estate-executing epics — connector.deploy (D1),
+// endpoint.verify (D2), connector.rollback (D4), discovery.run (C2),
+// revocation.probe (R1), trust.distribute (H2) — each add their kind here as they
+// ship. Handing out work nothing can perform is how a queue silently fills while
+// the control plane's own worker stops doing it.
+var agentJobKindAllowlist = map[string]bool{
+	"connector.deploy":   true,
+	"connector.rollback": true,
+	"endpoint.verify":    true,
+	"discovery.run":      true,
+	"revocation.probe":   true,
+	"trust.distribute":   true,
+}
+
+const (
+	// agentJobMaxBatch caps one claim. A small batch keeps work spread across a
+	// fleet and keeps a lease short enough to be meaningful.
+	agentJobMaxBatch = 16
+	// agentJobDefaultLease is long enough for a deploy-and-reload, short enough
+	// that a dead agent's work comes back in under a minute.
+	agentJobDefaultLease = 45 * time.Second
+	// agentJobMaxLease bounds what an agent may ask for. A lease is a promise
+	// that the holder is alive; one long enough to hide a dead agent for an hour
+	// is not a promise, it is a stall.
+	agentJobMaxLease = 10 * time.Minute
+	// agentJobPollSeconds is the hint an agent gets for when to ask again.
+	agentJobPollSeconds = 15
+)
+
+// ClaimJobs leases estate-touching work to the calling agent.
+func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRequest) (*transport.ClaimJobsResponse, error) {
+	info, err := a.peerInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if a.store == nil {
+		return nil, status.Error(codes.FailedPrecondition, "agent job ledger is not configured")
+	}
+	kinds := allowedAgentJobKinds(a.claimableJobKinds, agentClaimKinds(req))
+	if len(kinds) == 0 {
+		// Not an error: an agent that can execute nothing this control plane
+		// hands out should keep heartbeating, not crash-loop on a refusal.
+		return &transport.ClaimJobsResponse{NextPollSeconds: agentJobPollSeconds}, nil
+	}
+
+	limit := req.Limit
+	if limit <= 0 || limit > agentJobMaxBatch {
+		limit = agentJobMaxBatch
+	}
+	lease := time.Duration(req.LeaseSeconds) * time.Second
+	if lease <= 0 {
+		lease = agentJobDefaultLease
+	}
+	if lease > agentJobMaxLease {
+		lease = agentJobMaxLease
+	}
+
+	claimed, err := a.store.ClaimAgentJobs(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName), kinds, limit, lease, time.Now().UTC())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "claim agent jobs: %v", err)
+	}
+	out := &transport.ClaimJobsResponse{NextPollSeconds: agentJobPollSeconds}
+	for _, job := range claimed {
+		out.Jobs = append(out.Jobs, transport.ClaimedJob{
+			JobID: job.ID, Kind: job.Destination, Payload: job.Payload,
+			IdempotencyKey: job.IdempotencyKey, Attempt: job.ClaimAttempts,
+			LeaseExpiresUnix: job.ClaimExpiresAt.Unix(),
+		})
+	}
+	if len(out.Jobs) > 0 {
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.claimed", map[string]any{
+			"agent": info.CommonName, "count": len(out.Jobs), "kinds": kinds,
+		})
+	}
+	return out, nil
+}
+
+// ReportJobResult records what the claiming agent did.
+//
+// A report from an agent that no longer holds the lease is refused rather than
+// applied. That is the case that matters: the agent stalled, its lease lapsed,
+// another agent took the work and may already have done it. Accepting the late
+// report would mean two agents believing they own the same deploy.
+func (a *agentService) ReportJobResult(ctx context.Context, req *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error) {
+	info, err := a.peerInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if a.store == nil {
+		return nil, status.Error(codes.FailedPrecondition, "agent job ledger is not configured")
+	}
+	if req.JobID <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "job_id is required")
+	}
+	agentID := agentRowID(info.TenantID, info.CommonName)
+	now := time.Now().UTC()
+
+	switch strings.TrimSpace(req.Outcome) {
+	case transport.JobOutcomeExecuted:
+		// Two leases have to agree: the agent still holds its claim, and no
+		// dispatch worker holds the entry. Closing the claim proves the first;
+		// the orchestrator's CompleteByKey proves the second and records the
+		// destination's circuit success, which a hand-rolled status flip here
+		// would skip (AN-6).
+		destination, idemKey, ok, err := a.store.MarkAgentJobCompleted(ctx, info.TenantID, agentID, req.JobID, now)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "close agent job claim: %v", err)
+		}
+		if !ok {
+			return &transport.ReportJobResultResponse{Accepted: false}, nil
+		}
+		if a.outbox != nil {
+			if _, err := a.outbox.CompleteByKey(ctx, info.TenantID, destination, idemKey); err != nil {
+				return nil, status.Errorf(codes.Internal, "complete outbox entry: %v", err)
+			}
+		}
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.executed", map[string]any{
+			"agent": info.CommonName, "job_id": req.JobID, "kind": destination,
+			"evidence_digest": req.EvidenceDigest,
+		})
+		return &transport.ReportJobResultResponse{Accepted: true}, nil
+
+	case transport.JobOutcomeFailed:
+		ok, err := a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Detail)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "release agent job: %v", err)
+		}
+		if ok {
+			a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", map[string]any{
+				"agent": info.CommonName, "job_id": req.JobID, "detail": req.Detail,
+			})
+		}
+		return &transport.ReportJobResultResponse{Accepted: ok}, nil
+
+	case transport.JobOutcomeExtend:
+		lease := time.Duration(req.LeaseSeconds) * time.Second
+		if lease <= 0 {
+			lease = agentJobDefaultLease
+		}
+		if lease > agentJobMaxLease {
+			lease = agentJobMaxLease
+		}
+		until := now.Add(lease)
+		ok, err := a.store.ExtendAgentJobClaim(ctx, info.TenantID, agentID, req.JobID, until)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "extend agent job claim: %v", err)
+		}
+		resp := &transport.ReportJobResultResponse{Accepted: ok}
+		if ok {
+			resp.LeaseExpiresUnix = until.Unix()
+		}
+		return resp, nil
+
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "unknown job outcome %q", req.Outcome)
+	}
+}
+
+// allowedAgentJobKinds intersects what the agent asked for with what any agent is
+// permitted to execute. An unknown kind is dropped silently rather than refused:
+// a newer agent asking for a kind this control plane does not serve is a version
+// skew, not an attack, and it should keep working on the kinds they share.
+func allowedAgentJobKinds(enabled map[string]bool, requested []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, kind := range requested {
+		kind = strings.TrimSpace(kind)
+		if kind == "" || seen[kind] || !enabled[kind] {
+			continue
+		}
+		seen[kind] = true
+		out = append(out, kind)
+	}
+	return out
+}
+
+// AgentClaimableJobKinds turns operator configuration into the enabled set,
+// dropping anything outside the allowlist. An operator cannot enable
+// `ca.issue` or `notification.expiry` by writing it in a config file: those are
+// the control plane's own effects, and moving them into the estate would put
+// CA-adjacent work on a host.
+func AgentClaimableJobKinds(configured []string) map[string]bool {
+	out := map[string]bool{}
+	for _, kind := range configured {
+		kind = strings.TrimSpace(kind)
+		if kind != "" && agentJobKindAllowlist[kind] {
+			out[kind] = true
+		}
+	}
+	return out
+}
+
+// recordAgentJobEvent appends claim/report evidence to the tenant's event log.
+// Best-effort by design: failing to record the note must not fail the job the
+// operator is waiting on, and the ledger row is the authoritative state either
+// way.
+func (a *agentService) recordAgentJobEvent(ctx context.Context, tenantID, eventType string, data map[string]any) {
+	if a.log == nil {
+		return
+	}
+	body, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	_, _ = a.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: body})
+}
+
+// GetKinds is the nil-safe read the handler uses.
+func agentClaimKinds(req *transport.ClaimJobsRequest) []string {
+	if req == nil {
+		return nil
+	}
+	return req.Kinds
+}
+
+// agentJobPosture reads live job-ledger health for the operations surface (A1).
+//
+// It separates three things an empty queue could mean: the channel is not
+// mounted at all, it is mounted but no kind is enabled, or it is mounted and
+// enabled and the work has simply drained. An operator staring at zeros needs to
+// know which.
+func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, error) {
+	out := api.AgentJobPosture{
+		GeneratedAt: time.Now().UTC(),
+		Served:      s.AgentChannelServed(),
+		Queues:      []api.AgentJobQueue{},
+	}
+	svc, _ := s.agentSvc.(*bulkheadedAgentService)
+	var enabled map[string]bool
+	if svc != nil {
+		if inner, ok := svc.next.(*agentService); ok {
+			enabled = inner.claimableJobKinds
+		}
+	}
+	for kind := range enabled {
+		out.ClaimableKinds = append(out.ClaimableKinds, kind)
+	}
+	sort.Strings(out.ClaimableKinds)
+
+	if s.store == nil {
+		return out, nil
+	}
+	// Every allowlisted kind is reported, enabled or not: a kind that exists but
+	// is switched off should read as switched off, not as absent.
+	kinds := make([]string, 0, len(agentJobKindAllowlist))
+	for kind := range agentJobKindAllowlist {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+
+	depths, err := s.store.AgentJobQueueDepths(ctx, kinds)
+	if err != nil {
+		return out, err
+	}
+	byKind := make(map[string]store.AgentJobQueueDepth, len(depths))
+	for _, d := range depths {
+		byKind[d.Destination] = d
+	}
+	now := time.Now().UTC()
+	for _, kind := range kinds {
+		q := api.AgentJobQueue{Kind: kind, Enabled: enabled[kind]}
+		if d, ok := byKind[kind]; ok {
+			q.Pending, q.Claimed = d.Pending, d.Claimed
+			if d.OldestUnclaimedAt != nil {
+				if age := now.Sub(d.OldestUnclaimedAt.UTC()); age > 0 {
+					q.OldestUnclaimedSeconds = int(age.Seconds())
+				}
+			}
+		}
+		out.Queues = append(out.Queues, q)
+	}
+	return out, nil
+}

@@ -21,6 +21,7 @@ import type {
   ACMEARIPosture,
   ACMEEABCredential,
   ACMEEABPosture,
+  AgentJobPosture,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
   ACMEDNS01ProviderCatalog,
@@ -494,6 +495,7 @@ export type {
   ACMEARIPosture,
   ACMEEABCredential,
   ACMEEABPosture,
+  AgentJobPosture,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
   ACMEDNS01ProviderCatalog,
@@ -1337,6 +1339,7 @@ export interface Api {
   updateConnectorTarget(id: string, input: DeploymentTargetRequest): Promise<DeploymentTarget>;
   deleteConnectorTarget(id: string): Promise<void>;
   outboxCircuits(): Promise<OutboxCircuitList>;
+  agentJobPosture(): Promise<AgentJobPosture>;
   connectorDelivery(id: string): Promise<ConnectorDelivery>;
   requestEphemeralCredential(input: EphemeralCredentialRequest): Promise<EphemeralCredential>;
   approveEphemeralCredential(id: string, input: EphemeralApprovalRequest): Promise<EphemeralApproval>;
@@ -1694,6 +1697,7 @@ const liveApi: Api = {
   updateConnectorTarget: (id, input) => mutate<DeploymentTarget>("PUT", `/api/v1/connectors/targets/${encodeURIComponent(id)}`, input),
   deleteConnectorTarget: (id) => mutate<void>("DELETE", `/api/v1/connectors/targets/${encodeURIComponent(id)}`),
   outboxCircuits: () => req<OutboxCircuitList>("/api/v1/connectors/outbox-circuits"),
+  agentJobPosture: () => req<AgentJobPosture>("/api/v1/operations/jobs"),
   connectorDelivery: (id) => req<ConnectorDelivery>(`/api/v1/connectors/deliveries/${encodeURIComponent(id)}`),
   requestEphemeralCredential: (input) => mutate<EphemeralCredential>("POST", "/api/v1/ephemeral", input),
   approveEphemeralCredential: (id, input) => mutate<EphemeralApproval>("POST", `/api/v1/ephemeral/${encodeURIComponent(id)}/approvals`, input),

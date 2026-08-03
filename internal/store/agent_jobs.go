@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -122,39 +123,51 @@ func (s *Store) ExtendAgentJobClaim(ctx context.Context, tenantID, agentID strin
 	return extended, err
 }
 
-// CompleteAgentJob records that the claiming agent finished the work. The entry
-// leaves the queue the same way a control-plane delivery would, so the outbox's
-// existing accounting, GC and observability keep working unchanged.
+// MarkAgentJobCompleted closes the agent's claim and returns the entry's
+// destination and idempotency key so the caller can finish the delivery through
+// orchestrator.Outbox.CompleteByKey.
 //
-// Completing is idempotent on the claim: a replayed report from the same agent
-// finds the entry already delivered and changes nothing, which is what makes an
+// It deliberately does NOT flip the outbox status itself. Completion is the
+// orchestrator's job: it holds the dispatch lease predicate that stops two
+// drainers finishing the same entry, and it records the destination's circuit
+// success. A hand-rolled `status = 'delivered'` here would skip both, so the
+// agent claim closes here and the delivery completes there.
+//
+// Closing the claim is idempotent: a replayed report from the same agent finds
+// the claim already closed and changes nothing, which is what makes an
 // at-least-once report safe to send twice.
-func (s *Store) CompleteAgentJob(ctx context.Context, tenantID, agentID string, jobID int64, at time.Time) (bool, error) {
-	var completed bool
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx,
+func (s *Store) MarkAgentJobCompleted(ctx context.Context, tenantID, agentID string, jobID int64, at time.Time) (destination, idempotencyKey string, ok bool, err error) {
+	err = s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		scanErr := tx.QueryRow(ctx,
 			`UPDATE outbox
-			    SET status             = 'delivered',
-			        delivered_at       = $4,
-			        claim_completed_at = $4,
-			        attempts           = attempts + 1
+			    SET claim_completed_at = $4
 			  WHERE tenant_id = $1
 			    AND id = $3
 			    AND claimed_by_agent_id = $2::uuid
-			    AND claim_completed_at IS NULL`,
-			tenantID, agentID, jobID, at.UTC())
-		if err != nil {
-			return err
+			    AND claim_completed_at IS NULL
+			RETURNING destination, idempotency_key`,
+			tenantID, agentID, jobID, at.UTC()).Scan(&destination, &idempotencyKey)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return nil
 		}
-		completed = tag.RowsAffected() == 1
+		if scanErr != nil {
+			return scanErr
+		}
+		ok = true
 		return nil
 	})
-	return completed, err
+	return destination, idempotencyKey, ok, err
 }
 
 // ReleaseAgentJob hands a job back after a failed attempt, recording why. The
 // entry becomes claimable again immediately — by this agent or another — because
 // a failure on one host is not evidence the work is impossible.
+//
+// The persisted reason is a closed-set marker, never the agent's own words. An
+// agent executes against systems that may echo the credential it was just given
+// back in an error string; persisting arbitrary agent text here would turn that
+// into a durable, unwipeable secret in PostgreSQL (AN-8) — the same reason the
+// dispatcher's own delivery errors are a closed set.
 func (s *Store) ReleaseAgentJob(ctx context.Context, tenantID, agentID string, jobID int64, reason string) (bool, error) {
 	var released bool
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -163,12 +176,12 @@ func (s *Store) ReleaseAgentJob(ctx context.Context, tenantID, agentID string, j
 			    SET claimed_by_agent_id = NULL,
 			        claim_expires_at    = NULL,
 			        attempts            = attempts + 1,
-			        last_error          = NULLIF($4, '')
+			        last_error          = $4
 			  WHERE tenant_id = $1
 			    AND id = $3
 			    AND claimed_by_agent_id = $2::uuid
 			    AND claim_completed_at IS NULL`,
-			tenantID, agentID, jobID, reason)
+			tenantID, agentID, jobID, agentFailureReason(reason))
 		if err != nil {
 			return err
 		}
@@ -239,4 +252,20 @@ func (s *Store) AgentJobQueueDepths(ctx context.Context, destinations []string) 
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// AgentFailureReason values are the only failure strings persisted on an outbox
+// row from an agent report. The agent's own description travels to the operator
+// through the event log, where it is attributable to a named agent and a job, and
+// never becomes an unbounded string on the queue itself.
+const (
+	AgentFailureReported = "agent_reported_failure"
+	AgentFailureUnstated = "agent_reported_failure_no_detail"
+)
+
+func agentFailureReason(detail string) string {
+	if detail == "" {
+		return AgentFailureUnstated
+	}
+	return AgentFailureReported
 }

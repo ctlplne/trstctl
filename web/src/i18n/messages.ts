@@ -953,6 +953,42 @@ export const messages = {
     defaultMessage: "Download signature",
     description: "Link that downloads the returned artifact signature.",
   },
+  "operations.jobs.description": {
+    defaultMessage: "Work that touches your estate is decided here and executed by an agent in your environment. This is what is waiting, what an agent holds right now, and how long the oldest job has waited \u2014 the number that tells a drained queue from a stalled one.",
+    description: "A1: explains what the job ledger shows and why oldest-unclaimed age is the number that matters.",
+  },
+  "operations.jobs.disabled": {
+    defaultMessage: "not enabled",
+    description: "A1: marks a job kind that exists but which no operator has made claimable.",
+  },
+  "operations.jobs.heading": {
+    defaultMessage: "Agent job ledger",
+    description: "A1: heading of the Operations panel showing estate-touching work agents claim over the channel.",
+  },
+  "operations.jobs.inFlight": {
+    defaultMessage: "Held by an agent",
+    description: "A1: column header for jobs an agent currently holds under lease.",
+  },
+  "operations.jobs.kind": {
+    defaultMessage: "Job kind",
+    description: "A1: column header for the job kind (the outbox destination).",
+  },
+  "operations.jobs.noneEnabled": {
+    defaultMessage: "No job kind is enabled, so nothing is handed to agents. A kind becomes claimable when an executor for it ships and you enable it in agent_channel.claimable_job_kinds.",
+    description: "A1: states plainly that a served ledger with nothing enabled hands out nothing, so an empty panel is not read as a healthy drained queue.",
+  },
+  "operations.jobs.notServed": {
+    defaultMessage: "The agent channel is not mounted, so there is no job ledger to show. Enable agent_channel to let agents claim work.",
+    description: "A1: distinguishes an unmounted channel from an empty queue, so zeros are never ambiguous.",
+  },
+  "operations.jobs.oldest": {
+    defaultMessage: "Oldest wait",
+    description: "A1: column header for how long the oldest unclaimed job has waited.",
+  },
+  "operations.jobs.waiting": {
+    defaultMessage: "Waiting",
+    description: "A1: column header for jobs no agent has taken yet.",
+  },
   "operations.status.queued": {
     defaultMessage: "Queued",
     description: "Operations-page status filter for queued work.",

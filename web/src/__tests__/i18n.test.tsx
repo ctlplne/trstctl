@@ -344,8 +344,15 @@ describe("i18n boundary", () => {
       // must keep their qualifications, and the openssl command plus the PEM
       // header stay byte-identical everywhere because they are protocol literals.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "17802ab12c1ee8ce6fc070943c1fffdc02a8bc15b9e62053cfd137fd7ebe7e04",
-      "de-DE": "33fa7652f7bd24b70a088d53c8db7aa82bfbbd5a8c5203768825da68d3c94d3b",
+      // A1 re-pin: nine keys for the agent job ledger panel on Operations —
+      // per-kind waiting/held counts, the oldest-wait column that distinguishes a
+      // drained queue from a stalled one, and the two distinct empty states
+      // (channel not mounted vs no kind enabled) so zeros are never ambiguous.
+      // Reviewed for meaning in all three locales; both empty-state strings must
+      // keep their explanation of which case the operator is looking at.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "6bc7d2183d86f87498f59ca094714b69685962709c2152e42635a87df9ecc5b4",
+      "de-DE": "eb24155c06c0b01c45900e76e937e4f4a065bfa91ce582db6d1d9ea70bc4c957",
     });
   });
 

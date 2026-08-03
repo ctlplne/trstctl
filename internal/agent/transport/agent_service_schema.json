@@ -1,79 +1,103 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "contract": "trstctl.agent.v1.AgentService",
   "codec": {
-    "name": "agent.json",
-    "content_subtype": "agent.json"
+    "content_subtype": "agent.json",
+    "name": "agent.json"
   },
-  "metadata": {
-    "agent_version_key": "x-trstctl-agent-version",
-    "agent_protocol_key": "x-trstctl-agent-protocol",
-    "agent_capabilities_key": "x-trstctl-agent-capabilities",
-    "server_protocol_key": "x-trstctl-server-protocol",
-    "server_capabilities_key": "x-trstctl-server-capabilities",
-    "capabilities": [
-      "heartbeat",
-      "renew",
-      "inventory",
-      "kubernetes-posture"
-    ]
-  },
-  "service": {
-    "name": "trstctl.agent.v1.AgentService",
-    "metadata": "trstctl.agent.v1",
-    "methods": [
-      {
-        "name": "Heartbeat",
-        "full_method": "/trstctl.agent.v1.AgentService/Heartbeat",
-        "request": "HeartbeatRequest",
-        "response": "HeartbeatResponse"
-      },
-      {
-        "name": "Renew",
-        "full_method": "/trstctl.agent.v1.AgentService/Renew",
-        "request": "RenewRequest",
-        "response": "RenewResponse"
-      },
-      {
-        "name": "ReportInventory",
-        "full_method": "/trstctl.agent.v1.AgentService/ReportInventory",
-        "request": "InventoryRequest",
-        "response": "InventoryResponse"
-      },
-      {
-        "name": "ReportKubernetesPosture",
-        "full_method": "/trstctl.agent.v1.AgentService/ReportKubernetesPosture",
-        "request": "KubernetesPostureRequest",
-        "response": "KubernetesPostureResponse"
-      }
-    ]
-  },
+  "contract": "trstctl.agent.v1.AgentService",
   "messages": {
-    "HeartbeatRequest": {
+    "ClaimJobsRequest": {
       "fields": [
         {
-          "name": "agent_id",
-          "go_type": "string",
-          "presence": "required"
-        },
-        {
-          "name": "version",
-          "go_type": "string",
-          "presence": "required"
-        },
-        {
-          "name": "status",
-          "go_type": "string",
-          "presence": "required"
-        },
-        {
-          "name": "cert_serial",
-          "go_type": "string",
+          "go_type": "[]string",
+          "name": "kinds",
           "presence": "optional"
         },
         {
+          "go_type": "int",
+          "name": "limit",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int",
+          "name": "lease_seconds",
+          "presence": "optional"
+        }
+      ]
+    },
+    "ClaimJobsResponse": {
+      "fields": [
+        {
+          "go_type": "[]transport.ClaimedJob",
+          "name": "jobs",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int",
+          "name": "next_poll_seconds",
+          "presence": "optional"
+        }
+      ]
+    },
+    "ClaimedJob": {
+      "fields": [
+        {
+          "go_type": "int64",
+          "name": "job_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "kind",
+          "presence": "required"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "payload",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "idempotency_key",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int64",
+          "name": "lease_expires_unix",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int",
+          "name": "attempt",
+          "presence": "optional"
+        }
+      ]
+    },
+    "HeartbeatRequest": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "agent_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "version",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "status",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "cert_serial",
+          "presence": "optional"
+        },
+        {
+          "go_type": "map\u003cstring,int64\u003e",
           "name": "inventory",
-          "go_type": "map<string,int64>",
           "presence": "optional"
         }
       ]
@@ -81,36 +105,13 @@
     "HeartbeatResponse": {
       "fields": [
         {
-          "name": "tenant_id",
           "go_type": "string",
+          "name": "tenant_id",
           "presence": "required"
         },
         {
+          "go_type": "int64",
           "name": "next_heartbeat_seconds",
-          "go_type": "int64",
-          "presence": "required"
-        }
-      ]
-    },
-    "RenewRequest": {
-      "fields": [
-        {
-          "name": "csr_der",
-          "go_type": "bytes_base64",
-          "presence": "required"
-        }
-      ]
-    },
-    "RenewResponse": {
-      "fields": [
-        {
-          "name": "cert_chain_pem",
-          "go_type": "bytes_base64",
-          "presence": "required"
-        },
-        {
-          "name": "not_after_unix",
-          "go_type": "int64",
           "presence": "required"
         }
       ]
@@ -118,33 +119,33 @@
     "InventoryFinding": {
       "fields": [
         {
+          "go_type": "string",
           "name": "kind",
-          "go_type": "string",
           "presence": "required"
         },
         {
+          "go_type": "string",
           "name": "ref",
-          "go_type": "string",
           "presence": "required"
         },
         {
+          "go_type": "string",
           "name": "provenance",
-          "go_type": "string",
           "presence": "optional"
         },
         {
+          "go_type": "string",
           "name": "fingerprint",
-          "go_type": "string",
           "presence": "optional"
         },
         {
-          "name": "risk_score",
           "go_type": "int",
+          "name": "risk_score",
           "presence": "optional"
         },
         {
+          "go_type": "map\u003cstring,string\u003e",
           "name": "metadata",
-          "go_type": "map<string,string>",
           "presence": "optional"
         }
       ]
@@ -152,13 +153,13 @@
     "InventoryRequest": {
       "fields": [
         {
-          "name": "source_kind",
           "go_type": "string",
+          "name": "source_kind",
           "presence": "required"
         },
         {
-          "name": "findings",
           "go_type": "[]InventoryFinding",
+          "name": "findings",
           "presence": "required"
         }
       ]
@@ -166,60 +167,254 @@
     "InventoryResponse": {
       "fields": [
         {
+          "go_type": "string",
           "name": "tenant_id",
-          "go_type": "string",
           "presence": "required"
         },
         {
+          "go_type": "string",
           "name": "run_id",
-          "go_type": "string",
           "presence": "required"
         },
         {
+          "go_type": "int",
           "name": "recorded",
-          "go_type": "int",
           "presence": "required"
         },
         {
-          "name": "rejected",
           "go_type": "int",
+          "name": "rejected",
+          "presence": "required"
+        }
+      ]
+    },
+    "KubernetesPostureRequest": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "report_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "cluster_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "reconcile_interval_seconds",
+          "presence": "required"
+        },
+        {
+          "go_type": "transport.KubernetesPostureSection",
+          "name": "certificate_signing_requests",
+          "presence": "required"
+        },
+        {
+          "go_type": "transport.KubernetesPostureSection",
+          "name": "trust_bundles",
           "presence": "required"
         }
       ]
     },
     "KubernetesPostureResource": {
       "fields": [
-        {"name": "namespace", "go_type": "string", "presence": "optional"},
-        {"name": "name", "go_type": "string", "presence": "required"},
-        {"name": "uid", "go_type": "string", "presence": "required"},
-        {"name": "resource_version", "go_type": "string", "presence": "required"},
-        {"name": "state", "go_type": "string", "presence": "required"},
-        {"name": "reason", "go_type": "string", "presence": "required"},
-        {"name": "public_hash", "go_type": "string", "presence": "optional"}
-      ]
-    },
-    "KubernetesPostureSection": {
-      "fields": [
-        {"name": "complete", "go_type": "bool", "presence": "required"},
-        {"name": "failure_code", "go_type": "string", "presence": "optional"},
-        {"name": "resources", "go_type": "[]KubernetesPostureResource", "presence": "required"}
-      ]
-    },
-    "KubernetesPostureRequest": {
-      "fields": [
-        {"name": "report_id", "go_type": "string", "presence": "required"},
-        {"name": "cluster_id", "go_type": "string", "presence": "required"},
-        {"name": "reconcile_interval_seconds", "go_type": "int", "presence": "required"},
-        {"name": "certificate_signing_requests", "go_type": "transport.KubernetesPostureSection", "presence": "required"},
-        {"name": "trust_bundles", "go_type": "transport.KubernetesPostureSection", "presence": "required"}
+        {
+          "go_type": "string",
+          "name": "namespace",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "name",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "uid",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "resource_version",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "state",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "reason",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "public_hash",
+          "presence": "optional"
+        }
       ]
     },
     "KubernetesPostureResponse": {
       "fields": [
-        {"name": "tenant_id", "go_type": "string", "presence": "required"},
-        {"name": "report_id", "go_type": "string", "presence": "required"},
-        {"name": "recorded_at_unix", "go_type": "int64", "presence": "required"}
+        {
+          "go_type": "string",
+          "name": "tenant_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "report_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "recorded_at_unix",
+          "presence": "required"
+        }
+      ]
+    },
+    "KubernetesPostureSection": {
+      "fields": [
+        {
+          "go_type": "bool",
+          "name": "complete",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "failure_code",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[]KubernetesPostureResource",
+          "name": "resources",
+          "presence": "required"
+        }
+      ]
+    },
+    "RenewRequest": {
+      "fields": [
+        {
+          "go_type": "bytes_base64",
+          "name": "csr_der",
+          "presence": "required"
+        }
+      ]
+    },
+    "RenewResponse": {
+      "fields": [
+        {
+          "go_type": "bytes_base64",
+          "name": "cert_chain_pem",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "not_after_unix",
+          "presence": "required"
+        }
+      ]
+    },
+    "ReportJobResultRequest": {
+      "fields": [
+        {
+          "go_type": "int64",
+          "name": "job_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "outcome",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "detail",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "evidence_digest",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int",
+          "name": "lease_seconds",
+          "presence": "optional"
+        }
+      ]
+    },
+    "ReportJobResultResponse": {
+      "fields": [
+        {
+          "go_type": "bool",
+          "name": "accepted",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "lease_expires_unix",
+          "presence": "optional"
+        }
       ]
     }
+  },
+  "metadata": {
+    "agent_capabilities_key": "x-trstctl-agent-capabilities",
+    "agent_protocol_key": "x-trstctl-agent-protocol",
+    "agent_version_key": "x-trstctl-agent-version",
+    "capabilities": [
+      "heartbeat",
+      "renew",
+      "inventory",
+      "kubernetes-posture",
+      "jobs"
+    ],
+    "server_capabilities_key": "x-trstctl-server-capabilities",
+    "server_protocol_key": "x-trstctl-server-protocol"
+  },
+  "service": {
+    "metadata": "trstctl.agent.v1",
+    "methods": [
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/Heartbeat",
+        "name": "Heartbeat",
+        "request": "HeartbeatRequest",
+        "response": "HeartbeatResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/Renew",
+        "name": "Renew",
+        "request": "RenewRequest",
+        "response": "RenewResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/ReportInventory",
+        "name": "ReportInventory",
+        "request": "InventoryRequest",
+        "response": "InventoryResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/ReportKubernetesPosture",
+        "name": "ReportKubernetesPosture",
+        "request": "KubernetesPostureRequest",
+        "response": "KubernetesPostureResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/ClaimJobs",
+        "name": "ClaimJobs",
+        "request": "ClaimJobsRequest",
+        "response": "ClaimJobsResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/ReportJobResult",
+        "name": "ReportJobResult",
+        "request": "ReportJobResultRequest",
+        "response": "ReportJobResultResponse"
+      }
+    ],
+    "name": "trstctl.agent.v1.AgentService"
   }
 }

@@ -164,6 +164,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window enforced fail-closed, runtime disable. Rotation stays a config operation | [Protocols](#protocols) |
 | Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
+| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **No job kind is claimable yet** — each becomes claimable when its agent-side executor ships | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -507,6 +508,46 @@ compression check is forward-looking (it says new leaves are being truncated); i
 does not retrospectively scan already-issued leaves to report which ones were
 shortened. Nothing here schedules or performs the renewal — it tells you when to
 start, and the re-key and rotation routes remain the operator's action.
+
+### The agent job ledger: served fabric, no work yet
+
+Work that touches your estate has to execute inside your estate. The control
+plane has no route into a host and never gets one, so the agent comes and takes
+the work over the connection it opened — the same mTLS channel it heartbeats on,
+the same certificate-derived tenant, no inbound port anywhere.
+
+The ledger is the outbox, unchanged. An entry is still committed in the same
+transaction as the state change that caused it, still carries an idempotency key,
+still at-least-once. What changed is the consumer: `ClaimJobs` and
+`ReportJobResult` on the agent channel let an enrolled agent lease work, extend
+while it is still going, and report executed or failed.
+
+A claim is a **lease**, not an assignment. An agent that is killed, partitioned,
+or simply stops calling home leaves work behind; because the claim expires rather
+than sticking, that work returns to the queue without anyone noticing the machine
+is gone. Claims use `SKIP LOCKED`, so a fleet polling in lockstep fans out across
+the queue instead of serializing on its head. Extend, complete and release all
+require the caller to hold the lease, so a stalled agent whose lease lapsed cannot
+report on work another agent has since done. `GET /api/v1/operations/jobs` and the
+Operations console show per-kind waiting and held counts plus the oldest wait —
+counts only, never a tenant identifier, payload or credential.
+
+**What is not served: any actual job.** The claimable set is empty by default and
+`agent_channel.claimable_job_kinds` is the only way to fill it. That is deliberate
+rather than unfinished: a kind should become claimable when an agent-side executor
+for it exists, and handing out work nothing can perform fills a queue while the
+control plane's own worker stops doing it. The six kinds the allowlist recognises
+— `connector.deploy`, `connector.rollback`, `endpoint.verify`, `discovery.run`,
+`revocation.probe`, `trust.distribute` — each become real as their executor ships.
+Anything outside that allowlist is dropped even if an operator names it in
+configuration, so `ca.issue` and `notification.expiry` cannot be moved onto a host:
+those are the control plane's own effects and CA-adjacent work does not belong in
+the estate.
+
+Also not served yet: agent-signed result receipts (a report is authenticated by the
+channel's client certificate today, not signed as a separate artifact), per-agent
+claim quotas beyond the shared agent bulkhead, and the per-agent live-claim view on
+the Agents page.
 
 ### Served status vocabulary: what each status claims
 

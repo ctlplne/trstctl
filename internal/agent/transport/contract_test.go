@@ -191,7 +191,7 @@ func currentAgentContract() agentContract {
 			AgentCapabilitiesKey:  protocol.MetadataAgentCapabilities,
 			ServerProtocolKey:     protocol.MetadataServerProtocol,
 			ServerCapabilitiesKey: protocol.MetadataServerCapabilities,
-			Capabilities:          []string{AgentCapabilityHeartbeat, AgentCapabilityRenew, AgentCapabilityInventory, AgentCapabilityKubernetesPosture},
+			Capabilities:          []string{AgentCapabilityHeartbeat, AgentCapabilityRenew, AgentCapabilityInventory, AgentCapabilityKubernetesPosture, AgentCapabilityJobs},
 		},
 		Service: agentContractService{
 			Name:     agentServiceDesc.ServiceName,
@@ -210,6 +210,11 @@ func currentAgentContract() agentContract {
 			"KubernetesPostureSection":  {Fields: jsonFieldsOf(KubernetesPostureSection{})},
 			"KubernetesPostureRequest":  {Fields: jsonFieldsOf(KubernetesPostureRequest{})},
 			"KubernetesPostureResponse": {Fields: jsonFieldsOf(KubernetesPostureResponse{})},
+			"ClaimJobsRequest":          {Fields: jsonFieldsOf(ClaimJobsRequest{})},
+			"ClaimedJob":                {Fields: jsonFieldsOf(ClaimedJob{})},
+			"ClaimJobsResponse":         {Fields: jsonFieldsOf(ClaimJobsResponse{})},
+			"ReportJobResultRequest":    {Fields: jsonFieldsOf(ReportJobResultRequest{})},
+			"ReportJobResultResponse":   {Fields: jsonFieldsOf(ReportJobResultResponse{})},
 		},
 	}
 }
@@ -224,6 +229,10 @@ func methodMessageTypes(method string) struct{ request, response string } {
 		return struct{ request, response string }{"InventoryRequest", "InventoryResponse"}
 	case methodKubernetesPosture:
 		return struct{ request, response string }{"KubernetesPostureRequest", "KubernetesPostureResponse"}
+	case methodClaimJobs:
+		return struct{ request, response string }{"ClaimJobsRequest", "ClaimJobsResponse"}
+	case methodReportJobResult:
+		return struct{ request, response string }{"ReportJobResultRequest", "ReportJobResultResponse"}
 	default:
 		return struct{ request, response string }{"", ""}
 	}

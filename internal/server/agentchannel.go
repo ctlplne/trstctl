@@ -86,6 +86,7 @@ const agentMaxInventoryFindings = 1000
 
 type agentChannelService interface {
 	transport.AgentServiceServer
+	transport.AgentJobServiceServer
 }
 
 // provisionAgentCA establishes the AGENT CA whose key lives inside the signer (AN-4),
@@ -195,6 +196,13 @@ type agentService struct {
 	caCertDER    []byte
 	beatInterval time.Duration
 	metrics      *agentChannelMetrics
+	// claimableJobKinds is the operator-enabled set of estate-touching job kinds
+	// agents may claim (A1). Empty means the fabric is served but hands out
+	// nothing — the honest default until an executor for a kind exists.
+	claimableJobKinds map[string]bool
+	// outbox completes a job's delivery through the orchestrator so the dispatch
+	// lease predicate and the destination's circuit accounting both run (AN-6).
+	outbox *orchestrator.Outbox
 }
 
 // bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC
@@ -233,6 +241,22 @@ func (b *bulkheadedAgentService) Renew(ctx context.Context, req *transport.Renew
 func (b *bulkheadedAgentService) ReportInventory(ctx context.Context, req *transport.InventoryRequest) (*transport.InventoryResponse, error) {
 	return runAgentBulkhead(ctx, b.pool, "inventory", b.metrics, func(ctx context.Context) (*transport.InventoryResponse, error) {
 		return b.next.ReportInventory(ctx, req)
+	})
+}
+
+// The job RPCs run behind the same fire door as everything else on this channel
+// (AN-7). A fleet that wakes up together and all asks for work at once is the
+// expected case, not the exceptional one, and it must shed rather than consume
+// the capacity the API and protocols depend on.
+func (b *bulkheadedAgentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRequest) (*transport.ClaimJobsResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "claim_jobs", b.metrics, func(ctx context.Context) (*transport.ClaimJobsResponse, error) {
+		return b.next.ClaimJobs(ctx, req)
+	})
+}
+
+func (b *bulkheadedAgentService) ReportJobResult(ctx context.Context, req *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "report_job_result", b.metrics, func(ctx context.Context) (*transport.ReportJobResultResponse, error) {
+		return b.next.ReportJobResult(ctx, req)
 	})
 }
 
