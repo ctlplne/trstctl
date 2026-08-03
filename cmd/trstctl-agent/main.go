@@ -62,6 +62,8 @@ func main() {
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
 	relayPollEvery := flag.Duration("relay-poll-every", 15*time.Second, "how often to ask for relay work when --relay-claim is set")
+	inventoryWindowsStores := flag.String("inventory-windows-stores", "", "comma-separated Windows certificate stores to inventory (MY, WEBHOSTING, CA, ROOT, TRUSTEDPUBLISHER), or \"all\" for every supported store. Metadata only: reads certificates, never private keys. Windows builds only — on any other platform this reports an error rather than an empty estate")
+	inventoryWindowsLocation := flag.String("inventory-windows-location", "local-machine", "which Windows certificate hierarchy to inventory: local-machine (service and IIS certificates) or current-user")
 	inventoryK8sSecrets := flag.Bool("inventory-k8s-secrets", false, "inventory the TLS Secrets in this pod's Kubernetes namespace (metadata only; reads tls.crt, never tls.key). Requires the in-cluster service-account mount and list access to Secrets in the namespace")
 	inventorySSHHostKeyGlobs := flag.String("inventory-ssh-host-key-globs", "", "comma-separated public host-key globs to inventory; empty disables this SSH source")
 	inventorySSHUserKeyGlobs := flag.String("inventory-ssh-user-key-globs", "", "comma-separated public user-key globs to inventory; empty disables this SSH source")
@@ -198,6 +200,8 @@ func main() {
 		inventoryBrowserTrustRoots:        splitList(*inventoryBrowserTrustRoots),
 		inventoryPrivateKeyRoots:          splitList(*inventoryPrivateKeyRoots),
 		inventoryK8sSecrets:               *inventoryK8sSecrets,
+		inventoryWindowsStores:            splitList(*inventoryWindowsStores),
+		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
 		relayPollEvery:                    *relayPollEvery,
 		inventorySSH: sshdiscovery.Config{
@@ -260,6 +264,12 @@ type agentOptions struct {
 	inventoryPrivateKeyRoots                                                                           []string
 	inventorySSH                                                                                       sshdiscovery.Config
 	inventoryK8sSecrets                                                                                bool
+	// inventoryWindowsStores names the Windows certificate stores to inventory
+	// (epic C1). Empty means the source is off — a Windows estate is only
+	// inventoried when an operator says which stores, because "all of them" on a
+	// domain controller is a different proposition from the personal store.
+	inventoryWindowsStores   []string
+	inventoryWindowsLocation string
 	// relayClaim turns on the A3 relay runtime: claim connector.deploy work for
 	// appliances in this segment, redeem its credential for one attempt, deploy,
 	// wipe. Off by default because it moves live credential material onto this
@@ -376,6 +386,14 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if o.inventoryK8sSecrets {
 		if err := reportKubernetesSecretInventory(ctx, a, ch); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes Secret inventory report failed:", err)
+		}
+	}
+	if len(o.inventoryWindowsStores) > 0 {
+		if err := reportWindowsStoreInventory(ctx, a, ch, o); err != nil {
+			// The error is surfaced, never swallowed into an empty report: on a
+			// non-Windows build this says so out loud rather than letting an
+			// operator conclude their Windows estate is clean (epic C1).
+			fmt.Fprintln(os.Stderr, "trstctl-agent: Windows certificate store inventory report failed:", err)
 		}
 	}
 
@@ -495,6 +513,35 @@ func reportKubernetesSecretInventory(ctx context.Context, a *agent.Agent, ch age
 		return err
 	}
 	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourceKubernetes, found, 30, "kubernetes secret inventory")
+}
+
+// reportWindowsStoreInventory inventories the requested Windows certificate
+// stores. Metadata only: it reads certificates, never the keys behind them.
+//
+// A store that cannot be read fails the whole report rather than contributing
+// nothing, because a partially-read Windows estate presented as complete is the
+// false-clean result epic C1 exists to remove.
+func reportWindowsStoreInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, o agentOptions) error {
+	location := agentdiscovery.WindowsStoreLocation(o.inventoryWindowsLocation)
+	if !agentdiscovery.ValidWindowsStoreLocation(location) {
+		return fmt.Errorf("unknown --inventory-windows-location %q (want local-machine or current-user)", o.inventoryWindowsLocation)
+	}
+	stores := o.inventoryWindowsStores
+	if len(stores) == 1 && strings.EqualFold(stores[0], "all") {
+		stores = agentdiscovery.WindowsStoreNames()
+	}
+	var found []agentdiscovery.Found
+	for _, store := range stores {
+		if !agentdiscovery.ValidWindowsStoreName(store) {
+			return fmt.Errorf("unknown Windows certificate store %q (want one of %v, or \"all\")", store, agentdiscovery.WindowsStoreNames())
+		}
+		got, err := agentdiscovery.NewWindowsCertStoreSource(location, store).Discover(ctx)
+		if err != nil {
+			return fmt.Errorf("read Windows store %s/%s: %w", location, store, err)
+		}
+		found = append(found, got...)
+	}
+	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourceWindowsCert, found, 30, "windows certificate store inventory")
 }
 
 func hasTrustStoreInventory(o agentOptions) bool {

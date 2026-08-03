@@ -1653,11 +1653,11 @@ This is a deliberate, documented trust boundary, not an accident.
   `GET /api/v1/agents` response also publishes the served
   `agent.mtls.ReportInventory` path and the source kinds the shipped agent
   binary can actually collect — `filesystem`, `trust-store`,
-  `k8s-secret`, `private-key`, and `ssh` — each with the flags that switch
-  it on, so a capability that is listed but unconfigured is not read as
-  coverage that is running. **`pkcs11` and `windows-store` are declared at
-  the agent's collector boundary but the binary constructs no enumerator
-  for either, so they are not advertised.** All three unbuilt kinds were
+  `k8s-secret`, `windows-store`, `private-key`, and `ssh` — each with the
+  flags that switch it on, so a capability that is listed but unconfigured
+  is not read as coverage that is running. **`pkcs11` is declared at the
+  agent's collector boundary but the binary constructs no enumerator for
+  it, so it is not advertised.** All three unbuilt kinds were
   previously listed here and on the API, which read as a Windows estate,
   token store, and Kubernetes Secrets being inventoried when nothing was
   collecting them. Advertised capability is derived from the agent
@@ -1669,9 +1669,21 @@ This is a deliberate, documented trust boundary, not an accident.
   namespace through the in-cluster service account, reading `tls.crt` and
   never `tls.key`, and reports metadata-only findings over the same mTLS
   inventory path as every other source. It needs list access to Secrets in
-  that namespace and sees only that namespace. The Windows read path and
-  the PKCS#11 path are still unbuilt and return to the panel when they are
-  real. The channel is behind its own bounded agent
+  that namespace and sees only that namespace. `windows-store` left the
+  unbuilt list when its crypt32 reader shipped: with
+  `--inventory-windows-stores` the agent opens the named machine or user
+  stores **read-only**, walks each certificate context, and reports
+  metadata only — it never asks the platform to export a private key, so a
+  key held in a TPM or on a smart card is untouched and irrelevant. `MY`,
+  `WEBHOSTING`, `CA`, `ROOT` and `TRUSTEDPUBLISHER` are supported;
+  `WEBHOSTING` is where IIS keeps site certificates on current Windows
+  Server, which is the population most likely to expire unowned. An
+  unreadable store fails the report rather than contributing nothing, and
+  on a non-Windows build the source returns an **error**, never an empty
+  inventory — telling a Linux operator their Windows estate is clean would
+  be worse than the original defect, because it would arrive with the
+  authority of a scan that never happened. The PKCS#11 path is still
+  unbuilt and returns to the panel when it is real. The channel is behind its own bounded agent
   worker lane and per-connection gRPC stream cap, so a heartbeat or renewal
   storm sheds with `ResourceExhausted` rather than starving API, protocol,
   outbox, or signer capacity. Agents announce an explicit

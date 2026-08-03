@@ -65,10 +65,11 @@ func TestAdvertisedAgentSourcesHaveAConstructorInTheBinary(t *testing.T) {
 // list only when epic C1 actually builds it.
 func TestUnshippedAgentSourcesAreNotAdvertised(t *testing.T) {
 	t.Parallel()
-	// k8s-secret left this list when its enumerator was actually wired into the
-	// agent binary (C1). PKCS#11 and the Windows certificate store have no read
-	// path yet, so they stay off the advertised set until they do.
-	for _, kind := range []string{"pkcs11", "windows-store"} {
+	// k8s-secret left this list when its enumerator was wired into the agent
+	// binary, and windows-store left it when the crypt32 reader shipped (C1).
+	// PKCS#11 has no read path yet, so it stays off the advertised set until it
+	// does.
+	for _, kind := range []string{"pkcs11"} {
 		if discovery.IsShippedSourceKind(kind) {
 			// Not a failure to be silenced: if the enumerator is genuinely wired
 			// now, delete the kind from this list in the same change.

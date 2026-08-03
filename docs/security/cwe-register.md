@@ -701,7 +701,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:288` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:298` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:82` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
@@ -1124,7 +1124,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:370` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:376` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:384` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:345` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:355` | reconnect jitter, not a security decision (CWE-338) |
 | `internal/cli/cli.go:417` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/orchestrator/outbox.go:402` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |
