@@ -507,3 +507,69 @@ func TestRevocationProbeNeedsEndpoints(t *testing.T) {
 		t.Fatal("a probe with no endpoints succeeded; an empty green report is worse than none")
 	}
 }
+
+// TestSweepRefusesReservedRangesByDefault is C2's safety property. The
+// reserved-range guard is not a control-plane policy a relay escapes by moving
+// the scan: it lives in the scanner, so it travels with it.
+func TestSweepRefusesReservedRangesByDefault(t *testing.T) {
+	report, err := relay.Sweep(context.Background(), relay.DiscoveryScanIntent{
+		Mode:    relay.DiscoveryModeTLS,
+		Targets: []string{"127.0.0.1:443"},
+	})
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if report.Blocked == 0 {
+		t.Fatal("a loopback target was not blocked; the reserved-range guard did not travel with the scanner")
+	}
+	if len(report.Findings) != 0 {
+		t.Fatalf("a blocked sweep produced %d findings", len(report.Findings))
+	}
+	// Blocked must be visible rather than presenting as an empty segment: an
+	// operator who scanned the wrong range should see a refusal.
+	if report.Targets == 0 {
+		t.Error("the sweep reported no attempted targets, so a refusal reads as an empty segment")
+	}
+}
+
+// TestSweepNeedsTargetsAndAKnownMode: an empty sweep reporting success would be
+// a green discovery dashboard for a segment nobody scanned.
+func TestSweepNeedsTargetsAndAKnownMode(t *testing.T) {
+	if _, err := relay.Sweep(context.Background(), relay.DiscoveryScanIntent{
+		Mode: relay.DiscoveryModeTLS,
+	}); err == nil {
+		t.Fatal("a sweep with no targets succeeded")
+	}
+	if _, err := relay.Sweep(context.Background(), relay.DiscoveryScanIntent{
+		Mode: "portscan", Targets: []string{"10.0.0.1"},
+	}); err == nil {
+		t.Fatal("an unknown sweep mode was accepted")
+	}
+}
+
+// TestSweepFindsWhatASegmentServes proves the sweep actually collects, against
+// a real TLS listener — otherwise the guard tests above would pass on a scanner
+// that found nothing ever.
+func TestSweepFindsWhatASegmentServes(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer srv.Close()
+	addr := strings.TrimPrefix(srv.URL, "https://")
+
+	report, err := relay.Sweep(context.Background(), relay.DiscoveryScanIntent{
+		Mode:    relay.DiscoveryModeTLS,
+		Targets: []string{addr},
+		// The listener is on loopback, which is exactly what the guard refuses —
+		// so the lab escape hatch is what makes this testable, and its existence
+		// is the reason the guard test above matters.
+		AllowReservedRanges: true,
+	})
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if report.Discovered == 0 || len(report.Findings) == 0 {
+		t.Fatalf("the sweep found nothing against a live TLS listener: %+v", report)
+	}
+	if report.Findings[0].Fingerprint == "" {
+		t.Error("a finding carries no fingerprint, so it cannot be reconciled with the inventory")
+	}
+}

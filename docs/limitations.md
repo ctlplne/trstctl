@@ -579,6 +579,38 @@ MAY claim the row once executors ship with the relay runtime. The `roles` column
 **projection** for the console only: writing `network` into it grants nothing,
 because the certificate still says host and the claim path still refuses.
 
+### Segment sweeps run from inside the segment
+
+Network scanning ran from the control plane's worker, which meant it could only
+ever see what the control plane could route to. For a hosted deployment that is
+the public internet — so the scan inventoried the estate's least interesting
+surface and reported it as the estate. The segments that actually hold unmanaged
+certificates are the ones behind a firewall: a management VLAN, a DMZ, a lab
+nobody admits owning.
+
+`discovery.run` is now a relay job. A network-role agent already sits in those
+segments, and the scanners needed no changes to allow it — they were already
+dependency-light, and the one thing keeping them out of the agent binary was a
+store-backed sink whose only caller was a control-plane test. Both modes travel:
+TLS sweeps for served certificates, SSH sweeps for host keys.
+
+**The reserved-range guard travels with the scanner, not with the control
+plane.** A relay does not escape it by being somewhere else: loopback,
+link-local and multicast targets are refused inside the scanner, and the sweep
+reports how many were `blocked` rather than presenting a refused range as an
+empty segment. Attempted, discovered, failed, rejected and blocked are all
+reported, because a sweep that reached nothing and a segment with nothing in it
+must not read the same.
+
+Findings come back over the channel the agent opened and the control plane
+writes them, as with every other agent finding — a relay holds no database.
+
+**What changed in the vantage table:** `discovery.run` was host work when it
+meant "enumerate this machine's filesystem". It is now a segment sweep, which is
+a vantage question, so it demands the network role. A host agent's own
+filesystem inventory still travels on the inventory path rather than as a
+claimed job, so nothing was taken away from it.
+
 ### Revocation distribution points are monitored, not just recorded
 
 Every inventoried certificate has carried its CDP and OCSP URLs since discovery

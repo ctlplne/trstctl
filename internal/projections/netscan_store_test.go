@@ -25,7 +25,7 @@ func TestNetscanMergesDiscoveryIntoInventory(t *testing.T) {
 	addr := srv.Listener.Addr().String()
 	fingerprint := crypto.SHA256Hex(srv.Certificate().Raw)
 
-	sc := netscan.New(netscan.NewStoreSink(s, tenantA), netscan.WithAllowLoopbackTargets(true))
+	sc := netscan.New(&testNetscanStoreSink{store: s, tenantID: tenantA}, netscan.WithAllowLoopbackTargets(true))
 	defer sc.Close()
 
 	if rep := sc.Scan(ctx, []string{addr}); rep.Discovered != 1 {
@@ -81,4 +81,39 @@ func countByFingerprint(t *testing.T, ctx context.Context, s *store.Store, fp st
 		}
 	}
 	return n
+}
+
+// testNetscanStoreSink upserts network-scan discoveries into the inventory. It
+// lives HERE, in a control-plane test, and not in internal/discovery/netscan,
+// because C2 re-homes network scanning onto network-role agents — and the agent
+// binary must not link internal/store (docs/agent_binary_import_boundary_test.go).
+// The direct upsert is a test harness for store idempotency; the production
+// ingestion path is event-sourced through the dispatcher's run sinks (AN-2).
+type testNetscanStoreSink struct {
+	store    *store.Store
+	tenantID string
+}
+
+func (ss *testNetscanStoreSink) Record(ctx context.Context, f netscan.Found) error {
+	info := f.Cert
+	notBefore, notAfter := info.NotBefore, info.NotAfter
+	sans := make([]string, 0, len(info.DNSNames)+len(info.IPAddresses)+len(info.URIs)+len(info.EmailAddresses))
+	sans = append(sans, info.DNSNames...)
+	sans = append(sans, info.IPAddresses...)
+	sans = append(sans, info.URIs...)
+	sans = append(sans, info.EmailAddresses...)
+	_, err := ss.store.UpsertCertificate(ctx, store.Certificate{
+		TenantID:           ss.tenantID,
+		Subject:            info.Subject,
+		SANs:               sans,
+		Issuer:             info.Issuer,
+		Serial:             info.SerialNumber,
+		Fingerprint:        info.SHA256Fingerprint,
+		KeyAlgorithm:       info.KeyAlgorithm,
+		NotBefore:          &notBefore,
+		NotAfter:           &notAfter,
+		DeploymentLocation: f.Address,
+		Source:             "network-scan",
+	})
+	return err
 }

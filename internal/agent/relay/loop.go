@@ -45,7 +45,7 @@ const (
 // relay's whole purpose is driving things that cannot host an agent, and asking
 // for host-local kinds would be asking for work it cannot do.
 func ClaimableKinds() []string {
-	return []string{"connector.deploy", "connector.test", KindRevocationProbe}
+	return []string{"connector.deploy", "connector.test", KindRevocationProbe, KindDiscoveryRun}
 }
 
 // KindConnectorTest is the dry-run kind (epic D5): resolve everything a deploy
@@ -105,6 +105,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// path keeps it from redeeming material it has no use for (R1).
 	if job.Kind == KindRevocationProbe {
 		return runRevocationProbe(ctx, ch, client, job)
+	}
+	// A segment sweep needs no credential either — it reads what hosts serve
+	// publicly. Routing it before the deploy path keeps it from redeeming
+	// material it has no use for (C2).
+	if job.Kind == KindDiscoveryRun {
+		return runDiscoverySweep(ctx, ch, job)
 	}
 
 	var intent DeployIntent

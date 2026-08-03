@@ -113,11 +113,14 @@ func TestServedNetworkAgentClaimsRelayWork(t *testing.T) {
 // discovery.run is not its work either. The role is a vantage, not a rank.
 func TestServedNetworkAgentCannotClaimHostLocalWork(t *testing.T) {
 	ctx := context.Background()
-	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, "discovery.run")
-	seedRoleJob(t, ctx, h, "discovery.run", "discover:seg-1")
+	// trust.distribute is the host-vantage example here. discovery.run used to
+	// be, until C2 re-homed segment sweeps onto relays — a vantage question, not
+	// a filesystem one. The property under test is unchanged.
+	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, "trust.distribute")
+	seedRoleJob(t, ctx, h, "trust.distribute", "trust:seg-1")
 
 	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{
-		Kinds: []string{"discovery.run"}, Limit: 5, LeaseSeconds: 60,
+		Kinds: []string{"trust.distribute"}, Limit: 5, LeaseSeconds: 60,
 	})
 	if err != nil {
 		t.Fatalf("claim: %v", err)
@@ -154,12 +157,12 @@ func TestServedDualRoleAgentClaimsBoth(t *testing.T) {
 // nothing, and not one that does everything.
 func TestServedAgentWithNoGrantIsHostOnly(t *testing.T) {
 	ctx := context.Background()
-	h := newRoleHarness(t, nil, "discovery.run", "endpoint.verify")
-	seedRoleJob(t, ctx, h, "discovery.run", "discover:legacy-1")
+	h := newRoleHarness(t, nil, "trust.distribute", "endpoint.verify")
+	seedRoleJob(t, ctx, h, "trust.distribute", "trust:legacy-1")
 	seedRoleJob(t, ctx, h, "endpoint.verify", "verify:legacy-1")
 
 	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{
-		Kinds: []string{"discovery.run", "endpoint.verify"}, Limit: 5, LeaseSeconds: 60,
+		Kinds: []string{"trust.distribute", "endpoint.verify"}, Limit: 5, LeaseSeconds: 60,
 	})
 	if err != nil {
 		t.Fatalf("claim: %v", err)
@@ -167,8 +170,8 @@ func TestServedAgentWithNoGrantIsHostOnly(t *testing.T) {
 	if len(claimed.Jobs) != 1 {
 		t.Fatalf("grant-less agent claimed %d jobs, want 1 (host work only)", len(claimed.Jobs))
 	}
-	if claimed.Jobs[0].Kind != "discovery.run" {
-		t.Fatalf("grant-less agent claimed %q, want discovery.run", claimed.Jobs[0].Kind)
+	if claimed.Jobs[0].Kind != "trust.distribute" {
+		t.Fatalf("grant-less agent claimed %q, want trust.distribute", claimed.Jobs[0].Kind)
 	}
 }
 

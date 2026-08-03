@@ -64,6 +64,15 @@ func ShippedJobKinds() []ShippedJobKind {
 			Kind:  KindRevocationProbe,
 			Flags: []string{"--relay-claim"},
 		},
+		{
+			// C2: segment sweeps. Like the revocation probe this reads publicly
+			// served material and redeems nothing — and like it, the value is
+			// entirely in the vantage: a scan that can only see what the control
+			// plane routes to inventories the least interesting surface an
+			// estate has.
+			Kind:  KindDiscoveryRun,
+			Flags: []string{"--relay-claim"},
+		},
 	}
 }
 
@@ -74,7 +83,6 @@ func ShippedJobKinds() []ShippedJobKind {
 func UnshippedJobKinds() map[string]string {
 	return map[string]string{
 		"connector.rollback": "needs a retained predecessor credential; nothing keeps one yet",
-		"discovery.run":      "host-local work: a relay has no filesystem of the appliance's to enumerate",
 		"trust.distribute":   "host-local work: installs roots in a host's own trust store",
 		"endpoint.verify":    "owned by the verification epics; no relay-side prober ships yet",
 	}

@@ -85,13 +85,18 @@ var agentJobKindAllowlist = map[string]bool{
 //     open at the kind level and the honest thing is to say so rather than to
 //     invent a restriction that does not hold.
 var agentJobKindVantage = map[string][]string{
-	"discovery.run":      {mtls.AgentRoleHost},
-	"trust.distribute":   {mtls.AgentRoleHost},
-	"endpoint.verify":    {mtls.AgentRoleNetwork},
+	// C2 changed this. discovery.run was host work when it meant "enumerate this
+	// machine's filesystem"; it is now a SEGMENT sweep, which is a vantage
+	// question — the ranges worth scanning are the ones behind a firewall that
+	// only a relay sits inside. A host agent's own filesystem inventory travels
+	// on the inventory path, not as a claimed job.
+	"discovery.run":    {mtls.AgentRoleNetwork},
+	"trust.distribute": {mtls.AgentRoleHost},
+	"endpoint.verify":  {mtls.AgentRoleNetwork},
 	// R1: reads public distribution points from a vantage inside the segment,
 	// because the CDPs that matter most are internal ones a SaaS control plane
 	// cannot reach by design.
-	"revocation.probe": {mtls.AgentRoleNetwork},
+	"revocation.probe":   {mtls.AgentRoleNetwork},
 	"connector.deploy":   {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.rollback": {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.test":     {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
