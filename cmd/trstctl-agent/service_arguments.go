@@ -28,6 +28,18 @@ func serviceArguments(o agentOptions) []string {
 	// service-managed start — the agent comes back up looking healthy and
 	// claiming nothing, which reads as a stalled queue rather than as lost
 	// configuration.
+	// C1: PKCS#11 token inventory must survive an SCM restart too, PIN file
+	// path included — dropping it would silently downgrade a configured token
+	// inventory to public objects only.
+	if o.inventoryPKCS11Module != "" {
+		args = append(args, "--inventory-pkcs11-module", o.inventoryPKCS11Module)
+		if o.inventoryPKCS11Token != "" {
+			args = append(args, "--inventory-pkcs11-token", o.inventoryPKCS11Token)
+		}
+		if o.inventoryPKCS11PINFile != "" {
+			args = append(args, "--inventory-pkcs11-pin-file", o.inventoryPKCS11PINFile)
+		}
+	}
 	// C1: a Windows agent installed as a service is the main consumer of the
 	// Windows store inventory, so dropping these on an SCM restart would silence
 	// exactly the estate they exist to see.

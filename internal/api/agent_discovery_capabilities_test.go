@@ -71,12 +71,18 @@ func TestAgentResponseDoesNotAdvertiseUnbuiltEnumerators(t *testing.T) {
 	for _, capability := range got.DiscoveryCapabilities {
 		advertised[capability.SourceKind] = struct{}{}
 	}
-	// k8s-secret left this list when its enumerator was wired into the agent
-	// binary, and windows-store left it when the crypt32 reader shipped.
-	// PKCS#11 has no read path yet, so it must stay off the advertised set.
-	for _, kind := range []string{"pkcs11"} {
+	// Every declared kind now has a reader (C1 complete). What the API must
+	// never do is advertise a kind THIS BINARY cannot collect — which for
+	// pkcs11 depends on whether the build has cgo, since it dlopens a vendor
+	// module. So the assertion is agreement with the census, not a fixed list.
+	for kind := range advertised {
+		if !discovery.IsShippedSourceKind(kind) {
+			t.Errorf("agent advertises %q, which this build's census does not ship", kind)
+		}
+	}
+	for _, kind := range discovery.UnshippedSourceKinds() {
 		if _, ok := advertised[kind]; ok {
-			t.Errorf("agent advertises %q; if its enumerator now ships, add it to discovery.ShippedSourceKinds and drop it from this list in the same change", kind)
+			t.Errorf("agent advertises %q, which this build cannot collect", kind)
 		}
 	}
 }

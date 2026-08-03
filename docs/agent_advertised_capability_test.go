@@ -65,21 +65,24 @@ func TestAdvertisedAgentSourcesHaveAConstructorInTheBinary(t *testing.T) {
 // list only when epic C1 actually builds it.
 func TestUnshippedAgentSourcesAreNotAdvertised(t *testing.T) {
 	t.Parallel()
-	// k8s-secret left this list when its enumerator was wired into the agent
-	// binary, and windows-store left it when the crypt32 reader shipped (C1).
-	// PKCS#11 has no read path yet, so it stays off the advertised set until it
-	// does.
-	for _, kind := range []string{"pkcs11"} {
+	// Every declared kind now has a reader (C1 complete): k8s-secret, then
+	// windows-store, then pkcs11. What this test protects is no longer a list of
+	// unbuilt kinds but the rule that produced it — advertised must equal
+	// shipped, for THIS binary.
+	//
+	// pkcs11 is the case that makes the rule sharp. It needs cgo to dlopen a
+	// vendor module, and the default agent build is deliberately cgo-free, so
+	// whether it ships depends on how the binary was built. The census is
+	// build-dependent for exactly that reason, and the assertion is that the two
+	// agree — not that pkcs11 is or is not present.
+	missing := discovery.UnshippedSourceKinds()
+	for _, kind := range missing {
 		if discovery.IsShippedSourceKind(kind) {
-			// Not a failure to be silenced: if the enumerator is genuinely wired
-			// now, delete the kind from this list in the same change.
-			t.Errorf("source kind %q is advertised as shipped; if its enumerator is now wired into the agent binary, remove it from this test's list in the same change",
-				kind)
+			t.Errorf("source kind %q is reported both shipped and unshipped", kind)
 		}
 	}
-	missing := discovery.UnshippedSourceKinds()
-	if len(missing) == 0 {
-		t.Log("every declared source kind now ships; epic C1 is complete and this test can be retired")
+	if len(missing) > 0 && !containsString(missing, "pkcs11") {
+		t.Errorf("unshipped kinds %v include something other than the cgo-gated pkcs11; a kind that lost its reader is a regression", missing)
 	}
 }
 

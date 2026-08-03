@@ -62,6 +62,9 @@ func main() {
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
 	relayPollEvery := flag.Duration("relay-poll-every", 15*time.Second, "how often to ask for relay work when --relay-claim is set")
+	inventoryPKCS11Module := flag.String("inventory-pkcs11-module", "", "path to a PKCS#11 module (softhsm2.so, libykcs11.so, opensc-pkcs11.so) whose tokens should be inventoried. Metadata only: reads certificate objects, never private keys, over a read-only session. Requires a cgo-enabled agent build — the default build is statically linked and reports an error rather than an empty token estate")
+	inventoryPKCS11Token := flag.String("inventory-pkcs11-token", "", "inventory only the PKCS#11 token with this label; empty inventories every token the module presents")
+	inventoryPKCS11PINFile := flag.String("inventory-pkcs11-pin-file", "", "file holding the PKCS#11 user PIN, for tokens whose certificate objects are not public. A file rather than a flag, because process arguments expose credentials — the same rule the bootstrap token follows. Omit it to read only public certificate objects")
 	inventoryWindowsStores := flag.String("inventory-windows-stores", "", "comma-separated Windows certificate stores to inventory (MY, WEBHOSTING, CA, ROOT, TRUSTEDPUBLISHER), or \"all\" for every supported store. Metadata only: reads certificates, never private keys. Windows builds only — on any other platform this reports an error rather than an empty estate")
 	inventoryWindowsLocation := flag.String("inventory-windows-location", "local-machine", "which Windows certificate hierarchy to inventory: local-machine (service and IIS certificates) or current-user")
 	inventoryK8sSecrets := flag.Bool("inventory-k8s-secrets", false, "inventory the TLS Secrets in this pod's Kubernetes namespace (metadata only; reads tls.crt, never tls.key). Requires the in-cluster service-account mount and list access to Secrets in the namespace")
@@ -200,6 +203,9 @@ func main() {
 		inventoryBrowserTrustRoots:        splitList(*inventoryBrowserTrustRoots),
 		inventoryPrivateKeyRoots:          splitList(*inventoryPrivateKeyRoots),
 		inventoryK8sSecrets:               *inventoryK8sSecrets,
+		inventoryPKCS11Module:             strings.TrimSpace(*inventoryPKCS11Module),
+		inventoryPKCS11Token:              strings.TrimSpace(*inventoryPKCS11Token),
+		inventoryPKCS11PINFile:            strings.TrimSpace(*inventoryPKCS11PINFile),
 		inventoryWindowsStores:            splitList(*inventoryWindowsStores),
 		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
@@ -270,6 +276,12 @@ type agentOptions struct {
 	// domain controller is a different proposition from the personal store.
 	inventoryWindowsStores   []string
 	inventoryWindowsLocation string
+	// PKCS#11 token inventory (epic C1). The PIN is a FILE path, never an
+	// inline value: process arguments are readable by anyone who can list
+	// processes, which is why the bootstrap token has the same rule.
+	inventoryPKCS11Module  string
+	inventoryPKCS11Token   string
+	inventoryPKCS11PINFile string
 	// relayClaim turns on the A3 relay runtime: claim connector.deploy work for
 	// appliances in this segment, redeem its credential for one attempt, deploy,
 	// wipe. Off by default because it moves live credential material onto this
@@ -386,6 +398,13 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if o.inventoryK8sSecrets {
 		if err := reportKubernetesSecretInventory(ctx, a, ch); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes Secret inventory report failed:", err)
+		}
+	}
+	if o.inventoryPKCS11Module != "" {
+		if err := reportPKCS11Inventory(ctx, a, ch, o); err != nil {
+			// Surfaced, never swallowed: a cgo-free build says it cannot look
+			// rather than reporting a clean token estate (epic C1).
+			fmt.Fprintln(os.Stderr, "trstctl-agent: PKCS#11 inventory report failed:", err)
 		}
 	}
 	if len(o.inventoryWindowsStores) > 0 {
@@ -513,6 +532,31 @@ func reportKubernetesSecretInventory(ctx context.Context, a *agent.Agent, ch age
 		return err
 	}
 	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourceKubernetes, found, 30, "kubernetes secret inventory")
+}
+
+// reportPKCS11Inventory inventories the certificate objects on the configured
+// token(s). Metadata only, over a read-only session; no private key object is
+// searched for and none is read.
+func reportPKCS11Inventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, o agentOptions) error {
+	cfg := agentdiscovery.PKCS11Config{
+		ModulePath: o.inventoryPKCS11Module,
+		TokenLabel: o.inventoryPKCS11Token,
+	}
+	if o.inventoryPKCS11PINFile != "" {
+		pin, err := os.ReadFile(o.inventoryPKCS11PINFile) // #nosec G304 -- operator-supplied PIN file path, read at their instruction (CWE-22)
+		if err != nil {
+			return fmt.Errorf("read PKCS#11 PIN file: %w", err)
+		}
+		// The PIN lives as bytes and is wiped as soon as the read completes
+		// (AN-8); it is never turned into a long-lived string here.
+		cfg.UserPIN = bytes.TrimSpace(pin)
+		defer secret.Wipe(cfg.UserPIN)
+	}
+	found, err := agentdiscovery.NewPKCS11CertSource(cfg).Discover(ctx)
+	if err != nil {
+		return err
+	}
+	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourcePKCS11, found, 30, "pkcs11 token inventory")
 }
 
 // reportWindowsStoreInventory inventories the requested Windows certificate

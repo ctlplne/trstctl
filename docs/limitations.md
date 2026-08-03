@@ -1655,9 +1655,11 @@ This is a deliberate, documented trust boundary, not an accident.
   binary can actually collect — `filesystem`, `trust-store`,
   `k8s-secret`, `windows-store`, `private-key`, and `ssh` — each with the
   flags that switch it on, so a capability that is listed but unconfigured
-  is not read as coverage that is running. **`pkcs11` is declared at the
-  agent's collector boundary but the binary constructs no enumerator for
-  it, so it is not advertised.** All three unbuilt kinds were
+  is not read as coverage that is running. **`pkcs11` ships only in a
+  cgo-enabled agent build**, because it dlopens a vendor module and the
+  default agent binary is deliberately statically linked; the census is
+  build-dependent so a cgo-free binary neither carries the reader nor
+  advertises the kind. All three formerly-unbuilt kinds were
   previously listed here and on the API, which read as a Windows estate,
   token store, and Kubernetes Secrets being inventoried when nothing was
   collecting them. Advertised capability is derived from the agent
@@ -1682,8 +1684,18 @@ This is a deliberate, documented trust boundary, not an accident.
   on a non-Windows build the source returns an **error**, never an empty
   inventory — telling a Linux operator their Windows estate is clean would
   be worse than the original defect, because it would arrive with the
-  authority of a scan that never happened. The PKCS#11 path is still
-  unbuilt and returns to the panel when it is real. The channel is behind its own bounded agent
+  authority of a scan that never happened. `pkcs11` completed the set: a
+  cgo build opens the configured module, walks each matching token over a
+  **read-only, non-read-write** session, and reads `CKA_VALUE` from objects
+  of class `CKO_CERTIFICATE`. It never searches for `CKO_PRIVATE_KEY`,
+  never calls `C_Sign`, and never asks a token to export anything — a
+  PKCS#11 key is normally `CKA_EXTRACTABLE=false` and could not leave
+  regardless, but the code does not ask. Login is optional: public
+  certificate objects are readable without one, and the PIN, when a token
+  needs it, comes from a **file** rather than a flag, because process
+  arguments are readable by anyone who can list processes — the same rule
+  the bootstrap token follows. A cgo-free build returns an error rather
+  than an empty token inventory, and does not advertise the kind at all. The channel is behind its own bounded agent
   worker lane and per-connection gRPC stream cap, so a heartbeat or renewal
   storm sheds with `ResourceExhausted` rather than starving API, protocol,
   outbox, or signer capacity. Agents announce an explicit

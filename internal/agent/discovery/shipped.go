@@ -32,9 +32,13 @@ type ShippedSourceKind struct {
 // ShippedSourceKinds returns the certificate and credential source kinds the
 // shipped agent binary can collect today, in the order the API advertises them.
 //
-// Absent on purpose, because no enumerator is constructed for it: pkcs11
-// (SourcePKCS11). The PKCS#11 read path is not built. It belongs here when it
-// is real, and the API will advertise it then and not before.
+// pkcs11 is BUILD-DEPENDENT, and that is the honest answer rather than a
+// hedge. PKCS#11 is a dlopen ABI and needs cgo; the default agent build is
+// deliberately cgo-free, because a statically linked binary is what makes a
+// fleet rollout predictable. A cgo build carries the reader and advertises the
+// kind; a cgo-free build carries neither and advertises neither. The census
+// reports what THIS binary can do, which is the only thing an operator's panel
+// should ever claim.
 //
 // windows-store joined this list when its crypt32 enumerator was actually wired
 // into the agent binary. On a non-Windows build the source reports an ERROR
@@ -46,7 +50,7 @@ type ShippedSourceKind struct {
 // agent binary — the read side had existed unwired, which is exactly the state
 // that made the advertisement false.
 func ShippedSourceKinds() []ShippedSourceKind {
-	return []ShippedSourceKind{
+	kinds := []ShippedSourceKind{
 		{
 			Kind:        SourceFilesystem,
 			Constructor: "NewFilesystemSource",
@@ -95,6 +99,18 @@ func ShippedSourceKinds() []ShippedSourceKind {
 			},
 		},
 	}
+	if pkcs11Shipped() {
+		kinds = append(kinds, ShippedSourceKind{
+			Kind:        SourcePKCS11,
+			Constructor: "NewPKCS11CertSource",
+			Flags: []string{
+				"--inventory-pkcs11-module",
+				"--inventory-pkcs11-token",
+				"--inventory-pkcs11-pin-file",
+			},
+		})
+	}
+	return kinds
 }
 
 // IsShippedSourceKind reports whether the agent binary can collect this kind.
