@@ -2496,6 +2496,10 @@ const esESCatalog = {
   "source.all.a52ace420f": "Todas",
   "source.all.environments.f19ac5a6af": "Todos los entornos",
   "source.all.issuers.ab00116bbe": "Todos los emisores",
+  "source.trusted.by.h1trust0001": "Confiado por",
+  "source.trusted.by.count.h1trust0002": "{value1} almacenes de confianza en {value2} hosts.",
+  "source.trusted.by.none.h1trust0003":
+    "Ning\u00fan almac\u00e9n de confianza analizado contiene el ancla de esta CA. Eso es lo observado, no una prueba de que nadie conf\u00ede en ella.",
   "source.all.kinds.ddd0c2108e": "Todos los tipos",
   "source.all.profiles.18f6aff3fe": "Todos los perfiles",
   "source.all.statuses.8ee57323a6": "Todos los estados",

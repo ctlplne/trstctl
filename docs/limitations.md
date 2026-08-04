@@ -1295,6 +1295,21 @@ looking for a credential that was never there.
   path. The credential graph and risk-scoring read APIs (`/api/v1/graph*`,
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`) are
   also served, as is the AI/RCA/MCP surface behind `ai.enable_api`.
+- Trust in the graph (H1): trust-store anchors agents collect are promoted from
+  flat discovery findings into relationships — a `trust-store` node kind, `TRUSTS`
+  (store → issuer, oriented the way impact travels) and `HOSTS` (resource → store).
+  `GET /api/v1/graph/trust-stores/{id}`, `trstctl graph trust-stores`, and the
+  Graph console's issuer detail answer "trusted by N stores across M hosts"; hosts
+  are counted distinctly, because one machine running both an OS store and a JVM
+  cacerts is two stores and one machine to visit. A store is its own node rather
+  than a host attribute on purpose: a machine routinely carries several with
+  DIFFERENT contents, so "is this CA trusted on host X" has no single answer.
+  Scope, stated exactly: discovered anchors are matched to a managed issuer by
+  SUBJECT NAME, the only correspondence the two share — a name match is not proof
+  they are the same key, so the anchor node carries the fingerprint for
+  confirmation, and the served guidance says so. Stores nobody has scanned do not
+  appear, which is the honest answer rather than a reassuring one; a CA showing
+  zero trusting stores means none have been observed, not that none exist.
 - Third-party secret scanning: CI/CD log, container-registry, Slack, and Jira
   artifact scanning is served through
   `/api/v1/secrets/scans/third-party/{provider}/ingest` and the matching CLI.

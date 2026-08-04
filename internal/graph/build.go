@@ -195,6 +195,12 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		return nil, err
 	}
 	for _, f := range findings {
+		// H1: a trust-store anchor becomes a relationship rather than another
+		// flat credential row. Handled first so the generic path below does not
+		// also emit a duplicate node for it.
+		if addTrustStoreFinding(g, f, issuerByName) {
+			continue
+		}
 		nid := "disc:" + f.ID
 		g.AddNode(Node{
 			ID:   nid,

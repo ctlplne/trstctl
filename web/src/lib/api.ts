@@ -10,6 +10,7 @@
 // now-missing field fails `tsc` — the drift cannot ship silently. Regenerate with
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
 import { translateNow } from "@/i18n/I18nProvider";
+import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import type {
   SecretRotationScheduleRun,
   MDMSCEPPolicyRequest,
@@ -162,6 +163,7 @@ import type {
   FleetReissuanceRun,
   FleetReissuanceRunList,
   GraphImpact,
+  GraphTrustStores,
   GraphNode,
   GraphQueryResult,
   GraphReachable,
@@ -608,6 +610,7 @@ export type {
   FleetReissuanceRun,
   FleetReissuanceRunList,
   GraphImpact,
+  GraphTrustStores,
   GraphNode,
   GraphQueryResult,
   GraphReachable,
@@ -835,7 +838,9 @@ function readCookie(name: string): string | undefined {
   return undefined;
 }
 
-function csrfHeaders(method: string | undefined): Record<string, string> {
+// Exported for the audit-export workflow, which issues a blob fetch rather
+// than a JSON request and so cannot go through req<T> (epic J1).
+export function csrfHeaders(method: string | undefined): Record<string, string> {
   if (!isUnsafeMethod(method)) return {};
   const token = readCookie("trstctl_csrf");
   return token ? { "X-CSRF-Token": token } : {};
@@ -1022,9 +1027,16 @@ export function setPreviewTransportIsolation(isolated: boolean): void {
   previewTransportIsolated = isolated;
 }
 
+/** Read the preview-isolation wall. A reader rather than an exported binding,
+ * so this module stays the only writer (epic J1's audit download needs to
+ * honour the same wall without being able to lower it). */
+export function previewTransportIsIsolated(): boolean {
+  return previewTransportIsolated;
+}
+
 const previewFixturesCompiled = import.meta.env.DEV || import.meta.env.VITE_TRSTCTL_DEMO === "1";
 
-function previewRefusal(): ApiError {
+export function previewRefusal(): ApiError {
   const refusal = new ApiError(0, translateNow("preview.transportIsolated"));
   refusal.message = refusal.body;
   return refusal;
@@ -1349,6 +1361,8 @@ export interface Api {
   policyDryRun(input: PolicyDryRunRequest): Promise<PolicyDryRun>;
   graph(): Promise<GraphResponse>;
   graphBlastRadius(id: string): Promise<GraphImpact>;
+  // H1: which discovered trust stores carry this CA's anchor, and where.
+  graphTrustStores(id: string): Promise<GraphTrustStores>;
   graphReachable(id: string): Promise<GraphReachable>;
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
@@ -1700,31 +1714,7 @@ const liveApi: Api = {
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
   auditEvents: (options) => req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
-  downloadAuditExport: async (options, format) => {
-    if (previewTransportIsolated) throw previewRefusal();
-    // Not req<T>: a record stream is not JSON and must not be parsed as it.
-    // It is fetched as a blob and handed to the browser as a download, so a
-    // year of audit events becomes a file the operator feeds to their SIEM
-    // rather than a string this page tries to render.
-    const qs = auditQueryString(options);
-    const sep = qs ? "&" : "?";
-    const path = `/api/v1/audit/export${qs}${sep}format=${encodeURIComponent(format)}`;
-    const res = await fetch(path, { credentials: "include", headers: { ...csrfHeaders("GET") } });
-    if (res.status === 401) throw new UnauthorizedError();
-    if (!res.ok) throw new ApiError(res.status, await res.text());
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    try {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `trstctl-audit.${format === "csv" ? "csv" : "ndjson"}`;
-      a.click();
-    } finally {
-      // Released either way: a leaked object URL pins the whole export in
-      // memory for the life of the tab.
-      URL.revokeObjectURL(url);
-    }
-  },
+  downloadAuditExport: (options, format) => downloadAuditExportImpl(options, format),
   complianceEvidencePack: (framework) => req<ComplianceEvidencePack>(`/api/v1/compliance/evidence-packs/${encodeURIComponent(framework)}`),
   complianceInventoryReport: () => req<ComplianceInventoryReport>("/api/v1/compliance/inventory-report"),
   nhiComplianceReport: () => req<NHIComplianceReport>("/api/v1/compliance/nhi-report"),
@@ -1737,6 +1727,7 @@ const liveApi: Api = {
   policyDryRun: (input) => mutate<PolicyDryRun>("POST", "/api/v1/policy/dry-run", input),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
+  graphTrustStores: (id) => req<GraphTrustStores>(`/api/v1/graph/trust-stores/${encodeURIComponent(id)}`),
   graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),
   graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
   // CLI parity (S3.3): console flows for every remaining core API operation.

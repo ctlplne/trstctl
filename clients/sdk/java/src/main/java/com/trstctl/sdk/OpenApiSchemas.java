@@ -244,6 +244,7 @@ public final class OpenApiSchemas {
       "GraphQueryResult",
       "GraphReachable",
       "GraphResponse",
+      "GraphTrustStores",
       "ITSMTicket",
       "IdempotencyResultProtectionReadout",
       "Identity",

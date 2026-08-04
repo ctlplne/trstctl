@@ -3077,6 +3077,14 @@ func componentSchemas() map[string]*Schema {
 		"from":  str(),
 		"nodes": {Type: "array", Items: ref("GraphNode")},
 	}, "from", "nodes")
+	// H1: who trusts a CA, and where those stores live.
+	graphTrustStores := object(map[string]*Schema{
+		"issuer":      str(),
+		"stores":      {Type: "array", Items: ref("GraphNode")},
+		"hosts":       {Type: "array", Items: ref("GraphNode")},
+		"store_count": {Type: "integer"}, "host_count": {Type: "integer"},
+		"guidance": str(),
+	}, "issuer", "stores", "hosts", "store_count", "host_count", "guidance")
 	graphImpact := object(map[string]*Schema{
 		"node":     ref("GraphNode"),
 		"affected": {Type: "array", Items: ref("GraphNode")},
@@ -4197,6 +4205,7 @@ func componentSchemas() map[string]*Schema {
 		"GraphResponse":                            graphResponse,
 		"GraphReachable":                           graphReachable,
 		"GraphImpact":                              graphImpact,
+		"GraphTrustStores":                         graphTrustStores,
 		"GraphQueryResult":                         graphQueryResult,
 		"Owner":                                    owner,
 		"OwnerRequest":                             ownerReq,

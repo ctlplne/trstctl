@@ -108,3 +108,69 @@ func (a *API) buildGraph(w http.ResponseWriter, r *http.Request) (*graph.Graph, 
 	}
 	return g, true
 }
+
+// trustStoresResponse answers "who trusts this CA" (epic H1).
+//
+// Counts are served alongside the lists because the headline an operator needs
+// is a sentence — "trusted by N stores across M hosts" — and making the console
+// derive it from array lengths invites two surfaces disagreeing about the same
+// number.
+type trustStoresResponse struct {
+	Issuer string `json:"issuer"`
+	// Stores are the discovered trust stores holding this CA's anchor.
+	Stores []graph.Node `json:"stores"`
+	// Hosts are the DISTINCT machines those stores sit on. A host running both
+	// an OS store and a JVM cacerts contributes two stores and one machine to
+	// visit, and the difference is the whole point of reporting both.
+	Hosts      []graph.Node `json:"hosts"`
+	StoreCount int          `json:"store_count"`
+	HostCount  int          `json:"host_count"`
+	// Guidance travels with the data rather than living in documentation nobody
+	// opens during a rollover.
+	Guidance string `json:"guidance"`
+}
+
+const trustStoreGuidance = "Every row here is a trust store some agent actually read on some host, " +
+	"promoted from a flat finding into a relationship. Anchors are matched to a managed issuer by " +
+	"SUBJECT NAME, which is the only correspondence a discovered anchor and a managed CA share — a " +
+	"name match is not proof the two are the same key, so confirm the anchor's fingerprint before " +
+	"acting on a rollover. Stores nobody has scanned do not appear at all, which is the honest " +
+	"answer rather than a reassuring one: this is what has been observed, not what exists."
+
+// graphTrustStores lists the trust stores that carry a given issuer's anchor.
+func (a *API) graphTrustStores(w http.ResponseWriter, r *http.Request) {
+	g, tenantOK := a.buildGraph(w, r)
+	if !tenantOK {
+		return
+	}
+	id := r.PathValue("id")
+	node, ok := g.Node(id)
+	if !ok {
+		a.writeError(w, errStatus(http.StatusNotFound, "graph node not found"))
+		return
+	}
+	if node.Kind != graph.KindIssuer {
+		// Refused rather than answered with an empty list. "No stores trust this"
+		// and "you asked about something that is not a CA" are different
+		// statements, and an empty list for the second reads as the first.
+		a.writeError(w, errStatus(http.StatusBadRequest,
+			"trust stores are listed for an issuer node; "+id+" is a "+string(node.Kind)))
+		return
+	}
+	stores, hosts := g.TrustStoresForIssuer(id)
+	a.writeJSON(w, http.StatusOK, trustStoresResponse{
+		Issuer: id,
+		Stores: nonNilNodes(stores), Hosts: nonNilNodes(hosts),
+		StoreCount: len(stores), HostCount: len(hosts),
+		Guidance: trustStoreGuidance,
+	})
+}
+
+// nonNilNodes keeps JSON arrays as [] rather than null, so a console can render
+// an empty result without a special case.
+func nonNilNodes(ns []graph.Node) []graph.Node {
+	if ns == nil {
+		return []graph.Node{}
+	}
+	return ns
+}

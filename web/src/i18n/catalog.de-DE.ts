@@ -2499,6 +2499,10 @@ const deDECatalog = {
   "source.all.a52ace420f": "Alle",
   "source.all.environments.f19ac5a6af": "Alle Umgebungen",
   "source.all.issuers.ab00116bbe": "Alle Aussteller",
+  "source.trusted.by.h1trust0001": "Vertraut von",
+  "source.trusted.by.count.h1trust0002": "{value1} Vertrauensspeicher auf {value2} Hosts.",
+  "source.trusted.by.none.h1trust0003":
+    "Kein gepr\u00fcfter Vertrauensspeicher enth\u00e4lt den Anker dieser CA. Das ist der Beobachtungsstand, kein Beweis daf\u00fcr, dass ihr niemand vertraut.",
   "source.all.kinds.ddd0c2108e": "Alle Arten",
   "source.all.profiles.18f6aff3fe": "Alle Profile",
   "source.all.statuses.8ee57323a6": "Alle Status",

@@ -2156,6 +2156,15 @@ export interface GraphResponse {
   nodes: GraphNode[];
 }
 
+export interface GraphTrustStores {
+  guidance: string;
+  host_count: number;
+  hosts: GraphNode[];
+  issuer: string;
+  store_count: number;
+  stores: GraphNode[];
+}
+
 export interface ITSMTicket {
   created_at: string;
   destination: string;

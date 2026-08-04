@@ -3082,6 +3082,19 @@ GraphResponse = TypedDict(
     total=False,
 )
 
+GraphTrustStores = TypedDict(
+    'GraphTrustStores',
+    {
+        'guidance': str,
+        'host_count': int,
+        'hosts': list[dict[str, Any]],
+        'issuer': str,
+        'store_count': int,
+        'stores': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 ITSMTicket = TypedDict(
     'ITSMTicket',
     {

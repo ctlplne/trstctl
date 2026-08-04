@@ -313,6 +313,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"graph", "nodes"}, Method: "GET", Path: "/api/v1/graph", Summary: "Get the credential graph"},
 	{Name: []string{"graph", "reachable"}, Method: "GET", Path: "/api/v1/graph/reachable/{id}", Summary: "Nodes reachable from a node"},
 	{Name: []string{"graph", "blast-radius"}, Method: "GET", Path: "/api/v1/graph/blast-radius/{id}", Summary: "Blast radius of a node"},
+	{Name: []string{"graph", "trust-stores"}, Method: "GET", Path: "/api/v1/graph/trust-stores/{id}", Summary: "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on"},
 	{Name: []string{"graph", "query"}, Method: "POST", Path: "/api/v1/graph/query", Body: bodyCypher, Summary: "Run a Cypher-style query"},
 
 	{Name: []string{"risk", "credentials"}, Method: "GET", Path: "/api/v1/risk/credentials", Query: []string{"sort", "min_score", "privilege", "owner"}, Summary: "Rank credentials by risk score"},

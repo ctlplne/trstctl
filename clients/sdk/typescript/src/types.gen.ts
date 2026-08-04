@@ -1805,6 +1805,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/graph/trust-stores/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the discovered trust stores that carry a CA's anchor, and the hosts they sit on */
+        get: operations["graphTrustStores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities": {
         parameters: {
             query?: never;
@@ -6666,6 +6683,14 @@ export interface components {
         GraphResponse: {
             edges: components["schemas"]["GraphEdge"][];
             nodes: components["schemas"]["GraphNode"][];
+        };
+        GraphTrustStores: {
+            guidance: string;
+            host_count: number;
+            hosts: components["schemas"]["GraphNode"][];
+            issuer: string;
+            store_count: number;
+            stores: components["schemas"]["GraphNode"][];
         };
         ITSMTicket: {
             /** Format: date-time */
@@ -14811,6 +14836,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphReachable"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    graphTrustStores: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description credential graph node id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphTrustStores"];
                 };
             };
             /** @description client error */

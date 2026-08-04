@@ -9415,6 +9415,18 @@ export const messages = {
     defaultMessage: "All issuers",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
   },
+  "source.trusted.by.h1trust0001": {
+    defaultMessage: "Trusted by",
+    description: "H1: heading for the trust stores carrying a CA's anchor.",
+  },
+  "source.trusted.by.count.h1trust0002": {
+    defaultMessage: "{value1} trust stores across {value2} hosts.",
+    description: "H1: headline count of stores and distinct machines.",
+  },
+  "source.trusted.by.none.h1trust0003": {
+    defaultMessage: "No scanned trust store carries this CA's anchor. That is what has been observed, not proof nothing trusts it.",
+    description: "H1: empty state, worded so absence of evidence does not read as evidence of absence.",
+  },
   "source.all.kinds.ddd0c2108e": {
     defaultMessage: "All kinds",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx, src/pages/Identities.tsx, src/pages/Owners.tsx.",

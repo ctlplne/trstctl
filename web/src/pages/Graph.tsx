@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, ApiError, type GraphImpact, type GraphNode, type GraphQueryResult, type GraphReachable, type GraphResponse } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type GraphImpact,
+  type GraphTrustStores,
+  type GraphNode,
+  type GraphQueryResult,
+  type GraphReachable,
+  type GraphResponse,
+} from "@/lib/api";
 // This page renders errors in the fallback-prefixed shape ("Could not compute
 // reachability: <detail>"), pinned by __tests__/operations_surface.test.tsx.
 import { apiProblemContext as apiProblemMessage } from "@/lib/apiProblem";
@@ -42,6 +51,10 @@ export function Graph() {
   const [queryResult, setQueryResult] = useState<GraphQueryResult | null>(null);
   const [activeTab, setActiveTab] = useState<"map" | "query">("map");
   const [blastError, setBlastError] = useState<string | null>(null);
+  // H1: who trusts a CA. Loaded only for issuer nodes, because the question is
+  // only meaningful for one — asking it of a credential and rendering an empty
+  // list would read as "nothing trusts this".
+  const [trustStores, setTrustStores] = useState<GraphTrustStores | null>(null);
   const [reachableError, setReachableError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"analysis" | "query" | null>(null);
@@ -74,6 +87,27 @@ export function Graph() {
     [data, hiddenEdgeTypes, visibleNodeIDs],
   );
   const selectedNode = selected ? (nodeByID.get(selected) ?? null) : null;
+
+  useEffect(() => {
+    let active = true;
+    setTrustStores(null);
+    if (!selectedNode || selectedNode.kind !== "issuer") return;
+    if (typeof api.graphTrustStores !== "function") return;
+    api
+      .graphTrustStores(selectedNode.id)
+      .then((res) => {
+        if (active) setTrustStores(res);
+      })
+      .catch(() => {
+        // A failure leaves the panel absent rather than showing zero. "We could
+        // not ask" and "nothing trusts this CA" are opposite answers during a
+        // rollover, and a zero would be the dangerous one to show.
+        if (active) setTrustStores(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedNode]);
   const emptyGraph = data != null && data.nodes.length === 0 && data.edges.length === 0;
   const analysisRef = useRef<HTMLDivElement>(null);
   const impactIds = useMemo(() => {
@@ -422,6 +456,7 @@ export function Graph() {
 
                 <div className="space-y-5">
                   <NodeDetail node={selectedNode} />
+                  {trustStores && <TrustStorePanel trust={trustStores} />}
                   <div ref={analysisRef} className="space-y-5">
                     {impact && <ImpactPanel impact={impact} />}
                     {reachable && <ReachablePanel reachable={reachable} />}
@@ -477,6 +512,39 @@ export function Graph() {
           )}
         </>
       )}
+    </section>
+  );
+}
+
+// TrustStorePanel answers "who trusts this CA" on a selected issuer (epic H1).
+function TrustStorePanel({ trust }: { trust: GraphTrustStores }) {
+  return (
+    <section aria-labelledby="trust-stores-heading" className="ui-panel space-y-3 p-comfortable">
+      <h3 id="trust-stores-heading" className="text-title font-semibold">
+        {translateNow("source.trusted.by.h1trust0001")}
+      </h3>
+      {/* The headline is a sentence, and it is served rather than derived here:
+          two surfaces computing the same number from array lengths is how they
+          come to disagree. */}
+      <p className="text-sm">
+        {translateNow("source.trusted.by.count.h1trust0002", {
+          value1: String(trust.store_count),
+          value2: String(trust.host_count),
+        })}
+      </p>
+      {trust.store_count === 0 ? (
+        <p className="text-caption text-muted-foreground">{translateNow("source.trusted.by.none.h1trust0003")}</p>
+      ) : (
+        <ul className="space-y-1 text-sm">
+          {trust.stores.map((store) => (
+            <li key={store.id} className="flex justify-between gap-3">
+              <span>{store.name}</span>
+              <span className="font-mono text-xs text-muted-foreground">{String((store.attrs as Record<string, string> | undefined)?.host ?? "")}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-caption text-muted-foreground">{trust.guidance}</p>
     </section>
   );
 }

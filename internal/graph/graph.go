@@ -16,6 +16,15 @@ const (
 	KindIssuer      NodeKind = "issuer"       // a CA or other authority that issues credentials
 	KindCryptoAsset NodeKind = "crypto-asset" // an observed cryptographic usage (CBOM, F52)
 	KindAttestation NodeKind = "attestation"  // a verified proof (hardware/cloud/platform) that justified an issuance (F30)
+	// KindTrustStore is a discovered trust store — an OS/Java/NSS/browser
+	// anchor set on some host (epic H1).
+	//
+	// A store is a node rather than an attribute on the host because the same
+	// machine routinely carries several with DIFFERENT contents: the OS store,
+	// a JVM's cacerts, Firefox's NSS DB. "Is this CA trusted on host X" has no
+	// single answer, and modelling the store as a property of the host would
+	// force one.
+	KindTrustStore NodeKind = "trust-store"
 )
 
 // EdgeType names a directed relationship. Direction is oriented so that impact
@@ -30,6 +39,20 @@ const (
 	EdgeGrantsAccess EdgeType = "GRANTS_ACCESS" // credential → resource it can authenticate to
 	EdgeConnectsTo   EdgeType = "CONNECTS_TO"   // workload/resource → workload it talks to
 	EdgeExhibits     EdgeType = "EXHIBITS"      // resource → crypto asset it exhibits (CBOM, F52)
+	// EdgeTrusts is trust-store → issuer whose anchor it contains (epic H1).
+	//
+	// Oriented store → issuer, matching the direction convention: an edge points
+	// the way IMPACT travels. A compromised or rotated CA propagates to every
+	// store holding its anchor, so following the graph outward from an issuer
+	// answers "who breaks if this changes" — which is the question a rollover
+	// or an incident actually asks.
+	EdgeTrusts EdgeType = "TRUSTS"
+	// EdgeHosts is resource → trust store located on it (epic H1).
+	//
+	// It is what turns "N stores" into "N stores across M hosts". Without it a
+	// trust store would float free of the machine that has it, and the answer to
+	// "where do I go to fix this" would be missing.
+	EdgeHosts EdgeType = "HOSTS"
 )
 
 // Node is a vertex in the credential graph. ID is the stable, unique key;

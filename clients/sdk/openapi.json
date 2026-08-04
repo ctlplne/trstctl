@@ -8358,6 +8358,43 @@
         ],
         "type": "object"
       },
+      "GraphTrustStores": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "host_count": {
+            "type": "integer"
+          },
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "store_count": {
+            "type": "integer"
+          },
+          "stores": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "issuer",
+          "stores",
+          "hosts",
+          "store_count",
+          "host_count",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "ITSMTicket": {
         "properties": {
           "created_at": {
@@ -27143,6 +27180,64 @@
           }
         ],
         "summary": "Nodes reachable from a node (reachability query)",
+        "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/graph/trust-stores/{id}": {
+      "get": {
+        "operationId": "graphTrustStores",
+        "parameters": [
+          {
+            "description": "credential graph node id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphTrustStores"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on",
         "x-trstctl-permission": "graph:read"
       }
     },
