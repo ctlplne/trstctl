@@ -1295,6 +1295,19 @@ looking for a credential that was never there.
   path. The credential graph and risk-scoring read APIs (`/api/v1/graph*`,
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`) are
   also served, as is the AI/RCA/MCP surface behind `ai.enable_api`.
+- Incident fleet-reissue batch gates (H3): each batch's health gate is recomputed
+  on read from THAT BATCH's own replacement identities, through the same
+  verification summary D6's canary uses. It previously round-robined the run's
+  gate list across batches (`gates[(index-1)%len(gates)]`), so a batch's gate
+  described some other batch — worse than showing nothing, because during an
+  incident it reads as per-batch evidence and the operator deciding whether to
+  continue is exactly who would act on it. The verdict rules are unchanged and
+  deliberately refuse to round up: any failed replacement fails the gate, and a
+  single UNVERIFIED replacement keeps it `not_evaluated` rather than passed — a
+  run that is 99% verified is a run with an endpoint nobody looked at. Batches
+  that are planned or halted keep `not_evaluated`, because a batch that never ran
+  has nothing to verify and a halted one changed nothing; a read failure leaves
+  the gate as it stands rather than inventing a verdict in either direction.
 - Migration waves (H2): `internal/migration` is the generic ordered-cohort engine
   behind CA rollover. Phases run distribute-trust → VERIFY trust → issue → VERIFY
   live → advance, and both verify steps are GATES rather than steps: `Advance`

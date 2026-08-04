@@ -226,7 +226,7 @@ func (a *API) startFleetReissuance(w http.ResponseWriter, r *http.Request) {
 			failedTargets = append(failedTargets, incidentFailedTargets(delivery)...)
 			rollbackRefs = append(rollbackRefs, "identity:"+compromised.ID, "replacement:"+replacement.ID, "delivery:"+delivery.ID+":"+delivery.RollbackRef)
 		}
-		batches := buildFleetBatches(affectedIDs, replacementIDs, batchSize, healthGates)
+		batches := buildFleetBatches(affectedIDs, replacementIDs, batchSize)
 		evidenceFormat, evidenceBundle, err := a.incidentEvidenceBundle(ctx, tenantID, req.IssuerID)
 		if err != nil {
 			return 0, nil, err
@@ -406,6 +406,13 @@ func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID strin
 			resp.FailedReplacements = outcome.Failed
 			resp.UnverifiedReplacements = outcome.Unverified
 		}
+		// H3: each batch's gate is recomputed from ITS OWN replacements before
+		// anything is reported. Done here, on the read, so a gate reflects what
+		// verification says NOW rather than what it said when the run was
+		// recorded — during an incident the two diverge constantly, and the
+		// stale one is the one that gets acted on.
+		resp.Batches = evaluateFleetBatchGates(ctx, a.store, tenantID, resp.Batches)
+
 		// D6: canary-first. If the first batch's replacements are not being
 		// served, the remainder is halted rather than allowed to propagate a
 		// bad certificate to the whole estate at the speed of the outbox.
@@ -541,7 +548,7 @@ func fleetDeploymentVerdict(o store.FleetVerificationOutcome) string {
 	}
 }
 
-func buildFleetBatches(identityIDs, replacementIDs []string, batchSize int, gates []store.FleetReissuanceHealthGate) []store.FleetReissuanceBatch {
+func buildFleetBatches(identityIDs, replacementIDs []string, batchSize int) []store.FleetReissuanceBatch {
 	if batchSize <= 0 {
 		batchSize = 25
 	}
@@ -551,15 +558,65 @@ func buildFleetBatches(identityIDs, replacementIDs []string, batchSize int, gate
 		if end > len(identityIDs) {
 			end = len(identityIDs)
 		}
+		// Not evaluated until this batch's OWN replacements have been observed.
+		//
+		// This used to round-robin the run's gate list across batches —
+		// gates[(index-1)%len(gates)] — so batch 1 wore the first gate's label,
+		// batch 2 the second, and it wrapped. A batch's health gate therefore
+		// said nothing whatever about that batch, which is worse than showing
+		// nothing: during an incident it reads as per-batch evidence, and an
+		// operator deciding whether to continue a fleet reissue is exactly the
+		// reader who would act on it.
+		//
+		// The per-batch verdict is computed by evaluateFleetBatchGates below,
+		// from the batch's own replacement identities. Planned batches start
+		// unevaluated because nothing has been looked at yet, which is the true
+		// statement.
 		gate := servedstatus.FleetGateNotEvaluated
-		if len(gates) > 0 {
-			g := gates[(index-1)%len(gates)]
-			gate = strings.TrimSpace(g.Name + ":" + g.Status)
-		}
 		batches = append(batches, store.FleetReissuanceBatch{
 			Index: index, Status: servedstatus.FleetBatchPlanned, IdentityIDs: append([]string(nil), identityIDs[start:end]...),
 			ReplacementIdentityIDs: append([]string(nil), replacementIDs[start:end]...), HealthGate: gate,
 		})
+	}
+	return batches
+}
+
+// evaluateFleetBatchGates gives each batch a verdict from ITS OWN replacements
+// (epic H3).
+//
+// Per batch rather than per run, because the decision a fleet reissue asks an
+// operator to make is per batch: continue, halt, or roll back. A run-wide gate
+// answers a question nobody is asking at that moment — it tells you the estate
+// is imperfect without telling you whether THIS wave landed.
+//
+// Batches that have not executed are left alone. A planned batch has nothing to
+// verify, and stamping it with a verdict derived from an empty set would make
+// "not evaluated" and "evaluated and found nothing" the same string.
+func evaluateFleetBatchGates(
+	ctx context.Context,
+	st *store.Store,
+	tenantID string,
+	batches []store.FleetReissuanceBatch,
+) []store.FleetReissuanceBatch {
+	if st == nil {
+		return batches
+	}
+	for i := range batches {
+		if batches[i].Status == servedstatus.FleetBatchPlanned ||
+			batches[i].Status == servedstatus.FleetBatchHalted {
+			continue
+		}
+		if len(batches[i].ReplacementIdentityIDs) == 0 {
+			continue
+		}
+		outcome, err := st.SummarizeFleetVerification(ctx, tenantID, batches[i].ReplacementIdentityIDs)
+		if err != nil {
+			// A read failure is not a verdict. Leaving the gate as it stands is
+			// the only honest option: reporting passed would be a lie and
+			// reporting failed would halt a healthy run over a transient error.
+			continue
+		}
+		batches[i].HealthGate = fleetDeploymentVerdict(outcome)
 	}
 	return batches
 }
