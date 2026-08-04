@@ -1295,6 +1295,25 @@ looking for a credential that was never there.
   path. The credential graph and risk-scoring read APIs (`/api/v1/graph*`,
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`) are
   also served, as is the AI/RCA/MCP surface behind `ai.enable_api`.
+- Ownership depth (I1): owners carry an application/service model —
+  `application_id`, `service`, `business_unit`, `environment` — plus a STORED
+  `escalation_chain` and an `ownership_verified_at` attestation. The stored chain
+  is deliberately distinct from the computed approver snapshot: the snapshot
+  answers who could approve right now, the chain answers who to wake and in what
+  order, and the approver graph cannot answer the second because it is about
+  responsibility rather than permission. Every field is nullable and EMPTY MEANS
+  UNKNOWN, never "none" — an estate predating this model has owners nobody can
+  retroactively classify, and treating blank as a deliberate answer would hide
+  exactly the rows the queue exists to surface. `Store.ListUnownedIdentities`
+  reports three distinct reasons rather than one boolean (`no_owner`,
+  `owner_missing_application_model`, `ownership_never_attested`) because they need
+  different actions: a data-entry gap, a classification gap, and a trust gap.
+  An ownership attestation is never cleared by an ordinary edit — losing it would
+  silently return the owner to the queue and train operators to click through the
+  re-confirmation. Scope, stated exactly: the store model and the unowned query
+  are served; the Owners CONSOLE surface for the application model and the queue
+  is NOT built, and there is no served API route for the queue yet, so this is a
+  data model without its operator surface.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives
