@@ -7874,6 +7874,7 @@
           },
           "status": {
             "enum": [
+              "halted",
               "planned",
               "executed",
               "failed",
@@ -15211,6 +15212,49 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "RenewalSLO": {
+        "properties": {
+          "breached": {
+            "type": "boolean"
+          },
+          "budget_remaining_percent": {
+            "type": "number"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "observed_percent": {
+            "type": "number"
+          },
+          "succeeded": {
+            "type": "integer"
+          },
+          "target_percent": {
+            "type": "number"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "window_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window_days",
+          "target_percent",
+          "total",
+          "succeeded",
+          "failed",
+          "observed_percent",
+          "budget_remaining_percent",
+          "breached",
+          "guidance"
+        ],
         "type": "object"
       },
       "ResponseIntegrationDestinationRequest": {
@@ -31202,6 +31246,53 @@
           }
         ],
         "summary": "Get agent job-ledger queue depth and claim health",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/operations/renewal-slo": {
+      "get": {
+        "operationId": "getRenewalSLO",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenewalSLO"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Renewal success SLO and error-budget burn over the measurement window",
         "x-trstctl-permission": "access:read"
       }
     },

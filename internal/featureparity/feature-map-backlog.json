@@ -6928,7 +6928,8 @@
         "getNotification",
         "searchAudit",
         "listRotationRuns",
-        "getRotationRun"
+        "getRotationRun",
+        "getRenewalSLO"
       ],
       "api_na": "",
       "cli_surface": [
@@ -6939,7 +6940,8 @@
         "notifications list",
         "notifications get",
         "lifecycle rotation-runs list",
-        "lifecycle rotation-runs get"
+        "lifecycle rotation-runs get",
+        "operations renewal-slo"
       ],
       "cli_na": "",
       "facet_evidence": {

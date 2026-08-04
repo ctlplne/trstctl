@@ -2753,6 +2753,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/renewal-slo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Renewal success SLO and error-budget burn over the measurement window */
+        get: operations["getRenewalSLO"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/owners": {
         parameters: {
             query?: never;
@@ -6514,7 +6531,7 @@ export interface components {
             index: number;
             replacement_identity_ids: string[];
             /** @enum {string} */
-            status: "planned" | "executed" | "failed" | "completed";
+            status: "halted" | "planned" | "executed" | "failed" | "completed";
         };
         FleetReissuanceEvidence: {
             evidence_bundle: string;
@@ -8464,6 +8481,17 @@ export interface components {
             target?: string;
             /** Format: uuid */
             target_identity_id?: string;
+        };
+        RenewalSLO: {
+            breached: boolean;
+            budget_remaining_percent: number;
+            failed: number;
+            guidance: string;
+            observed_percent: number;
+            succeeded: number;
+            target_percent: number;
+            total: number;
+            window_days: number;
         };
         ResponseIntegrationDestinationRequest: {
             allow_private_endpoint?: boolean;
@@ -17631,6 +17659,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentJobPosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getRenewalSLO: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenewalSLO"];
                 };
             };
             /** @description client error */

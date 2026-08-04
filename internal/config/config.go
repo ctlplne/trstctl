@@ -1036,6 +1036,26 @@ type Lifecycle struct {
 	// (90 days). It is a yardstick for CA-horizon alerting, never a cap on what
 	// any profile issues.
 	LeafValidity string `json:"leaf_validity,omitempty"`
+
+	// MaintenanceWindows restrict when the scheduler may renew (epic D6).
+	//
+	// A renewal deploys to a listener and reloads a service, and there are hours
+	// in every organisation's week when nobody wants that unattended — a change
+	// freeze, a month-end close, a trading window. Before this the only control
+	// was to switch renewal off, which trades an outage risk for an expiry risk.
+	//
+	// Each entry is "[Days ]HH:MM-HH:MM[ Timezone]", for example
+	// "Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London" or "Sat,Sun 00:00-23:59".
+	// A window whose end precedes its start wraps midnight, which is the shape
+	// most operators actually want.
+	//
+	// EMPTY MEANS UNRESTRICTED, never "never". An operator who has configured no
+	// windows has not asked for a freeze, and defaulting to closed would turn
+	// an upgrade into a fleet-wide expiry event.
+	// Parsed by the server rather than here: config stays free of dependencies
+	// on the packages that consume it, and a window is only meaningful next to
+	// a scheduler.
+	MaintenanceWindows []string `json:"maintenance_windows,omitempty"`
 }
 
 // NotBeforeSkewDuration parses the issuance backdate window ("" = default 5m).

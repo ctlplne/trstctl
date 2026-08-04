@@ -1451,6 +1451,14 @@ func componentSchemas() map[string]*Schema {
 		"never_validated_count": {Type: "integer"},
 		"guidance":              str(),
 	}, "items", "never_validated_count", "guidance")
+	// D6: renewal success SLO and error-budget burn.
+	renewalSLO := object(map[string]*Schema{
+		"window_days": {Type: "integer"}, "target_percent": {Type: "number"},
+		"total": {Type: "integer"}, "succeeded": {Type: "integer"}, "failed": {Type: "integer"},
+		"observed_percent": {Type: "number"}, "budget_remaining_percent": {Type: "number"},
+		"breached": {Type: "boolean"}, "guidance": str(),
+	}, "window_days", "target_percent", "total", "succeeded", "failed",
+		"observed_percent", "budget_remaining_percent", "breached", "guidance")
 	// D3: issued / delivered / verified, counted separately.
 	deploymentTriState := object(map[string]*Schema{
 		"delivered": {Type: "integer"}, "verified": {Type: "integer"},
@@ -3942,6 +3950,7 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryCoverage":                        discoveryCoverage,
 		"ACMEUpstreamAuthorization":                acmeUpstreamAuthorization,
 		"DeploymentTriState":                       deploymentTriState,
+		"RenewalSLO":                               renewalSLO,
 		"EndpointVerification":                     endpointVerification,
 		"EndpointVerificationSummary":              endpointVerificationSummary,
 		"EndpointVerificationList":                 endpointVerificationList,

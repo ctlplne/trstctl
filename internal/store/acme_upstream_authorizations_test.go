@@ -425,3 +425,221 @@ func TestDeploymentTriStateSeparatesDeliveredFromVerified(t *testing.T) {
 			"that a connector applying a credential and an endpoint serving it are different facts")
 	}
 }
+
+// A fleet run cannot show all-green while one replacement is not being served
+// (epic D6).
+//
+// This is the gate's whole purpose. Before D2/D3 nothing re-read an endpoint, so
+// every gate trstctl filled in itself was not_evaluated — correctly, because a
+// verdict nobody computed is not a pass. Now there is evidence, and the two
+// rules an operator relies on mid-incident are that failure dominates and
+// absence beats success: a run must never read green while something in it is
+// known-broken, and never read green for something nobody looked at.
+func TestFleetVerificationSummaryDistinguishesFailedFromUnlooked(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	tenantID := "d6000001-0000-0000-0000-000000000001"
+	seedTenant(t, s, tenantID)
+
+	idA := "d6000001-0000-0000-0000-0000000000a1"
+	idB := "d6000001-0000-0000-0000-0000000000b1"
+	idC := "d6000001-0000-0000-0000-0000000000c1"
+
+	n := 0
+	receipt := func(identityID, status string, at time.Time) {
+		t.Helper()
+		n++
+		id := fmt.Sprintf("d6000001-0000-0000-0000-%012d", n)
+		ident := identityID
+		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: id, TenantID: tenantID, IdentityID: &ident,
+				Destination: "connector.deploy", Connector: "nginx", Target: "edge",
+				Status: status, IdempotencyKey: id, CreatedAt: at, UpdatedAt: at,
+			})
+		}); err != nil {
+			t.Fatalf("record receipt: %v", err)
+		}
+	}
+
+	base := time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC)
+	receipt(idA, "verified", base)
+	receipt(idB, "verify_failed", base)
+	// idC has no verification receipt at all — nobody looked.
+
+	got, err := s.SummarizeFleetVerification(ctx, tenantID, []string{idA, idB, idC})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if got.Verified != 1 {
+		t.Errorf("Verified = %d, want 1", got.Verified)
+	}
+	if got.Failed != 1 {
+		t.Errorf("Failed = %d, want 1 — one replacement's endpoint is serving something else, "+
+			"and a run containing it must never display all-green", got.Failed)
+	}
+	if got.Unverified != 1 {
+		t.Errorf("Unverified = %d, want 1 — a replacement nobody probed is not a pass, and "+
+			"during an incident it is exactly the one worth knowing about", got.Unverified)
+	}
+}
+
+// The latest verification wins, so a replacement that failed and was then fixed
+// reads as verified rather than being condemned by its history.
+func TestFleetVerificationTakesTheLatestOutcomePerIdentity(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	tenantID := "d6000002-0000-0000-0000-000000000002"
+	seedTenant(t, s, tenantID)
+	id := "d6000002-0000-0000-0000-0000000000a1"
+
+	n := 0
+	receipt := func(status string, at time.Time) {
+		t.Helper()
+		n++
+		rid := fmt.Sprintf("d6000002-0000-0000-0000-%012d", n)
+		ident := id
+		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: rid, TenantID: tenantID, IdentityID: &ident,
+				Destination: "connector.deploy", Connector: "nginx", Target: "edge",
+				Status: status, IdempotencyKey: rid, CreatedAt: at, UpdatedAt: at,
+			})
+		}); err != nil {
+			t.Fatalf("record receipt: %v", err)
+		}
+	}
+
+	base := time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC)
+	receipt("verify_failed", base)
+	receipt("verified", base.Add(time.Hour))
+
+	got, err := s.SummarizeFleetVerification(ctx, tenantID, []string{id})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if got.Verified != 1 || got.Failed != 0 {
+		t.Errorf("verified=%d failed=%d; a replacement that was fixed must read as verified "+
+			"rather than being condemned by an earlier failure", got.Verified, got.Failed)
+	}
+}
+
+// The renewal SLO and its error budget (epic D6).
+//
+// The two things easy to get wrong here both teach a team to ignore the number:
+// reporting a breach when nothing was due, and reporting a burn figure so
+// extreme it stops meaning anything.
+func TestRenewalSLOTreatsAnIdleWindowAsHealthy(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	tenantID := "d6100001-0000-0000-0000-000000000001"
+	seedTenant(t, s, tenantID)
+
+	got, err := s.SummarizeRenewalSLO(ctx, tenantID, 30, 99)
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if got.Breached() {
+		t.Error("an estate with no renewals due reported an SLO breach; paging someone about " +
+			"the absence of work is the fastest way to teach a team to ignore an SLO")
+	}
+	if got.ObservedPercent != 100 {
+		t.Errorf("ObservedPercent = %v over an idle window, want 100", got.ObservedPercent)
+	}
+	if got.BudgetRemainingPercent != 100 {
+		t.Errorf("BudgetRemainingPercent = %v with nothing spent, want 100", got.BudgetRemainingPercent)
+	}
+}
+
+// Error budget burn is clamped at zero. An SLO reporting -340% consumed is not
+// more actionable than one reporting none left, and the raw counts are beside it.
+func TestRenewalSLOClampsBudgetBurn(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	tenantID := "d6100002-0000-0000-0000-000000000002"
+	seedTenant(t, s, tenantID)
+
+	n := 0
+	run := func(status string) {
+		t.Helper()
+		n++
+		id := fmt.Sprintf("d6100002-0000-0000-0000-%012d", n)
+		now := time.Now().UTC()
+		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx,
+				`INSERT INTO lifecycle_rotation_runs
+				        (id, tenant_id, identity_id, status, trigger, created_at, updated_at)
+				 VALUES ($1, $2, $3, $4, 'scheduler', $5, $5)`,
+				id, tenantID, tenantID, status, now)
+			return err
+		}); err != nil {
+			t.Fatalf("seed run: %v", err)
+		}
+	}
+
+	// A 99% target over ten runs allows 0.1 failures; five failures is a very
+	// deep breach.
+	for i := 0; i < 5; i++ {
+		run("completed")
+	}
+	for i := 0; i < 5; i++ {
+		run("failed")
+	}
+
+	got, err := s.SummarizeRenewalSLO(ctx, tenantID, 30, 99)
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if got.Total != 10 || got.Failed != 5 {
+		t.Fatalf("counts = %d total / %d failed, want 10/5", got.Total, got.Failed)
+	}
+	if !got.Breached() {
+		t.Error("a 50% success rate against a 99% target did not report as breached")
+	}
+	if got.BudgetRemainingPercent < 0 {
+		t.Errorf("BudgetRemainingPercent = %v; burn is clamped at zero because a large negative "+
+			"number is not more actionable than none-left", got.BudgetRemainingPercent)
+	}
+	if got.ObservedPercent != 50 {
+		t.Errorf("ObservedPercent = %v, want 50", got.ObservedPercent)
+	}
+}
+
+// A renewal still in flight is neither a success nor a failure, and counting it
+// as either would move the number for reasons unrelated to reliability.
+func TestRenewalSLOExcludesRunsStillInFlight(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	tenantID := "d6100003-0000-0000-0000-000000000003"
+	seedTenant(t, s, tenantID)
+
+	n := 0
+	run := func(status string) {
+		t.Helper()
+		n++
+		id := fmt.Sprintf("d6100003-0000-0000-0000-%012d", n)
+		now := time.Now().UTC()
+		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx,
+				`INSERT INTO lifecycle_rotation_runs
+				        (id, tenant_id, identity_id, status, trigger, created_at, updated_at)
+				 VALUES ($1, $2, $3, $4, 'scheduler', $5, $5)`,
+				id, tenantID, tenantID, status, now)
+			return err
+		}); err != nil {
+			t.Fatalf("seed run: %v", err)
+		}
+	}
+	run("completed")
+	run("executing")
+	run("queued")
+
+	got, err := s.SummarizeRenewalSLO(ctx, tenantID, 30, 99)
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if got.Total != 1 {
+		t.Errorf("Total = %d, want 1 — only terminal runs count, because an unfinished renewal "+
+			"is neither a success nor a failure yet", got.Total)
+	}
+}

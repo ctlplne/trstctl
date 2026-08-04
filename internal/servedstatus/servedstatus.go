@@ -391,12 +391,25 @@ const (
 	FleetBatchExecuted = "executed"
 	// FleetBatchFailed means the batch ran as its own unit and failed.
 	FleetBatchFailed = "failed"
+	// FleetBatchHalted means the batch did NOT run because an earlier batch's
+	// verification failed (epic D6).
+	//
+	// Distinct from failed, and the distinction is the whole value of a canary:
+	// a halted batch was never attempted, so nothing about it is broken and
+	// nothing about it needs fixing. Reporting it as failed would send an
+	// operator to investigate targets that are still serving perfectly well,
+	// during an incident, which is the worst possible time to waste attention.
+	FleetBatchHalted = "halted"
 )
 
 // FleetBatch is the served vocabulary for fleet re-issuance batches.
 var FleetBatch = Registry{
 	Surface: "fleet re-issuance batch",
 	Claims: []Claim{
+		{
+			Value:   FleetBatchHalted,
+			Meaning: "This batch was not attempted because an earlier batch's verification failed. Nothing here was changed and nothing here is known to be broken; the run stopped before reaching it.",
+		},
 		{
 			Value:   FleetBatchPlanned,
 			Meaning: "A partition of the affected identities. The run does not execute batch by batch yet, so this is a plan, not a result.",

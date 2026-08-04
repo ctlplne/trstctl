@@ -2033,7 +2033,7 @@ export interface FleetReissuanceBatch {
   identity_ids: string[];
   index: number;
   replacement_identity_ids: string[];
-  status: "planned" | "executed" | "failed" | "completed";
+  status: "halted" | "planned" | "executed" | "failed" | "completed";
 }
 
 export interface FleetReissuanceEvidence {
@@ -3900,6 +3900,18 @@ export interface RemediationPlaybookRunRequest {
   rollback_ref?: string;
   target?: string;
   target_identity_id?: string;
+}
+
+export interface RenewalSLO {
+  breached: boolean;
+  budget_remaining_percent: number;
+  failed: number;
+  guidance: string;
+  observed_percent: number;
+  succeeded: number;
+  target_percent: number;
+  total: number;
+  window_days: number;
 }
 
 export interface ResponseIntegrationDestinationRequest {

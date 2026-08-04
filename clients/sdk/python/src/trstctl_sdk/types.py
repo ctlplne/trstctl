@@ -5500,6 +5500,22 @@ RemediationPlaybookRunRequest = TypedDict(
     total=False,
 )
 
+RenewalSLO = TypedDict(
+    'RenewalSLO',
+    {
+        'breached': bool,
+        'budget_remaining_percent': float,
+        'failed': int,
+        'guidance': str,
+        'observed_percent': float,
+        'succeeded': int,
+        'target_percent': float,
+        'total': int,
+        'window_days': int,
+    },
+    total=False,
+)
+
 ResponseIntegrationDestinationRequest = TypedDict(
     'ResponseIntegrationDestinationRequest',
     {

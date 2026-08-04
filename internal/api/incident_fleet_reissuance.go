@@ -53,16 +53,30 @@ type fleetReissuanceRunResponse struct {
 	ConnectorDeliveryIDs   []string                          `json:"connector_delivery_ids"`
 	Batches                []store.FleetReissuanceBatch      `json:"batches"`
 	HealthGates            []store.FleetReissuanceHealthGate `json:"health_gates"`
-	FailedTargets          []string                          `json:"failed_targets"`
-	RollbackRefs           []string                          `json:"rollback_refs"`
-	EvidenceBundleFormat   string                            `json:"evidence_bundle_format"`
-	EvidenceBundle         string                            `json:"evidence_bundle"`
-	IdempotencyKey         string                            `json:"idempotency_key"`
-	CreatedBy              string                            `json:"created_by"`
-	CreatedAt              time.Time                         `json:"created_at"`
-	UpdatedAt              time.Time                         `json:"updated_at"`
-	ReplacementIdentities  []identityResponse                `json:"replacement_identities,omitempty"`
-	ConnectorDeliveries    []connectorDeliveryResponse       `json:"connector_deliveries,omitempty"`
+	// D6: how many replacements are actually being served. These are the
+	// numbers behind the replacement-deployment gate, exposed so an operator
+	// can see WHY it reads as it does rather than having to trust the verdict.
+	VerifiedReplacements int `json:"verified_replacements"`
+	FailedReplacements   int `json:"failed_replacements"`
+	// UnverifiedReplacements is what keeps a gate at not_evaluated. A run that
+	// is 99% verified has one endpoint nobody looked at, and during an incident
+	// that is exactly the endpoint worth knowing about.
+	UnverifiedReplacements int `json:"unverified_replacements"`
+	// CanaryState is "pending", "healthy" or "failed" (epic D6). The first
+	// batch gates the rest: a canary that is not being served halts the
+	// remainder before it can propagate to the whole estate.
+	CanaryState           string                      `json:"canary_state,omitempty"`
+	CanaryDetail          string                      `json:"canary_detail,omitempty"`
+	FailedTargets         []string                    `json:"failed_targets"`
+	RollbackRefs          []string                    `json:"rollback_refs"`
+	EvidenceBundleFormat  string                      `json:"evidence_bundle_format"`
+	EvidenceBundle        string                      `json:"evidence_bundle"`
+	IdempotencyKey        string                      `json:"idempotency_key"`
+	CreatedBy             string                      `json:"created_by"`
+	CreatedAt             time.Time                   `json:"created_at"`
+	UpdatedAt             time.Time                   `json:"updated_at"`
+	ReplacementIdentities []identityResponse          `json:"replacement_identities,omitempty"`
+	ConnectorDeliveries   []connectorDeliveryResponse `json:"connector_deliveries,omitempty"`
 }
 
 type fleetReissuanceEvidenceResponse struct {
@@ -379,21 +393,82 @@ func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID strin
 			resp.ConnectorDeliveries = append(resp.ConnectorDeliveries, toConnectorDeliveryResponse(delivery))
 		}
 	}
+	// D6: derive the replacement-deployment gate from what the endpoints are
+	// actually serving. Computed at READ time rather than frozen at run time,
+	// because verification is a loop — an endpoint that was serving correctly
+	// when the run finished can stop, and a gate that never re-evaluated would
+	// go on showing a pass for a fleet that has since diverged.
+	if a.store != nil && len(resp.ReplacementIdentityIDs) > 0 {
+		outcome, err := a.store.SummarizeFleetVerification(ctx, tenantID, resp.ReplacementIdentityIDs)
+		if err == nil {
+			resp.HealthGates = evaluateFleetDeploymentGate(resp.HealthGates, operatorAssertedGates(resp.HealthGates), outcome)
+			resp.VerifiedReplacements = outcome.Verified
+			resp.FailedReplacements = outcome.Failed
+			resp.UnverifiedReplacements = outcome.Unverified
+		}
+		// D6: canary-first. If the first batch's replacements are not being
+		// served, the remainder is halted rather than allowed to propagate a
+		// bad certificate to the whole estate at the speed of the outbox.
+		switch evaluateCanary(ctx, a.store, tenantID, resp.Batches) {
+		case canaryFailed:
+			resp.Batches = applyCanaryHalt(resp.Batches)
+			resp.CanaryState = "failed"
+			resp.CanaryDetail = canaryHaltReason(len(resp.Batches) - 1)
+		case canaryHealthy:
+			resp.CanaryState = "healthy"
+		default:
+			// Pending. The rest waits rather than proceeding on silence: "we
+			// have not looked" and "it is fine" are the two things this
+			// workstream exists to keep apart.
+			resp.CanaryState = "pending"
+			resp.CanaryDetail = "the canary batch has not been verified yet; the remaining " +
+				"batches wait rather than proceeding on an unverified first batch"
+		}
+	}
+}
+
+// operatorAssertedGates records which gates an operator set explicitly at
+// creation time, so a computed verdict never overwrites an attestation.
+//
+// A gate that is anything other than not_evaluated when the run is read was put
+// there by a person. That person may have inspected something this control
+// plane cannot see, which makes them the better authority — replacing their
+// answer with a derived one would discard the more informed of the two.
+func operatorAssertedGates(gates []store.FleetReissuanceHealthGate) map[string]bool {
+	out := map[string]bool{}
+	for _, g := range gates {
+		if strings.TrimSpace(g.Status) != "" && strings.TrimSpace(g.Status) != servedstatus.FleetGateNotEvaluated {
+			out[strings.ToLower(strings.TrimSpace(g.Name))] = true
+		}
+	}
+	return out
 }
 
 // normalizeFleetHealthGates fills in the gate set for a run. trstctl evaluates
-// none of these gates today: it enumerates the blast radius, queues replacement
-// deploys, and records revocation intent, but nothing re-reads an endpoint to
-// decide whether a gate held. So the gates trstctl supplies itself are
-// not_evaluated, not passed — a verdict nobody computed is not a pass
-// (truth-integrity 2). An operator may still assert a gate status explicitly,
-// which is an attestation and recorded as theirs. Epic D6 wires these to WS-D
-// verification receipts, at which point trstctl computes passed/failed for real.
+// D6 changed what this can honestly say. The replacement-deployment gate is now
+// COMPUTED from verification receipts: D2 re-reads endpoints and D3 records the
+// verdict, so there is finally evidence to derive a verdict from.
+//
+// The rule that matters is the one an operator relies on mid-incident: any
+// failed verification fails the gate, and any replacement nobody verified keeps
+// it not_evaluated. A run cannot display all-green while one of its
+// replacements is not being served, and silence never reads as success — a
+// verdict nobody computed is still not a pass (truth-integrity 2).
+//
+// The other two gates stay not_evaluated because nothing computes them yet:
+// graph enumeration has no completeness oracle, and revocation publication is
+// R1's CRL/OCSP freshness signal, which is not wired to this run. Saying so is
+// better than deriving them from something adjacent and calling it proof.
+//
+// An operator may still assert any gate explicitly. That is an attestation and
+// is recorded as theirs — an asserted gate is never overwritten by a computed
+// one, because an operator who has looked at something this control plane
+// cannot see is the better authority.
 func normalizeFleetHealthGates(in []store.FleetReissuanceHealthGate) []store.FleetReissuanceHealthGate {
 	if len(in) == 0 {
 		return []store.FleetReissuanceHealthGate{
 			{Name: "graph enumeration", Status: servedstatus.FleetGateNotEvaluated},
-			{Name: "replacement deployment", Status: servedstatus.FleetGateNotEvaluated},
+			{Name: fleetDeploymentGateName, Status: servedstatus.FleetGateNotEvaluated},
 			{Name: "revocation publication", Status: servedstatus.FleetGateNotEvaluated},
 		}
 	}
@@ -418,6 +493,54 @@ func normalizeFleetHealthGates(in []store.FleetReissuanceHealthGate) []store.Fle
 // (truth-integrity 2). The per-batch gate label likewise carries the gate's real
 // status, which is not_evaluated unless an operator asserted otherwise. Epic D6
 // makes batches actual execution units with pause/resume that gates publishing.
+// fleetDeploymentGateName is the gate D6 computes from verification receipts.
+const fleetDeploymentGateName = "replacement deployment"
+
+// evaluateFleetDeploymentGate replaces the not_evaluated placeholder with a
+// verdict derived from what endpoints are actually serving.
+//
+// Never overwrites a gate an OPERATOR asserted. An operator who has inspected
+// something this control plane cannot see is the better authority, and silently
+// replacing their attestation with a computed value would discard the more
+// informed answer.
+func evaluateFleetDeploymentGate(
+	gates []store.FleetReissuanceHealthGate,
+	operatorAsserted map[string]bool,
+	outcome store.FleetVerificationOutcome,
+) []store.FleetReissuanceHealthGate {
+	for i, gate := range gates {
+		if !strings.EqualFold(strings.TrimSpace(gate.Name), fleetDeploymentGateName) {
+			continue
+		}
+		if operatorAsserted[strings.ToLower(strings.TrimSpace(gate.Name))] {
+			continue
+		}
+		gates[i].Status = fleetDeploymentVerdict(outcome)
+	}
+	return gates
+}
+
+// fleetDeploymentVerdict maps verification counts onto the gate vocabulary.
+//
+// Failure dominates, and absence beats success. Those two rules are the whole
+// point: an operator reading a green run during an incident must be able to
+// trust that nothing in it is known-broken and that nothing in it is merely
+// unlooked-at.
+func fleetDeploymentVerdict(o store.FleetVerificationOutcome) string {
+	switch {
+	case o.Failed > 0:
+		return servedstatus.FleetGateFailed
+	case o.Unverified > 0 || o.Verified == 0:
+		// Even one unverified replacement keeps the gate unevaluated. A run
+		// that is 99% verified is not a run that passed — it is a run with an
+		// endpoint nobody looked at, and during an incident that is exactly the
+		// endpoint worth knowing about.
+		return servedstatus.FleetGateNotEvaluated
+	default:
+		return servedstatus.FleetGatePassed
+	}
+}
+
 func buildFleetBatches(identityIDs, replacementIDs []string, batchSize int, gates []store.FleetReissuanceHealthGate) []store.FleetReissuanceBatch {
 	if batchSize <= 0 {
 		batchSize = 25

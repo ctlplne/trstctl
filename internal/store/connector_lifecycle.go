@@ -495,3 +495,156 @@ func (s *Store) SummarizeDeploymentTriState(ctx context.Context, tenantID string
 	})
 	return out, err
 }
+
+// FleetVerificationOutcome is what verification says about one fleet run's
+// replacement identities (epic D6).
+type FleetVerificationOutcome struct {
+	// Verified is replacements whose latest verification receipt says a
+	// handshake found the endpoint serving them.
+	Verified int
+	// Failed is replacements whose endpoint is serving something else, or
+	// could not be reached.
+	Failed int
+	// Unverified is replacements with no verification receipt at all. It is
+	// what keeps a gate at not_evaluated rather than letting silence read as
+	// success.
+	Unverified int
+}
+
+// SummarizeFleetVerification reports the verification outcome for a set of
+// identities.
+//
+// This is what turns a fleet health gate from a label into a verdict. Until
+// D2/D3 nothing re-read an endpoint, so every gate trstctl filled in itself was
+// not_evaluated — correctly, because a verdict nobody computed is not a pass.
+// Now there are receipts to compute one from.
+//
+// The rule the caller depends on: ANY failure makes the gate fail, and any
+// absence keeps it unevaluated. A run cannot show all-green while one of its
+// replacements is not being served, and it cannot show green for replacements
+// nobody looked at.
+func (s *Store) SummarizeFleetVerification(ctx context.Context, tenantID string, identityIDs []string) (FleetVerificationOutcome, error) {
+	var out FleetVerificationOutcome
+	if len(identityIDs) == 0 {
+		return out, nil
+	}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`WITH latest AS (
+			   SELECT DISTINCT ON (identity_id)
+			          identity_id, status
+			     FROM connector_delivery_receipts
+			    WHERE tenant_id = $1
+			      AND identity_id = ANY($2::uuid[])
+			      AND status IN ('verified', 'verify_failed')
+			    ORDER BY identity_id, updated_at DESC, id DESC
+			 )
+			 SELECT
+			   (SELECT count(*) FROM latest WHERE status = 'verified'),
+			   (SELECT count(*) FROM latest WHERE status = 'verify_failed'),
+			   (SELECT count(*) FROM unnest($2::uuid[]) AS wanted(id)
+			      WHERE NOT EXISTS (SELECT 1 FROM latest l WHERE l.identity_id = wanted.id))`,
+			tenantID, identityIDs).Scan(&out.Verified, &out.Failed, &out.Unverified)
+	})
+	return out, err
+}
+
+// RenewalSLO is the renewal success rate and its error budget (epic D6).
+//
+// An SLO is only useful if it is measured over a window an operator chose and
+// against a target they set. Both are inputs here rather than constants: a
+// 99.9% target over 30 days and a 99% target over 7 days are different
+// promises, and a surface that picked for them would be reporting compliance
+// with a standard nobody agreed to.
+type RenewalSLO struct {
+	// WindowDays is the measurement window.
+	WindowDays int
+	// TargetPercent is the success rate the operator committed to.
+	TargetPercent float64
+	// Total, Succeeded and Failed are renewal runs that reached a terminal
+	// state inside the window. Runs still in flight are excluded: counting an
+	// unfinished renewal as a failure would burn budget for work that may yet
+	// succeed, and counting it as a success would be worse.
+	Total     int
+	Succeeded int
+	Failed    int
+	// ObservedPercent is the achieved success rate, or 100 when nothing ran.
+	//
+	// A window with no renewals is not a breach. It is an estate where nothing
+	// was due, and reporting 0% for it would page someone about the absence of
+	// work — the single fastest way to teach a team to ignore an SLO.
+	ObservedPercent float64
+	// BudgetRemainingPercent is how much of the error budget is left, 0-100.
+	// Negative burn is clamped: an SLO that reports -340% consumed is not more
+	// actionable than one reporting 0 left, and the raw counts are right there.
+	BudgetRemainingPercent float64
+}
+
+// Breached reports whether the observed rate is below target.
+func (s RenewalSLO) Breached() bool { return s.Total > 0 && s.ObservedPercent < s.TargetPercent }
+
+// SummarizeRenewalSLO computes the renewal success SLO over a window.
+//
+// Terminal runs only. A renewal that is still executing is neither a success
+// nor a failure yet, and forcing it into either would make the number move for
+// reasons unrelated to reliability.
+func (s *Store) SummarizeRenewalSLO(ctx context.Context, tenantID string, windowDays int, targetPercent float64) (RenewalSLO, error) {
+	if windowDays <= 0 {
+		windowDays = 30
+	}
+	if targetPercent <= 0 {
+		targetPercent = 99
+	}
+	out := RenewalSLO{WindowDays: windowDays, TargetPercent: targetPercent, ObservedPercent: 100, BudgetRemainingPercent: 100}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// The tenant scope is applied in the CTE, before any aggregate. Written
+		// this way on purpose: with FILTER (WHERE ...) clauses in the select
+		// list, the tenant predicate stops being the first WHERE a reader — or
+		// the AN-1 linter — encounters, and a scope you have to hunt for is one
+		// a later edit can drop without anyone noticing.
+		return tx.QueryRow(ctx,
+			`WITH scoped AS (
+			   SELECT status
+			     FROM lifecycle_rotation_runs
+			    WHERE tenant_id = $1
+			      AND updated_at >= now() - make_interval(days => $2)
+			 )
+			 SELECT
+			   count(*) FILTER (WHERE status IN ('completed', 'failed')),
+			   count(*) FILTER (WHERE status = 'completed'),
+			   count(*) FILTER (WHERE status = 'failed')
+			 FROM scoped`,
+			tenantID, windowDays).Scan(&out.Total, &out.Succeeded, &out.Failed)
+	})
+	if err != nil {
+		return RenewalSLO{}, err
+	}
+	if out.Total == 0 {
+		// Nothing was due. Not a breach — see the field comment.
+		return out, nil
+	}
+	out.ObservedPercent = float64(out.Succeeded) * 100 / float64(out.Total)
+
+	// The error budget is the share of allowed failures that remains. A 99%
+	// target over 100 runs allows one failure; two failures is 0% remaining,
+	// not -100%.
+	allowedFailureRate := 100 - targetPercent
+	if allowedFailureRate <= 0 {
+		// A 100% target has no budget at all: any failure is a breach, and
+		// saying "0% remaining" the moment one occurs is the honest rendering.
+		if out.Failed > 0 {
+			out.BudgetRemainingPercent = 0
+		}
+		return out, nil
+	}
+	observedFailureRate := float64(out.Failed) * 100 / float64(out.Total)
+	remaining := (1 - observedFailureRate/allowedFailureRate) * 100
+	if remaining < 0 {
+		remaining = 0
+	}
+	if remaining > 100 {
+		remaining = 100
+	}
+	out.BudgetRemainingPercent = remaining
+	return out, nil
+}

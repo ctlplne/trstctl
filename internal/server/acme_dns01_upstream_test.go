@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
+	"trstctl.com/trstctl/internal/lifecycle"
 	acme "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -416,5 +417,49 @@ func TestAutoRollbackRequiresExplicitOptIn(t *testing.T) {
 					"production listener is not something to infer", tc.cfg, got, tc.want)
 			}
 		})
+	}
+}
+
+// A closed maintenance window DEFERS renewals rather than dropping them
+// (epic D6).
+//
+// This is the failure that would be invisible: a change freeze that quietly
+// stopped renewals looks exactly like a scheduler working correctly, right up
+// until certificates start expiring. Expiry is the more expensive of the two
+// failures by a wide margin, so the deferral has to be observable and has to
+// name when work resumes.
+func TestAClosedMaintenanceWindowDefersRatherThanDropsRenewals(t *testing.T) {
+	t.Parallel()
+
+	// A window that is open only on Sundays, evaluated on a Wednesday.
+	sundayOnly, err := lifecycle.ParseWindow("Sun 00:00-23:59")
+	if err != nil {
+		t.Fatalf("parse window: %v", err)
+	}
+	set := lifecycle.WindowSet{sundayOnly}
+	wednesday := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
+	if wednesday.Weekday() != time.Wednesday {
+		t.Fatalf("fixture is not a Wednesday: %s", wednesday.Weekday())
+	}
+
+	if set.Allows(wednesday) {
+		t.Fatal("a Sunday-only window admitted a Wednesday renewal")
+	}
+	reason := set.DeferralReason(wednesday)
+	if reason == "" {
+		t.Fatal("a held renewal produced no reason; an operator asking why nothing has renewed " +
+			"since Friday would have nothing to read")
+	}
+	if !strings.Contains(reason, "Sun") {
+		t.Errorf("reason = %q; it must name when work resumes", reason)
+	}
+
+	// And the work is still due when the window opens — deferred, not dropped.
+	sunday := time.Date(2026, 8, 9, 2, 0, 0, 0, time.UTC)
+	if sunday.Weekday() != time.Sunday {
+		t.Fatalf("fixture is not a Sunday: %s", sunday.Weekday())
+	}
+	if !set.Allows(sunday) {
+		t.Error("the window did not open on the day it names, so held work would never resume")
 	}
 }

@@ -170,6 +170,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **`connector.deploy` (A3), `connector.test` (D5), `connector.rollback` (D4), `revocation.probe` (R1), `discovery.run` (C2) and `adcs.inventory` (F1) have relay-side executors**; the rest become claimable when theirs ship. Nothing is claimable until an operator names a kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which an operator must enable separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
+| Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance health gates are now **computed from verification receipts** rather than left unevaluated — any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`, so a run cannot display all-green while something in it is broken or unlooked-at. Canary-first: the first batch gates the rest, and a canary that is not being served halts the remainder as `halted` (distinct from `failed` — nothing in a halted batch was attempted). Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the listener it just changed — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
 | Connector rollback | Served as EXECUTED re-bind for **f5, kemp, netscaler, a10** — the families whose API addresses an installed object separately from uploading one. Deploys now install under a fingerprint-derived object name so the predecessor survives; a rollback re-points the listener at it and uploads nothing, which is the only form available once the control plane holds no subject key. Other families keep the attested-intent receipt and the census says which is which. A missing predecessor object **fails** rather than reporting success. **On an existing install nothing is rollable immediately** — certificates deployed before this change sit under the old target-derived name, so a target becomes rollable only after two deploys under the new scheme. Automatic rollback on failed verification is not served — it needs the verification engine | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Relays redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
@@ -2526,6 +2527,66 @@ operator needs to tell a pipeline problem from a listener problem.
 neither a failure nor a pass — it means nothing has looked. Folding it into
 either direction would be an overclaim, and on a fresh install every target sits
 here, which is the correct starting picture rather than a discouraging one.
+
+## Renewal windows, canaries and SLOs
+
+**Maintenance windows defer, they never drop.** A renewal deploys to a listener
+and reloads a service, and there are hours in every organisation's week when
+nobody wants that unattended. Before this the only control was switching renewal
+off, which trades an outage risk for an expiry risk. A window that closes now
+holds the sweep and records why, naming when it reopens — because a change
+freeze that quietly stopped renewals looks exactly like a scheduler working
+correctly, right up until certificates expire, and expiry is the more expensive
+failure by a wide margin.
+
+An empty window list means **unrestricted**, never "never": an operator who
+configured no windows has not asked for a freeze, and defaulting to closed would
+turn an upgrade into a fleet-wide expiry event. A malformed window refuses to
+start rather than being ignored — an operator who wrote a freeze this could not
+read would believe production was protected while the scheduler renewed through
+it. Windows are expressed in named timezones so they follow daylight saving the
+way the person who wrote them expects, and a window whose end precedes its start
+wraps midnight, which is the shape most operators actually want.
+
+**Fleet gates are computed, not asserted.** Until D2/D3 nothing re-read an
+endpoint, so every gate trstctl filled in itself was `not_evaluated` — correctly,
+because a verdict nobody computed is not a pass. The replacement-deployment gate
+is now derived from verification receipts under two rules an operator relies on
+mid-incident: **failure dominates** (one replacement serving the wrong
+certificate fails the gate however many others passed) and **absence beats
+success** (one replacement nobody probed keeps it unevaluated). A gate an
+operator asserted is never overwritten by a computed one — they may have
+inspected something this control plane cannot see. Gates evaluate at read time,
+so a fleet that has since diverged stops showing a pass.
+
+The other two gates stay `not_evaluated` because nothing computes them: graph
+enumeration has no completeness oracle, and revocation publication is R1's
+freshness signal, which is not wired to a run. Saying so beats deriving them
+from something adjacent and calling it proof.
+
+**Canary-first halts propagation.** A fleet re-issuance touches every certificate
+an issuer signed; without a gate a bad replacement reaches the whole estate at
+the speed of the outbox. The first batch is the canary. `halted` is a distinct
+status from `failed` because a halted batch was never attempted — nothing in it
+changed and nothing in it is broken, and sending an operator to investigate it
+during an incident wastes the attention they have least of. A batch that already
+executed is never relabelled halted: it is deployed and needs attention, and
+hiding that is worse than the halt.
+
+**The SLO counts terminal runs only.** A renewal still executing is neither a
+success nor a failure, and forcing it into either would move the number for
+reasons unrelated to reliability. A window in which nothing was due reports 100%,
+not 0% — an estate with no renewals pending is not in breach, and paging on the
+absence of work is how a team learns to ignore an SLO. Error-budget burn is
+clamped at zero, because a figure like -340% is not more actionable than
+none-remaining and the raw counts sit beside it.
+
+**What is not served.** Batches are still planning partitions rather than
+independently executed units: a run issues every replacement in one pass, so
+pause/resume records operator intent and gates what the console shows, but does
+not interrupt an in-flight pass. Canary evaluation therefore gates what a run
+DISPLAYS and what an operator should do next, not what the outbox has already
+sent.
 
 ## Endpoint verification
 

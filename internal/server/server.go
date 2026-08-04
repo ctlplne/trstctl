@@ -290,6 +290,10 @@ type Deps struct {
 	// LifecycleInterval is the scheduler cadence. Zero selects a conservative default.
 	LifecycleInterval time.Duration
 
+	// MaintenanceWindows restrict when the renewal scheduler may queue work
+	// (epic D6). Empty means unrestricted.
+	MaintenanceWindows lifecycle.WindowSet
+
 	// EndpointVerificationInterval is how often endpoints are re-probed to
 	// confirm they are still serving what was deployed (epic D2). Zero selects
 	// defaultEndpointVerificationInterval.
@@ -764,10 +768,14 @@ type Server struct {
 	// endpointVerificationInterval is how often endpoints are re-probed (D2).
 	// Zero uses defaultEndpointVerificationInterval.
 	endpointVerificationInterval time.Duration
-	mLifecycleQueued             *observ.Counter
-	mLifecycleAlerts             *observ.Counter
-	mLifecycleFailures           *observ.Counter
-	mLifecycleLastOK             *observ.Gauge
+	// maintenanceWindows restrict when the scheduler may renew (D6). Empty
+	// means unrestricted — an operator who configured no windows did not ask
+	// for a freeze.
+	maintenanceWindows lifecycle.WindowSet
+	mLifecycleQueued   *observ.Counter
+	mLifecycleAlerts   *observ.Counter
+	mLifecycleFailures *observ.Counter
+	mLifecycleLastOK   *observ.Gauge
 
 	// Fleet-health telemetry (OPS-002): aggregate, low-cardinality gauges/counters
 	// for enrollment, heartbeat, and missed-heartbeat thresholds.
@@ -1636,6 +1644,7 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.lifecycleLeafValidity = d.LifecycleLeafValidity
 	s.lifecycleInterval = d.LifecycleInterval
 	s.endpointVerificationInterval = d.EndpointVerificationInterval
+	s.maintenanceWindows = d.MaintenanceWindows
 	s.mLifecycleQueued = s.registry.CounterVec("trstctl_lifecycle_renewals_queued_total", "Identities queued by the lifecycle renewal scheduler.", nil).WithLabelValues()
 	s.mLifecycleAlerts = s.registry.CounterVec("trstctl_lifecycle_expiry_alerts_queued_total", "Expiry notifications queued by the lifecycle scheduler.", nil).WithLabelValues()
 	s.mLifecycleLastOK = s.registry.Gauge("trstctl_lifecycle_scheduler_last_success_timestamp_seconds", "Unix timestamp of the last successful lifecycle scheduler sweep.")
@@ -2673,6 +2682,19 @@ func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
 	now := time.Now().UTC()
 	queued := 0
 	if s.lifecycleRenewBefore > 0 {
+		// D6: a closed maintenance window DEFERS renewals, it never drops them.
+		//
+		// The deferral is recorded rather than silent. A change freeze that
+		// quietly stopped renewals would look exactly like a scheduler working
+		// correctly, right up until certificates started expiring — and expiry
+		// is the more expensive of the two failures by a wide margin. An
+		// operator has to be able to see that work is being held and when it
+		// will resume.
+		if reason := s.maintenanceWindows.DeferralReason(now); reason != "" {
+			s.recordRenewalDeferral(ctx, now, reason)
+			s.observeLifecycleSweep(queued, 0, nil)
+			return queued, nil
+		}
 		cutoff := now.Add(s.lifecycleRenewBefore)
 		tenants, err := s.store.TenantsWithRenewalIdentityCandidates(ctx, cutoff, now)
 		if err != nil {
@@ -3079,4 +3101,41 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		s.store.Close()
 	}
 	return errors.Join(errs...)
+}
+
+// recordRenewalDeferral records that a sweep was held by a maintenance window
+// (epic D6).
+//
+// An event rather than a log line, because the question an operator asks is
+// "why has nothing renewed since Friday" and a log line is not where they will
+// look. The reason names when the window next opens, so the answer is
+// actionable rather than merely true.
+//
+// Deliberately at most one per sweep rather than one per deferred certificate:
+// a freeze holds the whole sweep, and a thousand events saying the same thing
+// would bury the one that matters.
+func (s *Server) recordRenewalDeferral(ctx context.Context, now time.Time, reason string) {
+	if s.log == nil || s.store == nil {
+		return
+	}
+	// The deferral is a system-wide fact, so it is recorded once per tenant
+	// that had work to hold — a tenant with nothing due does not need telling
+	// that nothing happened.
+	tenants, err := s.store.TenantsWithRenewalIdentityCandidates(ctx, now.Add(s.lifecycleRenewBefore), now)
+	if err != nil {
+		return
+	}
+	for _, tenant := range tenants {
+		payload, merr := json.Marshal(map[string]any{
+			"reason":      reason,
+			"deferred_at": now.UTC(),
+			"window_open": s.maintenanceWindows.NextOpen(now).UTC(),
+		})
+		if merr != nil {
+			continue
+		}
+		_, _ = s.log.Append(ctx, events.Event{
+			Type: "lifecycle.renewal.deferred", TenantID: tenant, Data: payload,
+		})
+	}
 }

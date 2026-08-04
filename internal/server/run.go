@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"trstctl.com/trstctl/internal/lifecycle"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
@@ -412,6 +413,14 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		return Deps{}, err
 	}
 	retention, privacyRetentionEnabled, privacyRetentionInterval, privacyRetentionPolicy, renewBefore, alertBefore, err := runRetentionAndLifecycleWindows(cfg)
+	// D6: parsed at startup, not at sweep time. A malformed window REFUSES to
+	// start rather than being silently ignored — an operator who wrote a change
+	// freeze this could not read would believe production was protected while
+	// the scheduler renewed straight through it.
+	maintenanceWindows, windowErr := parseMaintenanceWindows(cfg.Lifecycle.MaintenanceWindows)
+	if windowErr != nil {
+		return Deps{}, windowErr
+	}
 	if err != nil {
 		return Deps{}, err
 	}
@@ -489,6 +498,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		PrivacyRetentionEnabled: privacyRetentionEnabled, PrivacyRetentionInterval: privacyRetentionInterval,
 		PrivacyRetentionPolicy:       privacyRetentionPolicy,
 		LifecycleRenewBefore:         renewBefore,
+		MaintenanceWindows:           maintenanceWindows,
 		LifecycleAlertBefore:         alertBefore,
 		LifecycleLeafValidity:        leafValidity,
 		NotificationChannels:         notificationChannels,
@@ -1282,4 +1292,24 @@ func toCapabilities(names []string) []pluginhost.Capability {
 		}
 	}
 	return out
+}
+
+// parseMaintenanceWindows turns the configured specs into a window set.
+//
+// An empty configuration yields an empty set, which ALLOWS everything: an
+// operator who configured no windows has not asked for a freeze, and defaulting
+// to closed would turn an upgrade into a fleet-wide expiry event.
+func parseMaintenanceWindows(specs []string) (lifecycle.WindowSet, error) {
+	if len(specs) == 0 {
+		return nil, nil
+	}
+	out := make(lifecycle.WindowSet, 0, len(specs))
+	for _, spec := range specs {
+		w, err := lifecycle.ParseWindow(spec)
+		if err != nil {
+			return nil, fmt.Errorf("lifecycle.maintenance_windows %q: %w", spec, err)
+		}
+		out = append(out, w)
+	}
+	return out, nil
 }

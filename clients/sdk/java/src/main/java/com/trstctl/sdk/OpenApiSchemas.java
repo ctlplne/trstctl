@@ -412,6 +412,7 @@ public final class OpenApiSchemas {
       "RemediationPlaybookRun",
       "RemediationPlaybookRunList",
       "RemediationPlaybookRunRequest",
+      "RenewalSLO",
       "ResponseIntegrationDestinationRequest",
       "ResponseIntegrationDispatch",
       "ResponseIntegrationDispatchRequest",
