@@ -268,6 +268,18 @@ type CertificateRecorded struct {
 	// Event-sourced state means a Rebuild() must reproduce it too, which is the
 	// other reason it belongs on the event rather than being written directly.
 	KeyOrigin string `json:"key_origin,omitempty"`
+	// KeyStorage, KeyExportable and KeyGeneratedBy are the rest of the custody
+	// record (B5).
+	//
+	// They were added to the schema and to the issuing code and to the served
+	// API, and never to this event — so every one of them projected as empty
+	// while three layers of the system agreed they had been recorded. The
+	// key_origin half of the same bug was found while implementing B2; these
+	// three were found by going back and looking, which is the only way this
+	// class of defect ever is.
+	KeyStorage     string `json:"key_storage,omitempty"`
+	KeyExportable  string `json:"key_exportable,omitempty"`
+	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
 }
 
 // CertificateRevoked is the payload of a certificate.revoked event. The
@@ -1924,7 +1936,10 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			// B5/B2: the custody claim is projected like any other field, so a
 			// Rebuild() reproduces it. Without this the column stayed empty no
 			// matter what the issuing path recorded.
-			KeyOrigin: pl.KeyOrigin,
+			KeyOrigin:      pl.KeyOrigin,
+			KeyStorage:     pl.KeyStorage,
+			KeyExportable:  pl.KeyExportable,
+			KeyGeneratedBy: pl.KeyGeneratedBy,
 		}); err != nil {
 			return err
 		}

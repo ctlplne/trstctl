@@ -208,6 +208,18 @@ never live in the API process. What you can do end to end against the running bi
   target, binds the identity to that endpoint, and queues issue/deploy work through
   the outbox. The leader lifecycle scheduler later renews the identity and sends the
   successor back through credential-bearing `connector.deploy` work.
+- Certificate key custody, corrected (B5 re-audit): the four custody columns
+  (`key_origin`, `key_storage`, `key_exportable`, `key_generated_by`) are now
+  actually persisted. They were added to the schema, set by the issuing code and
+  served by the API, but `projections.CertificateRecorded` had no fields for them
+  and the projector's INSERT never listed them — so every projected certificate
+  recorded blanks while three layers of the system agreed custody had been
+  captured. B5 was signed off in that state. The `key_origin` half surfaced while
+  implementing B2, because B2's own claim depended on it; the other three surfaced
+  only on re-audit. A regression test now reads the DATABASE rather than asserting
+  a struct field was assigned — the distinction that made this invisible — and a
+  structural test fails if a custody field exists on the row without a matching
+  field on the event that carries it.
 - Host-generated endpoint keys (B2): a deployment target whose config sets
   `executor: "agent"` opts out of credential-bearing delivery entirely. When the
   lifecycle scheduler renews an identity bound to such a target, the issuance
