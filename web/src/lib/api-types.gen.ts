@@ -1348,7 +1348,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+  status: "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
   target: string;
   tenant_id: string;
   updated_at: string;
@@ -1445,6 +1445,14 @@ export interface DeploymentTargetRequest {
   config?: Record<string, unknown>;
   connector: string;
   name: string;
+}
+
+export interface DeploymentTriState {
+  delivered: number;
+  unverified: number;
+  verified: number;
+  verified_percent: number;
+  verify_failed: number;
 }
 
 export interface DiscoveryCoverage {
@@ -4640,6 +4648,7 @@ export interface SystemReadout {
   build_date: string;
   commit: string;
   dependencies: SystemDependency[];
+  deployment?: DeploymentTriState;
   fips_module_active: boolean;
   go_version: string;
   idempotency_results: IdempotencyResultProtectionReadout;

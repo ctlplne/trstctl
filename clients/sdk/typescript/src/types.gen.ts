@@ -5808,7 +5808,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /** @enum {string} */
-            status: "queued" | "delivered" | "failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+            status: "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
             target: string;
             /** Format: uuid */
             tenant_id: string;
@@ -5907,6 +5907,13 @@ export interface components {
             config?: Record<string, never>;
             connector: string;
             name: string;
+        };
+        DeploymentTriState: {
+            delivered: number;
+            unverified: number;
+            verified: number;
+            verified_percent: number;
+            verify_failed: number;
         };
         DiscoveryCoverage: {
             classes: components["schemas"]["DiscoveryCoverageClass"][];
@@ -9212,6 +9219,7 @@ export interface components {
             build_date: string;
             commit: string;
             dependencies: components["schemas"]["SystemDependency"][];
+            deployment?: components["schemas"]["DeploymentTriState"];
             fips_module_active: boolean;
             go_version: string;
             idempotency_results: components["schemas"]["IdempotencyResultProtectionReadout"];

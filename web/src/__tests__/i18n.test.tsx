@@ -270,6 +270,11 @@ describe("i18n boundary", () => {
       // and values a finding was derived from, so an operator can check it
       // against the template's own property page instead of taking it on faith.
       // Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      // D3 re-pin: six source.*.d3tri* keys add the deployment-truth panel —
+      // delivered, verified serving, serving something else, and not checked.
+      // The last one is the honest middle and had to be named rather than
+      // folded into either side. Machine-authored es/de - FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW.
       // D2 re-pin: eighteen source.*.d2ver* keys add the endpoint verification
       // section — what each listener is actually SERVING, per vantage, with the
       // comparisons that actually ran and a "never verified" that reads as the
@@ -418,8 +423,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "cb60a4810f996a981511fb6a202d4e131f1191bb6c27ae731df3494677c8403d",
-      "de-DE": "b07020982d1234346465a4fefc54013d02fb166421df59a572238a1761691f79",
+      "es-ES": "6b975dd2bf0998ee1e5fcffc71fdd6426641597cdfb250417ea71fe4831f3f53",
+      "de-DE": "2ec7c5d1c878008f64b55a3aca0eb918288da4a5e0285a79dc126d75fe784611",
     });
   });
 

@@ -1035,6 +1035,8 @@ string that bypassed the registry.
 | `delivered` | connector delivery | A connector reached the target and applied the credential. | That the endpoint is serving it. Live verification is a **separate state**, served since D2 — see `GET /api/v1/endpoints/verifications` and the endpoint verification vocabulary below. A delivery receipt says what this control plane did; only a handshake says what the listener answers with. |
 | `failed` | connector delivery | The attempt ran and did not succeed. | — |
 | `config_validated` | connector delivery | `POST /api/v1/connectors/targets/{id}/test` resolved target metadata, schema, and credential references **locally**, because no relay is enabled for `connector.test`. | That the target was contacted, reachable, or willing to accept the credential. Nothing was changed. |
+| `verified` | connector delivery | A connector applied the credential AND a TLS handshake against the endpoint afterwards observed it serving that exact identity. The only delivery state that says the certificate is **live** rather than that it was sent. | That it is still live now. A delivery receipt is historical — it records what was true when that delivery ran. Current state is the endpoint verification row beside it. |
+| `verify_failed` | connector delivery | A connector applied the credential and a handshake found the endpoint serving something else. | That the delivery failed. It succeeded; the endpoint did not take it. This is a renewal that did not land, and it is what triggers rollback where a target has opted in. |
 | `verified` | endpoint verification | A TLS handshake against the live listener observed it serving the expected identity. The record carries which comparisons ran — fingerprint always, name set and chain when an expectation supplied them. | That every vantage agrees. A `local` row means the serving host's own agent confirmed it; only a `relay` row means a client across the segment could get it. |
 | `diverged` | endpoint verification | A handshake succeeded and the listener is **not** serving what was deployed. The mismatch class says which way: `fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`. | That the deploy failed. It usually succeeded — this is a renewal that did not land, which is exactly the failure inventory-based expiry alerting cannot see. |
 | `unreachable` | endpoint verification | The handshake did not complete, so nothing was observed. | A divergence, and emphatically not a pass. An endpoint nobody could connect to is not verified. |
@@ -2491,6 +2493,39 @@ caller's context if it carries one, and otherwise the DNS-01 automation's own
 30-second outbox wait. There is no separate, configurable propagation budget,
 and the 30 seconds is a floor for callers that set no deadline rather than a cap
 that always applies.
+
+## Issued, delivered, verified
+
+Three claims about the same certificate, with three different lifetimes, and
+only the third is what an operator actually wanted:
+
+- **Issued** — a CA produced it. Recorded in the certificate inventory.
+- **Delivered** — a connector applied it to a target. Recorded on a
+  `connector.deploy` delivery receipt. This is trstctl's own account of what it
+  did, and it is where every deployment surface stopped before D3.
+- **Verified** — a TLS handshake observed the endpoint serving it. Recorded on a
+  second delivery receipt and, separately, as current endpoint state.
+
+**Delivered and verified are counted separately and never summed.** A renewal can
+succeed at the CA, be delivered by a connector, and never reach the listener,
+with every delivery record staying truthfully green. A health surface that
+counted deliveries would be reporting intentions; `GET /api/v1/platform/system`
+counts by verified state for exactly that reason, and `verified_percent` is of
+DELIVERED targets — "of what we have deployed, how much is confirmed live".
+
+**Verification writes a second receipt rather than editing the delivery one.**
+Both facts belong in the evidence chain and they have different lifetimes: "a
+connector applied the credential" is true forever once it happens, and "the
+endpoint was serving it" is true of the moment it was observed. A certificate
+verified in June whose listener silently reverted in August shows a June receipt
+still reading `verified` and an endpoint state reading `diverged`. Overwriting
+the first would destroy the record that delivery succeeded, which is what an
+operator needs to tell a pipeline problem from a listener problem.
+
+**`unverified` is the honest middle.** A delivered target nobody has probed is
+neither a failure nor a pass — it means nothing has looked. Folding it into
+either direction would be an overclaim, and on a fresh install every target sits
+here, which is the correct starting picture rather than a discouraging one.
 
 ## Endpoint verification
 

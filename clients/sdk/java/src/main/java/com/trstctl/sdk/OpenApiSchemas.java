@@ -169,6 +169,7 @@ public final class OpenApiSchemas {
       "DeploymentTarget",
       "DeploymentTargetList",
       "DeploymentTargetRequest",
+      "DeploymentTriState",
       "DiscoveryCoverage",
       "DiscoveryCoverageClass",
       "DiscoveryFinding",

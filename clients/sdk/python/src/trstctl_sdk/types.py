@@ -2073,6 +2073,18 @@ DeploymentTargetRequest = TypedDict(
     total=False,
 )
 
+DeploymentTriState = TypedDict(
+    'DeploymentTriState',
+    {
+        'delivered': int,
+        'unverified': int,
+        'verified': int,
+        'verified_percent': int,
+        'verify_failed': int,
+    },
+    total=False,
+)
+
 DiscoveryCoverage = TypedDict(
     'DiscoveryCoverage',
     {
@@ -6532,6 +6544,7 @@ SystemReadout = TypedDict(
         'build_date': str,
         'commit': str,
         'dependencies': list[dict[str, Any]],
+        'deployment': dict[str, Any],
         'fips_module_active': bool,
         'go_version': str,
         'idempotency_results': dict[str, Any],

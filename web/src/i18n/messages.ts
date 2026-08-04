@@ -5570,6 +5570,30 @@ export const messages = {
     defaultMessage: "Upstream domain validation not allowed",
     description: "B7: saved state of the consent flag; the default, and the safe one.",
   },
+  "source.deployment.truth.d3tri00001": {
+    defaultMessage: "Deployment truth",
+    description: "D3: panel heading \u2014 issued/delivered/verified counted separately.",
+  },
+  "source.deployment.truth.help.d3tri00002": {
+    defaultMessage: "Delivered is this control plane's account of what it did. Verified is what a client actually gets, established by a TLS handshake against the endpoint. A renewal can be delivered and never land, so these are counted separately rather than summed.",
+    description: "D3: explains why delivered and verified are different numbers.",
+  },
+  "source.delivered.d3tri00003": {
+    defaultMessage: "Delivered",
+    description: "D3: a connector applied the credential to the target.",
+  },
+  "source.verified.serving.d3tri00004": {
+    defaultMessage: "Verified serving",
+    description: "D3: a handshake observed the endpoint serving what was deployed.",
+  },
+  "source.serving.something.else.d3tri00005": {
+    defaultMessage: "Serving something else",
+    description: "D3: the credential was applied and the endpoint is serving a different identity.",
+  },
+  "source.not.checked.d3tri00006": {
+    defaultMessage: "Not checked",
+    description: "D3: delivered but never probed \u2014 neither a failure nor a pass.",
+  },
   "source.endpoint.verification.d2ver00001": {
     defaultMessage: "Endpoint verification",
     description: "D2: section heading \u2014 what each listener is actually serving.",

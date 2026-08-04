@@ -322,7 +322,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"ssh", "fleet"}, Method: "GET", Path: "/api/v1/ssh/fleet", Summary: "List hosts with standing SSH key access not under the CA"},
 
 	// B-5: what is running and is the spine reachable.
-	{Name: []string{"platform", "system"}, Method: "GET", Path: "/api/v1/platform/system", Summary: "Show running build, uptime, signer topology, and spine reachability"},
+	{Name: []string{"platform", "system"}, Method: "GET", Path: "/api/v1/platform/system", Summary: "Show running build, uptime, signer topology, spine reachability, and the issued/delivered/verified deployment roll-up"},
 
 	// B-1: AN-7 pool pressure as an operator command, beside the outbox
 	// circuit view it complements.

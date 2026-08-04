@@ -428,3 +428,70 @@ func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedC
 	}
 	return tenants, rows.Err()
 }
+
+// DeploymentTriState is the estate roll-up of issued / delivered / verified
+// (epic D3).
+//
+// Three counts rather than one, because they are three different claims about
+// the same certificate and only the third one is what an operator wanted.
+// Counting deliveries and calling it health is counting INTENTIONS — the
+// pipeline's own account of what it did — which is precisely the blindness the
+// verification engine exists to remove. A surface that kept counting deliveries
+// after verification shipped would waste it.
+type DeploymentTriState struct {
+	// Delivered is targets whose most recent deploy receipt says a connector
+	// applied the credential.
+	Delivered int
+	// Verified is targets whose most recent verification receipt says a
+	// handshake found the endpoint serving it.
+	Verified int
+	// VerifyFailed is targets where the credential was applied and the endpoint
+	// is serving something else.
+	VerifyFailed int
+	// Unverified is delivered targets with NO verification receipt at all.
+	//
+	// The honest middle. It is not a failure and it is emphatically not a pass:
+	// nobody has looked. Folding it into either would be the overclaim this
+	// whole epic exists to remove — and on a fresh install every target is
+	// here, which is the correct starting picture.
+	Unverified int
+}
+
+// SummarizeDeploymentTriState rolls delivery receipts up per target.
+func (s *Store) SummarizeDeploymentTriState(ctx context.Context, tenantID string) (DeploymentTriState, error) {
+	var out DeploymentTriState
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// Per (connector, target), the LATEST receipt of each kind. A target
+		// deployed ten times and verified once is verified; a target verified
+		// last month and diverged today is failed. Both fall out of taking the
+		// most recent of each rather than counting rows.
+		return tx.QueryRow(ctx,
+			`WITH latest AS (
+			   SELECT DISTINCT ON (connector, target)
+			          connector, target, status
+			     FROM connector_delivery_receipts
+			    WHERE tenant_id = $1
+			      AND destination = 'connector.deploy'
+			      AND status IN ('delivered', 'verified', 'verify_failed')
+			    ORDER BY connector, target, updated_at DESC, id DESC
+			 ),
+			 verified_targets AS (
+			   SELECT DISTINCT ON (connector, target)
+			          connector, target, status
+			     FROM connector_delivery_receipts
+			    WHERE tenant_id = $1
+			      AND destination = 'connector.deploy'
+			      AND status IN ('verified', 'verify_failed')
+			    ORDER BY connector, target, updated_at DESC, id DESC
+			 )
+			 SELECT
+			   (SELECT count(*) FROM latest),
+			   (SELECT count(*) FROM verified_targets WHERE status = 'verified'),
+			   (SELECT count(*) FROM verified_targets WHERE status = 'verify_failed'),
+			   (SELECT count(*) FROM latest l
+			      WHERE NOT EXISTS (SELECT 1 FROM verified_targets v
+			                         WHERE v.connector = l.connector AND v.target = l.target))`,
+			tenantID).Scan(&out.Delivered, &out.Verified, &out.VerifyFailed, &out.Unverified)
+	})
+	return out, err
+}

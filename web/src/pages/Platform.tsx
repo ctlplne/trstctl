@@ -242,6 +242,65 @@ export function AdminSystem() {
         <TenantKeyDomainPanel canWrite={Boolean(user?.permissions?.includes("keys:write"))} />
         <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
 
+        {/* D3: issued / delivered / verified.
+            Delivered is this pipeline's account of what it did; verified is
+            what a client actually gets. Only a TLS handshake establishes the
+            second, so they are counted separately and the panel leads with the
+            one that is not self-reported. */}
+        {systemReadout?.deployment && systemReadout.deployment.delivered > 0 ? (
+          <section className="ui-panel p-comfortable" aria-labelledby="deployment-truth-heading">
+            <h2 id="deployment-truth-heading" className="text-title font-semibold">
+              {translateNow("source.deployment.truth.d3tri00001")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-caption text-muted-foreground">
+              {translateNow("source.deployment.truth.help.d3tri00002")}
+            </p>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-4">
+              <div>
+                <dt className="text-caption font-medium text-muted-foreground">
+                  {translateNow("source.delivered.d3tri00003")}
+                </dt>
+                <dd className="text-title font-semibold tabular-nums">{systemReadout.deployment.delivered}</dd>
+              </div>
+              <div>
+                <dt className="text-caption font-medium text-muted-foreground">
+                  {translateNow("source.verified.serving.d3tri00004")}
+                </dt>
+                <dd className="text-title font-semibold tabular-nums text-status-success">
+                  {systemReadout.deployment.verified}
+                  <span className="ml-1 text-body font-normal text-muted-foreground">
+                    ({systemReadout.deployment.verified_percent}%)
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-caption font-medium text-muted-foreground">
+                  {translateNow("source.serving.something.else.d3tri00005")}
+                </dt>
+                <dd
+                  className={
+                    systemReadout.deployment.verify_failed > 0
+                      ? "text-title font-semibold tabular-nums text-destructive"
+                      : "text-title font-semibold tabular-nums"
+                  }
+                >
+                  {systemReadout.deployment.verify_failed}
+                </dd>
+              </div>
+              {/* Unverified is the honest middle: not a failure, not a pass.
+                  Nobody has looked. On a fresh install every target is here. */}
+              <div>
+                <dt className="text-caption font-medium text-muted-foreground">
+                  {translateNow("source.not.checked.d3tri00006")}
+                </dt>
+                <dd className="text-title font-semibold tabular-nums text-muted-foreground">
+                  {systemReadout.deployment.unverified}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
         <div className="grid gap-4 lg:grid-cols-4">
           <section className="ui-panel p-comfortable" aria-labelledby="packaging-heading">
             <h2 id="packaging-heading" className="text-title font-semibold">

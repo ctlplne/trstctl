@@ -1451,6 +1451,12 @@ func componentSchemas() map[string]*Schema {
 		"never_validated_count": {Type: "integer"},
 		"guidance":              str(),
 	}, "items", "never_validated_count", "guidance")
+	// D3: issued / delivered / verified, counted separately.
+	deploymentTriState := object(map[string]*Schema{
+		"delivered": {Type: "integer"}, "verified": {Type: "integer"},
+		"verify_failed": {Type: "integer"}, "unverified": {Type: "integer"},
+		"verified_percent": {Type: "integer"},
+	}, "delivered", "verified", "verify_failed", "unverified", "verified_percent")
 	// D2: what each listener is actually serving, per vantage.
 	endpointVerification := object(map[string]*Schema{
 		"endpoint_id": str(), "address": str(),
@@ -2373,6 +2379,7 @@ func componentSchemas() map[string]*Schema {
 		"fips_module_active":  {Type: "boolean"},
 		"dependencies":        {Type: "array", Items: ref("SystemDependency")},
 		"idempotency_results": ref("IdempotencyResultProtectionReadout"),
+		"deployment":          ref("DeploymentTriState"),
 	}, "version", "commit", "build_date", "go_version", "started_at", "uptime_seconds", "signer_mode", "fips_module_active", "dependencies", "idempotency_results")
 	// B-1: bounded worker-pool pressure (AN-7) as served telemetry.
 	bulkheadPool := object(map[string]*Schema{
@@ -3934,6 +3941,7 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoring":                      discoveryMonitoring,
 		"DiscoveryCoverage":                        discoveryCoverage,
 		"ACMEUpstreamAuthorization":                acmeUpstreamAuthorization,
+		"DeploymentTriState":                       deploymentTriState,
 		"EndpointVerification":                     endpointVerification,
 		"EndpointVerificationSummary":              endpointVerificationSummary,
 		"EndpointVerificationList":                 endpointVerificationList,

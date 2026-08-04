@@ -74,6 +74,36 @@ type SystemReadout struct {
 	FIPSModuleActive   bool                               `json:"fips_module_active"`
 	Dependencies       []SystemDependency                 `json:"dependencies"`
 	IdempotencyResults IdempotencyResultProtectionReadout `json:"idempotency_results"`
+	// Deployment is the issued/delivered/verified roll-up (epic D3).
+	//
+	// It sits on the health readout deliberately. Every other health number
+	// here describes this process; this one describes the estate, and it is the
+	// only one sourced from observations of the outside world rather than from
+	// trstctl's own records.
+	Deployment DeploymentTriState `json:"deployment"`
+}
+
+// DeploymentTriState is how many targets are delivered, verified, failing
+// verification, and unverified (epic D3).
+//
+// Delivered and verified are counted separately because they are different
+// claims. A connector applying a credential is the pipeline's account of what
+// it did; an endpoint serving that credential is what a client actually gets,
+// and only a handshake establishes the second. A health surface that counted
+// deliveries would be reporting intentions.
+type DeploymentTriState struct {
+	Delivered    int `json:"delivered"`
+	Verified     int `json:"verified"`
+	VerifyFailed int `json:"verify_failed"`
+	// Unverified is delivered targets nobody has probed. Neither a failure nor
+	// a pass — and on a fresh install every target is here, which is the
+	// correct starting picture rather than a discouraging one.
+	Unverified int `json:"unverified"`
+	// VerifiedPercent is of DELIVERED targets, so it answers "of what we have
+	// deployed, how much is confirmed live". Zero delivered targets yields zero
+	// rather than 100: a percentage over nothing is the most misleading number
+	// a health surface can print.
+	VerifiedPercent int `json:"verified_percent"`
 }
 
 // getPlatformSystem returns the readout, or served=false shaped data when no
@@ -112,6 +142,21 @@ func (a *API) getPlatformSystem(w http.ResponseWriter, r *http.Request) {
 	}
 	if readout.Dependencies == nil {
 		readout.Dependencies = []SystemDependency{}
+	}
+	// D3: the estate's deployment truth, counted by what was VERIFIED rather
+	// than by what was delivered. A read failure leaves the zero value rather
+	// than omitting the block: zeroes read as "nothing confirmed", which is the
+	// honest reading when the count could not be taken.
+	if a.store != nil && tenantID != "" {
+		if tri, err := a.store.SummarizeDeploymentTriState(r.Context(), tenantID); err == nil {
+			readout.Deployment = DeploymentTriState{
+				Delivered: tri.Delivered, Verified: tri.Verified,
+				VerifyFailed: tri.VerifyFailed, Unverified: tri.Unverified,
+			}
+			if tri.Delivered > 0 {
+				readout.Deployment.VerifiedPercent = tri.Verified * 100 / tri.Delivered
+			}
+		}
 	}
 	a.writeJSON(w, http.StatusOK, readout)
 }

@@ -4,6 +4,7 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -352,5 +353,75 @@ func TestADivergentObservationKeepsItsExpectedFingerprint(t *testing.T) {
 	if got.LastGoodAt.IsZero() {
 		t.Error("last_good_at was erased by a failing observation; the age of the outage is " +
 			"the one thing an operator cannot reconstruct afterwards")
+	}
+}
+
+// The tri-state counts three different claims, and "unverified" is the honest
+// middle (epic D3).
+//
+// A dashboard that counted deliveries and called it health would be counting
+// INTENTIONS — the pipeline's own account of what it did — which is exactly the
+// blindness the verification engine exists to remove. The count that matters is
+// how many endpoints were observed serving what was deployed.
+//
+// The subtle one is unverified: a delivered target nobody has probed is not a
+// failure and is emphatically not a pass. Folding it into either direction
+// would be the overclaim this epic removes, and on a fresh install every target
+// is here — which is the correct starting picture.
+func TestDeploymentTriStateSeparatesDeliveredFromVerified(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	tenantID := "d3000001-0000-0000-0000-000000000001"
+	seedTenant(t, s, tenantID)
+
+	n := 0
+	receipt := func(connector, target, status, key string, at time.Time) {
+		t.Helper()
+		n++
+		id := fmt.Sprintf("d3000001-0000-0000-0000-%012d", n)
+		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: id, TenantID: tenantID, Destination: "connector.deploy",
+				Connector: connector, Target: target, Status: status,
+				IdempotencyKey: key, CreatedAt: at, UpdatedAt: at,
+			})
+		}); err != nil {
+			t.Fatalf("record %s receipt: %v", status, err)
+		}
+	}
+
+	base := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	// Target A: delivered and verified.
+	receipt("nginx", "edge-a", "delivered", "a-1", base)
+	receipt("nginx", "edge-a", "verified", "a-1:verified", base.Add(time.Minute))
+	// Target B: delivered, and the endpoint is serving something else.
+	receipt("nginx", "edge-b", "delivered", "b-1", base)
+	receipt("nginx", "edge-b", "verify_failed", "b-1:verified", base.Add(time.Minute))
+	// Target C: delivered, nobody has looked.
+	receipt("nginx", "edge-c", "delivered", "c-1", base)
+
+	got, err := s.SummarizeDeploymentTriState(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if got.Delivered != 3 {
+		t.Errorf("Delivered = %d, want 3", got.Delivered)
+	}
+	if got.Verified != 1 {
+		t.Errorf("Verified = %d, want 1 — only one endpoint was observed serving what was "+
+			"deployed, and that is the number a health surface should lead with", got.Verified)
+	}
+	if got.VerifyFailed != 1 {
+		t.Errorf("VerifyFailed = %d, want 1", got.VerifyFailed)
+	}
+	if got.Unverified != 1 {
+		t.Errorf("Unverified = %d, want 1 — a delivered target nobody probed is neither a "+
+			"failure nor a pass, and collapsing it into either is the overclaim this epic removes",
+			got.Unverified)
+	}
+	// The headline property: delivered is NOT verified.
+	if got.Delivered == got.Verified {
+		t.Error("delivered and verified counted the same; the whole point of the tri-state is " +
+			"that a connector applying a credential and an endpoint serving it are different facts")
 	}
 }

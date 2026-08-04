@@ -5172,6 +5172,8 @@
               "queued",
               "delivered",
               "failed",
+              "verified",
+              "verify_failed",
               "config_validated",
               "rollback_recorded",
               "rollback_queued",
@@ -5561,6 +5563,33 @@
         "required": [
           "name",
           "connector"
+        ],
+        "type": "object"
+      },
+      "DeploymentTriState": {
+        "properties": {
+          "delivered": {
+            "type": "integer"
+          },
+          "unverified": {
+            "type": "integer"
+          },
+          "verified": {
+            "type": "integer"
+          },
+          "verified_percent": {
+            "type": "integer"
+          },
+          "verify_failed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "delivered",
+          "verified",
+          "verify_failed",
+          "unverified",
+          "verified_percent"
         ],
         "type": "object"
       },
@@ -18034,6 +18063,9 @@
               "$ref": "#/components/schemas/SystemDependency"
             },
             "type": "array"
+          },
+          "deployment": {
+            "$ref": "#/components/schemas/DeploymentTriState"
           },
           "fips_module_active": {
             "type": "boolean"
