@@ -69,10 +69,10 @@ not this file.
 | `deploy/helm/helm_test.go:1528` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:89` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:29` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/agent/relay/relay_test.go:123` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:165` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:303` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:361` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:133` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:175` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:313` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:371` | reference NAME (CWE-798) |
 | `internal/agent/transport/agentservice.go:575` | an RPC method name, not a credential. The material this |
 | `internal/agent/transport/receipt.go:158` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/aimodel/redactor_test.go:39` | fixture: AWS's documented example key id; the redactor must catch it (CWE-798) |

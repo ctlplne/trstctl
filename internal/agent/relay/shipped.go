@@ -81,6 +81,20 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags: []string{"--relay-claim"},
 		},
 		{
+			// D2: the network vantage. It carries no credential — a listener's
+			// served certificate is public — so like the revocation probe it
+			// redeems nothing, and it declares no connectors because it is a
+			// probe rather than connector work.
+			//
+			// The HOST half of verification is deliberately absent from this
+			// census: the agent's post-deploy self-check is not a claimed job,
+			// it runs inside connector.deploy where the deployed material is
+			// still live. Listing it here would advertise a claimable capability
+			// that no claim protocol serves.
+			Kind:  KindEndpointVerify,
+			Flags: []string{"--relay-claim"},
+		},
+		{
 			// F1: AD CS template posture. It must run in-domain — a domain
 			// controller's LDAP is not reachable from a hosted control plane and
 			// should not be — so an in-domain relay is the only vantage from
@@ -99,6 +113,5 @@ func ShippedJobKinds() []ShippedJobKind {
 func UnshippedJobKinds() map[string]string {
 	return map[string]string{
 		"trust.distribute": "host-local work: installs roots in a host's own trust store",
-		"endpoint.verify":  "owned by the verification epics; no relay-side prober ships yet",
 	}
 }

@@ -57,6 +57,20 @@ type DeployIntent struct {
 	Fingerprint    string          `json:"fingerprint,omitempty"`
 	TargetConfig   json.RawMessage `json:"target_config,omitempty"`
 	CredentialRefs []string        `json:"credential_refs,omitempty"`
+
+	// VerifyAddress is the host:port of the listener this deploy updates, and
+	// it is the one thing the pipeline could never derive (epic D2).
+	//
+	// Not TargetConfig.Endpoint: that is an appliance's MANAGEMENT API, and an
+	// F5's management plane and the virtual server it fronts are different
+	// sockets. Not Target either: that is a connector routing string. A
+	// listener address is operator knowledge, so it arrives as operator
+	// configuration or verification does not happen — and an empty value means
+	// exactly that, rather than meaning verified.
+	VerifyAddress string `json:"verify_address,omitempty"`
+	// VerifyServerName overrides SNI when the listener answers to a name other
+	// than the address host — a virtual host behind an IP, most often.
+	VerifyServerName string `json:"verify_server_name,omitempty"`
 }
 
 // TargetConfig is the relay-side view of a deployment target: the routing

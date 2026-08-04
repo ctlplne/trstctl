@@ -10,8 +10,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
@@ -47,6 +50,11 @@ type report struct {
 	attempt int
 	outcome string
 	detail  string
+	// evidence is the probe transcript digest (D2). Recorded because a
+	// verification verdict with no evidence behind it is an assertion, not a
+	// receipt: the digest is what lets an operator prove the transcript they
+	// are reading is the one the agent signed.
+	evidence string
 }
 
 func (f *fakeChannel) ClaimJobs(context.Context, []string, int, int) ([]relay.Job, error) {
@@ -67,8 +75,10 @@ func (f *fakeChannel) RedeemJobCredential(context.Context, int64, int) (map[stri
 	return out, nil
 }
 
-func (f *fakeChannel) ReportJobResult(_ context.Context, jobID int64, attempt int, outcome, detail, _ string) (bool, error) {
-	f.reports = append(f.reports, report{jobID: jobID, attempt: attempt, outcome: outcome, detail: detail})
+func (f *fakeChannel) ReportJobResult(_ context.Context, jobID int64, attempt int, outcome, detail, evidence string) (bool, error) {
+	f.reports = append(f.reports, report{
+		jobID: jobID, attempt: attempt, outcome: outcome, detail: detail, evidence: evidence,
+	})
 	return true, nil
 }
 
@@ -600,4 +610,199 @@ func TestSweepFindsWhatASegmentServes(t *testing.T) {
 	if report.Findings[0].Fingerprint == "" {
 		t.Error("a finding carries no fingerprint, so it cannot be reconciled with the inventory")
 	}
+}
+
+// Kill the reload and verification catches it (epic D2 acceptance).
+//
+// This is the criterion the epic is written around, and it is the failure the
+// rest of the pipeline structurally cannot see. A connector's reload is one
+// exec call inside its own Deploy method; when it does not take effect the
+// connector still returns success, the delivery receipt still says delivered,
+// and the inventory still says the new certificate exists — all of which are
+// TRUE. The listener is simply still serving the old one, and only a handshake
+// can say so.
+//
+// The test models exactly that: the deploy runs and succeeds, and the listener
+// keeps presenting a different certificate, because nothing reloaded it.
+func TestAKilledReloadIsCaughtByPostDeployVerification(t *testing.T) {
+	// The listener, still on its old certificate.
+	stale, err := tlsprobe.NewServingTestServer("api.example.test")
+	if err != nil {
+		t.Fatalf("start stale listener: %v", err)
+	}
+	defer stale.Close()
+
+	// The certificate the deploy delivers. A different one for the same name —
+	// which is what a renewal produces.
+	fresh, err := tlsprobe.NewServingTestServer("api.example.test")
+	if err != nil {
+		t.Fatalf("mint the deployed certificate: %v", err)
+	}
+	defer fresh.Close()
+
+	dir := t.TempDir()
+	ch := &fakeChannel{
+		jobs: []relay.Job{intentJob(t, 1, relay.DeployIntent{
+			Connector:      "nginx",
+			Target:         "edge",
+			CredentialRefs: []string{"credential.cert_pem", "credential.key_pem"},
+			TargetConfig: mustJSON(t, map[string]string{
+				"cert_path": filepath.Join(dir, "server.crt"),
+				"key_path":  filepath.Join(dir, "server.key"),
+			}),
+			// The operator told us where the listener is. Without this there is
+			// no verification at all — and no claim of one.
+			VerifyAddress: stale.Addr,
+		})},
+		material: map[string][]byte{
+			"credential.cert_pem": fresh.LeafPEM,
+			"credential.key_pem":  []byte(testKeyPEM),
+		},
+	}
+
+	_, _ = relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient,
+		hostProfileForNginx(t, dir), 1, 30)
+
+	if len(ch.reports) != 1 {
+		t.Fatalf("got %d reports, want 1: %+v", len(ch.reports), ch.reports)
+	}
+	got := ch.reports[0]
+	if got.outcome != transport.OutcomeVerifyFailed {
+		t.Fatalf("outcome = %q, want %q — the files landed and the listener is still serving the "+
+			"old certificate, which every other record in the pipeline reports as a clean deploy",
+			got.outcome, transport.OutcomeVerifyFailed)
+	}
+	// verify_failed is deliberately NOT plain failure: the deploy applied, so a
+	// rollback is the right response, whereas rolling back a deploy that never
+	// applied would undo something that was never done.
+	if got.outcome == relay.OutcomeFailed {
+		t.Error("a verification failure was reported as a deploy failure")
+	}
+	if got.evidence == "" {
+		t.Error("no probe transcript digest accompanied the verdict; the receipt would commit " +
+			"to nothing and the verdict would be a bare assertion")
+	}
+	if !strings.Contains(got.detail, "different certificate") {
+		t.Errorf("detail = %q; it must say what the listener is actually serving", got.detail)
+	}
+}
+
+// The same deploy against a listener that DID reload verifies, and says so with
+// evidence behind it.
+func TestAReloadedListenerVerifiesWithEvidence(t *testing.T) {
+	served, err := tlsprobe.NewServingTestServer("api.example.test")
+	if err != nil {
+		t.Fatalf("start listener: %v", err)
+	}
+	defer served.Close()
+
+	dir := t.TempDir()
+	ch := &fakeChannel{
+		jobs: []relay.Job{intentJob(t, 2, relay.DeployIntent{
+			Connector:      "nginx",
+			Target:         "edge",
+			CredentialRefs: []string{"credential.cert_pem", "credential.key_pem"},
+			TargetConfig: mustJSON(t, map[string]string{
+				"cert_path": filepath.Join(dir, "server.crt"),
+				"key_path":  filepath.Join(dir, "server.key"),
+			}),
+			VerifyAddress: served.Addr,
+		})},
+		material: map[string][]byte{
+			// The listener is serving exactly this.
+			"credential.cert_pem": served.LeafPEM,
+			"credential.key_pem":  []byte(testKeyPEM),
+		},
+	}
+
+	_, _ = relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient,
+		hostProfileForNginx(t, dir), 1, 30)
+
+	if len(ch.reports) != 1 {
+		t.Fatalf("got %d reports, want 1: %+v", len(ch.reports), ch.reports)
+	}
+	if got := ch.reports[0]; got.outcome != transport.OutcomeVerified {
+		t.Fatalf("outcome = %q, want %q (detail: %s)", got.outcome, transport.OutcomeVerified, got.detail)
+	}
+	if ch.reports[0].evidence == "" {
+		t.Error("a passing verification carried no transcript digest")
+	}
+}
+
+// A deploy with no configured listener address reports plain success and
+// claims NO verification.
+//
+// This is the honesty rule that makes the whole surface trustworthy. An
+// operator who has not told us where the listener is gets "deployed", not
+// "verified" — because the alternative, treating an absent address as nothing
+// to check and therefore fine, is the same overclaim the epic exists to remove.
+func TestNoListenerAddressYieldsNoVerificationClaim(t *testing.T) {
+	dir := t.TempDir()
+	ch := &fakeChannel{
+		jobs: []relay.Job{intentJob(t, 3, relay.DeployIntent{
+			Connector:      "nginx",
+			Target:         "edge",
+			CredentialRefs: []string{"credential.cert_pem", "credential.key_pem"},
+			TargetConfig: mustJSON(t, map[string]string{
+				"cert_path": filepath.Join(dir, "server.crt"),
+				"key_path":  filepath.Join(dir, "server.key"),
+			}),
+		})},
+		material: map[string][]byte{
+			"credential.cert_pem": []byte(testCertPEM),
+			"credential.key_pem":  []byte(testKeyPEM),
+		},
+	}
+
+	_, _ = relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient,
+		hostProfileForNginx(t, dir), 1, 30)
+
+	if len(ch.reports) != 1 {
+		t.Fatalf("got %d reports, want 1: %+v", len(ch.reports), ch.reports)
+	}
+	got := ch.reports[0]
+	if got.outcome != relay.OutcomeExecuted {
+		t.Fatalf("outcome = %q, want %q — an unverifiable deploy must report what it did, not "+
+			"what it did not check", got.outcome, relay.OutcomeExecuted)
+	}
+	if got.outcome == transport.OutcomeVerified {
+		t.Error("a deploy with no listener address claimed verification")
+	}
+	if got.evidence != "" {
+		t.Error("a deploy that ran no probe carried a transcript digest")
+	}
+}
+
+func mustJSON(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// hostProfileForNginx binds nginx's two exec calls to a harmless command.
+//
+// The connector's own Deploy runs `nginx -t` then `nginx -s reload`. Binding
+// them to /bin/true is what makes "the deploy succeeded" true in the test while
+// leaving the listener untouched — which is precisely the production failure
+// being modelled: the reload ran, or claimed to, and the process kept serving
+// what it had.
+func hostProfileForNginx(t *testing.T, root string) connector.LocalOpsConfig {
+	t.Helper()
+	return connector.LocalOpsConfig{
+		AllowedRoots: []string{root},
+		Actions: []connector.LocalAction{
+			{LogicalName: "nginx", Command: trueCommand(), PassArgs: false},
+		},
+	}
+}
+
+// trueCommand is a command that exits 0 and does nothing.
+func trueCommand() string {
+	if runtime.GOOS == "windows" {
+		return "cmd"
+	}
+	return "/usr/bin/true"
 }

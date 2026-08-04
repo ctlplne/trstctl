@@ -54,7 +54,7 @@ const (
 func ClaimableKinds() []string {
 	return []string{
 		"connector.deploy", "connector.test", KindConnectorRollback,
-		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory,
+		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindEndpointVerify,
 	}
 }
 
@@ -130,6 +130,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// material it has no use for (C2).
 	if job.Kind == KindDiscoveryRun {
 		return runDiscoverySweep(ctx, ch, job)
+	}
+	// A verification sweep reads what listeners publicly present, so like the
+	// two above it redeems nothing and is routed before the credential step
+	// (D2).
+	if job.Kind == KindEndpointVerify {
+		return runEndpointVerify(ctx, ch, job)
 	}
 
 	// A rollback carries a rollback intent, not a deploy intent — no
@@ -239,8 +245,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		report(ctx, ch, job, OutcomeFailed, "connector attempted an operation outside its declared capabilities")
 		return false
 	}
-	report(ctx, ch, job, OutcomeExecuted, "")
-	return true
+	// D2: the deploy applied. Whether the listener is SERVING it is a different
+	// question, and this is the only moment it can be asked — the redeemed
+	// certificate's life ends when this function returns.
+	outcome, detail, evidence := postDeployVerification(ctx, intent, material)
+	reportWithEvidence(ctx, ch, job, outcome, detail, evidence)
+	return outcome != transport.OutcomeVerifyFailed
 }
 
 // runRollback executes one re-bind (epic D4).
@@ -307,9 +317,21 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, job Job) 
 }
 
 func report(ctx context.Context, ch Channel, job Job, outcome, detail string) {
+	reportWithEvidence(ctx, ch, job, outcome, detail, "")
+}
+
+// reportWithEvidence reports an outcome together with the digest of whatever
+// transcript backs it (epic D2).
+//
+// The evidence digest travels inside the agent's signed statement, so a
+// verification verdict is not merely asserted by the agent: an operator reading
+// the receipt can prove the transcript they are looking at is the one that was
+// signed. Every other kind still passes "" — an empty digest means no
+// transcript was kept, which is the honest value for work that produced none.
+func reportWithEvidence(ctx context.Context, ch Channel, job Job, outcome, detail, evidence string) {
 	// A failed report is not retried here: the claim lease is the safety net.
 	// If the control plane never hears, the lease lapses and the work returns.
-	_, _ = ch.ReportJobResult(ctx, job.JobID, job.Attempt, outcome, detail, "")
+	_, _ = ch.ReportJobResult(ctx, job.JobID, job.Attempt, outcome, detail, evidence)
 }
 
 func decodeIntent(payload []byte, out *DeployIntent) error {
