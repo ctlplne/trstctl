@@ -62,6 +62,11 @@ func main() {
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
+	pluginDir := flag.String("connector-plugin-dir", "", "directory of signature-verified third-party WASM connectors this relay may execute (epic E4). Each <name>.wasm needs a sibling <name>.wasm.sig from a key named by --connector-plugin-key. Empty disables third-party connectors; a directory with no trust keys is refused rather than loaded")
+	pluginKeys := flag.String("connector-plugin-key", "", "comma-separated PEM files holding the publisher public keys whose signatures this relay accepts for third-party connectors. Required whenever --connector-plugin-dir is set: loading unverified partner code inside a customer network is refused, not warned about")
+	pluginPins := flag.String("connector-plugin-pin", "", "comma-separated hex SHA-256 digests restricting third-party connectors to exactly these builds. A signature says who built a module; a pin says which build, which is what stops a compromised publisher key from shipping a new one")
+	pluginCaps := flag.String("connector-plugin-capability", "", "comma-separated capability grant every third-party connector runs under (fs.read, fs.write, net.dial). Required with --connector-plugin-dir: an unset grant is refused rather than defaulted, because a grant nobody set and a grant that permits nothing are indistinguishable here")
+	pluginCapPrefix := flag.String("connector-plugin-capability-prefix", "", "comma-separated resource constraints for the grant above, as capability=prefix (net.dial=appliance.internal:443, fs.read=/etc/partner). A capability with no constraint is unrestricted for that capability")
 	workloadAPISocket := flag.String("workload-api-socket", "", "serve the SPIFFE Workload API on this unix socket for workloads on THIS host (epic B3). The SVID key is generated here and never leaves the machine; only a public key travels up for signing. Empty disables it — a Workload API endpoint is an identity oracle for every workload on the host, so an operator turns it on deliberately and owns the socket's directory permissions")
 	relayPollEvery := flag.Duration("relay-poll-every", 15*time.Second, "how often to ask for relay work when --relay-claim is set")
 	inventoryPKCS11Module := flag.String("inventory-pkcs11-module", "", "path to a PKCS#11 module (softhsm2.so, libykcs11.so, opensc-pkcs11.so) whose tokens should be inventoried. Metadata only: reads certificate objects, never private keys, over a read-only session. Requires a cgo-enabled agent build — the default build is statically linked and reports an error rather than an empty token estate")
@@ -212,6 +217,11 @@ func main() {
 		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
 		workloadAPISocket:                 *workloadAPISocket,
+		pluginDir:                         *pluginDir,
+		pluginKeys:                        *pluginKeys,
+		pluginPins:                        *pluginPins,
+		pluginCaps:                        *pluginCaps,
+		pluginCapPrefix:                   *pluginCapPrefix,
 		relayPollEvery:                    *relayPollEvery,
 		hostExecProfile:                   strings.TrimSpace(*hostExecProfile),
 		inventorySSH: sshdiscovery.Config{
@@ -295,7 +305,17 @@ type agentOptions struct {
 	// Empty means the agent serves no Workload API, which is the default: the
 	// endpoint issues identities to every workload that can reach it.
 	workloadAPISocket string
-	relayPollEvery    time.Duration
+	// E4: third-party WASM connectors this relay may execute. All five are
+	// operator-owned: the modules, the keys that vouch for them, the builds
+	// pinned, and the capabilities they run under. None of it is derived from
+	// the module or from the control plane, because a publisher who could widen
+	// their own grant would make the sandbox decorative.
+	pluginDir       string
+	pluginKeys      string
+	pluginPins      string
+	pluginCaps      string
+	pluginCapPrefix string
+	relayPollEvery  time.Duration
 	// hostExecProfile is the path to this host's operator-owned exec allowlist
 	// (epic D1). Empty means this agent executes no file/reload connectors:
 	// without an authorized command set there is nothing safe to default to.
@@ -443,6 +463,20 @@ func runAgent(ctx context.Context, o agentOptions) error {
 		defer relayTimer.Stop()
 	}
 
+	// E4: third-party connectors, verified and loaded before any work is
+	// claimed. A configuration error here is fatal rather than a warning: an
+	// agent that came up having skipped its plugin directory would serve a
+	// subset of what an operator configured, and the missing one is the module
+	// whose signature did not check out.
+	pluginRuntime, pluginErr := buildPluginRuntime(ctx, o)
+	if pluginErr != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent:", pluginErr)
+		return pluginErr
+	}
+	if pluginRuntime != nil {
+		defer func() { _ = pluginRuntime.Close(context.Background()) }()
+	}
+
 	// B3: the SPIFFE Workload API, served on this host for the workloads that
 	// run on it. Its own goroutine because it is a listener rather than a
 	// polling loop — workloads dial it when they need an SVID, and it must be
@@ -471,7 +505,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			// Claim, redeem, deploy, wipe, report — one pass. Failures are the
 			// job's business, not the loop's: every path inside reports, so work
 			// returns to the queue rather than waiting out its lease.
-			if executed, rerr := relay.RunOnceWithHost(ctx, relayCh, relayHTTPClient(), hostProfile, relayClaimBatch, int(relayLeaseFor(o.relayPollEvery).Seconds())); rerr != nil {
+			if executed, rerr := relay.RunOnceWithPlugins(ctx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, relayClaimBatch, int(relayLeaseFor(o.relayPollEvery).Seconds())); rerr != nil {
 				fmt.Fprintln(os.Stderr, "trstctl-agent: relay claim failed:", rerr)
 			} else if executed > 0 {
 				fmt.Printf("trstctl-agent: relay executed %d connector deploy(s)\n", executed)

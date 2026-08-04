@@ -124,7 +124,18 @@ var workloadIssueCount atomic.Int64
 const (
 	workloadAPIServedKey = "workload_api_served"
 	workloadAPIIssuedKey = "workload_api_svids_issued"
+	// pluginConnectorsKey counts verified third-party connectors on this relay
+	// (epic E4).
+	pluginConnectorsKey = "plugin_connectors_loaded"
 )
+
+// pluginConnectorCount is how many verified third-party connectors this relay
+// loaded at start.
+//
+// Set once, after verification. A count taken before verification would report
+// modules that were refused, which is the opposite of what an operator checking
+// this number wants to know.
+var pluginConnectorCount atomic.Int64
 
 // workloadAPICounters adds this host's Workload API state to the heartbeat.
 //
@@ -143,6 +154,13 @@ func workloadAPICounters(inv map[string]int64) map[string]int64 {
 	}
 	out[workloadAPIServedKey] = served
 	out[workloadAPIIssuedKey] = workloadIssueCount.Load()
+	// E4: how many verified third-party connectors this relay carries.
+	//
+	// Reported by the relay because only the relay knows. The control plane
+	// does not distribute these modules, does not hold the operator's publisher
+	// keys, and cannot enumerate what a given machine loaded — so any count it
+	// rendered from its own state would be a guess. This is the measurement.
+	out[pluginConnectorsKey] = pluginConnectorCount.Load()
 	return out
 }
 

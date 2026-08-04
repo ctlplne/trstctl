@@ -171,7 +171,15 @@ func TestShippedRelayJobKindsAreExecutableByTheBinary(t *testing.T) {
 		// link the package. RunOnceWithHost is what the binary calls (D1 gave
 		// the loop a host exec profile); RunOnce remains as the relay-only
 		// wrapper, so either satisfies "the loop runs".
-		if !strings.Contains(sources, "relay.RunOnceWithHost(") && !strings.Contains(sources, "relay.RunOnce(") {
+		// RunOnceWithPlugins is what the binary calls since E4 gave the loop a
+		// third-party connector runtime; RunOnceWithHost and RunOnce remain as
+		// the narrower wrappers, so any of the three satisfies "the loop runs".
+		// The check is on the CALL rather than the import, because linking the
+		// package and never driving it is the exact state this guard exists to
+		// catch.
+		if !strings.Contains(sources, "relay.RunOnceWithPlugins(") &&
+			!strings.Contains(sources, "relay.RunOnceWithHost(") &&
+			!strings.Contains(sources, "relay.RunOnce(") {
 			t.Errorf("relay job kind %q is declared but the agent binary never runs the job loop", kind.Kind)
 		}
 		// Every declared connector must be executable by ONE of the two

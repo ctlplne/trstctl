@@ -264,6 +264,28 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Third-party connectors in the relay (E4): a relay started with
+  `--connector-plugin-dir` executes signature-verified WASM connectors inside the
+  customer's network, under a capability grant its own operator sets. The control
+  plane never loads partner code. Every guarantee is re-proven in the new location
+  rather than assumed to have travelled with the code: an unsigned, tampered, or
+  untrusted-key module is refused AT LOAD and fails the whole runtime rather than
+  being skipped — a relay serving a subset of its configured connectors would be
+  missing precisely the one somebody tampered with. An out-of-grant operation is
+  denied at runtime and FAILS the deploy, so a module reaching outside its grant
+  cannot report success. Both properties are mutation-verified.
+  Everything is operator-owned: the modules, the publisher keys, the pinned build
+  digests and the capability grant. None is read from the module or pushed from the
+  control plane, because a publisher who could widen their own grant by editing a
+  file they ship would make the sandbox a formality. A directory with no trust keys
+  is refused, and an unset grant is refused rather than defaulted — a grant nobody
+  set and a grant that permits nothing are indistinguishable at that point, so the
+  reading that cannot surprise anyone is the one that refuses.
+  SCOPE: the control plane cannot enumerate which modules a given relay carries —
+  it does not distribute them and does not hold the operator's keys — so the count
+  shown per agent is REPORTED BY THE RELAY on its heartbeat rather than derived
+  centrally. Third-party connectors never receive redeemed credential material; a
+  module that could read an appliance password would make the sandbox decorative.
   Live appliance readback (E2): after every appliance mutation the relay now asks
   the device what it actually has, alongside D2's TLS handshake against the served
   listener. The two are not redundant and only together locate a fault: a handshake

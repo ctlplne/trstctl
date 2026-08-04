@@ -101,6 +101,24 @@ func RunOnceWithHost(
 	hostProfile connector.LocalOpsConfig,
 	limit, leaseSeconds int,
 ) (int, error) {
+	return RunOnceWithPlugins(ctx, ch, client, hostProfile, nil, limit, leaseSeconds)
+}
+
+// RunOnceWithPlugins is RunOnceWithHost plus this relay's verified third-party
+// connectors (epic E4).
+//
+// A separate entry point rather than another parameter on the existing one:
+// every caller that does not carry plugins keeps working unchanged, and a nil
+// runtime is safe to interrogate, so the plugin path costs nothing where it is
+// not configured.
+func RunOnceWithPlugins(
+	ctx context.Context,
+	ch Channel,
+	client *http.Client,
+	hostProfile connector.LocalOpsConfig,
+	plugins *PluginRuntime,
+	limit, leaseSeconds int,
+) (int, error) {
 	if ch == nil {
 		return 0, errors.New("relay: no channel")
 	}
@@ -110,7 +128,7 @@ func RunOnceWithHost(
 	}
 	executed := 0
 	for _, job := range jobs {
-		if runJob(ctx, ch, client, hostProfile, job) {
+		if runJob(ctx, ch, client, hostProfile, plugins, job) {
 			executed++
 		}
 	}
@@ -124,7 +142,7 @@ func RunOnceWithHost(
 // than waiting out its lease: a relay that dies silently is indistinguishable
 // from a slow one, and the difference matters to whoever is waiting for the
 // certificate to land.
-func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, job Job) bool {
+func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, plugins *PluginRuntime, job Job) bool {
 	// A revocation probe carries a different payload and needs no credential at
 	// all — it reads public distribution points. Routing it before the deploy
 	// path keeps it from redeeming material it has no use for (R1).
@@ -174,13 +192,19 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// before anything is redeemed. A host agent handed appliance work, or a
 	// relay handed a filesystem deploy, must not burn the attempt's one
 	// credential redemption discovering that.
+	// E4: a verified third-party connector, if this relay carries one for this
+	// name. Checked BEFORE the native-connector refusal below, because a plugin
+	// connector is not a native one and would otherwise be rejected as
+	// unexecutable by a relay that is in fact carrying it.
+	pluginJob := plugins.Has(intent.Connector)
+
 	hostJob := ExecutesOnHost(intent.Connector)
 	if job.Kind == KindADCSInventory {
 		// An AD CS inventory names no connector; its executor is the directory
 		// reader. Skip the connector checks rather than failing it for not
 		// naming one it has no use for.
 		hostJob = false
-	} else if !hostJob && !Executes(intent.Connector) {
+	} else if !hostJob && !pluginJob && !Executes(intent.Connector) {
 		report(ctx, ch, job, OutcomeFailed, "connector is not executable by this agent")
 		return false
 	}
@@ -241,7 +265,13 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 
 	var stats connector.Stats
 	var execErr error
-	if hostJob {
+	if pluginJob {
+		// The module runs under the operator's grant, on this machine, inside
+		// the customer's network. It never receives the redeemed credential
+		// material: a third-party module that could read the appliance password
+		// would make the sandbox a formality.
+		execErr = plugins.Deploy(ctx, intent.Connector)
+	} else if hostJob {
 		stats, execErr = ExecuteOnHost(ctx, hostProfile, intent, material)
 	} else {
 		stats, execErr = Execute(ctx, client, intent, material)
