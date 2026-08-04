@@ -1792,6 +1792,39 @@ export interface EndpointBindingRequest {
   target_id?: string;
 }
 
+export interface EndpointVerification {
+  address: string;
+  agent_common_name?: string;
+  checked_chain: boolean;
+  checked_sans: boolean;
+  detail?: string;
+  endpoint_id: string;
+  evidence_digest?: string;
+  expected_fingerprint?: string;
+  last_checked_at?: string;
+  last_good_at?: string;
+  mismatch?: "fingerprint" | "sans" | "chain" | "expired" | "not_yet_valid";
+  not_after?: string;
+  observed_fingerprint?: string;
+  stale_for_seconds?: number;
+  status: "verified" | "diverged" | "unreachable" | "not_checked";
+  vantage: "local" | "relay";
+}
+
+export interface EndpointVerificationList {
+  guidance: string;
+  items: EndpointVerification[];
+  summary: EndpointVerificationSummary;
+}
+
+export interface EndpointVerificationSummary {
+  diverged: number;
+  endpoints: number;
+  unreachable: number;
+  verified: number;
+  verified_percent: number;
+}
+
 export interface EnrollmentToken {
   enroll_path?: string;
   roles: ("host" | "network")[];

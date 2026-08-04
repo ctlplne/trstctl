@@ -149,6 +149,14 @@ export function Dashboard() {
   const identities = useApiQuery(["identities"], api.identities, { live: { intervalMs: 30_000 } });
   const nhiInventory = useApiQuery(["nhi-inventory"], readNhiInventory, { live: { intervalMs: 30_000 } });
   const rotationRuns = useApiQuery(["rotation-runs", { limit: 100 }], () => api.rotationRuns({ limit: 100 }), { live: { intervalMs: 30_000 } });
+  // D2: what the estate is actually SERVING, as against what was deployed. The
+  // two diverge silently, and this is the only tile on this page sourced from
+  // observations rather than from trstctl's own records.
+  const verifications = useApiQuery(
+    ["endpoint-verifications"],
+    () => (typeof api.endpointVerifications === "function" ? api.endpointVerifications() : Promise.reject(new Error("unavailable"))),
+    { live: { intervalMs: 60_000 } },
+  );
   const secretsCount = useApiQuery(["secrets-count"], readSecretsCount, { live: { intervalMs: 30_000 } });
   const openIncidents = useApiQuery(["open-incidents"], readOpenIncidents, { live: { intervalMs: 30_000 } });
   const recentAudit = useApiQuery(["recent-audit"], readRecentAudit, { live: { intervalMs: 60_000 } });
@@ -201,6 +209,23 @@ export function Dashboard() {
     );
   }
 
+  // Nothing observed means no tile. A verified percentage over an estate
+  // nobody has probed would read as an all-clear that nothing earned.
+  const summary = verifications.data?.summary;
+  const verificationTile =
+    summary && summary.endpoints > 0
+      ? {
+          percent: summary.verified_percent,
+          sub:
+            summary.diverged > 0
+              ? `${summary.diverged} diverged`
+              : summary.unreachable > 0
+                ? `${summary.unreachable} unreachable`
+                : `${summary.verified}/${summary.endpoints} serving`,
+          tone: summary.diverged > 0 ? ("crit" as const) : summary.unreachable > 0 ? ("warn" as const) : undefined,
+        }
+      : null;
+
   return (
     <section aria-labelledby="dashboard-heading" className="space-y-6">
       <PageHeader
@@ -243,6 +268,24 @@ export function Dashboard() {
           to="/certificates?expiry=7d"
         />
         <Kpi icon={<ShieldAlert className="h-4 w-4" />} label="High-risk" value={kpis.highRisk} sub="rotate" tone="crit" to="/risk?sort=score" />
+        {/* D2: verified % is a percentage of OBSERVED endpoints, not of the
+            estate. Endpoints nobody has configured a listener address for are
+            absent rather than counted — counting them as unverified would
+            punish operators for the parts they have not reached yet, and
+            counting them as verified would be a lie. The tile is hidden
+            entirely until something has been observed, because "100%" over
+            zero endpoints is the most misleading number this page could show. */}
+        {verificationTile ? (
+          <Kpi
+            icon={<ShieldCheck className="h-4 w-4" />}
+            label="Endpoints verified"
+            value={verificationTile.percent}
+            valueSuffix="%"
+            sub={verificationTile.sub}
+            tone={verificationTile.tone}
+            to="/connectors"
+          />
+        ) : null}
         <Kpi
           icon={<Siren className="h-4 w-4" />}
           label="Open incidents"
@@ -408,6 +451,7 @@ function Kpi({
   icon,
   label,
   value,
+  valueSuffix,
   delta,
   sub,
   spark,
@@ -417,6 +461,10 @@ function Kpi({
   icon: ReactNode;
   label: string;
   value: number;
+  // valueSuffix renders immediately after the formatted number — "%" for a
+  // ratio tile. Kept separate from the value so the number still goes through
+  // formatNumber and stays localized.
+  valueSuffix?: string;
   delta?: string;
   sub?: string;
   spark?: number[];
@@ -434,7 +482,10 @@ function Kpi({
           {label}
         </div>
         <div className="mt-2 flex min-w-0 items-end justify-between gap-2">
-          <span className="text-display font-semibold tracking-tight tabular-nums">{formatNumber(value)}</span>
+          <span className="text-display font-semibold tracking-tight tabular-nums">
+            {formatNumber(value)}
+            {valueSuffix ? <span className="text-title font-medium text-muted-foreground">{valueSuffix}</span> : null}
+          </span>
           {spark && <Sparkline points={spark} width={84} height={28} className="shrink" />}
         </div>
         {(delta || sub) && <div className={`mt-1 text-caption font-medium ${toneClass}`}>{delta ?? sub}</div>}

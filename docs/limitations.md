@@ -170,6 +170,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **`connector.deploy` (A3), `connector.test` (D5), `connector.rollback` (D4), `revocation.probe` (R1), `discovery.run` (C2) and `adcs.inventory` (F1) have relay-side executors**; the rest become claimable when theirs ship. Nothing is claimable until an operator names a kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which an operator must enable separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
+| Endpoint verification (D2) | Served: after a deploy the host agent handshakes the listener it just changed — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
 | Connector rollback | Served as EXECUTED re-bind for **f5, kemp, netscaler, a10** — the families whose API addresses an installed object separately from uploading one. Deploys now install under a fingerprint-derived object name so the predecessor survives; a rollback re-points the listener at it and uploads nothing, which is the only form available once the control plane holds no subject key. Other families keep the attested-intent receipt and the census says which is which. A missing predecessor object **fails** rather than reporting success. **On an existing install nothing is rollable immediately** — certificates deployed before this change sit under the old target-derived name, so a target becomes rollable only after two deploys under the new scheme. Automatic rollback on failed verification is not served — it needs the verification engine | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Relays redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
@@ -1031,9 +1032,13 @@ string that bypassed the registry.
 | Status | Surface | What it means | What it does **not** mean |
 |---|---|---|---|
 | `queued` | connector delivery | Intent committed to the outbox in the same transaction as the state change. | That any connector has run. |
-| `delivered` | connector delivery | A connector reached the target and applied the credential. | That the endpoint was re-read and proven to serve it. Live verification is separate work (not yet served). |
+| `delivered` | connector delivery | A connector reached the target and applied the credential. | That the endpoint is serving it. Live verification is a **separate state**, served since D2 — see `GET /api/v1/endpoints/verifications` and the endpoint verification vocabulary below. A delivery receipt says what this control plane did; only a handshake says what the listener answers with. |
 | `failed` | connector delivery | The attempt ran and did not succeed. | — |
 | `config_validated` | connector delivery | `POST /api/v1/connectors/targets/{id}/test` resolved target metadata, schema, and credential references **locally**, because no relay is enabled for `connector.test`. | That the target was contacted, reachable, or willing to accept the credential. Nothing was changed. |
+| `verified` | endpoint verification | A TLS handshake against the live listener observed it serving the expected identity. The record carries which comparisons ran — fingerprint always, name set and chain when an expectation supplied them. | That every vantage agrees. A `local` row means the serving host's own agent confirmed it; only a `relay` row means a client across the segment could get it. |
+| `diverged` | endpoint verification | A handshake succeeded and the listener is **not** serving what was deployed. The mismatch class says which way: `fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`. | That the deploy failed. It usually succeeded — this is a renewal that did not land, which is exactly the failure inventory-based expiry alerting cannot see. |
+| `unreachable` | endpoint verification | The handshake did not complete, so nothing was observed. | A divergence, and emphatically not a pass. An endpoint nobody could connect to is not verified. |
+| `not_checked` | endpoint verification | No verification has run for this endpoint from this vantage. | That the endpoint is fine. An endpoint with no configured listener address stays here permanently — absence of a check is not absence of a problem. |
 | `dry_run_queued` | connector delivery | A relay-executed dry-run was queued for the agent bound to this target. | That anything is yet known about the target. No relay has reported. |
 | `dry_run_planned` | connector delivery | A relay reached the target, resolved every credential a real deploy needs, and returned the mutation plan. | That anything was deployed. The dry-run path never invokes a connector's `Deploy`, so zero writes is structural, not promised. |
 | `dry_run_blocked` | connector delivery | A relay ran the dry-run and a real deploy would **not** proceed. The reason names the step that stopped it. | That the target is broken in every respect — one step failed, and the plan says which. |
@@ -2486,6 +2491,80 @@ caller's context if it carries one, and otherwise the DNS-01 automation's own
 30-second outbox wait. There is no separate, configurable propagation budget,
 and the 30 seconds is a floor for callers that set no deadline rather than a cap
 that always applies.
+
+## Endpoint verification
+
+Every other record in this product reports what trstctl DID. An outbox row
+delivered, a connector returned success, a certificate was issued — all of them
+can be true at once while the listener serves something else entirely, because
+a connector's reload is one exec call inside its own `Deploy` method and nothing
+downstream observes whether it took effect.
+
+**The failure this exists to catch.** A renewal succeeds at the CA. The connector
+writes the file. The reload fails, or the service ignores it. Every delivery
+receipt stays green, the inventory correctly describes the new certificate, and
+clients keep getting the old one until it expires. Inventory-based expiry
+alerting cannot see this, because the inventory is *right* — it just does not
+describe what is being served.
+
+**Two vantages, and the difference is not redundancy.** The host agent's check
+runs inside `connector.deploy`, in the only window where it can: after the
+reload, before the redeemed material is destroyed. It verifies against the exact
+bytes it deployed rather than a description of them. The relay's check is a
+separate `endpoint.verify` job — network vantage, no credential redeemed — and
+it is the only witness for an appliance, because nothing runs on an F5. A local
+pass means the box thinks it is fine; only a relay pass means a client could get
+it. The two are stored as separate rows and never merged.
+
+**A verdict never claims more than it checked.** Each record carries whether the
+name set and the chain were actually compared, not just the fingerprint. An
+expectation that supplied no SAN set yields a verification that does not claim to
+have checked names.
+
+**Unreachable is not a pass.** It is stored as its own state, with no mismatch
+class, no comparison flags and no observed fingerprint — enforced in three
+places (the agent's transcript validation, the projector's decode, and a database
+CHECK constraint) because an endpoint nobody could connect to, recorded as
+verified, would be a worse false assurance than the blindness this replaces.
+
+**`last_good_at` is never erased by a failure.** The gap between it and
+`last_checked_at` is how long an endpoint has been failing, and losing it on the
+first failure would destroy the only measure of the outage's age. An endpoint
+that has never once been observed serving what it should reads as *never
+verified*, which is a stronger statement than "not recently" and renders as one.
+
+**Re-verification is a loop, not an event.** A post-deploy check proves the
+reload took effect at that moment; it says nothing about the weeks afterwards,
+and a listener can start serving the wrong certificate long after a deploy — a
+failover to a node that never got the file, a config reload elsewhere, a restored
+backup. Sweeps run hourly by default (`EndpointVerificationInterval`), batched at
+50 endpoints per job so one tenant cannot hold a relay indefinitely. Each sweep's
+expectation comes from the control plane's own record of what should be there,
+never from the last observation — re-probing against what was last *seen* would
+re-verify a divergence as correct on the next sweep and silence its own alarm.
+
+**Divergence alerts route by severity, not by finding score.** A served-identity
+divergence is `critical`; an unreachable endpoint is `warning`, because a probe
+that could not connect may be a firewall or a maintenance window and paging at
+critical for that teaches people to ignore the channel. The alert kind is
+distinct from `credential.drift` deliberately: drift drives a file-repair
+workflow keyed on a filesystem path, and a served-identity divergence usually has
+a perfectly correct file that a process never reloaded.
+
+**Automatic rollback is opt-in, per target, default off.** Setting
+`auto_rollback_on_verify_failure` on a deployment target closes the loop: a
+`verify_failed` deploy queues D4's executed re-bind to the predecessor. It fires
+only on `verify_failed` and never on plain failure — a deploy that failed did not
+change the target, so rolling it back would undo something that was never done.
+Absent flag means off; a target whose config predates this feature never starts
+re-binding itself because a new version shipped. Only the four families that can
+address an installed object separately from uploading one can re-bind at all, and
+a first deployment with no predecessor has nothing to roll back to.
+
+**What is not served.** Verification only covers endpoints an operator has given
+a listener address for; there is no discovery of listeners from deployment
+targets, because a guessed address produces confident, wrong records. An endpoint
+with no address is never verified and never claims to be.
 
 ## Per-issuer capabilities
 

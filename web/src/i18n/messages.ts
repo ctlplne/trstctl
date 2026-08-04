@@ -5570,6 +5570,78 @@ export const messages = {
     defaultMessage: "Upstream domain validation not allowed",
     description: "B7: saved state of the consent flag; the default, and the safe one.",
   },
+  "source.endpoint.verification.d2ver00001": {
+    defaultMessage: "Endpoint verification",
+    description: "D2: section heading \u2014 what each listener is actually serving.",
+  },
+  "source.endpoint.verification.help.d2ver00002": {
+    defaultMessage: "Every row is a TLS handshake somebody performed, not a record of what this control plane did. A renewal can succeed at the CA, be delivered by a connector, and never reach the listener \u2014 and every delivery receipt stays green while clients keep getting the old certificate.",
+    description: "D2: explains why this section is separate from delivery receipts.",
+  },
+  "source.endpoint.verification.caption.d2ver00003": {
+    defaultMessage: "Observed endpoint identity by vantage",
+    description: "D2: screen-reader caption.",
+  },
+  "source.endpoint.d2ver00004": {
+    defaultMessage: "Endpoint",
+    description: "D2: the host:port that was handshaked.",
+  },
+  "source.vantage.d2ver00005": {
+    defaultMessage: "Vantage",
+    description: "D2: who looked \u2014 the serving host itself, or the network.",
+  },
+  "source.checked.d2ver00006": {
+    defaultMessage: "Checked",
+    description: "D2: which comparisons actually ran for this observation.",
+  },
+  "source.last.good.d2ver00007": {
+    defaultMessage: "Last good",
+    description: "D2: when this endpoint was last observed serving what it should.",
+  },
+  "source.last.checked.d2ver00008": {
+    defaultMessage: "Last checked",
+    description: "D2: when a probe last ran, whatever the outcome.",
+  },
+  "source.vantage.local.d2ver00009": {
+    defaultMessage: "Local (serving host)",
+    description: "D2: the agent on the machine checked its own listener after deploying.",
+  },
+  "source.vantage.relay.d2ver00010": {
+    defaultMessage: "Relay (network)",
+    description: "D2: a network agent probed it as a client would; the only witness for appliances.",
+  },
+  "source.verified.d2ver00011": {
+    defaultMessage: "Serving the expected certificate",
+    description: "D2: the handshake matched what was deployed.",
+  },
+  "source.unreachable.d2ver00012": {
+    defaultMessage: "Could not connect",
+    description: "D2: nothing was observed \u2014 not a pass and not a divergence.",
+  },
+  "source.diverged.d2ver00013": {
+    defaultMessage: "Serving something else",
+    description: "D2: the handshake succeeded and found a different identity than was deployed.",
+  },
+  "source.checked.fingerprint.d2ver00014": {
+    defaultMessage: "fingerprint",
+    description: "D2: the leaf certificate was compared.",
+  },
+  "source.checked.names.d2ver00015": {
+    defaultMessage: "names",
+    description: "D2: the SAN set was compared.",
+  },
+  "source.checked.chain.d2ver00016": {
+    defaultMessage: "chain",
+    description: "D2: the issuer chain was compared, in served order.",
+  },
+  "source.diverged.class.d2ver00018": {
+    defaultMessage: "Serving something else ({value1})",
+    description: "D2: divergence with its class — fingerprint, sans, chain, expired or not_yet_valid.",
+  },
+  "source.never.verified.d2ver00017": {
+    defaultMessage: "Never verified",
+    description: "D2: this endpoint has never once been observed serving what it should.",
+  },
   "protocols.dns01.upstreamUnavailableTitle": {
     defaultMessage: "Upstream authorization freshness unavailable",
     description: "B7: the freshness read failed; an absent answer is not a negative one.",

@@ -205,3 +205,32 @@ func (s *Store) SummarizeEndpointVerifications(ctx context.Context, tenantID str
 	})
 	return out, err
 }
+
+// TenantsWithVerifiableEndpoints lists tenants that have at least one endpoint
+// worth re-probing.
+//
+// Cross-tenant by necessity — a scheduler must ask "who has work" before it can
+// enter any tenant's scope — so it runs on the system pool with the annotation
+// that marks it as a deliberate AN-1 exemption, and every ROW read afterwards
+// happens inside WithTenant.
+func (s *Store) TenantsWithVerifiableEndpoints(ctx context.Context) ([]string, error) {
+	rows, err := s.SystemPool().Query(ctx,
+		//trstctl:system-query — cross-tenant scan for the verification scheduler; owner role, not under RLS (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text
+		   FROM endpoint_verifications
+		  WHERE expected_fingerprint <> '' AND address <> ''
+		  ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}

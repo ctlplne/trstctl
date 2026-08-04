@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -144,4 +145,45 @@ func (s *Store) GetDeploymentTargetRevision(ctx context.Context, tenantID, targe
 	d.Config = cfg
 	d.UpdatedAt = d.CreatedAt
 	return d, err
+}
+
+// PredecessorCertificate is the certificate the current one replaced.
+type PredecessorCertificate struct {
+	Serial      string
+	Fingerprint string
+}
+
+// ResolvePredecessorCertificate walks an identity's replacement chain to the
+// certificate the current one replaced.
+//
+// Lives here rather than in one caller because two callers need it and for
+// opposite reasons: the API resolves it when an OPERATOR asks for a rollback,
+// and the agent channel resolves it when VERIFICATION decides one is warranted
+// (D2). Two copies of a chain walk would drift, and the one that drifts is the
+// automatic path — the one nobody watches.
+//
+// An empty value rather than an error when there is no predecessor: "this is
+// the first credential on this target" is an ordinary state, and a 500 for a
+// target that has simply never been renewed would be wrong.
+func (s *Store) ResolvePredecessorCertificate(ctx context.Context, tenantID, identityID string) PredecessorCertificate {
+	if strings.TrimSpace(identityID) == "" {
+		return PredecessorCertificate{}
+	}
+	identity, err := s.GetIdentity(ctx, tenantID, identityID)
+	if err != nil {
+		return PredecessorCertificate{}
+	}
+	certs, err := s.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, identity.OwnerID, identity.Name)
+	if err != nil || len(certs) == 0 {
+		return PredecessorCertificate{}
+	}
+	current := certs[len(certs)-1]
+	if current.ReplacesID == nil || strings.TrimSpace(*current.ReplacesID) == "" {
+		return PredecessorCertificate{}
+	}
+	previous, err := s.GetCertificate(ctx, tenantID, *current.ReplacesID)
+	if err != nil {
+		return PredecessorCertificate{}
+	}
+	return PredecessorCertificate{Serial: previous.Serial, Fingerprint: previous.Fingerprint}
 }

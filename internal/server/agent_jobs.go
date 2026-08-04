@@ -403,9 +403,17 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// same report shape as a sweep. One decoder for both, because the one that
 	// drifts is always the one exercised less, and here that would be the only
 	// witness that a reload took effect.
-	if destination == "connector.deploy" && a.recordEndpointVerification != nil &&
+	if destination == "connector.deploy" && a.recordDeployVerification != nil &&
 		(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
-		a.recordEndpointVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+		payload, _, _ := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
+		a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, payload)
+	}
+	// D2 + D4: the deploy applied and the listener is not serving it. That is
+	// the one condition under which a rollback is unambiguously the right
+	// response, and it is the decision D4's executed re-bind was waiting for.
+	// Opt-in per target — see maybeAutoRollbackAfterVerifyFailure.
+	if destination == "connector.deploy" && req.Outcome == transport.JobOutcomeVerifyFailed {
+		a.maybeAutoRollbackAfterVerifyFailure(ctx, info.TenantID, req.JobID)
 	}
 	// D4: a re-bind that actually happened. The receipt is written from the
 	// JOB payload rather than from the agent's report, because the payload

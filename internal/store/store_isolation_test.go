@@ -182,6 +182,13 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		"internal/server/server.go":             1,
 		"internal/store/connector_lifecycle.go": 1,
 		"internal/store/lifecycle.go":           1,
+		// D2: the verification scheduler's leader enumerator — "which tenants
+		// have endpoints worth re-probing" — has the same shape as the expiry
+		// enumerator above and the same justification: a scheduler must know
+		// who has work before it can enter any tenant's scope. It reads tenant
+		// ids ONLY; every endpoint row is then loaded under that tenant's RLS
+		// context by ListEndpointVerifications.
+		"internal/store/endpoint_verification.go": 1,
 		// H5: the CA calendar's leader enumerator — "which tenants operate a CA
 		// authority with a known expiry" — mirrors the expiry-alert enumerator in
 		// lifecycle.go. It reads tenant ids only; the authority rows themselves are

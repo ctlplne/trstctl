@@ -6955,6 +6955,136 @@
         ],
         "type": "object"
       },
+      "EndpointVerification": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "agent_common_name": {
+            "type": "string"
+          },
+          "checked_chain": {
+            "type": "boolean"
+          },
+          "checked_sans": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "endpoint_id": {
+            "type": "string"
+          },
+          "evidence_digest": {
+            "type": "string"
+          },
+          "expected_fingerprint": {
+            "type": "string"
+          },
+          "last_checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_good_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "mismatch": {
+            "enum": [
+              "fingerprint",
+              "sans",
+              "chain",
+              "expired",
+              "not_yet_valid"
+            ],
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_fingerprint": {
+            "type": "string"
+          },
+          "stale_for_seconds": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "verified",
+              "diverged",
+              "unreachable",
+              "not_checked"
+            ],
+            "type": "string"
+          },
+          "vantage": {
+            "enum": [
+              "local",
+              "relay"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint_id",
+          "address",
+          "vantage",
+          "status",
+          "checked_sans",
+          "checked_chain"
+        ],
+        "type": "object"
+      },
+      "EndpointVerificationList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EndpointVerification"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EndpointVerificationSummary"
+          }
+        },
+        "required": [
+          "items",
+          "summary",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "EndpointVerificationSummary": {
+        "properties": {
+          "diverged": {
+            "type": "integer"
+          },
+          "endpoints": {
+            "type": "integer"
+          },
+          "unreachable": {
+            "type": "integer"
+          },
+          "verified": {
+            "type": "integer"
+          },
+          "verified_percent": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "endpoints",
+          "verified",
+          "diverged",
+          "unreachable",
+          "verified_percent"
+        ],
+        "type": "object"
+      },
       "EnrollmentToken": {
         "properties": {
           "enroll_path": {
@@ -26178,6 +26308,53 @@
         },
         "summary": "Edition and license posture",
         "x-trstctl-public-rationale": "public edition posture: the response contains only global license state, feature-table rows, and crypto posture; it carries no tenant data or credential material."
+      }
+    },
+    "/api/v1/endpoints/verifications": {
+      "get": {
+        "operationId": "listEndpointVerifications",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointVerificationList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List observed endpoint identity: what each listener is actually serving, per vantage",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/ephemeral": {

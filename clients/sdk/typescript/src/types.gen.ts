@@ -1618,6 +1618,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/endpoints/verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List observed endpoint identity: what each listener is actually serving, per vantage */
+        get: operations["listEndpointVerifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ephemeral": {
         parameters: {
             query?: never;
@@ -6260,6 +6277,42 @@ export interface components {
             target?: components["schemas"]["DeploymentTargetRequest"];
             /** Format: uuid */
             target_id?: string;
+        };
+        EndpointVerification: {
+            address: string;
+            agent_common_name?: string;
+            checked_chain: boolean;
+            checked_sans: boolean;
+            detail?: string;
+            endpoint_id: string;
+            evidence_digest?: string;
+            expected_fingerprint?: string;
+            /** Format: date-time */
+            last_checked_at?: string;
+            /** Format: date-time */
+            last_good_at?: string;
+            /** @enum {string} */
+            mismatch?: "fingerprint" | "sans" | "chain" | "expired" | "not_yet_valid";
+            /** Format: date-time */
+            not_after?: string;
+            observed_fingerprint?: string;
+            stale_for_seconds?: number;
+            /** @enum {string} */
+            status: "verified" | "diverged" | "unreachable" | "not_checked";
+            /** @enum {string} */
+            vantage: "local" | "relay";
+        };
+        EndpointVerificationList: {
+            guidance: string;
+            items: components["schemas"]["EndpointVerification"][];
+            summary: components["schemas"]["EndpointVerificationSummary"];
+        };
+        EndpointVerificationSummary: {
+            diverged: number;
+            endpoints: number;
+            unreachable: number;
+            verified: number;
+            verified_percent: number;
         };
         EnrollmentToken: {
             enroll_path?: string;
@@ -14216,6 +14269,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EditionsInfo"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listEndpointVerifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointVerificationList"];
                 };
             };
             /** @description client error */

@@ -22,6 +22,11 @@ const (
 	// (F17) — a sibling destination on the same notification surface, so the
 	// same channel integrations (Slack, Teams, email, ... F29) consume both.
 	DestinationCTLog = "notification.ct"
+	// DestinationVerification carries endpoint verification divergence (D2):
+	// the listener is not serving what was deployed. It is the first alert in
+	// this product sourced from an OBSERVATION rather than from trstctl's own
+	// records, which is why it can fire when every delivery receipt is green.
+	DestinationVerification = "notification.verification"
 	// DestinationDrift carries credential drift alerts (F18) through the same
 	// notification fanout as expiry and CT monitoring.
 	DestinationDrift = "notification.drift"
@@ -66,7 +71,20 @@ const (
 	// KindCAHorizon marks a CA authority crossing into a tighter expiry band
 	// (H5). Replacing a trust anchor is a quarters-long programme, so this fires
 	// years ahead and again at each tightening.
-	KindCAHorizon = "ca.horizon"
+	// KindEndpointVerificationFailed means a TLS handshake found a listener
+	// serving something other than what was deployed (D2).
+	//
+	// Deliberately NOT KindCredentialDrift: that kind drives a file-repair
+	// workflow keyed on a filesystem path, and a served-identity divergence has
+	// no path to repair — the file is usually correct and the process never
+	// reloaded it. Routing one into the other would send an operator to fix
+	// something that is not broken.
+	KindEndpointVerificationFailed = "endpoint.verification_failed"
+	// KindEndpointUnreachable means a verification probe could not connect at
+	// all. Separate from a divergence because the person who fixes a network
+	// path is rarely the person who fixes a certificate.
+	KindEndpointUnreachable = "endpoint.unreachable"
+	KindCAHorizon           = "ca.horizon"
 	// KindCAValidityCompression marks a CA authority whose remaining life is
 	// shorter than the validity its leaves are supposed to receive. Issuance keeps
 	// succeeding and the certificates just get quietly shorter, so this is the
@@ -125,6 +143,17 @@ type Alert struct {
 	// under this authority stop receiving their full validity; and
 	// DependentCertificates says how much of the estate sits behind the anchor,
 	// so the alert carries blast radius instead of naming a CA in isolation.
+	// Endpoint verification fields (D2), set only on the endpoint kinds.
+	// EndpointAddress is the host:port that was handshaked; Vantage says
+	// whether the serving host itself or a network relay observed it; Mismatch
+	// names the divergence class. LastGoodAt is what turns an alert into a
+	// judgement of severity — an endpoint that was good an hour ago and one
+	// that has never once served correctly are different incidents.
+	EndpointAddress string    `json:"endpoint_address,omitempty"`
+	Vantage         string    `json:"vantage,omitempty"`
+	Mismatch        string    `json:"mismatch,omitempty"`
+	LastGoodAt      time.Time `json:"last_good_at,omitempty"`
+
 	AuthorityID           string    `json:"authority_id,omitempty"`
 	AuthorityKind         string    `json:"authority_kind,omitempty"`
 	HorizonMonths         *int      `json:"horizon_months,omitempty"`

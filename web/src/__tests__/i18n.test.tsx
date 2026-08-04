@@ -270,6 +270,11 @@ describe("i18n boundary", () => {
       // and values a finding was derived from, so an operator can check it
       // against the template's own property page instead of taking it on faith.
       // Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      // D2 re-pin: eighteen source.*.d2ver* keys add the endpoint verification
+      // section — what each listener is actually SERVING, per vantage, with the
+      // comparisons that actually ran and a "never verified" that reads as the
+      // strong statement it is. Machine-authored es/de - FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW.
       // B7 second-pass re-pin: three findings the refuters had dismissed turned
       // out to be right — a failed freshness read rendered identically to a
       // healthy deployment, timestamps bypassed the locale/timezone policy every
@@ -413,8 +418,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "eed28bbfb90e84e85091f70f0e4732fb979d6e9577bebecc4c47a516ac83d839",
-      "de-DE": "46ede9660081364145f59ff414ae6cf7511794bdaf19877c5e0764c5894cb700",
+      "es-ES": "cb60a4810f996a981511fb6a202d4e131f1191bb6c27ae731df3494677c8403d",
+      "de-DE": "b07020982d1234346465a4fefc54013d02fb166421df59a572238a1761691f79",
     });
   });
 

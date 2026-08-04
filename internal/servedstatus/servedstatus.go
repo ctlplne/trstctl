@@ -138,6 +138,24 @@ const (
 	ConnectorDelivered = "delivered"
 	// ConnectorFailed means the attempt ran and did not succeed.
 	ConnectorFailed = "failed"
+	// ConnectorVerified means the credential was applied AND a TLS handshake
+	// afterwards observed the endpoint serving it (epic D3).
+	//
+	// This is the third state the delivery vocabulary has been missing, and
+	// ConnectorDelivered's own Meaning has pointed at it since it shipped:
+	// "the endpoint has not been independently re-read; live verification is a
+	// separate state". Issued, delivered, and verified are three different
+	// claims — a certificate can be all three, or issued and delivered but not
+	// verified, and only the third one is what an operator actually wanted.
+	ConnectorVerified = "verified"
+	// ConnectorVerifyFailed means the credential was applied and the endpoint
+	// is NOT serving it.
+	//
+	// Distinct from ConnectorFailed, which means the attempt did not complete.
+	// The difference decides what to do next: a failed deploy is retried, a
+	// verified-failed deploy is rolled back, and retrying the second would run
+	// forever against a listener that already has the file and ignored it.
+	ConnectorVerifyFailed = "verify_failed"
 	// ConnectorConfigValidated means target metadata, schema, and credential
 	// references were validated locally. The target was NOT contacted. This
 	// replaces the former "test_succeeded", which claimed a successful test on a
@@ -209,6 +227,20 @@ var ConnectorDelivery = Registry{
 			Meaning:         "The attempt ran and did not succeed. The reason field carries the cause.",
 		},
 		{
+			Value:           ConnectorVerified,
+			ContactedTarget: true,
+			MutatedTarget:   true,
+			Verified:        true,
+			Meaning:         "A connector applied the credential and a TLS handshake against the endpoint afterwards observed it serving that exact identity. This is the only delivery state that says the certificate is live rather than that it was sent.",
+		},
+		{
+			Value:           ConnectorVerifyFailed,
+			ContactedTarget: true,
+			MutatedTarget:   true,
+			Verified:        true,
+			Meaning:         "A connector applied the credential and a handshake found the endpoint serving something else. The delivery succeeded; the endpoint did not take it. This is a renewal that did not land, not a delivery that failed.",
+		},
+		{
 			Value:   ConnectorConfigValidated,
 			Meaning: "Target metadata, schema, and credential references validated locally. The target was not contacted and nothing was changed.",
 		},
@@ -271,6 +303,62 @@ const (
 	// gate did not hold.
 	FleetGateFailed = "failed"
 )
+
+// Endpoint verification statuses (epic D2).
+//
+// This is the family the connector-delivery vocabulary has been pointing at
+// since it shipped: ConnectorDelivered says plainly that "the endpoint has not
+// been independently re-read; live verification is a separate state". This is
+// that state.
+//
+// It is the only family in this file whose values may carry Verified, and they
+// earn it in the way the flag's own definition names — a TLS handshake against
+// the live listener. Everything before it could say what trstctl DID; these say
+// what the listener is serving.
+const (
+	// EndpointVerified means a handshake observed the listener serving the
+	// expected identity.
+	EndpointVerified = "verified"
+	// EndpointDiverged means a handshake succeeded and what it found is not
+	// what was deployed. The mismatch class names which way.
+	EndpointDiverged = "diverged"
+	// EndpointUnreachable means the handshake did not complete. Deliberately
+	// NOT a divergence: a network problem and a certificate problem send an
+	// operator to different people, and it must never read as verified.
+	EndpointUnreachable = "unreachable"
+	// EndpointNotChecked is the honest default for an endpoint nothing has
+	// probed — including every endpoint for which no operator has configured a
+	// listener address. Absence of a check is not absence of a problem.
+	EndpointNotChecked = "not_checked"
+)
+
+// EndpointVerification is the served vocabulary for observed endpoint identity.
+var EndpointVerification = Registry{
+	Surface: "endpoint verification",
+	Claims: []Claim{
+		{
+			Value:           EndpointVerified,
+			ContactedTarget: true,
+			Verified:        true,
+			Meaning:         "A TLS handshake against the live listener observed it serving the expected identity. What was checked — fingerprint, and optionally the name set and chain — travels with the record.",
+		},
+		{
+			Value:           EndpointDiverged,
+			ContactedTarget: true,
+			Verified:        true,
+			Meaning:         "A TLS handshake succeeded and the listener is not serving what was deployed. The mismatch class names the difference; this is a renewal that did not land, not a delivery that failed.",
+		},
+		{
+			Value:           EndpointUnreachable,
+			ContactedTarget: false,
+			Meaning:         "The handshake did not complete, so nothing was observed and nothing is claimed. This is not a divergence and it is not a pass.",
+		},
+		{
+			Value:   EndpointNotChecked,
+			Meaning: "No verification has been performed for this endpoint from this vantage. An endpoint with no configured listener address stays here permanently, which is the honest answer rather than a passing one.",
+		},
+	},
+}
 
 // FleetHealthGate is the served vocabulary for fleet re-issuance health gates.
 var FleetHealthGate = Registry{
@@ -335,7 +423,7 @@ var FleetBatch = Registry{
 
 // Registries is every served status vocabulary, for the guard test and the docs
 // generator to walk.
-var Registries = []Registry{ConnectorDelivery, FleetHealthGate, FleetBatch}
+var Registries = []Registry{ConnectorDelivery, EndpointVerification, FleetHealthGate, FleetBatch}
 
 // overclaim is one banned spelling and the flag that must be true to use it.
 type overclaim struct {

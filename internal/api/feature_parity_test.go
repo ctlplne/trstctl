@@ -96,11 +96,13 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// feature rows in the same change; the upstream authorization staleness
 	// read (B7) raised it to 305 and is mapped onto the DNS-01 feature row,
 	// because it answers "can this deployment still validate" for the same
-	// provider configs that row already covers.
+	// provider configs that row already covers; D2's observed endpoint identity
+	// raised it to 306 and is mapped onto F7, the deployment-connector row
+	// whose delivery receipts it is the missing half of.
 	// The count is a deliberate ratchet: every new operation must be mapped to
 	// a feature-catalog row in the same change.
-	if len(out) != 305 {
-		t.Fatalf("OpenAPI operationIds = %d, want 305", len(out))
+	if len(out) != 306 {
+		t.Fatalf("OpenAPI operationIds = %d, want 306", len(out))
 	}
 	return out
 }

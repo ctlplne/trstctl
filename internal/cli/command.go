@@ -110,6 +110,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"acme", "dns-01", "provider-configs", "get"}, Method: "GET", Path: "/api/v1/acme/dns-01/provider-configs/{id}", Summary: "Get a DNS-01 provider config"},
 	{Name: []string{"acme", "dns-01", "provider-configs", "update"}, Method: "PUT", Path: "/api/v1/acme/dns-01/provider-configs/{id}", Body: bodyFile, Summary: "Replace a DNS-01 provider config using secret references"},
 	{Name: []string{"acme", "dns-01", "provider-configs", "delete"}, Method: "DELETE", Path: "/api/v1/acme/dns-01/provider-configs/{id}", Summary: "Delete a DNS-01 provider config"},
+	{Name: []string{"endpoints", "verifications"}, Method: "GET", Path: "/api/v1/endpoints/verifications", Summary: "List observed endpoint identity: what each listener is actually serving, per vantage"},
 	{Name: []string{"acme", "dns-01", "upstream-authorizations"}, Method: "GET", Path: "/api/v1/acme/dns-01/upstream-authorizations", Summary: "List upstream authorization freshness: when each identifier last actually validated vs last rode a reuse"},
 	{Name: []string{"acme", "dns-01", "preflight"}, Method: "POST", Path: "/api/v1/acme/dns-01/preflight", Body: bodyFile, Summary: "Run DNS-01 propagation, CNAME, CAA, method, and wildcard policy preflight"},
 	{Name: []string{"acme", "ari", "posture"}, Method: "GET", Path: "/api/v1/acme/ari/posture", Query: []string{"limit", "cursor"}, Summary: "Show ARI publication and lifecycle scheduler-consumption posture"},

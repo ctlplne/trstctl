@@ -287,3 +287,70 @@ func TestNeverValidatedRowsSortAboveHealthierLookingOnes(t *testing.T) {
 			rows[0].Identifier)
 	}
 }
+
+// A re-verification sweep must never ratify a divergence (epic D2).
+//
+// The scheduler builds each sweep's expectation from the control plane's own
+// record of what SHOULD be there. If it built the expectation from what was
+// last OBSERVED, an endpoint serving the wrong certificate would be re-verified
+// as correct on the very next sweep — the alarm would silence itself, and the
+// longer a divergence persisted the more confidently the surface would report
+// it as fine.
+//
+// This pins the property at the level the scheduler reads: a stored divergence
+// keeps its EXPECTED fingerprint, which is what the next sweep will probe
+// against, and never adopts the observed one.
+func TestADivergentObservationKeepsItsExpectedFingerprint(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	tenantID := "d2000001-0000-0000-0000-000000000001"
+	seedTenant(t, s, tenantID)
+
+	apply := func(v store.EndpointVerification) {
+		t.Helper()
+		v.TenantID = tenantID
+		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			return s.ApplyEndpointVerificationTx(ctx, tx, v)
+		}); err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+	}
+
+	// First: healthy. The endpoint serves what was deployed.
+	apply(store.EndpointVerification{
+		EndpointID: "ep-1", Address: "api.example.test:443", Vantage: "relay",
+		Reached: true, ExpectedFingerprint: "expected-aa", ObservedFingerprint: "expected-aa",
+		LastCheckedAt: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), EventSequence: 1,
+	})
+
+	// Then: the listener starts serving something else.
+	apply(store.EndpointVerification{
+		EndpointID: "ep-1", Address: "api.example.test:443", Vantage: "relay",
+		Reached: true, Mismatch: "fingerprint",
+		ExpectedFingerprint: "expected-aa", ObservedFingerprint: "wrong-bb",
+		LastCheckedAt: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), EventSequence: 2,
+	})
+
+	rows, err := s.ListEndpointVerifications(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	got := rows[0]
+	if got.ExpectedFingerprint != "expected-aa" {
+		t.Errorf("expected_fingerprint = %q; the next sweep probes against this value, so "+
+			"adopting the observed one would re-verify the divergence as correct and silence "+
+			"its own alarm", got.ExpectedFingerprint)
+	}
+	if got.ObservedFingerprint != "wrong-bb" {
+		t.Errorf("observed_fingerprint = %q, want the certificate actually being served", got.ObservedFingerprint)
+	}
+	// And the last-known-good date survives the failure, because it is the only
+	// measure of how long this has been broken.
+	if got.LastGoodAt.IsZero() {
+		t.Error("last_good_at was erased by a failing observation; the age of the outage is " +
+			"the one thing an operator cannot reconstruct afterwards")
+	}
+}

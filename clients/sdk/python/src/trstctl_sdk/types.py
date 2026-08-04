@@ -2554,6 +2554,51 @@ EndpointBindingRequest = TypedDict(
     total=False,
 )
 
+EndpointVerification = TypedDict(
+    'EndpointVerification',
+    {
+        'address': str,
+        'agent_common_name': str,
+        'checked_chain': bool,
+        'checked_sans': bool,
+        'detail': str,
+        'endpoint_id': str,
+        'evidence_digest': str,
+        'expected_fingerprint': str,
+        'last_checked_at': str,
+        'last_good_at': str,
+        'mismatch': str,
+        'not_after': str,
+        'observed_fingerprint': str,
+        'stale_for_seconds': int,
+        'status': str,
+        'vantage': str,
+    },
+    total=False,
+)
+
+EndpointVerificationList = TypedDict(
+    'EndpointVerificationList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+EndpointVerificationSummary = TypedDict(
+    'EndpointVerificationSummary',
+    {
+        'diverged': int,
+        'endpoints': int,
+        'unreachable': int,
+        'verified': int,
+        'verified_percent': int,
+    },
+    total=False,
+)
+
 EnrollmentToken = TypedDict(
     'EnrollmentToken',
     {

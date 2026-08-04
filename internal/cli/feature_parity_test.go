@@ -143,11 +143,12 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F1's `posture adcs` raised it to 313; R2's `issuers capabilities` raised
 	// it to 314 and is mapped onto the issuer feature rows; B7's
 	// `acme dns-01 upstream-authorizations` raised it to 315 and is mapped onto
-	// the DNS-01 feature row, whose provider configs it reports the freshness of.
+	// the DNS-01 feature row, whose provider configs it reports the freshness of;
+	// D2's `endpoints verifications` raised it to 316 and is mapped onto F7.
 	// Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 315 {
-		t.Fatalf("CLI commands = %d, want 315", len(out))
+	if len(out) != 316 {
+		t.Fatalf("CLI commands = %d, want 316", len(out))
 	}
 	return out
 }

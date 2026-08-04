@@ -232,6 +232,13 @@ type agentService struct {
 	// live only in the job row, which is where R1's revocation findings still
 	// sit — an observation nobody reads changes nothing.
 	recordEndpointVerification func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
+
+	// recordDeployVerification handles the LOCAL vantage: a deploy that
+	// verified, or failed to. It writes both the current endpoint state and the
+	// historical delivery receipt (D3), which is why it needs the job payload —
+	// the connector and target come from what the control plane queued, never
+	// from the agent's report.
+	recordDeployVerification func(ctx context.Context, tenantID, agent, idempotencyKey, report string, jobPayload []byte)
 	// recordRollback turns a relay's re-bind report into a delivery receipt
 	// (epic D4). Nil means rollback results live only in the event log.
 	recordRollback func(ctx context.Context, tenantID, agent, idempotencyKey, payload, reason string, executed bool)

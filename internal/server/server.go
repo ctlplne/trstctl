@@ -289,6 +289,14 @@ type Deps struct {
 	LifecycleLeafValidity time.Duration
 	// LifecycleInterval is the scheduler cadence. Zero selects a conservative default.
 	LifecycleInterval time.Duration
+
+	// EndpointVerificationInterval is how often endpoints are re-probed to
+	// confirm they are still serving what was deployed (epic D2). Zero selects
+	// defaultEndpointVerificationInterval.
+	//
+	// This is the interval the epic's acceptance criterion is measured against:
+	// a renewal that never lands live must be detected within one of these.
+	EndpointVerificationInterval time.Duration
 	// NotificationChannels are the operator-configured served notification sinks
 	// (NOTIF-01/F29). They are driven only by notification.* outbox rows; the
 	// scheduler never calls a channel directly, preserving AN-6 at-least-once delivery.
@@ -753,10 +761,13 @@ type Server struct {
 	lifecycleAlertBefore  time.Duration
 	lifecycleLeafValidity time.Duration
 	lifecycleInterval     time.Duration
-	mLifecycleQueued      *observ.Counter
-	mLifecycleAlerts      *observ.Counter
-	mLifecycleFailures    *observ.Counter
-	mLifecycleLastOK      *observ.Gauge
+	// endpointVerificationInterval is how often endpoints are re-probed (D2).
+	// Zero uses defaultEndpointVerificationInterval.
+	endpointVerificationInterval time.Duration
+	mLifecycleQueued             *observ.Counter
+	mLifecycleAlerts             *observ.Counter
+	mLifecycleFailures           *observ.Counter
+	mLifecycleLastOK             *observ.Gauge
 
 	// Fleet-health telemetry (OPS-002): aggregate, low-cardinality gauges/counters
 	// for enrollment, heartbeat, and missed-heartbeat thresholds.
@@ -1570,6 +1581,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		recordRollback:             s.rollbackReceipt,
 		recordADCSPosture:          s.recordADCSPosture,
 		recordEndpointVerification: s.recordEndpointVerificationSweep,
+		recordDeployVerification:   s.recordDeployVerification,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {
@@ -1623,6 +1635,7 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.lifecycleAlertBefore = d.LifecycleAlertBefore
 	s.lifecycleLeafValidity = d.LifecycleLeafValidity
 	s.lifecycleInterval = d.LifecycleInterval
+	s.endpointVerificationInterval = d.EndpointVerificationInterval
 	s.mLifecycleQueued = s.registry.CounterVec("trstctl_lifecycle_renewals_queued_total", "Identities queued by the lifecycle renewal scheduler.", nil).WithLabelValues()
 	s.mLifecycleAlerts = s.registry.CounterVec("trstctl_lifecycle_expiry_alerts_queued_total", "Expiry notifications queued by the lifecycle scheduler.", nil).WithLabelValues()
 	s.mLifecycleLastOK = s.registry.Gauge("trstctl_lifecycle_scheduler_last_success_timestamp_seconds", "Unix timestamp of the last successful lifecycle scheduler sweep.")

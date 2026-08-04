@@ -1451,6 +1451,31 @@ func componentSchemas() map[string]*Schema {
 		"never_validated_count": {Type: "integer"},
 		"guidance":              str(),
 	}, "items", "never_validated_count", "guidance")
+	// D2: what each listener is actually serving, per vantage.
+	endpointVerification := object(map[string]*Schema{
+		"endpoint_id": str(), "address": str(),
+		"vantage": {Type: "string", Enum: []string{"local", "relay"}},
+		"status":  {Type: "string", Enum: []string{"verified", "diverged", "unreachable", "not_checked"}},
+		"mismatch": {Type: "string", Enum: []string{
+			"fingerprint", "sans", "chain", "expired", "not_yet_valid",
+		}},
+		"checked_sans": {Type: "boolean"}, "checked_chain": {Type: "boolean"},
+		"expected_fingerprint": str(), "observed_fingerprint": str(),
+		"not_after": timestamp(), "detail": str(),
+		"evidence_digest": str(), "agent_common_name": str(),
+		"last_checked_at": timestamp(), "last_good_at": timestamp(),
+		"stale_for_seconds": {Type: "integer"},
+	}, "endpoint_id", "address", "vantage", "status", "checked_sans", "checked_chain")
+	endpointVerificationSummary := object(map[string]*Schema{
+		"endpoints": {Type: "integer"}, "verified": {Type: "integer"},
+		"diverged": {Type: "integer"}, "unreachable": {Type: "integer"},
+		"verified_percent": {Type: "integer"},
+	}, "endpoints", "verified", "diverged", "unreachable", "verified_percent")
+	endpointVerificationList := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("EndpointVerification")},
+		"summary":  ref("EndpointVerificationSummary"),
+		"guidance": str(),
+	}, "items", "summary", "guidance")
 	// R2: what each authority can actually do through trstctl.
 	issuerCapability := object(map[string]*Schema{
 		"issuer": str(), "discover": {Type: "boolean"}, "issue": {Type: "boolean"},
@@ -3909,6 +3934,9 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoring":                      discoveryMonitoring,
 		"DiscoveryCoverage":                        discoveryCoverage,
 		"ACMEUpstreamAuthorization":                acmeUpstreamAuthorization,
+		"EndpointVerification":                     endpointVerification,
+		"EndpointVerificationSummary":              endpointVerificationSummary,
+		"EndpointVerificationList":                 endpointVerificationList,
 		"ACMEUpstreamAuthorizationList":            acmeUpstreamAuthorizationList,
 		"IssuerCapability":                         issuerCapability,
 		"IssuerCapabilityMatrix":                   issuerCapabilityMatrix,

@@ -25,6 +25,7 @@ const { apiMock } = vi.hoisted(() => ({
     secretPage: vi.fn(),
     incidentExecutions: vi.fn(),
     transitionIdentity: vi.fn(),
+    endpointVerifications: vi.fn(),
   },
 }));
 
@@ -118,6 +119,13 @@ describe("auth + dashboards", () => {
     apiMock.auditEvents.mockResolvedValue([]);
     apiMock.risk.mockResolvedValue([]);
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
+    // D2: nothing observed by default, so the verified tile stays absent.
+    apiMock.endpointVerifications.mockReset();
+    apiMock.endpointVerifications.mockResolvedValue({
+      items: [],
+      summary: { endpoints: 0, verified: 0, diverged: 0, unreachable: 0, verified_percent: 0 },
+      guidance: "",
+    });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.secretPage.mockResolvedValue({ items: [] });
     apiMock.incidentExecutions.mockResolvedValue({ items: [] });
@@ -564,4 +572,45 @@ describe("auth + dashboards", () => {
     await waitFor(() => expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: expect.any(String) }));
     expect(await screen.findByText("CN=soon.example.com")).toBeInTheDocument();
   });
+
+  // The verified tile is a percentage of OBSERVED endpoints, and it does not
+  // appear at all until something has been observed (epic D2).
+  //
+  // "100%" over zero endpoints is the most misleading number this page could
+  // show — an all-clear that nothing earned — and an estate nobody has probed
+  // is exactly the estate most likely to have a listener quietly serving last
+  // year's certificate.
+  it("hides the verified tile until endpoints have actually been observed", async () => {
+    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
+    apiMock.certificates.mockResolvedValue([
+      { id: "c1", tenant_id: "t1", subject: "CN=api.example.test", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
+    ]);
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    await waitFor(() => expect(apiMock.endpointVerifications).toHaveBeenCalled());
+    expect(within(dash).queryByText(/endpoints verified/i)).toBeNull();
+  });
+
+  it("shows the verified percentage and leads with divergence once endpoints are observed", async () => {
+    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
+    // A non-empty tenant, so the dashboard renders its KPI row rather than the
+    // first-run wizard.
+    apiMock.certificates.mockResolvedValue([
+      { id: "c1", tenant_id: "t1", subject: "CN=api.example.test", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
+    ]);
+    apiMock.endpointVerifications.mockResolvedValue({
+      items: [],
+      summary: { endpoints: 4, verified: 3, diverged: 1, unreachable: 0, verified_percent: 75 },
+      guidance: "",
+    });
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+
+    expect(await within(dash).findByText(/endpoints verified/i)).toBeInTheDocument();
+    expect(within(dash).getByText("75")).toBeInTheDocument();
+    // The divergence count is the subtitle, because one endpoint serving the
+    // wrong certificate is the thing to act on — not the 75%.
+    expect(within(dash).getByText("1 diverged")).toBeInTheDocument();
+  });
+
 });

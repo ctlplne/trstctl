@@ -385,3 +385,36 @@ func countUpstreamPresentRows(t *testing.T, ctx context.Context, h *servedHarnes
 	}
 	return n
 }
+
+// Auto-rollback is OPT-IN, and an absent flag is not consent (epic D2 + D4).
+//
+// Automatic re-binding of a production listener is a mutation the operator did
+// not ask for at the moment it happens. Enabling verification says "tell me
+// when this breaks"; it does not say "change my load balancer when you decide
+// it has". A target whose config predates this feature must never start
+// re-binding itself because a new version shipped.
+func TestAutoRollbackRequiresExplicitOptIn(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		cfg  string
+		want bool
+	}{
+		{"no config at all", "", false},
+		{"config without the flag", `{"endpoint":"https://f5.example.test"}`, false},
+		{"flag explicitly false", `{"auto_rollback_on_verify_failure":false}`, false},
+		{"flag as a string, not a bool", `{"auto_rollback_on_verify_failure":"true"}`, false},
+		{"unparseable config", `{not json`, false},
+		{"flag explicitly true", `{"auto_rollback_on_verify_failure":true}`, true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := autoRollbackEnabled([]byte(tc.cfg)); got != tc.want {
+				t.Errorf("autoRollbackEnabled(%s) = %v, want %v — an unasked-for re-bind of a "+
+					"production listener is not something to infer", tc.cfg, got, tc.want)
+			}
+		})
+	}
+}

@@ -564,6 +564,13 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Credential drift")
 	case KindApprovalRequest:
 		b.WriteString("Approval requested")
+	case KindEndpointVerificationFailed:
+		// The wording is chosen to be unmistakable at 3am. "Verification
+		// failed" would read as a tooling problem; this says what is actually
+		// true of production traffic right now.
+		b.WriteString("Endpoint is serving the wrong certificate")
+	case KindEndpointUnreachable:
+		b.WriteString("Endpoint could not be reached for verification")
 	case KindCAHorizon:
 		b.WriteString("CA hierarchy expiry horizon")
 	case KindCAValidityCompression:
@@ -579,6 +586,15 @@ func FormatMessage(a Alert) string {
 	}
 	if a.Serial != "" {
 		b.WriteString(" [serial " + a.Serial + "]")
+	}
+	// The vantage is part of the claim, not decoration: a local divergence
+	// means the serving host itself disagrees, a relay one means clients cannot
+	// get the right certificate, and an operator triages those differently.
+	if a.Vantage != "" {
+		b.WriteString(" [" + a.Vantage + " vantage]")
+	}
+	if a.Mismatch != "" {
+		b.WriteString(" [" + a.Mismatch + "]")
 	}
 	if !a.NotAfter.IsZero() {
 		b.WriteString(" — not after " + a.NotAfter.UTC().Format("2006-01-02"))

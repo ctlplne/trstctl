@@ -538,34 +538,16 @@ type predecessorCertificate struct {
 	Fingerprint string
 }
 
-// resolvePredecessorCertificate walks the replacement chain to the certificate
-// the current one replaced.
-//
-// It returns an empty value rather than an error when there is no predecessor,
-// because "this is the first credential on this target" is an ordinary state
-// and the caller renders it as such — the alternative is a 500 for a target
-// that has simply never been renewed.
+// resolvePredecessorCertificate adapts the store's chain walk to this
+// package's local type. The walk itself lives in the store because the
+// verification path (D2) resolves the same predecessor when it decides a
+// rollback is warranted, and two copies would drift.
 func resolvePredecessorCertificate(ctx context.Context, st *store.Store, tenantID string, identityID *string) predecessorCertificate {
-	if st == nil || identityID == nil || strings.TrimSpace(*identityID) == "" {
+	if st == nil || identityID == nil {
 		return predecessorCertificate{}
 	}
-	identity, err := st.GetIdentity(ctx, tenantID, *identityID)
-	if err != nil {
-		return predecessorCertificate{}
-	}
-	certs, err := st.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, identity.OwnerID, identity.Name)
-	if err != nil || len(certs) == 0 {
-		return predecessorCertificate{}
-	}
-	current := certs[len(certs)-1]
-	if current.ReplacesID == nil || strings.TrimSpace(*current.ReplacesID) == "" {
-		return predecessorCertificate{}
-	}
-	previous, err := st.GetCertificate(ctx, tenantID, *current.ReplacesID)
-	if err != nil {
-		return predecessorCertificate{}
-	}
-	return predecessorCertificate{Serial: previous.Serial, Fingerprint: previous.Fingerprint}
+	p := st.ResolvePredecessorCertificate(ctx, tenantID, *identityID)
+	return predecessorCertificate{Serial: p.Serial, Fingerprint: p.Fingerprint}
 }
 
 //trstctl:mutation
