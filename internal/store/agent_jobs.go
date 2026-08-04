@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -485,4 +486,40 @@ func (s *Store) AgentJobRedemptions(ctx context.Context, now time.Time) (AgentJo
 		   FROM agent_job_credential_redemptions`, now.UTC()).
 		Scan(&out.Live, &out.Total, &out.OldestLiveAt)
 	return out, err
+}
+
+// AgentJobAttemptSignedOtherCSR reports whether this job attempt has already had
+// a DIFFERENT CSR signed (epic B2).
+//
+// It reads the certificates table rather than a new ledger, because the
+// certificate IS the record: every issuance against an agent's CSR is stamped
+// with an idempotency key of the form `agentcsr:<jobID>:<attempt>:<digest>`, so
+// the existence of such a row is the fact we need and there is nothing to keep
+// in sync.
+//
+// DIFFERENT is the load-bearing word. Two cases look alike and must not be
+// treated alike:
+//
+//   - The same CSR arriving twice is a RETRY — the agent's first call timed out
+//     and it is asking again for the certificate belonging to the key it still
+//     holds. Refusing that would lose the certificate for a live key over a
+//     network blip, so it must replay the cached issuance.
+//   - A different CSR on the same attempt is the abuse: the CSR-derived
+//     idempotency key makes every new key a new issuance, so one claim could
+//     otherwise mint certificates without limit.
+//
+// The bound is per ATTEMPT rather than per job because a genuine retry re-claims
+// the work and gets a new attempt number, which should be allowed to sign again.
+func (s *Store) AgentJobAttemptSignedOtherCSR(ctx context.Context, tenantID string, jobID int64, attempt int, idempotencyKey string) (bool, error) {
+	signed := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM certificates
+			     WHERE tenant_id = $1
+			       AND issuance_idempotency_key LIKE $2
+			       AND issuance_idempotency_key <> $3
+			 )`, tenantID, fmt.Sprintf("agentcsr:%d:%d:%%", jobID, attempt), idempotencyKey).Scan(&signed)
+	})
+	return signed, err
 }

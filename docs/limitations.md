@@ -208,6 +208,28 @@ never live in the API process. What you can do end to end against the running bi
   target, binds the identity to that endpoint, and queues issue/deploy work through
   the outbox. The leader lifecycle scheduler later renews the identity and sends the
   successor back through credential-bearing `connector.deploy` work.
+- Host-generated endpoint keys (B2): a deployment target whose config sets
+  `executor: "agent"` opts out of credential-bearing delivery entirely. When the
+  lifecycle scheduler renews an identity bound to such a target, the issuance
+  dispatcher queues an `endpoint.renew` job INSTEAD OF MINTING — the branch is at
+  mint time, not deploy time, because once a certificate has been minted for a
+  server-keygen identity the control plane already holds a private key and no later
+  refusal can unmake that. A host agent then claims the job, generates the subject
+  key on the machine that will serve it, sends a PKCS#10 up through `SignJobCSR`,
+  installs the returned certificate with its locally held key, and verifies the
+  listener. The rotation run is recorded as succeeded on the HANDOFF, not on a
+  certificate: the certificate does not exist until the agent's CSR arrives, and
+  D3's three-state truth reports the rest. The control plane never holds
+  that private key, and `enforceExecutorParity` REFUSES — rather than silently falling
+  back — any deploy that would carry key bytes to such a target, so a target cannot
+  read as migrated while still receiving keys. Scope, stated exactly: this is per
+  target and opt-in; targets without the marker keep the control-plane path unchanged,
+  which is the supported default and not a defect. Renewal is host-vantage only — a
+  network relay cannot claim `endpoint.renew`, because generating a key for an
+  appliance it merely reaches would reintroduce the custody hop this removes. The CSR
+  is authorized against the names the job payload already carries, so an agent cannot
+  widen its request. `GET /api/v1/endpoints/key-custody` and the Connectors console
+  report, per target, which path it is on and how much of the estate has moved.
 - Expiry-alert delivery: the leader lifecycle scheduler honors the configured alert
   window, writes `notification.expiry` outbox work, stamps `alerted_at` in the same
   transaction so one certificate does not spam, and the outbox worker dispatches
@@ -2656,6 +2678,14 @@ Absent flag means off; a target whose config predates this feature never starts
 re-binding itself because a new version shipped. Only the four families that can
 address an installed object separately from uploading one can re-bind at all, and
 a first deployment with no predecessor has nothing to roll back to.
+
+**Configuring it.** Local post-deploy verification runs when a deployment target
+carries `verify_address` (and optionally `verify_server_name`) in its config —
+for example `{"cert_path": "/etc/nginx/server.crt", "verify_address": "api.example.test:443"}`.
+The address cannot be derived and is not guessed: on an appliance target
+`endpoint` is the MANAGEMENT API, and the connector's target string is a routing
+label, so an F5's management plane and the virtual server it fronts are
+different sockets.
 
 **What is not served.** Verification only covers endpoints an operator has given
 a listener address for; there is no discovery of listeners from deployment

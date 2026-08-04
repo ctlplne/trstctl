@@ -374,6 +374,44 @@
           "presence": "optional"
         }
       ]
+    },
+    "SignJobCSRRequest": {
+      "fields": [
+        {
+          "go_type": "int64",
+          "name": "job_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "attempt",
+          "presence": "required"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "csr_der",
+          "presence": "required"
+        }
+      ]
+    },
+    "SignJobCSRResponse": {
+      "fields": [
+        {
+          "go_type": "bytes_base64",
+          "name": "certificate_pem",
+          "presence": "required"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "chain_pem",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "fingerprint",
+          "presence": "optional"
+        }
+      ]
     }
   },
   "metadata": {
@@ -434,6 +472,12 @@
         "name": "RedeemJobCredential",
         "request": "",
         "response": ""
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/SignJobCSR",
+        "name": "SignJobCSR",
+        "request": "SignJobCSRRequest",
+        "response": "SignJobCSRResponse"
       }
     ],
     "name": "trstctl.agent.v1.AgentService"

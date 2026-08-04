@@ -1,5 +1,4 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -8,8 +7,17 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { describeStatus } from "@/lib/statusVocab";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
-import { formatDateTime } from "@/i18n/format";
-import { api, type ConnectorCatalogItem, type ConnectorDelivery, type DeploymentTarget, type EndpointVerification, type Identity, type OutboxCircuit } from "@/lib/api";
+import { formatDateTime, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import {
+  api,
+  type ConnectorCatalogItem,
+  type ConnectorDelivery,
+  type DeploymentTarget,
+  type EndpointVerification,
+  type EndpointKeyCustodyList,
+  type Identity,
+  type OutboxCircuit,
+} from "@/lib/api";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 // VantageBadge names where a connector's deploy work executes (epic A3), read
@@ -48,6 +56,10 @@ export function Connectors() {
   // else — and so an endpoint a relay probed, which has no connector target at
   // all, still appears.
   const [endpointVerifications, setEndpointVerifications] = useState<EndpointVerification[]>([]);
+  // B2: where each target's private key is generated. Loaded separately for the
+  // same reason as the verification rows above — a deployment without this
+  // surface still renders the rest of the page.
+  const [keyCustody, setKeyCustody] = useState<EndpointKeyCustodyList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
   const [targetName, setTargetName] = useState("edge/prod/payments");
@@ -104,6 +116,22 @@ export function Connectors() {
       },
     );
   };
+
+  useEffect(() => {
+    let active = true;
+    if (typeof api.endpointKeyCustody !== "function") return;
+    api
+      .endpointKeyCustody()
+      .then((list) => {
+        if (active) setKeyCustody(list);
+      })
+      .catch(() => {
+        if (active) setKeyCustody(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -472,9 +500,7 @@ export function Connectors() {
                             during an incident needs the difference before they
                             reach, not after. */}
                         <span className={connector.executes_rollback ? "font-medium text-status-success" : "text-muted-foreground"}>
-                          {connector.executes_rollback
-                            ? translateNow("source.executes.rebind.d4rb000003")
-                            : translateNow("source.manual.procedure.d4rb000004")}
+                          {connector.executes_rollback ? translateNow("source.executes.rebind.d4rb000003") : translateNow("source.manual.procedure.d4rb000004")}
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">{connector.rollback}</span>
                       </td>
@@ -489,89 +515,155 @@ export function Connectors() {
 
       {deliveries && (
         <section aria-labelledby="delivery-receipts-heading" className="grid gap-3 border-y border-border py-4">
-      {/* D2: what the listeners are actually SERVING.
+          {/* D2: what the listeners are actually SERVING.
           Deliberately its own section rather than a column on the delivery
           receipts below. A receipt records what this control plane DID; these
           rows record what a handshake FOUND, and the two do not join reliably —
           an appliance probed by a relay has no delivery receipt at all, and
           hiding it inside one would make the only witness for appliances
           invisible. */}
-      {endpointVerifications.length > 0 ? (
-        <section aria-labelledby="endpoint-verification-heading" className="space-y-3">
-          <div>
-            <h2 id="endpoint-verification-heading" className="text-title font-semibold">
-              {translateNow("source.endpoint.verification.d2ver00001")}
-            </h2>
-            <p className="mt-1 max-w-4xl text-caption text-muted-foreground">
-              {translateNow("source.endpoint.verification.help.d2ver00002")}
-            </p>
-          </div>
-          <div className="ui-panel overflow-x-auto">
-            <table className="ui-table min-w-[72rem]">
-              <caption className="sr-only">{translateNow("source.endpoint.verification.caption.d2ver00003")}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{translateNow("source.endpoint.d2ver00004")}</th>
-                  <th scope="col">{translateNow("source.vantage.d2ver00005")}</th>
-                  <th scope="col">{translateNow("source.status.920e413c7d")}</th>
-                  <th scope="col">{translateNow("source.checked.d2ver00006")}</th>
-                  <th scope="col">{translateNow("source.last.good.d2ver00007")}</th>
-                  <th scope="col">{translateNow("source.last.checked.d2ver00008")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {endpointVerifications.map((row) => (
-                  <tr key={`${row.endpoint_id}:${row.vantage}`} className="align-top">
-                    <td className="font-mono text-xs">{row.address}</td>
-                    <td>
-                      {row.vantage === "local"
-                        ? translateNow("source.vantage.local.d2ver00009")
-                        : translateNow("source.vantage.relay.d2ver00010")}
-                    </td>
-                    <td className="max-w-[24rem]">
-                      {row.status === "verified" ? (
-                        <span className="font-medium text-status-success">{translateNow("source.verified.d2ver00011")}</span>
-                      ) : row.status === "unreachable" ? (
-                        <span className="text-status-warning">{translateNow("source.unreachable.d2ver00012")}</span>
-                      ) : (
-                        <span className="font-medium text-destructive">
-                          {row.mismatch
-                            ? translateNow("source.diverged.class.d2ver00018", { value1: row.mismatch })
-                            : translateNow("source.diverged.d2ver00013")}
-                        </span>
-                      )}
-                      {row.detail ? <span className="mt-1 block text-xs text-muted-foreground">{row.detail}</span> : null}
-                    </td>
-                    {/* What was actually compared. A "verified" that only
+          {/* B2: the migration view. Rendered whenever targets exist, including when
+          NONE have migrated — an operator planning a custody migration needs to
+          see the work remaining, and a panel that appeared only once the work
+          was done would be a trophy rather than a tool. */}
+          {keyCustody && keyCustody.items.length > 0 ? (
+            <section aria-labelledby="endpoint-custody-heading" className="space-y-3">
+              <div>
+                <h2 id="endpoint-custody-heading" className="text-title font-semibold">
+                  {translateNow("source.endpoint.key.custody.b2cus00001")}
+                </h2>
+                <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{translateNow("source.endpoint.key.custody.help.b2cus00002")}</p>
+                <p className="mt-2 text-caption text-muted-foreground">
+                  {translateNow("source.endpoint.key.custody.summary.b2cus00003", {
+                    value1: String(keyCustody.summary.host_generated),
+                    value2: String(keyCustody.summary.targets),
+                    value3: String(keyCustody.summary.migrated_percent),
+                  })}
+                </p>
+              </div>
+              <div className="ui-panel overflow-x-auto">
+                <table className="ui-table min-w-[56rem]">
+                  <caption className="sr-only">{translateNow("source.endpoint.key.custody.caption.b2cus00004")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{translateNow("source.target.b2cus00005")}</th>
+                      <th scope="col">{translateNow("source.connector.b2cus00006")}</th>
+                      <th scope="col">{translateNow("source.key.generated.by.b2cus00007")}</th>
+                      <th scope="col">{translateNow("source.last.renewed.by.b2cus00012")}</th>
+                      <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {keyCustody.items.map((row) => (
+                      <tr key={row.target_id} className="align-top">
+                        <td className="font-mono text-xs">{row.name}</td>
+                        <td className="text-xs text-muted-foreground">{row.connector}</td>
+                        <td>
+                          {row.executor === "agent" ? (
+                            <span className="font-medium text-status-success">{translateNow("source.key.origin.host.agent.b2cus00008")}</span>
+                          ) : (
+                            /* Deliberately NOT styled as an error. A control-plane
+                           key is the supported path today; painting a working
+                           estate red teaches operators to ignore the colour. */
+                            <span className="text-muted-foreground">{translateNow("source.key.origin.control.plane.b2cus00009")}</span>
+                          )}
+                          <span className="mt-1 block text-xs text-muted-foreground">{row.detail}</span>
+                        </td>
+                        {/* Who last DID it, not who is responsible for it. A
+                            target is not bound to a named agent — claiming is by
+                            role — so an assignment column here would imply a
+                            guarantee this system does not make. */}
+                        <td className="text-xs text-muted-foreground">
+                          {row.last_executed_by_agent ? (
+                            <>
+                              <span className="font-mono">{row.last_executed_by_agent}</span>
+                              {row.last_executed_at ? <span className="mt-1 block">{formatDateTime(row.last_executed_at)}</span> : null}
+                            </>
+                          ) : (
+                            translateNow("source.not.observed.b2cus00013")
+                          )}
+                        </td>
+                        <td className="text-xs text-muted-foreground">
+                          {row.enabled ? translateNow("source.enabled.b2cus00010") : translateNow("source.disabled.b2cus00011")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
+
+          {endpointVerifications.length > 0 ? (
+            <section aria-labelledby="endpoint-verification-heading" className="space-y-3">
+              <div>
+                <h2 id="endpoint-verification-heading" className="text-title font-semibold">
+                  {translateNow("source.endpoint.verification.d2ver00001")}
+                </h2>
+                <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{translateNow("source.endpoint.verification.help.d2ver00002")}</p>
+              </div>
+              <div className="ui-panel overflow-x-auto">
+                <table className="ui-table min-w-[72rem]">
+                  <caption className="sr-only">{translateNow("source.endpoint.verification.caption.d2ver00003")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{translateNow("source.endpoint.d2ver00004")}</th>
+                      <th scope="col">{translateNow("source.vantage.d2ver00005")}</th>
+                      <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+                      <th scope="col">{translateNow("source.checked.d2ver00006")}</th>
+                      <th scope="col">{translateNow("source.last.good.d2ver00007")}</th>
+                      <th scope="col">{translateNow("source.last.checked.d2ver00008")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {endpointVerifications.map((row) => (
+                      <tr key={`${row.endpoint_id}:${row.vantage}`} className="align-top">
+                        <td className="font-mono text-xs">{row.address}</td>
+                        <td>{row.vantage === "local" ? translateNow("source.vantage.local.d2ver00009") : translateNow("source.vantage.relay.d2ver00010")}</td>
+                        <td className="max-w-[24rem]">
+                          {row.status === "verified" ? (
+                            <span className="font-medium text-status-success">{translateNow("source.verified.d2ver00011")}</span>
+                          ) : row.status === "unreachable" ? (
+                            <span className="text-status-warning">{translateNow("source.unreachable.d2ver00012")}</span>
+                          ) : (
+                            <span className="font-medium text-destructive">
+                              {row.mismatch
+                                ? translateNow("source.diverged.class.d2ver00018", { value1: row.mismatch })
+                                : translateNow("source.diverged.d2ver00013")}
+                            </span>
+                          )}
+                          {row.detail ? <span className="mt-1 block text-xs text-muted-foreground">{row.detail}</span> : null}
+                        </td>
+                        {/* What was actually compared. A "verified" that only
                         matched a fingerprint is a narrower claim than one that
                         also checked the name set and chain, and the surface
                         says which rather than letting the reader assume. */}
-                    <td className="text-xs text-muted-foreground">
-                      {[
-                        translateNow("source.checked.fingerprint.d2ver00014"),
-                        row.checked_sans ? translateNow("source.checked.names.d2ver00015") : null,
-                        row.checked_chain ? translateNow("source.checked.chain.d2ver00016") : null,
-                      ]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </td>
-                    {/* Never good is a much stronger statement than "not
+                        <td className="text-xs text-muted-foreground">
+                          {[
+                            translateNow("source.checked.fingerprint.d2ver00014"),
+                            row.checked_sans ? translateNow("source.checked.names.d2ver00015") : null,
+                            row.checked_chain ? translateNow("source.checked.chain.d2ver00016") : null,
+                          ]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </td>
+                        {/* Never good is a much stronger statement than "not
                         recently", and it reads as one. */}
-                    <td>
-                      {row.last_good_at ? (
-                        formatDateTimePolicy(row.last_good_at)
-                      ) : (
-                        <span className="font-medium text-destructive">{translateNow("source.never.verified.d2ver00017")}</span>
-                      )}
-                    </td>
-                    <td className="text-muted-foreground">{row.last_checked_at ? formatDateTimePolicy(row.last_checked_at) : "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
+                        <td>
+                          {row.last_good_at ? (
+                            formatDateTimePolicy(row.last_good_at)
+                          ) : (
+                            <span className="font-medium text-destructive">{translateNow("source.never.verified.d2ver00017")}</span>
+                          )}
+                        </td>
+                        <td className="text-muted-foreground">{row.last_checked_at ? formatDateTimePolicy(row.last_checked_at) : "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
 
           <div>
             <h2 id="delivery-receipts-heading" className="text-title font-semibold">

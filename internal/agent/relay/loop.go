@@ -55,6 +55,12 @@ func ClaimableKinds() []string {
 	return []string{
 		"connector.deploy", "connector.test", KindConnectorRollback,
 		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindEndpointVerify,
+		// B2: host-generated renewal. Asked for by every agent and granted only
+		// to host-role ones — the vantage gate is the server's, not the agent's,
+		// which is why this list is not split by role. A network relay asking
+		// for it is refused and the reach recorded, exactly as it already is for
+		// the three network-only kinds above when a host agent asks.
+		KindEndpointRenew,
 	}
 }
 
@@ -136,6 +142,15 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// (D2).
 	if job.Kind == KindEndpointVerify {
 		return runEndpointVerify(ctx, ch, job)
+	}
+	// B2: a host-generated renewal redeems NOTHING. It is routed before the
+	// credential step because there is no credential to redeem — the key it
+	// installs does not exist yet, and this agent is about to make it. A
+	// renewal that fell through to the deploy path would burn the attempt's one
+	// redemption asking for material the control plane deliberately does not
+	// hold.
+	if job.Kind == KindEndpointRenew {
+		return runHostRenew(ctx, ch, hostProfile, job)
 	}
 
 	// A rollback carries a rollback intent, not a deploy intent — no

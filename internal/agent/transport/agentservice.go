@@ -196,6 +196,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodClaimJobs, Handler: claimJobsHandler},
 		{MethodName: methodReportJobResult, Handler: reportJobResultHandler},
 		{MethodName: methodRedeemJobCredential, Handler: redeemJobCredentialHandler},
+		{MethodName: methodSignJobCSR, Handler: signJobCSRHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",
@@ -576,6 +577,46 @@ type AgentJobServiceServer interface {
 	ClaimJobs(ctx context.Context, req *ClaimJobsRequest) (*ClaimJobsResponse, error)
 	ReportJobResult(ctx context.Context, req *ReportJobResultRequest) (*ReportJobResultResponse, error)
 	RedeemJobCredential(ctx context.Context, req *RedeemJobCredentialRequest) (*RedeemJobCredentialResponse, error)
+	// SignJobCSR signs a subject CSR the agent generated for a job it holds
+	// (epic B2). It is the direction-reversal that makes host-generated keys
+	// possible: everything else on this service sends material DOWN to an
+	// agent, and this sends a public request UP.
+	SignJobCSR(ctx context.Context, req *SignJobCSRRequest) (*SignJobCSRResponse, error)
+}
+
+// SignJobCSRRequest carries a PKCS#10 the agent built from a key it generated
+// locally (epic B2).
+//
+// It carries no key and cannot: a CSR is the public half plus the requested
+// names. That is the entire point — the previous flow shipped a private key
+// down to the agent, and this replaces it with a public request coming up.
+type SignJobCSRRequest struct {
+	// JobID scopes the request to work this agent actually holds. The control
+	// plane re-reads the job's own payload to decide what may be certified, so
+	// an agent cannot widen its request by asking for extra names: the CSR's
+	// subject is validated against the binding the job was queued for, not
+	// taken on trust.
+	JobID int64 `json:"job_id"`
+	// Attempt is the claim generation, so a CSR from a lapsed lease cannot be
+	// signed after the work has been reassigned.
+	Attempt int `json:"attempt"`
+	// CSRDER is the PKCS#10, DER-encoded.
+	CSRDER []byte `json:"csr_der"`
+}
+
+// SignJobCSRResponse returns the issued chain.
+//
+// Certificate material only. There is no key field and there must never be one:
+// a response shape that could carry a key would make the security property of
+// this epic a convention rather than a structure.
+type SignJobCSRResponse struct {
+	// CertificatePEM is the issued leaf, PEM-encoded.
+	CertificatePEM []byte `json:"certificate_pem"`
+	// ChainPEM is the issuer chain to serve alongside it.
+	ChainPEM []byte `json:"chain_pem,omitempty"`
+	// Fingerprint is the SHA-256 of the leaf, so the agent can verify against
+	// exactly what was issued without re-deriving it.
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 // gRPC method names and their full paths. "RedeemJobCredential" names an RPC;
@@ -591,6 +632,11 @@ const (
 	fullMethodClaimJobs           = "/" + agentServiceName + "/" + methodClaimJobs
 	fullMethodReportJobResult     = "/" + agentServiceName + "/" + methodReportJobResult
 	fullMethodRedeemJobCredential = "/" + agentServiceName + "/" + methodRedeemJobCredential
+	// #nosec G101 -- an RPC method name. This call carries a CSR up and returns
+	// certificates down; no key material crosses it in either direction, which
+	// is the entire point of epic B2 (CWE-798).
+	methodSignJobCSR     = "SignJobCSR"
+	fullMethodSignJobCSR = "/" + agentServiceName + "/" + methodSignJobCSR
 )
 
 func claimJobsHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -631,6 +677,25 @@ func redeemJobCredentialHandler(srv any, ctx context.Context, dec func(any) erro
 	return interceptor(ctx, in, info, handler)
 }
 
+func signJobCSRHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(SignJobCSRRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	jobs, ok := srv.(AgentJobServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not serve the agent job ledger")
+	}
+	if interceptor == nil {
+		return jobs.SignJobCSR(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodSignJobCSR}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return jobs.SignJobCSR(ctx, req.(*SignJobCSRRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func reportJobResultHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ReportJobResultRequest)
 	if err := dec(in); err != nil {
@@ -667,6 +732,20 @@ func (c *AgentClient) ClaimJobs(ctx context.Context, req *ClaimJobsRequest) (*Cl
 func (c *AgentClient) RedeemJobCredential(ctx context.Context, req *RedeemJobCredentialRequest) (*RedeemJobCredentialResponse, error) {
 	out := new(RedeemJobCredentialResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodRedeemJobCredential, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SignJobCSR sends a locally generated CSR up to be signed (epic B2).
+//
+// The request carries a PKCS#10 and a job reference. It cannot carry a key, and
+// the response cannot return one: that structural fact is what lets an operator
+// say the private half never left the host and have it be true rather than a
+// promise about how the code is used.
+func (c *AgentClient) SignJobCSR(ctx context.Context, req *SignJobCSRRequest) (*SignJobCSRResponse, error) {
+	out := new(SignJobCSRResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodSignJobCSR, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

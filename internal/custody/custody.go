@@ -22,7 +22,10 @@
 // exactly that, and it is a different claim from any of the others.
 package custody
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // KeyOrigin says whose process generated the private key.
 type KeyOrigin string
@@ -196,4 +199,48 @@ func ValidExportability(v Exportability) bool {
 	default:
 		return false
 	}
+}
+
+// Which process generates a deployment target's subject key (epic B2).
+//
+// This lives here rather than in internal/server or internal/api because BOTH
+// need it and neither may import the other: the control plane decides the path,
+// the console reports it, and the two must agree exactly. A copy in each package
+// was the first shape of this and it was wrong — not because duplication is
+// untidy, but because a console that read the marker differently would report a
+// target as migrated while the control plane kept sending it keys, which is
+// precisely the false claim this epic exists to make impossible.
+//
+// One definition, imported twice, cannot drift.
+
+// ExecutorConfigKey is the deployment-target config key naming the executor.
+const ExecutorConfigKey = "executor"
+
+// ExecutorAgent is the value that opts a target into host-generated keys.
+const ExecutorAgent = "agent"
+
+// TargetExecutorIsAgent reports whether a target's config opts it into
+// host-generated keys.
+//
+// Absent means no, and so does unparseable. A target whose config predates this
+// feature must not change behaviour because a new version shipped, and the
+// failure direction is the one that matters: reading "agent" from a config that
+// does not say it would both refuse that target's deploys and report it as
+// migrated when it is not.
+//
+// The value must be a STRING. A config with `executor: true` is an error, and
+// coercing it to consent would migrate a target its operator never marked.
+func TargetExecutorIsAgent(cfg []byte) bool {
+	if len(cfg) == 0 {
+		return false
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(cfg, &fields); err != nil {
+		return false
+	}
+	v, ok := fields[ExecutorConfigKey].(string)
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(v), ExecutorAgent)
 }

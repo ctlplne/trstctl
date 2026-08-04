@@ -219,6 +219,19 @@ type agentService struct {
 	// redemption time (epic A3). Nil means the channel serves everything except
 	// RedeemJobCredential, which fails closed as unconfigured.
 	relayCredentials *relayCredentialResolver
+	// signSubjectCSR signs a CSR an agent generated for a job it holds (epic
+	// B2). Nil means host-generated renewal is not served and SignJobCSR fails
+	// closed — the same shape as relayCredentials, for the same reason: a
+	// control plane that cannot issue must say so rather than appear to.
+	//
+	// The permitted set is passed in already derived from the job payload, so
+	// the signing side cannot be handed names the caller did not authorize.
+	signSubjectCSR func(ctx context.Context, tenantID string, job store.AgentJobForRedemption, jobID int64, csrDER []byte, permitted []string, attempt int) (*transport.SignJobCSRResponse, error)
+	// completeHostRenewal moves an identity out of StateRenewing once a host
+	// agent reports its renewal finished (epic B2). Nil means the transition is
+	// not completed and the identity would stay in renewing forever, so this is
+	// wired unconditionally in the served assembly rather than being optional.
+	completeHostRenewal func(ctx context.Context, tenantID string, payload []byte, outcome string)
 	// recordDryRun turns a relay's reported plan into a delivery receipt (epic
 	// D5). Nil means dry-run receipts are not recorded and the plan lives only
 	// in the event log.

@@ -146,7 +146,21 @@ func TestShippedRelayJobKindsAreExecutableByTheBinary(t *testing.T) {
 		// reads public distribution points and drives no connector at all, and
 		// demanding a fake one would be the kind of paperwork that teaches
 		// people to write fake entries.
-		connectorWork := strings.HasPrefix(kind.Kind, "connector.")
+		//
+		// Membership is an explicit list, not the "connector." name prefix it
+		// used to be. B2's endpoint.renew installs through the same host
+		// connectors a deploy does — it is connector work under a different
+		// name — and a prefix rule would have forced the census to either hide
+		// that or lie about it. The list keeps the guard's teeth: a kind that
+		// names connectors without being listed here still fails, so adding one
+		// stays a deliberate, reviewable act.
+		connectorDriving := map[string]bool{
+			"connector.deploy":          true,
+			relay.KindConnectorTest:     true,
+			relay.KindConnectorRollback: true,
+			relay.KindEndpointRenew:     true,
+		}
+		connectorWork := connectorDriving[kind.Kind]
 		if connectorWork && len(kind.Connectors) == 0 {
 			t.Errorf("connector job kind %q declares no connectors; a kind with no executor is not shipped", kind.Kind)
 		}

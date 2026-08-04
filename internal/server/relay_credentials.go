@@ -255,6 +255,70 @@ type RelayDeployIntent struct {
 	// attempt, so an agent can refuse work it has no executor for before
 	// redeeming anything.
 	CredentialRefs []string `json:"credential_refs,omitempty"`
+	// VerifyAddress and VerifyServerName carry the listener the agent should
+	// handshake after deploying (epic D2).
+	//
+	// These were missing until now, which made D2's local post-deploy
+	// verification unreachable in production: the agent read the field, the
+	// field was never populated, and every deploy therefore reported "executed"
+	// rather than verified. The capability shipped and never ran — the same
+	// defect class D2 exists to remove, one layer up.
+	//
+	// The value is operator configuration on the deployment target, because it
+	// cannot be derived: TargetConfig.Endpoint is an appliance's MANAGEMENT
+	// API, and Target is a connector routing string. An absent address still
+	// means no verification and no claim of one.
+	VerifyAddress    string `json:"verify_address,omitempty"`
+	VerifyServerName string `json:"verify_server_name,omitempty"`
+	// SubjectCommonName and SubjectDNSNames are the binding a host-generated
+	// renewal may certify (epic B2). Populated for endpoint.renew only.
+	//
+	// They are the AUTHORIZATION for SignJobCSR, not a hint to the agent: the
+	// control plane re-reads them from this payload when the CSR comes back up
+	// and refuses any name outside the set. An agent may generate whatever key
+	// it likes; it may not choose what that key gets to be called.
+	SubjectCommonName string   `json:"subject_common_name,omitempty"`
+	SubjectDNSNames   []string `json:"subject_dns_names,omitempty"`
+	// PredecessorCertificateID is the certificate this renewal replaces (B2).
+	//
+	// It travels in the payload because the control plane must know it when the
+	// agent's CSR arrives, and by then the renewal that chose it is long over.
+	// Without it the issued certificate is recorded with no ReplacesID, the
+	// predecessor is never marked superseded, and the identity reads as having
+	// two active certificates — so expiry alerts, fleet counts and the D3
+	// three-state view all describe an estate that does not exist.
+	//
+	// Empty on a first issuance, which genuinely replaces nothing.
+	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
+}
+
+// verifyAddressKey and verifyServerNameKey are the deployment-target config
+// keys an operator sets to enable post-deploy verification (epic D2).
+const (
+	verifyAddressKey    = "verify_address"
+	verifyServerNameKey = "verify_server_name"
+)
+
+// verifyTargetFromConfig reads the listener address an operator configured.
+//
+// Absent yields empty, which disables verification for that target rather than
+// guessing. A guessed address produces confident, wrong verification records —
+// the one outcome worse than no verification at all.
+func verifyTargetFromConfig(raw json.RawMessage) (address, serverName string) {
+	if len(raw) == 0 {
+		return "", ""
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return "", ""
+	}
+	if v, ok := fields[verifyAddressKey].(string); ok {
+		address = strings.TrimSpace(v)
+	}
+	if v, ok := fields[verifyServerNameKey].(string); ok {
+		serverName = strings.TrimSpace(v)
+	}
+	return address, serverName
 }
 
 // relayDeployIntentFromSealed reads the PUBLIC envelope of a sealed connector
@@ -278,11 +342,14 @@ func relayDeployIntentFromSealed(job store.AgentJob) (RelayDeployIntent, error) 
 			// Defensive: an unsealed payload must never carry key material.
 			return RelayDeployIntent{}, errors.New("unsealed connector job carries key material")
 		}
+		addr, sni := verifyTargetFromConfig(plain.TargetConfig)
 		return RelayDeployIntent{
 			Connector: plain.Connector, Target: plain.Target, TargetID: plain.TargetID,
 			Revision: plain.TargetRevision, IdentityID: plain.IdentityID,
 			Fingerprint: plain.Fingerprint, TargetConfig: plain.TargetConfig,
-			CredentialRefs: collectSecretRefs(plain.TargetConfig),
+			CredentialRefs:   collectSecretRefs(plain.TargetConfig),
+			VerifyAddress:    addr,
+			VerifyServerName: sni,
 		}, nil
 	}
 	// Sealed: the routing fields ride outside the seal precisely so this
@@ -291,15 +358,18 @@ func relayDeployIntentFromSealed(job store.AgentJob) (RelayDeployIntent, error) 
 	// before redeeming anything.
 	refs := []string{"credential.cert_pem", "credential.key_pem"}
 	refs = append(refs, collectSecretRefs(wrapped.TargetConfig)...)
+	sealedAddr, sealedSNI := verifyTargetFromConfig(wrapped.TargetConfig)
 	return RelayDeployIntent{
-		Connector:      strings.TrimSpace(wrapped.Connector),
-		Target:         strings.TrimSpace(wrapped.Target),
-		TargetID:       strings.TrimSpace(wrapped.TargetID),
-		Revision:       strings.TrimSpace(wrapped.Revision),
-		IdentityID:     strings.TrimSpace(wrapped.IdentityID),
-		Fingerprint:    strings.TrimSpace(wrapped.Fingerprint),
-		TargetConfig:   append(json.RawMessage(nil), wrapped.TargetConfig...),
-		CredentialRefs: refs,
+		Connector:        strings.TrimSpace(wrapped.Connector),
+		Target:           strings.TrimSpace(wrapped.Target),
+		TargetID:         strings.TrimSpace(wrapped.TargetID),
+		Revision:         strings.TrimSpace(wrapped.Revision),
+		IdentityID:       strings.TrimSpace(wrapped.IdentityID),
+		Fingerprint:      strings.TrimSpace(wrapped.Fingerprint),
+		TargetConfig:     append(json.RawMessage(nil), wrapped.TargetConfig...),
+		CredentialRefs:   refs,
+		VerifyAddress:    sealedAddr,
+		VerifyServerName: sealedSNI,
 	}, nil
 }
 

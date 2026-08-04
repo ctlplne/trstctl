@@ -1490,6 +1490,28 @@ func componentSchemas() map[string]*Schema {
 		"summary":  ref("EndpointVerificationSummary"),
 		"guidance": str(),
 	}, "items", "summary", "guidance")
+	// B2: where each deployment target's private key is generated.
+	endpointKeyCustody := object(map[string]*Schema{
+		"target_id": str(), "name": str(), "connector": str(),
+		"executor":                      {Type: "string", Enum: []string{"agent", "control_plane"}},
+		"origin":                        {Type: "string", Enum: []string{"host_agent", "control_plane"}},
+		"key_bytes_leave_control_plane": {Type: "boolean"},
+		"enabled":                       {Type: "boolean"},
+		"detail":                        str(),
+		"last_executed_by_agent":        str(),
+		"last_executed_at":              timestamp(),
+		"last_executed_outcome":         str(),
+	}, "target_id", "name", "connector", "executor", "origin",
+		"key_bytes_leave_control_plane", "enabled", "detail")
+	endpointCustodySummary := object(map[string]*Schema{
+		"targets": {Type: "integer"}, "host_generated": {Type: "integer"},
+		"control_plane_generated": {Type: "integer"}, "migrated_percent": {Type: "integer"},
+	}, "targets", "host_generated", "control_plane_generated", "migrated_percent")
+	endpointKeyCustodyList := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("EndpointKeyCustody")},
+		"summary":  ref("EndpointCustodySummary"),
+		"guidance": str(),
+	}, "items", "summary", "guidance")
 	// R2: what each authority can actually do through trstctl.
 	issuerCapability := object(map[string]*Schema{
 		"issuer": str(), "discover": {Type: "boolean"}, "issue": {Type: "boolean"},
@@ -3954,6 +3976,9 @@ func componentSchemas() map[string]*Schema {
 		"EndpointVerification":                     endpointVerification,
 		"EndpointVerificationSummary":              endpointVerificationSummary,
 		"EndpointVerificationList":                 endpointVerificationList,
+		"EndpointKeyCustody":                       endpointKeyCustody,
+		"EndpointCustodySummary":                   endpointCustodySummary,
+		"EndpointKeyCustodyList":                   endpointKeyCustodyList,
 		"ACMEUpstreamAuthorizationList":            acmeUpstreamAuthorizationList,
 		"IssuerCapability":                         issuerCapability,
 		"IssuerCapabilityMatrix":                   issuerCapabilityMatrix,

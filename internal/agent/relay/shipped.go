@@ -45,6 +45,20 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags:      []string{"--relay-claim", "--host-exec-profile"},
 		},
 		{
+			// B2: host-generated renewal. HOST connectors only, and that is the
+			// whole point of it being a distinct kind rather than a flag on
+			// connector.deploy: the key is generated on the machine that will
+			// serve it, so a vantage that merely reaches the target cannot
+			// perform this work at all.
+			//
+			// It redeems no credential, because the credential does not exist
+			// until this agent makes it. That is the one kind in this census
+			// whose material flows UP.
+			Kind:       KindEndpointRenew,
+			Connectors: HostConnectorKinds(),
+			Flags:      []string{"--relay-claim", "--host-exec-profile"},
+		},
+		{
 			// D5: the dry-run. Same connectors, same credential redemption, and
 			// deliberately never connector.Run — zero writes is structural here,
 			// not a promise, because the mutating path is not on it.

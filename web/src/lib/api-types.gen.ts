@@ -1800,6 +1800,33 @@ export interface EndpointBindingRequest {
   target_id?: string;
 }
 
+export interface EndpointCustodySummary {
+  control_plane_generated: number;
+  host_generated: number;
+  migrated_percent: number;
+  targets: number;
+}
+
+export interface EndpointKeyCustody {
+  connector: string;
+  detail: string;
+  enabled: boolean;
+  executor: "agent" | "control_plane";
+  key_bytes_leave_control_plane: boolean;
+  last_executed_at?: string;
+  last_executed_by_agent?: string;
+  last_executed_outcome?: string;
+  name: string;
+  origin: "host_agent" | "control_plane";
+  target_id: string;
+}
+
+export interface EndpointKeyCustodyList {
+  guidance: string;
+  items: EndpointKeyCustody[];
+  summary: EndpointCustodySummary;
+}
+
 export interface EndpointVerification {
   address: string;
   agent_common_name?: string;

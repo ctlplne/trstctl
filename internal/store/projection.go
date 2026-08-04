@@ -120,12 +120,19 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		`INSERT INTO certificates
 		        (id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint,
 		         key_algorithm, not_before, not_after, deployment_location, source, certificate_der, certificate_pem, issuance_response,
-		         issuance_idempotency_key, issuance_request_binding, replaces_id, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		         issuance_idempotency_key, issuance_request_binding, replaces_id, created_at,
+		         -- B5/B2: whose process generated this certificate's private key.
+		         -- The column existed and the issuing paths set the value, but
+		         -- this INSERT never listed it, so every projected certificate
+		         -- recorded an empty custody origin. A custody claim that lives
+		         -- in the code and not in the row is not auditable, which is the
+		         -- entire reason the column exists.
+		         key_origin)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 		 ON CONFLICT DO NOTHING`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
-		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID, c.CreatedAt)
+		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID, c.CreatedAt, c.KeyOrigin)
 	if err != nil {
 		return err
 	}

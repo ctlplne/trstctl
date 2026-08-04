@@ -4,6 +4,8 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -461,5 +463,133 @@ func TestAClosedMaintenanceWindowDefersRatherThanDropsRenewals(t *testing.T) {
 	}
 	if !set.Allows(sunday) {
 		t.Error("the window did not open on the day it names, so held work would never resume")
+	}
+}
+
+// The control plane must actually EMIT the verification address (epic D2).
+//
+// This is a defect the B2 seam map found in D2's own wiring: the agent read
+// DeployIntent.VerifyAddress and nothing ever populated it, so post-deploy
+// verification — the only observation that a reload took effect — shipped and
+// never ran. Every deploy reported "executed" rather than verified, which is
+// precisely the defect class D2 exists to remove, one layer up.
+//
+// Worse than the missing behaviour was the documentation: limitations.md
+// described verification as opt-in per target via a configured listener
+// address, and there was no way for an operator to configure one.
+func TestTheDeployIntentCarriesTheConfiguredVerificationAddress(t *testing.T) {
+	t.Parallel()
+
+	cfg := json.RawMessage(`{"cert_path":"/etc/nginx/server.crt","verify_address":"api.example.test:443","verify_server_name":"api.example.test"}`)
+	addr, sni := verifyTargetFromConfig(cfg)
+	if addr != "api.example.test:443" {
+		t.Fatalf("verify address = %q; without it the agent's post-deploy handshake never runs "+
+			"and every deploy reports executed rather than verified", addr)
+	}
+	if sni != "api.example.test" {
+		t.Errorf("verify server name = %q", sni)
+	}
+
+	// A target that configured nothing yields nothing — verification stays off
+	// rather than guessing an address, because a guessed address produces
+	// confident, wrong records.
+	noneAddr, noneSNI := verifyTargetFromConfig(json.RawMessage(`{"cert_path":"/etc/nginx/server.crt"}`))
+	if noneAddr != "" || noneSNI != "" {
+		t.Errorf("an unconfigured target produced address %q / sni %q; a guessed listener address "+
+			"is worse than no verification", noneAddr, noneSNI)
+	}
+
+	// Malformed config disables verification rather than failing the deploy.
+	if a, _ := verifyTargetFromConfig(json.RawMessage(`{not json`)); a != "" {
+		t.Error("unparseable target config produced a verification address")
+	}
+}
+
+// A CSR-first identity must stay CSR-first through renewal (epic B2).
+//
+// This closed a custody regression that ran on a timer. B1 made first issuance
+// CSR-first; renewal called the control-plane keygen path unconditionally. So an
+// operator who enrolled with a CSR — key generated on their host, never sent —
+// silently received a control-plane-generated key on their first renewal, 30 to
+// 90 days later, with nothing announcing it. The renewal path did not even emit
+// the server-side-keygen deprecation event that the issue path emits.
+//
+// Custody that degrades automatically is worse than custody never claimed,
+// because the claim outlives the property: the enrollment receipt still says the
+// key never left the host, and by then it has.
+func TestARenewalHonoursTheIdentitysRecordedCSR(t *testing.T) {
+	t.Parallel()
+
+	withCSR := store.Identity{
+		Name:       "api.example.test",
+		Attributes: json.RawMessage(`{"subject_csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\nMIIB\n-----END CERTIFICATE REQUEST-----"}`),
+	}
+	if got := subjectCSRFromIdentity(withCSR); got == "" {
+		t.Fatal("an identity carrying a recorded CSR reported none; the renewal path would fall " +
+			"back to control-plane keygen and silently take custody of a key the operator holds")
+	}
+
+	// An identity that never supplied one reports none, and the renewal
+	// legitimately generates — that changes nothing about its custody.
+	without := store.Identity{Name: "api.example.test", Attributes: json.RawMessage(`{}`)}
+	if got := subjectCSRFromIdentity(without); got != "" {
+		t.Errorf("an identity with no CSR reported %q", got)
+	}
+
+	// Malformed attributes mean no CSR rather than a failed renewal: a renewal
+	// that refused to run because an attribute blob was unreadable would turn a
+	// cosmetic problem into an expiry.
+	malformed := store.Identity{Name: "api.example.test", Attributes: json.RawMessage(`{not json`)}
+	if got := subjectCSRFromIdentity(malformed); got != "" {
+		t.Errorf("malformed attributes produced a CSR %q", got)
+	}
+}
+
+// An agent-executed target REFUSES key bytes rather than degrading (epic B2).
+//
+// B2's value is a negative property — private key bytes stop travelling from
+// the control plane to the host — and a negative property is only worth
+// anything if it cannot be silently violated. A migration that "prefers" the
+// host-generated path but falls back to shipping a key would give an estate
+// that believes it moved and did not: the receipts, the custody column and the
+// documentation would all say the key never left, and on some targets it would
+// still be leaving.
+func TestAnAgentExecutedTargetRefusesCredentialBearingDeploys(t *testing.T) {
+	t.Parallel()
+	agentTarget := json.RawMessage(`{"cert_path":"/etc/nginx/server.crt","executor":"agent"}`)
+	legacyTarget := json.RawMessage(`{"cert_path":"/etc/nginx/server.crt"}`)
+	key := []byte("-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----")
+
+	if err := enforceExecutorParity(agentTarget, key); !errors.Is(err, ErrCredentialBearingPathRefused) {
+		t.Fatalf("err = %v; a target marked executor=agent must refuse key bytes rather than "+
+			"quietly falling back to the legacy path", err)
+	}
+	// The refusal names what an operator has to do, because mid-migration this
+	// means the identity still has no CSR on record — not a transient fault to
+	// retry.
+	if err := enforceExecutorParity(agentTarget, key); err != nil {
+		for _, want := range []string{"executor=agent", "subject CSR", "re-enroll"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("refusal does not mention %q: %v", want, err)
+			}
+		}
+	}
+
+	// A certificate-only deploy is exactly what such a target should get.
+	if err := enforceExecutorParity(agentTarget, nil); err != nil {
+		t.Errorf("a key-less deploy to an agent-executed target was refused: %v", err)
+	}
+
+	// Partial migration: targets not marked keep working precisely as before.
+	// This is the property that makes migrating a few at a time safe.
+	if err := enforceExecutorParity(legacyTarget, key); err != nil {
+		t.Errorf("an unmarked target refused the legacy path: %v — a global cutover would force "+
+			"all-or-nothing on exactly the systems least able to take one", err)
+	}
+
+	// An absent or unparseable config never changes behaviour on upgrade.
+	if targetExecutorIsAgent(nil) || targetExecutorIsAgent(json.RawMessage(`{not json`)) {
+		t.Error("a target with no or malformed config was treated as agent-executed; on upgrade " +
+			"that would refuse deploys across an entire estate")
 	}
 }

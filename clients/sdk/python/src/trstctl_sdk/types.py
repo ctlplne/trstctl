@@ -2566,6 +2566,45 @@ EndpointBindingRequest = TypedDict(
     total=False,
 )
 
+EndpointCustodySummary = TypedDict(
+    'EndpointCustodySummary',
+    {
+        'control_plane_generated': int,
+        'host_generated': int,
+        'migrated_percent': int,
+        'targets': int,
+    },
+    total=False,
+)
+
+EndpointKeyCustody = TypedDict(
+    'EndpointKeyCustody',
+    {
+        'connector': str,
+        'detail': str,
+        'enabled': bool,
+        'executor': str,
+        'key_bytes_leave_control_plane': bool,
+        'last_executed_at': str,
+        'last_executed_by_agent': str,
+        'last_executed_outcome': str,
+        'name': str,
+        'origin': str,
+        'target_id': str,
+    },
+    total=False,
+)
+
+EndpointKeyCustodyList = TypedDict(
+    'EndpointKeyCustodyList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
 EndpointVerification = TypedDict(
     'EndpointVerification',
     {

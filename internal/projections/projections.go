@@ -255,6 +255,19 @@ type CertificateRecorded struct {
 	IssuanceResponse       []byte     `json:"issuance_response,omitempty"`
 	IssuanceIdempotencyKey string     `json:"issuance_idempotency_key,omitempty"`
 	IssuanceRequestBinding string     `json:"issuance_request_binding,omitempty"`
+	// KeyOrigin records whose process generated this certificate's private key
+	// (epic B5's vocabulary, internal/custody).
+	//
+	// It travels in the EVENT, not merely on the struct the issuing code built.
+	// It was previously absent here, so every issuing path that set
+	// Certificate.KeyOrigin — the CSR-first mint, and B2's host-generated
+	// renewal — had the value silently dropped at the projection boundary and
+	// wrote an empty column. The custody claim existed in the code and in the
+	// documentation and nowhere an auditor could read it.
+	//
+	// Event-sourced state means a Rebuild() must reproduce it too, which is the
+	// other reason it belongs on the event rather than being written directly.
+	KeyOrigin string `json:"key_origin,omitempty"`
 }
 
 // CertificateRevoked is the payload of a certificate.revoked event. The
@@ -1899,6 +1912,10 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			IssuanceResponse:       pl.IssuanceResponse,
 			IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey, IssuanceRequestBinding: pl.IssuanceRequestBinding,
 			ReplacesID: pl.ReplacesID, CreatedAt: e.Time,
+			// B5/B2: the custody claim is projected like any other field, so a
+			// Rebuild() reproduces it. Without this the column stayed empty no
+			// matter what the issuing path recorded.
+			KeyOrigin: pl.KeyOrigin,
 		}); err != nil {
 			return err
 		}

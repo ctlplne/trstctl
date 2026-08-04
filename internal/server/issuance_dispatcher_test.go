@@ -1140,6 +1140,11 @@ func newIssuanceDispatcherHarness(t *testing.T) *issuanceDispatcherHarness {
 			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), nil
 		},
 		orch: orch, idem: idem, store: st, log: log,
+		// B2: the dispatcher queues endpoint.renew work for agent-executed
+		// targets, so the harness needs the same outbox the served binary wires.
+		// Without it that branch fails closed — correctly, but invisibly to any
+		// test that never reaches it.
+		outbox: outbox,
 	}
 	h := &issuanceDispatcherHarness{
 		store: st, log: log, outbox: outbox, orch: orch, handler: handler,

@@ -44,6 +44,10 @@ func (stubAgentChannelService) RedeemJobCredential(context.Context, *transport.R
 	return &transport.RedeemJobCredentialResponse{}, nil
 }
 
+func (stubAgentChannelService) SignJobCSR(context.Context, *transport.SignJobCSRRequest) (*transport.SignJobCSRResponse, error) {
+	return &transport.SignJobCSRResponse{}, nil
+}
+
 func TestAgentBulkheadShedsWithoutStarvingOtherSubsystems(t *testing.T) {
 	set := bulkhead.NewSet(
 		bulkhead.Config{Name: bulkhead.SubsystemAgent, Workers: 1, Queue: 0},

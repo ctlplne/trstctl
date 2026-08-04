@@ -7540,7 +7540,8 @@
         "listConnectorDeliveries",
         "getConnectorDelivery",
         "listOutboxCircuits",
-        "listEndpointVerifications"
+        "listEndpointVerifications",
+        "listEndpointKeyCustody"
       ],
       "api_na": "",
       "cli_surface": [
@@ -7557,7 +7558,8 @@
         "connectors deliveries list",
         "connectors deliveries get",
         "connectors outbox-circuits",
-        "endpoints verifications"
+        "endpoints verifications",
+        "endpoints key-custody"
       ],
       "cli_na": "",
       "facet_evidence": {

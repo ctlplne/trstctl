@@ -1618,6 +1618,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/endpoints/key-custody": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List where each deployment target's private key is generated: host agent or control plane */
+        get: operations["listEndpointKeyCustody"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/endpoints/verifications": {
         parameters: {
             query?: never;
@@ -6301,6 +6318,33 @@ export interface components {
             target?: components["schemas"]["DeploymentTargetRequest"];
             /** Format: uuid */
             target_id?: string;
+        };
+        EndpointCustodySummary: {
+            control_plane_generated: number;
+            host_generated: number;
+            migrated_percent: number;
+            targets: number;
+        };
+        EndpointKeyCustody: {
+            connector: string;
+            detail: string;
+            enabled: boolean;
+            /** @enum {string} */
+            executor: "agent" | "control_plane";
+            key_bytes_leave_control_plane: boolean;
+            /** Format: date-time */
+            last_executed_at?: string;
+            last_executed_by_agent?: string;
+            last_executed_outcome?: string;
+            name: string;
+            /** @enum {string} */
+            origin: "host_agent" | "control_plane";
+            target_id: string;
+        };
+        EndpointKeyCustodyList: {
+            guidance: string;
+            items: components["schemas"]["EndpointKeyCustody"][];
+            summary: components["schemas"]["EndpointCustodySummary"];
         };
         EndpointVerification: {
             address: string;
@@ -14305,6 +14349,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EditionsInfo"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listEndpointKeyCustody: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointKeyCustodyList"];
                 };
             };
             /** @description client error */

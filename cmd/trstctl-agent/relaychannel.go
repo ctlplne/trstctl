@@ -89,3 +89,22 @@ func (r relayChannel) clock() time.Time {
 	}
 	return time.Now().UTC()
 }
+
+// SignJobCSR sends a locally generated CSR up for signing (epic B2).
+//
+// This method is what makes relayChannel satisfy relay.CSRSigner, and its
+// absence would be silent: the renewal executor checks for the interface and
+// refuses the work when it is missing, so a build without this method would
+// claim renewal jobs and fail every one of them with a message about the build
+// rather than about the estate. That is the D2 defect class — a capability
+// shipped and never reachable — which is exactly what this epic's sibling fix
+// went and repaired one layer up.
+func (r relayChannel) SignJobCSR(ctx context.Context, jobID int64, attempt int, csrDER []byte) ([]byte, []byte, string, error) {
+	resp, err := r.c.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: jobID, Attempt: attempt, CSRDER: csrDER,
+	})
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return resp.CertificatePEM, resp.ChainPEM, resp.Fingerprint, nil
+}

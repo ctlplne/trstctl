@@ -215,6 +215,13 @@ func currentAgentContract() agentContract {
 			"ClaimJobsResponse":         {Fields: jsonFieldsOf(ClaimJobsResponse{})},
 			"ReportJobResultRequest":    {Fields: jsonFieldsOf(ReportJobResultRequest{})},
 			"ReportJobResultResponse":   {Fields: jsonFieldsOf(ReportJobResultResponse{})},
+			// B2. Pinned in the contract for a reason beyond completeness: the
+			// security claim of host-generated renewal is that neither of these
+			// messages can carry a private key. A committed field list turns
+			// that from a property of today's struct into a change an author has
+			// to make deliberately, in a diff a reviewer will see.
+			"SignJobCSRRequest":  {Fields: jsonFieldsOf(SignJobCSRRequest{})},
+			"SignJobCSRResponse": {Fields: jsonFieldsOf(SignJobCSRResponse{})},
 		},
 	}
 }
@@ -233,6 +240,8 @@ func methodMessageTypes(method string) struct{ request, response string } {
 		return struct{ request, response string }{"ClaimJobsRequest", "ClaimJobsResponse"}
 	case methodReportJobResult:
 		return struct{ request, response string }{"ReportJobResultRequest", "ReportJobResultResponse"}
+	case methodSignJobCSR:
+		return struct{ request, response string }{"SignJobCSRRequest", "SignJobCSRResponse"}
 	default:
 		return struct{ request, response string }{"", ""}
 	}

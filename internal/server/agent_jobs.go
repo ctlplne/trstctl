@@ -67,7 +67,17 @@ var agentJobKindAllowlist = map[string]bool{
 	// rather than something the brain does itself.
 	"adcs.inventory":   true,
 	"trust.distribute": true,
+	// B2: host-generated renewal. The agent makes the key, sends a CSR up, and
+	// the control plane never holds the private half. Separate from
+	// connector.deploy on purpose — the two differ in custody, not in mechanics,
+	// and an operator migrating an estate needs to enable the custody change
+	// deliberately and target by target rather than have it arrive with a
+	// version bump.
+	agentJobKindEndpointRenew: true,
 }
+
+// agentJobKindEndpointRenew is the host-generated renewal kind (epic B2).
+const agentJobKindEndpointRenew = "endpoint.renew"
 
 // agentJobKindVantage declares, per job kind, which agent roles can execute it
 // (epic A2). This is what makes the role stamped in an agent's certificate mean
@@ -106,6 +116,12 @@ var agentJobKindVantage = map[string][]string{
 	"connector.deploy":   {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.rollback": {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.test":     {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+	// B2: HOST ONLY, and this one is not a judgement call. The kind exists so a
+	// private key is generated on the machine that will serve it; a network
+	// relay generating a key for an appliance it merely reaches would recreate
+	// the exact custody hop the epic removes, with an extra machine in the
+	// chain instead of one fewer.
+	agentJobKindEndpointRenew: {mtls.AgentRoleHost},
 }
 
 // agentRolePermitsKind reports whether an agent holding roles may execute kind.
@@ -407,6 +423,26 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
 		payload, _, _ := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
 		a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, payload)
+	}
+	// B2: a host-generated renewal reports the same three outcomes a deploy
+	// does, and needs the same two things done with them.
+	//
+	// The lifecycle transition is the load-bearing one. The dispatcher hands
+	// this renewal off and returns WITHOUT moving the identity out of
+	// StateRenewing — deliberately, because the certificate does not exist yet
+	// — so nothing else in the system will ever move it. An identity left in
+	// renewing is not merely mislabelled: the scheduler will not renew it
+	// again, so the endpoint silently stops being renewed and expires months
+	// later with every surface reporting the rotation as succeeded.
+	if destination == agentJobKindEndpointRenew {
+		payload, _, _ := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
+		if a.recordDeployVerification != nil &&
+			(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
+			a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, payload)
+		}
+		if a.completeHostRenewal != nil {
+			a.completeHostRenewal(ctx, info.TenantID, payload, req.Outcome)
+		}
 	}
 	// D2 + D4: the deploy applied and the listener is not serving it. That is
 	// the one condition under which a rollback is unambiguously the right

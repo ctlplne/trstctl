@@ -71,6 +71,19 @@ type DeployIntent struct {
 	// VerifyServerName overrides SNI when the listener answers to a name other
 	// than the address host — a virtual host behind an IP, most often.
 	VerifyServerName string `json:"verify_server_name,omitempty"`
+
+	// SubjectCommonName and SubjectDNSNames name what a host-generated renewal
+	// should certify (epic B2). Present on endpoint.renew only.
+	//
+	// They are an INSTRUCTION, not a grant. The control plane re-reads the same
+	// names from the job payload it queued when the CSR arrives and refuses
+	// anything outside that set, so an agent that edited these before building
+	// its CSR would get a refusal rather than a wider certificate.
+	SubjectCommonName string   `json:"subject_common_name,omitempty"`
+	SubjectDNSNames   []string `json:"subject_dns_names,omitempty"`
+	// PredecessorCertificateID is control-plane bookkeeping the agent never
+	// reads. It is declared so the intent round-trips without loss.
+	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
 }
 
 // TargetConfig is the relay-side view of a deployment target: the routing

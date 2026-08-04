@@ -109,6 +109,10 @@ type issuanceDispatcher struct {
 	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the
 	// audit emit but the deny still rejects.
 	log *events.Log
+	// chainPEM is the issuing CA chain returned alongside a certificate issued
+	// against an agent-generated CSR (epic B2). Empty is legitimate — the agent
+	// then serves the leaf alone, exactly as the sealed-deploy path did.
+	chainPEM []byte
 	// defaultProfile is the certificate-profile name enforced on the served mint
 	// when it resolves for the tenant (PKIGOV-002). Empty means no served-side
 	// profile binding, preserving the prior behavior.
@@ -421,6 +425,34 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err := d.admitIssuance(ctx, m, p, ident, "issue"); err != nil {
 			return nil, err
 		}
+		// B2: first issuance to an agent-executed target, with no CSR to honour.
+		//
+		// Narrow on purpose. An identity that carries a CSR — on the transition
+		// or recorded at creation — already has the custody B2 wants: the
+		// requester generated the key and the control plane never held it, so
+		// mintServedLeafForTrigger produces no key bytes and the parity gate
+		// passes. Only the server-keygen FALLBACK is a problem, and it is a
+		// sharp one: it generates a control-plane key, records the certificate,
+		// and only then reaches enforceExecutorParity, which refuses. The key
+		// was made for a target that explicitly opted out of receiving one, and
+		// no later refusal unmakes it.
+		//
+		// So the fallback is diverted to the host instead of being refused after
+		// the fact.
+		target, hostExecuted, targetErr := d.hostRenewalTargetFor(ctx, m.TenantID, ident)
+		if targetErr != nil {
+			return nil, targetErr
+		}
+		if hostExecuted &&
+			strings.TrimSpace(p.SubjectCSRPEM) == "" && subjectCSRFromIdentity(ident) == "" {
+			if err := d.enqueueHostRenewal(ctx, m.TenantID, ident, target,
+				ident.Name, []string{ident.Name}, "", "host-issue:"+idemKey); err != nil {
+				return nil, err
+			}
+			d.recordAgentRenewalDispatch(ctx, m.TenantID, ident, target, []string{ident.Name})
+			return []byte("first issuance dispatched to host agent"), nil
+		}
+
 		material, err := d.mintServedLeafForTrigger(ctx, m.TenantID, ident, p)
 		if err != nil {
 			return nil, err
@@ -642,27 +674,7 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			return nil, err
 		}
 		if len(recovered) > 0 {
-			recoveredLast := recovered[len(recovered)-1]
-			if recoveredLast.ReplacesID != nil {
-				predecessor, predecessorErr := d.store.GetCertificate(ctx, m.TenantID, *recoveredLast.ReplacesID)
-				if predecessorErr != nil {
-					_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", predecessorErr.Error())
-					return nil, fmt.Errorf("server: load recovered renewal predecessor: %w", predecessorErr)
-				}
-				run.PredecessorFingerprint = predecessor.Fingerprint
-			}
-			if err := d.recordRotationRun(ctx, m.TenantID, run, "running", ""); err != nil {
-				return nil, err
-			}
-			if err := d.completeRecoveredRenewal(ctx, m.TenantID, p.IdentityID, p.Reason); err != nil {
-				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-				return nil, fmt.Errorf("server: complete recovered renewal transition: %w", err)
-			}
-			run.SuccessorFingerprint = recoveredLast.Fingerprint
-			if err := d.recordRotationRun(ctx, m.TenantID, run, "succeeded", ""); err != nil {
-				return nil, err
-			}
-			return []byte(fmt.Sprintf("renewed:%d", len(recovered))), nil
+			return d.completeRecoveredRenewalRun(ctx, m.TenantID, p, run, recovered)
 		}
 		certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
 		if err != nil {
@@ -689,6 +701,15 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, err
 		}
+		// B2: hand the whole renewal to the host, before anything is minted.
+		dispatched, hostErr := d.dispatchHostRenewal(ctx, m.TenantID, ident, certs[0], run, idemKey)
+		if hostErr != nil {
+			return nil, hostErr
+		}
+		if dispatched {
+			return []byte("renewal dispatched to host agent"), nil
+		}
+
 		var deployCertPEM, deployKeyPEM []byte
 		deployFingerprint := ""
 		defer func() { secret.Wipe(deployKeyPEM) }()
@@ -701,7 +722,19 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			if len(dnsNames) > 0 {
 				commonName = dnsNames[0]
 			}
-			material, err := d.mintServedLeafMaterial(ctx, m.TenantID, ident.OwnerID, commonName, dnsNames)
+			// B2: a renewal honours the identity's CSR exactly as first
+			// issuance does.
+			//
+			// This closed a custody hole that ran on a timer. B1 made first
+			// issuance CSR-first, but renewal called mintServedLeafMaterial
+			// unconditionally — so an operator who enrolled with a CSR, key
+			// never leaving their host, silently received a
+			// control-plane-generated key on their FIRST RENEWAL, 30 to 90 days
+			// later. Nothing announced it: the renewal path did not even emit
+			// the server-side-keygen deprecation event the issue path emits.
+			// Custody that degrades automatically is worse than custody that
+			// was never claimed, because the claim outlives the property.
+			material, err := d.mintServedLeafForRenewal(ctx, m.TenantID, ident, commonName, dnsNames)
 			if err != nil {
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, err
@@ -924,6 +957,14 @@ func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Contex
 		}
 		if !configured.Enabled {
 			return fmt.Errorf("server: deployment target %s is disabled", targetID)
+		}
+		// B2: refuse rather than degrade. A target marked executor=agent must
+		// never receive key bytes, and the check happens HERE because this is
+		// the last moment before the payload is sealed into an outbox row and
+		// an append-only event — after that the bytes are durable and the
+		// event log is permanent.
+		if err := enforceExecutorParity(configured.Config, keyPEM); err != nil {
+			return err
 		}
 		connName = configured.Type
 		payload, err = connector.EncodeTargetIdentityDeploy(connName, ident.ID, configured.ID, configured.RevisionID, configured.Config, deployment)
@@ -1513,6 +1554,34 @@ func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenan
 	}
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
 	return d.mintServedLeafMaterial(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name})
+}
+
+// mintServedLeafForRenewal mints a renewal leaf, honouring a recorded CSR.
+//
+// Separate from mintServedLeafForTrigger because a renewal has no transition
+// CSR to prefer — the scheduler queued it, not a requester — and because the
+// subject and SAN set come from the certificate being REPLACED rather than from
+// the identity name. Renewing a certificate for a different name set than the
+// one it is replacing would be a reissue wearing a renewal's clothes.
+//
+// A CSR recorded on the identity means the requester holds the key, and they
+// still hold it: nothing about a renewal transfers custody. Falling back to
+// control-plane keygen for such an identity is what this exists to prevent.
+func (d *issuanceDispatcher) mintServedLeafForRenewal(
+	ctx context.Context, tenantID string, ident store.Identity, commonName string, dnsNames []string,
+) (issuedLeafMaterial, error) {
+	if csr := subjectCSRFromIdentity(ident); csr != "" {
+		// The recorded CSR fixes the public key; its own subject and SANs are
+		// re-validated against the profile inside mintServedLeafFromCSR, so a
+		// stale CSR cannot widen what the renewal asserts.
+		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr))
+	}
+	// No CSR on record: this identity's key has always been control-plane
+	// generated, so a renewal that generates one changes nothing about its
+	// custody. It is still worth announcing, for the same reason the issue path
+	// announces it.
+	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
+	return d.mintServedLeafMaterial(ctx, tenantID, ident.OwnerID, commonName, dnsNames)
 }
 
 // subjectCSRFromIdentity reads the CSR a requester attached when they created the

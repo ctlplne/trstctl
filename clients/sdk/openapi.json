@@ -6984,6 +6984,108 @@
         ],
         "type": "object"
       },
+      "EndpointCustodySummary": {
+        "properties": {
+          "control_plane_generated": {
+            "type": "integer"
+          },
+          "host_generated": {
+            "type": "integer"
+          },
+          "migrated_percent": {
+            "type": "integer"
+          },
+          "targets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "targets",
+          "host_generated",
+          "control_plane_generated",
+          "migrated_percent"
+        ],
+        "type": "object"
+      },
+      "EndpointKeyCustody": {
+        "properties": {
+          "connector": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "executor": {
+            "enum": [
+              "agent",
+              "control_plane"
+            ],
+            "type": "string"
+          },
+          "key_bytes_leave_control_plane": {
+            "type": "boolean"
+          },
+          "last_executed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_executed_by_agent": {
+            "type": "string"
+          },
+          "last_executed_outcome": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "host_agent",
+              "control_plane"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "name",
+          "connector",
+          "executor",
+          "origin",
+          "key_bytes_leave_control_plane",
+          "enabled",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "EndpointKeyCustodyList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EndpointKeyCustody"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EndpointCustodySummary"
+          }
+        },
+        "required": [
+          "items",
+          "summary",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "EndpointVerification": {
         "properties": {
           "address": {
@@ -26384,6 +26486,53 @@
         },
         "summary": "Edition and license posture",
         "x-trstctl-public-rationale": "public edition posture: the response contains only global license state, feature-table rows, and crypto posture; it carries no tenant data or credential material."
+      }
+    },
+    "/api/v1/endpoints/key-custody": {
+      "get": {
+        "operationId": "listEndpointKeyCustody",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointKeyCustodyList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List where each deployment target's private key is generated: host agent or control plane",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/endpoints/verifications": {

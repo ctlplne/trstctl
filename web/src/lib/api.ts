@@ -32,6 +32,7 @@ import type {
   ACMEUpstreamAuthorizationList,
   EndpointVerification,
   EndpointVerificationList,
+  EndpointKeyCustodyList,
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
   ADCSPosture as GenADCSPosture,
@@ -514,6 +515,7 @@ export type {
   ACMEUpstreamAuthorizationList,
   EndpointVerification,
   EndpointVerificationList,
+  EndpointKeyCustodyList,
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
   AgentCertRevocation,
@@ -1210,6 +1212,8 @@ export interface Api {
   acmeDNS01ProviderConfigs(): Promise<ACMEDNS01ProviderConfigList>;
   acmeUpstreamAuthorizations(): Promise<ACMEUpstreamAuthorizationList>;
   endpointVerifications(): Promise<EndpointVerificationList>;
+  // B2: where each deployment target's private key is generated.
+  endpointKeyCustody(): Promise<EndpointKeyCustodyList>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
@@ -1535,6 +1539,7 @@ const liveApi: Api = {
   acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
   acmeUpstreamAuthorizations: () => req<ACMEUpstreamAuthorizationList>("/api/v1/acme/dns-01/upstream-authorizations"),
   endpointVerifications: () => req<EndpointVerificationList>("/api/v1/endpoints/verifications"),
+  endpointKeyCustody: () => req<EndpointKeyCustodyList>("/api/v1/endpoints/key-custody"),
   mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),
   mdmSCEPPolicies: () => req<MDMSCEPPolicyList>("/api/v1/mdm/scep/policies"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
