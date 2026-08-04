@@ -10,6 +10,7 @@
 // now-missing field fails `tsc` — the drift cannot ship silently. Regenerate with
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
 import { translateNow } from "@/i18n/I18nProvider";
+import * as estate from "./estateApi";
 import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import type {
   SecretRotationScheduleRun,
@@ -165,6 +166,8 @@ import type {
   GraphImpact,
   GraphTrustStores,
   MigrationAssessment,
+  UnownedQueue,
+  RetirementChecklist,
   GraphNode,
   GraphQueryResult,
   GraphReachable,
@@ -613,6 +616,8 @@ export type {
   GraphImpact,
   GraphTrustStores,
   MigrationAssessment,
+  UnownedQueue,
+  RetirementChecklist,
   GraphNode,
   GraphQueryResult,
   GraphReachable,
@@ -1056,7 +1061,9 @@ async function previewResponse(method: string): Promise<unknown> {
   throw previewRefusal();
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+// Exported for the estate-shape workflow module (H1/H2/H4/I1), which must go
+// through this same bounded transport.
+export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   if (previewTransportIsolated) {
     // api methods are intercepted before reaching req. Keep this second wall
     // for direct/internal callers and future code that accidentally bypasses
@@ -1367,6 +1374,10 @@ export interface Api {
   graphTrustStores(id: string): Promise<GraphTrustStores>;
   // H2: read-only assessment of a migration plan.
   assessMigration(request: unknown): Promise<MigrationAssessment>;
+  // I1: managed identities whose ownership cannot answer an incident question.
+  unownedIdentities(): Promise<UnownedQueue>;
+  // H4: what blocks a CA key's destruction.
+  caRetirementChecklist(keyId: string): Promise<RetirementChecklist>;
   graphReachable(id: string): Promise<GraphReachable>;
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
@@ -1730,11 +1741,12 @@ const liveApi: Api = {
   rollbackPolicyVersion: (id, input) => mutate<PolicyVersion>("POST", `/api/v1/policy/versions/${encodeURIComponent(id)}/rollback`, input),
   policyDryRun: (input) => mutate<PolicyDryRun>("POST", "/api/v1/policy/dry-run", input),
   graph: () => req<GraphResponse>("/api/v1/graph"),
-  graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
-  graphTrustStores: (id) => req<GraphTrustStores>(`/api/v1/graph/trust-stores/${encodeURIComponent(id)}`),
-  assessMigration: (request) =>
-    req<MigrationAssessment>("/api/v1/migrations/assess", { method: "POST", body: JSON.stringify(request), headers: { "Content-Type": "application/json" } }),
-  graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),
+  graphReachable: estate.graphReachable,
+  graphBlastRadius: estate.graphBlastRadius,
+  graphTrustStores: estate.graphTrustStores,
+  unownedIdentities: estate.unownedIdentities,
+  caRetirementChecklist: estate.caRetirementChecklist,
+  assessMigration: estate.assessMigration,
   graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions: (options) => req<PAMSessionList>(`/api/v1/access/sessions${pageQueryString(options)}`),

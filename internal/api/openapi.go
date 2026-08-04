@@ -3077,6 +3077,19 @@ func componentSchemas() map[string]*Schema {
 		"from":  str(),
 		"nodes": {Type: "array", Items: ref("GraphNode")},
 	}, "from", "nodes")
+	// I1: managed identities whose ownership cannot answer an incident question.
+	unownedIdentity := object(map[string]*Schema{
+		"identity_id": str(), "name": str(), "status": str(),
+		"reason": {Type: "string", Enum: []string{
+			"no_owner", "owner_missing_application_model", "ownership_never_attested",
+		}},
+		"detail": str(),
+	}, "identity_id", "name", "reason")
+	unownedQueue := object(map[string]*Schema{
+		"items":  {Type: "array", Items: ref("UnownedIdentity")},
+		"counts": {Type: "object"},
+		"total":  {Type: "integer"}, "guidance": str(),
+	}, "items", "counts", "total", "guidance")
 	// H4: what blocks a CA key's destruction.
 	retirementDependent := object(map[string]*Schema{
 		"kind": str(), "ref": str(), "detail": str(),
@@ -4245,6 +4258,8 @@ func componentSchemas() map[string]*Schema {
 		"GraphReachable":                           graphReachable,
 		"GraphImpact":                              graphImpact,
 		"GraphTrustStores":                         graphTrustStores,
+		"UnownedIdentity":                          unownedIdentity,
+		"UnownedQueue":                             unownedQueue,
 		"RetirementDependent":                      retirementDependent,
 		"RetirementChecklist":                      retirementChecklist,
 		"MigrationAssessRequest":                   migrationAssessRequest,

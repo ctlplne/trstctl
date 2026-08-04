@@ -316,6 +316,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"graph", "trust-stores"}, Method: "GET", Path: "/api/v1/graph/trust-stores/{id}", Summary: "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on"},
 	{Name: []string{"migrations", "assess"}, Method: "POST", Path: "/api/v1/migrations/assess", Summary: "Assess a migration plan read-only: what it would touch and what is unknown"},
 	{Name: []string{"ca", "keys", "retirement"}, Method: "GET", Path: "/api/v1/ca/keys/{id}/retirement", Summary: "List the dependents blocking a CA key's destruction, and the destruction record once complete"},
+	{Name: []string{"owners", "unowned"}, Method: "GET", Path: "/api/v1/owners/unowned", Summary: "List managed identities whose ownership cannot answer an incident question"},
 	{Name: []string{"graph", "query"}, Method: "POST", Path: "/api/v1/graph/query", Body: bodyCypher, Summary: "Run a Cypher-style query"},
 
 	{Name: []string{"risk", "credentials"}, Method: "GET", Path: "/api/v1/risk/credentials", Query: []string{"sort", "min_score", "privilege", "owner"}, Summary: "Rank credentials by risk score"},

@@ -232,6 +232,14 @@ func servedSurfaceSizeAllowlist() map[string]servedSurfaceSizeAllowlistEntry {
 			owner:     "ENGHEALTH/server",
 			rationale: "Control-plane composition root wires many lifecycle workers; function-level hotspot guards keep boot stages split.",
 		},
+		"web/src/lib/api.ts": {
+			owner: "ENGHEALTH/web",
+			rationale: "Operation IMPLEMENTATIONS are split by workflow (auditExport.ts, estateApi.ts) " +
+				"and further splits go there. What remains over budget is the single Api interface " +
+				"declaration, which cannot be divided without splitting the Api type itself — a " +
+				"larger refactor tracked separately. Adding an operation must still add its " +
+				"implementation to a workflow module, not here.",
+		},
 		"web/src/pages/Discovery.tsx": {
 			owner:     "ENGHEALTH/web",
 			rationale: "Discovery page pre-dates this secrets-surface remediation and remains tracked by the served-surface budget.",

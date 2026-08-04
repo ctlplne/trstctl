@@ -19091,6 +19091,62 @@
         ],
         "type": "object"
       },
+      "UnownedIdentity": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "no_owner",
+              "owner_missing_application_model",
+              "ownership_never_attested"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "name",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "UnownedQueue": {
+        "properties": {
+          "counts": {
+            "type": "object"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UnownedIdentity"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "counts",
+          "total",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "UnvaultedSecretDetectionSource": {
         "properties": {
           "capabilities": {
@@ -31989,6 +32045,53 @@
         ],
         "summary": "Create an owner",
         "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/owners/unowned": {
+      "get": {
+        "operationId": "listUnownedIdentities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnownedQueue"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List managed identities whose ownership cannot answer an incident question",
+        "x-trstctl-permission": "owners:read"
       }
     },
     "/api/v1/owners/{id}": {

@@ -437,8 +437,14 @@ describe("i18n boundary", () => {
       // deployed, and the counts line must stay a count rather than becoming a
       // readiness percentage in any locale.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "a5f714779a39ff8f3d03145bd36d2bfa53d0e4e831563f4f299a44761baa21b6",
-      "de-DE": "01418e7c48f8d9e2475141e958d18136f59bc2c221180efef626f777ff57d2b5",
+      // I1 ownership re-pin: two source.unowned.* keys. The counts string must
+      // keep its three separate numbers in every locale — collapsing them into a
+      // total would lose the only information that makes the queue actionable.
+      // H4 retirement re-pin: three source.retirement.* keys. The cleared state
+      // must keep saying the SIGNER mints the record, not this page.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "06c7e05f8b9022dec860a87acd875bf3c62d43c3ef235d5d1a46ab040b0f473b",
+      "de-DE": "63b13608de931e18fa06d96e37a664154236d4dc4d2514ceb1c97f52f5befc2b",
     });
   });
 

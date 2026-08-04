@@ -9796,6 +9796,18 @@ export const messages = {
     defaultMessage: "CA chain PEM",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
+  "source.retirement.checklist.h4ret00001": {
+    defaultMessage: "Key retirement",
+    description: "H4: heading for the CA-key retirement checklist.",
+  },
+  "source.retirement.blocked.h4ret00002": {
+    defaultMessage: "{value1} dependents must be re-protected or released before this key can be destroyed.",
+    description: "H4: the blocking count.",
+  },
+  "source.retirement.clear.h4ret00003": {
+    defaultMessage: "Every dependent is accounted for. The signer will mint a destruction record when the key is destroyed.",
+    description: "H4: the unblocked state.",
+  },
   "source.ca.hierarchy.73e4cbcaf4": {
     defaultMessage: "CA hierarchy",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
@@ -12126,6 +12138,14 @@ export const messages = {
   "source.owner.status.74d91b61ae": {
     defaultMessage: "Owner status",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Risk.tsx.",
+  },
+  "source.unowned.queue.i1own00001": {
+    defaultMessage: "Ownership gaps",
+    description: "I1: heading for the unowned queue on the Owners page.",
+  },
+  "source.unowned.counts.i1own00002": {
+    defaultMessage: "{value1} with no owner, {value2} whose owner names no application or environment, {value3} never confirmed.",
+    description: "I1: the three counts, kept separate because each needs different work.",
   },
   "source.owners.58f5df9b24": {
     defaultMessage: "Owners",

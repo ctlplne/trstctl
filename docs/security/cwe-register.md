@@ -1009,7 +1009,7 @@ not this file.
 | `tools/pqclab/main_test.go:80` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/docs_test.go:75` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/hotspot_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/trstctllint/hotspot_test.go:295` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/trstctllint/hotspot_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/licenseboundary/licenseboundary.go:35` | developer tool reading the repo paths it is pointed at (CWE-22) |
 
 ### G306 — CWE-276 Incorrect default permissions (file write) (81 sites)

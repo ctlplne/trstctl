@@ -2603,6 +2603,10 @@ const deDECatalog = {
   "source.business.purpose.286d11d720": "Geschäftszweck",
   "source.by.key.type.7228596a06": "nach Schlüsseltyp",
   "source.ca.chain.pem.add189510a": "CA-Kette im PEM-Format",
+  "source.retirement.checklist.h4ret00001": "Schl\u00fcssel-Au\u00dferbetriebnahme",
+  "source.retirement.blocked.h4ret00002":
+    "{value1} Abh\u00e4ngige m\u00fcssen neu gesch\u00fctzt oder freigegeben werden, bevor dieser Schl\u00fcssel zerst\u00f6rt werden kann.",
+  "source.retirement.clear.h4ret00003": "Alle Abh\u00e4ngigen sind erfasst. Der Signierer stellt beim Zerst\u00f6ren einen Vernichtungsnachweis aus.",
   "source.ca.hierarchy.73e4cbcaf4": "CA-Hierarchie",
   "source.ca.key.ceremony.244faa4ab3": "CA-Schlüsselzeremonie",
   "source.ca.re.key.failed.c94515c43b": "CA-Schlüsselregenerierung fehlgeschlagen",
@@ -3217,6 +3221,9 @@ const deDECatalog = {
   "source.owner.kind.eb9923cec7": "Eigentümerart",
   "source.owner.name.id.email.or.kind.d0081dd7f1": "Name, ID, E-Mail oder Art des Eigentümers",
   "source.owner.status.74d91b61ae": "Eigentümerstatus",
+  "source.unowned.queue.i1own00001": "L\u00fccken bei der Zust\u00e4ndigkeit",
+  "source.unowned.counts.i1own00002":
+    "{value1} ohne Eigent\u00fcmer, {value2} deren Eigent\u00fcmer weder Anwendung noch Umgebung nennt, {value3} nie best\u00e4tigt.",
   "source.owners.58f5df9b24": "Eigentümer",
   "source.packaging.0d62bb01df": "Packaging",
   "source.packaging.edition.matrix.265d443ef4": "Matrix der Pakete und Editionen",

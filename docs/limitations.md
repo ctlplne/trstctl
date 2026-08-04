@@ -1310,10 +1310,11 @@ looking for a credential that was never there.
   different actions: a data-entry gap, a classification gap, and a trust gap.
   An ownership attestation is never cleared by an ordinary edit — losing it would
   silently return the owner to the queue and train operators to click through the
-  re-confirmation. Scope, stated exactly: the store model and the unowned query
-  are served; the Owners CONSOLE surface for the application model and the queue
-  is NOT built, and there is no served API route for the queue yet, so this is a
-  data model without its operator surface.
+  re-confirmation. Served at `GET /api/v1/owners/unowned`, `trstctl owners
+  unowned`, and an "Ownership gaps" panel on the Owners console that renders the
+  three counts separately rather than a total. Scope, stated exactly: the console
+  shows the queue and its reasons; EDITING the application model from the Owners
+  page is not built, so the fields are populated through the API.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives
@@ -1324,10 +1325,11 @@ looking for a credential that was never there.
   Licensed under `vdec` and FAIL-CLOSED: an unlicensed deployment returns 501 with
   a message stating that no answer was produced, rather than an empty outstanding
   list — an empty list reads as "this key has no dependents", which is permission
-  to perform an irreversible act on evidence nobody gathered. Scope, stated
-  exactly: the console surface for this checklist is NOT yet on the CA hierarchy
-  page; the API and CLI are served and the ee/decommission engine is attached in
-  both binaries, but the operator-facing screen the epic calls for is not built.
+  to perform an irreversible act on evidence nobody gathered. Served on the CA
+  hierarchy console's lifecycle tab, where retirement belongs beside rotation.
+  Scope, stated exactly: the panel is keyed on the first issuer because a per-key
+  selector is not served yet, and it renders NOTHING when the checklist cannot be
+  read — a reassuring zero must never appear because a request failed.
 - Incident fleet-reissue batch gates (H3): each batch's health gate is recomputed
   on read from THAT BATCH's own replacement identities, through the same
   verification summary D6's canary uses. It previously round-robined the run's

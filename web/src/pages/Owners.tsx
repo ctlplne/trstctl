@@ -22,6 +22,47 @@ function readOwnershipAttribution(): Promise<OwnershipAttribution> {
   return client.ownershipAttribution ? client.ownershipAttribution() : Promise.resolve(emptyOwnershipAttribution());
 }
 
+// UnownedQueuePanel surfaces the ownership gaps that block an incident (I1).
+//
+// Three counts, never one. A single "unowned: 47" would be a number nobody can
+// act on: a missing owner record, an owner who names a person but no system, and
+// an owner nobody has re-confirmed are three different pieces of work, and the
+// middle one is the one people miss — it looks owned until somebody needs a
+// blast radius.
+function UnownedQueuePanel() {
+  const queue = useApiQuery(["unowned-identities"], api.unownedIdentities);
+  const data = queue.data;
+  // Guard the array, not just the object. A response whose shape is present but
+  // whose items are absent is exactly what a fixture or a partial payload looks
+  // like, and reading .slice on it takes down the whole Owners page rather than
+  // hiding one panel.
+  const items = data?.items ?? [];
+  if (!data || items.length === 0) return null;
+  return (
+    <section aria-labelledby="unowned-heading" className="ui-panel space-y-3 p-comfortable">
+      <h2 id="unowned-heading" className="text-title font-semibold">
+        {translateNow("source.unowned.queue.i1own00001")}
+      </h2>
+      <p className="text-sm">
+        {translateNow("source.unowned.counts.i1own00002", {
+          value1: String(data.counts?.no_owner ?? 0),
+          value2: String(data.counts?.owner_missing_application_model ?? 0),
+          value3: String(data.counts?.ownership_never_attested ?? 0),
+        })}
+      </p>
+      <ul className="space-y-2 text-sm">
+        {items.slice(0, 25).map((item) => (
+          <li key={item.identity_id} className="border-b border-border pb-2 last:border-0">
+            <span className="font-mono text-xs">{item.name}</span>
+            <span className="mt-1 block text-caption text-muted-foreground">{item.detail}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-caption text-muted-foreground">{data.guidance}</p>
+    </section>
+  );
+}
+
 export function Owners() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
@@ -149,6 +190,7 @@ export function Owners() {
         description="Search owner records — the people and teams accountable for credentials — by name, ID, kind, or email."
       />
       <OrphanGovernance owners={owners} />
+      <UnownedQueuePanel />
       {loading && <LoadingState>{translateNow("source.loading.owners.8fcc1cacd9")}</LoadingState>}
       {error && <ErrorState title={translateNow("source.could.not.load.owners.f32406fb21")}>{error}</ErrorState>}
       {rows && (

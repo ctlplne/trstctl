@@ -2856,6 +2856,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/owners/unowned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List managed identities whose ownership cannot answer an incident question */
+        get: operations["listUnownedIdentities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/owners/{id}": {
         parameters: {
             query?: never;
@@ -9575,6 +9592,20 @@ export interface components {
             subject_csr_pem?: string;
             /** @enum {string} */
             to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
+        };
+        UnownedIdentity: {
+            detail?: string;
+            identity_id: string;
+            name: string;
+            /** @enum {string} */
+            reason: "no_owner" | "owner_missing_application_model" | "ownership_never_attested";
+            status?: string;
+        };
+        UnownedQueue: {
+            counts: Record<string, never>;
+            guidance: string;
+            items: components["schemas"]["UnownedIdentity"][];
+            total: number;
         };
         UnvaultedSecretDetectionSource: {
             capabilities: string[];
@@ -18099,6 +18130,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Owner"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listUnownedIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnownedQueue"];
                 };
             };
             /** @description client error */

@@ -521,6 +521,8 @@ public final class OpenApiSchemas {
       "TransitVerify",
       "TransitVerifyRequest",
       "TransitionRequest",
+      "UnownedIdentity",
+      "UnownedQueue",
       "UnvaultedSecretDetectionSource",
       "UnvaultedSecretPosture",
       "UnvaultedSecretSummary",

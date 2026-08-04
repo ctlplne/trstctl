@@ -6958,6 +6958,29 @@ TransitionRequest = TypedDict(
     total=False,
 )
 
+UnownedIdentity = TypedDict(
+    'UnownedIdentity',
+    {
+        'detail': str,
+        'identity_id': str,
+        'name': str,
+        'reason': str,
+        'status': str,
+    },
+    total=False,
+)
+
+UnownedQueue = TypedDict(
+    'UnownedQueue',
+    {
+        'counts': dict[str, Any],
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'total': int,
+    },
+    total=False,
+)
+
 UnvaultedSecretDetectionSource = TypedDict(
     'UnvaultedSecretDetectionSource',
     {

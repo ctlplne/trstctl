@@ -45,6 +45,7 @@ import {
   type ExternalCAIssueRequest,
   type Issuer,
   type IssuerCapabilityMatrix,
+  type RetirementChecklist,
   type IssuerRequest,
   type ManagedKey,
   type Profile,
@@ -114,6 +115,65 @@ const externalCAIssueDefaults: ExternalCAIssueForm = {
   ttlDays: "30",
   csrPEM: "",
 };
+
+// RetirementChecklistPanel explains why a CA key cannot be destroyed yet (H4).
+//
+// It explains the gate; it is not the gate. The refusal is enforced in the
+// isolated signer, and the served guidance says so — an operator who believes
+// this panel is the control will route around it, have the key destroyed by
+// hand, and the evidence chain the whole feature exists to produce never gets
+// written.
+//
+// An unlicensed deployment returns 501 rather than an empty list, so a failure
+// to load renders NOTHING rather than a reassuring zero: "no outstanding
+// dependents" is permission to destroy, and it must never appear because a
+// request failed.
+function RetirementChecklistPanel({ keyId }: { keyId: string }) {
+  const [checklist, setChecklist] = useState<RetirementChecklist | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setChecklist(null);
+    if (!keyId || typeof api.caRetirementChecklist !== "function") return;
+    api
+      .caRetirementChecklist(keyId)
+      .then((res) => {
+        if (active) setChecklist(res);
+      })
+      .catch(() => {
+        if (active) setChecklist(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [keyId]);
+
+  if (!checklist) return null;
+  return (
+    <section aria-labelledby="retirement-heading" className="ui-panel space-y-3 p-comfortable">
+      <h3 id="retirement-heading" className="text-title font-semibold">
+        {translateNow("source.retirement.checklist.h4ret00001")}
+      </h3>
+      <p className="text-sm">
+        {checklist.blocked
+          ? translateNow("source.retirement.blocked.h4ret00002", { value1: String(checklist.outstanding?.length ?? 0) })
+          : translateNow("source.retirement.clear.h4ret00003")}
+      </p>
+      {(checklist.outstanding?.length ?? 0) > 0 && (
+        <ul className="space-y-1 text-sm">
+          {(checklist.outstanding ?? []).map((dep) => (
+            <li key={`${dep.kind}:${dep.ref}`} className="flex justify-between gap-3">
+              <span className="font-mono text-xs">{dep.ref}</span>
+              <span className="text-muted-foreground">{dep.kind}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {checklist.destruction_record && <p className="break-all font-mono text-xs text-muted-foreground">{checklist.destruction_record}</p>}
+      <p className="text-caption text-muted-foreground">{checklist.guidance}</p>
+    </section>
+  );
+}
 
 export function CAHierarchy() {
   const { t } = useTranslation();
@@ -193,10 +253,8 @@ export function CAHierarchy() {
     // leave the column reading "unknown" rather than taking the page down. The
     // console already treats an absent matrix as a different fact from a
     // negative one, so this degrades to the honest answer.
-    const capabilityRead =
-      typeof api.issuerCapabilities === "function" ? api.issuerCapabilities() : Promise.reject(new Error("unavailable"));
-    const externalCARead =
-      typeof api.externalCAs === "function" ? api.externalCAs() : Promise.reject(new Error("unavailable"));
+    const capabilityRead = typeof api.issuerCapabilities === "function" ? api.issuerCapabilities() : Promise.reject(new Error("unavailable"));
+    const externalCARead = typeof api.externalCAs === "function" ? api.externalCAs() : Promise.reject(new Error("unavailable"));
     const [issuerResult, discoveryResult, authoritiesResult, capabilityResult, externalCAResult] = await Promise.allSettled([
       api.issuers(),
       api.caDiscoveryInventory(),
@@ -676,6 +734,11 @@ export function CAHierarchy() {
       </div>
 
       <div {...tabPanelProps("ca", "lifecycle")} className={tab === "lifecycle" ? undefined : "hidden"}>
+        {/* H4: retirement is the end of the lifecycle, so it lives on the
+            lifecycle tab beside rotation. Keyed on the first issuer because a
+            per-key selector is not served yet; the panel renders nothing when
+            the checklist cannot be read, which is the only safe empty state. */}
+        {issuers.length > 0 && <RetirementChecklistPanel keyId={issuers[0].id} />}
         <CARotationPanel
           busy={rotationBusy}
           error={rotationError}
@@ -746,7 +809,13 @@ export function CAHierarchy() {
           </EmptyState>
         )}
         {!loading && !notice && sortedIssuers.length > 0 && (
-          <IssuerTable issuers={sortedIssuers} capabilities={capabilities} externalCAs={externalCARegistry} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />
+          <IssuerTable
+            issuers={sortedIssuers}
+            capabilities={capabilities}
+            externalCAs={externalCARegistry}
+            probe={probe}
+            onTestConnection={(issuer) => void testIssuerConnection(issuer)}
+          />
         )}
       </section>
 
@@ -2787,7 +2856,19 @@ function KeyValue({ label, mono = false, value }: { label: string; mono?: boolea
   );
 }
 
-function IssuerTable({ issuers, capabilities, externalCAs, onTestConnection, probe }: { issuers: Issuer[]; capabilities: IssuerCapabilityMatrix | null; externalCAs: ExternalCA[]; probe: ProbeState | null; onTestConnection: (issuer: Issuer) => void }) {
+function IssuerTable({
+  issuers,
+  capabilities,
+  externalCAs,
+  onTestConnection,
+  probe,
+}: {
+  issuers: Issuer[];
+  capabilities: IssuerCapabilityMatrix | null;
+  externalCAs: ExternalCA[];
+  probe: ProbeState | null;
+  onTestConnection: (issuer: Issuer) => void;
+}) {
   // Resolve an issuer to its row in the served capability census.
   //
   // Three genuinely different answers, and collapsing any two of them would
@@ -2868,9 +2949,7 @@ function IssuerTable({ issuers, capabilities, externalCAs, onTestConnection, pro
                   ) : (
                     <>
                       <span className="text-status-warning">{translateNow("source.manual.step.b7dv000003")}</span>
-                      {cap.unattended_dv_note ? (
-                        <span className="mt-1 block text-xs text-muted-foreground">{cap.unattended_dv_note}</span>
-                      ) : null}
+                      {cap.unattended_dv_note ? <span className="mt-1 block text-xs text-muted-foreground">{cap.unattended_dv_note}</span> : null}
                     </>
                   );
                 })()}

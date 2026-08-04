@@ -4924,6 +4924,21 @@ export interface TransitionRequest {
   to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
 }
 
+export interface UnownedIdentity {
+  detail?: string;
+  identity_id: string;
+  name: string;
+  reason: "no_owner" | "owner_missing_application_model" | "ownership_never_attested";
+  status?: string;
+}
+
+export interface UnownedQueue {
+  counts: Record<string, unknown>;
+  guidance: string;
+  items: UnownedIdentity[];
+  total: number;
+}
+
 export interface UnvaultedSecretDetectionSource {
   capabilities: string[];
   configured_count: number;
