@@ -106,3 +106,28 @@ func TestUpstreamAuthorizationsUseEventRecoveryAndSnapshots(t *testing.T) {
 			SnapshotFormatVersion)
 	}
 }
+
+// The endpoint verification read model is event-derived, so it belongs in both
+// the rebuild set and the snapshot set (epic D2).
+//
+// The failure mode of getting this wrong is specific and bad: restore
+// TRUNCATES everything in ReadModelTables and reloads only what the snapshot
+// payload carries, so a table in the first list and missing from the second is
+// silently emptied by every restore. The console would then show an estate with
+// no divergences — which is the reading an operator most wants to be true and
+// the one this epic exists to stop being assumed.
+func TestEndpointVerificationsUseEventRecoveryAndSnapshots(t *testing.T) {
+	const table = "endpoint_verifications"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is event-derived but missing from ReadModelTables", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is in the truncate set but missing from snapshotTables; every snapshot "+
+			"restore would erase the estate's verification state and show it as clean", table)
+	}
+	if SnapshotFormatVersion < 12 {
+		t.Errorf("SnapshotFormatVersion = %d; adding the endpoint verification projection must "+
+			"invalidate older snapshots, whose covered offset skips every observation event",
+			SnapshotFormatVersion)
+	}
+}

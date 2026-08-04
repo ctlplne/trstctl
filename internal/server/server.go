@@ -1566,9 +1566,10 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto},
 		// D5: a relay's dry-run plan becomes a delivery receipt an operator can
 		// read on the Connectors page.
-		recordDryRun:      s.dryRunReceipt,
-		recordRollback:    s.rollbackReceipt,
-		recordADCSPosture: s.recordADCSPosture,
+		recordDryRun:               s.dryRunReceipt,
+		recordRollback:             s.rollbackReceipt,
+		recordADCSPosture:          s.recordADCSPosture,
+		recordEndpointVerification: s.recordEndpointVerificationSweep,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {

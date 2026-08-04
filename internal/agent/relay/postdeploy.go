@@ -4,6 +4,7 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -81,6 +82,23 @@ func postDeployVerification(ctx context.Context, intent DeployIntent, material M
 		// reporting a verdict nothing backs.
 		return transport.OutcomeVerifyFailed, "verification transcript was not reportable", ""
 	}
+
+	// The SAME report shape the relay sweep uses, with one result. One wire
+	// shape means one server-side decoder: a second one would drift, and the
+	// one that drifts is always the one exercised less — which here would be
+	// the local vantage, the only witness that a reload took effect.
+	report := EndpointVerifyReport{Results: []EndpointVerifyResult{{
+		// The endpoint identity comes from the control plane's own target id,
+		// never from anything the agent chose. An agent that could name the
+		// endpoint could overwrite another one's state.
+		EndpointID: intent.TargetID,
+		Transcript: res.Transcript,
+		Detail:     res.Verdict.Detail,
+	}}}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		return transport.OutcomeVerifyFailed, "verification report could not be encoded", ""
+	}
 	evidence = res.Transcript.Digest()
 
 	if !res.OK() {
@@ -88,7 +106,7 @@ func postDeployVerification(ctx context.Context, intent DeployIntent, material M
 		// is still not serving them. Distinct from OutcomeFailed, which means
 		// the deploy itself did not complete — rolling back a deploy that never
 		// applied would undo something that was never done.
-		return transport.OutcomeVerifyFailed, res.Verdict.Detail, evidence
+		return transport.OutcomeVerifyFailed, string(encoded), evidence
 	}
-	return transport.OutcomeVerified, "", evidence
+	return transport.OutcomeVerified, string(encoded), evidence
 }

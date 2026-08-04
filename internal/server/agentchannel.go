@@ -226,6 +226,12 @@ type agentService struct {
 	// recordADCSPosture turns a relay's AD CS observation into the Posture
 	// console's read model (epic F1).
 	recordADCSPosture func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
+
+	// recordEndpointVerification turns a relay's verification sweep into
+	// observed endpoint state (epic D2). Without it the sweep's report would
+	// live only in the job row, which is where R1's revocation findings still
+	// sit — an observation nobody reads changes nothing.
+	recordEndpointVerification func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
 	// recordRollback turns a relay's re-bind report into a delivery receipt
 	// (epic D4). Nil means rollback results live only in the event log.
 	recordRollback func(ctx context.Context, tenantID, agent, idempotencyKey, payload, reason string, executed bool)

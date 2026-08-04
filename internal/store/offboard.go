@@ -109,6 +109,7 @@ var TenantScopedTables = []string{
 	"workload_attester_trust_sources",
 	"acme_dns01_provider_configs",
 	"acme_upstream_authorizations",
+	"endpoint_verifications",
 	"mdm_scep_policies",
 	"audit_checkpoints",
 	"notification_channels",

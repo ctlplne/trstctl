@@ -434,6 +434,18 @@ const (
 	// JobOutcomeFailed means the agent tried and could not. The job returns to
 	// the queue: a failure on one host is not evidence the work is impossible.
 	JobOutcomeFailed = "failed"
+	// JobOutcomeVerified means the agent performed the work AND observed the
+	// endpoint serving the expected identity afterwards (epic D2). Distinct
+	// from executed because "we applied it" and "it is live" are different
+	// claims, and only the second one is what an operator actually wanted.
+	JobOutcomeVerified = "verified"
+	// JobOutcomeVerifyFailed means the work was applied and the endpoint is
+	// NOT serving it. Terminal, not retryable: the job did what it was asked
+	// to do, and re-running it against a listener that ignored the reload
+	// would loop forever. It is the outcome that justifies a rollback, which
+	// plain failure is not — rolling back a deploy that never applied would
+	// undo something that was never done.
+	JobOutcomeVerifyFailed = "verify_failed"
 	// JobOutcomeExtend means the agent is still working and wants more lease.
 	JobOutcomeExtend = "extend"
 )

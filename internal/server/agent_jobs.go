@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/agent/relay"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -252,7 +253,12 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 	}
 
 	switch outcome {
-	case transport.JobOutcomeExecuted:
+	// D2: all three mean the agent finished the work, so all three are terminal
+	// and none returns the job to the queue. They differ in what was OBSERVED
+	// afterwards, which the receipt and the endpoint state record — a
+	// verify_failed deploy that got requeued would retry forever against a
+	// listener that is serving the wrong certificate.
+	case transport.JobOutcomeExecuted, transport.JobOutcomeVerified, transport.JobOutcomeVerifyFailed:
 		return a.acceptExecutedReport(ctx, info, agentID, req, now)
 
 	case transport.JobOutcomeFailed:
@@ -386,6 +392,20 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// in the report from the run that found it.
 	if destination == "adcs.inventory" && a.recordADCSPosture != nil {
 		a.recordADCSPosture(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+	}
+	// D2: a verification sweep becomes observed endpoint state. The report is
+	// the whole point of the job — a sweep whose findings stayed in the job row
+	// would leave the estate exactly as blind as before it ran.
+	if destination == relay.KindEndpointVerify && a.recordEndpointVerification != nil {
+		a.recordEndpointVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+	}
+	// D2, local vantage: a deploy that verified — or failed to — carries the
+	// same report shape as a sweep. One decoder for both, because the one that
+	// drifts is always the one exercised less, and here that would be the only
+	// witness that a reload took effect.
+	if destination == "connector.deploy" && a.recordEndpointVerification != nil &&
+		(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
+		a.recordEndpointVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
 	}
 	// D4: a re-bind that actually happened. The receipt is written from the
 	// JOB payload rather than from the agent's report, because the payload

@@ -80,6 +80,7 @@ const (
 	EventACMEDNS01RecordPresented                 = "acme.dns01.record.presented"
 	EventACMEDNS01RecordCleaned                   = "acme.dns01.record.cleaned"
 	EventACMEUpstreamAuthorizationObserved        = "acme.dns01.upstream.authorization.observed"
+	EventEndpointVerified                         = "endpoint.verification.observed"
 	EventMDMSCEPPolicyUpserted                    = "mdm.scep_policy.upserted"
 	EventMDMSCEPPolicyDeleted                     = "mdm.scep_policy.deleted"
 	EventMDMSCEPChallengeRotated                  = "mdm.scep_challenge.rotated"
@@ -800,6 +801,39 @@ type ACMEUpstreamAuthorizationObserved struct {
 	ChallengeType string    `json:"challenge_type,omitempty"`
 	Reused        bool      `json:"reused"`
 	ExpiresAt     time.Time `json:"expires_at,omitzero"`
+}
+
+// EndpointVerificationObserved is the payload of endpoint.verification.observed
+// (epic D2).
+//
+// It is an OBSERVATION, so every field describes what a handshake established
+// rather than what the platform intended. Reached is the load-bearing one: when
+// it is false nothing below it means anything, and the projector refuses a
+// payload that claims otherwise — an endpoint nobody could connect to must
+// never become a verified one.
+type EndpointVerificationObserved struct {
+	EndpointID string `json:"endpoint_id"`
+	Address    string `json:"address"`
+	// Vantage is "local" or "relay". The two are never merged: a local pass
+	// means the serving host thinks it is fine, a relay pass means a client
+	// could actually get it, and an appliance has only the second.
+	Vantage             string `json:"vantage"`
+	Reached             bool   `json:"reached"`
+	Mismatch            string `json:"mismatch,omitempty"`
+	ExpectedFingerprint string `json:"expected_fingerprint,omitempty"`
+	ObservedFingerprint string `json:"observed_fingerprint,omitempty"`
+	CheckedSANs         bool   `json:"checked_sans,omitempty"`
+	CheckedChain        bool   `json:"checked_chain,omitempty"`
+	// NotBefore/NotAfter are the SERVED validity window, which is not
+	// necessarily the issued certificate's — that difference is the point.
+	NotBefore time.Time `json:"not_before,omitzero"`
+	NotAfter  time.Time `json:"not_after,omitzero"`
+	Detail    string    `json:"detail,omitempty"`
+	// EvidenceDigest is the probe transcript digest carried inside the agent's
+	// signed receipt.
+	EvidenceDigest  string    `json:"evidence_digest,omitempty"`
+	AgentCommonName string    `json:"agent_common_name,omitempty"`
+	ObservedAt      time.Time `json:"observed_at,omitzero"`
 }
 
 // ACMEDNS01Preflighted is the payload of acme.dns01.preflighted. It records the
@@ -1658,6 +1692,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventACMEDNS01RecordPresented:                 {1: true},
 	EventACMEDNS01RecordCleaned:                   {1: true},
 	EventACMEUpstreamAuthorizationObserved:        {1: true},
+	EventEndpointVerified:                         {1: true},
 	EventMDMSCEPPolicyUpserted:                    {1: true},
 	EventMDMSCEPPolicyDeleted:                     {1: true},
 	EventMDMSCEPChallengeRotated:                  {1: true},
@@ -2293,6 +2328,37 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
 		return p.store.ApplyACMEDNS01ProviderConfigDeletedTx(ctx, tx, e.TenantID, pl.ID)
+	case EventEndpointVerified:
+		var pl EndpointVerificationObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.EndpointID == "" || pl.Address == "" || pl.Vantage == "" {
+			return fmt.Errorf("projections: %s requires endpoint_id, address and vantage", e.Type)
+		}
+		// The honesty rule, restated where a malformed producer cannot bypass
+		// it: a probe that never reached the listener cannot have compared
+		// anything, so a payload claiming otherwise is refused rather than
+		// stored. The database CHECK constraint says the same thing; this says
+		// it earlier, with the event type in the error.
+		if !pl.Reached && (pl.Mismatch != "" || pl.CheckedSANs || pl.CheckedChain || pl.ObservedFingerprint != "") {
+			return fmt.Errorf("projections: %s reports an unreached probe that claims an observation", e.Type)
+		}
+		observedAt := pl.ObservedAt
+		if observedAt.IsZero() {
+			observedAt = e.Time
+		}
+		return p.store.ApplyEndpointVerificationTx(ctx, tx, store.EndpointVerification{
+			TenantID: e.TenantID, EndpointID: pl.EndpointID, Address: pl.Address,
+			Vantage: pl.Vantage, Reached: pl.Reached, Mismatch: pl.Mismatch,
+			ExpectedFingerprint: pl.ExpectedFingerprint, ObservedFingerprint: pl.ObservedFingerprint,
+			CheckedSANs: pl.CheckedSANs, CheckedChain: pl.CheckedChain,
+			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter,
+			Detail: pl.Detail, EvidenceDigest: pl.EvidenceDigest,
+			AgentCommonName: pl.AgentCommonName,
+			LastCheckedAt:   observedAt,
+			EventSequence:   e.Sequence,
+		})
 	case EventACMEUpstreamAuthorizationObserved:
 		var pl ACMEUpstreamAuthorizationObserved
 		if err := decode(e, &pl); err != nil {
