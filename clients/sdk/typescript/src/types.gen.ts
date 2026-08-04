@@ -1014,6 +1014,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/keys/{id}/retirement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the dependents blocking a CA key's destruction, and the destruction record once complete */
+        get: operations["getCARetirementChecklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cbom/assets": {
         parameters: {
             query?: never;
@@ -8654,6 +8671,20 @@ export interface components {
             provider: string;
             status: string;
         };
+        RetirementChecklist: {
+            accounted: number;
+            blocked: boolean;
+            destruction_record?: string;
+            guidance: string;
+            key_id: string;
+            outstanding: components["schemas"]["RetirementDependent"][];
+            total: number;
+        };
+        RetirementDependent: {
+            detail?: string;
+            kind: string;
+            ref: string;
+        };
         RiskComponents: {
             age: number;
             exposure: number;
@@ -12558,6 +12589,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CADiscoveryInventory"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCARetirementChecklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description credential graph node id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetirementChecklist"];
                 };
             };
             /** @description client error */

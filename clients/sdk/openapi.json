@@ -15697,6 +15697,61 @@
         ],
         "type": "object"
       },
+      "RetirementChecklist": {
+        "properties": {
+          "accounted": {
+            "type": "integer"
+          },
+          "blocked": {
+            "type": "boolean"
+          },
+          "destruction_record": {
+            "type": "string"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "outstanding": {
+            "items": {
+              "$ref": "#/components/schemas/RetirementDependent"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key_id",
+          "blocked",
+          "outstanding",
+          "accounted",
+          "total",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "RetirementDependent": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ref"
+        ],
+        "type": "object"
+      },
       "RiskComponents": {
         "properties": {
           "age": {
@@ -23962,6 +24017,64 @@
         ],
         "summary": "List public and private CA discovery inventory",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/ca/keys/{id}/retirement": {
+      "get": {
+        "operationId": "getCARetirementChecklist",
+        "parameters": [
+          {
+            "description": "credential graph node id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetirementChecklist"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the dependents blocking a CA key's destruction, and the destruction record once complete",
+        "x-trstctl-permission": "keys:read"
       }
     },
     "/api/v1/cbom/assets": {

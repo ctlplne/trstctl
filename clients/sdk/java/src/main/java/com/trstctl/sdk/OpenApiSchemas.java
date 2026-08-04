@@ -425,6 +425,8 @@ public final class OpenApiSchemas {
       "ResponseIntegrationDispatch",
       "ResponseIntegrationDispatchRequest",
       "ResponseIntegrationQueuedDestination",
+      "RetirementChecklist",
+      "RetirementDependent",
       "RiskComponents",
       "RogueCertificateFinding",
       "RogueCertificatePosture",

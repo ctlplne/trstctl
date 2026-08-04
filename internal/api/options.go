@@ -37,6 +37,16 @@ func WithAuditTimestamper(ts auditanchor.Timestamper) Option {
 	return func(c *config) { c.auditTimestamper = ts }
 }
 
+// WithRetirementChecklist wires the licensed VDEC source for the CA-key
+// retirement checklist (epic H4).
+//
+// Optional, and its absence FAILS CLOSED at the route rather than yielding an
+// empty checklist — see RetirementChecklistSource for why that direction is the
+// only safe one for an irreversible operation.
+func WithRetirementChecklist(src RetirementChecklistSource) Option {
+	return func(c *config) { c.retirementChecklist = src }
+}
+
 // WithRoles registers custom (tenant-defined) roles alongside the built-ins.
 func WithRoles(roles ...authz.Role) Option {
 	return func(c *config) { c.customRoles = append(c.customRoles, roles...) }

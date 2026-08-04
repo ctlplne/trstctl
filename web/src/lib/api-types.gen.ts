@@ -4023,6 +4023,22 @@ export interface ResponseIntegrationQueuedDestination {
   status: string;
 }
 
+export interface RetirementChecklist {
+  accounted: number;
+  blocked: boolean;
+  destruction_record?: string;
+  guidance: string;
+  key_id: string;
+  outstanding: RetirementDependent[];
+  total: number;
+}
+
+export interface RetirementDependent {
+  detail?: string;
+  kind: string;
+  ref: string;
+}
+
 export interface RiskComponents {
   age: number;
   exposure: number;

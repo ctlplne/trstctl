@@ -54,6 +54,7 @@ type API struct {
 	principal                 func(*http.Request) (authz.Principal, error)
 	audit                     *audit.Service
 	auditTimestamper          auditanchor.Timestamper
+	retirementChecklist       RetirementChecklistSource
 	auth                      *AuthConfig
 	oidcPreLogin              *oidcPreLoginStore
 	scim                      *SCIMConfig
@@ -144,6 +145,7 @@ type config struct {
 	principalFromReg          func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
 	audit                     *audit.Service
 	auditTimestamper          auditanchor.Timestamper
+	retirementChecklist       RetirementChecklistSource
 	auth                      *AuthConfig
 	scim                      *SCIMConfig
 	agentTokens               BootstrapTokenIssuer
@@ -405,6 +407,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		roles:                     reg,
 		audit:                     cfg.audit,
 		auditTimestamper:          cfg.auditTimestamper,
+		retirementChecklist:       cfg.retirementChecklist,
 		auth:                      cfg.auth,
 		scim:                      cfg.scim,
 		scimTokens:                normalizeSCIM(cfg.scim),
@@ -1139,6 +1142,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/graph/reachable/{id}", opID: "graphReachable", summary: "Nodes reachable from a node (reachability query)", handler: a.graphReachable, pathParams: graphNodePath, resSchema: "GraphReachable", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/graph/blast-radius/{id}", opID: "graphBlastRadius", summary: "Blast radius of compromising a node", handler: a.graphBlastRadius, pathParams: graphNodePath, resSchema: "GraphImpact", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, resSchema: "GraphQueryResult", successCode: "200", perm: authz.GraphRead},
+		{method: "GET", path: "/api/v1/ca/keys/{id}/retirement", opID: "getCARetirementChecklist", summary: "List the dependents blocking a CA key's destruction, and the destruction record once complete", handler: a.getCARetirementChecklist, pathParams: graphNodePath, resSchema: "RetirementChecklist", successCode: "200", perm: authz.KeysRead},
 		{method: "POST", path: "/api/v1/migrations/assess", opID: "assessMigration", summary: "Assess a migration plan read-only: what it would touch and what is unknown", handler: a.assessMigration, reqSchema: "MigrationAssessRequest", resSchema: "MigrationAssessment", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/graph/trust-stores/{id}", opID: "graphTrustStores", summary: "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on", handler: a.graphTrustStores, pathParams: graphNodePath, resSchema: "GraphTrustStores", successCode: "200", perm: authz.GraphRead},
 

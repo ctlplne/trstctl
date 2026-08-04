@@ -1295,6 +1295,20 @@ looking for a credential that was never there.
   path. The credential graph and risk-scoring read APIs (`/api/v1/graph*`,
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`) are
   also served, as is the AI/RCA/MCP surface behind `ai.enable_api`.
+- CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
+  `trstctl ca keys retirement` list the dependents standing between a CA key and
+  destruction, and the destruction record once it exists. The REFUSAL itself lives
+  in the isolated signer via `ee/decommission`, not in this route — the checklist
+  explains the gate rather than being it, and the served guidance says so, because
+  an operator who believes the page is the gate will route around it and have the
+  key destroyed by hand, at which point the evidence chain is never written.
+  Licensed under `vdec` and FAIL-CLOSED: an unlicensed deployment returns 501 with
+  a message stating that no answer was produced, rather than an empty outstanding
+  list — an empty list reads as "this key has no dependents", which is permission
+  to perform an irreversible act on evidence nobody gathered. Scope, stated
+  exactly: the console surface for this checklist is NOT yet on the CA hierarchy
+  page; the API and CLI are served and the ee/decommission engine is attached in
+  both binaries, but the operator-facing screen the epic calls for is not built.
 - Incident fleet-reissue batch gates (H3): each batch's health gate is recomputed
   on read from THAT BATCH's own replacement identities, through the same
   verification summary D6's canary uses. It previously round-robined the run's

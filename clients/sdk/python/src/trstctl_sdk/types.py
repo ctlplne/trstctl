@@ -5673,6 +5673,30 @@ ResponseIntegrationQueuedDestination = TypedDict(
     total=False,
 )
 
+RetirementChecklist = TypedDict(
+    'RetirementChecklist',
+    {
+        'accounted': int,
+        'blocked': bool,
+        'destruction_record': str,
+        'guidance': str,
+        'key_id': str,
+        'outstanding': list[dict[str, Any]],
+        'total': int,
+    },
+    total=False,
+)
+
+RetirementDependent = TypedDict(
+    'RetirementDependent',
+    {
+        'detail': str,
+        'kind': str,
+        'ref': str,
+    },
+    total=False,
+)
+
 RiskComponents = TypedDict(
     'RiskComponents',
     {

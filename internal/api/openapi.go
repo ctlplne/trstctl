@@ -3077,6 +3077,16 @@ func componentSchemas() map[string]*Schema {
 		"from":  str(),
 		"nodes": {Type: "array", Items: ref("GraphNode")},
 	}, "from", "nodes")
+	// H4: what blocks a CA key's destruction.
+	retirementDependent := object(map[string]*Schema{
+		"kind": str(), "ref": str(), "detail": str(),
+	}, "kind", "ref")
+	retirementChecklist := object(map[string]*Schema{
+		"key_id": str(), "blocked": {Type: "boolean"},
+		"outstanding": {Type: "array", Items: ref("RetirementDependent")},
+		"accounted":   {Type: "integer"}, "total": {Type: "integer"},
+		"destruction_record": str(), "guidance": str(),
+	}, "key_id", "blocked", "outstanding", "accounted", "total", "guidance")
 	// H2: read-only migration assessment.
 	migrationAssessRequest := object(map[string]*Schema{
 		"plan_id": str(),
@@ -4235,6 +4245,8 @@ func componentSchemas() map[string]*Schema {
 		"GraphReachable":                           graphReachable,
 		"GraphImpact":                              graphImpact,
 		"GraphTrustStores":                         graphTrustStores,
+		"RetirementDependent":                      retirementDependent,
+		"RetirementChecklist":                      retirementChecklist,
 		"MigrationAssessRequest":                   migrationAssessRequest,
 		"MigrationUnknown":                         migrationUnknown,
 		"MigrationAssessedWave":                    migrationAssessedWave,
