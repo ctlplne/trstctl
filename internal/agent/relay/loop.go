@@ -264,6 +264,26 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// question, and this is the only moment it can be asked — the redeemed
 	// certificate's life ends when this function returns.
 	outcome, detail, evidence := postDeployVerification(ctx, intent, material)
+
+	// E2: and whether the APPLIANCE agrees. The handshake says what a client
+	// gets; this says what the device thinks it has, and the two together
+	// separate "the deploy did not take" from "the deploy took and the binding
+	// did not" — which look identical from the client side and send an operator
+	// to different places.
+	if !hostJob {
+		if verdict, readback := applianceReadback(ctx, client, intent, material); readback != "" {
+			detail = detail + " | appliance readback: " + readback
+			// A readback that contradicts a passing handshake downgrades the
+			// outcome. The handshake can pass against a cached session or a
+			// second listener while the object this deploy installed is not the
+			// one bound, and reporting verified on that evidence would put a
+			// green receipt over a device nobody actually updated.
+			if !readbackConfirms(verdict) && outcome == transport.OutcomeVerified {
+				outcome = transport.OutcomeVerifyFailed
+			}
+		}
+	}
+
 	reportWithEvidence(ctx, ch, job, outcome, detail, evidence)
 	return outcome != transport.OutcomeVerifyFailed
 }

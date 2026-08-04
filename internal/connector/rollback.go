@@ -178,3 +178,30 @@ func RunRollback(ctx context.Context, c Connector, ops Ops, rb Rollback) (Stats,
 	err := r.Rollback(ctx, sb, rb)
 	return Stats{Denied: sb.denied}, err
 }
+
+// FingerprintFromObjectName recovers the fingerprint prefix an object name
+// carries (epic E2).
+//
+// The inverse of DeployedObjectName, and it lives beside it so the two cannot
+// drift: a readback that parsed names by a rule the deploy did not follow would
+// report every correctly-bound listener as diverged, which during an incident is
+// worse than reporting nothing.
+//
+// Returns the PREFIX, not a full fingerprint — the name only ever carried a
+// prefix. Callers compare with strings.HasPrefix, and ClassifyReadback does.
+func FingerprintFromObjectName(name string) string {
+	idx := strings.LastIndex(name, "-")
+	if idx < 0 || idx+1 >= len(name) {
+		return ""
+	}
+	candidate := strings.ToLower(name[idx+1:])
+	if len(candidate) != objectNameFingerprintLen {
+		return ""
+	}
+	for _, r := range candidate {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return ""
+		}
+	}
+	return candidate
+}

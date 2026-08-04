@@ -14,6 +14,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -230,4 +231,69 @@ func (c *Connector) basicAuth() string {
 	secret.Wipe(raw)
 	defer secret.Wipe(encoded)
 	return secrettext.Prefixed("Basic ", encoded)
+}
+
+// Readback asks the BIG-IP what the Client SSL profile is bound to (epic E2).
+//
+// The question a deploy cannot answer about itself. Upload succeeds, the crypto
+// object installs, and the virtual server keeps presenting the previous
+// certificate because the profile patch went to a different profile than the one
+// the VIP uses — every step reporting success, clients getting the old cert
+// until it expires.
+//
+// The fingerprint comes out of the OBJECT NAME rather than from a certificate
+// the device re-serves. iControl REST will not hand back the DER of an installed
+// crypto object, but D4 already puts the fingerprint prefix in the name it
+// installs under, so the name is the comparison key. That is a real constraint
+// of the API and not a shortcut: a family whose names did not carry it would
+// have to report an empty fingerprint and be classified unknown.
+func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, target string) (connector.Installed, error) {
+	profile := target
+	if profile == "" {
+		profile = c.profile
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.baseURL+"/mgmt/tm/ltm/profile/client-ssl/"+url.PathEscape(profile), nil)
+	if err != nil {
+		return connector.Installed{}, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", c.basicAuth())
+
+	resp, err := sb.Request(req)
+	if err != nil {
+		return connector.Installed{}, fmt.Errorf("f5: read back profile %q: %w", profile, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		// The profile itself is absent. Distinct from "present and bound to
+		// something else": one is a configuration that does not exist, the other
+		// is a binding that did not move.
+		return connector.Installed{}, nil
+	}
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return connector.Installed{}, fmt.Errorf("f5: read back profile %q: status %d (response body redacted)",
+			profile, resp.StatusCode)
+	}
+	var body struct {
+		CertKeyChain []struct {
+			Cert string `json:"cert"`
+		} `json:"certKeyChain"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
+		return connector.Installed{}, fmt.Errorf("f5: decode profile %q: %w", profile, err)
+	}
+	if len(body.CertKeyChain) == 0 || body.CertKeyChain[0].Cert == "" {
+		// A profile with no chain is a real state on a BIG-IP, and it is not
+		// ours — reporting it as bound-to-nothing rather than as absent keeps
+		// the two apart for the classifier.
+		return connector.Installed{ObjectName: profile}, nil
+	}
+	object := body.CertKeyChain[0].Cert
+	return connector.Installed{
+		Fingerprint: connector.FingerprintFromObjectName(object),
+		ObjectName:  object,
+		Bound:       true,
+	}, nil
 }

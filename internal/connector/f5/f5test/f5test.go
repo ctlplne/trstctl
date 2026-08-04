@@ -75,6 +75,19 @@ func (s *Server) Profile(name string) (Chain, bool) {
 	return c, ok
 }
 
+// BindProfile sets what a Client SSL profile is bound to, without a deploy.
+//
+// It exists so a test can construct the state that matters for E2: an object
+// installed on the device while the profile the VIP uses still points at the
+// predecessor. Reaching that state through the deploy path would require
+// simulating the misconfiguration that causes it, which is a property of the
+// operator's BIG-IP rather than of this connector.
+func (s *Server) BindProfile(profile, cert string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.profiles[profile] = Chain{Cert: cert, Key: cert}
+}
+
 // RemoveCert deletes an installed crypto cert object, so a test can model the
 // case that matters most: the predecessor is gone and a rollback must refuse
 // rather than report success.
@@ -165,6 +178,26 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.ok(w, map[string]any{"name": name})
+
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/"):
+		// E2: what the profile is ACTUALLY bound to, which is the question a
+		// deploy's own return value cannot answer. A BIG-IP will happily hold a
+		// freshly installed crypto object while the virtual server keeps
+		// presenting the previous one.
+		profile := strings.TrimPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/")
+		s.mu.Lock()
+		chain, bound := s.profiles[profile]
+		s.mu.Unlock()
+		if !bound {
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+			return
+		}
+		s.ok(w, map[string]any{
+			"name": profile,
+			"certKeyChain": []map[string]string{
+				{"name": chain.Cert, "cert": chain.Cert, "key": chain.Key},
+			},
+		})
 
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/"):
 		profile := strings.TrimPrefix(r.URL.Path, "/mgmt/tm/ltm/profile/client-ssl/")

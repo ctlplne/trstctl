@@ -252,6 +252,23 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Live appliance readback (E2): after every appliance mutation the relay now asks
+  the device what it actually has, alongside D2's TLS handshake against the served
+  listener. The two are not redundant and only together locate a fault: a handshake
+  showing the old certificate with a readback showing ours-and-bound means the VIP
+  is fronted by something else; with a readback showing theirs it means the binding
+  never moved (the deploy patched the wrong profile); with a readback showing
+  nothing it means the deploy did not take. A handshake failure alone reads as "the
+  deploy failed", and the most common cause is the middle case — a binding the
+  deploy never touched, on a device that reported success at every step. A readback
+  that contradicts a passing handshake DOWNGRADES the outcome to verify_failed,
+  because a handshake can pass against a second listener while the object this
+  deploy installed is not the one bound. Verdicts are a closed set: serving,
+  installed_not_bound, diverged, absent, unknown — and `unknown` (the device named
+  an object but not which certificate it is) is NOT a pass. Readback is available
+  only where the API can address an installed object separately from uploading one:
+  f5, kemp, netscaler, a10. cisco, fortigate and paloalto cannot be asked, which is
+  reported as no readback rather than as a clean one.
   Support matrix (E3): docs/features/connector-support-matrix.md is GENERATED from
   the same census the API serves, and a Go test fails if the two diverge — so a
   capability cannot be removed while its published row survives. It deliberately
