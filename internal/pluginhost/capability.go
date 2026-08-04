@@ -40,6 +40,25 @@ func NewGrant(caps ...Capability) Grant {
 // host[:port] authority rather than a path; see Allows for how each kind is
 // matched. It returns the grant for chaining.
 func (g Grant) WithPathPrefix(cap Capability, prefix string) Grant {
+	// An EMPTY constraint is recorded, not skipped, and it denies.
+	//
+	// This was the opposite before, and it was a fail-open: an empty constraint
+	// reached authorityAllows/pathPrefixAllows, both of which treated "" as "no
+	// restriction" and returned true. So a caller narrowing a grant to one
+	// appliance — WithPathPrefix(CapNetDial, c.host) — WIDENED it to every
+	// reachable host the moment c.host came out empty.
+	//
+	// That is reachable from ordinary operator configuration, not a contrived
+	// input: url.Parse("appliance.example") with no scheme puts the authority in
+	// Path and leaves Host empty, and the connectors validated only that the
+	// endpoint string was non-empty. Eleven connector families derived their
+	// dial constraint that way.
+	//
+	// A caller that wants no restriction expresses it by not adding a
+	// constraint at all — len(constraints) == 0 still means unrestricted. What
+	// cannot be allowed to mean "everything" is an explicit attempt to narrow
+	// that resolved to nothing, because that is what a misconfiguration looks
+	// like, and the failure direction of a misconfiguration must be refusal.
 	g.prefixes[cap] = append(g.prefixes[cap], prefix)
 	return g
 }
@@ -131,7 +150,9 @@ func (g Grant) Allows(cap Capability, resource string) bool {
 // onto a separator boundary.
 func pathPrefixAllows(prefix, resource string) bool {
 	if prefix == "" {
-		return true
+		// Same rule as authorityAllows, for the same reason: a filesystem grant
+		// narrowed to an empty path must not become a grant over every path.
+		return false
 	}
 	p := path.Clean(prefix)
 	r := path.Clean(resource)
@@ -145,7 +166,10 @@ func pathPrefixAllows(prefix, resource string) bool {
 // constraint grants.
 func authorityAllows(constraint, resource string) bool {
 	if constraint == "" {
-		return true
+		// See WithPathPrefix: an explicit constraint that resolved to nothing
+		// denies. It is the signature of a misconfigured endpoint, and reading
+		// it as "any host" hands a connector the whole network.
+		return false
 	}
 	grantedHost, grantedPort := splitAuthority(constraint)
 	host, port := splitAuthority(resource)

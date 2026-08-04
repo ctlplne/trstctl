@@ -27,6 +27,19 @@ type connectorCatalogItem struct {
 	// back" during an incident and finding out otherwise is the specific
 	// failure the truth-integrity work exists to prevent.
 	ExecutesRollback bool `json:"executes_rollback"`
+	// DeviceProven reports whether this family's deploy is exercised against a
+	// faithful double of its device API in this repository (epic E1).
+	//
+	// Distinct from the conformance suite every connector passes. That suite
+	// runs against an in-memory double that accepts any request, so it proves a
+	// connector respects its capability grant and is replay-deterministic — and
+	// proves nothing about whether the appliance would have accepted the call.
+	// For an appliance family, whose entire implementation is an API
+	// conversation, that is the only question that matters.
+	//
+	// False on a host connector is not a gap: there is no device API to emulate,
+	// so this is simply not the proof that covers it.
+	DeviceProven bool `json:"device_proven"`
 	// B-6: the catalog described WHAT each connector deploys but not what it
 	// is permitted to do or how it behaves on a redelivery — the two facts an
 	// operator actually needs before authorizing a privileged deployment.
@@ -864,6 +877,7 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		item.ReplaySafety = replaySafetyLabel(connector.ReplaySafetyAtMostOnce)
 		item.TargetVantage = string(connector.VantageControlPlane)
 		item.ExecutesRollback = connector.CanRollback(item.Name)
+		item.DeviceProven = connector.DeviceProven(item.Name)
 		if a.connectorRegistry != nil {
 			item.Native = a.connectorRegistry.Has(item.Name)
 			if caps := a.connectorRegistry.CapabilitiesFor(item.Name); len(caps) > 0 {

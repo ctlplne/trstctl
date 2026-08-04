@@ -1466,6 +1466,10 @@ const deDECatalog = {
   "source.not.checked.d3tri00006": "Nicht gepr\u00fcft",
   "source.last.renewed.by.b2cus00012": "Zuletzt erneuert von",
   "source.not.observed.b2cus00013": "Nicht beobachtet",
+  "source.device.proof.e1dev00001": "Ger\u00e4tenachweis",
+  "source.device.proven.e1dev00002": "Emuliertes Ger\u00e4t",
+  "source.device.unproven.e1dev00003": "Kein Ger\u00e4tenachweis",
+  "source.device.not.applicable.e1dev00004": "Nicht zutreffend",
   "source.workload.api.hosts.b3wla0001": "Workload-API je Host",
   "source.workload.api.hosts.help.b3wla0002":
     "Wo die Workloads jedes Hosts ihre SVIDs beziehen. Ein Host, der die Workload-API bereitstellt, erzeugt den privaten Schl\u00fcssel jedes Workloads auf der Maschine, die ihn ausf\u00fchrt, und die Steuerebene sieht diesen Schl\u00fcssel nie \u2014 sie signiert eine SVID f\u00fcr einen \u00f6ffentlichen Schl\u00fcssel, den sie erhalten hat. Hosts ohne Bereitstellung nutzen den Socket der Steuerebene, der den Schl\u00fcssel zentral erzeugt; dieser Weg funktioniert weiterhin und ist die verbleibende Migration.",

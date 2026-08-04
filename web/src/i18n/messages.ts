@@ -5604,6 +5604,22 @@ export const messages = {
     defaultMessage: "Not observed",
     description: "B2: no host-generated renewal has been seen for this target yet.",
   },
+  "source.device.proof.e1dev00001": {
+    defaultMessage: "Device proof",
+    description: "E1: column heading \u2014 whether this connector's deploy is exercised against a double of its device API.",
+  },
+  "source.device.proven.e1dev00002": {
+    defaultMessage: "Emulated device",
+    description: "E1: this family's deploy runs against a faithful double of its management API.",
+  },
+  "source.device.unproven.e1dev00003": {
+    defaultMessage: "No device proof",
+    description: "E1: an appliance family whose API conversation nothing exercises.",
+  },
+  "source.device.not.applicable.e1dev00004": {
+    defaultMessage: "Not applicable",
+    description: "E1: a host connector writes files rather than calling a device API, so device proof does not apply.",
+  },
   "source.workload.api.hosts.b3wla0001": {
     defaultMessage: "Workload API by host",
     description: "B3: section heading \u2014 which hosts serve the SPIFFE Workload API locally.",

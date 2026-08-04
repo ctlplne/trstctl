@@ -1918,6 +1918,7 @@ ConnectorCatalogItem = TypedDict(
     {
         'capabilities': list[str],
         'delivery_mode': str,
+        'device_proven': bool,
         'executes_rollback': bool,
         'kind': str,
         'name': str,

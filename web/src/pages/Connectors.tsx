@@ -483,6 +483,7 @@ export function Connectors() {
                     <th scope="col">{translateNow("source.delivery.mode.c9585346ea")}</th>
                     <th scope="col">{translateNow("source.executes.on.a3vant0001")}</th>
                     <th scope="col">{translateNow("source.rollback.evidence.bf960c995c")}</th>
+                    <th scope="col">{translateNow("source.device.proof.e1dev00001")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -503,6 +504,25 @@ export function Connectors() {
                           {connector.executes_rollback ? translateNow("source.executes.rebind.d4rb000003") : translateNow("source.manual.procedure.d4rb000004")}
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">{connector.rollback}</span>
+                      </td>
+                      {/* E1: whether this family's deploy is exercised against a
+                          faithful double of its device API, not only the
+                          in-memory conformance suite every connector passes.
+                          For an appliance the whole implementation IS an API
+                          conversation, so conformance alone says nothing about
+                          whether the device would have accepted the call. */}
+                      <td>
+                        {connector.device_proven ? (
+                          <span className="font-medium text-status-success">{translateNow("source.device.proven.e1dev00002")}</span>
+                        ) : connector.target_vantage === "network_relay" ? (
+                          <span className="text-status-warning">{translateNow("source.device.unproven.e1dev00003")}</span>
+                        ) : (
+                          /* Not a gap on a host connector: it writes files and
+                             reloads a service, so there is no device API to
+                             emulate and this is simply not the proof that
+                             covers it. */
+                          <span className="text-muted-foreground">{translateNow("source.device.not.applicable.e1dev00004")}</span>
+                        )}
                       </td>
                     </tr>
                   ))}

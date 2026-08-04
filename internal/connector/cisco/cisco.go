@@ -92,6 +92,14 @@ func (c *Connector) Name() string { return "cisco" }
 
 // Capabilities declares the least privilege the connector needs: reach the
 // management host over the network. No filesystem, no exec.
+//
+// An endpoint with no derivable authority — a schemeless "ise.example", which
+// url.Parse reads as a path and leaves Host empty — produces an empty
+// constraint, and pluginhost denies an explicit constraint that resolved to
+// nothing. The deploy is refused by the sandbox rather than running against
+// whatever it can reach. That rule lives in pluginhost rather than here because
+// every appliance connector derives its constraint the same way, and eleven
+// copies of the same guard is eleven chances to omit one.
 func (c *Connector) Capabilities() pluginhost.Grant {
 	return pluginhost.NewGrant(pluginhost.CapNetDial).
 		WithPathPrefix(pluginhost.CapNetDial, c.host)

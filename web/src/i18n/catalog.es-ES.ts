@@ -1458,6 +1458,10 @@ const esESCatalog = {
   "source.not.checked.d3tri00006": "Sin comprobar",
   "source.last.renewed.by.b2cus00012": "Renovado por \u00faltima vez por",
   "source.not.observed.b2cus00013": "No observado",
+  "source.device.proof.e1dev00001": "Prueba de dispositivo",
+  "source.device.proven.e1dev00002": "Dispositivo emulado",
+  "source.device.unproven.e1dev00003": "Sin prueba de dispositivo",
+  "source.device.not.applicable.e1dev00004": "No aplicable",
   "source.workload.api.hosts.b3wla0001": "API de cargas de trabajo por host",
   "source.workload.api.hosts.help.b3wla0002":
     "D\u00f3nde obtienen sus SVID las cargas de trabajo de cada host. Un host que sirve la API de cargas de trabajo genera la clave privada de cada carga en la m\u00e1quina que la ejecuta, y el plano de control nunca ve esa clave: firma un SVID para una clave p\u00fablica que recibi\u00f3. Los hosts que no la sirven recurren al socket del propio plano de control, que crea la clave de forma centralizada; esa ruta sigue funcionando y es la migraci\u00f3n pendiente.",

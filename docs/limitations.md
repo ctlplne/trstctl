@@ -240,6 +240,25 @@ never live in the API process. What you can do end to end against the running bi
   delivery, not a tenant channel-management API.
 - Deployment connector orchestration serves target metadata, identity binding,
   outbox intent, receipts, provenance-verified WASM dispatch, and all 24 advertised native connectors.
+  Device proof (E1): every appliance family — a10, cisco, f5, fortigate, kemp,
+  netscaler, paloalto — now carries a faithful in-process double of its management
+  API and tests that drive the REAL connector against it, and the connector catalog
+  reports which families have that proof. This is a different claim from the
+  conformance suite every connector passes: conformance runs against an in-memory
+  double that accepts any request, so it proves a connector respects its capability
+  grant and is replay-deterministic while proving nothing about whether the device
+  would have accepted the call. For an appliance, whose entire implementation is an
+  API conversation, that was the only untested part. Each suite is verified
+  load-bearing by stubbing the connector's Deploy to return nil and confirming the
+  tests fail. A guard test refuses a family that claims device proof without both an
+  emulator package and a test that drives it.
+  Rollback, restated honestly after that work: cisco, fortigate and paloalto CANNOT
+  re-bind, and it is a property of their APIs rather than an unfinished feature.
+  Each exposes a single call that both uploads and installs the credential, with no
+  way to address an already-installed object, so the only available "rollback" would
+  be re-uploading the predecessor key — which the control plane no longer holds after
+  B1. They are correctly absent from the rollback census and their tests pin that
+  absence in both directions.
   `buildRunDeps` constructs the operator-selected production registry; strict
   target schemas bind endpoint/filesystem/process and same-tenant secret
   references before a served issue/deploy route can enqueue work.

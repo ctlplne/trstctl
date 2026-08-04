@@ -5115,6 +5115,9 @@
           "delivery_mode": {
             "type": "string"
           },
+          "device_proven": {
+            "type": "boolean"
+          },
           "executes_rollback": {
             "type": "boolean"
           },
@@ -5154,7 +5157,8 @@
           "native",
           "capabilities",
           "replay_safety",
-          "target_vantage"
+          "target_vantage",
+          "device_proven"
         ],
         "type": "object"
       },

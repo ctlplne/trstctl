@@ -41,11 +41,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1044 annotated sites across 25 rules. Each row is
+1046 annotated sites across 25 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (230 sites)
+### G101 — CWE-798 Use of hardcoded credentials (231 sites)
 
 | Location | Reason |
 |---|---|
@@ -167,10 +167,11 @@ not this file.
 | `internal/connector/acm/acm_test.go:20` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/azurekv/token_test.go:20` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/azurekv/token_test.go:63` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/connector/fortigate/fortigate_test.go:19` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/connector/cisco/cisco_test.go:21` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/connector/cisco/ciscotest/ciscotest_test.go:16` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/connector/paloalto/paloalto_test.go:21` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/connector/paloalto/paloalto_test.go:28` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:13` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
@@ -735,7 +736,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:162` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:277` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (274 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (275 sites)
 
 | Location | Reason |
 |---|---|
@@ -838,6 +839,7 @@ not this file.
 | `internal/cli/doctor/doctor_test.go:94` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:1907` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/connector/device_proof_census_test.go:46` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:147` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:180` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1250,7 +1252,7 @@ not this file.
 |---|---|
 | `internal/ca/letsencrypt/acmefake/acmefake.go:233` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/ca/letsencrypt/acmefake/acmefake.go:256` | test-support package compiled only into test binaries (CWE-79) |
-| `internal/connector/fortigate/fortigate_test.go:127` | test writes fixture bytes to its own recorder/local server (CWE-79) |
+| `internal/connector/fortigate/fortigatetest/fortigatetest.go:219` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/operator/reconcile_test.go:217` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |

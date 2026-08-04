@@ -1334,6 +1334,7 @@ export interface ConnectorCatalog {
 export interface ConnectorCatalogItem {
   capabilities: string[];
   delivery_mode: string;
+  device_proven: boolean;
   executes_rollback?: boolean;
   kind: string;
   name: string;
