@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	googleuuid "github.com/google/uuid"
 
@@ -48,6 +49,13 @@ type dns01ProviderConfigRequest struct {
 	CAAIssuerDomain  string          `json:"caa_issuer_domain,omitempty"`
 	AllowedMethods   []string        `json:"allowed_methods,omitempty"`
 	AllowWildcards   bool            `json:"allow_wildcards,omitempty"`
+	// AllowUpstreamDV permits this config to publish challenge records for
+	// UPSTREAM domain validation against an external CA (epic B7). Off unless
+	// an operator sets it: credentials given so trstctl could verify a
+	// challenge are not consent to publish into the zone on a public CA's
+	// behalf, and as validation windows compress that publishing becomes
+	// frequent and unattended.
+	AllowUpstreamDV bool `json:"allow_upstream_dv,omitempty"`
 }
 
 type dns01ProviderConfigResponse struct {
@@ -63,6 +71,7 @@ type dns01ProviderConfigResponse struct {
 	CAAIssuerDomain  string          `json:"caa_issuer_domain,omitempty"`
 	AllowedMethods   []string        `json:"allowed_methods"`
 	AllowWildcards   bool            `json:"allow_wildcards"`
+	AllowUpstreamDV  bool            `json:"allow_upstream_dv"`
 	SecretHandling   string          `json:"secret_handling"`
 	CreatedAt        string          `json:"created_at"`
 	UpdatedAt        string          `json:"updated_at"`
@@ -340,6 +349,7 @@ func (a *API) emitACMEDNS01ProviderConfig(ctx context.Context, tenantID, id stri
 		ChallengeDomain: req.ChallengeDomain, DelegationTarget: req.DelegationTarget,
 		CredentialRefs: req.CredentialRefs, Config: req.Config, CAAIssuerDomain: req.CAAIssuerDomain,
 		AllowedMethods: req.AllowedMethods, AllowWildcards: req.AllowWildcards,
+		AllowUpstreamDV: req.AllowUpstreamDV,
 	})
 	if err != nil {
 		return err
@@ -497,9 +507,10 @@ func toDNS01ProviderConfigResponse(rec store.ACMEDNS01ProviderConfig) dns01Provi
 		Zone: rec.Zone, ChallengeDomain: rec.ChallengeDomain, DelegationTarget: rec.DelegationTarget,
 		CredentialRefs: refs, Config: cfg, CAAIssuerDomain: rec.CAAIssuerDomain,
 		AllowedMethods: methods, AllowWildcards: rec.AllowWildcards,
-		SecretHandling: "credential_refs_only",
-		CreatedAt:      rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:      rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		AllowUpstreamDV: rec.AllowUpstreamDV,
+		SecretHandling:  "credential_refs_only",
+		CreatedAt:       rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:       rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -603,4 +614,98 @@ func (a *API) writeACMEDNS01Error(w http.ResponseWriter, err error) {
 		return
 	}
 	a.writeError(w, err)
+}
+
+// Upstream authorization staleness (epic B7).
+//
+// Automating DNS-01 upstream removes the human from the validation cycle, which
+// also removes the human who used to NOTICE when validation stopped working. An
+// authority that already holds a valid authorization issues without a
+// challenge, so a broken publish path is invisible until the reuse window
+// closes — and then it is not one certificate that fails, it is every
+// identifier authorized in the same original burst, on the same day.
+//
+// This surface exists to make that visible early. The number it leads with is
+// not "when does the certificate expire" but "when did this identifier last
+// actually prove control", because those two diverge silently and the gap
+// between them is the warning.
+
+// ACMEUpstreamAuthorization is one identifier's authorization at one authority.
+type ACMEUpstreamAuthorization struct {
+	Identifier string `json:"identifier"`
+	Issuer     string `json:"issuer"`
+	// ChallengeType is empty when the last observation was a reuse. The
+	// emptiness is information, not a missing field.
+	ChallengeType string `json:"challenge_type,omitempty"`
+	// LastValidatedAt is absent when trstctl has NEVER validated this
+	// identifier at this authority — every issuance so far rode a reuse this
+	// install did not earn and cannot repeat.
+	LastValidatedAt string `json:"last_validated_at,omitempty"`
+	LastReusedAt    string `json:"last_reused_at,omitempty"`
+	ExpiresAt       string `json:"expires_at,omitempty"`
+	ReuseCount      int64  `json:"reuse_count"`
+	ValidateCount   int64  `json:"validate_count"`
+	// NeverValidated is the headline per row. It is derived rather than stored
+	// so it cannot disagree with the timestamps beside it.
+	NeverValidated bool `json:"never_validated"`
+}
+
+// ACMEUpstreamAuthorizationList is the served response.
+type ACMEUpstreamAuthorizationList struct {
+	Items []ACMEUpstreamAuthorization `json:"items"`
+	// NeverValidatedCount is the number an operator should act on: identifiers
+	// this install has issued for but never once validated itself.
+	NeverValidatedCount int `json:"never_validated_count"`
+	// Guidance travels with the data rather than living in documentation
+	// nobody opens during an incident.
+	Guidance string `json:"guidance"`
+}
+
+const acmeUpstreamAuthorizationGuidance = "An authority that already holds a valid authorization issues without a " +
+	"challenge, so a broken validation path stays invisible while certificates keep arriving. Rows that have never " +
+	"been validated by this install are the ones to act on: every issuance for them so far rode a reuse, and when " +
+	"the authority's reuse window closes they fail together rather than one at a time. Empty is the honest answer " +
+	"for a deployment that has not enabled upstream domain validation — it means nothing has been observed, not " +
+	"that nothing is stale."
+
+func (a *API) listACMEUpstreamAuthorizations(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.store == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "ACME DNS-01 provider configuration is not configured"))
+		return
+	}
+	recs, err := a.store.ListACMEUpstreamAuthorizations(r.Context(), tenantID)
+	if err != nil {
+		a.writeACMEDNS01Error(w, err)
+		return
+	}
+	out := ACMEUpstreamAuthorizationList{
+		Items:    make([]ACMEUpstreamAuthorization, 0, len(recs)),
+		Guidance: acmeUpstreamAuthorizationGuidance,
+	}
+	for _, rec := range recs {
+		item := ACMEUpstreamAuthorization{
+			Identifier: rec.Identifier, Issuer: rec.Issuer, ChallengeType: rec.ChallengeType,
+			ReuseCount: rec.ReuseCount, ValidateCount: rec.ValidateCount,
+			NeverValidated: rec.LastValidatedAt.IsZero(),
+		}
+		if !rec.LastValidatedAt.IsZero() {
+			item.LastValidatedAt = rec.LastValidatedAt.UTC().Format(time.RFC3339)
+		}
+		if !rec.LastReusedAt.IsZero() {
+			item.LastReusedAt = rec.LastReusedAt.UTC().Format(time.RFC3339)
+		}
+		if !rec.ExpiresAt.IsZero() {
+			item.ExpiresAt = rec.ExpiresAt.UTC().Format(time.RFC3339)
+		}
+		if item.NeverValidated {
+			out.NeverValidatedCount++
+		}
+		out.Items = append(out.Items, item)
+	}
+	a.writeJSON(w, http.StatusOK, out)
 }

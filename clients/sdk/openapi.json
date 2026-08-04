@@ -365,6 +365,9 @@
       },
       "ACMEDNS01ProviderConfig": {
         "properties": {
+          "allow_upstream_dv": {
+            "type": "boolean"
+          },
           "allow_wildcards": {
             "type": "boolean"
           },
@@ -448,6 +451,9 @@
       },
       "ACMEDNS01ProviderConfigRequest": {
         "properties": {
+          "allow_upstream_dv": {
+            "type": "boolean"
+          },
           "allow_wildcards": {
             "type": "boolean"
           },
@@ -613,6 +619,70 @@
           "required",
           "generated_at",
           "items"
+        ],
+        "type": "object"
+      },
+      "ACMEUpstreamAuthorization": {
+        "properties": {
+          "challenge_type": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "last_reused_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_validated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "never_validated": {
+            "type": "boolean"
+          },
+          "reuse_count": {
+            "type": "integer"
+          },
+          "validate_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "identifier",
+          "issuer",
+          "reuse_count",
+          "validate_count",
+          "never_validated"
+        ],
+        "type": "object"
+      },
+      "ACMEUpstreamAuthorizationList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEUpstreamAuthorization"
+            },
+            "type": "array"
+          },
+          "never_validated_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "never_validated_count",
+          "guidance"
         ],
         "type": "object"
       },
@@ -8498,6 +8568,12 @@
           "revoke_note": {
             "type": "string"
           },
+          "unattended_dv": {
+            "type": "boolean"
+          },
+          "unattended_dv_note": {
+            "type": "string"
+          },
           "validation": {
             "enum": [
               "acme_challenge",
@@ -8515,7 +8591,8 @@
           "renew",
           "revoke",
           "key_handling",
-          "validation"
+          "validation",
+          "unattended_dv"
         ],
         "type": "object"
       },
@@ -8532,11 +8609,15 @@
           },
           "revoke_capable_count": {
             "type": "integer"
+          },
+          "unattended_dv_capable_count": {
+            "type": "integer"
           }
         },
         "required": [
           "issuers",
           "revoke_capable_count",
+          "unattended_dv_capable_count",
           "guidance"
         ],
         "type": "object"
@@ -20687,6 +20768,53 @@
           }
         ],
         "summary": "List served ACME DNS-01 provider coverage",
+        "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/acme/dns-01/upstream-authorizations": {
+      "get": {
+        "operationId": "listACMEUpstreamAuthorizations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEUpstreamAuthorizationList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List upstream ACME authorization staleness: when each identifier last actually validated vs last rode a reuse",
         "x-trstctl-permission": "issuers:read"
       }
     },

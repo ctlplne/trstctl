@@ -79,6 +79,7 @@ const (
 	EventACMEDNS01Preflighted                     = "acme.dns01.preflighted"
 	EventACMEDNS01RecordPresented                 = "acme.dns01.record.presented"
 	EventACMEDNS01RecordCleaned                   = "acme.dns01.record.cleaned"
+	EventACMEUpstreamAuthorizationObserved        = "acme.dns01.upstream.authorization.observed"
 	EventMDMSCEPPolicyUpserted                    = "mdm.scep_policy.upserted"
 	EventMDMSCEPPolicyDeleted                     = "mdm.scep_policy.deleted"
 	EventMDMSCEPChallengeRotated                  = "mdm.scep_challenge.rotated"
@@ -766,12 +767,39 @@ type ACMEDNS01ProviderConfigUpserted struct {
 	CAAIssuerDomain  string          `json:"caa_issuer_domain,omitempty"`
 	AllowedMethods   []string        `json:"allowed_methods,omitempty"`
 	AllowWildcards   bool            `json:"allow_wildcards,omitempty"`
+	// AllowUpstreamDV is additive at schema v1 and omitempty: an event written
+	// before epic B7 replays as false, which is the correct default — an
+	// operator who configured this before upstream DV existed cannot have
+	// consented to it.
+	AllowUpstreamDV bool `json:"allow_upstream_dv,omitempty"`
 }
 
 // ACMEDNS01ProviderConfigDeleted is the payload of
 // acme.dns01.provider_config.deleted.
 type ACMEDNS01ProviderConfigDeleted struct {
 	ID string `json:"id"`
+}
+
+// ACMEUpstreamAuthorizationObserved is the payload of
+// acme.dns01.upstream.authorization.observed (epic B7).
+//
+// Reused is the field this event exists for. An authority that already
+// considers an identifier authorized issues without a challenge, which is
+// normal and also the thing that hides a validation path that has quietly
+// stopped working: nothing fails until the reuse window closes, and then it
+// fails for every identifier at once, because they were all authorized in the
+// same original burst.
+type ACMEUpstreamAuthorizationObserved struct {
+	Identifier string `json:"identifier"`
+	// Issuer is the authority. The same name authorized at two CAs has two
+	// independent reuse windows, and reporting their union would hide whichever
+	// one is about to lapse.
+	Issuer string `json:"issuer"`
+	// ChallengeType is empty when the authorization was reused. The emptiness
+	// is the signal, not a missing field.
+	ChallengeType string    `json:"challenge_type,omitempty"`
+	Reused        bool      `json:"reused"`
+	ExpiresAt     time.Time `json:"expires_at,omitzero"`
 }
 
 // ACMEDNS01Preflighted is the payload of acme.dns01.preflighted. It records the
@@ -1629,6 +1657,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventACMEDNS01Preflighted:                     {1: true},
 	EventACMEDNS01RecordPresented:                 {1: true},
 	EventACMEDNS01RecordCleaned:                   {1: true},
+	EventACMEUpstreamAuthorizationObserved:        {1: true},
 	EventMDMSCEPPolicyUpserted:                    {1: true},
 	EventMDMSCEPPolicyDeleted:                     {1: true},
 	EventMDMSCEPChallengeRotated:                  {1: true},
@@ -2252,7 +2281,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Zone: pl.Zone, ChallengeDomain: pl.ChallengeDomain, DelegationTarget: pl.DelegationTarget,
 			CredentialRefs: pl.CredentialRefs, Config: pl.Config, CAAIssuerDomain: pl.CAAIssuerDomain,
 			AllowedMethods: pl.AllowedMethods, AllowWildcards: pl.AllowWildcards,
-			CreatedAt: e.Time, UpdatedAt: e.Time,
+			AllowUpstreamDV: pl.AllowUpstreamDV,
+			CreatedAt:       e.Time, UpdatedAt: e.Time,
 		})
 	case EventACMEDNS01ProviderConfigDeleted:
 		var pl ACMEDNS01ProviderConfigDeleted
@@ -2263,6 +2293,22 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
 		return p.store.ApplyACMEDNS01ProviderConfigDeletedTx(ctx, tx, e.TenantID, pl.ID)
+	case EventACMEUpstreamAuthorizationObserved:
+		var pl ACMEUpstreamAuthorizationObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Identifier == "" || pl.Issuer == "" {
+			return fmt.Errorf("projections: %s requires identifier and issuer", e.Type)
+		}
+		// A reuse and a validation update different columns on purpose: the
+		// gap between "last issued" and "last actually validated" is the number
+		// an operator needs, and folding them into one timestamp erases it.
+		return p.store.ApplyACMEUpstreamAuthorizationObservedTx(ctx, tx, store.ACMEUpstreamAuthorization{
+			TenantID: e.TenantID, Identifier: pl.Identifier, Issuer: pl.Issuer,
+			ChallengeType: pl.ChallengeType, Reused: pl.Reused,
+			ExpiresAt: pl.ExpiresAt, EventSequence: e.Sequence, ObservedAt: e.Time,
+		})
 	case EventACMEDNS01Preflighted:
 		var pl ACMEDNS01Preflighted
 		if err := decode(e, &pl); err != nil {

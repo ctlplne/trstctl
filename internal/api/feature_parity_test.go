@@ -93,11 +93,14 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// certificate template posture read (F1) raised it to 303 and is mapped
 	// onto the discovery/posture feature row in the same change; the per-issuer
 	// capability matrix (R2) raised it to 304 and is mapped onto the issuer
-	// feature rows in the same change.
+	// feature rows in the same change; the upstream authorization staleness
+	// read (B7) raised it to 305 and is mapped onto the DNS-01 feature row,
+	// because it answers "can this deployment still validate" for the same
+	// provider configs that row already covers.
 	// The count is a deliberate ratchet: every new operation must be mapped to
 	// a feature-catalog row in the same change.
-	if len(out) != 304 {
-		t.Fatalf("OpenAPI operationIds = %d, want 304", len(out))
+	if len(out) != 305 {
+		t.Fatalf("OpenAPI operationIds = %d, want 305", len(out))
 	}
 	return out
 }

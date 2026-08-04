@@ -49,7 +49,10 @@ import (
 // outbox delivery and destroys both the provider copy and the source buffers on
 // every success/failure path. ACME account keys and remote CA/HSM private-key
 // operations are opaque handles on SignerProvider; they never enter this process.
-func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig, signerProvider SignerProvider, tokenProvider signing.SignTokenProvider, guard *egress.Guard) ([]ExternalCA, error) {
+//
+// upstreamDV may be nil. When it is non-nil, an ACME entry with upstream_dns01
+// enabled gets a solver bound to that entry's own CAA issuer domain (epic B7).
+func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig, signerProvider SignerProvider, tokenProvider signing.SignTokenProvider, guard *egress.Guard, upstreamDV *upstreamDVHolder) ([]ExternalCA, error) {
 	if err := config.ValidateExternalCAs(items); err != nil {
 		return nil, err
 	}
@@ -78,7 +81,7 @@ func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig,
 				return nil, fmt.Errorf("external CA %q Azure CA custody: %w", item.ID, err)
 			}
 		}
-		factory, err := externalCAFactoryFromConfig(item, guard, acmeAccountSigner, azureCASigner)
+		factory, err := externalCAFactoryFromConfig(item, guard, acmeAccountSigner, azureCASigner, upstreamDV)
 		if err != nil {
 			return nil, fmt.Errorf("external CA %q: %w", item.ID, err)
 		}
@@ -87,7 +90,7 @@ func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig,
 	return out, nil
 }
 
-func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Guard, acmeAccountSigner, azureCASigner crypto.DigestSigner) (ExternalCAFactory, error) {
+func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Guard, acmeAccountSigner, azureCASigner crypto.DigestSigner, upstreamDV *upstreamDVHolder) (ExternalCAFactory, error) {
 	poll, err := item.PollIntervalDuration()
 	if err != nil {
 		return nil, err
@@ -202,7 +205,16 @@ func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Gua
 			if acmeAccountSigner == nil {
 				return fail(errors.New("isolated ACME account signer is required for Let's Encrypt"))
 			}
-			implementation, err = letsencrypt.NewPluginWithRemoteAccountSigner(item.Name, externalCAConfigEndpoint(item), client, acmeAccountSigner)
+			var acmeOpts []letsencrypt.Option
+			if item.UpstreamDNS01 && upstreamDV != nil {
+				// Bound to THIS authority's CAA identifier, not a
+				// process-wide one — see upstreamDVHolder.
+				binding := upstreamDV.bind(item.CAAIssuerDomain, item.ID)
+				acmeOpts = append(acmeOpts,
+					letsencrypt.WithChallengeSolver(binding),
+					letsencrypt.WithDVObserver(binding))
+			}
+			implementation, err = letsencrypt.NewPluginWithRemoteAccountSigner(item.Name, externalCAConfigEndpoint(item), client, acmeAccountSigner, acmeOpts...)
 			if err != nil {
 				return fail(err)
 			}

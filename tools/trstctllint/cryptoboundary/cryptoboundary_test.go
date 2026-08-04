@@ -18,8 +18,12 @@ func TestCryptoBoundary(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), cryptoboundary.Analyzer,
 		"trstctl.com/trstctl/internal/crypto",          // the boundary: allowed
 		"trstctl.com/trstctl/internal/crypto/software", // subpackage of the boundary: allowed
-		"trstctl.com/trstctl/internal/store",           // violation: imports crypto/*
-		"cleanpkg",                                     // clean: no crypto import at all
+		// AN-3 inward half: a package inside the boundary importing the platform.
+		// The boundary is worth having because it is small enough to read; an
+		// import outward drags the platform in behind it.
+		"trstctl.com/trstctl/internal/crypto/inbound",
+		"trstctl.com/trstctl/internal/store", // violation: imports crypto/*
+		"cleanpkg",                           // clean: no crypto import at all
 		// CRYPTO-002: third-party crypto (x/crypto, circl) is forbidden outside the
 		// boundary in production code, but a differential/conformance _test.go may
 		// drive a reference client. The fixture has a production file that imports
@@ -27,5 +31,9 @@ func TestCryptoBoundary(t *testing.T) {
 		"thirdpartycrypto",
 		// The boundary itself may import third-party crypto freely.
 		"trstctl.com/trstctl/internal/crypto/pqcfix",
+		// ee/pqc holds crypto AND imports core, and both are correct: it is
+		// inside the boundary for "may hold crypto" and outside it for "must
+		// stay small", because its imports of core ARE the AN-9 attach seam.
+		"trstctl.com/trstctl/ee/pqc",
 	)
 }

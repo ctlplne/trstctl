@@ -21,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
     updateACMEDNS01ProviderConfig: vi.fn(),
     deleteACMEDNS01ProviderConfig: vi.fn(),
     acmeDNS01Preflight: vi.fn(),
+    acmeUpstreamAuthorizations: vi.fn(),
   },
 }));
 
@@ -82,6 +83,8 @@ describe("protocol surface", () => {
     apiMock.updateACMEDNS01ProviderConfig.mockReset();
     apiMock.deleteACMEDNS01ProviderConfig.mockReset();
     apiMock.acmeDNS01Preflight.mockReset();
+    apiMock.acmeUpstreamAuthorizations.mockReset();
+    apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
     apiMock.acmeARIPosture.mockResolvedValue(ariPosture());
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
@@ -176,6 +179,7 @@ describe("protocol surface", () => {
           caa_issuer_domain: "trstctl.example",
           allowed_methods: ["dns-01"],
           allow_wildcards: true,
+          allow_upstream_dv: true,
           secret_handling: "credential_refs_only",
           created_at: "2026-06-26T14:00:00Z",
           updated_at: "2026-06-26T14:00:00Z",
@@ -763,6 +767,140 @@ describe("protocol surface", () => {
     await user.click(deleteConfig);
     await waitFor(() => expect(screen.queryByRole("button", { name: "Delete DNS-01 config prod-cloudflare" })).not.toBeInTheDocument());
     expect(apiMock.deleteACMEDNS01ProviderConfig).toHaveBeenCalledWith("01900000-0000-7000-8000-000000000069");
+  });
+
+  // Editing a provider config must not silently revoke upstream-DV consent
+  // (epic B7).
+  //
+  // The dialog does a PUT, which REPLACES the config. A field the form does not
+  // send comes back as its zero value, so an operator who opened this dialog to
+  // fix a typo in the zone name would have turned off upstream domain
+  // validation without being told — and discovered it one renewal cycle later,
+  // when a process that was supposed to need no human suddenly did.
+  //
+  // The flag is also a permission rather than a preference, so it is shown
+  // rather than merely preserved: publishing into a zone on an external CA's
+  // behalf is not what credentials added for the server direction granted.
+  it("preserves and exposes upstream-DV consent when a config is edited", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Edit DNS-01 config prod-cloudflare" }));
+    const dialog = await screen.findByRole("dialog");
+
+    const consent = within(dialog).getByRole("checkbox", { name: /allow upstream domain validation/i });
+    expect(consent).toBeChecked();
+
+    // Change something unrelated, exactly as an operator would: the first text
+    // field in the dialog, leaving the consent checkbox untouched.
+    const firstField = within(dialog).getAllByRole("textbox")[0];
+    await user.clear(firstField);
+    await user.type(firstField, "prod-cloudflare-renamed");
+    await user.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(apiMock.updateACMEDNS01ProviderConfig).toHaveBeenCalled());
+    const [, input] = apiMock.updateACMEDNS01ProviderConfig.mock.calls[0];
+    expect(input.allow_upstream_dv).toBe(true);
+  });
+
+  // And turning it OFF must actually turn it off — a consent control that only
+  // ever grants is not a control.
+  it("revokes upstream-DV consent when the operator clears it", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Edit DNS-01 config prod-cloudflare" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("checkbox", { name: /allow upstream domain validation/i }));
+    await user.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(apiMock.updateACMEDNS01ProviderConfig).toHaveBeenCalled());
+    const [, input] = apiMock.updateACMEDNS01ProviderConfig.mock.calls[0];
+    expect(input.allow_upstream_dv).toBe(false);
+  });
+
+  // Upstream authorization freshness reaches the operator (epic B7).
+  //
+  // Automating DNS-01 upstream removes the human from the validation cycle, and
+  // with them the human who noticed when validation broke. An authority holding a
+  // valid authorization issues without a challenge, so a dead publish path stays
+  // invisible until the reuse window closes — and then every identifier
+  // authorized in the same original burst fails on the same day. The panel exists
+  // to make that visible while it is still one warning rather than an outage.
+  describe("upstream authorization freshness", () => {
+    it("names the identifiers this deployment has never validated itself", async () => {
+      apiMock.acmeUpstreamAuthorizations.mockResolvedValue({
+        items: [
+          {
+            identifier: "*.app.example.test",
+            issuer: "letsencrypt",
+            challenge_type: "",
+            last_reused_at: "2026-07-30T09:00:00Z",
+            expires_at: "2026-08-09T09:00:00Z",
+            reuse_count: 6,
+            validate_count: 0,
+            never_validated: true,
+          },
+          {
+            identifier: "api.example.test",
+            issuer: "letsencrypt",
+            challenge_type: "dns-01",
+            last_validated_at: "2026-08-01T10:00:00Z",
+            expires_at: "2026-08-31T10:00:00Z",
+            reuse_count: 0,
+            validate_count: 3,
+            never_validated: false,
+          },
+        ],
+        never_validated_count: 1,
+        guidance: "Rows never validated by this install are the ones to act on.",
+      });
+
+      await renderProtocols();
+
+      const heading = await screen.findByRole("heading", { name: /upstream authorization freshness/i });
+      const panel = heading.closest("section");
+      expect(panel).not.toBeNull();
+
+      // The wildcard has issued six times and proved control zero times. That is
+      // the row an operator must see; reporting only "last issued" would show it
+      // as the healthiest name on the list.
+      expect(within(panel as HTMLElement).getByText("*.app.example.test")).toBeInTheDocument();
+      expect(within(panel as HTMLElement).getByText(/never validated here/i)).toBeInTheDocument();
+      // Singular, because the count is 1. "1 identifiers" is the kind of detail
+    // that quietly tells a reader nobody looked at this screen.
+    expect(within(panel as HTMLElement).getByText(/1 identifier has never been validated/i)).toBeInTheDocument();
+
+      // A name that genuinely validates shows its date rather than the warning.
+      // Rendered through the locale/timezone policy like every other panel in
+      // this file, rather than as a raw ISO string.
+      expect(within(panel as HTMLElement).getAllByText(/2026/).length).toBeGreaterThan(0);
+    });
+
+    // A failed read must not look like a healthy deployment.
+    //
+    // The panel hides when there is nothing to show, which is right: empty is
+    // the honest answer for a deployment that never enabled upstream DV. But an
+    // ERROR is a third state, and hiding it too would mean a broken surface and
+    // a clean one render identically — the same false reassurance this panel
+    // exists to prevent, one level up.
+    it("says so when upstream freshness cannot be read at all", async () => {
+      apiMock.acmeUpstreamAuthorizations.mockRejectedValue(new Error("upstream freshness offline"));
+      await renderProtocols();
+
+      expect(await screen.findByText(/upstream authorization freshness unavailable/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/nothing here should be taken as evidence that validation is healthy/i),
+      ).toBeInTheDocument();
+    });
+
+    it("stays out of the way when nothing upstream has been observed", async () => {
+      await renderProtocols();
+      // Empty is the honest answer for a deployment that never enabled upstream
+      // DV. An empty table with a reassuring header would read as "nothing is
+      // stale", which is a different and false claim.
+      expect(screen.queryByRole("heading", { name: /upstream authorization freshness/i })).toBeNull();
+    });
   });
 });
 

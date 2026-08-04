@@ -31,6 +31,7 @@ func TestRevokeReachesTheACMEAuthority(t *testing.T) {
 	ctx := context.Background()
 
 	issued, err := plugin.Issue(ctx, ca.IssueRequest{
+		TenantID: "tenant-a",
 		CSR:      buildCSR(t, "revoke.example.test", []string{"revoke.example.test"}),
 		DNSNames: []string{"revoke.example.test"},
 	})

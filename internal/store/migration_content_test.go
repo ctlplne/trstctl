@@ -25,6 +25,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	109: true,
 	108: true,
 	62:  true,
 	72:  true,
@@ -486,6 +487,109 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 		}
 		if segments != 0 {
 			t.Errorf("0108 invented %d declared segments", segments)
+		}
+	})
+
+	// 0109 adds upstream-DV consent (epic B7). The property is consent, not
+	// shape: every provider config that already exists was created so trstctl
+	// could VERIFY a challenge somebody else published. None of them agreed
+	// that trstctl may PUBLISH into that zone whenever an external CA asks. A
+	// migration that defaulted the column true would grant that silently,
+	// across every zone an operator ever gave us credentials for.
+	t.Run("0109_acme_dns01_upstream_dv", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 109)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		for _, tenant := range []string{tenantA, tenantB} {
+			if _, err := pool.Exec(ctx,
+				`INSERT INTO acme_dns01_provider_configs
+				     (id, tenant_id, name, provider, zone, credential_refs, config,
+				      allowed_methods, allow_wildcards, created_at, updated_at)
+				 VALUES (gen_random_uuid(), $1, $2, 'route53', 'example.test',
+				         '{}'::jsonb, '{}'::jsonb, ARRAY['dns-01'], true, now(), now())`,
+				tenant, "seeded-"+tenant); err != nil {
+				t.Fatalf("seed provider config for %s: %v", tenant, err)
+			}
+		}
+
+		var before int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM acme_dns01_provider_configs`).Scan(&before); err != nil {
+			t.Fatalf("count seeded configs: %v", err)
+		}
+		if before == 0 {
+			t.Fatal("precondition: the content case needs seeded provider configs to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		var after, consented int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*), count(*) FILTER (WHERE allow_upstream_dv)
+			   FROM acme_dns01_provider_configs`).Scan(&after, &consented); err != nil {
+			t.Fatalf("read post-0109 configs: %v", err)
+		}
+		if after != before {
+			t.Fatalf("0109 changed the config count: %d before, %d after", before, after)
+		}
+		if consented != 0 {
+			t.Errorf("%d existing provider configs came out consenting to upstream domain "+
+				"validation nobody agreed to; a migration cannot grant permission to publish "+
+				"into an operator's DNS zone on an external CA's behalf", consented)
+		}
+	})
+
+	// 0110 adds the upstream authorization read model (epic B7). The property
+	// is the same one 0108 protects for observation, sharpened: a migration
+	// cannot invent validation history. The table's whole purpose is to say
+	// when an identifier last actually PROVED control, and the tempting
+	// convenience — backfill a row per provider config, or per certificate,
+	// stamped "validated at migration time" — would manufacture exactly the
+	// evidence an operator is meant to check. A deployment upgrading into this
+	// table has never validated anything upstream, and must come out saying so.
+	t.Run("0110_acme_upstream_authorizations", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 110)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		// Seed the things a backfill would be tempted to derive rows FROM:
+		// existing provider configs, and existing certificates.
+		for _, tenant := range []string{tenantA, tenantB} {
+			if _, err := pool.Exec(ctx,
+				`INSERT INTO acme_dns01_provider_configs
+				     (id, tenant_id, name, provider, zone, credential_refs, config,
+				      allowed_methods, allow_wildcards, allow_upstream_dv, created_at, updated_at)
+				 VALUES (gen_random_uuid(), $1, $2, 'route53', 'example.test',
+				         '{}'::jsonb, '{}'::jsonb, ARRAY['dns-01'], true, true, now(), now())`,
+				tenant, "seeded-"+tenant); err != nil {
+				t.Fatalf("seed provider config for %s: %v", tenant, err)
+			}
+			seedMigrationContent(t, ctx, pool, tenant)
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		var rows int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM acme_upstream_authorizations`).Scan(&rows); err != nil {
+			t.Fatalf("read post-0110 authorizations: %v", err)
+		}
+		if rows != 0 {
+			t.Errorf("%d authorization rows exist immediately after the migration; a schema "+
+				"change cannot witness a domain-validation challenge, and a backfilled row "+
+				"would report control this deployment has never proved", rows)
 		}
 	})
 

@@ -40,12 +40,47 @@ var _ ca.CA = (*Plugin)(nil)
 // NewPluginWithRemoteAccountSigner is the production constructor. The ACME
 // protocol still runs through x/crypto/acme, but the account JWS key is an
 // opaque digest signer backed by the isolated signing process (AN-4/AN-8).
-func NewPluginWithRemoteAccountSigner(name, directoryURL string, client *http.Client, signer crypto.DigestSigner) (*Plugin, error) {
-	driver, err := acmekey.NewDriverWithDigestSigner(directoryURL, nil, client, signer)
+func NewPluginWithRemoteAccountSigner(name, directoryURL string, client *http.Client, signer crypto.DigestSigner, opts ...Option) (*Plugin, error) {
+	var cfg options
+	for _, o := range opts {
+		o(&cfg)
+	}
+	// A nil solver stays nil. The driver fails closed when an authority
+	// actually requires validation, which is the honest behaviour for a
+	// deployment that has configured no DNS-01 provider — the previous no-op
+	// substitution made that state indistinguishable from a working one.
+	driver, err := acmekey.NewDriverWithDigestSigner(directoryURL, cfg.solver, client, signer)
 	if err != nil {
 		return nil, err
 	}
+	if cfg.observer != nil {
+		driver = driver.WithObserver(cfg.observer)
+	}
 	return &Plugin{name: name, driver: driver}, nil
+}
+
+// Option configures the plugin. Variadic rather than a new constructor because
+// internal/crypto/acmekey/production_guard_test.go bans a second constructor
+// name in production code, and the guard is right: two constructors is how one
+// of them quietly becomes the one nobody wires a solver into.
+type Option func(*options)
+
+type options struct {
+	solver   acmekey.ChallengeSolver
+	observer acmekey.DVObserver
+}
+
+// WithChallengeSolver supplies the domain-validation solver (epic B7). Without
+// one this issuer can only obtain certificates for identifiers the authority
+// has already authorized.
+func WithChallengeSolver(s acmekey.ChallengeSolver) Option {
+	return func(o *options) { o.solver = s }
+}
+
+// WithDVObserver receives every authorization outcome, including ones the
+// authority reused without a challenge.
+func WithDVObserver(o acmekey.DVObserver) Option {
+	return func(opt *options) { opt.observer = o }
 }
 
 // Name identifies the authority.
@@ -68,15 +103,23 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 		return ca.Certificate{}, fmt.Errorf("letsencrypt: at least one DNS name is required")
 	}
 
-	der, err := p.driver.IssueChain(ctx, req.DNSNames, req.CSR)
+	// req.TenantID travels with the order. It used to be dropped here, which
+	// meant nothing downstream could scope a lookup to the tenant — fine while
+	// no solver existed, and an AN-1 hole the moment one did.
+	der, err := p.driver.IssueChain(ctx, acmekey.OrderRequest{
+		TenantID: req.TenantID, DNSNames: req.DNSNames, CSR: req.CSR,
+	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return ca.Certificate{}, err
 		}
-		// ACME problem documents contain free-form detail fields and some gateways
-		// echo account authorization. Keep the internal error out of every caller,
-		// journal, and log path.
-		return ca.Certificate{}, errors.New("letsencrypt: upstream ACME issuance failed")
+		// ACME problem documents carry free-form detail and some gateways echo
+		// account authorization, so the upstream error never reaches a caller.
+		// But collapsing EVERY failure into one sentence left an operator with
+		// no idea whether to fix DNS, fix CAA, or wait — so the classified
+		// domain-validation failures are distinguished by a closed set of
+		// phrases that name no provider, no record and no problem detail.
+		return ca.Certificate{}, dvFailureOrGeneric(err)
 	}
 
 	chain := make([]byte, 0)
@@ -119,4 +162,22 @@ func (p *Plugin) Revoke(ctx context.Context, req ca.RevokeRequest) error {
 		return errors.New("letsencrypt: certificate material is not a PEM CERTIFICATE block")
 	}
 	return p.driver.RevokeChain(ctx, block.Bytes, req.ReasonCode)
+}
+
+// dvFailureOrGeneric maps a classified domain-validation failure to a closed
+// phrase an operator can act on, and everything else to the generic message.
+//
+// The phrases name a category, never a value: no provider name, no record
+// content, no ACME problem detail. What an operator needs is which of the four
+// or five things to go and look at.
+func dvFailureOrGeneric(err error) error {
+	switch {
+	case errors.Is(err, acmekey.ErrSolverNotConfigured):
+		return errors.New("letsencrypt: this issuer has no domain-validation solver configured, " +
+			"so it can only obtain certificates for identifiers the authority has already authorized")
+	case errors.Is(err, acmekey.ErrNoSolvableChallenge):
+		return errors.New("letsencrypt: the authority offered no challenge this deployment can solve")
+	default:
+		return errors.New("letsencrypt: upstream ACME issuance failed")
+	}
 }

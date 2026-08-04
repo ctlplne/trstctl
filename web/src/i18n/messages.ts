@@ -1020,6 +1020,26 @@ export const messages = {
     defaultMessage: "Revoke at the authority",
     description: "R2: trstctl ships no revocation for this issuer; the note says where to go instead.",
   },
+  "source.domain.validation.b7dv000001": {
+    defaultMessage: "Domain validation",
+    description: "B7: column header — can trstctl satisfy this authority's DCV challenge unattended.",
+  },
+  "source.unattended.b7dv000002": {
+    defaultMessage: "Unattended",
+    description: "B7: trstctl publishes the dns-01 challenge itself; no human step per validation cycle.",
+  },
+  "source.manual.step.b7dv000003": {
+    defaultMessage: "Manual step",
+    description: "B7: this authority needs a person in the loop each validation cycle; the note says why.",
+  },
+  "source.revoke.internal.r2cap00005": {
+    defaultMessage: "trstctl issues and revokes this",
+    description: "R2: an internal authority has no upstream vendor; revocation runs through trstctl's own CRL/OCSP.",
+  },
+  "source.dv.internal.b7dv000004": {
+    defaultMessage: "No domain validation",
+    description: "B7: an internal authority issues under its own policy; there is no DCV challenge to automate.",
+  },
   "source.unknown.r2cap00004": {
     defaultMessage: "Unknown — capability matrix unavailable",
     description: "R2: the capability matrix could not be read; an absent answer is not a negative answer.",
@@ -5533,6 +5553,74 @@ export const messages = {
   "protocols.dns01.off": {
     defaultMessage: "Off",
     description: "Badge label for an unavailable DNS-01 provider.",
+  },
+  "protocols.dns01.allowUpstreamDV": {
+    defaultMessage: "Allow upstream domain validation",
+    description: "B7: consent for trstctl to publish challenge records into this zone for an external CA.",
+  },
+  "protocols.dns01.allowUpstreamDVHelp": {
+    defaultMessage: "Lets trstctl publish _acme-challenge records in this zone on an external CA's behalf, unattended, on every validation cycle. Credentials added so trstctl could verify a challenge do not grant this.",
+    description: "B7: explains what the consent flag actually permits, since it is a permission rather than a preference.",
+  },
+  "protocols.dns01.upstreamDVAllowed": {
+    defaultMessage: "Upstream domain validation allowed",
+    description: "B7: saved state of the consent flag on a provider config.",
+  },
+  "protocols.dns01.upstreamDVDenied": {
+    defaultMessage: "Upstream domain validation not allowed",
+    description: "B7: saved state of the consent flag; the default, and the safe one.",
+  },
+  "protocols.dns01.upstreamUnavailableTitle": {
+    defaultMessage: "Upstream authorization freshness unavailable",
+    description: "B7: the freshness read failed; an absent answer is not a negative one.",
+  },
+  "protocols.dns01.upstreamUnavailable": {
+    defaultMessage: "This deployment could not read upstream authorization freshness, so nothing here should be taken as evidence that validation is healthy.",
+    description: "B7: says plainly that a failed read is not the same as no problems.",
+  },
+  "protocols.dns01.upstreamHeading": {
+    defaultMessage: "Upstream authorization freshness",
+    description: "B7: when each identifier last actually validated at an external CA, vs when it last rode a reuse.",
+  },
+  "protocols.dns01.upstreamCaption": {
+    defaultMessage: "Upstream ACME authorizations by identifier and authority",
+    description: "B7: screen-reader caption for the upstream authorization table.",
+  },
+  "protocols.dns01.upstreamIdentifier": {
+    defaultMessage: "Identifier",
+    description: "B7: the domain name authorized, wildcards included.",
+  },
+  "protocols.dns01.upstreamIssuer": {
+    defaultMessage: "Authority",
+    description: "B7: which external CA holds this authorization; two CAs have independent reuse windows.",
+  },
+  "protocols.dns01.upstreamLastValidated": {
+    defaultMessage: "Last validated",
+    description: "B7: when a challenge was last actually solved for this identifier.",
+  },
+  "protocols.dns01.upstreamLastReused": {
+    defaultMessage: "Last reused",
+    description: "B7: when the authority last waived the challenge and issued on an existing authorization.",
+  },
+  "protocols.dns01.upstreamExpires": {
+    defaultMessage: "Authorization expires",
+    description: "B7: the authority's own stated expiry for the authorization.",
+  },
+  "protocols.dns01.upstreamNeverValidated": {
+    defaultMessage: "Never validated here",
+    description: "B7: every issuance so far rode a reuse this install did not earn and cannot repeat.",
+  },
+  "protocols.dns01.upstreamNoStatedExpiry": {
+    defaultMessage: "Not stated by the authority",
+    description: "B7: the CA gave no expiry; a local guess would keep looking right as the window moves.",
+  },
+  "protocols.dns01.upstreamNeverValidatedOne": {
+    defaultMessage: "1 identifier has never been validated by this deployment — when the authority's reuse window closes, it fails.",
+    description: "B7: the headline count, singular. Paired with the many form; this codebase pluralises by key, not by interpolation.",
+  },
+  "protocols.dns01.upstreamNeverValidatedMany": {
+    defaultMessage: "{count} identifiers have never been validated by this deployment — when the authority's reuse window closes, they fail together.",
+    description: "B7: the headline count an operator should act on, plural.",
   },
   "protocols.dns01.configHeading": {
     defaultMessage: "DNS-01 provider configs",

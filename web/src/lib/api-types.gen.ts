@@ -97,6 +97,7 @@ export interface ACMEDNS01ProviderCatalogItem {
 }
 
 export interface ACMEDNS01ProviderConfig {
+  allow_upstream_dv?: boolean;
   allow_wildcards?: boolean;
   allowed_methods: string[];
   caa_issuer_domain?: string;
@@ -119,6 +120,7 @@ export interface ACMEDNS01ProviderConfigList {
 }
 
 export interface ACMEDNS01ProviderConfigRequest {
+  allow_upstream_dv?: boolean;
   allow_wildcards?: boolean;
   allowed_methods?: ("http-01" | "dns-01" | "tls-alpn-01")[];
   caa_issuer_domain?: string;
@@ -160,6 +162,24 @@ export interface ACMEEABPosture {
   items: ACMEEABCredential[];
   required: boolean;
   served: boolean;
+}
+
+export interface ACMEUpstreamAuthorization {
+  challenge_type?: string;
+  expires_at?: string;
+  identifier: string;
+  issuer: string;
+  last_reused_at?: string;
+  last_validated_at?: string;
+  never_validated: boolean;
+  reuse_count: number;
+  validate_count: number;
+}
+
+export interface ACMEUpstreamAuthorizationList {
+  guidance: string;
+  items: ACMEUpstreamAuthorization[];
+  never_validated_count: number;
 }
 
 export interface ADCSFindingEvidence {
@@ -2192,6 +2212,8 @@ export interface IssuerCapability {
   renew: boolean;
   revoke: boolean;
   revoke_note?: string;
+  unattended_dv: boolean;
+  unattended_dv_note?: string;
   validation: "acme_challenge" | "account_scoped" | "organizational" | "internal";
 }
 
@@ -2199,6 +2221,7 @@ export interface IssuerCapabilityMatrix {
   guidance: string;
   issuers: IssuerCapability[];
   revoke_capable_count: number;
+  unattended_dv_capable_count: number;
 }
 
 export interface IssuerList {

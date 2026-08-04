@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -99,6 +100,16 @@ func (a *servedACMEDNS01Automation) Present(ctx context.Context, tenantID, domai
 	}
 	recordName := acme.DNS01RecordName(domain)
 	value := acme.DNS01RecordValue(keyAuth)
+	return a.presentRecord(ctx, tenantID, cfg, domain, recordName, value)
+}
+
+// presentRecord publishes one TXT record and returns its retraction.
+//
+// Split out of Present so the upstream client solver (epic B7) publishes
+// through exactly this path rather than a second one. Two publish paths would
+// drift, and the one that drifts is always the one exercised less — which here
+// would be the one that runs unattended every validation cycle.
+func (a *servedACMEDNS01Automation) presentRecord(ctx context.Context, tenantID string, cfg store.ACMEDNS01ProviderConfig, domain, recordName, value string) (func(context.Context) error, error) {
 	payload := acmeDNS01OutboxPayload{
 		ConfigID:         cfg.ID,
 		Provider:         cfg.Provider,
@@ -111,11 +122,31 @@ func (a *servedACMEDNS01Automation) Present(ctx context.Context, tenantID, domai
 		CredentialRefs:   cfg.CredentialRefs,
 		Config:           cfg.Config,
 	}
-	presentKey := acmeDNS01IdempotencyKey(destinationACMEDNS01Present, cfg.ID, recordName, value)
+	// The key carries a per-publish nonce, and it has to.
+	//
+	// Keyed on (config, record, value) alone, a SECOND solve of the same
+	// authorization — a retried order, the same token, therefore the same key
+	// authorization and the same TXT value — found the earlier row already
+	// enqueued and delivered, and returned success. But that first publish had
+	// been retracted when its attempt finished, so the solver reported a record
+	// live in DNS that was not there, the authority found nothing, and the
+	// authorization went invalid with no failure anywhere in trstctl.
+	//
+	// AN-5 is preserved where it is meant to apply: a retried DELIVERY of one
+	// enqueued row is still deduplicated by the same key. What is no longer
+	// deduplicated is two separate publish intents, which are genuinely two
+	// effects because the first one was undone. Republishing an identical TXT
+	// value is an upsert at every supported provider, so the cost of being
+	// wrong in this direction is nothing.
+	publishNonce := uuid.NewString()
+	presentKey := acmeDNS01IdempotencyKey(destinationACMEDNS01Present, cfg.ID, recordName, value+"#"+publishNonce)
 	if err := a.enqueueAndWait(ctx, tenantID, destinationACMEDNS01Present, presentKey, payload); err != nil {
 		return nil, fmt.Errorf("acme: dns-01 present %s: %w", recordName, err)
 	}
-	cleanupKey := acmeDNS01IdempotencyKey(destinationACMEDNS01Cleanup, cfg.ID, recordName, value)
+	// The cleanup pairs with THIS publish, so it carries the same nonce: a
+	// retraction deduplicated against an earlier attempt's cleanup would leave
+	// this attempt's record live in public DNS.
+	cleanupKey := acmeDNS01IdempotencyKey(destinationACMEDNS01Cleanup, cfg.ID, recordName, value+"#"+publishNonce)
 	return func(cleanupCtx context.Context) error {
 		return a.enqueueAndWait(cleanupCtx, tenantID, destinationACMEDNS01Cleanup, cleanupKey, payload)
 	}, nil
@@ -156,11 +187,42 @@ func (a *servedACMEDNS01Automation) Deliver(ctx context.Context, m orchestrator.
 	}
 }
 
-func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, tenantID, domain string) (store.ACMEDNS01ProviderConfig, error) {
+// selectProviderConfigForUpstream is selectProviderConfig plus the upstream
+// consent check (epic B7).
+//
+// A separate entry point rather than a flag, so the consent requirement cannot
+// be forgotten at a call site: the upstream solver has no way to reach the
+// unchecked selector by accident.
+func (a *servedACMEDNS01Automation) selectProviderConfigForUpstream(ctx context.Context, tenantID, domain string) (store.ACMEDNS01ProviderConfig, error) {
+	// The domain keeps its "*." here. Stripping it before selection — which an
+	// earlier version did — silently disabled the selector's own wildcard
+	// filter, because that filter is guarded by acme.IsWildcard(domain). A zone
+	// with two configs, only one of them wildcard-capable, could then pick the
+	// wrong one and fail the order while a config that would have worked sat
+	// right beside it.
+	cfg, err := a.selectProviderConfig(ctx, tenantID, domain, upstreamDVConsented)
+	if err != nil {
+		return store.ACMEDNS01ProviderConfig{}, err
+	}
+	return cfg, nil
+}
+
+// upstreamDVConsented filters selection to configs an operator has enabled for
+// upstream domain validation.
+//
+// A FILTER, not a post-hoc check on whichever config matched first. Consent is
+// per config, so a zone covered by two of them — one consented, one not — must
+// select the consented one rather than reporting that the zone is not enabled.
+// The error when nothing matches still names the flag, because "no config
+// matches" would leave an operator with nothing to act on.
+func upstreamDVConsented(cfg store.ACMEDNS01ProviderConfig) bool { return cfg.AllowUpstreamDV }
+
+func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, tenantID, domain string, extra ...func(store.ACMEDNS01ProviderConfig) bool) (store.ACMEDNS01ProviderConfig, error) {
 	configs, err := a.store.ListACMEDNS01ProviderConfigs(ctx, tenantID)
 	if err != nil {
 		return store.ACMEDNS01ProviderConfig{}, err
 	}
+	rejectedByExtra := false
 	for _, cfg := range configs {
 		if !stringIn(acme.ChallengeDNS01, cfg.AllowedMethods) {
 			continue
@@ -171,9 +233,31 @@ func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, te
 		if !dns01ConfigMatchesDomain(cfg, domain) {
 			continue
 		}
+		if !allExtraPredicatesPass(cfg, extra) {
+			// Remembered so the error can say WHY: a config covering this zone
+			// exists and was rejected by an operator-settable flag, which is a
+			// different problem from no config at all.
+			rejectedByExtra = true
+			continue
+		}
 		return cfg, nil
 	}
+	if rejectedByExtra {
+		return store.ACMEDNS01ProviderConfig{}, fmt.Errorf(
+			"server: a DNS-01 provider config covers %s but none of them is enabled for upstream "+
+				"domain validation; enable allow_upstream_dv on the one that should publish "+
+				"challenge records into that zone on an external CA's behalf", domain)
+	}
 	return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("acme: no served dns-01 provider config matches %s", domain)
+}
+
+func allExtraPredicatesPass(cfg store.ACMEDNS01ProviderConfig, extra []func(store.ACMEDNS01ProviderConfig) bool) bool {
+	for _, ok := range extra {
+		if ok != nil && !ok(cfg) {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *servedACMEDNS01Automation) AllowedMethods(ctx context.Context, tenantID, domain string) ([]string, bool, error) {

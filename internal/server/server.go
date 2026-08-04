@@ -350,6 +350,14 @@ type Deps struct {
 	// surface fail-closed.
 	ExternalCAs []ExternalCA
 
+	// UpstreamDV carries the unattended domain-validation seam for ACME
+	// authorities configured with upstream_dns01 (epic B7). The external-CA
+	// factories capture it during dependency construction; the Server fills it
+	// once the DNS-01 automation exists, so an order arriving before that fails
+	// closed rather than appearing to validate. Nil disables upstream DV, which
+	// is the pre-B7 behaviour: issuance only for already-authorized identifiers.
+	UpstreamDV *upstreamDVHolder
+
 	// ConnectorRegistry configures the trusted, in-process native deployment
 	// connectors (CLM-05/F7/F27). When set, connector.deploy outbox rows whose
 	// connector name is registered here are delivered by the running binary through
@@ -1261,6 +1269,9 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 	}
 	if d.Store != nil && d.Log != nil && s.outbox != nil {
 		s.acmeDNS01 = newServedACMEDNS01Automation(d.Store, d.Log, s.outbox, d.KEK, s.plugins, d.TenantCrypto)
+		// Close the late-binding seam: from here an ACME authority configured
+		// with upstream_dns01 can actually publish challenge records (B7).
+		d.UpstreamDV.set(s.acmeDNS01, d.Log)
 	}
 	if err := s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL); err != nil {
 		return err

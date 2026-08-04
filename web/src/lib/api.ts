@@ -29,6 +29,7 @@ import type {
   ACMEDNS01ProviderCatalogItem,
   ACMEDNS01ProviderConfig,
   ACMEDNS01ProviderConfigList,
+  ACMEUpstreamAuthorizationList,
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
   ADCSPosture as GenADCSPosture,
@@ -508,6 +509,7 @@ export type {
   ACMEDNS01ProviderCatalogItem,
   ACMEDNS01ProviderConfig,
   ACMEDNS01ProviderConfigList,
+  ACMEUpstreamAuthorizationList,
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
   AgentCertRevocation,
@@ -1202,6 +1204,7 @@ export interface Api {
   setACMEEABCredentialDisabled(kid: string, disabled: boolean): Promise<ACMEEABCredential>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   acmeDNS01ProviderConfigs(): Promise<ACMEDNS01ProviderConfigList>;
+  acmeUpstreamAuthorizations(): Promise<ACMEUpstreamAuthorizationList>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
@@ -1525,6 +1528,7 @@ const liveApi: Api = {
     mutate<ACMEEABCredential>("POST", `/api/v1/acme/eab-credentials/${encodeURIComponent(kid)}/${disabled ? "disable" : "enable"}`, {}),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
+  acmeUpstreamAuthorizations: () => req<ACMEUpstreamAuthorizationList>("/api/v1/acme/dns-01/upstream-authorizations"),
   mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),
   mdmSCEPPolicies: () => req<MDMSCEPPolicyList>("/api/v1/mdm/scep/policies"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),

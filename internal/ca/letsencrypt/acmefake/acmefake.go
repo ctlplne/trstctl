@@ -24,6 +24,10 @@ import (
 )
 
 // Server is a running fake ACME CA.
+// dnsChallengeToken is the fixed token this authority issues. Fixed so a test
+// can compute the expected TXT value without scraping it back out.
+const dnsChallengeToken = "b7-dns01-token" // #nosec G101 -- fabricated fixture challenge token in a test double; no value is real (CWE-798)
+
 type Server struct {
 	ts        *httptest.Server
 	authority *cryptoca.Authority
@@ -34,6 +38,13 @@ type Server struct {
 	certs  map[string][]byte // path -> PEM chain
 	// revocations records revoke-cert requests that actually arrived (epic R2).
 	revocations []string
+	// B7: domain-validation mode. Off by default so existing tests keep
+	// exercising what they were written for.
+	requireDV        bool
+	identifier       string
+	wildcard         bool
+	accepted         map[string]bool
+	challengeAccepts int
 }
 
 // NewServer starts a fake ACME CA backed by a fresh internal CA.
@@ -42,7 +53,7 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{authority: authority, certs: map[string][]byte{}}
+	s := &Server{authority: authority, certs: map[string][]byte{}, accepted: map[string]bool{}}
 	s.ts = httptest.NewServer(http.HandlerFunc(s.route))
 	return s, nil
 }
@@ -66,6 +77,27 @@ func (s *Server) Revocations() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.revocations...)
+}
+
+// RequireDomainValidation makes this authority issue PENDING orders with a
+// dns-01 challenge, so a client must actually solve one.
+//
+// Opt-in rather than the default: the six existing call sites test issuance
+// mechanics, not validation, and forcing DV on them would test the fixture.
+func (s *Server) RequireDomainValidation(identifier string, wildcard bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.requireDV = true
+	s.identifier = identifier
+	s.wildcard = wildcard
+}
+
+// ChallengeAccepts counts challenges the client accepted. A DV test asserts
+// this moved: an order that finalized without it did not validate anything.
+func (s *Server) ChallengeAccepts() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.challengeAccepts
 }
 
 func (s *Server) nextNonce() string {
@@ -102,14 +134,81 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.orders++
 		n := s.orders
+		requireDV := s.requireDV
 		s.mu.Unlock()
 		w.Header().Set("Location", s.u(fmt.Sprintf("/order/%d", n)))
 		w.WriteHeader(http.StatusCreated)
+		if requireDV {
+			// PENDING. The order cannot be finalized until the authorization
+			// validates, which happens only after the client publishes the
+			// record and accepts the challenge.
+			_, _ = fmt.Fprintf(w, `{"status":"pending","authorizations":[%q],"finalize":%q}`,
+				s.u(fmt.Sprintf("/authz/%d", n)), s.u(fmt.Sprintf("/order/%d/finalize", n)))
+			return
+		}
 		// Pre-authorized: the order is immediately ready to finalize.
 		_, _ = fmt.Fprintf(w, `{"status":"ready","authorizations":[%q],"finalize":%q}`,
 			s.u(fmt.Sprintf("/authz/%d", n)), s.u(fmt.Sprintf("/order/%d/finalize", n)))
 	case strings.HasPrefix(r.URL.Path, "/authz/"):
-		_, _ = fmt.Fprint(w, `{"status":"valid","identifier":{"type":"dns","value":"example.test"}}`)
+		s.mu.Lock()
+		requireDV := s.requireDV
+		accepted := s.accepted[r.URL.Path]
+		s.mu.Unlock()
+		if !requireDV {
+			_, _ = fmt.Fprint(w, `{"status":"valid","identifier":{"type":"dns","value":"example.test"}}`)
+			return
+		}
+		// A REAL pending authorization offering dns-01. It becomes valid only
+		// once the challenge has been accepted, so a client that presents
+		// nothing and accepts nothing never gets an order it can finalize.
+		//
+		// This is the whole point of the option: with a pre-authorized order,
+		// a solver that does nothing passes every test — which is how the
+		// upstream path shipped for this long unable to validate at all.
+		status := "pending"
+		if accepted {
+			status = "valid"
+		}
+		writeJSON(w, map[string]any{
+			"status":     status,
+			"wildcard":   s.wildcard,
+			"identifier": map[string]string{"type": "dns", "value": s.identifier},
+			"challenges": []map[string]any{{
+				"type":   "dns-01",
+				"url":    s.u(strings.Replace(r.URL.Path, "/authz/", "/chal/", 1)),
+				"token":  dnsChallengeToken,
+				"status": status,
+			}},
+		})
+	case strings.HasPrefix(r.URL.Path, "/chal/"):
+		// Accepting the challenge is what flips the authorization to valid.
+		authzPath := strings.Replace(r.URL.Path, "/chal/", "/authz/", 1)
+		s.mu.Lock()
+		s.accepted[authzPath] = true
+		s.challengeAccepts++
+		s.mu.Unlock()
+		writeJSON(w, map[string]any{
+			"type": "dns-01", "url": s.u(r.URL.Path),
+			"token": dnsChallengeToken, "status": "valid",
+		})
+	case strings.HasPrefix(r.URL.Path, "/order/") && !strings.HasSuffix(r.URL.Path, "/finalize"):
+		// Polling the order. After the authorization validates, the order
+		// becomes ready — this is the transition a real client waits on, and
+		// without it a DV order can never be finalized.
+		n := strings.TrimPrefix(r.URL.Path, "/order/")
+		authzPath := "/authz/" + n
+		s.mu.Lock()
+		accepted := s.accepted[authzPath]
+		s.mu.Unlock()
+		status := "pending"
+		if accepted || !s.requireDV {
+			status = "ready"
+		}
+		writeJSON(w, map[string]any{
+			"status":         status,
+			"authorizations": []string{s.u(authzPath)},
+			"finalize":       s.u(r.URL.Path + "/finalize"),
+		})
 	case strings.HasSuffix(r.URL.Path, "/finalize"):
 		s.finalize(w, r)
 	case r.URL.Path == "/revoke-cert":
@@ -181,4 +280,15 @@ func csrFromJWS(r *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("acmefake: decode finalize: %w", err)
 	}
 	return base64.RawURLEncoding.DecodeString(req.CSR)
+}
+
+// writeJSON encodes a response value.
+//
+// The DV handlers used to interpolate identifiers and URLs into a JSON string
+// template with %q, which is correct for well-formed input and a taint finding
+// for anything else — the identifier arrives from the client's own order. A
+// double that models a hostile authority should not itself be the thing that
+// mis-encodes.
+func writeJSON(w http.ResponseWriter, v any) {
+	_ = json.NewEncoder(w).Encode(v)
 }

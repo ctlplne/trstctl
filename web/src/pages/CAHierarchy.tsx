@@ -124,6 +124,13 @@ export function CAHierarchy() {
   // table says "unknown" rather than implying revocation is unavailable — an
   // absent answer and a negative answer are different facts.
   const [capabilities, setCapabilities] = useState<IssuerCapabilityMatrix | null>(null);
+  // The capability matrix is keyed by AUTHORITY KIND ("letsencrypt",
+  // "digicert"), and Issuer.kind is "x509_ca" | "ssh_ca" — a different axis
+  // entirely. Without the external-CA registry to bridge them, every capability
+  // cell looked the authority up by a key that can never match and rendered
+  // "matrix unavailable", which told the operator the census was broken when it
+  // was the lookup that was.
+  const [externalCARegistry, setExternalCARegistry] = useState<ExternalCA[]>([]);
   const [caDiscovery, setCADiscovery] = useState<CADiscovery | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -188,13 +195,17 @@ export function CAHierarchy() {
     // negative one, so this degrades to the honest answer.
     const capabilityRead =
       typeof api.issuerCapabilities === "function" ? api.issuerCapabilities() : Promise.reject(new Error("unavailable"));
-    const [issuerResult, discoveryResult, authoritiesResult, capabilityResult] = await Promise.allSettled([
+    const externalCARead =
+      typeof api.externalCAs === "function" ? api.externalCAs() : Promise.reject(new Error("unavailable"));
+    const [issuerResult, discoveryResult, authoritiesResult, capabilityResult, externalCAResult] = await Promise.allSettled([
       api.issuers(),
       api.caDiscoveryInventory(),
       api.caAuthorities(),
       capabilityRead,
+      externalCARead,
     ]);
     setCapabilities(capabilityResult.status === "fulfilled" ? capabilityResult.value : null);
+    setExternalCARegistry(externalCAResult.status === "fulfilled" ? externalCAResult.value : []);
     if (issuerResult.status === "fulfilled") {
       setIssuers(issuerResult.value);
     } else {
@@ -735,7 +746,7 @@ export function CAHierarchy() {
           </EmptyState>
         )}
         {!loading && !notice && sortedIssuers.length > 0 && (
-          <IssuerTable issuers={sortedIssuers} capabilities={capabilities} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />
+          <IssuerTable issuers={sortedIssuers} capabilities={capabilities} externalCAs={externalCARegistry} probe={probe} onTestConnection={(issuer) => void testIssuerConnection(issuer)} />
         )}
       </section>
 
@@ -2776,7 +2787,19 @@ function KeyValue({ label, mono = false, value }: { label: string; mono?: boolea
   );
 }
 
-function IssuerTable({ issuers, capabilities, onTestConnection, probe }: { issuers: Issuer[]; capabilities: IssuerCapabilityMatrix | null; probe: ProbeState | null; onTestConnection: (issuer: Issuer) => void }) {
+function IssuerTable({ issuers, capabilities, externalCAs, onTestConnection, probe }: { issuers: Issuer[]; capabilities: IssuerCapabilityMatrix | null; externalCAs: ExternalCA[]; probe: ProbeState | null; onTestConnection: (issuer: Issuer) => void }) {
+  // Resolve an issuer to its row in the served capability census.
+  //
+  // Three genuinely different answers, and collapsing any two of them would
+  // mislead: an INTERNAL issuer has no upstream authority, so the question does
+  // not apply; an external issuer we cannot match to a registry entry is
+  // unknown; and a matched one gets its authority kind's row.
+  const capabilityFor = (issuer: Issuer) => {
+    if (issuer.internal) return "internal" as const;
+    const upstream = findExternalCAForIssuer(issuer, externalCAs);
+    if (!upstream) return undefined;
+    return (capabilities?.issuers ?? []).find((c) => c.issuer === upstream.type);
+  };
   return (
     <div className="ui-panel overflow-x-auto">
       <table className="ui-table min-w-[60rem]">
@@ -2790,6 +2813,7 @@ function IssuerTable({ issuers, capabilities, onTestConnection, probe }: { issue
             <th scope="col">{translateNow("source.public.key.4ee252fb73")}</th>
             <th scope="col">{translateNow("source.certificates.16f637921e")}</th>
             <th scope="col">{translateNow("source.revocation.r2cap00001")}</th>
+            <th scope="col">{translateNow("source.domain.validation.b7dv000001")}</th>
             <th scope="col">{translateNow("source.connection.639a40e82b")}</th>
           </tr>
         </thead>
@@ -2812,7 +2836,10 @@ function IssuerTable({ issuers, capabilities, onTestConnection, probe }: { issue
                   a revocation that went nowhere. */}
               <td className="max-w-[22rem] text-sm">
                 {(() => {
-                  const cap = (capabilities?.issuers ?? []).find((c) => c.issuer === issuer.kind);
+                  const cap = capabilityFor(issuer);
+                  if (cap === "internal") {
+                    return <span className="text-status-success">{translateNow("source.revoke.internal.r2cap00005")}</span>;
+                  }
                   if (!cap) return <span className="text-muted-foreground">{translateNow("source.unknown.r2cap00004")}</span>;
                   return cap.revoke ? (
                     <span className="font-medium text-status-success">{translateNow("source.revoke.supported.r2cap00002")}</span>
@@ -2820,6 +2847,30 @@ function IssuerTable({ issuers, capabilities, onTestConnection, probe }: { issue
                     <>
                       <span className="text-status-warning">{translateNow("source.revoke.elsewhere.r2cap00003")}</span>
                       {cap.revoke_note ? <span className="mt-1 block text-xs text-muted-foreground">{cap.revoke_note}</span> : null}
+                    </>
+                  );
+                })()}
+              </td>
+              {/* B7: whether trstctl can satisfy this authority's domain
+                  validation with nobody in the loop. As the CA/Browser Forum
+                  compresses the validation-reuse window, an authority that
+                  reads "manual" here needs a person every cycle, and the
+                  number of cycles per year is going up. */}
+              <td className="max-w-[22rem] text-sm">
+                {(() => {
+                  const cap = capabilityFor(issuer);
+                  if (cap === "internal") {
+                    return <span className="text-muted-foreground">{translateNow("source.dv.internal.b7dv000004")}</span>;
+                  }
+                  if (!cap) return <span className="text-muted-foreground">{translateNow("source.unknown.r2cap00004")}</span>;
+                  return cap.unattended_dv ? (
+                    <span className="font-medium text-status-success">{translateNow("source.unattended.b7dv000002")}</span>
+                  ) : (
+                    <>
+                      <span className="text-status-warning">{translateNow("source.manual.step.b7dv000003")}</span>
+                      {cap.unattended_dv_note ? (
+                        <span className="mt-1 block text-xs text-muted-foreground">{cap.unattended_dv_note}</span>
+                      ) : null}
                     </>
                   );
                 })()}

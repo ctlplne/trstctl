@@ -148,3 +148,99 @@ func issuersDeclaringRevoke(t *testing.T) map[string]bool {
 	}
 	return out
 }
+
+// The unattended-DV column is checked against the source, in both directions
+// (epic B7).
+//
+// This column is the one an operator will plan a year of renewals around as the
+// CA/Browser Forum's validation-reuse window compresses: true means trstctl can
+// keep that authority validated with nobody in the loop. Claiming it for an
+// issuer with no solver would be the most expensive kind of wrong — the failure
+// arrives on the day the window closes, for every domain at once, and the
+// operator finds out from an outage rather than from this matrix.
+//
+// The check is deliberately structural rather than a hand-maintained list: an
+// issuer can satisfy a challenge unattended only if its package wires a
+// challenge solver into the ACME driver, so that is what is looked for.
+func TestUnattendedDVMatrixMatchesTheImplementations(t *testing.T) {
+	t.Parallel()
+
+	declared := issuersWiringAChallengeSolver(t)
+	for _, row := range ca.IssuerCapabilityMatrix() {
+		switch {
+		case row.UnattendedDV && !declared[row.Issuer]:
+			t.Errorf("the matrix says %q can validate unattended, but its package wires no challenge "+
+				"solver. An operator planning renewals around this discovers the truth when the "+
+				"reuse window closes on every domain at once", row.Issuer)
+		case !row.UnattendedDV && declared[row.Issuer]:
+			t.Errorf("%q wires a challenge solver but the matrix says it cannot validate unattended; "+
+				"a capability the binary has and does not advertise is one nobody will use", row.Issuer)
+		}
+	}
+}
+
+// An authority that cannot validate unattended must say why. Same reason the
+// revoke column carries a note: "no" without a reason is not actionable, and
+// here the reason is usually the difference between "there is no challenge to
+// solve" (internal CAs) and "a human completes DCV in the vendor's console"
+// (public OV/EV), which are opposite operational situations.
+func TestAbsentUnattendedDVExplainsItself(t *testing.T) {
+	t.Parallel()
+	for _, row := range ca.IssuerCapabilityMatrix() {
+		if row.UnattendedDV {
+			if row.UnattendedDVNote != "" {
+				t.Errorf("%q validates unattended but carries a note explaining why it does not: %q",
+					row.Issuer, row.UnattendedDVNote)
+			}
+			continue
+		}
+		if strings.TrimSpace(row.UnattendedDVNote) == "" {
+			t.Errorf("%q cannot validate unattended and gives no reason; the operator needs to know "+
+				"whether that is because there is no challenge or because a human must run it",
+				row.Issuer)
+		}
+	}
+}
+
+// issuersWiringAChallengeSolver parses each issuer package and reports which
+// pass a challenge solver to the crypto boundary's ACME driver.
+func issuersWiringAChallengeSolver(t *testing.T) map[string]bool {
+	t.Helper()
+	out := map[string]bool{}
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read ca dir: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		files, err := filepath.Glob(filepath.Join(entry.Name(), "*.go"))
+		if err != nil {
+			t.Fatalf("glob %s: %v", entry.Name(), err)
+		}
+		for _, file := range files {
+			if strings.HasSuffix(file, "_test.go") {
+				continue
+			}
+			parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
+			if err != nil {
+				continue
+			}
+			ast.Inspect(parsed, func(n ast.Node) bool {
+				// The solver reaches the protocol only through the driver
+				// constructor, so a package that names acmekey.ChallengeSolver
+				// in production code is a package that can solve a challenge.
+				sel, ok := n.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != "ChallengeSolver" {
+					return true
+				}
+				if ident, ok := sel.X.(*ast.Ident); ok && ident.Name == "acmekey" {
+					out[entry.Name()] = true
+				}
+				return true
+			})
+		}
+	}
+	return out
+}

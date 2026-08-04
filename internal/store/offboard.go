@@ -108,6 +108,7 @@ var TenantScopedTables = []string{
 	"secret_sync_workload_identity_sources",
 	"workload_attester_trust_sources",
 	"acme_dns01_provider_configs",
+	"acme_upstream_authorizations",
 	"mdm_scep_policies",
 	"audit_checkpoints",
 	"notification_channels",

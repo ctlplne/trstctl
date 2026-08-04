@@ -60,7 +60,7 @@ func TestExternalCAConfigRegistryDoesNotLoadCredentialsAtStartup(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "not-created")
 	items, err := externalCAsFromConfig(context.Background(), []config.ExternalCAConfig{{
 		ID: "digicert", Type: "digicert", Name: "DigiCert", Endpoint: "https://www.digicert.com", APIKeyRef: "file:" + missing,
-	}}, nil, nil, nil)
+	}}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("construct registry: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestExternalCAConfigRejectsACMEWithoutIsolatedSigner(t *testing.T) {
 	_, err := externalCAsFromConfig(context.Background(), []config.ExternalCAConfig{{
 		ID: "letsencrypt", Type: "letsencrypt", Name: "Let's Encrypt",
 		DirectoryURL: "https://acme.example/directory",
-	}}, nil, nil, nil)
+	}}, nil, nil, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "isolated signing service is required") {
 		t.Fatalf("ACME registry without signer error = %v", err)
 	}
@@ -145,7 +145,7 @@ func TestExternalCAFactoryErrorsDoNotEchoCredentialPathContents(t *testing.T) {
 	items, err := externalCAsFromConfig(context.Background(), []config.ExternalCAConfig{{
 		ID: "gcp", Type: "gcpcas", Name: "GCP", Endpoint: "https://privateca.googleapis.com",
 		CAPool: "projects/p/locations/l/caPools/pool", BearerTokenRef: "file:" + path,
-	}}, nil, nil, nil)
+	}}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

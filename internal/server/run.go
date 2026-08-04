@@ -497,6 +497,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		ConnectorRegistry:            outbound.connectorRegistry,
 		ConnectorRightSize:           outbound.connectorRightSize,
 		ExternalCAs:                  outbound.externalCAs,
+		UpstreamDV:                   outbound.upstreamDV,
 		TenantDynamicSecretProviders: outbound.dynamicSecretProviders,
 		TenantSecretSyncTargets:      outbound.secretSyncTargets,
 		CloudTokenMinter:             outbound.cloudTokenMinter,
@@ -534,6 +535,7 @@ type runOutboundDeps struct {
 	connectorRegistry      *connector.Registry
 	connectorRightSize     RightSizeMutator
 	externalCAs            []ExternalCA
+	upstreamDV             *upstreamDVHolder
 	dynamicSecretProviders DynamicSecretProviderRegistry
 	secretSyncTargets      SecretSyncTargetRegistry
 	cloudTokenMinter       *cloudauth.Minter
@@ -566,7 +568,10 @@ func buildRunOutboundDeps(
 	if out.connectorRightSize, err = connectorRightSizeHandler(cfg.Connectors, st, sec.kek, egressGuard, tenantCrypto); err != nil {
 		return runOutboundDeps{}, fmt.Errorf("connector right-size: %w", err)
 	}
-	if out.externalCAs, err = externalCAsFromConfig(ctx, cfg.ExternalCAs, signer.signer, signer.tokenProvider, egressGuard); err != nil {
+	// Built here and filled by the Server once the DNS-01 automation exists;
+	// the ACME factories below capture it now (epic B7).
+	out.upstreamDV = &upstreamDVHolder{}
+	if out.externalCAs, err = externalCAsFromConfig(ctx, cfg.ExternalCAs, signer.signer, signer.tokenProvider, egressGuard, out.upstreamDV); err != nil {
 		return runOutboundDeps{}, fmt.Errorf("external CAs: %w", err)
 	}
 	if out.dynamicSecretProviders, err = dynamicSecretProvidersFromConfig(ctx, cfg.SecretIntegrations.DynamicProviders, st, sec.kek, egressGuard, tenantCrypto); err != nil {

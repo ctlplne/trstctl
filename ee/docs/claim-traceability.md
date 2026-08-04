@@ -23,7 +23,7 @@ it cannot drift from the code it describes.
 | VDEC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 | XREC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 
-Citations parsed: **982 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **984 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
@@ -46,7 +46,7 @@ Citations parsed: **982 qualified**, **0 bare** (bare citations infer their fami
 | 15 | `ee/agentid/delegation/attestbind.go`, `ee/agentid/delegation/brokerstore/precondition.go` | `ee/agentid/delegation/brokerstore/brokerpg_test.go`, `ee/agentid/delegation/brokerstore/precondition_test.go` | _[counsel]_ |
 | 16 | `ee/agentid/delegation/projection.go`, `ee/agentid/delegation/store/store.go`, `ee/agentid/revoke/cascade.go` _(+5 more)_ | `ee/agentid/delegation/store/store_test.go`, `ee/agentid/revoke/cascade_test.go`, `ee/agentid/revoke/execution_test.go` _(+1 more)_ | _[counsel]_ |
 | 17 | `ee/agentid/api/api.go`, `ee/agentid/revoke/cascade.go`, `ee/agentid/revoke/directive.go` | `ee/agentid/revoke/cascade_test.go` | _[counsel]_ |
-| 18 | `ee/agentid/orchestrator/revocation.go`, `ee/agentid/revoke/aggregate.go`, `ee/agentid/revoke/terminal.go` | `ee/agentid/revoke/terminal_test.go` | _[counsel]_ |
+| 18 | `ee/agentid/orchestrator/revocation.go`, `ee/agentid/revoke/aggregate.go`, `ee/agentid/revoke/terminal.go` | `ee/agentid/revoke/aggregate_internal_test.go`, `ee/agentid/revoke/terminal_test.go` | _[counsel]_ |
 | 19 | `ee/agentid/api/api.go`, `ee/agentid/revoke/cascade.go`, `ee/agentid/revoke/directive.go` _(+2 more)_ | `ee/agentid/revoke/cascade_test.go` | _[counsel]_ |
 | 20 | `ee/agentid/delegation/store/store.go`, `ee/agentid/orchestrator/issuance.go`, `ee/agentid/revoke/refuse_active.go` | `ee/agentid/revoke/refuse_active_test.go` | _[counsel]_ |
 | 21 | `ee/agentid/delegation/store/store.go`, `ee/agentid/orchestrator/revocation.go`, `ee/agentid/revoke/directive.go` _(+3 more)_ | `ee/agentid/revoke/execution_test.go`, `ee/agentid/revoke/main_test.go` | _[counsel]_ |

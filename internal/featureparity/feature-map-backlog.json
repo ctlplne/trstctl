@@ -3681,12 +3681,14 @@
         "getACMEDNS01ProviderConfig",
         "updateACMEDNS01ProviderConfig",
         "deleteACMEDNS01ProviderConfig",
-        "preflightACMEDNS01"
+        "preflightACMEDNS01",
+        "listACMEUpstreamAuthorizations"
       ],
       "api_na": "",
       "cli_surface": [
         "acme dns-01 providers",
         "acme dns-01 provider-configs create",
+        "acme dns-01 upstream-authorizations",
         "acme dns-01 provider-configs list",
         "acme dns-01 provider-configs get",
         "acme dns-01 provider-configs update",

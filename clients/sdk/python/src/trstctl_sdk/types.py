@@ -129,6 +129,7 @@ ACMEDNS01ProviderCatalogItem = TypedDict(
 ACMEDNS01ProviderConfig = TypedDict(
     'ACMEDNS01ProviderConfig',
     {
+        'allow_upstream_dv': bool,
         'allow_wildcards': bool,
         'allowed_methods': list[str],
         'caa_issuer_domain': str,
@@ -159,6 +160,7 @@ ACMEDNS01ProviderConfigList = TypedDict(
 ACMEDNS01ProviderConfigRequest = TypedDict(
     'ACMEDNS01ProviderConfigRequest',
     {
+        'allow_upstream_dv': bool,
         'allow_wildcards': bool,
         'allowed_methods': list[str],
         'caa_issuer_domain': str,
@@ -212,6 +214,32 @@ ACMEEABPosture = TypedDict(
         'items': list[dict[str, Any]],
         'required': bool,
         'served': bool,
+    },
+    total=False,
+)
+
+ACMEUpstreamAuthorization = TypedDict(
+    'ACMEUpstreamAuthorization',
+    {
+        'challenge_type': str,
+        'expires_at': str,
+        'identifier': str,
+        'issuer': str,
+        'last_reused_at': str,
+        'last_validated_at': str,
+        'never_validated': bool,
+        'reuse_count': int,
+        'validate_count': int,
+    },
+    total=False,
+)
+
+ACMEUpstreamAuthorizationList = TypedDict(
+    'ACMEUpstreamAuthorizationList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'never_validated_count': int,
     },
     total=False,
 )
@@ -3128,6 +3156,8 @@ IssuerCapability = TypedDict(
         'renew': bool,
         'revoke': bool,
         'revoke_note': str,
+        'unattended_dv': bool,
+        'unattended_dv_note': str,
         'validation': str,
     },
     total=False,
@@ -3139,6 +3169,7 @@ IssuerCapabilityMatrix = TypedDict(
         'guidance': str,
         'issuers': list[dict[str, Any]],
         'revoke_capable_count': int,
+        'unattended_dv_capable_count': int,
     },
     total=False,
 )

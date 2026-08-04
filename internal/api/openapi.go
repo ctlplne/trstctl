@@ -1436,6 +1436,21 @@ func componentSchemas() map[string]*Schema {
 		"detail":  str(),
 		"action":  str(),
 	}, "kind", "subject", "detail")
+	// B7: when each upstream identifier last actually proved control, as
+	// against when it last rode a reuse the install did not earn.
+	acmeUpstreamAuthorization := object(map[string]*Schema{
+		"identifier": str(), "issuer": str(), "challenge_type": str(),
+		"last_validated_at": timestamp(), "last_reused_at": timestamp(),
+		"expires_at":      timestamp(),
+		"reuse_count":     {Type: "integer"},
+		"validate_count":  {Type: "integer"},
+		"never_validated": {Type: "boolean"},
+	}, "identifier", "issuer", "reuse_count", "validate_count", "never_validated")
+	acmeUpstreamAuthorizationList := object(map[string]*Schema{
+		"items":                 {Type: "array", Items: ref("ACMEUpstreamAuthorization")},
+		"never_validated_count": {Type: "integer"},
+		"guidance":              str(),
+	}, "items", "never_validated_count", "guidance")
 	// R2: what each authority can actually do through trstctl.
 	issuerCapability := object(map[string]*Schema{
 		"issuer": str(), "discover": {Type: "boolean"}, "issue": {Type: "boolean"},
@@ -1445,12 +1460,16 @@ func componentSchemas() map[string]*Schema {
 			"acme_challenge", "account_scoped", "organizational", "internal",
 		}},
 		"revoke_note": str(),
-	}, "issuer", "discover", "issue", "renew", "revoke", "key_handling", "validation")
+		// B7: can trstctl keep this authority validated with nobody in the loop.
+		"unattended_dv":      {Type: "boolean"},
+		"unattended_dv_note": str(),
+	}, "issuer", "discover", "issue", "renew", "revoke", "key_handling", "validation", "unattended_dv")
 	issuerCapabilityMatrix := object(map[string]*Schema{
-		"issuers":              {Type: "array", Items: ref("IssuerCapability")},
-		"revoke_capable_count": {Type: "integer"},
-		"guidance":             str(),
-	}, "issuers", "revoke_capable_count", "guidance")
+		"issuers":                     {Type: "array", Items: ref("IssuerCapability")},
+		"revoke_capable_count":        {Type: "integer"},
+		"unattended_dv_capable_count": {Type: "integer"},
+		"guidance":                    str(),
+	}, "issuers", "revoke_capable_count", "unattended_dv_capable_count", "guidance")
 	discoveryCoverage := object(map[string]*Schema{
 		"generated_at":              timestamp(),
 		"observed":                  {Type: "integer"},
@@ -1952,14 +1971,15 @@ func componentSchemas() map[string]*Schema {
 		"delegation_target": str(), "credential_refs": {Type: "object"},
 		"config": {Type: "object"}, "caa_issuer_domain": str(),
 		"allowed_methods": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01"}}},
-		"allow_wildcards": {Type: "boolean"},
+		"allow_wildcards": {Type: "boolean"}, "allow_upstream_dv": {Type: "boolean"},
 	}, "name", "provider")
 	acmeDNS01ProviderConfig := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "name": str(), "provider": str(), "zone": str(),
 		"challenge_domain": str(), "delegation_target": str(), "credential_refs": {Type: "object"},
 		"config": {Type: "object"}, "caa_issuer_domain": str(),
 		"allowed_methods": {Type: "array", Items: str()}, "allow_wildcards": {Type: "boolean"},
-		"secret_handling": str(), "created_at": timestamp(), "updated_at": timestamp(),
+		"allow_upstream_dv": {Type: "boolean"},
+		"secret_handling":   str(), "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "name", "provider", "credential_refs", "config", "allowed_methods", "secret_handling", "created_at", "updated_at")
 	acmeDNS01ProviderConfigList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ACMEDNS01ProviderConfig")},
@@ -3888,6 +3908,8 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoringSource":                discoveryMonitoringSource,
 		"DiscoveryMonitoring":                      discoveryMonitoring,
 		"DiscoveryCoverage":                        discoveryCoverage,
+		"ACMEUpstreamAuthorization":                acmeUpstreamAuthorization,
+		"ACMEUpstreamAuthorizationList":            acmeUpstreamAuthorizationList,
 		"IssuerCapability":                         issuerCapability,
 		"IssuerCapabilityMatrix":                   issuerCapabilityMatrix,
 		"DiscoverySegmentCoverage":                 discoverySegmentCoverage,

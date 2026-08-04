@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -18,6 +19,7 @@ import {
   type ACMEDNS01PreflightRequest,
   type ACMEDNS01ProviderCatalogItem,
   type ACMEDNS01ProviderConfig,
+  type ACMEUpstreamAuthorizationList,
   type ACMEDNS01ProviderConfigRequest,
   type MDMSCEPPolicy,
   type MDMSCEPPolicyRequest,
@@ -177,6 +179,12 @@ export function Protocols() {
   const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
   const [dnsProviders, setDNSProviders] = useState<ACMEDNS01ProviderCatalogItem[]>([]);
   const [dnsProviderConfigs, setDNSProviderConfigs] = useState<ACMEDNS01ProviderConfig[]>([]);
+  const [upstreamAuthorizations, setUpstreamAuthorizations] = useState<ACMEUpstreamAuthorizationList | null>(null);
+  // A failed read is a THIRD state, not the empty one. Hiding the panel when
+  // the request errors would make a broken surface look like a deployment with
+  // nothing stale — the same false reassurance the panel exists to prevent,
+  // one level up.
+  const [upstreamAuthorizationsError, setUpstreamAuthorizationsError] = useState<string | null>(null);
   const [mdmSCEPStatus, setMDMSCEPStatus] = useState<MDMSCEPStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -187,6 +195,28 @@ export function Protocols() {
   const [dnsEditConfig, setDNSEditConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
   const [dnsDeleteConfig, setDNSDeleteConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
   const [dnsPreflightConfig, setDNSPreflightConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
+
+  // B7: upstream authorization staleness, fetched on its own so a deployment
+  // without the surface still renders every other protocol panel.
+  useEffect(() => {
+    let active = true;
+    if (typeof api.acmeUpstreamAuthorizations !== "function") return;
+    api
+      .acmeUpstreamAuthorizations()
+      .then((list) => {
+        if (!active) return;
+        setUpstreamAuthorizations(list);
+        setUpstreamAuthorizationsError(null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setUpstreamAuthorizations(null);
+        setUpstreamAuthorizationsError(protocolStatusError(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -439,6 +469,74 @@ export function Protocols() {
         )}
       </section>
 
+      {/* B7: automating DNS-01 upstream removes the human from the validation
+          cycle, and with them the human who used to notice when validation
+          stopped working. An authority holding a valid authorization issues
+          without a challenge, so a broken publish path stays invisible until
+          the reuse window closes — and then every identifier authorized in the
+          same original burst fails on the same day. This panel leads with the
+          date each identifier last actually proved control, not the date it
+          last issued, because those two diverge silently. */}
+      {upstreamAuthorizationsError && (
+        <section aria-labelledby="dns-upstream-error-heading">
+          <h2 id="dns-upstream-error-heading" className="mb-3 text-title font-semibold">
+            {t("protocols.dns01.upstreamHeading")}
+          </h2>
+          <ErrorState title={t("protocols.dns01.upstreamUnavailableTitle")}>
+            {t("protocols.dns01.upstreamUnavailable")}
+          </ErrorState>
+        </section>
+      )}
+      {(upstreamAuthorizations?.items ?? []).length > 0 && (
+        <section aria-labelledby="dns-upstream-heading">
+          <h2 id="dns-upstream-heading" className="mb-3 text-title font-semibold">
+            {t("protocols.dns01.upstreamHeading")}
+          </h2>
+          <p className="mb-3 max-w-4xl text-caption text-muted-foreground">{upstreamAuthorizations?.guidance}</p>
+          {(upstreamAuthorizations?.never_validated_count ?? 0) > 0 && (
+            <p className="mb-3 text-sm font-medium text-status-warning">
+              {t(
+                upstreamAuthorizations?.never_validated_count === 1
+                  ? "protocols.dns01.upstreamNeverValidatedOne"
+                  : "protocols.dns01.upstreamNeverValidatedMany",
+                { count: upstreamAuthorizations?.never_validated_count ?? 0 },
+              )}
+            </p>
+          )}
+          <div className="ui-panel overflow-x-auto">
+            <table className="ui-table min-w-[64rem]">
+              <caption className="sr-only">{t("protocols.dns01.upstreamCaption")}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{t("protocols.dns01.upstreamIdentifier")}</th>
+                  <th scope="col">{t("protocols.dns01.upstreamIssuer")}</th>
+                  <th scope="col">{t("protocols.dns01.upstreamLastValidated")}</th>
+                  <th scope="col">{t("protocols.dns01.upstreamLastReused")}</th>
+                  <th scope="col">{t("protocols.dns01.upstreamExpires")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(upstreamAuthorizations?.items ?? []).map((row) => (
+                  <tr key={`${row.issuer}:${row.identifier}`} className="align-top">
+                    <td className="font-mono text-xs">{row.identifier}</td>
+                    <td>{row.issuer}</td>
+                    <td>
+                      {row.never_validated ? (
+                        <span className="font-medium text-status-warning">{t("protocols.dns01.upstreamNeverValidated")}</span>
+                      ) : (
+                        <span>{formatDate(row.last_validated_at)}</span>
+                      )}
+                    </td>
+                    <td className="text-muted-foreground">{row.last_reused_at ? formatDate(row.last_reused_at) : "-"}</td>
+                    <td>{row.expires_at ? formatDate(row.expires_at) : t("protocols.dns01.upstreamNoStatedExpiry")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       <section aria-labelledby="dns-config-heading">
         <h2 id="dns-config-heading" className="mb-3 text-title font-semibold">
           {t("protocols.dns01.configHeading")}
@@ -476,6 +574,7 @@ export function Protocols() {
                       <ul className="grid gap-1">
                         <li>{(config.allowed_methods ?? []).join(", ") || t("protocols.dns01.noMethodPolicy")}</li>
                         <li>{config.allow_wildcards ? t("protocols.dns01.wildcardsAllowed") : t("protocols.dns01.wildcardsDenied")}</li>
+                        <li>{config.allow_upstream_dv ? t("protocols.dns01.upstreamDVAllowed") : t("protocols.dns01.upstreamDVDenied")}</li>
                         {config.caa_issuer_domain && (
                           <li>
                             {translateNow("source.caa.084696b5b2")} {config.caa_issuer_domain}
@@ -1107,6 +1206,12 @@ function DNS01ConfigEditDialog({
   const [delegationTarget, setDelegationTarget] = useState(config.delegation_target ?? "");
   const [caaIssuerDomain, setCAAIssuerDomain] = useState(config.caa_issuer_domain ?? "");
   const [allowWildcards, setAllowWildcards] = useState(config.allow_wildcards ?? false);
+  // B7 consent. Seeded from the saved config because this dialog does a PUT
+  // (replace): a field the form does not send comes back false, so omitting it
+  // here silently revoked upstream-DV consent every time an operator edited
+  // anything else on the config — and the next renewal cycle would then need a
+  // human nobody knew to expect.
+  const [allowUpstreamDV, setAllowUpstreamDV] = useState(config.allow_upstream_dv ?? false);
   const [allowedMethods, setAllowedMethods] = useState<ACMEChallengeMethod[]>(() => (config.allowed_methods ?? []).filter(isACMEChallengeMethod));
   const [configJSON, setConfigJSON] = useState(() => stringifyRecord(config.config));
   const [credentialRefsJSON, setCredentialRefsJSON] = useState(() => stringifyRecord(config.credential_refs));
@@ -1143,6 +1248,7 @@ function DNS01ConfigEditDialog({
       name: name.trim(),
       provider: provider.trim(),
       allow_wildcards: allowWildcards,
+      allow_upstream_dv: allowUpstreamDV,
     };
     if (zone.trim()) input.zone = zone.trim();
     if (challengeDomain.trim()) input.challenge_domain = challengeDomain.trim();
@@ -1258,6 +1364,23 @@ function DNS01ConfigEditDialog({
         <label className="flex items-center gap-2 text-body font-medium">
           <input type="checkbox" checked={allowWildcards} onChange={(event) => setAllowWildcards(event.target.checked)} />
           {t("parity.allowWildcardIssuance_0fe53c")}
+        </label>
+        {/* B7: this is a permission, not a preference. It lets trstctl publish
+            into this zone on an EXTERNAL CA's behalf, unattended, every
+            validation cycle — which is not what credentials given for the
+            server direction were granted for. */}
+        <label className="flex items-start gap-2 text-body font-medium">
+          <Checkbox
+            className="mt-1"
+            checked={allowUpstreamDV}
+            onChange={(event) => setAllowUpstreamDV(event.target.checked)}
+          />
+          <span>
+            {t("protocols.dns01.allowUpstreamDV")}
+            <span className="mt-1 block text-caption font-normal text-muted-foreground">
+              {t("protocols.dns01.allowUpstreamDVHelp")}
+            </span>
+          </span>
         </label>
         <label className="grid gap-1 text-body font-medium">
           {t("parity.providerConfigJsonOptional_02753c")}

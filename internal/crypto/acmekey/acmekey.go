@@ -27,6 +27,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"golang.org/x/crypto/acme"
 
@@ -109,18 +111,100 @@ func NewRSAClient(directoryURL string) (*acme.Client, error) {
 // ChallengeSolver provisions and removes the response for an ACME HTTP-01
 // challenge. It is a neutral seam (no acme.* types), so an ACME CA plugin can
 // supply one without importing golang.org/x/crypto/acme.
-type ChallengeSolver interface {
-	Present(domain, token, keyAuth string) error
-	Cleanup(domain, token string) error
+// Challenge types this driver can be asked to solve. Strings rather than an
+// enum so the seam carries no acme.* type in either direction (AN-3).
+const (
+	ChallengeHTTP01 = "http-01"
+	ChallengeDNS01  = "dns-01"
+)
+
+// ChallengeRequest is one challenge to solve.
+//
+// Identifier keeps its leading "*." for a wildcard: the solver strips it when
+// building the record name, and a solver that never saw the wildcard could not
+// enforce a wildcard policy.
+type ChallengeRequest struct {
+	TenantID   string
+	Type       string
+	Identifier string
+	Token      string
+	// KeyAuth is the key authorization. RFC 8555 §8.1 makes it independent of
+	// challenge type: HTTP-01 serves it verbatim, DNS-01 publishes its
+	// SHA-256/base64url digest. The digest is computed and cross-checked inside
+	// this boundary before the raw value crosses the seam.
+	KeyAuth string
 }
+
+// ChallengeSolver satisfies challenges on behalf of the client.
+//
+// Solve returns a retract function rather than a separate Cleanup, so the
+// caller cannot forget which challenge it is retracting and cannot retract one
+// that was never presented. The previous shape — Present/Cleanup keyed by
+// domain and token — allowed both.
+type ChallengeSolver interface {
+	// SolvableChallenges names the types this deployment can actually satisfy,
+	// most preferred first. It is a census, not a wish: naming a type nothing
+	// can solve makes the driver select it and then fail.
+	SolvableChallenges() []string
+	// Solve satisfies the challenge and returns a retract to undo it.
+	Solve(ctx context.Context, req ChallengeRequest) (retract func(context.Context) error, err error)
+}
+
+// DVOutcome is one authorization's result, reported for observability.
+type DVOutcome struct {
+	Identifier    string
+	ChallengeType string
+	// Reused is true when the authority already considered the identifier
+	// authorized and no challenge was solved. It is the number that matters as
+	// validation-reuse windows compress: an install whose authorizations are
+	// all reused has not proven it can still validate.
+	Reused    bool
+	ExpiresAt time.Time
+}
+
+// OrderRequest is one upstream order.
+//
+// A struct rather than positional arguments because the tenant had to be added
+// and a positional parameter is exactly the kind of thing a caller drops — as
+// the Let's Encrypt plugin did, discarding req.TenantID entirely before this.
+type OrderRequest struct {
+	TenantID string
+	DNSNames []string
+	CSR      []byte
+}
+
+// DVObserver receives every authorization outcome, including reused ones.
+type DVObserver interface {
+	ObserveAuthorization(ctx context.Context, tenantID string, out DVOutcome)
+}
+
+// ErrSolverNotConfigured is returned when a challenge must be solved and no
+// solver was supplied. It fails closed: the previous behaviour substituted a
+// no-op solver, which turned "this deployment cannot validate" into "validation
+// silently did nothing".
+var ErrSolverNotConfigured = errors.New("acmekey: no challenge solver is configured for this authority")
+
+// ErrNoSolvableChallenge is returned when the authority offers no challenge
+// type this deployment can satisfy.
+var ErrNoSolvableChallenge = errors.New("acmekey: the authority offers no challenge this deployment can solve")
 
 // Driver runs an ACME (RFC 8555) order to completion behind the crypto boundary.
 // It wraps golang.org/x/crypto/acme so that callers (the Let's Encrypt CA plugin)
 // drive an order using only neutral types — keeping the third-party ACME/crypto
 // import inside internal/crypto (AN-3, CRYPTO-002).
 type Driver struct {
-	client *acme.Client
-	solver ChallengeSolver
+	client   *acme.Client
+	solver   ChallengeSolver
+	observer DVObserver
+}
+
+// WithObserver attaches a DV observer. Separate from construction because the
+// observer needs the store, which is assembled after the CA factories.
+func (d *Driver) WithObserver(o DVObserver) *Driver {
+	if d != nil {
+		d.observer = o
+	}
+	return d
 }
 
 // newLocalDriverWithHTTPClient is a package-private protocol-test fixture. The
@@ -130,9 +214,11 @@ func newLocalDriverWithHTTPClient(directoryURL string, solver ChallengeSolver, h
 	if err != nil {
 		return nil, err
 	}
-	if solver == nil {
-		solver = noopSolver{}
-	}
+	// A nil solver is STORED as nil and fails closed at the point of use. The
+	// previous code substituted a no-op here, which is why an authority
+	// offering a real challenge appeared to validate: nothing was presented,
+	// the challenge was accepted, and the wait succeeded only because the
+	// fixture pre-authorized the order.
 	return &Driver{client: client, solver: solver}, nil
 }
 
@@ -145,9 +231,11 @@ func NewDriverWithDigestSigner(directoryURL string, solver ChallengeSolver, http
 	if err != nil {
 		return nil, err
 	}
-	if solver == nil {
-		solver = noopSolver{}
-	}
+	// A nil solver is STORED as nil and fails closed at the point of use. The
+	// previous code substituted a no-op here, which is why an authority
+	// offering a real challenge appeared to validate: nothing was presented,
+	// the challenge was accepted, and the wait succeeded only because the
+	// fixture pre-authorized the order.
 	return &Driver{client: client, solver: solver}, nil
 }
 
@@ -164,19 +252,23 @@ func (d *Driver) Destroy() {
 	boundary.WipeECDSAPrivateKey(key)
 }
 
-type noopSolver struct{}
-
-func (noopSolver) Present(string, string, string) error { return nil }
-func (noopSolver) Cleanup(string, string) error         { return nil }
-
 // IssueChain registers the account, authorizes an order for dnsNames (solving any
 // pending HTTP-01 challenges via the solver), finalizes it with csr, and returns
 // the issued certificate chain as DER blocks (leaf first). The caller PEM-encodes
 // the result; no acme.* type crosses this boundary.
-func (d *Driver) IssueChain(ctx context.Context, dnsNames []string, csr []byte) ([][]byte, error) {
+func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) ([][]byte, error) {
 	if d == nil || d.client == nil {
 		return nil, fmt.Errorf("acmekey: driver is destroyed")
 	}
+	// The tenant travels with the order because the solver needs it to select
+	// a provider config under RLS (AN-1). It comes from the authenticated
+	// principal upstream of here and is never a request field the caller
+	// chooses; rejecting an empty one keeps a solver from ever running
+	// unscoped.
+	if strings.TrimSpace(req.TenantID) == "" {
+		return nil, errors.New("acmekey: an order needs the tenant it is issued for")
+	}
+	dnsNames, csr := req.DNSNames, req.CSR
 	if _, err := d.client.Register(ctx, &acme.Account{}, acme.AcceptTOS); err != nil {
 		return nil, fmt.Errorf("acmekey: register: %w", err)
 	}
@@ -185,12 +277,24 @@ func (d *Driver) IssueChain(ctx context.Context, dnsNames []string, csr []byte) 
 		return nil, fmt.Errorf("acmekey: authorize order: %w", err)
 	}
 	if order.Status != acme.StatusReady {
-		if err := d.fulfill(ctx, order); err != nil {
+		if err := d.fulfill(ctx, req.TenantID, order); err != nil {
 			return nil, err
 		}
 		if order, err = d.client.WaitOrder(ctx, order.URI); err != nil {
 			return nil, fmt.Errorf("acmekey: wait order: %w", err)
 		}
+	} else {
+		// A ready order means the authority reused EVERY authorization: no
+		// challenge will be solved, and fulfill — which is where reuse used to
+		// be recorded — never runs.
+		//
+		// That left the staleness surface blind in exactly the population it
+		// exists for. An install whose validation path broke months ago keeps
+		// getting ready orders and issuing happily; it is the one that finds
+		// out for every identifier at once when the window closes. Recording
+		// nothing for it meant the console showed an empty panel, which reads
+		// as "no problems" and is the opposite of the truth.
+		d.observeReusedOrder(ctx, req.TenantID, order)
 	}
 	der, _, err := d.client.CreateOrderCert(ctx, order.FinalizeURL, csr, true)
 	if err != nil {
@@ -199,46 +303,161 @@ func (d *Driver) IssueChain(ctx context.Context, dnsNames []string, csr []byte) 
 	return der, nil
 }
 
+// observeReusedOrder records every authorization of an already-ready order.
+//
+// Best-effort by design: this is reporting, and failing an issuance the
+// authority has already approved because a follow-up read failed would trade a
+// working certificate for a log line. A fetch that fails records nothing, which
+// is honest — absence of an observation, not a fabricated one.
+func (d *Driver) observeReusedOrder(ctx context.Context, tenantID string, order *acme.Order) {
+	if d.observer == nil {
+		return
+	}
+	for _, authzURL := range order.AuthzURLs {
+		authz, err := d.client.GetAuthorization(ctx, authzURL)
+		if err != nil {
+			continue
+		}
+		d.observe(ctx, tenantID, DVOutcome{
+			Identifier: identifierOf(authz), Reused: true, ExpiresAt: authz.Expires,
+		})
+	}
+}
+
 // fulfill solves the pending authorizations of an order via the configured
 // HTTP-01 solver, then accepts each challenge and waits for it to validate.
-func (d *Driver) fulfill(ctx context.Context, order *acme.Order) error {
+func (d *Driver) fulfill(ctx context.Context, tenantID string, order *acme.Order) error {
 	for _, authzURL := range order.AuthzURLs {
 		authz, err := d.client.GetAuthorization(ctx, authzURL)
 		if err != nil {
 			return fmt.Errorf("acmekey: get authorization: %w", err)
 		}
 		if authz.Status == acme.StatusValid {
+			// Already authorized: the authority is reusing a previous
+			// validation. Reported rather than skipped silently — as reuse
+			// windows compress, an install whose authorizations are all reused
+			// has not demonstrated it can still validate, and the day the
+			// window closes it discovers that all at once.
+			d.observe(ctx, tenantID, DVOutcome{
+				Identifier: identifierOf(authz), Reused: true, ExpiresAt: authz.Expires,
+			})
 			continue
 		}
-		chal := httpChallenge(authz)
-		if chal == nil {
-			return fmt.Errorf("acmekey: authorization %s offers no http-01 challenge", authz.Identifier.Value)
+		if d.solver == nil {
+			return ErrSolverNotConfigured
 		}
-		response, err := d.client.HTTP01ChallengeResponse(chal.Token)
+		chal := selectChallenge(authz, d.solver.SolvableChallenges())
+		if chal == nil {
+			return fmt.Errorf("%w: authorization %s offers [%s], this deployment can solve [%s]",
+				ErrNoSolvableChallenge, identifierOf(authz),
+				strings.Join(offeredTypes(authz), ", "),
+				strings.Join(d.solver.SolvableChallenges(), ", "))
+		}
+		// The key authorization is challenge-type independent (RFC 8555 §8.1).
+		// x/crypto/acme names this HTTP01ChallengeResponse, which is
+		// misleading: DNS-01 publishes its digest rather than the value
+		// itself, but the value is the same.
+		keyAuth, err := d.client.HTTP01ChallengeResponse(chal.Token)
 		if err != nil {
 			return err
 		}
-		if err := d.solver.Present(authz.Identifier.Value, chal.Token, response); err != nil {
-			return fmt.Errorf("acmekey: present challenge: %w", err)
+		if chal.Type == ChallengeDNS01 {
+			// Cross-check the digest the solver will publish against the one
+			// this library computes, INSIDE the boundary. That is what licenses
+			// passing the raw key authorization across the seam: the solver can
+			// hash it with the platform's own helper and cannot disagree
+			// without this failing first.
+			want, derr := d.client.DNS01ChallengeRecord(chal.Token)
+			if derr != nil {
+				return fmt.Errorf("acmekey: dns-01 record: %w", derr)
+			}
+			if got := boundary.SHA256Base64URL([]byte(keyAuth)); got != want {
+				return errors.New("acmekey: dns-01 digest disagreement; refusing to publish a record " +
+					"the authority will not accept")
+			}
 		}
-		if _, err := d.client.Accept(ctx, chal); err != nil {
-			return fmt.Errorf("acmekey: accept challenge: %w", err)
+
+		retract, err := d.solver.Solve(ctx, ChallengeRequest{
+			TenantID: tenantID, Type: chal.Type, Identifier: identifierOf(authz),
+			Token: chal.Token, KeyAuth: keyAuth,
+		})
+		if err != nil {
+			return fmt.Errorf("acmekey: present %s challenge for %s: %w", chal.Type, identifierOf(authz), err)
 		}
-		if _, err := d.client.WaitAuthorization(ctx, authzURL); err != nil {
-			return fmt.Errorf("acmekey: wait authorization: %w", err)
+		// Retract on EVERY exit path, not only the happy one. The previous code
+		// returned early on Accept or WaitAuthorization failure without
+		// cleaning up and discarded the cleanup error entirely. Harmless for an
+		// in-memory HTTP-01 file; for DNS it leaves a live public TXT record
+		// with a validation token in it, indefinitely.
+		//
+		// WithoutCancel because the retraction must still run when the order
+		// failed because ctx expired — that is exactly when a record is most
+		// likely to be left behind.
+		err = func() (err error) {
+			defer func() {
+				if retract == nil {
+					return
+				}
+				if rerr := retract(context.WithoutCancel(ctx)); rerr != nil {
+					err = errors.Join(err, fmt.Errorf("acmekey: retract %s challenge: %w", chal.Type, rerr))
+				}
+			}()
+			if _, aerr := d.client.Accept(ctx, chal); aerr != nil {
+				return fmt.Errorf("acmekey: accept challenge: %w", aerr)
+			}
+			final, werr := d.client.WaitAuthorization(ctx, authzURL)
+			if werr != nil {
+				return fmt.Errorf("acmekey: wait authorization: %w", werr)
+			}
+			d.observe(ctx, tenantID, DVOutcome{
+				Identifier: identifierOf(authz), ChallengeType: chal.Type,
+				Reused: false, ExpiresAt: final.Expires,
+			})
+			return nil
+		}()
+		if err != nil {
+			return err
 		}
-		_ = d.solver.Cleanup(authz.Identifier.Value, chal.Token)
 	}
 	return nil
 }
 
-func httpChallenge(authz *acme.Authorization) *acme.Challenge {
-	for _, c := range authz.Challenges {
-		if c.Type == "http-01" {
-			return c
+// selectChallenge picks the first offered challenge whose type this deployment
+// can solve, in the solver's own order of preference.
+func selectChallenge(authz *acme.Authorization, prefer []string) *acme.Challenge {
+	for _, want := range prefer {
+		for _, c := range authz.Challenges {
+			if c.Type == want {
+				return c
+			}
 		}
 	}
 	return nil
+}
+
+func offeredTypes(authz *acme.Authorization) []string {
+	out := make([]string, 0, len(authz.Challenges))
+	for _, c := range authz.Challenges {
+		out = append(out, c.Type)
+	}
+	return out
+}
+
+// identifierOf returns the authorization's identifier, restoring the "*."
+// prefix for a wildcard. x/crypto/acme reports the base name plus a Wildcard
+// flag; a solver enforcing a wildcard policy needs to see the wildcard.
+func identifierOf(authz *acme.Authorization) string {
+	if authz.Wildcard {
+		return "*." + authz.Identifier.Value
+	}
+	return authz.Identifier.Value
+}
+
+func (d *Driver) observe(ctx context.Context, tenantID string, out DVOutcome) {
+	if d.observer == nil {
+		return
+	}
+	d.observer.ObserveAuthorization(ctx, tenantID, out)
 }
 
 // RevokeChain revokes a certificate through the ACME authority (epic R2,

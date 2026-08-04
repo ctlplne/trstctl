@@ -124,6 +124,19 @@ type IssuerCapabilities struct {
 	// false: "not supported" without a reason tells an operator nothing they
 	// can act on, and the useful part is usually where to go instead.
 	RevokeNote string
+	// UnattendedDV reports whether this build can satisfy the authority's
+	// domain-validation challenge with no human step (epic B7).
+	//
+	// This is the question the CA/Browser Forum's shrinking validation-reuse
+	// window turns into an operational one. An authority that reads false here
+	// needs a person in the loop every time its reuse window closes, and the
+	// number of those events per year is going up. It is a capability of the
+	// BUILD, not of a particular configuration: whether a given authority is
+	// actually configured for it is per-config state on the external-CA row.
+	UnattendedDV bool
+	// UnattendedDVNote explains an absent one. Required when UnattendedDV is
+	// false, for the same reason RevokeNote is.
+	UnattendedDVNote string
 }
 
 // issuerCapabilityMatrix is the served census.
@@ -137,72 +150,88 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "letsencrypt", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationACME,
+		UnattendedDV: true,
+		// The only true in this column. It requires all three: an ACME
+		// challenge model, a shipped dns-01 solver, and a DNS provider config
+		// that has consented to upstream publication.
 	},
 	{
 		Issuer: "vaultpki", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
+		UnattendedDVNote: "Vault PKI issues under its own role policy with no domain-validation challenge, so there is nothing to automate.",
 	},
 	{
 		Issuer: "ejbca", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
+		UnattendedDVNote: "EJBCA issues under its own certificate profile with no domain-validation challenge.",
 	},
 	{
 		Issuer: "digicert", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
 		RevokeNote: "DigiCert's API documents certificate revocation, but trstctl ships no " +
 			"implementation and none is tested against it. Revoke from the DigiCert console.",
+		UnattendedDVNote: "Public DV/OV issuance through DigiCert's API requires validation steps trstctl does not drive. Complete DCV in the DigiCert console; trstctl cannot keep this authority validated unattended.",
 	},
 	{
 		Issuer: "sectigo", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
 		RevokeNote: "Sectigo's API documents revocation; trstctl ships no implementation. " +
 			"Revoke from the Sectigo console.",
+		UnattendedDVNote: "Sectigo SCM validation is completed in Sectigo's own console; trstctl drives no DCV method for it.",
 	},
 	{
 		Issuer: "venafi", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationAccountScoped,
 		RevokeNote: "Venafi's API documents revocation; trstctl ships no implementation. " +
 			"Revoke from Venafi.",
+		UnattendedDVNote: "Venafi issues against a policy folder the account is already scoped to; trstctl performs no domain validation.",
 	},
 	{
 		Issuer: "entrust", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		RevokeNote: "No revocation implementation ships. Revoke from the Entrust console.",
+		RevokeNote:       "No revocation implementation ships. Revoke from the Entrust console.",
+		UnattendedDVNote: "Entrust validation is an organizational step outside trstctl.",
 	},
 	{
 		Issuer: "globalsign", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		RevokeNote: "No revocation implementation ships. Revoke from the GlobalSign console.",
+		RevokeNote:       "No revocation implementation ships. Revoke from the GlobalSign console.",
+		UnattendedDVNote: "GlobalSign validation is an organizational step outside trstctl.",
 	},
 	{
 		Issuer: "awspca", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
 		RevokeNote: "AWS Private CA exposes RevokeCertificate; trstctl ships no implementation. " +
 			"Revoke with the AWS API or console.",
+		UnattendedDVNote: "AWS Private CA is internal and performs no domain validation.",
 	},
 	{
 		Issuer: "gcpcas", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
 		RevokeNote: "Google CAS exposes RevokeCertificate; trstctl ships no implementation. " +
 			"Revoke with the gcloud API or console.",
+		UnattendedDVNote: "Google CAS is internal and performs no domain validation.",
 	},
 	{
 		Issuer: "adcs", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
 		RevokeNote: "AD CS revocation runs through the CA's own management interface, which " +
 			"trstctl does not drive. Revoke with certutil or the Certification Authority console.",
+		UnattendedDVNote: "AD CS issues from template policy against a domain identity; there is no DCV challenge to solve.",
 	},
 	{
 		Issuer: "smallstep", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
 		RevokeNote: "step-ca exposes a revoke endpoint; trstctl ships no implementation. " +
 			"Revoke with the step CLI.",
+		UnattendedDVNote: "step-ca issues under provisioner policy; trstctl drives no ACME challenge against it.",
 	},
 	{
 		Issuer: "azurekv", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyAuthorityGenerated, Validation: ValidationInternal,
 		RevokeNote: "Azure Key Vault certificates are disabled rather than revoked, and " +
 			"trstctl does not drive that. Use the Azure portal or CLI.",
+		UnattendedDVNote: "Azure Key Vault issues from its own policy with no domain-validation challenge trstctl drives.",
 	},
 }
 

@@ -73,7 +73,7 @@ func TestDriverUsesInjectedHTTPClientAndDestroysAccountKey(t *testing.T) {
 		t.Fatal("Destroy left the ACME account private key usable for signing")
 	}
 	// A destroyed driver must fail before any protocol request.
-	if _, err := driver.IssueChain(context.Background(), []string{"example.test"}, []byte("csr")); err == nil {
+	if _, err := driver.IssueChain(context.Background(), OrderRequest{TenantID: "tenant-a", DNSNames: []string{"example.test"}, CSR: []byte("csr")}); err == nil {
 		t.Fatal("destroyed ACME driver accepted an issuance")
 	}
 }
@@ -105,7 +105,7 @@ func TestDriverRejectsCrossOriginURLsDiscoveredFromDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer driver.Destroy()
-	if _, err := driver.IssueChain(context.Background(), []string{"svc.example.test"}, []byte("unused-csr")); !errors.Is(err, netsec.ErrSSRFBlocked) {
+	if _, err := driver.IssueChain(context.Background(), OrderRequest{TenantID: "tenant-a", DNSNames: []string{"svc.example.test"}, CSR: []byte("unused-csr")}); !errors.Is(err, netsec.ErrSSRFBlocked) {
 		t.Fatalf("ACME directory steering error = %v, want ErrSSRFBlocked", err)
 	}
 	if requests != 1 {

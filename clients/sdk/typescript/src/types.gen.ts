@@ -351,6 +351,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acme/dns-01/upstream-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List upstream ACME authorization staleness: when each identifier last actually validated vs last rode a reuse */
+        get: operations["listACMEUpstreamAuthorizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/acme/eab-credentials": {
         parameters: {
             query?: never;
@@ -4488,6 +4505,7 @@ export interface components {
             served: boolean;
         };
         ACMEDNS01ProviderConfig: {
+            allow_upstream_dv?: boolean;
             allow_wildcards?: boolean;
             allowed_methods: string[];
             caa_issuer_domain?: string;
@@ -4512,6 +4530,7 @@ export interface components {
             items: components["schemas"]["ACMEDNS01ProviderConfig"][];
         };
         ACMEDNS01ProviderConfigRequest: {
+            allow_upstream_dv?: boolean;
             allow_wildcards?: boolean;
             allowed_methods?: ("http-01" | "dns-01" | "tls-alpn-01")[];
             caa_issuer_domain?: string;
@@ -4555,6 +4574,25 @@ export interface components {
             items: components["schemas"]["ACMEEABCredential"][];
             required: boolean;
             served: boolean;
+        };
+        ACMEUpstreamAuthorization: {
+            challenge_type?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            identifier: string;
+            issuer: string;
+            /** Format: date-time */
+            last_reused_at?: string;
+            /** Format: date-time */
+            last_validated_at?: string;
+            never_validated: boolean;
+            reuse_count: number;
+            validate_count: number;
+        };
+        ACMEUpstreamAuthorizationList: {
+            guidance: string;
+            items: components["schemas"]["ACMEUpstreamAuthorization"][];
+            never_validated_count: number;
         };
         ADCSFindingEvidence: {
             attribute: string;
@@ -6650,6 +6688,8 @@ export interface components {
             renew: boolean;
             revoke: boolean;
             revoke_note?: string;
+            unattended_dv: boolean;
+            unattended_dv_note?: string;
             /** @enum {string} */
             validation: "acme_challenge" | "account_scoped" | "organizational" | "internal";
         };
@@ -6657,6 +6697,7 @@ export interface components {
             guidance: string;
             issuers: components["schemas"]["IssuerCapability"][];
             revoke_capable_count: number;
+            unattended_dv_capable_count: number;
         };
         IssuerList: {
             items: components["schemas"]["Issuer"][];
@@ -10562,6 +10603,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ACMEDNS01ProviderCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listACMEUpstreamAuthorizations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEUpstreamAuthorizationList"];
                 };
             };
             /** @description client error */

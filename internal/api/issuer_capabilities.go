@@ -41,6 +41,15 @@ type IssuerCapability struct {
 	// where to go instead. "Unsupported" with no reason tells an operator
 	// nothing they can act on.
 	RevokeNote string `json:"revoke_note,omitempty"`
+	// UnattendedDV reports whether this build can satisfy the authority's
+	// domain-validation challenge with no human step (epic B7). As the
+	// CA/Browser Forum compresses the validation-reuse window, this decides
+	// how often somebody has to be in the loop for each authority.
+	UnattendedDV bool `json:"unattended_dv"`
+	// UnattendedDVNote explains an absent one, and the distinction it carries
+	// is operational: "there is no challenge to solve" (an internal CA) and "a
+	// human completes DCV in the vendor console" are opposite situations.
+	UnattendedDVNote string `json:"unattended_dv_note,omitempty"`
 }
 
 // IssuerCapabilityMatrix is the served response.
@@ -49,6 +58,9 @@ type IssuerCapabilityMatrix struct {
 	// RevokeCapableCount is the headline: how many of the configured authority
 	// kinds this build can actually revoke through.
 	RevokeCapableCount int `json:"revoke_capable_count"`
+	// UnattendedDVCapableCount is the second headline: how many authority
+	// kinds this build can keep validated without a person.
+	UnattendedDVCapableCount int `json:"unattended_dv_capable_count"`
 	// Guidance travels with the data rather than living in documentation
 	// nobody opens.
 	Guidance string `json:"guidance"`
@@ -58,7 +70,10 @@ const issuerCapabilityGuidance = "Revoke is true only where trstctl ships an imp
 	"authority and is proven against its protocol by a test. Several authorities document a revocation API that " +
 	"trstctl does not drive; those read false with a note naming where to revoke instead. A revocation that " +
 	"cannot reach the authority fails visibly rather than returning success — a certificate left valid behind a " +
-	"receipt saying otherwise is the failure this matrix exists to prevent."
+	"receipt saying otherwise is the failure this matrix exists to prevent. Unattended DV is true only where " +
+	"trstctl can satisfy the authority's domain-validation challenge with no human step; it additionally " +
+	"requires a DNS-01 provider config that has consented to upstream publication, which is per-authority " +
+	"configuration rather than a property of the build."
 
 func (a *API) listIssuerCapabilities(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.tenant(r); !ok {
@@ -75,10 +90,14 @@ func (a *API) listIssuerCapabilities(w http.ResponseWriter, r *http.Request) {
 			Issuer: row.Issuer, Discover: row.Discover, Issue: row.Issue,
 			Renew: row.Renew, Revoke: row.Revoke,
 			KeyHandling: string(row.KeyHandling), Validation: string(row.Validation),
-			RevokeNote: row.RevokeNote,
+			RevokeNote:   row.RevokeNote,
+			UnattendedDV: row.UnattendedDV, UnattendedDVNote: row.UnattendedDVNote,
 		})
 		if row.Revoke {
 			out.RevokeCapableCount++
+		}
+		if row.UnattendedDV {
+			out.UnattendedDVCapableCount++
 		}
 	}
 	a.writeJSON(w, http.StatusOK, out)

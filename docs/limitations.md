@@ -43,6 +43,7 @@ receipt cannot certify it.
 | F17 | Certificate Transparency monitoring | docs/features/observability-and-risk.md |
 | Discovery coverage & provenance | Served: coverage is measured against **operator-declared segments** rather than against what discovery happened to find, with a per-segment staleness SLO, declared exclusions carrying their reason, and a named blind-spot register. Every certificate carries provenance — which source last observed it, of what kind, and when — distinct from when trstctl first recorded it. Headlined on the Discovery console. **Nothing is rollable into coverage until an operator declares a segment**: an inventory built from findings can describe what it found and nothing else, so an estate with no declarations reports no coverage rather than 100% | [Coverage, provenance and blind spots](#coverage-provenance-and-blind-spots) |
 | Revocation through external issuers | Served for **letsencrypt (ACME), vaultpki and ejbca** — each proven end to end against that authority's own protocol, asserting the AUTHORITY was contacted rather than that the call returned nil. Every other issuer kind reports `revoke: false` on the served capability matrix with a note naming where to revoke instead. A documented vendor endpoint trstctl does not drive is **not** counted as a capability. Revocation that cannot reach the authority **fails visibly**; there is no silent no-op | [Per-issuer capabilities](#per-issuer-capabilities) |
+| Upstream domain validation (DNS-01 as an ACME client) | Served: obtaining a certificate FROM a public CA now negotiates the challenge type the authority offers and solves DNS-01 unattended, reusing the provider configs already persisted for the server direction. **Wildcard issuance from a public CA works for the first time** — DNS-01 is the only challenge that can authorize one. Two independent opt-ins, both default off: `upstream_dns01` on the ACME authority (which also requires that authority's own `caa_issuer_domain`) and `allow_upstream_dv` on each DNS-01 provider config. The console shows a domain-validation column beside every configured issuer — unattended or manual, with the reason — and an upstream authorization freshness panel reporting when each identifier last actually proved control, as against when it last rode a reuse. DNS-01 only: http-01 upstream would need an inbound listener this architecture does not have | [Upstream domain validation](#upstream-domain-validation) |
 | F18 | Drift detection | docs/features/observability-and-risk.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
 | F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
@@ -2409,12 +2410,98 @@ can serve with. [Key custody](custody.md) states this in full. Host-executed
 renewal is what fixes it, and until it lands the count of successors reading
 `control_plane` is the honest measure of the gap.
 
+## Upstream domain validation
+
+trstctl is an ACME server and an ACME client, and until now only one of those
+could do DNS-01.
+
+**What was wrong.** As a client to a public CA, the driver looked only for
+`http-01` and errored if the authority offered none, so DNS-01 was never
+attempted and wildcards were impossible. Worse, the production constructor wired
+a solver whose present and cleanup did nothing. The upstream path therefore
+worked **only against orders the authority had already authorized out of band**.
+Every test passed, because the fixture returned orders as pre-authorized — the
+same shape of defect as a feature whose executor is never asked for work.
+
+**What is served now.** The client negotiates challenge type from what the
+authority actually offers, and solves DNS-01 through the same publish path, the
+same providers and the same credentials the server direction already uses. A
+missing solver fails closed with a named reason rather than silently validating
+nothing. The record is retracted on **every** exit path, including when the
+context expired — which is exactly when a validation token is most likely to be
+left live in public DNS.
+
+**Consent is explicit, and it is two decisions, not one.** The authority must
+be configured with `upstream_dns01`, and each DNS-01 provider config must set
+`allow_upstream_dv`. Both default to false, including on configs that already
+existed. Credentials an operator supplied so
+that trstctl could *verify* a challenge somebody else published are not consent
+for trstctl to *publish* into that zone whenever an external authority asks —
+and as validation-reuse windows compress, that publishing becomes frequent and
+unattended. A migration cannot grant that permission; a content harness asserts
+no existing config comes out consenting.
+
+**CAA is checked against the right issuer.** The server-side check uses the
+config's own CAA identifier, which is correct when trstctl is the issuer.
+Upstream the certificate comes from someone else, so the check uses the external
+CA's identifier, and refuses to run at all if none is configured — a CAA check
+against an empty issuer authorizes everything while appearing to check.
+Configuration validation requires `caa_issuer_domain` whenever `upstream_dns01`
+is on, so that state is unreachable rather than merely handled. The identifier
+is bound per authority: two configured ACME CAs do not share one, because a CAA
+check that authorizes the *wrong* CA passes while being wrong, which is harder
+to notice than one that authorizes everyone.
+
+**Reused authorizations are recorded, and served.** An authority that already
+considers an identifier authorized issues without a challenge. That is normal
+and it is also the thing worth watching: automating validation removes the
+human from the cycle, and with them the human who used to notice when
+validation broke. `GET /api/v1/acme/dns-01/upstream-authorizations` and the
+console's *Upstream authorization freshness* panel report, per identifier and
+per authority, when control was **last actually proved** — not when a
+certificate was last issued. Those two diverge silently, and the gap is the
+warning. An identifier that has never been validated by this deployment is
+called out by name: every issuance for it so far rode a reuse this install did
+not earn and cannot repeat, and when the window closes they fail together
+rather than one at a time. A reuse never overwrites the last real validation
+date; that is asserted by a test, because the convenient single "last seen"
+column would erase the only signal here.
+
+**What is not served.** trstctl does not wait for DNS propagation before telling
+the authority to validate. The record is published through the provider's API
+and the challenge is accepted as soon as that call returns, so a zone whose
+nameservers are slow to converge can have its authorization marked invalid and
+the order retried rather than waiting. The operator-run preflight
+(`POST /api/v1/acme/dns-01/preflight`) checks propagation for a domain, but it
+evaluates TXT values the caller supplies rather than querying DNS itself, so it
+cannot be reused as an automatic gate. Closing this needs authoritative-nameserver
+TXT verification that does not exist in the tree yet; until it does, a slow zone
+costs a retry, not a wrong answer.
+
+Also not served: http-01 upstream — it would require an inbound listener
+on the validated host, which this architecture does not have and will not grow.
+The challenge census says so rather than claiming a type that would be selected
+and then fail. The publish is bounded, but by whichever deadline is tighter: the
+caller's context if it carries one, and otherwise the DNS-01 automation's own
+30-second outbox wait. There is no separate, configurable propagation budget,
+and the 30 seconds is a floor for callers that set no deadline rather than a cap
+that always applies.
+
 ## Per-issuer capabilities
 
 `GET /api/v1/issuers/capabilities` and `trstctl issuers capabilities` serve one
-row per authority kind: discover, issue, renew, revoke, where the private key is
-generated, and what the authority validates before issuing. The console shows
-revocation beside each configured issuer.
+row per authority kind: discover, issue, renew, revoke, whether trstctl can
+satisfy its domain validation unattended, where the private key is generated,
+and what the authority validates before issuing. The console shows revocation
+and domain validation beside each configured issuer.
+
+**Unattended DV is checked against the source, in both directions.** It is true
+only where the issuer's package wires a challenge solver into the ACME driver —
+one authority kind today — and an authority that reads false must say why, because
+"there is no challenge to solve" (an internal CA) and "a human completes DCV in
+the vendor's console" (public OV/EV) are opposite operational situations. It is a
+property of the build; whether a given authority is actually configured for it is
+the `upstream_dns01` flag on that authority.
 
 **Revoke is the field that matters, and it is deliberately conservative.** It is
 true only where this build ships an implementation that contacts the authority

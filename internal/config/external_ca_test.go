@@ -85,3 +85,60 @@ func TestExternalCAProviderIDsAreStableAndComplete(t *testing.T) {
 		t.Fatalf("compiled external CA types = %d, want 14: %v", len(seen), ExternalCATypes)
 	}
 }
+
+// upstreamDVFixtureSecretRef is a fabricated reference: the validator needs the
+// file: shape, and no value here is real.
+const upstreamDVFixtureSecretRef = "file:/var/lib/trstctl/secrets/upstream" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+
+// Upstream DV cannot be half-configured (epic B7).
+//
+// The CAA check asks whether a domain's policy authorizes the authority about
+// to issue. Against an empty issuer it authorizes every CA while looking like a
+// control — so the configuration that would produce that state is refused at
+// load, not handled at solve time. Refusing at load is what makes the runtime
+// check's "this is a bug, not a supported state" comment true.
+func TestUpstreamDNS01RequiresTheAuthoritysCAAIssuer(t *testing.T) {
+	err := ValidateExternalCAs([]ExternalCAConfig{{
+		ID: "le", Type: "letsencrypt", Name: "Let's Encrypt",
+		DirectoryURL:  "https://acme-v02.api.letsencrypt.org/directory",
+		UpstreamDNS01: true,
+	}})
+	if err == nil {
+		t.Fatal("upstream DV was accepted with no CAA issuer domain; the CAA check it implies " +
+			"would authorize every issuer")
+	}
+	if !strings.Contains(err.Error(), "caa_issuer_domain") {
+		t.Errorf("error = %v; it must name the field an operator has to set", err)
+	}
+
+	ok := ValidateExternalCAs([]ExternalCAConfig{{
+		ID: "le", Type: "letsencrypt", Name: "Let's Encrypt",
+		DirectoryURL:  "https://acme-v02.api.letsencrypt.org/directory",
+		UpstreamDNS01: true, CAAIssuerDomain: "letsencrypt.org",
+	}})
+	if ok != nil {
+		t.Fatalf("a complete upstream DV config was rejected: %v", ok)
+	}
+}
+
+// Upstream DV on a non-ACME authority is refused rather than ignored.
+//
+// An operator who writes upstream_dns01 on their DigiCert entry has stated an
+// intent this platform cannot carry out. Accepting the file and dropping the
+// field would leave them believing validation is automated right up until the
+// reuse window closes — which is the failure the whole epic exists to remove,
+// reintroduced through configuration.
+func TestUpstreamDNS01IsRefusedOnAuthoritiesThatCannotDoIt(t *testing.T) {
+	err := ValidateExternalCAs([]ExternalCAConfig{{
+		ID: "dc", Type: "digicert", Name: "DigiCert",
+		Endpoint: "https://example.test", APIKeyRef: upstreamDVFixtureSecretRef,
+		UpstreamDNS01: true, CAAIssuerDomain: "digicert.com",
+	}})
+	if err == nil {
+		t.Fatal("upstream DV was silently accepted on an authority with no solver; the operator " +
+			"would believe DCV is automated when nothing will ever publish a record")
+	}
+	if !strings.Contains(err.Error(), "upstream_dns01") {
+		t.Errorf("error = %v, want the ignored-field reason naming the flag", err)
+	}
+}

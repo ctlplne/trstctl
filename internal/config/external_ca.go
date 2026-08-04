@@ -85,6 +85,23 @@ type ExternalCAConfig struct {
 	// Let's Encrypt or another ACME directory.
 	DirectoryURL string `json:"directory_url,omitempty"`
 
+	// UpstreamDNS01 enables unattended domain validation against this
+	// authority: trstctl publishes the dns-01 challenge record itself, using
+	// the DNS-01 provider configs that have set allow_upstream_dv (epic B7).
+	//
+	// Off by default. With it off this issuer can only obtain certificates for
+	// identifiers the authority has already authorized out of band, which is
+	// what shipped before and is still the correct posture for an operator who
+	// has not decided to hand trstctl publish rights in their zones.
+	UpstreamDNS01 bool `json:"upstream_dns01,omitempty"`
+
+	// CAAIssuerDomain is THIS authority's CAA identifier ("letsencrypt.org"),
+	// not trstctl's. It is required whenever UpstreamDNS01 is on: the check
+	// asks whether the domain's CAA policy authorizes the CA about to issue,
+	// and against an empty issuer it would authorize everyone while looking
+	// like a control.
+	CAAIssuerDomain string `json:"caa_issuer_domain,omitempty"`
+
 	// Sectigo SCM.
 	Login       string `json:"login,omitempty"`
 	CustomerURI string `json:"customer_uri,omitempty"`
@@ -333,6 +350,11 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 		credential(c.APISecretRef, "api_secret_ref", false)
 	case "letsencrypt":
 		// The ACME account key is generated and held by the isolated signer.
+		if c.UpstreamDNS01 && strings.TrimSpace(c.CAAIssuerDomain) == "" {
+			errs = append(errs, fmt.Errorf(
+				"%s.caa_issuer_domain is required when upstream_dns01 is enabled: the CAA check "+
+					"must name the authority that will issue, and an empty issuer authorizes every CA", where))
+		}
 	case "sectigo":
 		require(c.Login, "login")
 		credential(c.PasswordRef, "password_ref", false)
@@ -360,6 +382,16 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 	case "venafi":
 		credential(c.AccessTokenRef, "access_token_ref", false)
 		require(c.PolicyDN, "policy_dn")
+	}
+	// Upstream DV is ACME-only, and setting it elsewhere is rejected rather
+	// than ignored. An operator who writes upstream_dns01 on their DigiCert
+	// entry has stated an intent the platform cannot carry out; accepting the
+	// file and dropping the field would leave them believing validation is
+	// automated right up until the reuse window closes.
+	if c.Type != "letsencrypt" && (c.UpstreamDNS01 || strings.TrimSpace(c.CAAIssuerDomain) != "") {
+		errs = append(errs, fmt.Errorf(
+			"%s.upstream_dns01/caa_issuer_domain apply only to ACME (letsencrypt) authorities, not %q",
+			where, c.Type))
 	}
 	return errs
 }

@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     profiles: vi.fn(),
     caDiscoveryInventory: vi.fn(),
     externalCAs: vi.fn(),
+    issuerCapabilities: vi.fn(),
     createCACeremony: vi.fn(),
     approveCACeremony: vi.fn(),
     importOfflineRootCA: vi.fn(),
@@ -69,6 +70,23 @@ describe("CA hierarchy and custody surface", () => {
     ]);
     apiMock.profiles.mockReset().mockResolvedValue([]);
     apiMock.externalCAs.mockReset().mockResolvedValue([]);
+    apiMock.issuerCapabilities.mockReset().mockResolvedValue({
+      issuers: [
+        {
+          issuer: "letsencrypt", discover: false, issue: true, renew: true, revoke: true,
+          key_handling: "requester_csr", validation: "acme_challenge", unattended_dv: true,
+        },
+        {
+          issuer: "digicert", discover: false, issue: true, renew: true, revoke: false,
+          key_handling: "requester_csr", validation: "organizational", unattended_dv: false,
+          revoke_note: "Revoke from the DigiCert console.",
+          unattended_dv_note: "Complete DCV in the DigiCert console.",
+        },
+      ],
+      revoke_capable_count: 1,
+      unattended_dv_capable_count: 1,
+      guidance: "",
+    });
     apiMock.caDiscoveryInventory.mockReset().mockResolvedValue({
       items: [
         {
@@ -627,4 +645,53 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.queryByRole("dialog", { name: "Configure ACME issuer" })).not.toBeInTheDocument();
     expect(opener).toHaveFocus();
   });
+  // The capability columns must resolve the AUTHORITY, not the issuer's
+  // key type (epics R2 + B7).
+  //
+  // This is the test whose absence let a dead column ship. Both capability
+  // cells looked their row up with `c.issuer === issuer.kind`, but Issuer.kind
+  // is "x509_ca" | "ssh_ca" while the census is keyed by authority kind
+  // ("letsencrypt", "digicert"). The two axes never intersect, so every row
+  // rendered "Unknown — capability matrix unavailable" — telling the operator
+  // the census was broken when the census was fine and the lookup was wrong.
+  //
+  // The bridge is the external-CA registry, where `type` IS the authority kind.
+  it("shows each external issuer's real revocation and domain-validation capability", async () => {
+    apiMock.externalCAs.mockResolvedValue([
+      { id: "iss-ssh", type: "digicert", name: "SSH CA", status: "available" },
+    ]);
+    renderCAHierarchy();
+
+    // DigiCert: no shipped revocation, no unattended DV — and both notes say
+    // where to go instead, which is the whole point of a false row.
+    expect(await screen.findByText("Revoke at the authority")).toBeInTheDocument();
+    expect(screen.getByText("Revoke from the DigiCert console.")).toBeInTheDocument();
+    expect(screen.getByText("Manual step")).toBeInTheDocument();
+    expect(screen.getByText("Complete DCV in the DigiCert console.")).toBeInTheDocument();
+    // The failure this replaces: the cell used to read "unavailable" for every
+    // configured authority.
+    expect(screen.queryByText(/capability matrix unavailable/i)).toBeNull();
+  });
+
+  // An INTERNAL issuer is a third answer, not a missing one. trstctl is the CA,
+  // so revocation runs through its own CRL/OCSP and there is no upstream
+  // challenge to automate. Rendering "unknown" there would invite an operator
+  // to go looking for a vendor console that does not exist.
+  it("says internal authorities have no upstream vendor rather than reading unknown", async () => {
+    apiMock.issuers.mockResolvedValue([
+      {
+        id: "iss-root",
+        name: "Root CA",
+        kind: "x509_ca",
+        internal: true,
+        chain: ["Root CA"],
+        public_key: "-----BEGIN PUBLIC KEY-----ROOT-----END PUBLIC KEY-----",
+      },
+    ]);
+    renderCAHierarchy();
+
+    expect(await screen.findByText("trstctl issues and revokes this")).toBeInTheDocument();
+    expect(screen.getByText("No domain validation")).toBeInTheDocument();
+  });
+
 });

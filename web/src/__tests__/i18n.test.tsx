@@ -270,6 +270,30 @@ describe("i18n boundary", () => {
       // and values a finding was derived from, so an operator can check it
       // against the template's own property page instead of taking it on faith.
       // Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      // B7 second-pass re-pin: three findings the refuters had dismissed turned
+      // out to be right — a failed freshness read rendered identically to a
+      // healthy deployment, timestamps bypassed the locale/timezone policy every
+      // other panel in that file uses, and the docs overstated the publish
+      // bound. The two new keys are the failed-read state, which has to say
+      // plainly that it is not evidence of health. Machine-authored es/de -
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      // B7 review re-pin: the adversarial pass found the never-validated count
+      // had no singular form ("1 identifiers"), the DNS-01 consent flag was not
+      // in the edit dialog at all (a PUT silently revoked it), and the
+      // capability columns rendered "matrix unavailable" for every authority
+      // because they keyed on Issuer.kind. Fixing those added a one/many pair,
+      // the consent toggle and its explanation, and the internal-authority
+      // answers. Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      // B7 staleness re-pin: ten protocols.dns01.upstream* keys add the
+      // upstream authorization freshness panel — when each identifier last
+      // actually proved control, as against when it last rode a reuse the
+      // install did not earn. Machine-authored es/de - FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW.
+      // B7 upstream DV re-pin: three source.*.b7dv* keys add the issuer
+      // domain-validation column — whether trstctl can satisfy this authority's
+      // DCV challenge with nobody in the loop, which is the question the
+      // shrinking CA/Browser Forum reuse window turns into an operational one.
+      // Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
       // F1 AD CS re-pin: twenty-two source.adcs.* keys add the certificate
       // template posture panel — the risk verdict, what each template permits
       // and the fix, whether a CA publishes it, and the empty state that
@@ -389,8 +413,8 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "e4396c583b1772248fd67c03ac0e3829988c524f72c0cfa5f75979cc1213523d",
-      "de-DE": "f2c678e09c6c31ba1090934edf9706e577c650a7687fa5b09c5195f6d95171f9",
+      "es-ES": "eed28bbfb90e84e85091f70f0e4732fb979d6e9577bebecc4c47a516ac83d839",
+      "de-DE": "46ede9660081364145f59ff414ae6cf7511794bdaf19877c5e0764c5894cb700",
     });
   });
 
