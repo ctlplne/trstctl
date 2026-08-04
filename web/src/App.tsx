@@ -32,6 +32,7 @@ const Assistant = lazyPage(() => import("@/pages/Assistant"), "Assistant");
 const Profiles = lazyPage(() => import("@/pages/Profiles"), "Profiles");
 const Audit = lazyPage(() => import("@/pages/Audit"), "Audit");
 const Graph = lazyPage(() => import("@/pages/Graph"), "Graph");
+const Migration = lazyPage(() => import("@/pages/Migration"), "Migration");
 const AdminAccess = lazyPage(() => import("@/pages/Platform"), "AdminAccess");
 const AdminEditions = lazyPage(() => import("@/pages/Platform"), "AdminEditions");
 const AdminSystem = lazyPage(() => import("@/pages/Platform"), "AdminSystem");
@@ -119,6 +120,7 @@ export function AppRoutes() {
             <Route path="notifications" element={<Notifications />} />
             <Route path="posture" element={<Posture />} />
             <Route path="graph" element={<Graph />} />
+            <Route path="migration" element={<Migration />} />
             <Route path="audit" element={<Audit />} />
             <Route path="privacy" element={<Privacy />} />
             <Route path="integrate" element={<Integrate />} />

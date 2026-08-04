@@ -423,8 +423,22 @@ describe("i18n boundary", () => {
       // Reviewed for meaning in all three locales; both empty-state strings must
       // keep their explanation of which case the operator is looking at.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "6b975dd2bf0998ee1e5fcffc71fdd6426641597cdfb250417ea71fe4831f3f53",
-      "de-DE": "2ec7c5d1c878008f64b55a3aca0eb918288da4a5e0285a79dc126d75fe784611",
+      // J1 audit-export re-pin: six source.export.format.* / source.format.*
+      // keys name the export encodings. Format names (NDJSON, CSV, Splunk HEC,
+      // Microsoft Sentinel) are product nouns and stay untranslated in all three
+      // locales on purpose — a localized "NDJSON" would not match what the
+      // operator's ingest pipeline calls it.
+      // H1 trust re-pin: three source.trusted.by.* keys carry the "N stores
+      // across M hosts" headline and the empty state. The empty state's meaning
+      // is load-bearing and must survive translation: it says no scanned store
+      // carries this anchor, NOT that nothing trusts the CA.
+      // H2 migration re-pin: twelve source.migration.* keys. The read-only
+      // sentence must keep saying that nothing is distributed, issued or
+      // deployed, and the counts line must stay a count rather than becoming a
+      // readiness percentage in any locale.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "a5f714779a39ff8f3d03145bd36d2bfa53d0e4e831563f4f299a44761baa21b6",
+      "de-DE": "01418e7c48f8d9e2475141e958d18136f59bc2c221180efef626f777ff57d2b5",
     });
   });
 

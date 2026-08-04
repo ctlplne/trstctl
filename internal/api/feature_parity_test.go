@@ -101,8 +101,8 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// whose delivery receipts it is the missing half of.
 	// The count is a deliberate ratchet: every new operation must be mapped to
 	// a feature-catalog row in the same change.
-	if len(out) != 309 {
-		t.Fatalf("OpenAPI operationIds = %d, want 309", len(out))
+	if len(out) != 310 {
+		t.Fatalf("OpenAPI operationIds = %d, want 310", len(out))
 	}
 	return out
 }

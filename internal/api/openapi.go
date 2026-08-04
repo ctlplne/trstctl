@@ -3077,6 +3077,35 @@ func componentSchemas() map[string]*Schema {
 		"from":  str(),
 		"nodes": {Type: "array", Items: ref("GraphNode")},
 	}, "from", "nodes")
+	// H2: read-only migration assessment.
+	migrationAssessRequest := object(map[string]*Schema{
+		"plan_id": str(),
+		"waves": {Type: "array", Items: object(map[string]*Schema{
+			"id": str(), "ordinal": {Type: "integer"},
+			"members": {Type: "array", Items: str()},
+		}, "id", "ordinal", "members")},
+		"require_full_trust": {Type: "boolean"}, "min_trust_percent": {Type: "integer"},
+	}, "waves")
+	migrationUnknown := object(map[string]*Schema{
+		"member": str(),
+		"kind": {Type: "string", Enum: []string{
+			"no_trust_store_observed", "no_verification_address", "no_deployment_target",
+		}},
+		"detail": str(),
+	}, "member", "kind", "detail")
+	migrationAssessedWave := object(map[string]*Schema{
+		"id": str(), "ordinal": {Type: "integer"},
+		"members":  {Type: "array", Items: str()},
+		"blocked":  {Type: "array", Items: str()},
+		"guidance": str(),
+	}, "id", "ordinal", "members")
+	migrationAssessment := object(map[string]*Schema{
+		"plan_id":  str(),
+		"waves":    {Type: "array", Items: ref("MigrationAssessedWave")},
+		"unknowns": {Type: "array", Items: ref("MigrationUnknown")},
+		"members":  {Type: "integer"}, "migratable": {Type: "integer"},
+		"guidance": str(),
+	}, "plan_id", "waves", "unknowns", "members", "migratable", "guidance")
 	// H1: who trusts a CA, and where those stores live.
 	graphTrustStores := object(map[string]*Schema{
 		"issuer":      str(),
@@ -4206,6 +4235,10 @@ func componentSchemas() map[string]*Schema {
 		"GraphReachable":                           graphReachable,
 		"GraphImpact":                              graphImpact,
 		"GraphTrustStores":                         graphTrustStores,
+		"MigrationAssessRequest":                   migrationAssessRequest,
+		"MigrationUnknown":                         migrationUnknown,
+		"MigrationAssessedWave":                    migrationAssessedWave,
+		"MigrationAssessment":                      migrationAssessment,
 		"GraphQueryResult":                         graphQueryResult,
 		"Owner":                                    owner,
 		"OwnerRequest":                             ownerReq,

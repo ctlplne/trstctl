@@ -147,8 +147,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// D2's `endpoints verifications` raised it to 316 and is mapped onto F7.
 	// Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 319 {
-		t.Fatalf("CLI commands = %d, want 319", len(out))
+	if len(out) != 320 {
+		t.Fatalf("CLI commands = %d, want 320", len(out))
 	}
 	return out
 }

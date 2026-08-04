@@ -136,6 +136,10 @@ describe("exported API surface census", () => {
     }
 
     const readOnlyPosts = new Set([
+      // H2: assess enumerates what a migration WOULD touch and writes nothing.
+      // It is a POST only because the plan travels as a body; requiring an
+      // idempotency key would imply a side effect it does not have.
+      "/api/v1/migrations/assess",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",

@@ -9,6 +9,7 @@ import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { moduleLabelKey, moduleScopeTerm } from "@/lib/navigation";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
@@ -170,9 +171,9 @@ export function Audit() {
             <label htmlFor="audit-export-format" className="sr-only">
               {translateNow("source.export.format.j1exp00001")}
             </label>
-            <select
+            <Select
               id="audit-export-format"
-              className="ui-input h-9 w-44"
+              className="h-9 w-44"
               value={exportFormat}
               onChange={(event) => setExportFormat(event.target.value)}
               disabled={busy || loading}
@@ -182,7 +183,7 @@ export function Audit() {
               <option value="csv">{translateNow("source.format.csv.j1exp00004")}</option>
               <option value="splunk-hec">{translateNow("source.format.splunk.j1exp00005")}</option>
               <option value="sentinel">{translateNow("source.format.sentinel.j1exp00006")}</option>
-            </select>
+            </Select>
             <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
               {translateNow("source.export.evidence.caab91492e")}
             </Button>

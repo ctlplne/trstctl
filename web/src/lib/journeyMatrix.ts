@@ -41,6 +41,7 @@ const routeCatalog = {
   discovery: { path: "/discovery", heading: "Discovery" },
   graph: { path: "/graph", heading: "Credential graph" },
   identities: { path: "/identities", heading: "Identities" },
+  migration: { path: "/migration", heading: "Migration" },
   incidents: { path: "/incidents", heading: "Incidents" },
   integrate: { path: "/integrate", heading: "Integrate" },
   operations: { path: "/operations", heading: "Operations queue" },

@@ -2503,6 +2503,21 @@ const deDECatalog = {
   "source.trusted.by.count.h1trust0002": "{value1} Vertrauensspeicher auf {value2} Hosts.",
   "source.trusted.by.none.h1trust0003":
     "Kein gepr\u00fcfter Vertrauensspeicher enth\u00e4lt den Anker dieser CA. Das ist der Beobachtungsstand, kein Beweis daf\u00fcr, dass ihr niemand vertraut.",
+  "source.migration.h2mig00001": "Migration",
+  "source.migration.description.h2mig00002":
+    "Planen Sie eine CA-Migration in geordneten Wellen und sehen Sie, was jede ber\u00fchren w\u00fcrde, bevor etwas ausgef\u00fchrt wird.",
+  "source.migration.plan.h2mig00003": "Migrationsplan",
+  "source.migration.assess.h2mig00004": "Plan bewerten",
+  "source.migration.readonly.h2mig00005":
+    "Die Bewertung ist schreibgesch\u00fctzt: nichts wird verteilt, ausgestellt oder bereitgestellt. Das Ausf\u00fchren einer Migration wird aus dieser Konsole noch nicht angeboten.",
+  "source.migration.unavailable.h2mig00006": "Bewertung nicht verf\u00fcgbar",
+  "source.migration.assessment.h2mig00007": "Bewertung",
+  "source.migration.counts.h2mig00008": "{value1} von {value2} Mitgliedern k\u00f6nnen mit dem bisher Beobachteten migriert werden.",
+  "source.migration.waves.h2mig00009": "Wellen",
+  "source.migration.wave.members.h2mig00010": "{value1} Mitglieder",
+  "source.migration.unknowns.h2mig00011": "Unbekannte",
+  "source.migration.no.unknowns.h2mig00012":
+    "Jedes Mitglied dieses Plans hat einen beobachteten Vertrauensspeicher, ein Bereitstellungsziel und einen zu pr\u00fcfenden Listener.",
   "source.all.kinds.ddd0c2108e": "Alle Arten",
   "source.all.profiles.18f6aff3fe": "Alle Profile",
   "source.all.statuses.8ee57323a6": "Alle Status",

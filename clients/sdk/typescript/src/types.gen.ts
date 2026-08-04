@@ -2458,6 +2458,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/migrations/assess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assess a migration plan read-only: what it would touch and what is unknown */
+        post: operations["assessMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/decommission": {
         parameters: {
             query?: never;
@@ -7208,6 +7225,37 @@ export interface components {
             email?: string;
             roles: string[];
             source?: string;
+        };
+        MigrationAssessRequest: {
+            min_trust_percent?: number;
+            plan_id?: string;
+            require_full_trust?: boolean;
+            waves: {
+                id: string;
+                members: string[];
+                ordinal: number;
+            }[];
+        };
+        MigrationAssessedWave: {
+            blocked?: string[];
+            guidance?: string;
+            id: string;
+            members: string[];
+            ordinal: number;
+        };
+        MigrationAssessment: {
+            guidance: string;
+            members: number;
+            migratable: number;
+            plan_id: string;
+            unknowns: components["schemas"]["MigrationUnknown"][];
+            waves: components["schemas"]["MigrationAssessedWave"][];
+        };
+        MigrationUnknown: {
+            detail: string;
+            /** @enum {string} */
+            kind: "no_trust_store_observed" | "no_verification_address" | "no_deployment_target";
+            member: string;
         };
         NHIComplianceControl: {
             control_id: string;
@@ -16777,6 +16825,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MDMSCEPStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    assessMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrationAssessRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationAssessment"];
                 };
             };
             /** @description client error */

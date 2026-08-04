@@ -2661,6 +2661,36 @@ export interface MemberRequest {
   source?: string;
 }
 
+export interface MigrationAssessRequest {
+  min_trust_percent?: number;
+  plan_id?: string;
+  require_full_trust?: boolean;
+  waves: { id: string; members: string[]; ordinal: number }[];
+}
+
+export interface MigrationAssessedWave {
+  blocked?: string[];
+  guidance?: string;
+  id: string;
+  members: string[];
+  ordinal: number;
+}
+
+export interface MigrationAssessment {
+  guidance: string;
+  members: number;
+  migratable: number;
+  plan_id: string;
+  unknowns: MigrationUnknown[];
+  waves: MigrationAssessedWave[];
+}
+
+export interface MigrationUnknown {
+  detail: string;
+  kind: "no_trust_store_observed" | "no_verification_address" | "no_deployment_target";
+  member: string;
+}
+
 export interface NHIComplianceControl {
   control_id: string;
   evidence_refs: string[];

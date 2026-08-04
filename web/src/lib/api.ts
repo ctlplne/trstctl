@@ -164,6 +164,7 @@ import type {
   FleetReissuanceRunList,
   GraphImpact,
   GraphTrustStores,
+  MigrationAssessment,
   GraphNode,
   GraphQueryResult,
   GraphReachable,
@@ -611,6 +612,7 @@ export type {
   FleetReissuanceRunList,
   GraphImpact,
   GraphTrustStores,
+  MigrationAssessment,
   GraphNode,
   GraphQueryResult,
   GraphReachable,
@@ -1348,7 +1350,7 @@ export interface Api {
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
   // J1: download a record stream (ndjson/csv/splunk-hec/sentinel) as a file.
-  downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<void>;
+  downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<string>;
   complianceEvidencePack(framework: ComplianceEvidencePack["framework"]): Promise<ComplianceEvidencePack>;
   complianceInventoryReport(): Promise<ComplianceInventoryReport>;
   nhiComplianceReport(): Promise<NHIComplianceReport>;
@@ -1363,6 +1365,8 @@ export interface Api {
   graphBlastRadius(id: string): Promise<GraphImpact>;
   // H1: which discovered trust stores carry this CA's anchor, and where.
   graphTrustStores(id: string): Promise<GraphTrustStores>;
+  // H2: read-only assessment of a migration plan.
+  assessMigration(request: unknown): Promise<MigrationAssessment>;
   graphReachable(id: string): Promise<GraphReachable>;
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
@@ -1728,6 +1732,8 @@ const liveApi: Api = {
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
   graphTrustStores: (id) => req<GraphTrustStores>(`/api/v1/graph/trust-stores/${encodeURIComponent(id)}`),
+  assessMigration: (request) =>
+    req<MigrationAssessment>("/api/v1/migrations/assess", { method: "POST", body: JSON.stringify(request), headers: { "Content-Type": "application/json" } }),
   graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),
   graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
   // CLI parity (S3.3): console flows for every remaining core API operation.

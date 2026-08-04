@@ -526,7 +526,7 @@ export function Connectors() {
           NONE have migrated — an operator planning a custody migration needs to
           see the work remaining, and a panel that appeared only once the work
           was done would be a trophy rather than a tool. */}
-          {keyCustody && keyCustody.items.length > 0 ? (
+          {keyCustody && (keyCustody.items?.length ?? 0) > 0 ? (
             <section aria-labelledby="endpoint-custody-heading" className="space-y-3">
               <div>
                 <h2 id="endpoint-custody-heading" className="text-title font-semibold">
@@ -554,7 +554,7 @@ export function Connectors() {
                     </tr>
                   </thead>
                   <tbody>
-                    {keyCustody.items.map((row) => (
+                    {(keyCustody.items ?? []).map((row) => (
                       <tr key={row.target_id} className="align-top">
                         <td className="font-mono text-xs">{row.name}</td>
                         <td className="text-xs text-muted-foreground">{row.connector}</td>

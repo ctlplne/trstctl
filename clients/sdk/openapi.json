@@ -10325,6 +10325,140 @@
         ],
         "type": "object"
       },
+      "MigrationAssessRequest": {
+        "properties": {
+          "min_trust_percent": {
+            "type": "integer"
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "require_full_trust": {
+            "type": "boolean"
+          },
+          "waves": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "members": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "ordinal": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "ordinal",
+                "members"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "waves"
+        ],
+        "type": "object"
+      },
+      "MigrationAssessedWave": {
+        "properties": {
+          "blocked": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ordinal": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ordinal",
+          "members"
+        ],
+        "type": "object"
+      },
+      "MigrationAssessment": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "members": {
+            "type": "integer"
+          },
+          "migratable": {
+            "type": "integer"
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "unknowns": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationUnknown"
+            },
+            "type": "array"
+          },
+          "waves": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationAssessedWave"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_id",
+          "waves",
+          "unknowns",
+          "members",
+          "migratable",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "MigrationUnknown": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "no_trust_store_observed",
+              "no_verification_address",
+              "no_deployment_target"
+            ],
+            "type": "string"
+          },
+          "member": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "member",
+          "kind",
+          "detail"
+        ],
+        "type": "object"
+      },
       "NHIComplianceControl": {
         "properties": {
           "control_id": {
@@ -30066,6 +30200,63 @@
         ],
         "summary": "Get served MDM SCEP policy and challenge telemetry status",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/migrations/assess": {
+      "post": {
+        "operationId": "assessMigration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrationAssessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationAssessment"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Assess a migration plan read-only: what it would touch and what is unknown",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/nhi/decommission": {

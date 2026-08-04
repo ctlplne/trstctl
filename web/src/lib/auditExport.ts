@@ -19,11 +19,14 @@ function fileExtension(format: string): string {
 /**
  * Download an audit export in a record-stream format.
  *
+ * Returns the filename it saved, so a caller can tell the operator where the
+ * download went rather than leaving a silent click.
+ *
  * The object URL is revoked on every path, including a failed click: a leaked
  * one pins the entire export in memory for the life of the tab, and an audit
  * export is exactly the download large enough for that to matter.
  */
-export async function downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<void> {
+export async function downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<string> {
   if (previewTransportIsIsolated()) throw previewRefusal();
   const params = new URLSearchParams();
   if (options?.type) params.set("type", options.type);
@@ -40,13 +43,15 @@ export async function downloadAuditExport(options: AuditQuery | undefined, forma
   if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) throw new ApiError(res.status, await res.text());
 
+  const filename = `trstctl-audit.${fileExtension(format)}`;
   const url = URL.createObjectURL(await res.blob());
   try {
     const a = document.createElement("a");
     a.href = url;
-    a.download = `trstctl-audit.${fileExtension(format)}`;
+    a.download = filename;
     a.click();
   } finally {
     URL.revokeObjectURL(url);
   }
+  return filename;
 }

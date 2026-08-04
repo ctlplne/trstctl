@@ -1295,6 +1295,23 @@ looking for a credential that was never there.
   path. The credential graph and risk-scoring read APIs (`/api/v1/graph*`,
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`) are
   also served, as is the AI/RCA/MCP surface behind `ai.enable_api`.
+- Migration waves (H2): `internal/migration` is the generic ordered-cohort engine
+  behind CA rollover. Phases run distribute-trust → VERIFY trust → issue → VERIFY
+  live → advance, and both verify steps are GATES rather than steps: `Advance`
+  refuses to leave the trust gate on an unconfirmed cohort, which is what stops
+  successor leaves being issued under a root the cohort's hosts do not yet trust —
+  the failure mode where every handshake to those endpoints fails outright. A
+  member that was checked and FAILED is never averaged away by a percentage
+  threshold; `Halt` never rewrites a wave that already executed; `RollbackOrder`
+  runs newest-first so undoing a wave cannot strip an anchor a later live wave
+  depends on. `ValidatePlan` refuses duplicate ordinals and a member in two waves.
+  Served: `POST /api/v1/migrations/assess`, `trstctl migrations assess`, and the
+  `/migration` console — READ-ONLY, and the page says so. Scope, stated exactly:
+  executing a migration is NOT served. The engine, its gates and the assessment
+  are; the orchestration that drives them end to end is not, so this is planning
+  and analysis rather than a run button. The assessment reports UNKNOWNS as
+  distinct from findings — a member with no observed trust store is not a member
+  confirmed to have an empty one, and only the second is safe to migrate.
 - Trust in the graph (H1): trust-store anchors agents collect are promoted from
   flat discovery findings into relationships — a `trust-store` node kind, `TRUSTS`
   (store → issuer, oriented the way impact travels) and `HOSTS` (resource → store).

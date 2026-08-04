@@ -3791,6 +3791,52 @@ MemberRequest = TypedDict(
     total=False,
 )
 
+MigrationAssessRequest = TypedDict(
+    'MigrationAssessRequest',
+    {
+        'min_trust_percent': int,
+        'plan_id': str,
+        'require_full_trust': bool,
+        'waves': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+MigrationAssessedWave = TypedDict(
+    'MigrationAssessedWave',
+    {
+        'blocked': list[str],
+        'guidance': str,
+        'id': str,
+        'members': list[str],
+        'ordinal': int,
+    },
+    total=False,
+)
+
+MigrationAssessment = TypedDict(
+    'MigrationAssessment',
+    {
+        'guidance': str,
+        'members': int,
+        'migratable': int,
+        'plan_id': str,
+        'unknowns': list[dict[str, Any]],
+        'waves': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+MigrationUnknown = TypedDict(
+    'MigrationUnknown',
+    {
+        'detail': str,
+        'kind': str,
+        'member': str,
+    },
+    total=False,
+)
+
 NHIComplianceControl = TypedDict(
     'NHIComplianceControl',
     {

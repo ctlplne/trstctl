@@ -9427,6 +9427,54 @@ export const messages = {
     defaultMessage: "No scanned trust store carries this CA's anchor. That is what has been observed, not proof nothing trusts it.",
     description: "H1: empty state, worded so absence of evidence does not read as evidence of absence.",
   },
+  "source.migration.h2mig00001": {
+    defaultMessage: "Migration",
+    description: "H2: migration console page title.",
+  },
+  "source.migration.description.h2mig00002": {
+    defaultMessage: "Plan a CA migration in ordered waves, and see what each one would touch before anything runs.",
+    description: "H2: migration page subtitle.",
+  },
+  "source.migration.plan.h2mig00003": {
+    defaultMessage: "Migration plan",
+    description: "H2: label for the plan editor.",
+  },
+  "source.migration.assess.h2mig00004": {
+    defaultMessage: "Assess plan",
+    description: "H2: button that runs the read-only assessment.",
+  },
+  "source.migration.readonly.h2mig00005": {
+    defaultMessage: "Assessment is read-only: nothing is distributed, issued, or deployed. Running a migration is done outside this page.",
+    description: "H2: states plainly what this page can and cannot do today.",
+  },
+  "source.migration.unavailable.h2mig00006": {
+    defaultMessage: "Assessment unavailable",
+    description: "H2: error heading when the assessment call fails.",
+  },
+  "source.migration.assessment.h2mig00007": {
+    defaultMessage: "Assessment",
+    description: "H2: heading for the assessment summary.",
+  },
+  "source.migration.counts.h2mig00008": {
+    defaultMessage: "{value1} of {value2} members can be migrated with what has been observed so far.",
+    description: "H2: headline counts, deliberately not a readiness percentage.",
+  },
+  "source.migration.waves.h2mig00009": {
+    defaultMessage: "Waves",
+    description: "H2: heading for the wave list.",
+  },
+  "source.migration.wave.members.h2mig00010": {
+    defaultMessage: "{value1} members",
+    description: "H2: per-wave membership count.",
+  },
+  "source.migration.unknowns.h2mig00011": {
+    defaultMessage: "Unknowns",
+    description: "H2: heading for gaps in what has been observed.",
+  },
+  "source.migration.no.unknowns.h2mig00012": {
+    defaultMessage: "Every member in this plan has an observed trust store, a deployment target, and a listener to verify against.",
+    description: "H2: empty unknowns state.",
+  },
   "source.all.kinds.ddd0c2108e": {
     defaultMessage: "All kinds",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx, src/pages/Identities.tsx, src/pages/Owners.tsx.",
