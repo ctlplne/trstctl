@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/store"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/connector"
@@ -23,6 +24,17 @@ import (
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
 func WithAudit(svc *audit.Service) Option {
 	return func(c *config) { c.audit = svc }
+}
+
+// WithAuditTimestamper wires the authority that countersigns audit chain heads
+// (epic J1).
+//
+// Optional. Without it exports still work and say plainly that they are
+// unanchored, which is the honest degradation: an audit bundle nobody
+// countersigned is weaker evidence, not invalid evidence, and pretending
+// otherwise either blocks a legitimate export or overstates a weak one.
+func WithAuditTimestamper(ts auditanchor.Timestamper) Option {
+	return func(c *config) { c.auditTimestamper = ts }
 }
 
 // WithRoles registers custom (tenant-defined) roles alongside the built-ins.

@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/breakglass"
@@ -52,6 +53,7 @@ type API struct {
 	roles                     *authz.Registry
 	principal                 func(*http.Request) (authz.Principal, error)
 	audit                     *audit.Service
+	auditTimestamper          auditanchor.Timestamper
 	auth                      *AuthConfig
 	oidcPreLogin              *oidcPreLoginStore
 	scim                      *SCIMConfig
@@ -141,6 +143,7 @@ type config struct {
 	// not linked into the production build. See WithInsecureHeaderResolver.
 	principalFromReg          func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
 	audit                     *audit.Service
+	auditTimestamper          auditanchor.Timestamper
 	auth                      *AuthConfig
 	scim                      *SCIMConfig
 	agentTokens               BootstrapTokenIssuer
@@ -401,6 +404,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		tenantFn:                  tenantFromHeader,
 		roles:                     reg,
 		audit:                     cfg.audit,
+		auditTimestamper:          cfg.auditTimestamper,
 		auth:                      cfg.auth,
 		scim:                      cfg.scim,
 		scimTokens:                normalizeSCIM(cfg.scim),
@@ -865,16 +869,7 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "playbook_id", typ: "string", desc: "return only runs for this remediation playbook"},
 	}
-	auditQuery := []param{
-		{name: "type", typ: "string", desc: "comma-separated event types to include"},
-		{name: "feature_id", typ: "string", desc: "catalog feature id (e.g. F6); returns only events the feature's mutating actions emit"},
-		{name: "action", typ: "string", desc: "catalog action (e.g. revoke); returns only events that action emits, optionally scoped by feature_id"},
-		{name: "since", typ: "string", desc: "RFC3339 inclusive lower time bound"},
-		{name: "until", typ: "string", desc: "RFC3339 inclusive upper time bound"},
-		{name: "as_of", typ: "integer", desc: "point-in-time: only tenant-local audit events with sequence <= this"},
-		{name: "q", typ: "string", desc: "substring match on event type or data"},
-		{name: "limit", typ: "integer", desc: "maximum records to return"},
-	}
+	auditQuery := auditQueryParams()
 	memberQuery := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque subject cursor from a prior page"},

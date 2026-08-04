@@ -21822,6 +21822,14 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "description": "export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -21934,6 +21942,14 @@
             "name": "limit",
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "description": "export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "type": "string"
             }
           }
         ],

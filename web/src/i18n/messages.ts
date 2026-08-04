@@ -10740,6 +10740,30 @@ export const messages = {
     defaultMessage: "Explorer →",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
+  "source.export.format.j1exp00001": {
+    defaultMessage: "Export format",
+    description: "J1: label for the audit export encoding picker.",
+  },
+  "source.format.jws.j1exp00002": {
+    defaultMessage: "Signed bundle (JWS)",
+    description: "J1: the verifiable evidence format, and the default.",
+  },
+  "source.format.ndjson.j1exp00003": {
+    defaultMessage: "NDJSON",
+    description: "J1: one JSON object per line, for log shippers.",
+  },
+  "source.format.csv.j1exp00004": {
+    defaultMessage: "CSV",
+    description: "J1: spreadsheet-friendly export.",
+  },
+  "source.format.splunk.j1exp00005": {
+    defaultMessage: "Splunk HEC",
+    description: "J1: Splunk HTTP Event Collector envelope.",
+  },
+  "source.format.sentinel.j1exp00006": {
+    defaultMessage: "Microsoft Sentinel",
+    description: "J1: Azure Monitor / Sentinel table shape.",
+  },
   "source.export.evidence.caab91492e": {
     defaultMessage: "Export evidence",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx.",

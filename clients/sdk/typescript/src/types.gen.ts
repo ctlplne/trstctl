@@ -11245,6 +11245,8 @@ export interface operations {
                 q?: string;
                 /** @description maximum records to return */
                 limit?: number;
+                /** @description export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel */
+                format?: string;
             };
             header?: never;
             path?: never;
@@ -11300,6 +11302,8 @@ export interface operations {
                 q?: string;
                 /** @description maximum records to return */
                 limit?: number;
+                /** @description export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel */
+                format?: string;
             };
             header?: never;
             path?: never;

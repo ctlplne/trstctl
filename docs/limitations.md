@@ -441,6 +441,21 @@ never live in the API process. What you can do end to end against the running bi
   schedule definitions; `GET /api/v1/compliance/report-schedules` and
   `trstctl-cli compliance report-schedules list` read them back. Delivery is
   `audit_export` only; email/webhook/ticket dispatch is not served or implied.
+- Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
+  JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record
+  streams, each carrying the per-record chain hash and a trailing `chain_trailer`
+  line with the chain head and anchor. When `protocols.tsa` is enabled the chain
+  head is countersigned with an RFC 3161 timestamp over a domain-separated
+  imprint, which is what makes a BACK-DATED head detectable: a chain rebuilt to
+  remove a record hashes differently, so no earlier token exists for it, and a
+  freshly-taken token is dated long after the events the bundle describes.
+  Scope, stated exactly: an anchor proves the head is no NEWER than the timestamp.
+  It does NOT prove the chain was complete when anchored — a record withheld
+  before anchoring was never in the chain — and detecting that needs continuous
+  anchoring at a known cadence, which is not served. A deployment without a TSA
+  exports successfully and says in the payload that it is unanchored; that is a
+  weaker claim, not an invalid one, and the export states which it is. Translog
+  inclusion proofs (`ee/translog`) are not wired into this path.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served
@@ -1318,7 +1333,8 @@ artifact the running binary serves:
 - Operational console routes. First-class routes, nav entries, typed API
   wrappers, and route-test coverage cover the GA operator slice: Profiles
   (`/profiles`), Graph (`/graph`, inventory + blast-radius query), Audit
-  (`/audit`, event list + evidence export), dual-control approvals from the
+  (`/audit`, event list + evidence export in JWS/NDJSON/CSV/Splunk-HEC/Sentinel),
+  dual-control approvals from the
   identity table, licensed incident execution (`/incidents` — replacement
   issue/deploy, fleet reissuance, revocation queue, connector receipt,
   rollback evidence, remediation playbooks, response dispatch, sealed audit

@@ -55,6 +55,11 @@ export function Audit() {
   const [selected, setSelected] = useState<AuditEvent | null>(null);
   const [bundle, setBundle] = useState<AuditBundle | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  // J1: the export encoding. The signed bundle stays the default because it is
+  // the only format that is itself verifiable; the rest exist so a SOC can
+  // ingest the trail into tooling that would notice something at the time,
+  // rather than it being exported once for an audit and never read.
+  const [exportFormat, setExportFormat] = useState<string>("jws");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -83,6 +88,12 @@ export function Audit() {
     setExportError(null);
     setBundle(null);
     try {
+      if (exportFormat !== "jws") {
+        // A record stream is a file, not something to render: a year of audit
+        // events pasted into the page would hang the browser and help nobody.
+        await api.downloadAuditExport(applied, exportFormat);
+        return;
+      }
       setBundle(await api.exportAudit(applied));
     } catch (err) {
       setExportError(apiProblemMessage(err, "Could not export evidence"));
@@ -155,9 +166,27 @@ export function Audit() {
         title={translateNow("source.audit.bb6aea2873")}
         description="Tenant-scoped immutable event evidence."
         actions={
-          <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
-            {translateNow("source.export.evidence.caab91492e")}
-          </Button>
+          <div className="flex items-center gap-2">
+            <label htmlFor="audit-export-format" className="sr-only">
+              {translateNow("source.export.format.j1exp00001")}
+            </label>
+            <select
+              id="audit-export-format"
+              className="ui-input h-9 w-44"
+              value={exportFormat}
+              onChange={(event) => setExportFormat(event.target.value)}
+              disabled={busy || loading}
+            >
+              <option value="jws">{translateNow("source.format.jws.j1exp00002")}</option>
+              <option value="ndjson">{translateNow("source.format.ndjson.j1exp00003")}</option>
+              <option value="csv">{translateNow("source.format.csv.j1exp00004")}</option>
+              <option value="splunk-hec">{translateNow("source.format.splunk.j1exp00005")}</option>
+              <option value="sentinel">{translateNow("source.format.sentinel.j1exp00006")}</option>
+            </select>
+            <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
+              {translateNow("source.export.evidence.caab91492e")}
+            </Button>
+          </div>
         }
       />
 

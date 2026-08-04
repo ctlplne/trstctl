@@ -1335,6 +1335,8 @@ export interface Api {
   privacyCatalog(): Promise<PrivacyCatalog>;
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
+  // J1: download a record stream (ndjson/csv/splunk-hec/sentinel) as a file.
+  downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<void>;
   complianceEvidencePack(framework: ComplianceEvidencePack["framework"]): Promise<ComplianceEvidencePack>;
   complianceInventoryReport(): Promise<ComplianceInventoryReport>;
   nhiComplianceReport(): Promise<NHIComplianceReport>;
@@ -1698,6 +1700,31 @@ const liveApi: Api = {
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
   auditEvents: (options) => req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
+  downloadAuditExport: async (options, format) => {
+    if (previewTransportIsolated) throw previewRefusal();
+    // Not req<T>: a record stream is not JSON and must not be parsed as it.
+    // It is fetched as a blob and handed to the browser as a download, so a
+    // year of audit events becomes a file the operator feeds to their SIEM
+    // rather than a string this page tries to render.
+    const qs = auditQueryString(options);
+    const sep = qs ? "&" : "?";
+    const path = `/api/v1/audit/export${qs}${sep}format=${encodeURIComponent(format)}`;
+    const res = await fetch(path, { credentials: "include", headers: { ...csrfHeaders("GET") } });
+    if (res.status === 401) throw new UnauthorizedError();
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `trstctl-audit.${format === "csv" ? "csv" : "ndjson"}`;
+      a.click();
+    } finally {
+      // Released either way: a leaked object URL pins the whole export in
+      // memory for the life of the tab.
+      URL.revokeObjectURL(url);
+    }
+  },
   complianceEvidencePack: (framework) => req<ComplianceEvidencePack>(`/api/v1/compliance/evidence-packs/${encodeURIComponent(framework)}`),
   complianceInventoryReport: () => req<ComplianceInventoryReport>("/api/v1/compliance/inventory-report"),
   nhiComplianceReport: () => req<NHIComplianceReport>("/api/v1/compliance/nhi-report"),

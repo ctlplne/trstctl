@@ -10,7 +10,30 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auditanchor"
+	"trstctl.com/trstctl/internal/auditchain"
 )
+
+// auditQueryParams describes the audit query string for the OpenAPI document.
+//
+// It lives beside the audit handlers rather than in the route table, because it
+// describes THIS workflow's inputs and the handlers are what have to honour
+// them. Keeping the two together is also what stops the served surface file
+// growing without bound as workflows are added — the served-file budget is a
+// guard against exactly that.
+func auditQueryParams() []param {
+	return []param{
+		{name: "type", typ: "string", desc: "comma-separated event types to include"},
+		{name: "feature_id", typ: "string", desc: "catalog feature id (e.g. F6); returns only events the feature's mutating actions emit"},
+		{name: "action", typ: "string", desc: "catalog action (e.g. revoke); returns only events that action emits, optionally scoped by feature_id"},
+		{name: "since", typ: "string", desc: "RFC3339 inclusive lower time bound"},
+		{name: "until", typ: "string", desc: "RFC3339 inclusive upper time bound"},
+		{name: "as_of", typ: "integer", desc: "point-in-time: only tenant-local audit events with sequence <= this"},
+		{name: "q", typ: "string", desc: "substring match on event type or data"},
+		{name: "limit", typ: "integer", desc: "maximum records to return"},
+		{name: "format", typ: "string", desc: "export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel"},
+	}
+}
 
 // auditQueryFromRequest builds an audit query from the request's tenant
 // (authoritative, from the principal) and its query parameters.
@@ -97,10 +120,52 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	bundle, err := a.audit.Export(r.Context(), q)
+	format, err := auditanchor.ParseFormat(r.URL.Query().Get("format"))
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	// Records first, in every format. The chain head and the anchor are computed
+	// from the SAME records the caller receives, so a CSV and a JWS taken from
+	// one request describe one thing — an anchor derived from a separate read
+	// could attest a head the exported rows do not hash to.
+	recs, err := a.audit.Search(r.Context(), q)
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, map[string]any{"format": "jws", "bundle": bundle})
+	head := auditchain.Seal(recs)
+	// Best effort, and honest about it: an export from a deployment with no TSA
+	// is unanchored, says so in its own payload, and is still worth having.
+	// Failing the export instead would leave an operator with nothing.
+	anchor, anchorErr := auditanchor.AnchorHead(r.Context(), a.auditTimestamper, head)
+	if anchorErr != nil && anchor.Detail == "" {
+		anchor.Detail = "this export could not be externally anchored"
+	}
+
+	if format == auditanchor.FormatJWS {
+		bundle, err := a.audit.Export(r.Context(), q)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		a.writeJSON(w, http.StatusOK, map[string]any{
+			"format": string(format), "bundle": bundle,
+			"chain_head": head, "anchor": anchor,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", format.ContentType())
+	w.Header().Set("X-Trstctl-Audit-Chain-Head", head)
+	w.Header().Set("X-Trstctl-Audit-Anchor", string(anchor.Kind))
+	w.WriteHeader(http.StatusOK)
+	// A write failure here cannot become a problem response — the status line
+	// and headers are already sent. It does not need to: the trailer IS the
+	// completeness signal. Every JSON stream format ends with a chain_trailer
+	// line, so a consumer that reaches EOF without one knows its download was
+	// truncated, and knows it from the file itself rather than from a status
+	// code it no longer has access to.
+	_ = auditanchor.WriteRecords(w, format, recs, head, anchor)
 }

@@ -1033,6 +1033,9 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.Log != nil {
 		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
 		defaults = append(defaults, api.WithAudit(auditSvc))
+		// J1: chain heads are countersigned by the served TSA. Resolved lazily —
+		// the protocol mounts are built after this point.
+		defaults = append(defaults, api.WithAuditTimestamper(auditTimestamper{srv: s}))
 	}
 	if d.RateLimiter != nil {
 		defaults = append(defaults, api.WithRateLimiter(d.RateLimiter))

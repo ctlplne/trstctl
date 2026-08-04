@@ -941,3 +941,24 @@ func toAPIACMEEABCredential(in acme.EABCredentialStatus) api.ACMEEABCredential {
 		LastUsedAt: in.LastUsedAt,
 	}
 }
+
+// auditTimestamper resolves the TSA at CALL time for audit-chain anchoring
+// (epic J1).
+//
+// Lazy on purpose. The API surface is constructed before the protocol mounts
+// are, so a value passed at construction would always be nil — and a nil
+// timestamper does not fail loudly, it produces exports that quietly say
+// "unanchored" forever. That is the shape of defect this workstream exists to
+// remove: a capability wired in the wrong order, shipping as a permanent
+// downgrade nobody notices.
+type auditTimestamper struct{ srv *Server }
+
+// Timestamp countersigns an audit chain head, or reports that it cannot.
+func (a auditTimestamper) Timestamp(ctx context.Context, hashedMessage []byte) (tsa.Token, error) {
+	if a.srv == nil || a.srv.protocols == nil || a.srv.protocols.tsa == nil {
+		return tsa.Token{}, fmt.Errorf(
+			"server: the timestamp authority is not served, so audit exports cannot be anchored; " +
+				"enable protocols.tsa to countersign audit chain heads")
+	}
+	return a.srv.protocols.tsa.Timestamp(ctx, hashedMessage)
+}
