@@ -1341,6 +1341,7 @@ export interface ConnectorCatalogItem {
   native: boolean;
   replay_safety: "at-most-once" | "reconciled";
   rollback: string;
+  support?: ConnectorSupportRow;
   target_vantage: "control_plane" | "host_agent" | "network_relay";
 }
 
@@ -1366,6 +1367,14 @@ export interface ConnectorDelivery {
 export interface ConnectorDeliveryList {
   items: ConnectorDelivery[];
   next_cursor?: string;
+}
+
+export interface ConnectorSupportRow {
+  api_contract: string;
+  detail: string;
+  hardware_tested: boolean;
+  known_limits: string[];
+  proven_operations: string[];
 }
 
 export interface ConnectorTargetActionRequest {

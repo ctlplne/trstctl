@@ -61,6 +61,7 @@ nav:
       - SSH: features/ssh.md
       - Lifecycle & PQC: features/lifecycle-and-pqc.md
       - Deployment connectors: features/deployment-connectors.md
+      - Connector support matrix: features/connector-support-matrix.md
       - Code signing & timestamping: features/code-signing-and-timestamping.md
       - Incident response & JIT: features/incident-and-jit.md
       - Secrets: features/secrets.md

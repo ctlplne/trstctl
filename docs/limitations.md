@@ -252,6 +252,16 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Support matrix (E3): docs/features/connector-support-matrix.md is GENERATED from
+  the same census the API serves, and a Go test fails if the two diverge — so a
+  capability cannot be removed while its published row survives. It deliberately
+  publishes no firmware compatibility range: nothing in this repository runs against
+  a physical or vendor-hosted device, so a version claim would be unbacked, and it
+  is precisely the line an operator would plan a migration around. What it publishes
+  instead is the management API each connector speaks, the operations exercised
+  against a faithful double of it, and the family's known limits. A guard test fails
+  the build if a version claim ever appears on the page, and every row carries an
+  explicit hardware_tested flag that is false for all seven families today.
   Rollback, restated honestly after that work: cisco, fortigate and paloalto CANNOT
   re-bind, and it is a property of their APIs rather than an unfinished feature.
   Each exposes a single call that both uploads and installs the credential, with no

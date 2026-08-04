@@ -1925,6 +1925,7 @@ ConnectorCatalogItem = TypedDict(
         'native': bool,
         'replay_safety': str,
         'rollback': str,
+        'support': dict[str, Any],
         'target_vantage': str,
     },
     total=False,
@@ -1958,6 +1959,18 @@ ConnectorDeliveryList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+ConnectorSupportRow = TypedDict(
+    'ConnectorSupportRow',
+    {
+        'api_contract': str,
+        'detail': str,
+        'hardware_tested': bool,
+        'known_limits': list[str],
+        'proven_operations': list[str],
     },
     total=False,
 )

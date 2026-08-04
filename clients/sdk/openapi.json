@@ -5140,6 +5140,9 @@
           "rollback": {
             "type": "string"
           },
+          "support": {
+            "$ref": "#/components/schemas/ConnectorSupportRow"
+          },
           "target_vantage": {
             "enum": [
               "control_plane",
@@ -5262,6 +5265,39 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "ConnectorSupportRow": {
+        "properties": {
+          "api_contract": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "hardware_tested": {
+            "type": "boolean"
+          },
+          "known_limits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "proven_operations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "api_contract",
+          "proven_operations",
+          "known_limits",
+          "hardware_tested",
+          "detail"
         ],
         "type": "object"
       },

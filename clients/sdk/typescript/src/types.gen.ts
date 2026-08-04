@@ -5900,6 +5900,7 @@ export interface components {
             /** @enum {string} */
             replay_safety: "at-most-once" | "reconciled";
             rollback: string;
+            support?: components["schemas"]["ConnectorSupportRow"];
             /** @enum {string} */
             target_vantage: "control_plane" | "host_agent" | "network_relay";
         };
@@ -5930,6 +5931,13 @@ export interface components {
         ConnectorDeliveryList: {
             items: components["schemas"]["ConnectorDelivery"][];
             next_cursor?: string;
+        };
+        ConnectorSupportRow: {
+            api_contract: string;
+            detail: string;
+            hardware_tested: boolean;
+            known_limits: string[];
+            proven_operations: string[];
         };
         ConnectorTargetActionRequest: {
             /** Format: uuid */

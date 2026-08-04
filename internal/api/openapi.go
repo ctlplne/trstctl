@@ -2002,6 +2002,8 @@ func componentSchemas() map[string]*Schema {
 		// E1: whether this family's deploy is exercised against a faithful
 		// double of its device API, not only the in-memory conformance suite.
 		"device_proven": {Type: "boolean"},
+		// E3: what this repository can truthfully attest about the family.
+		"support": ref("ConnectorSupportRow"),
 		// B-6: live sandbox facts from the connector registry.
 		"native":        {Type: "boolean"},
 		"capabilities":  {Type: "array", Items: str()},
@@ -2009,6 +2011,16 @@ func componentSchemas() map[string]*Schema {
 		// A3: where this connector's deploy work executes, from the live census.
 		"target_vantage": {Type: "string", Enum: []string{"control_plane", "host_agent", "network_relay"}},
 	}, "name", "kind", "delivery_mode", "rollback", "native", "capabilities", "replay_safety", "target_vantage", "device_proven")
+	// E3: deliberately no firmware version field. A version range is a claim
+	// about hardware nothing here runs, and a schema field for one would invite
+	// somebody to fill it.
+	connectorSupportRow := object(map[string]*Schema{
+		"api_contract":      str(),
+		"proven_operations": {Type: "array", Items: str()},
+		"known_limits":      {Type: "array", Items: str()},
+		"hardware_tested":   {Type: "boolean"},
+		"detail":            str(),
+	}, "api_contract", "proven_operations", "known_limits", "hardware_tested", "detail")
 	connectorCatalog := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ConnectorCatalogItem")},
 	}, "items")
@@ -4115,6 +4127,7 @@ func componentSchemas() map[string]*Schema {
 		"MDMSCEPTelemetry":                         mdmSCEPTelemetry,
 		"MDMSCEPStatus":                            mdmSCEPStatus,
 		"MDMSCEPChallengeRotated":                  mdmSCEPChallengeRotated,
+		"ConnectorSupportRow":                      connectorSupportRow,
 		"ConnectorCatalogItem":                     connectorCatalogItem,
 		"ConnectorCatalog":                         connectorCatalog,
 		"DeploymentTargetRequest":                  deploymentTargetReq,

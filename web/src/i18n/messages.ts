@@ -5604,6 +5604,10 @@ export const messages = {
     defaultMessage: "Not observed",
     description: "B2: no host-generated renewal has been seen for this target yet.",
   },
+  "source.no.hardware.tested.e3sup00001": {
+    defaultMessage: "No physical device has been tested",
+    description: "E3: this family is exercised against an API double only, never real hardware.",
+  },
   "source.device.proof.e1dev00001": {
     defaultMessage: "Device proof",
     description: "E1: column heading \u2014 whether this connector's deploy is exercised against a double of its device API.",

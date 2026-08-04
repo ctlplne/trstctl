@@ -531,6 +531,11 @@ cbom-docs-check: ## Verify docs/design/cbom-coverage.md regenerates byte-identic
 	@echo ">> cbom-docs-check (the CBOM coverage design doc is generated from the envelope registry; a stale page fails)"
 	@$(GO) run ./tools/cbomcoveragedoc -check
 
+.PHONY: connector-support-docs-check
+connector-support-docs-check: ## Verify docs/features/connector-support-matrix.md regenerates byte-identical from the internal/connector census
+	@echo ">> connector-support-docs-check (E3: the support matrix is generated from the census; a hand-edited or stale page fails)"
+	@$(GO) run ./tools/connectorsupportdoc -check
+
 .PHONY: security-review
 security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate vdec-caller-gate vdec-caller-gate-strong vdec-wire-gate vdec-release-gate ## Security-focused local review for signer, remediation, connectors, XREC, and VDEC delivery paths
 	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC package tests)"

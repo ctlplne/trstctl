@@ -40,6 +40,11 @@ type connectorCatalogItem struct {
 	// False on a host connector is not a gap: there is no device API to emulate,
 	// so this is simply not the proof that covers it.
 	DeviceProven bool `json:"device_proven"`
+	// Support is the attested support surface for this family (epic E3):
+	// which management API it speaks, which operations are exercised against a
+	// double of it, and what it cannot do. Absent for host connectors, whose
+	// "API contract" is the filesystem.
+	Support *connectorSupportRow `json:"support,omitempty"`
 	// B-6: the catalog described WHAT each connector deploys but not what it
 	// is permitted to do or how it behaves on a redelivery — the two facts an
 	// operator actually needs before authorizing a privileged deployment.
@@ -66,6 +71,26 @@ type connectorCatalogItem struct {
 	// unaudited work stays where it always ran. Read from the live registry
 	// census, never hardcoded beside the description.
 	TargetVantage string `json:"target_vantage"`
+}
+
+// connectorSupportRow is what this repository can truthfully attest about a
+// family (epic E3).
+//
+// Deliberately NOT a firmware compatibility range. A version range is a claim
+// about hardware somebody ran, and nothing here runs against a device — so
+// publishing one would be marketing in the shape of evidence, and an operator
+// would plan a migration around it. What is published instead is the API
+// contract, the operations exercised against a faithful double of it, and the
+// limits, every part of which is backed by a test that runs in CI.
+type connectorSupportRow struct {
+	APIContract      string   `json:"api_contract"`
+	ProvenOperations []string `json:"proven_operations"`
+	KnownLimits      []string `json:"known_limits"`
+	// HardwareTested is false for every family today. It is a field rather than
+	// a footnote so the surface cannot quietly imply otherwise.
+	HardwareTested bool `json:"hardware_tested"`
+	// Detail is the sentence that stops a reader inferring more than is meant.
+	Detail string `json:"detail"`
 }
 
 type connectorCatalogResponse struct {
@@ -878,6 +903,18 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		item.TargetVantage = string(connector.VantageControlPlane)
 		item.ExecutesRollback = connector.CanRollback(item.Name)
 		item.DeviceProven = connector.DeviceProven(item.Name)
+		if row, ok := connector.SupportRowFor(item.Name); ok {
+			item.Support = &connectorSupportRow{
+				APIContract:      row.APIContract,
+				ProvenOperations: row.ProvenOperations,
+				KnownLimits:      row.KnownLimits,
+				HardwareTested:   row.HardwareTested,
+				Detail: "These operations are exercised against a faithful in-process double of " +
+					"the named API in this repository's CI. No physical or vendor-hosted device " +
+					"has been run against this connector, so this is a statement about the API " +
+					"contract rather than about any firmware version.",
+			}
+		}
 		if a.connectorRegistry != nil {
 			item.Native = a.connectorRegistry.Has(item.Name)
 			if caps := a.connectorRegistry.CapabilitiesFor(item.Name); len(caps) > 0 {

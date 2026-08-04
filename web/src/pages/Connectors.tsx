@@ -511,7 +511,7 @@ export function Connectors() {
                           For an appliance the whole implementation IS an API
                           conversation, so conformance alone says nothing about
                           whether the device would have accepted the call. */}
-                      <td>
+                      <td className="max-w-[30rem]">
                         {connector.device_proven ? (
                           <span className="font-medium text-status-success">{translateNow("source.device.proven.e1dev00002")}</span>
                         ) : connector.target_vantage === "network_relay" ? (
@@ -523,6 +523,26 @@ export function Connectors() {
                              covers it. */
                           <span className="text-muted-foreground">{translateNow("source.device.not.applicable.e1dev00004")}</span>
                         )}
+                        {/* E3: what that proof actually covers. The API contract
+                            and the limits, never a firmware range — nothing here
+                            runs against a device, and a version number would be
+                            the one line on this page an operator plans a
+                            migration around. */}
+                        {connector.support ? (
+                          <>
+                            <span className="mt-1 block text-xs text-muted-foreground">{connector.support.api_contract}</span>
+                            {connector.support.known_limits.length > 0 ? (
+                              <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
+                                {connector.support.known_limits.map((limit) => (
+                                  <li key={limit}>{limit}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            {!connector.support.hardware_tested ? (
+                              <span className="mt-1 block text-xs text-status-warning">{translateNow("source.no.hardware.tested.e3sup00001")}</span>
+                            ) : null}
+                          </>
+                        ) : null}
                       </td>
                     </tr>
                   ))}

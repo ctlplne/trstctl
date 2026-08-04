@@ -1466,6 +1466,7 @@ const deDECatalog = {
   "source.not.checked.d3tri00006": "Nicht gepr\u00fcft",
   "source.last.renewed.by.b2cus00012": "Zuletzt erneuert von",
   "source.not.observed.b2cus00013": "Nicht beobachtet",
+  "source.no.hardware.tested.e3sup00001": "Kein physisches Ger\u00e4t getestet",
   "source.device.proof.e1dev00001": "Ger\u00e4tenachweis",
   "source.device.proven.e1dev00002": "Emuliertes Ger\u00e4t",
   "source.device.unproven.e1dev00003": "Kein Ger\u00e4tenachweis",

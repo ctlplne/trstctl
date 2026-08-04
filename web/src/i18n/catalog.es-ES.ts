@@ -1458,6 +1458,7 @@ const esESCatalog = {
   "source.not.checked.d3tri00006": "Sin comprobar",
   "source.last.renewed.by.b2cus00012": "Renovado por \u00faltima vez por",
   "source.not.observed.b2cus00013": "No observado",
+  "source.no.hardware.tested.e3sup00001": "No se ha probado ning\u00fan dispositivo f\u00edsico",
   "source.device.proof.e1dev00001": "Prueba de dispositivo",
   "source.device.proven.e1dev00002": "Dispositivo emulado",
   "source.device.unproven.e1dev00003": "Sin prueba de dispositivo",
