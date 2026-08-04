@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -91,6 +92,21 @@ type RegistrationEntry struct {
 	Selectors []string
 	X509TTL   time.Duration
 	JWTTTL    time.Duration
+	// ParentID scopes this entry to the node that may deliver it (epic B3).
+	//
+	// SPIRE's name for the same idea, and the same reason: once a host agent can
+	// ask for SVIDs on a workload's behalf, "which selectors did you observe" is
+	// a claim made by that agent, and an agent that could claim any selectors
+	// could obtain any workload's identity in the trust domain. A compromise of
+	// one host would become a compromise of every service.
+	//
+	// EMPTY MEANS NOT AGENT-DELIVERABLE — not "any agent". An entry an operator
+	// has not scoped to a node stays reachable only on the control plane's own
+	// socket, exactly as before this epic. That keeps every existing entry
+	// working unchanged while making agent delivery something an operator turns
+	// on per entry, and it means the failure direction of a forgotten field is a
+	// refusal rather than a silent widening of who can impersonate a workload.
+	ParentID string
 }
 
 // Config configures a Workload API Server.
@@ -157,9 +173,13 @@ type JWTSVID struct {
 // FetchX509SVIDs issues an X.509-SVID for every registration entry whose
 // selectors the caller satisfies, over the caller's public key (PKIX DER).
 func (s *Server) FetchX509SVIDs(ctx context.Context, pubDER []byte, selectors []string) ([]X509SVID, error) {
+	return s.fetchX509(ctx, "", pubDER, selectors)
+}
+
+func (s *Server) fetchX509(ctx context.Context, parentID string, pubDER []byte, selectors []string) ([]X509SVID, error) {
 	var out []X509SVID
 	err := s.run(func() error {
-		entries := s.matched(selectors)
+		entries := s.matchedForParent(selectors, parentID)
 		if len(entries) == 0 {
 			return ErrNoIdentity
 		}
@@ -191,15 +211,50 @@ func (s *Server) FetchX509SVIDs(ctx context.Context, pubDER []byte, selectors []
 	return out, nil
 }
 
+// FetchX509SVIDsForNode issues X.509-SVIDs on behalf of a workload attested by a
+// host agent (epic B3).
+//
+// Identical to FetchX509SVIDs except that the entries it will consider are the
+// ones scoped to THIS node. That difference is the whole security story of
+// moving the Workload API onto hosts: the selectors arrive as an agent's claim
+// about a process it inspected, and a claim is only as good as the bound on what
+// it can unlock. Scoping to the node bounds it — a compromised agent can
+// impersonate the workloads on its own machine, which it could do anyway by
+// reading their memory, and nothing else in the trust domain.
+//
+// nodeID must be the agent's own authenticated identity, taken from the
+// certificate it presented on the channel, never from anything in the request.
+func (s *Server) FetchX509SVIDsForNode(ctx context.Context, nodeID string, pubDER []byte, selectors []string) ([]X509SVID, error) {
+	if strings.TrimSpace(nodeID) == "" {
+		// An empty node would select the unscoped entries — the ones reserved
+		// for the control plane's own socket — so a caller that failed to
+		// identify its node must be refused rather than defaulted.
+		return nil, ErrNoIdentity
+	}
+	return s.fetchX509(ctx, nodeID, pubDER, selectors)
+}
+
+// FetchJWTSVIDsForNode is FetchJWTSVIDs scoped to a delivering node (epic B3).
+func (s *Server) FetchJWTSVIDsForNode(ctx context.Context, nodeID string, audience, selectors []string) ([]JWTSVID, error) {
+	if strings.TrimSpace(nodeID) == "" {
+		return nil, ErrNoIdentity
+	}
+	return s.fetchJWT(ctx, nodeID, audience, selectors)
+}
+
 // FetchJWTSVIDs issues a JWT-SVID (bound to the given audience) for every entry
 // whose selectors the caller satisfies.
 func (s *Server) FetchJWTSVIDs(ctx context.Context, audience, selectors []string) ([]JWTSVID, error) {
+	return s.fetchJWT(ctx, "", audience, selectors)
+}
+
+func (s *Server) fetchJWT(ctx context.Context, parentID string, audience, selectors []string) ([]JWTSVID, error) {
 	if len(audience) == 0 {
 		return nil, fmt.Errorf("spiffe: audience required for JWT-SVID")
 	}
 	var out []JWTSVID
 	err := s.run(func() error {
-		entries := s.matched(selectors)
+		entries := s.matchedForParent(selectors, parentID)
 		if len(entries) == 0 {
 			return ErrNoIdentity
 		}
@@ -233,7 +288,24 @@ func (s *Server) FetchJWTBundle(ctx context.Context) (crypto.JWKS, error) {
 	return s.cfg.Issuer.JWTBundle(ctx)
 }
 
-func (s *Server) matched(selectors []string) []RegistrationEntry {
+// matchedForParent is matched() scoped to a delivering node (epic B3).
+//
+// parentID is the SPIFFE ID of the agent asking on a workload's behalf, or ""
+// when the control plane's own socket is asking. The two cases are deliberately
+// not symmetric:
+//
+//   - "" (the local socket) sees entries with NO ParentID. It is the pre-B3
+//     behaviour, unchanged, and it cannot reach node-scoped entries because it
+//     is not that node.
+//   - a real parentID sees only entries scoped to exactly that node. It cannot
+//     reach unscoped entries, because an unscoped entry has not been authorized
+//     for delivery by any agent at all.
+//
+// So neither caller is a superset of the other, and an entry is reachable by
+// exactly one path. That is what makes the migration observable: an operator
+// moves an entry by setting ParentID, and the entry stops being served locally
+// at the same moment it starts being served on the host.
+func (s *Server) matchedForParent(selectors []string, parentID string) []RegistrationEntry {
 	have := make(map[string]bool, len(selectors))
 	for _, sel := range selectors {
 		have[sel] = true
@@ -241,6 +313,9 @@ func (s *Server) matched(selectors []string) []RegistrationEntry {
 	var out []RegistrationEntry
 	for _, e := range s.cfg.Entries {
 		if len(e.Selectors) == 0 {
+			continue
+		}
+		if e.ParentID != parentID {
 			continue
 		}
 		ok := true

@@ -5604,6 +5604,55 @@ export const messages = {
     defaultMessage: "Not observed",
     description: "B2: no host-generated renewal has been seen for this target yet.",
   },
+  "source.workload.api.hosts.b3wla0001": {
+    defaultMessage: "Workload API by host",
+    description: "B3: section heading \u2014 which hosts serve the SPIFFE Workload API locally.",
+  },
+  "source.workload.api.hosts.help.b3wla0002": {
+    defaultMessage:
+      "Where each host's workloads obtain their SVIDs. A host serving the Workload API generates each workload's private key on the machine that runs it, and the control plane never sees that key \u2014 it signs an SVID for a public key it was handed. Hosts not serving it fall back to the control plane's own socket, which mints the key centrally; that path still works and is the migration remaining.",
+    description: "B3: explains what the per-host Workload API status means and that the old path is not a fault.",
+  },
+  "source.workload.api.hosts.caption.b3wla0003": {
+    defaultMessage: "Hosts and where their workloads obtain SVIDs",
+    description: "B3: screen-reader caption for the per-host Workload API table.",
+  },
+  "source.host.b3wla0004": {
+    defaultMessage: "Host",
+    description: "B3: column heading \u2014 the agent's host name.",
+  },
+  "source.workload.api.b3wla0005": {
+    defaultMessage: "Workload API",
+    description: "B3: column heading \u2014 whether this host serves the socket.",
+  },
+  "source.svids.issued.b3wla0006": {
+    defaultMessage: "SVIDs issued",
+    description: "B3: column heading \u2014 SVIDs this host has issued.",
+  },
+  "source.last.reported.b3wla0007": {
+    defaultMessage: "Last reported",
+    description: "B3: column heading \u2014 when the host last reported its Workload API state.",
+  },
+  "source.workload.api.serving.b3wla0008": {
+    defaultMessage: "Serving locally",
+    description: "B3: this host serves the Workload API for its own workloads.",
+  },
+  "source.workload.api.unreported.b3wla0009": {
+    defaultMessage: "Not reported",
+    description: "B3: this agent has never reported Workload API state, usually an older build.",
+  },
+  "source.workload.api.not.serving.b3wla0010": {
+    defaultMessage: "Not serving",
+    description: "B3: this host reported that it is not serving a Workload API socket.",
+  },
+  "source.svids.since.start.b3wla0011": {
+    defaultMessage: "{value1} since agent start",
+    description: "B3: SVID count, noting that it resets when the agent restarts.",
+  },
+  "source.never.b3wla0012": {
+    defaultMessage: "Never",
+    description: "B3: this host has never reported Workload API state.",
+  },
   "source.endpoint.key.custody.b2cus00001": {
     defaultMessage: "Key custody by target",
     description: "B2: section heading \u2014 where each deployment target's private key is generated.",

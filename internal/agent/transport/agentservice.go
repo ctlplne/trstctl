@@ -197,6 +197,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodReportJobResult, Handler: reportJobResultHandler},
 		{MethodName: methodRedeemJobCredential, Handler: redeemJobCredentialHandler},
 		{MethodName: methodSignJobCSR, Handler: signJobCSRHandler},
+		{MethodName: methodFetchWorkloadSVID, Handler: fetchWorkloadSVIDHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",
@@ -582,6 +583,62 @@ type AgentJobServiceServer interface {
 	// possible: everything else on this service sends material DOWN to an
 	// agent, and this sends a public request UP.
 	SignJobCSR(ctx context.Context, req *SignJobCSRRequest) (*SignJobCSRResponse, error)
+	// FetchWorkloadSVID issues SVIDs for a workload this agent attested locally
+	// (epic B3). It is the SPIRE node-API shape: the agent inspects the calling
+	// process, reports what it observed, and the control plane decides which
+	// identities that observation unlocks.
+	FetchWorkloadSVID(ctx context.Context, req *FetchWorkloadSVIDRequest) (*FetchWorkloadSVIDResponse, error)
+}
+
+// FetchWorkloadSVIDRequest asks for the SVIDs a locally attested workload is
+// entitled to (epic B3).
+//
+// The key is the workload's, generated on the host that runs it, and only its
+// PUBLIC half travels — the same inversion B2 made for endpoint certificates.
+// Before this, the Workload API lived on the control plane and minted SVID
+// private keys there, which meant a workload's identity key existed on a machine
+// the workload does not run on.
+type FetchWorkloadSVIDRequest struct {
+	// PublicKeyDER is the workload's public key, PKIX DER. There is no private
+	// counterpart in this message and there must never be one.
+	PublicKeyDER []byte `json:"public_key_der"`
+	// Selectors are what the agent OBSERVED about the calling process — uid,
+	// gid, binary path. They are a claim, and the control plane bounds what that
+	// claim can unlock by scoping registration entries to this node: the agent
+	// is authenticated by its channel certificate, and only entries whose
+	// ParentID names that agent are considered. An agent asserting selectors it
+	// did not observe can therefore reach the workloads on its own machine and
+	// nothing else in the trust domain.
+	Selectors []string `json:"selectors,omitempty"`
+	// Audience requests JWT-SVIDs instead of X.509-SVIDs when non-empty.
+	Audience []string `json:"audience,omitempty"`
+}
+
+// FetchWorkloadSVIDResponse returns the issued SVIDs and the trust bundle.
+type FetchWorkloadSVIDResponse struct {
+	X509SVIDs []WorkloadX509SVID `json:"x509_svids,omitempty"`
+	JWTSVIDs  []WorkloadJWTSVID  `json:"jwt_svids,omitempty"`
+	// Bundle is the trust domain's X.509 authorities, DER-encoded.
+	Bundle [][]byte `json:"bundle,omitempty"`
+}
+
+// WorkloadX509SVID is one issued X.509-SVID.
+//
+// Certificate material only. The workload already holds the private half —
+// it never left the host — so there is nothing for this message to carry.
+type WorkloadX509SVID struct {
+	SPIFFEID      string   `json:"spiffe_id"`
+	CertChainDER  [][]byte `json:"cert_chain_der"`
+	ExpiresAtUnix int64    `json:"expires_at_unix,omitempty"`
+	FederatesWith []string `json:"federates_with,omitempty"`
+	Hint          string   `json:"hint,omitempty"`
+}
+
+// WorkloadJWTSVID is one issued JWT-SVID.
+type WorkloadJWTSVID struct {
+	SPIFFEID      string `json:"spiffe_id"`
+	Token         string `json:"token"`
+	ExpiresAtUnix int64  `json:"expires_at_unix,omitempty"`
 }
 
 // SignJobCSRRequest carries a PKCS#10 the agent built from a key it generated
@@ -637,6 +694,10 @@ const (
 	// is the entire point of epic B2 (CWE-798).
 	methodSignJobCSR     = "SignJobCSR"
 	fullMethodSignJobCSR = "/" + agentServiceName + "/" + methodSignJobCSR
+	// B3: the workload-identity node API. Carries a public key up and SVIDs
+	// down; no private key crosses it in either direction.
+	methodFetchWorkloadSVID     = "FetchWorkloadSVID"
+	fullMethodFetchWorkloadSVID = "/" + agentServiceName + "/" + methodFetchWorkloadSVID
 )
 
 func claimJobsHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -696,6 +757,25 @@ func signJobCSRHandler(srv any, ctx context.Context, dec func(any) error, interc
 	return interceptor(ctx, in, info, handler)
 }
 
+func fetchWorkloadSVIDHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(FetchWorkloadSVIDRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	jobs, ok := srv.(AgentJobServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not serve the agent job ledger")
+	}
+	if interceptor == nil {
+		return jobs.FetchWorkloadSVID(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodFetchWorkloadSVID}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return jobs.FetchWorkloadSVID(ctx, req.(*FetchWorkloadSVIDRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func reportJobResultHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ReportJobResultRequest)
 	if err := dec(in); err != nil {
@@ -746,6 +826,15 @@ func (c *AgentClient) RedeemJobCredential(ctx context.Context, req *RedeemJobCre
 func (c *AgentClient) SignJobCSR(ctx context.Context, req *SignJobCSRRequest) (*SignJobCSRResponse, error) {
 	out := new(SignJobCSRResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodSignJobCSR, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// FetchWorkloadSVID asks for SVIDs for a workload this agent attested (epic B3).
+func (c *AgentClient) FetchWorkloadSVID(ctx context.Context, req *FetchWorkloadSVIDRequest) (*FetchWorkloadSVIDResponse, error) {
+	out := new(FetchWorkloadSVIDResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodFetchWorkloadSVID, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

@@ -62,6 +62,7 @@ func main() {
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
+	workloadAPISocket := flag.String("workload-api-socket", "", "serve the SPIFFE Workload API on this unix socket for workloads on THIS host (epic B3). The SVID key is generated here and never leaves the machine; only a public key travels up for signing. Empty disables it — a Workload API endpoint is an identity oracle for every workload on the host, so an operator turns it on deliberately and owns the socket's directory permissions")
 	relayPollEvery := flag.Duration("relay-poll-every", 15*time.Second, "how often to ask for relay work when --relay-claim is set")
 	inventoryPKCS11Module := flag.String("inventory-pkcs11-module", "", "path to a PKCS#11 module (softhsm2.so, libykcs11.so, opensc-pkcs11.so) whose tokens should be inventoried. Metadata only: reads certificate objects, never private keys, over a read-only session. Requires a cgo-enabled agent build — the default build is statically linked and reports an error rather than an empty token estate")
 	inventoryPKCS11Token := flag.String("inventory-pkcs11-token", "", "inventory only the PKCS#11 token with this label; empty inventories every token the module presents")
@@ -210,6 +211,7 @@ func main() {
 		inventoryWindowsStores:            splitList(*inventoryWindowsStores),
 		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
+		workloadAPISocket:                 *workloadAPISocket,
 		relayPollEvery:                    *relayPollEvery,
 		hostExecProfile:                   strings.TrimSpace(*hostExecProfile),
 		inventorySSH: sshdiscovery.Config{
@@ -288,8 +290,12 @@ type agentOptions struct {
 	// appliances in this segment, redeem its credential for one attempt, deploy,
 	// wipe. Off by default because it moves live credential material onto this
 	// host, which is an operator's decision to make explicitly.
-	relayClaim     bool
-	relayPollEvery time.Duration
+	relayClaim bool
+	// workloadAPISocket is the host-local SPIFFE Workload API socket (B3).
+	// Empty means the agent serves no Workload API, which is the default: the
+	// endpoint issues identities to every workload that can reach it.
+	workloadAPISocket string
+	relayPollEvery    time.Duration
 	// hostExecProfile is the path to this host's operator-owned exec allowlist
 	// (epic D1). Empty means this agent executes no file/reload connectors:
 	// without an authorized command set there is nothing safe to default to.
@@ -436,6 +442,13 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if relayTimer != nil {
 		defer relayTimer.Stop()
 	}
+
+	// B3: the SPIFFE Workload API, served on this host for the workloads that
+	// run on it. Its own goroutine because it is a listener rather than a
+	// polling loop — workloads dial it when they need an SVID, and it must be
+	// answering before they do.
+	stopWorkloadAPI := startWorkloadAPI(ctx, o, conn)
+	defer stopWorkloadAPI()
 	for {
 		select {
 		case <-ctx.Done():
@@ -800,7 +813,7 @@ type channelAdapter struct{ c *transport.AgentClient }
 func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatRequest) (*agent.HeartbeatResponse, error) {
 	resp, err := a.c.Heartbeat(ctx, &transport.HeartbeatRequest{
 		AgentID: req.AgentID, Version: req.Version, Status: req.Status,
-		CertSerial: req.CertSerial, Inventory: req.Inventory,
+		CertSerial: req.CertSerial, Inventory: workloadAPICounters(req.Inventory),
 	})
 	if err != nil {
 		return nil, err

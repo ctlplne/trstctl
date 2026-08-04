@@ -21,12 +21,22 @@ type Agent struct {
 	// Roles is the capability grant projected from the agent's certificate SANs
 	// (epic A2). Display only: the certificate is what the claim path reads, so
 	// editing this column grants nothing.
-	Roles          []string
-	LastSeenAt     *time.Time
-	CreatedAt      time.Time
-	OffboardedAt   *time.Time
-	OffboardedBy   string
-	OffboardReason string
+	Roles      []string
+	LastSeenAt *time.Time
+	// WorkloadAPIServed, WorkloadAPISVIDs and WorkloadAPIReportedAt are this
+	// host's SPIFFE Workload API posture (epic B3).
+	//
+	// ReportedAt nil means the agent has never said anything about it, which an
+	// older build does. That is deliberately distinct from reporting "not
+	// serving": one is a version gap an operator fixes by upgrading, the other
+	// is a choice they made.
+	WorkloadAPIServed     bool
+	WorkloadAPISVIDs      int64
+	WorkloadAPIReportedAt *time.Time
+	CreatedAt             time.Time
+	OffboardedAt          *time.Time
+	OffboardedBy          string
+	OffboardReason        string
 }
 
 // AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
@@ -66,15 +76,33 @@ func (s *Store) UpsertAgent(ctx context.Context, a Agent) error {
 // model on the caller's tenant-scoped transaction.
 func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO agents (id, tenant_id, name, status, version, roles, last_seen_at)
-		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7)
+		`INSERT INTO agents (id, tenant_id, name, status, version, roles, last_seen_at,
+		                     workload_api_served, workload_api_svids, workload_api_reported_at)
+		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
 		        status = CASE WHEN agents.status = 'offboarded' THEN agents.status ELSE EXCLUDED.status END,
 		        version = CASE WHEN agents.status = 'offboarded' THEN agents.version ELSE EXCLUDED.version END,
 		        roles = CASE WHEN agents.status = 'offboarded' THEN agents.roles ELSE EXCLUDED.roles END,
-		        last_seen_at = CASE WHEN agents.status = 'offboarded' THEN agents.last_seen_at ELSE EXCLUDED.last_seen_at END`,
-		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt)
+		        last_seen_at = CASE WHEN agents.status = 'offboarded' THEN agents.last_seen_at ELSE EXCLUDED.last_seen_at END,
+		        -- B3: only overwrite when this beat actually REPORTED posture.
+		        -- An older agent sends nothing, and letting its beats reset the
+		        -- columns to false/0 would make a downgrade look like an
+		        -- operator disabling the Workload API.
+		        workload_api_served = CASE
+		            WHEN EXCLUDED.workload_api_reported_at IS NULL THEN agents.workload_api_served
+		            WHEN agents.status = 'offboarded' THEN agents.workload_api_served
+		            ELSE EXCLUDED.workload_api_served END,
+		        workload_api_svids = CASE
+		            WHEN EXCLUDED.workload_api_reported_at IS NULL THEN agents.workload_api_svids
+		            WHEN agents.status = 'offboarded' THEN agents.workload_api_svids
+		            ELSE EXCLUDED.workload_api_svids END,
+		        workload_api_reported_at = CASE
+		            WHEN EXCLUDED.workload_api_reported_at IS NULL THEN agents.workload_api_reported_at
+		            WHEN agents.status = 'offboarded' THEN agents.workload_api_reported_at
+		            ELSE EXCLUDED.workload_api_reported_at END`,
+		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt,
+		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt)
 	return err
 }
 
@@ -243,10 +271,12 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, status, version, roles, last_seen_at, created_at,
-			        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, '')
+			        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, ''),
+			        workload_api_served, workload_api_svids, workload_api_reported_at
 			   FROM agents WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
-				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason)
+				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
+				&a.WorkloadAPIServed, &a.WorkloadAPISVIDs, &a.WorkloadAPIReportedAt)
 	})
 	return a, err
 }
@@ -265,7 +295,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 		if afterCreatedAt != nil {
 			rows, err = tx.Query(ctx,
 				`SELECT id::text, tenant_id::text, name, status, version, roles, last_seen_at, created_at,
-				        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, '')
+				        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, ''),
+				        workload_api_served, workload_api_svids, workload_api_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1 AND (created_at, id) > ($2, $3)
 				  ORDER BY created_at, id
@@ -274,7 +305,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 		} else {
 			rows, err = tx.Query(ctx,
 				`SELECT id::text, tenant_id::text, name, status, version, roles, last_seen_at, created_at,
-				        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, '')
+				        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, ''),
+				        workload_api_served, workload_api_svids, workload_api_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1
 				  ORDER BY created_at, id
@@ -288,7 +320,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 		for rows.Next() {
 			var a Agent
 			if err := rows.Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
-				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason); err != nil {
+				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
+				&a.WorkloadAPIServed, &a.WorkloadAPISVIDs, &a.WorkloadAPIReportedAt); err != nil {
 				return err
 			}
 			out = append(out, a)

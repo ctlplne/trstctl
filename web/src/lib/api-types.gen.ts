@@ -385,6 +385,7 @@ export interface Agent {
   roles: ("host" | "network")[];
   status: string;
   version?: string;
+  workload_api: AgentWorkloadAPIStatus;
 }
 
 export interface AgentCertRevocation {
@@ -460,6 +461,13 @@ export interface AgentRelayCapability {
   connectors: string[];
   enable_flags?: string[];
   kind: string;
+}
+
+export interface AgentWorkloadAPIStatus {
+  detail: string;
+  reported_at?: string;
+  state: "serving" | "not_serving" | "unreported";
+  svids_issued: number;
 }
 
 export interface AlertRecipient {

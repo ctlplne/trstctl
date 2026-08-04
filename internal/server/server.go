@@ -1599,6 +1599,8 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// diverge for agent-originated requests.
 		signSubjectCSR:      s.signAgentSubjectCSR,
 		completeHostRenewal: s.completeHostRenewal,
+		// B3: the Workload API moved to the hosts; this is the node API it calls.
+		issueWorkloadSVID: s.issueWorkloadSVID,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {

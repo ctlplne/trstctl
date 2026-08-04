@@ -48,6 +48,10 @@ func (stubAgentChannelService) SignJobCSR(context.Context, *transport.SignJobCSR
 	return &transport.SignJobCSRResponse{}, nil
 }
 
+func (stubAgentChannelService) FetchWorkloadSVID(context.Context, *transport.FetchWorkloadSVIDRequest) (*transport.FetchWorkloadSVIDResponse, error) {
+	return &transport.FetchWorkloadSVIDResponse{}, nil
+}
+
 func TestAgentBulkheadShedsWithoutStarvingOtherSubsystems(t *testing.T) {
 	set := bulkhead.NewSet(
 		bulkhead.Config{Name: bulkhead.SubsystemAgent, Workers: 1, Queue: 0},

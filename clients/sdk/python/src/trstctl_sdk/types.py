@@ -521,6 +521,7 @@ Agent = TypedDict(
         'roles': list[str],
         'status': str,
         'version': str,
+        'workload_api': dict[str, Any],
     },
     total=False,
 )
@@ -640,6 +641,17 @@ AgentRelayCapability = TypedDict(
         'connectors': list[str],
         'enable_flags': list[str],
         'kind': str,
+    },
+    total=False,
+)
+
+AgentWorkloadAPIStatus = TypedDict(
+    'AgentWorkloadAPIStatus',
+    {
+        'detail': str,
+        'reported_at': str,
+        'state': str,
+        'svids_issued': int,
     },
     total=False,
 )

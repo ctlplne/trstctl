@@ -58,6 +58,7 @@ public final class OpenApiSchemas {
       "AgentOffboardRequest",
       "AgentOffboardResponse",
       "AgentRelayCapability",
+      "AgentWorkloadAPIStatus",
       "AlertRecipient",
       "Approval",
       "ApprovalRequest",

@@ -5,6 +5,7 @@ package crypto
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -105,4 +106,34 @@ func (d *SHA256HMACDigest) HMACSHA256() []byte {
 
 func (d *SHA256HMACDigest) HMACSHA256Hex() string {
 	return hex.EncodeToString(d.HMACSHA256())
+}
+
+// Telling a public key from a private one, at the boundary (epic B3).
+//
+// These exist because a caller outside internal/crypto legitimately needs to
+// ASSERT which of the two it is holding — a host that generates SVID keys must
+// be able to prove that what it put on the wire was the public half — and AN-3
+// says it may not reach for crypto/x509 to find out. Without them the check
+// happens by string-matching PEM preambles, which passes happily on DER.
+
+// IsPKIXPublicKey reports whether der is a well-formed SubjectPublicKeyInfo.
+func IsPKIXPublicKey(der []byte) bool {
+	if len(der) == 0 {
+		return false
+	}
+	_, err := x509.ParsePKIXPublicKey(der)
+	return err == nil
+}
+
+// IsPKCS8PrivateKey reports whether der is a well-formed PKCS#8 private key.
+//
+// The inverse assertion, and the one that carries the security weight: a caller
+// checking that key material did NOT travel needs to be able to say so about
+// bytes, not about labels.
+func IsPKCS8PrivateKey(der []byte) bool {
+	if len(der) == 0 {
+		return false
+	}
+	_, err := x509.ParsePKCS8PrivateKey(der)
+	return err == nil
 }

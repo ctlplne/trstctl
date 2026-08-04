@@ -66,8 +66,16 @@ func TestWorkloadAPIAdditionalSVIDIsAuditedLikeClassical(t *testing.T) {
 		Issuer: testIssuer(t), TenantID: "tenant-a", TrustDomain: "example.org",
 		Entries: []RegistrationEntry{{SPIFFEID: id, Selectors: []string{"unix"}}},
 		Audit: auditsink.AuditorFunc(func(_ context.Context, eventType, tenantID string, data []byte) error {
-			if eventType != "spiffe.svid.issued" || tenantID != "tenant-a" {
-				t.Errorf("audit emit = %s/%s, want spiffe.svid.issued/tenant-a", eventType, tenantID)
+			if tenantID != "tenant-a" {
+				t.Errorf("audit emit %s carried tenant %q, want tenant-a", eventType, tenantID)
+			}
+			// Filter to the issuance events this test is about. It previously
+			// rejected every other event type, which made it a de-facto
+			// assertion that this path emits nothing else — a claim it was
+			// never meant to make, and one that B3's local-socket deprecation
+			// notice legitimately breaks.
+			if eventType != "spiffe.svid.issued" {
+				return nil
 			}
 			payloads = append(payloads, string(data))
 			return nil

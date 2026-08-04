@@ -73,6 +73,44 @@
         }
       ]
     },
+    "FetchWorkloadSVIDRequest": {
+      "fields": [
+        {
+          "go_type": "bytes_base64",
+          "name": "public_key_der",
+          "presence": "required"
+        },
+        {
+          "go_type": "[]string",
+          "name": "selectors",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[]string",
+          "name": "audience",
+          "presence": "optional"
+        }
+      ]
+    },
+    "FetchWorkloadSVIDResponse": {
+      "fields": [
+        {
+          "go_type": "[]transport.WorkloadX509SVID",
+          "name": "x509_svids",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[]transport.WorkloadJWTSVID",
+          "name": "jwt_svids",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[][]uint8",
+          "name": "bundle",
+          "presence": "optional"
+        }
+      ]
+    },
     "HeartbeatRequest": {
       "fields": [
         {
@@ -412,6 +450,54 @@
           "presence": "optional"
         }
       ]
+    },
+    "WorkloadJWTSVID": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "spiffe_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "token",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "expires_at_unix",
+          "presence": "optional"
+        }
+      ]
+    },
+    "WorkloadX509SVID": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "spiffe_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "[][]uint8",
+          "name": "cert_chain_der",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "expires_at_unix",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[]string",
+          "name": "federates_with",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "hint",
+          "presence": "optional"
+        }
+      ]
     }
   },
   "metadata": {
@@ -478,6 +564,12 @@
         "name": "SignJobCSR",
         "request": "SignJobCSRRequest",
         "response": "SignJobCSRResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/FetchWorkloadSVID",
+        "name": "FetchWorkloadSVID",
+        "request": "FetchWorkloadSVIDRequest",
+        "response": "FetchWorkloadSVIDResponse"
       }
     ],
     "name": "trstctl.agent.v1.AgentService"

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Num } from "@/components/typography";
 import {
   api,
+  type Agent,
   type Attestation,
   type AttestedSVID,
   type BrokerAgentIdentity,
@@ -87,6 +88,9 @@ export function Workloads() {
   const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
   const [trustBundleSupport, setTrustBundleSupport] = useState<KubernetesTrustBundleDistribution | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // B3: per-host SPIFFE Workload API status, read from agent heartbeats. Loaded
+  // separately so a deployment without the agent fleet still renders the rest.
+  const [workloadAPIHosts, setWorkloadAPIHosts] = useState<Agent[]>([]);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [brokerError, setBrokerError] = useState<string | null>(null);
   const [attestationError, setAttestationError] = useState<string | null>(null);
@@ -95,6 +99,22 @@ export function Workloads() {
   const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
   const [trustBundleError, setTrustBundleError] = useState<string | null>(null);
   const trustSourceLoadErrorFallback = t("workloads.attestation.loadErrorFallback");
+
+  useEffect(() => {
+    let active = true;
+    if (typeof api.agents !== "function") return;
+    api
+      .agents()
+      .then((rows) => {
+        if (active) setWorkloadAPIHosts(rows ?? []);
+      })
+      .catch(() => {
+        if (active) setWorkloadAPIHosts([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -332,6 +352,64 @@ export function Workloads() {
         title={t("nav.item.workloads")}
         description="Short-lived identities for software workloads (services, pods, jobs): SPIFFE/SVID workload certificates, just-in-time (JIT) leases, and broker identities. Raw key material stays out of the browser — you see lease metadata here."
       />
+
+      {/* B3: where each host's workloads get their SVIDs. Rendered whenever any
+          agent is enrolled, including when none serve the socket yet — an
+          operator migrating off the control plane's Workload API needs to see
+          the hosts that have not moved, not only the ones that have. */}
+      {workloadAPIHosts.length > 0 ? (
+        <section aria-labelledby="workload-api-hosts-heading" className="grid gap-3 border-y border-border py-4">
+          <div>
+            <h2 id="workload-api-hosts-heading" className="text-title font-semibold">
+              {translateNow("source.workload.api.hosts.b3wla0001")}
+            </h2>
+            <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{translateNow("source.workload.api.hosts.help.b3wla0002")}</p>
+          </div>
+          <div className="ui-panel overflow-x-auto">
+            <table className="ui-table min-w-[52rem]">
+              <caption className="sr-only">{translateNow("source.workload.api.hosts.caption.b3wla0003")}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{translateNow("source.host.b3wla0004")}</th>
+                  <th scope="col">{translateNow("source.workload.api.b3wla0005")}</th>
+                  <th scope="col">{translateNow("source.svids.issued.b3wla0006")}</th>
+                  <th scope="col">{translateNow("source.last.reported.b3wla0007")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workloadAPIHosts.map((host) => (
+                  <tr key={host.id} className="align-top">
+                    <td className="font-mono text-xs">{host.name}</td>
+                    <td className="max-w-[26rem]">
+                      {host.workload_api.state === "serving" ? (
+                        <span className="font-medium text-status-success">{translateNow("source.workload.api.serving.b3wla0008")}</span>
+                      ) : host.workload_api.state === "unreported" ? (
+                        /* Not an error: an older agent cannot report this, and
+                           painting it red would send an operator to change a
+                           setting when the fix is an upgrade. */
+                        <span className="text-muted-foreground">{translateNow("source.workload.api.unreported.b3wla0009")}</span>
+                      ) : (
+                        <span className="text-status-warning">{translateNow("source.workload.api.not.serving.b3wla0010")}</span>
+                      )}
+                      <span className="mt-1 block text-xs text-muted-foreground">{host.workload_api.detail}</span>
+                    </td>
+                    {/* Resets when the agent restarts, and the column says so
+                        rather than letting a drop to zero read as an outage. */}
+                    <td className="text-xs text-muted-foreground">
+                      {host.workload_api.state === "serving"
+                        ? translateNow("source.svids.since.start.b3wla0011", { value1: String(host.workload_api.svids_issued) })
+                        : "—"}
+                    </td>
+                    <td className="text-xs text-muted-foreground">
+                      {host.workload_api.reported_at ? formatDateTimePolicy(host.workload_api.reported_at) : translateNow("source.never.b3wla0012")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section aria-labelledby="kubernetes-csr-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

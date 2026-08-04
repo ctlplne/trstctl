@@ -116,6 +116,64 @@ type agentResponse struct {
 	// an agent reports its version, and matching that to capability is the
 	// fleet-drift question, not this one.
 	RelayCapabilities []agentRelayCapabilityResponse `json:"relay_capabilities"`
+	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
+	WorkloadAPI agentWorkloadAPIStatus `json:"workload_api"`
+}
+
+// agentWorkloadAPIStatus is what a host reports about the Workload API it
+// serves for the workloads on its own machine (epic B3).
+type agentWorkloadAPIStatus struct {
+	// State is one of "serving", "not_serving", "unreported".
+	//
+	// Three values, not a boolean, because "unreported" is a real and different
+	// answer: an agent predating this epic says nothing, and rendering that as
+	// "not serving" would tell an operator their host declined when it simply
+	// cannot say. One is fixed by upgrading the agent, the other by changing a
+	// flag, and a console that conflates them sends people to the wrong place.
+	State string `json:"state"`
+	// SVIDsIssued is how many SVIDs this host has issued since its agent
+	// started. It RESETS on restart, which is stated rather than smoothed over:
+	// the agent is the only thing that can count them and it does not persist.
+	SVIDsIssued int64 `json:"svids_issued"`
+	// ReportedAt is when this host last reported the fields above. Empty when
+	// it never has.
+	ReportedAt string `json:"reported_at,omitempty"`
+	// Detail is the operator-facing sentence for this state.
+	Detail string `json:"detail"`
+}
+
+// Workload API state vocabulary (epic B3).
+const (
+	workloadAPIServing    = "serving"
+	workloadAPINotServing = "not_serving"
+	workloadAPIUnreported = "unreported"
+)
+
+// agentWorkloadAPIFor renders a host's Workload API posture.
+func agentWorkloadAPIFor(a store.Agent) agentWorkloadAPIStatus {
+	switch {
+	case a.WorkloadAPIReportedAt == nil:
+		return agentWorkloadAPIStatus{
+			State: workloadAPIUnreported,
+			Detail: "This agent has never reported Workload API state. That usually means it " +
+				"predates the host-served Workload API; it is not the same as reporting that " +
+				"the socket is off.",
+		}
+	case a.WorkloadAPIServed:
+		return agentWorkloadAPIStatus{
+			State: workloadAPIServing, SVIDsIssued: a.WorkloadAPISVIDs,
+			ReportedAt: a.WorkloadAPIReportedAt.UTC().Format(time.RFC3339),
+			Detail: "Workloads on this host obtain SVIDs from its local socket. The SVID key is " +
+				"generated here and never reaches the control plane.",
+		}
+	default:
+		return agentWorkloadAPIStatus{
+			State:      workloadAPINotServing,
+			ReportedAt: a.WorkloadAPIReportedAt.UTC().Format(time.RFC3339),
+			Detail: "This agent is not serving a Workload API socket. Workloads on this host must " +
+				"reach the control plane's own socket, which generates their SVID keys there.",
+		}
+	}
 }
 
 // agentRelayCapabilityResponse is one job kind a relay build executes.
@@ -163,6 +221,7 @@ func toAgentResponse(a store.Agent) agentResponse {
 		Roles:                 a.Roles,
 		RoleSource:            agentRoleSourceCertificate,
 		RelayCapabilities:     agentRelayCapabilities(),
+		WorkloadAPI:           agentWorkloadAPIFor(a),
 	}
 	if len(out.Roles) == 0 {
 		out.Roles = []string{}

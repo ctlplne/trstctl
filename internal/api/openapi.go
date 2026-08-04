@@ -3209,7 +3209,15 @@ func componentSchemas() map[string]*Schema {
 		// A3: what a relay build executes, derived from the agent's shipped
 		// census so the console cannot advertise an executor the binary lacks.
 		"relay_capabilities": {Type: "array", Items: ref("AgentRelayCapability")},
-	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities")
+		"workload_api":       ref("AgentWorkloadAPIStatus"),
+	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities", "workload_api")
+	// B3: whether this host serves the SPIFFE Workload API for its own workloads.
+	agentWorkloadAPIStatus := object(map[string]*Schema{
+		"state":        {Type: "string", Enum: []string{"serving", "not_serving", "unreported"}},
+		"svids_issued": {Type: "integer"},
+		"reported_at":  timestamp(),
+		"detail":       str(),
+	}, "state", "svids_issued", "detail")
 	agentRelayCapability := object(map[string]*Schema{
 		"kind":         str(),
 		"connectors":   {Type: "array", Items: str()},
@@ -3976,6 +3984,7 @@ func componentSchemas() map[string]*Schema {
 		"AccessChangeRequestList":                  list("AccessChangeRequest"),
 		"AgentDiscoveryCapability":                 agentDiscoveryCapability,
 		"Agent":                                    agent,
+		"AgentWorkloadAPIStatus":                   agentWorkloadAPIStatus,
 		"AgentRelayCapability":                     agentRelayCapability,
 		"AgentList":                                agentList,
 		"EnrollmentTokenRequest":                   enrollmentTokenReq,

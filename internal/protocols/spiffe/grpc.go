@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"net"
 	"os"
 	"time"
+	"trstctl.com/trstctl/internal/auditsink"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -130,6 +132,26 @@ func (s *WorkloadAPIServer) FetchX509SVID(_ *workloadpb.X509SVIDRequest, stream 
 // buildX509SVIDResponse mints the SVID set for the caller's selectors and assembles
 // the Workload API response. It is separated out so the wire-in test can assert the
 // exact response the stream sends.
+// recordLocalSocketDeprecation notes that a workload used the CONTROL PLANE's
+// socket rather than its own host's (epic B3).
+//
+// Retained for one release, and recorded every time, because the migration is
+// otherwise invisible: an operator who moves their agents to the host Workload
+// API has no way to tell which workloads are still dialling the old socket, and
+// "we think everything moved" is exactly the kind of belief this workstream
+// exists to replace with evidence.
+//
+// Best-effort: failing to record the deprecation must not fail an issuance a
+// workload is depending on today.
+func (s *WorkloadAPIServer) recordLocalSocketDeprecation(ctx context.Context, kind string) {
+	_ = auditsink.Emit(ctx, s.wl.cfg.Audit, nil, "spiffe.workload_api.local_socket_used", s.wl.cfg.TenantID,
+		[]byte(fmt.Sprintf(`{"type":%q,"detail":%q}`, kind,
+			"this SVID was issued on the control plane's own Workload API socket, which can only "+
+				"serve workloads on this machine and mints the SVID key here rather than on the "+
+				"host that runs the workload. Move the workload to its host agent's socket "+
+				"(--workload-api-socket) and scope its registration entry to that node.")))
+}
+
 func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloadpb.X509SVIDResponse, error) {
 	// Mint the workload key pair server-side (the Workload API owns the key). It is a
 	// LockedSigner (AN-8) destroyed before we return; only its public key crosses to
@@ -197,6 +219,10 @@ func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloa
 	if len(resp.Svids) == 0 {
 		return nil, status.Error(codes.PermissionDenied, "spiffe: no identity issued for caller selectors")
 	}
+	// Recorded AFTER the issuance, and only on success. "The deprecated socket
+	// was used" is a statement about an SVID that exists; a refused request did
+	// not use the old path, it was turned away by it.
+	s.recordLocalSocketDeprecation(ctx, "x509")
 	complete = true
 	return resp, nil
 }
@@ -269,6 +295,7 @@ func (s *WorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *workloadpb.JW
 	if len(resp.Svids) == 0 {
 		return nil, status.Error(codes.PermissionDenied, "spiffe: requested SPIFFE ID is not authorized for caller selectors")
 	}
+	s.recordLocalSocketDeprecation(ctx, "jwt")
 	return resp, nil
 }
 

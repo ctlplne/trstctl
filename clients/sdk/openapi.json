@@ -1501,6 +1501,9 @@
           },
           "version": {
             "type": "string"
+          },
+          "workload_api": {
+            "$ref": "#/components/schemas/AgentWorkloadAPIStatus"
           }
         },
         "required": [
@@ -1511,7 +1514,8 @@
           "discovery_capabilities",
           "roles",
           "role_source",
-          "relay_capabilities"
+          "relay_capabilities",
+          "workload_api"
         ],
         "type": "object"
       },
@@ -1759,6 +1763,34 @@
         "required": [
           "kind",
           "connectors"
+        ],
+        "type": "object"
+      },
+      "AgentWorkloadAPIStatus": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "reported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "serving",
+              "not_serving",
+              "unreported"
+            ],
+            "type": "string"
+          },
+          "svids_issued": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "svids_issued",
+          "detail"
         ],
         "type": "object"
       },

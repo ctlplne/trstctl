@@ -1937,6 +1937,32 @@ This is a deliberate, documented trust boundary, not an accident.
     go-spiffe and stock `spiffe-helper` against that served socket;
     go-spiffe is a test-only dependency so the served binary does not take a
     new runtime dependency for the proof.
+  - Host-served Workload API (B3): a host agent started with
+    `--workload-api-socket` serves the same Workload API on its OWN machine, for
+    the workloads that run there. It attests each caller from the kernel's record
+    of the connecting process (SO_PEERCRED on Linux, LOCAL_PEERCRED on darwin) and
+    renders SPIRE-shaped `unix:uid:`/`unix:gid:`/`unix:path:` selectors; a
+    platform with no peer-credential mechanism REFUSES to serve rather than
+    issuing without attestation. The SVID key is generated on that host and only
+    its public half travels: the control plane signs an SVID for a key it has
+    never seen, over the `FetchWorkloadSVID` node API on the agent channel.
+    Authorization is per node, not per agent-fleet: a registration entry carries a
+    `ParentID` naming the node permitted to deliver it, taken from the certificate
+    the agent authenticated with, so an agent that misreports selectors reaches
+    only the workloads on its own machine. An entry with NO `ParentID` is
+    deliverable by no agent at all and stays on the control plane's socket — so a
+    forgotten field refuses rather than widening who may impersonate a workload,
+    and scoping an entry moves it rather than duplicating it.
+    SCOPE, stated exactly: darwin reports uid and gid but not the peer's pid, so
+    `unix:path:` selectors are unavailable there and an entry requiring one will
+    not match on a darwin host. The control plane's own socket is retained for one
+    release and now emits a `spiffe.workload_api.local_socket_used` audit event on
+    every issuance, so an operator can see which workloads have not yet moved
+    rather than assuming they all have. The Workloads console reports, per host,
+    whether it serves the socket, how many SVIDs it has issued since its agent
+    started (a counter that resets on restart, and says so), and when it last
+    reported — with "not reported" kept distinct from "not serving", because the
+    first is fixed by upgrading an agent and the second by changing a flag.
   - Kubernetes TrustBundle distribution is served for public CA-bundle
     propagation: the agent reconciles cluster-scoped
     `TrustBundle.trstctl.com` resources, validates that `spec.caBundlePEM`

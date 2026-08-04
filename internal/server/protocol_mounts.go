@@ -882,7 +882,15 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		}
 		workloadOpts = append(workloadOpts, spiffe.WithAdditionalX509SVIDIssuer(additional))
 	}
-	return &spiffeProtocol{server: spiffe.NewWorkloadAPIServer(wl, []string{"unix"}, workloadOpts...), socket: socket}, nil
+	return &spiffeProtocol{
+		server: spiffe.NewWorkloadAPIServer(wl, []string{"unix"}, workloadOpts...),
+		socket: socket,
+		// B3: the agent channel issues through the SAME server, so a workload
+		// gets the same identity whichever socket it reached — the control
+		// plane's during the deprecation window, or its own host's after.
+		wl:          wl,
+		trustDomain: td,
+	}, nil
 }
 
 // spiffeJWTSigner returns a signer-backed DigestSigner for the SPIFFE JWT-SVID

@@ -25,6 +25,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	114: true,
 	109: true,
 	108: true,
 	62:  true,
@@ -496,6 +497,63 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	// that trstctl may PUBLISH into that zone whenever an external CA asks. A
 	// migration that defaulted the column true would grant that silently,
 	// across every zone an operator ever gave us credentials for.
+	// B3: existing agents must come out of 0114 as "never reported", NOT as
+	// "reported that they are not serving". The two render identically under a
+	// boolean and call for opposite responses — an upgrade versus a config
+	// change — so the whole value of the three-state surface rests on the
+	// migration leaving reported_at NULL rather than stamping a time.
+	t.Run("0114_agent_workload_api_posture", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 114)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		for _, tenant := range []string{tenantA, tenantB} {
+			if _, err := pool.Exec(ctx,
+				`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
+				 VALUES (gen_random_uuid(), $1, $2, 'active', '1.0.0', now())`,
+				tenant, "host-"+tenant); err != nil {
+				t.Fatalf("seed agent for %s: %v", tenant, err)
+			}
+		}
+
+		var before int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM agents`).Scan(&before); err != nil {
+			t.Fatalf("count seeded agents: %v", err)
+		}
+		if before == 0 {
+			t.Fatal("precondition: the content case needs seeded agents to protect")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		var after, reported, serving int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*),
+			        count(*) FILTER (WHERE workload_api_reported_at IS NOT NULL),
+			        count(*) FILTER (WHERE workload_api_served)
+			   FROM agents`).Scan(&after, &reported, &serving); err != nil {
+			t.Fatalf("read post-0114 agents: %v", err)
+		}
+		if after != before {
+			t.Fatalf("0114 changed the agent count: %d before, %d after", before, after)
+		}
+		if reported != 0 {
+			t.Errorf("%d existing agents came out of the migration claiming to have reported "+
+				"Workload API state they never sent; the console would tell an operator to "+
+				"change a flag on a host whose agent is simply too old to answer", reported)
+		}
+		if serving != 0 {
+			t.Errorf("%d existing agents came out marked as serving a Workload API socket they "+
+				"were never asked to serve", serving)
+		}
+	})
+
 	t.Run("0109_acme_dns01_upstream_dv", func(t *testing.T) {
 		ctx := context.Background()
 		prefix, target := splitMigrationsAtVersion(t, 109)

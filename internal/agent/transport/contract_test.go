@@ -222,6 +222,14 @@ func currentAgentContract() agentContract {
 			// to make deliberately, in a diff a reviewer will see.
 			"SignJobCSRRequest":  {Fields: jsonFieldsOf(SignJobCSRRequest{})},
 			"SignJobCSRResponse": {Fields: jsonFieldsOf(SignJobCSRResponse{})},
+			// B3: the workload-identity node API. Pinned for the same reason as
+			// B2's: the security claim is that neither message can carry a
+			// private key, and a committed field list makes that a change an
+			// author has to make deliberately in a diff a reviewer will see.
+			"FetchWorkloadSVIDRequest":  {Fields: jsonFieldsOf(FetchWorkloadSVIDRequest{})},
+			"FetchWorkloadSVIDResponse": {Fields: jsonFieldsOf(FetchWorkloadSVIDResponse{})},
+			"WorkloadX509SVID":          {Fields: jsonFieldsOf(WorkloadX509SVID{})},
+			"WorkloadJWTSVID":           {Fields: jsonFieldsOf(WorkloadJWTSVID{})},
 		},
 	}
 }
@@ -242,6 +250,8 @@ func methodMessageTypes(method string) struct{ request, response string } {
 		return struct{ request, response string }{"ReportJobResultRequest", "ReportJobResultResponse"}
 	case methodSignJobCSR:
 		return struct{ request, response string }{"SignJobCSRRequest", "SignJobCSRResponse"}
+	case methodFetchWorkloadSVID:
+		return struct{ request, response string }{"FetchWorkloadSVIDRequest", "FetchWorkloadSVIDResponse"}
 	default:
 		return struct{ request, response string }{"", ""}
 	}

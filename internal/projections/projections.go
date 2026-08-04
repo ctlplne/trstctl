@@ -653,6 +653,15 @@ type AgentHeartbeat struct {
 	// holds rather than what it was granted at some earlier enrollment. It is
 	// carried on the event so a replay reconstructs the same row.
 	Roles []string `json:"roles,omitempty"`
+	// WorkloadAPIServed and WorkloadAPISVIDs are this host's SPIFFE Workload API
+	// posture (epic B3), carried on the event so a replay reconstructs the row.
+	//
+	// A POINTER for the boolean, because three states matter: serving, not
+	// serving, and never reported. An older agent that does not know about this
+	// feature sends nothing, and rendering that as "not serving" would tell an
+	// operator their host declined to serve when it simply cannot say.
+	WorkloadAPIServed *bool  `json:"workload_api_served,omitempty"`
+	WorkloadAPISVIDs  *int64 `json:"workload_api_svids,omitempty"`
 }
 
 // AgentCertRenewed is the payload of an agent.cert.renewed event. The projector
@@ -2143,10 +2152,22 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		lastSeen := e.Time
-		return p.store.ApplyAgentHeartbeatTx(ctx, tx, store.Agent{
+		row := store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: pl.Status,
 			Version: pl.Version, Roles: pl.Roles, LastSeenAt: &lastSeen, CreatedAt: e.Time,
-		})
+		}
+		// B3: posture is written only when the beat carried it. A nil pointer
+		// leaves ReportedAt nil, and the upsert reads that as "this beat says
+		// nothing" rather than "this host is not serving".
+		if pl.WorkloadAPIServed != nil {
+			row.WorkloadAPIServed = *pl.WorkloadAPIServed
+			if pl.WorkloadAPISVIDs != nil {
+				row.WorkloadAPISVIDs = *pl.WorkloadAPISVIDs
+			}
+			reported := e.Time
+			row.WorkloadAPIReportedAt = &reported
+		}
+		return p.store.ApplyAgentHeartbeatTx(ctx, tx, row)
 	case EventAgentCertRenewed:
 		var pl AgentCertRenewed
 		if err := decode(e, &pl); err != nil {

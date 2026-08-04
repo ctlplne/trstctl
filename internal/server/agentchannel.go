@@ -232,6 +232,11 @@ type agentService struct {
 	// not completed and the identity would stay in renewing forever, so this is
 	// wired unconditionally in the served assembly rather than being optional.
 	completeHostRenewal func(ctx context.Context, tenantID string, payload []byte, outcome string)
+	// issueWorkloadSVID mints SVIDs for a workload a host agent attested (epic
+	// B3). Nil means the control plane serves no workload-identity surface and
+	// FetchWorkloadSVID fails closed, which is the honest answer for a
+	// deployment that has not configured a trust domain.
+	issueWorkloadSVID func(ctx context.Context, tenantID, nodeID string, req *transport.FetchWorkloadSVIDRequest) (*transport.FetchWorkloadSVIDResponse, error)
 	// recordDryRun turns a relay's reported plan into a delivery receipt (epic
 	// D5). Nil means dry-run receipts are not recorded and the plan lives only
 	// in the event log.
@@ -445,13 +450,22 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 	if a.log == nil {
 		return nil, status.Error(codes.FailedPrecondition, "agent event log is not configured")
 	}
-	payload, err := json.Marshal(projections.AgentHeartbeat{
+	beatPayload := projections.AgentHeartbeat{
 		ID: agentRowID(info.TenantID, name), Agent: name, Version: req.Version, Status: status_, CertSerial: info.Serial,
 		// The roles come off the certificate this heartbeat authenticated with
 		// (epic A2), never off the request — the same source the claim path reads,
 		// so the console cannot show a capability the fabric would refuse.
 		Roles: info.Roles,
-	})
+	}
+	// B3: the host's Workload API posture. Unlike roles this IS taken from the
+	// request, and legitimately so — it is a report about what this agent is
+	// doing on its own machine, not a claim about what it is permitted to do.
+	// Nothing is authorized by it; it is read by the console and nothing else.
+	if served, svids, reported := workloadAPIPosture(req.Inventory); reported {
+		beatPayload.WorkloadAPIServed = &served
+		beatPayload.WorkloadAPISVIDs = &svids
+	}
+	payload, err := json.Marshal(beatPayload)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
 	}

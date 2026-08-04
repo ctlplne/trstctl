@@ -4929,6 +4929,7 @@ export interface components {
             roles: ("host" | "network")[];
             status: string;
             version?: string;
+            workload_api: components["schemas"]["AgentWorkloadAPIStatus"];
         };
         AgentCertRevocation: {
             agent?: string;
@@ -4997,6 +4998,14 @@ export interface components {
             connectors: string[];
             enable_flags?: string[];
             kind: string;
+        };
+        AgentWorkloadAPIStatus: {
+            detail: string;
+            /** Format: date-time */
+            reported_at?: string;
+            /** @enum {string} */
+            state: "serving" | "not_serving" | "unreported";
+            svids_issued: number;
         };
         AlertRecipient: {
             display_name?: string;
