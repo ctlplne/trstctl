@@ -99,10 +99,14 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// provider configs that row already covers; D2's observed endpoint identity
 	// raised it to 306 and is mapped onto F7, the deployment-connector row
 	// whose delivery receipts it is the missing half of.
+	// M2's crypto readiness raised it to 315 and is mapped onto the same graph
+	// row as blast radius and reachability: it is the trust graph answering a
+	// different question over the same edges — not who is reachable from a
+	// node, but who depends on the crypto a node exhibits.
 	// The count is a deliberate ratchet: every new operation must be mapped to
 	// a feature-catalog row in the same change.
-	if len(out) != 314 {
-		t.Fatalf("OpenAPI operationIds = %d, want 314", len(out))
+	if len(out) != 315 {
+		t.Fatalf("OpenAPI operationIds = %d, want 315", len(out))
 	}
 	return out
 }

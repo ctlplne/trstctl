@@ -264,6 +264,32 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Crypto migration sequencing (M2): `GET /api/v1/graph/crypto-readiness` and a Risk
+  console panel order every observed crypto asset by WHO DEPENDS ON IT, not by
+  severity alone. The CBOM already said which algorithms are weak; it could not say
+  which change is hard. Sorted by severity only, a forgotten lab box exhibiting
+  RSA-1024 outranks a load balancer twelve services authenticate through, and the
+  migration gets planned in the wrong order by a table that looked authoritative.
+  The traversal walks BACK from a crypto asset along EXHIBITS to the resources using
+  it, then BACK again along CONNECTS_TO / GRANTS_ACCESS / DEPLOYED_TO to the parties
+  that depend on those resources. Both hops are reverse because every edge involved
+  points from the dependent toward the thing depended on — a first cut walked
+  out-edges from the resource, found nothing, and reported zero dependents for
+  everything while looking perfectly well-formed, which is the worst failure
+  available to a surface whose whole job is counting dependents. Each dependent is
+  served with the resource it was reached through, so a sequencing recommendation can
+  be checked rather than trusted, and owners are attributed so a blocker has names
+  against it.
+  Two honesty constraints are built into the wording rather than left to the reader.
+  Dependents are what DISCOVERY HAS OBSERVED: the graph is built from scans, so an
+  asset with zero dependents renders identically to one sitting on a resource nothing
+  has scanned, and no row is ever labelled safe to rotate — the recommendation for a
+  weak asset with no observed dependents says in words that zero observed is not zero.
+  And a CBOM usage recorded with NO LOCATION has no place on the graph and no
+  computable blast radius; it is counted separately as unplaceable rather than sorted
+  to the bottom, because an asset that cannot be placed is unmeasured, not low-risk.
+  Scope: this sequences what the graph knows. It does not discover new dependencies,
+  and its ordering is only as complete as the discovery feeding it.
   CORRECTION (D2/D3, B2, R1, F1, H2 — 2026-08-05): FIVE agent-claimable job kinds
   dead-lettered before any agent could claim them. The control-plane dispatcher is
   the sole handler for every outbox sweep, and its default branch returns a hard

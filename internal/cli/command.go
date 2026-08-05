@@ -315,6 +315,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"graph", "nodes"}, Method: "GET", Path: "/api/v1/graph", Summary: "Get the credential graph"},
 	{Name: []string{"graph", "reachable"}, Method: "GET", Path: "/api/v1/graph/reachable/{id}", Summary: "Nodes reachable from a node"},
 	{Name: []string{"graph", "blast-radius"}, Method: "GET", Path: "/api/v1/graph/blast-radius/{id}", Summary: "Blast radius of a node"},
+	{Name: []string{"graph", "crypto-readiness"}, Method: "GET", Path: "/api/v1/graph/crypto-readiness", Summary: "Sequence crypto assets for migration by observed dependency, not severity alone"},
 	{Name: []string{"graph", "trust-stores"}, Method: "GET", Path: "/api/v1/graph/trust-stores/{id}", Summary: "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on"},
 	{Name: []string{"migrations", "assess"}, Method: "POST", Path: "/api/v1/migrations/assess", Summary: "Assess a migration plan read-only: what it would touch and what is unknown"},
 	{Name: []string{"ca", "keys", "retirement"}, Method: "GET", Path: "/api/v1/ca/keys/{id}/retirement", Summary: "List the dependents blocking a CA key's destruction, and the destruction record once complete"},

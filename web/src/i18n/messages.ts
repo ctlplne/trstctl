@@ -5702,6 +5702,51 @@ export const messages = {
       "Attached, but no reconciliation schedule is configured — nothing is comparing authority state, so the counts below are the absence of collection rather than the absence of disagreement.",
     description: "C4: attached-but-not-collecting is indistinguishable from perfect agreement unless said out loud.",
   },
+  "source.crypto.readiness.m2seq00001": {
+    defaultMessage:
+      "Crypto migration sequencing",
+    description: "M2: panel heading — crypto assets ordered by observed dependency, not severity alone.",
+  },
+  "source.crypto.assets.m2seq00002": {
+    defaultMessage:
+      "Crypto assets",
+    description: "M2: how many observed cryptographic usages are on the graph.",
+  },
+  "source.urgent.m2seq00003": {
+    defaultMessage:
+      "Urgent (weak or quantum-vulnerable)",
+    description: "M2: rows that must migrate first, before dependency count is considered.",
+  },
+  "source.unplaceable.m2seq00004": {
+    defaultMessage:
+      "Unplaceable (no blast radius)",
+    description: "M2: recorded with no location, so dependency cannot be computed — unmeasured, not low-risk.",
+  },
+  "source.crypto.asset.m2seq00005": {
+    defaultMessage:
+      "Asset / where it runs",
+    description: "M2: table column.",
+  },
+  "source.dependents.m2seq00006": {
+    defaultMessage:
+      "Observed dependents",
+    description: "M2: labelled OBSERVED because the graph is built from discovery; zero is not proof of none.",
+  },
+  "source.owners.m2seq00007": {
+    defaultMessage:
+      "Owners to coordinate with",
+    description: "M2: blockers are owner-attributed so a migration has names against it.",
+  },
+  "source.sequencing.m2seq00008": {
+    defaultMessage:
+      "Sequencing",
+    description: "M2: what to do with this row, and what its numbers do not prove.",
+  },
+  "source.no.location.m2seq00009": {
+    defaultMessage:
+      "no location recorded",
+    description: "M2: the CBOM could not place this usage, so it has no graph position.",
+  },
   "source.deployment.truth.d3tri00001": {
     defaultMessage: "Deployment truth",
     description: "D3: panel heading \u2014 issued/delivered/verified counted separately.",

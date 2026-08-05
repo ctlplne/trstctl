@@ -1454,6 +1454,30 @@ export interface CredentialRiskList {
   credentials: CredentialRisk[];
 }
 
+export interface CryptoDependent {
+  edge: string;
+  node: GraphNode;
+  via: GraphNode;
+}
+
+export interface CryptoReadiness {
+  guidance: string;
+  items: CryptoReadinessRow[];
+  unlocated: number;
+  urgent: number;
+}
+
+export interface CryptoReadinessRow {
+  asset: GraphNode;
+  dependents?: CryptoDependent[];
+  exhibitors?: GraphNode[];
+  out_of_policy: boolean;
+  owners?: string[];
+  quantum_vulnerable: boolean;
+  recommendation: string;
+  unlocated: boolean;
+}
+
 export interface DRArtifactFailure {
   detail: string;
   name: string;

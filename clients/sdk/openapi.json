@@ -5608,6 +5608,96 @@
         ],
         "type": "object"
       },
+      "CryptoDependent": {
+        "properties": {
+          "edge": {
+            "type": "string"
+          },
+          "node": {
+            "$ref": "#/components/schemas/GraphNode"
+          },
+          "via": {
+            "$ref": "#/components/schemas/GraphNode"
+          }
+        },
+        "required": [
+          "node",
+          "via",
+          "edge"
+        ],
+        "type": "object"
+      },
+      "CryptoReadiness": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CryptoReadinessRow"
+            },
+            "type": "array"
+          },
+          "unlocated": {
+            "type": "integer"
+          },
+          "urgent": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "urgent",
+          "unlocated",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "CryptoReadinessRow": {
+        "properties": {
+          "asset": {
+            "$ref": "#/components/schemas/GraphNode"
+          },
+          "dependents": {
+            "items": {
+              "$ref": "#/components/schemas/CryptoDependent"
+            },
+            "type": "array"
+          },
+          "exhibitors": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          },
+          "out_of_policy": {
+            "type": "boolean"
+          },
+          "owners": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "quantum_vulnerable": {
+            "type": "boolean"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "unlocated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "asset",
+          "quantum_vulnerable",
+          "out_of_policy",
+          "unlocated",
+          "recommendation"
+        ],
+        "type": "object"
+      },
       "DRArtifactFailure": {
         "properties": {
           "detail": {
@@ -27720,6 +27810,53 @@
           }
         ],
         "summary": "Blast radius of compromising a node",
+        "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/graph/crypto-readiness": {
+      "get": {
+        "operationId": "graphCryptoReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CryptoReadiness"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Sequence crypto assets for migration by observed dependency and exposure",
         "x-trstctl-permission": "graph:read"
       }
     },

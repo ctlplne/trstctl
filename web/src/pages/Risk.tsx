@@ -12,6 +12,7 @@ import {
   type NHIStalePosture,
   type RiskQuery,
 } from "@/lib/api";
+import { CryptoReadinessPanel } from "@/components/CryptoReadinessPanel";
 import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { Button } from "@/components/ui/button";
@@ -320,6 +321,11 @@ export function Risk() {
       />
 
       <RiskPosture risks={data ?? []} />
+      {/* M2: which crypto to migrate FIRST, ordered by who actually depends on
+          it rather than by severity alone. Sits above the per-credential list
+          because it answers the sequencing question that comes before "what do
+          I rotate today". */}
+      <CryptoReadinessPanel />
       <ContextualRiskPanel priorities={contextualRisk} loading={contextualRiskLoading} error={contextualRiskError} />
       <NHIPolicyCompliancePanel posture={nhiPolicyCompliance} loading={nhiPolicyComplianceLoading} error={nhiPolicyComplianceError} />
       <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />

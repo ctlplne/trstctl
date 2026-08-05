@@ -12180,6 +12180,7 @@
         "getProfileVersion",
         "getSecret",
         "graphBlastRadius",
+        "graphCryptoReadiness",
         "graphTrustStores",
         "assessMigration",
         "getCARetirementChecklist",
@@ -13601,6 +13602,7 @@
         "graph nodes",
         "graph reachable",
         "graph blast-radius",
+        "graph crypto-readiness",
         "graph query"
       ],
       "cli_na": "",

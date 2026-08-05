@@ -3204,6 +3204,30 @@ func componentSchemas() map[string]*Schema {
 		"store_count": {Type: "integer"}, "host_count": {Type: "integer"},
 		"guidance": str(),
 	}, "issuer", "stores", "hosts", "store_count", "host_count", "guidance")
+
+	// M2: crypto assets sequenced for migration by observed dependency.
+	// `unlocated` is its own count rather than folded into the total: a usage
+	// the CBOM could not place has no computable blast radius, and absorbing it
+	// into a headline number would read as coverage it does not have.
+	cryptoDependent := object(map[string]*Schema{
+		"node": ref("GraphNode"), "via": ref("GraphNode"), "edge": str(),
+	}, "node", "via", "edge")
+	cryptoReadinessRow := object(map[string]*Schema{
+		"asset":              ref("GraphNode"),
+		"exhibitors":         {Type: "array", Items: ref("GraphNode")},
+		"dependents":         {Type: "array", Items: ref("CryptoDependent")},
+		"owners":             {Type: "array", Items: str()},
+		"quantum_vulnerable": {Type: "boolean"},
+		"out_of_policy":      {Type: "boolean"},
+		"unlocated":          {Type: "boolean"},
+		"recommendation":     str(),
+	}, "asset", "quantum_vulnerable", "out_of_policy", "unlocated", "recommendation")
+	cryptoReadiness := object(map[string]*Schema{
+		"items":     {Type: "array", Items: ref("CryptoReadinessRow")},
+		"urgent":    {Type: "integer"},
+		"unlocated": {Type: "integer"},
+		"guidance":  str(),
+	}, "items", "urgent", "unlocated", "guidance")
 	graphImpact := object(map[string]*Schema{
 		"node":     ref("GraphNode"),
 		"affected": {Type: "array", Items: ref("GraphNode")},
@@ -4340,6 +4364,9 @@ func componentSchemas() map[string]*Schema {
 		"GraphResponse":                            graphResponse,
 		"GraphReachable":                           graphReachable,
 		"GraphImpact":                              graphImpact,
+		"CryptoReadiness":                          cryptoReadiness,
+		"CryptoReadinessRow":                       cryptoReadinessRow,
+		"CryptoDependent":                          cryptoDependent,
 		"GraphTrustStores":                         graphTrustStores,
 		"UnownedIdentity":                          unownedIdentity,
 		"UnownedQueue":                             unownedQueue,

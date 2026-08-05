@@ -174,3 +174,53 @@ func nonNilNodes(ns []graph.Node) []graph.Node {
 	}
 	return ns
 }
+
+// cryptoReadinessResponse is the sequenced crypto migration order (M2).
+//
+// It reports CBOM findings — including each usage”'s quantum-vulnerability flag —
+// ordered by observed dependency. That is deliberately all it is: CBOM campaign
+// records and findings are core, while the licensed algorithm material the
+// PACKAGING-007 boundary reserves for ee/ is not implemented, named, or reachable
+// from here. Sequencing what the CBOM already found is bookkeeping over the trust
+// graph, not a licensed migration surface.
+type cryptoReadinessResponse struct {
+	Items []graph.CryptoReadinessRow `json:"items"`
+	// Urgent is how many rows are quantum-vulnerable or out of policy.
+	Urgent int `json:"urgent"`
+	// Unlocated is how many crypto usages the CBOM recorded with no location, so
+	// they have no place on the graph and no computable blast radius. Served as
+	// its own count because an unplaceable asset is unmeasured, not low-risk,
+	// and a total that quietly absorbed them would read as full coverage.
+	Unlocated int    `json:"unlocated"`
+	Guidance  string `json:"guidance"`
+}
+
+const cryptoReadinessGuidance = "Sequenced by exposure, not severity alone: two identically weak " +
+	"algorithms are ordered by how many parties actually depend on them, because severity says " +
+	"which crypto is worst while only dependency says which change is hard. Dependents are what " +
+	"DISCOVERY HAS OBSERVED — the graph is built from scans, so an asset with zero dependents reads " +
+	"identically to one on a resource nothing has scanned. No row is ever labelled safe to rotate; " +
+	"confirm coverage of an asset's exhibitors before treating a low count as a low-coordination " +
+	"change."
+
+// graphCryptoReadiness sequences crypto assets by dependency and exposure (M2).
+func (a *API) graphCryptoReadiness(w http.ResponseWriter, r *http.Request) {
+	g, tenantOK := a.buildGraph(w, r)
+	if !tenantOK {
+		return
+	}
+	rows := g.CryptoReadiness()
+	out := cryptoReadinessResponse{Items: rows, Guidance: cryptoReadinessGuidance}
+	if out.Items == nil {
+		out.Items = []graph.CryptoReadinessRow{}
+	}
+	for _, row := range rows {
+		if row.QuantumVulnerable || row.OutOfPolicy {
+			out.Urgent++
+		}
+		if row.Unlocated {
+			out.Unlocated++
+		}
+	}
+	a.writeJSON(w, http.StatusOK, out)
+}

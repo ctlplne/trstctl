@@ -1805,6 +1805,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/graph/crypto-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sequence crypto assets for migration by observed dependency and exposure */
+        get: operations["graphCryptoReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/graph/query": {
         parameters: {
             query?: never;
@@ -6049,6 +6066,27 @@ export interface components {
         };
         CredentialRiskList: {
             credentials: components["schemas"]["CredentialRisk"][];
+        };
+        CryptoDependent: {
+            edge: string;
+            node: components["schemas"]["GraphNode"];
+            via: components["schemas"]["GraphNode"];
+        };
+        CryptoReadiness: {
+            guidance: string;
+            items: components["schemas"]["CryptoReadinessRow"][];
+            unlocated: number;
+            urgent: number;
+        };
+        CryptoReadinessRow: {
+            asset: components["schemas"]["GraphNode"];
+            dependents?: components["schemas"]["CryptoDependent"][];
+            exhibitors?: components["schemas"]["GraphNode"][];
+            out_of_policy: boolean;
+            owners?: string[];
+            quantum_vulnerable: boolean;
+            recommendation: string;
+            unlocated: boolean;
         };
         DRArtifactFailure: {
             detail: string;
@@ -15055,6 +15093,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphImpact"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    graphCryptoReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CryptoReadiness"];
                 };
             };
             /** @description client error */

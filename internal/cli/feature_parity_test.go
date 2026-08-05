@@ -145,10 +145,14 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `acme dns-01 upstream-authorizations` raised it to 315 and is mapped onto
 	// the DNS-01 feature row, whose provider configs it reports the freshness of;
 	// D2's `endpoints verifications` raised it to 316 and is mapped onto F7.
+	// M2's `graph crypto-readiness` raised it to 325 and is mapped onto the same
+	// graph feature row as blast-radius and reachable: it reads the same edges to
+	// answer a different question — not who is reachable from a node, but who
+	// depends on the crypto a node exhibits.
 	// Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 324 {
-		t.Fatalf("CLI commands = %d, want 324", len(out))
+	if len(out) != 325 {
+		t.Fatalf("CLI commands = %d, want 325", len(out))
 	}
 	return out
 }

@@ -13,6 +13,7 @@ import { translateNow } from "@/i18n/I18nProvider";
 import * as estate from "./estateApi";
 import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import type {
+  CryptoReadiness,
   DRPosture,
   SecretRotationScheduleRun,
   MDMSCEPPolicyRequest,
@@ -405,6 +406,7 @@ export interface AuthorityAgreementReport {
 
 export type { CTMonitoring, CTMonitoringRequest };
 export type { DRPosture, DRDrill } from "./api-types.gen";
+export type { CryptoReadiness, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -1264,6 +1266,8 @@ export interface Api {
   ctMonitoring(): Promise<CTMonitoring>;
   /** C4: whether the configured authorities agree. Licensed; 402/403 when not entitled. */
   authorityAgreement(): Promise<AuthorityAgreementReport>;
+  /** M2: crypto assets sequenced for migration by observed dependency, not severity alone. */
+  cryptoReadiness(): Promise<CryptoReadiness>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
@@ -1582,6 +1586,7 @@ const liveApi: Api = {
   // reproduce state.
   drPosture: () => req<DRPosture>("/api/v1/platform/dr-posture"),
   authorityAgreement: () => req<AuthorityAgreementReport>("/api/v1/reconcile/agreement"),
+  cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),

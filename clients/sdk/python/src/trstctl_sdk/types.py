@@ -2080,6 +2080,42 @@ CredentialRiskList = TypedDict(
     total=False,
 )
 
+CryptoDependent = TypedDict(
+    'CryptoDependent',
+    {
+        'edge': str,
+        'node': dict[str, Any],
+        'via': dict[str, Any],
+    },
+    total=False,
+)
+
+CryptoReadiness = TypedDict(
+    'CryptoReadiness',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'unlocated': int,
+        'urgent': int,
+    },
+    total=False,
+)
+
+CryptoReadinessRow = TypedDict(
+    'CryptoReadinessRow',
+    {
+        'asset': dict[str, Any],
+        'dependents': list[dict[str, Any]],
+        'exhibitors': list[dict[str, Any]],
+        'out_of_policy': bool,
+        'owners': list[str],
+        'quantum_vulnerable': bool,
+        'recommendation': str,
+        'unlocated': bool,
+    },
+    total=False,
+)
+
 DRArtifactFailure = TypedDict(
     'DRArtifactFailure',
     {

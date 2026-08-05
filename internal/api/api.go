@@ -1142,6 +1142,7 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: "/api/v1/graph", opID: "getGraph", summary: "Get the credential graph", handler: a.getGraph, resSchema: "GraphResponse", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/graph/reachable/{id}", opID: "graphReachable", summary: "Nodes reachable from a node (reachability query)", handler: a.graphReachable, pathParams: graphNodePath, resSchema: "GraphReachable", successCode: "200", perm: authz.GraphRead},
+		{method: "GET", path: "/api/v1/graph/crypto-readiness", opID: "graphCryptoReadiness", summary: "Sequence crypto assets for migration by observed dependency and exposure", handler: a.graphCryptoReadiness, resSchema: "CryptoReadiness", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/graph/blast-radius/{id}", opID: "graphBlastRadius", summary: "Blast radius of compromising a node", handler: a.graphBlastRadius, pathParams: graphNodePath, resSchema: "GraphImpact", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, resSchema: "GraphQueryResult", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/owners/unowned", opID: "listUnownedIdentities", summary: "List managed identities whose ownership cannot answer an incident question", handler: a.listUnownedIdentities, resSchema: "UnownedQueue", successCode: "200", perm: authz.OwnersRead},
