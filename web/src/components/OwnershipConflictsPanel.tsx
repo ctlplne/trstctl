@@ -1,4 +1,6 @@
 import { type OwnershipConflict, type OwnershipConflictList } from "@/lib/api";
+import { useState } from "react";
+import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
 import { optionalApiCall } from "@/lib/optionalApi";
 import { translateNow } from "@/i18n/I18nProvider";
@@ -23,6 +25,16 @@ export function OwnershipConflictsPanel() {
   // down rather than hiding itself.
   const conflicts = useApiQuery(["ownership-conflicts"], readOwnershipConflicts);
   const items: OwnershipConflict[] = conflicts.data?.items ?? [];
+  // Reason per row, and the button stays disabled until one is typed. The
+  // served route refuses an empty resolution anyway; disabling here means an
+  // operator finds that out before they click rather than after.
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const resolve = async (id: string) => {
+    const reason = (reasons[id] ?? "").trim();
+    if (!reason) return;
+    await api.resolveOwnershipConflict(id, reason);
+    await conflicts.refetch?.();
+  };
   if (items.length === 0) return null;
   return (
     <section aria-labelledby="ownership-conflicts-heading" className="ui-panel space-y-3 p-comfortable">
@@ -46,6 +58,26 @@ export function OwnershipConflictsPanel() {
               {item.incoming_source}, {item.incoming_ref})
             </span>
             <span className="mt-1 block text-caption text-muted-foreground">{item.why}</span>
+            {item.id ? (
+              <span className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  aria-label={translateNow("source.ownership.conflicts.reason.i2own00010")}
+                  placeholder={translateNow("source.ownership.conflicts.reason.i2own00010")}
+                  value={reasons[item.id] ?? ""}
+                  onChange={(e) => setReasons((r) => ({ ...r, [item.id as string]: e.target.value }))}
+                  className="min-h-8 w-72 max-w-full rounded-control border border-border bg-background px-2 py-1 text-caption"
+                />
+                <button
+                  type="button"
+                  disabled={!(reasons[item.id] ?? "").trim()}
+                  onClick={() => void resolve(item.id as string)}
+                  className="min-h-8 rounded-control border border-border px-3 text-caption disabled:opacity-50"
+                >
+                  {translateNow("source.ownership.conflicts.resolve.i2own00009")}
+                </button>
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>

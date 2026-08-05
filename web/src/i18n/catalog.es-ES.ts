@@ -3288,6 +3288,8 @@ const esESCatalog = {
   "source.issuance.requests.counts.i3req00002": "{value1} esperando una decisi\u00f3n, de {value2} en total.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, decidido por {value2}",
   "source.issuance.requests.expired.i3req00003": "caducada: nadie decidi\u00f3",
+  "source.ownership.conflicts.resolve.i2own00009": "Resolver",
+  "source.ownership.conflicts.reason.i2own00010": "\u00bfPor qu\u00e9 se decidi\u00f3 as\u00ed? (obligatorio)",
   "source.ownership.conflicts.i2own00001": "Discrepancias de propiedad",
   "source.ownership.conflicts.blurb.i2own00002":
     "Una importaci\u00f3n encontr\u00f3 {value1} campo(s) en los que una fuente externa contradice lo registrado aqu\u00ed. La propiedad confirmada nunca se sobrescribi\u00f3.",

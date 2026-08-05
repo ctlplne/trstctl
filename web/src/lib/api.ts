@@ -1280,6 +1280,8 @@ export interface Api {
   cryptoReadiness(): Promise<CryptoReadiness>;
   /** I2: ownership an import refused to overwrite, and changes it made and recorded. */
   ownershipConflicts(): Promise<OwnershipConflictList>;
+  /** I2: close a disagreement. The reason is required — see the route's own guard. */
+  resolveOwnershipConflict(id: string, resolution: string): Promise<unknown>;
   /** I2: whether ownership is actually being re-read from the CMDB, and why the last read failed. */
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
@@ -1608,6 +1610,14 @@ const liveApi: Api = {
   authorityAgreement: () => req<AuthorityAgreementReport>("/api/v1/reconcile/agreement"),
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),
+  // Through mutate(), not a hand-rolled req(): mutate is what attaches the
+  // Idempotency-Key (AN-5). Rolling the request by hand skipped it, and a
+  // retried resolve would have been a second decision on the same conflict
+  // rather than a replay of the first.
+  resolveOwnershipConflict: (id: string, resolution: string) =>
+    mutate<unknown>("POST", `/api/v1/owners/ownership-conflicts/${encodeURIComponent(id)}/resolve`, {
+      resolution,
+    }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),

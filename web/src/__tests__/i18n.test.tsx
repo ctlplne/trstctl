@@ -470,8 +470,15 @@ describe("i18n boundary", () => {
       // they made must not silently resume a halt they never saw. The halted
       // string also says a resume restarts AT that ring, not past it.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "c65b91c909b99190b9618960181978c0c1a330bcc6ec9e80b8d105be4e0e537c",
-      "de-DE": "44788856e0ecc1e1897b06197b5a1cee81844bfb226efa11f338793cfdf6d368",
+      // I2 conflict-resolution re-pin: two keys for the resolve control. The
+      // reason field's label says REQUIRED in every locale, because a
+      // resolution with no explanation tells the next reader nothing about
+      // which side was right — and a translation that dropped the requirement
+      // would let an operator try, be refused by the route, and learn the rule
+      // from an error instead of the form.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "c6b5f83ab016a22f51caddc8d1960a80d8d43cf349a80d6fda1c421d21941fd1",
+      "de-DE": "e68dc12764bb25135ec3f4cfa55052f17d3c7004c1631721c5b9c538d7cb66b4",
     });
   });
 

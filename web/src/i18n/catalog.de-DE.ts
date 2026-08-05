@@ -3302,6 +3302,8 @@ const deDECatalog = {
   "source.issuance.requests.counts.i3req00002": "{value1} warten auf eine Entscheidung, von {value2} insgesamt.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, entschieden von {value2}",
   "source.issuance.requests.expired.i3req00003": "abgelaufen \u2014 niemand hat entschieden",
+  "source.ownership.conflicts.resolve.i2own00009": "Kl\u00e4ren",
+  "source.ownership.conflicts.reason.i2own00010": "Warum wurde so entschieden? (erforderlich)",
   "source.ownership.conflicts.i2own00001": "Abweichungen bei der Zust\u00e4ndigkeit",
   "source.ownership.conflicts.blurb.i2own00002":
     "Ein Import fand {value1} Feld(er), bei denen eine externe Quelle den hier erfassten Angaben widerspricht. Best\u00e4tigte Zust\u00e4ndigkeit wurde nie \u00fcberschrieben.",

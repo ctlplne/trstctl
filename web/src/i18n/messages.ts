@@ -12472,6 +12472,14 @@ export const messages = {
     defaultMessage: "expired — nobody decided",
     description: "I3: an expiry is deliberately not attributed to a person, because no human made that decision.",
   },
+  "source.ownership.conflicts.resolve.i2own00009": {
+    defaultMessage: "Resolve",
+    description: "I2: closes an ownership disagreement. Requires a reason.",
+  },
+  "source.ownership.conflicts.reason.i2own00010": {
+    defaultMessage: "Why was this decided? (required)",
+    description: "I2: a resolution with no reason tells the next reader nothing about which side was right.",
+  },
   "source.ownership.conflicts.i2own00001": {
     defaultMessage: "Ownership disagreements",
     description: "I2: heading for the queue of ownership an import refused to overwrite.",
