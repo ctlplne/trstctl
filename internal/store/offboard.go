@@ -69,6 +69,16 @@ var TenantScopedTables = []string{
 	"issuance_approvals",         // EXC-WIRE-03: FK -> issuance_approval_requests
 	"issuance_approval_requests", // EXC-WIRE-03: served dual-control approval state
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
+	// I2: ownership disagreements reference an owner_id. Listed BEFORE owners so
+	// the order stays correct if that reference ever becomes a real foreign key —
+	// and because a conflict about an owner who no longer exists is not something
+	// an offboarded tenant should leave behind.
+	"owner_ownership_conflicts",
+	// I2: a tenant's standing instruction to poll its own CMDB. It names the
+	// tenant's instance and credential reference, so it leaves with the tenant —
+	// and a schedule that outlived its tenant would keep dialling an external
+	// system on behalf of an account that no longer exists.
+	"cmdb_reconcile_schedules",
 	"owners",
 	"issuers",
 	"deployment_target_revisions",

@@ -151,8 +151,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// depends on the crypto a node exhibits.
 	// Like the OpenAPI count, it is a ratchet: a new command must be
 	// mapped to a feature row in the same change.
-	if len(out) != 325 {
-		t.Fatalf("CLI commands = %d, want 325", len(out))
+	// I2's `owners import`, `owners ownership-conflicts`, and the two
+	// `owners cmdb-schedule` commands raised it to 329, mapped onto the same
+	// owners row as the rest of the ownership surface.
+	if len(out) != 329 {
+		t.Fatalf("CLI commands = %d, want 329", len(out))
 	}
 	return out
 }

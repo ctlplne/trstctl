@@ -3617,6 +3617,46 @@
         },
         "type": "object"
       },
+      "CMDBReconcileSchedule": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "ci_query": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "instance_url": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "last_run_at": {
+            "type": "string"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured",
+          "enabled",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "CRLDistribution": {
         "properties": {
           "ca_id": {
@@ -13451,6 +13491,15 @@
           "name": {
             "type": "string"
           },
+          "ownership_source": {
+            "type": "string"
+          },
+          "ownership_source_observed_at": {
+            "type": "string"
+          },
+          "ownership_source_ref": {
+            "type": "string"
+          },
           "tenant_id": {
             "format": "uuid",
             "type": "string"
@@ -13871,6 +13920,98 @@
           "tenant_id",
           "kind",
           "name"
+        ],
+        "type": "object"
+      },
+      "OwnershipConflict": {
+        "properties": {
+          "current_attested": {
+            "type": "boolean"
+          },
+          "current_source": {
+            "type": "string"
+          },
+          "current_value": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "incoming_ref": {
+            "type": "string"
+          },
+          "incoming_source": {
+            "type": "string"
+          },
+          "incoming_value": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "current_attested"
+        ],
+        "type": "object"
+      },
+      "OwnershipConflictList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OwnershipConflict"
+            },
+            "type": "array"
+          },
+          "refused": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "refused",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "OwnershipImportResult": {
+        "properties": {
+          "applied": {
+            "type": "integer"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/OwnershipConflict"
+            },
+            "type": "array"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "unchanged": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "applied",
+          "unchanged",
+          "conflicts",
+          "detail",
+          "guidance"
         ],
         "type": "object"
       },
@@ -32524,6 +32665,214 @@
         ],
         "summary": "Create an owner",
         "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/owners/cmdb-schedule": {
+      "get": {
+        "operationId": "getCMDBReconcileSchedule",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CMDBReconcileSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read the CMDB reconcile schedule, including when it last ran and why it last failed",
+        "x-trstctl-permission": "owners:read"
+      },
+      "put": {
+        "operationId": "putCMDBReconcileSchedule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CMDBReconcileSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Configure scheduled read-only reconciliation of ownership against a ServiceNow CMDB",
+        "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/owners/import": {
+      "post": {
+        "operationId": "importOwnership",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipImportResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Import ownership from CSV: fills in what is unrecorded, refuses to overwrite what a human attested",
+        "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/owners/ownership-conflicts": {
+      "get": {
+        "operationId": "listOwnershipConflicts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipConflictList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List unresolved ownership disagreements between recorded owners and an external source",
+        "x-trstctl-permission": "owners:read"
       }
     },
     "/api/v1/owners/unowned": {

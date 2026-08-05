@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -27,10 +28,17 @@ import (
 // between the command side (which appends them) and the projector (which builds
 // the read model from them).
 const (
-	EventTenantRegistered                         = "tenant.registered"
-	EventTenantOffboarded                         = "tenant.offboarded"
-	EventOwnerCreated                             = "owner.created"
-	EventOwnerUpdated                             = "owner.updated"
+	EventTenantRegistered = "tenant.registered"
+	EventTenantOffboarded = "tenant.offboarded"
+	EventOwnerCreated     = "owner.created"
+	EventOwnerUpdated     = "owner.updated"
+	// I2: an external source's reconciliation against recorded ownership. It
+	// carries BOTH halves — what was applied and what was refused — because a
+	// replay that reconstructed only the applied half would rebuild an estate
+	// with no record of the disagreements somebody still has to resolve.
+	EventOwnershipReconciled = "ownership.reconciled"
+	// I2: a tenant's standing instruction to re-read its CMDB.
+	EventCMDBScheduleConfigured                   = "cmdb.schedule.configured"
 	EventOwnerDeleted                             = "owner.deleted"
 	EventIssuerCreated                            = "issuer.created"
 	EventIdentityCreated                          = "identity.created"
@@ -199,6 +207,68 @@ type OwnerUpdated struct {
 	Kind  string `json:"kind"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
+}
+
+// OwnershipReconciled is the payload of an ownership.reconciled event (I2).
+type OwnershipReconciled struct {
+	OwnerID string `json:"owner_id"`
+	// Source is where the claim came from: "csv-import" or "cmdb". Never
+	// "manual" — a reconcile is by definition not a human answering.
+	Source     string                    `json:"source"`
+	SourceRef  string                    `json:"source_ref"`
+	ObservedAt time.Time                 `json:"observed_at"`
+	Applied    []OwnershipFieldChange    `json:"applied,omitempty"`
+	Conflicts  []OwnershipConflictRecord `json:"conflicts,omitempty"`
+}
+
+// OwnershipFieldChange is one field a reconcile set.
+type OwnershipFieldChange struct {
+	Field string `json:"field"`
+	Value string `json:"value"`
+}
+
+// OwnershipConflictRecord is one disagreement a reconcile recorded. CurrentAttested
+// says why: a refused change had an attested value on the stored side.
+type OwnershipConflictRecord struct {
+	Field           string `json:"field"`
+	CurrentValue    string `json:"current_value"`
+	CurrentSource   string `json:"current_source"`
+	IncomingValue   string `json:"incoming_value"`
+	IncomingSource  string `json:"incoming_source"`
+	IncomingRef     string `json:"incoming_ref"`
+	CurrentAttested bool   `json:"current_attested"`
+}
+
+// OwnershipReconciledFrom builds the event from a reconcile plan.
+//
+// ONE definition, called by both ingest paths (the CSV import and the CMDB
+// scheduler). Two constructors for the same fact would drift, and a replay
+// could then reconstruct one ingest path's history and not the other's.
+func OwnershipReconciledFrom(ownerID, source, ref string, observed time.Time, plan ownership.Plan) OwnershipReconciled {
+	ev := OwnershipReconciled{OwnerID: ownerID, Source: source, SourceRef: ref, ObservedAt: observed}
+	for _, u := range plan.Apply {
+		ev.Applied = append(ev.Applied, OwnershipFieldChange{Field: u.Field, Value: u.Value})
+	}
+	for _, c := range plan.Conflicts {
+		ev.Conflicts = append(ev.Conflicts, OwnershipConflictRecord{
+			Field: c.Field, CurrentValue: c.CurrentValue, CurrentSource: string(c.CurrentSource),
+			IncomingValue: c.IncomingValue, IncomingSource: string(c.IncomingSource),
+			IncomingRef: c.IncomingRef, CurrentAttested: c.CurrentAttested,
+		})
+	}
+	return ev
+}
+
+// CMDBScheduleConfigured is the payload of a cmdb.schedule.configured event (I2).
+// TokenRef is a REFERENCE such as env:TRSTCTL_SERVICENOW_TOKEN; a token value in
+// an event is a token value in every backup and every replica of the log.
+type CMDBScheduleConfigured struct {
+	InstanceURL          string `json:"instance_url"`
+	TokenRef             string `json:"token_ref"`
+	CIQuery              string `json:"ci_query"`
+	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
+	IntervalSeconds      int    `json:"interval_seconds"`
+	Enabled              bool   `json:"enabled"`
 }
 
 // OwnerDeleted is the payload of an owner.deleted event.
@@ -1678,6 +1748,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantOffboarded:                         {1: true},
 	EventOwnerCreated:                             {1: true},
 	EventOwnerUpdated:                             {1: true},
+	EventOwnershipReconciled:                      {1: true},
+	EventCMDBScheduleConfigured:                   {1: true},
 	EventOwnerDeleted:                             {1: true},
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
@@ -1894,6 +1966,36 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyOwnerUpdatedTx(ctx, tx, store.Owner{
 			ID: pl.ID, TenantID: e.TenantID, Kind: store.OwnerKind(pl.Kind), Name: pl.Name, Email: pl.Email,
+		})
+	case EventOwnershipReconciled:
+		var pl OwnershipReconciled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		fields := make(map[string]string, len(pl.Applied))
+		for _, c := range pl.Applied {
+			fields[c.Field] = c.Value
+		}
+		conflicts := make([]store.OwnershipConflict, 0, len(pl.Conflicts))
+		for _, c := range pl.Conflicts {
+			conflicts = append(conflicts, store.OwnershipConflict{
+				OwnerID: pl.OwnerID, Field: c.Field,
+				CurrentValue: c.CurrentValue, CurrentSource: c.CurrentSource,
+				IncomingValue: c.IncomingValue, IncomingSource: c.IncomingSource,
+				IncomingRef: c.IncomingRef, CurrentAttested: c.CurrentAttested,
+			})
+		}
+		return p.store.ApplyOwnershipReconciledTx(ctx, tx, e.TenantID, pl.OwnerID,
+			fields, pl.Source, pl.SourceRef, pl.ObservedAt, conflicts)
+	case EventCMDBScheduleConfigured:
+		var pl CMDBScheduleConfigured
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyCMDBScheduleConfiguredTx(ctx, tx, e.TenantID, store.CMDBReconcileSchedule{
+			InstanceURL: pl.InstanceURL, TokenRef: pl.TokenRef, CIQuery: pl.CIQuery,
+			AllowPrivateEndpoint: pl.AllowPrivateEndpoint,
+			IntervalSeconds:      pl.IntervalSeconds, Enabled: pl.Enabled,
 		})
 	case EventOwnerDeleted:
 		var pl OwnerDeleted

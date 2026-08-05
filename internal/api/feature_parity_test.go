@@ -105,8 +105,12 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// node, but who depends on the crypto a node exhibits.
 	// The count is a deliberate ratchet: every new operation must be mapped to
 	// a feature-catalog row in the same change.
-	if len(out) != 315 {
-		t.Fatalf("OpenAPI operationIds = %d, want 315", len(out))
+	// I2's ownership import, its conflict queue, and the CMDB reconcile schedule
+	// raised it to 319, all mapped onto the owners feature row: they are that
+	// row's data-quality half — where an ownership claim came from, and where two
+	// sources disagree. There is deliberately no CMDB *write* operation.
+	if len(out) != 319 {
+		t.Fatalf("OpenAPI operationIds = %d, want 319", len(out))
 	}
 	return out
 }

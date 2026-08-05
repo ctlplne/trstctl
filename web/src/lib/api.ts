@@ -14,6 +14,8 @@ import * as estate from "./estateApi";
 import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import type {
   CryptoReadiness,
+  CMDBReconcileSchedule,
+  OwnershipConflictList,
   DRPosture,
   SecretRotationScheduleRun,
   MDMSCEPPolicyRequest,
@@ -407,6 +409,8 @@ export interface AuthorityAgreementReport {
 export type { CTMonitoring, CTMonitoringRequest };
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
+export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
+export type { CMDBReconcileSchedule } from "./api-types.gen";
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -1268,6 +1272,10 @@ export interface Api {
   authorityAgreement(): Promise<AuthorityAgreementReport>;
   /** M2: crypto assets sequenced for migration by observed dependency, not severity alone. */
   cryptoReadiness(): Promise<CryptoReadiness>;
+  /** I2: ownership an import refused to overwrite, and changes it made and recorded. */
+  ownershipConflicts(): Promise<OwnershipConflictList>;
+  /** I2: whether ownership is actually being re-read from the CMDB, and why the last read failed. */
+  cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
@@ -1587,6 +1595,8 @@ const liveApi: Api = {
   drPosture: () => req<DRPosture>("/api/v1/platform/dr-posture"),
   authorityAgreement: () => req<AuthorityAgreementReport>("/api/v1/reconcile/agreement"),
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
+  ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),
+  cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),

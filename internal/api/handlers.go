@@ -34,10 +34,24 @@ type ownerResponse struct {
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"created_at"`
+
+	// Where this ownership claim came from (I2). Empty means UNKNOWN — the row
+	// predates provenance — and is deliberately not rendered as "manual": an
+	// unrecorded origin is not evidence that a human said so. Omitted rather
+	// than sent empty so a client cannot mistake absence for an answer.
+	OwnershipSource           string `json:"ownership_source,omitempty"`
+	OwnershipSourceRef        string `json:"ownership_source_ref,omitempty"`
+	OwnershipSourceObservedAt string `json:"ownership_source_observed_at,omitempty"`
 }
 
 func toOwnerResponse(o store.Owner) ownerResponse {
-	return ownerResponse{ID: o.ID, TenantID: o.TenantID, Kind: string(o.Kind), Name: o.Name, Email: o.Email, CreatedAt: o.CreatedAt}
+	out := ownerResponse{ID: o.ID, TenantID: o.TenantID, Kind: string(o.Kind), Name: o.Name, Email: o.Email, CreatedAt: o.CreatedAt}
+	out.OwnershipSource = o.OwnershipSource
+	out.OwnershipSourceRef = o.OwnershipSourceRef
+	if o.OwnershipSourceObservedAt != nil {
+		out.OwnershipSourceObservedAt = o.OwnershipSourceObservedAt.UTC().Format(time.RFC3339)
+	}
+	return out
 }
 
 type issuerRequest struct {

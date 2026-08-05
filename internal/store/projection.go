@@ -40,6 +40,73 @@ func (s *Store) ApplyOwnerUpdatedTx(ctx context.Context, tx pgx.Tx, o Owner) err
 	return err
 }
 
+// ApplyOwnershipReconciledTx projects an ownership.reconciled event (I2).
+//
+// It writes BOTH halves in one transaction: the fields the reconcile was
+// allowed to set, stamped with where they came from, and the disagreements it
+// refused. Splitting them would let a crash leave an estate whose ownership had
+// changed with no record of what was overruled to change it.
+//
+// Conflicts are appended, never replaced. A disagreement that was recorded last
+// week and still stands is the same problem, and clearing the queue on each
+// sync would make a persistent conflict look freshly discovered every time.
+func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenantID, ownerID string,
+	fields map[string]string, source, sourceRef string, observed time.Time, conflicts []OwnershipConflict) error {
+	if len(fields) > 0 {
+		// Only the four application-model columns are reachable from a
+		// reconcile. An external source may describe what an asset is FOR; it
+		// may not rename an owner or change who to email, because those are
+		// this system's own identity for the owner.
+		if _, err := tx.Exec(ctx,
+			`UPDATE owners
+			    SET application_id = coalesce($3, application_id),
+			        service        = coalesce($4, service),
+			        business_unit  = coalesce($5, business_unit),
+			        environment    = coalesce($6, environment),
+			        ownership_source = $7, ownership_source_ref = $8,
+			        ownership_source_observed_at = $9
+			  WHERE tenant_id = $1 AND id = $2`,
+			tenantID, ownerID,
+			nullableText(fields["application_id"]), nullableText(fields["service"]),
+			nullableText(fields["business_unit"]), nullableText(fields["environment"]),
+			nullableText(source), nullableText(sourceRef), observed); err != nil {
+			return err
+		}
+	}
+	for _, c := range conflicts {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO owner_ownership_conflicts
+			   (tenant_id, owner_id, field, current_value, current_source,
+			    incoming_value, incoming_source, incoming_ref, current_attested)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			tenantID, c.OwnerID, c.Field, c.CurrentValue, c.CurrentSource,
+			c.IncomingValue, c.IncomingSource, c.IncomingRef, c.CurrentAttested); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ApplyCMDBScheduleConfiguredTx projects a cmdb.schedule.configured event (I2).
+//
+// last_run_at and last_error are deliberately NOT touched: they are the
+// scheduler's observations, not the operator's instruction, and a replay that
+// reset them would make a sync that has been failing for a week look like one
+// that had simply never run.
+func (s *Store) ApplyCMDBScheduleConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in CMDBReconcileSchedule) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO cmdb_reconcile_schedules (tenant_id, instance_url, token_ref, ci_query, allow_private_endpoint, interval_seconds, enabled)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 ON CONFLICT (tenant_id) DO UPDATE SET
+		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref,
+		   ci_query = EXCLUDED.ci_query, allow_private_endpoint = EXCLUDED.allow_private_endpoint,
+		   interval_seconds = EXCLUDED.interval_seconds,
+		   enabled = EXCLUDED.enabled, updated_at = now()`,
+		tenantID, in.InstanceURL, in.TokenRef, in.CIQuery, in.AllowPrivateEndpoint,
+		in.IntervalSeconds, in.Enabled)
+	return err
+}
+
 // DeleteOwnerTx projects an owner.deleted event.
 func (s *Store) DeleteOwnerTx(ctx context.Context, tx pgx.Tx, tenantID, id string) error {
 	_, err := tx.Exec(ctx, `DELETE FROM owners WHERE tenant_id = $1 AND id = $2`, tenantID, id)
@@ -342,7 +409,14 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 // backup-set manifest test (internal/backup) enforces that every persistent table
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
-var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "agent_cert_revocations", "kubernetes_controller_posture", "tenants", "tenant_key_domains", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides"}
+var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "agent_cert_revocations", "kubernetes_controller_posture", "tenants", "tenant_key_domains", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides",
+	// I2. Both are projections: owner_ownership_conflicts from ownership.reconciled,
+	// cmdb_reconcile_schedules from cmdb.schedule.configured. A rebuild does lose
+	// the schedule's last_run_at/last_error, which the SCHEDULER writes rather than
+	// the log — the cost is one extra sync within a minute of the rebuild, and the
+	// alternative (calling them independent PG state) would claim the operator's
+	// instruction is not event-sourced when it is.
+	"owner_ownership_conflicts", "cmdb_reconcile_schedules"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

@@ -1083,6 +1083,11 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunDiscoveryScheduler),
+			// I2: the tenant CMDB reconcile ticker. Without this line a configured
+			// schedule would sit in the table and never fire, and the epic's
+			// "changes reconcile on a schedule" would be true of the code and
+			// false of the running binary.
+			startRuntimeWorker(workCtx, srv.RunCMDBScheduler),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),
 			startRuntimeWorker(workCtx, srv.RunRestoreDrillScheduler),
 			// D2/D3: periodic endpoint re-verification. This line was missing, and

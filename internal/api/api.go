@@ -1145,7 +1145,6 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/graph/crypto-readiness", opID: "graphCryptoReadiness", summary: "Sequence crypto assets for migration by observed dependency and exposure", handler: a.graphCryptoReadiness, resSchema: "CryptoReadiness", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/graph/blast-radius/{id}", opID: "graphBlastRadius", summary: "Blast radius of compromising a node", handler: a.graphBlastRadius, pathParams: graphNodePath, resSchema: "GraphImpact", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, resSchema: "GraphQueryResult", successCode: "200", perm: authz.GraphRead},
-		{method: "GET", path: "/api/v1/owners/unowned", opID: "listUnownedIdentities", summary: "List managed identities whose ownership cannot answer an incident question", handler: a.listUnownedIdentities, resSchema: "UnownedQueue", successCode: "200", perm: authz.OwnersRead},
 		{method: "GET", path: "/api/v1/ca/keys/{id}/retirement", opID: "getCARetirementChecklist", summary: "List the dependents blocking a CA key's destruction, and the destruction record once complete", handler: a.getCARetirementChecklist, pathParams: graphNodePath, resSchema: "RetirementChecklist", successCode: "200", perm: authz.KeysRead},
 		{method: "POST", path: "/api/v1/migrations/assess", opID: "assessMigration", summary: "Assess a migration plan read-only: what it would touch and what is unknown", handler: a.assessMigration, reqSchema: "MigrationAssessRequest", resSchema: "MigrationAssessment", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/graph/trust-stores/{id}", opID: "graphTrustStores", summary: "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on", handler: a.graphTrustStores, pathParams: graphNodePath, resSchema: "GraphTrustStores", successCode: "200", perm: authz.GraphRead},
@@ -1274,6 +1273,7 @@ func (a *API) routes() []route {
 	// Extracted so this file stays inside the served-surface size budget: the
 	// route table is the bulk of api.go, and moving a coherent workflow out is
 	// the split the budget asks for rather than a waiver.
+	routes = append(routes, a.ownershipDataQualityRoutes()...)
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.platformRoutes()...)
 	return append(routes, a.licensedRouteRegistry()...)

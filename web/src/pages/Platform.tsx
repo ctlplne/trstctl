@@ -30,6 +30,7 @@ import {
   type SystemReadout,
   type DRPosture,
 } from "@/lib/api";
+import { optionalApiCall } from "@/lib/optionalApi";
 import type { StatusTone } from "@/lib/statusVocab";
 
 function browserTransport(): { label: string; detail: string; warning?: string } {
@@ -203,8 +204,9 @@ export function AdminSystem() {
 
   useEffect(() => {
     let active = true;
-    api
-      .drPosture()
+    // Optional-method guard (see lib/optionalApi): a client without this method
+    // must leave the panel absent, not blank the Platform page.
+    optionalApiCall<DRPosture | null>("drPosture", null)
       .then((posture) => {
         if (!active) return;
         setDRPosture(posture);

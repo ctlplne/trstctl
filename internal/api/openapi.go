@@ -238,6 +238,11 @@ func componentSchemas() map[string]*Schema {
 	owner := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: []string{"user", "team", "workload", "service"}},
 		"name": str(), "email": str(), "created_at": timestamp(),
+		// I2 provenance. Optional, because absent must stay distinguishable from
+		// recorded-and-empty: a row that predates provenance has no origin, and
+		// stamping one would read like a recorded answer.
+		"ownership_source": str(), "ownership_source_ref": str(),
+		"ownership_source_observed_at": str(),
 	}, "id", "tenant_id", "kind", "name")
 	ownerReq := object(map[string]*Schema{
 		"kind": {Type: "string", Enum: []string{"user", "team", "workload", "service"}}, "name": str(), "email": str(),
@@ -3228,6 +3233,40 @@ func componentSchemas() map[string]*Schema {
 		"unlocated": {Type: "integer"},
 		"guidance":  str(),
 	}, "items", "urgent", "unlocated", "guidance")
+
+	// I2: what a bulk ownership import did, and what it refused to do. Applied
+	// and refused are separate numbers on purpose — one total hides the rows
+	// somebody actually needed to look at.
+	ownershipConflictSchema := object(map[string]*Schema{
+		// id is present when listing the queue and absent on an import response:
+		// an import reports what it just decided, and those rows have not been
+		// read back. So it is optional, not required.
+		"id": uuid(), "owner_id": str(), "field": str(),
+		"current_value": str(), "current_source": str(),
+		"incoming_value": str(), "incoming_source": str(), "incoming_ref": str(),
+		"current_attested": {Type: "boolean"}, "why": str(),
+	}, "field", "current_attested")
+	ownershipImportResult := object(map[string]*Schema{
+		"applied":   {Type: "integer"},
+		"unchanged": {Type: "integer"},
+		"conflicts": {Type: "array", Items: ref("OwnershipConflict")},
+		"detail":    str(), "guidance": str(),
+	}, "applied", "unchanged", "conflicts", "detail", "guidance")
+	cmdbReconcileSchedule := object(map[string]*Schema{
+		// configured is separate from enabled: "never set up" and "set up and
+		// paused" are different operator states, and one flag merges them.
+		"configured": {Type: "boolean"}, "instance_url": str(), "token_ref": str(),
+		"ci_query": str(), "allow_private_endpoint": {Type: "boolean"},
+		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
+		// last_error is served rather than only logged: a sync failing for a week
+		// otherwise looks identical to one that found nothing to do.
+		"last_run_at": str(), "last_error": str(), "guidance": str(),
+	}, "configured", "enabled", "guidance")
+	ownershipConflictList := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("OwnershipConflict")},
+		"refused":  {Type: "integer"},
+		"guidance": str(),
+	}, "items", "refused", "guidance")
 	graphImpact := object(map[string]*Schema{
 		"node":     ref("GraphNode"),
 		"affected": {Type: "array", Items: ref("GraphNode")},
@@ -4364,6 +4403,10 @@ func componentSchemas() map[string]*Schema {
 		"GraphResponse":                            graphResponse,
 		"GraphReachable":                           graphReachable,
 		"GraphImpact":                              graphImpact,
+		"OwnershipImportResult":                    ownershipImportResult,
+		"OwnershipConflictList":                    ownershipConflictList,
+		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
+		"OwnershipConflict":                        ownershipConflictSchema,
 		"CryptoReadiness":                          cryptoReadiness,
 		"CryptoReadinessRow":                       cryptoReadinessRow,
 		"CryptoDependent":                          cryptoDependent,

@@ -12428,6 +12428,62 @@ export const messages = {
     defaultMessage: "{value1} with no owner, {value2} whose owner names no application or environment, {value3} never confirmed.",
     description: "I1: the three counts, kept separate because each needs different work.",
   },
+  "source.ownership.conflicts.i2own00001": {
+    defaultMessage: "Ownership disagreements",
+    description: "I2: heading for the queue of ownership an import refused to overwrite.",
+  },
+  "source.ownership.conflicts.blurb.i2own00002": {
+    defaultMessage: "An import found {value1} field(s) where an external source disagrees with what is recorded here. Attested ownership was never overwritten.",
+    description: "I2: says plainly that the import declined rather than applied, so the list is not read as completed work.",
+  },
+  "source.ownership.conflicts.attested.i2own00003": {
+    defaultMessage: "refused — a human attested this",
+    description: "I2: marks a conflict the import declined because the stored side was attested.",
+  },
+  "source.ownership.conflicts.applied.i2own00004": {
+    defaultMessage: "applied — the stored value was never attested",
+    description: "I2: marks a change the import did make, recorded so it is not a silent overwrite.",
+  },
+  "source.ownership.conflicts.unknown.i2own00005": {
+    defaultMessage: "unknown",
+    description: "I2: a stored ownership value with no recorded provenance — never rendered as if a human had said it.",
+  },
+  "source.crypto.readiness.via.m2crp00001": {
+    defaultMessage: "via {value1}",
+    description: "M2: names the edge by which a dependent reaches a crypto asset.",
+  },
+  "source.cmdb.sync.heading.i2own00009": {
+    defaultMessage: "CMDB ownership sync",
+    description: "I2: heading for the scheduled CMDB reconcile status panel.",
+  },
+  "source.cmdb.sync.paused.i2own00010": {
+    defaultMessage: "Configured but paused. Nothing is being re-read.",
+    description: "I2: shown when a schedule exists but is disabled — distinct from never configured.",
+  },
+  "source.cmdb.sync.lastrun.i2own00011": {
+    defaultMessage: "Last read {value1}, every {value2} minutes.",
+    description: "I2: when the CMDB was last read and how often it is scheduled.",
+  },
+  "source.cmdb.sync.neverran.i2own00012": {
+    defaultMessage: "Enabled, and has not read the CMDB yet.",
+    description: "I2: enabled with no run recorded — distinct from a run that found nothing.",
+  },
+  "source.cmdb.sync.failing.i2own00013": {
+    defaultMessage: "The last read failed: {value1}",
+    description: "I2: the served failure reason. A sync failing for a week otherwise looks like one with nothing to do.",
+  },
+  "source.ownership.source.column.i2own00006": {
+    defaultMessage: "Ownership source",
+    description: "I2: column header for where an ownership claim came from.",
+  },
+  "source.ownership.source.observed.i2own00008": {
+    defaultMessage: "{value1}, last seen {value2}",
+    description: "I2: the ownership source and the day that source last asserted it.",
+  },
+  "source.ownership.source.unrecorded.i2own00007": {
+    defaultMessage: "not recorded",
+    description: "I2: shown when an owner predates provenance. Deliberately not \"manual\" — an unrecorded origin is not evidence a human said so.",
+  },
   "source.owners.58f5df9b24": {
     defaultMessage: "Owners",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx, src/pages/Owners.tsx.",

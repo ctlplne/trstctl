@@ -442,9 +442,20 @@ describe("i18n boundary", () => {
       // total would lose the only information that makes the queue actionable.
       // H4 retirement re-pin: three source.retirement.* keys. The cleared state
       // must keep saying the SIGNER mints the record, not this page.
+      // I2 ownership-provenance re-pin: eleven keys. Five say whether ownership
+      // is actually being re-read from the CMDB, including the two states that
+      // otherwise look exactly like a healthy sync — paused, and failing. Four
+      // carry the disagreement queue and say for each row whether the change was
+      // REFUSED or APPLIED, because a list whose entries all read like completed
+      // work is worse than no list. Two render where an ownership claim came
+      // from, and an owner with no recorded origin says "not recorded" rather
+      // than "manual" in every locale — absence of provenance is not evidence a
+      // human said so, and a translation that blurred that would undo the point
+      // of the column. One M2 key was folded in at the same time: "via" was a
+      // hardcoded literal the extractor caught.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "06c7e05f8b9022dec860a87acd875bf3c62d43c3ef235d5d1a46ab040b0f473b",
-      "de-DE": "63b13608de931e18fa06d96e37a664154236d4dc4d2514ceb1c97f52f5befc2b",
+      "es-ES": "21645facc00aa91377988e488a645df127bb51b4c254db48349e11c53ecc9377",
+      "de-DE": "d70db950c494dbd6dfce073e7748c90cc9b910986d2524cae3bcbc020bfe1b6b",
     });
   });
 

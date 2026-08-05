@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem } from "@/lib/api";
+import { OwnershipConflictsPanel } from "@/components/OwnershipConflictsPanel";
+import { CMDBSyncPanel } from "@/components/CMDBSyncPanel";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -161,6 +163,28 @@ export function Owners() {
     { id: "kind", header: "Kind", cell: (owner) => owner.kind },
     { id: "email", header: "Email", cell: (owner) => owner.email ?? "—" },
     {
+      // I2: where this ownership claim came from, and when that source last
+      // said it. An owner with no recorded origin reads as "not recorded" and
+      // never as "manual" — absence of provenance is not evidence of a human.
+      id: "ownership_source",
+      header: translateNow("source.ownership.source.column.i2own00006"),
+      cell: (owner) =>
+        owner.ownership_source ? (
+          <span className="text-caption">
+            {owner.ownership_source_observed_at
+              ? translateNow("source.ownership.source.observed.i2own00008", {
+                  value1: owner.ownership_source,
+                  value2: owner.ownership_source_observed_at.slice(0, 10),
+                })
+              : owner.ownership_source}
+          </span>
+        ) : (
+          <span className="text-caption text-muted-foreground">
+            {translateNow("source.ownership.source.unrecorded.i2own00007")}
+          </span>
+        ),
+    },
+    {
       id: "actions",
       header: "Actions",
       cell: (owner) => (
@@ -191,6 +215,8 @@ export function Owners() {
       />
       <OrphanGovernance owners={owners} />
       <UnownedQueuePanel />
+      <CMDBSyncPanel />
+      <OwnershipConflictsPanel />
       {loading && <LoadingState>{translateNow("source.loading.owners.8fcc1cacd9")}</LoadingState>}
       {error && <ErrorState title={translateNow("source.could.not.load.owners.f32406fb21")}>{error}</ErrorState>}
       {rows && (

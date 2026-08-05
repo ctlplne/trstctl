@@ -338,13 +338,13 @@ export function Protocols() {
       {/* I4: what enrolments are failing and what to do about it. Rendered only
           when something has failed — an empty panel on a healthy estate is
           noise, and this surface earns attention by appearing. */}
-      {diagnostics && diagnostics.items.length > 0 ? (
+      {(diagnostics?.items ?? []).length > 0 ? (
         <section aria-labelledby="enrollment-diagnostics-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="enrollment-diagnostics-heading" className="text-title font-semibold">
               {translateNow("source.enrollment.diagnostics.i4diag0001")}
             </h2>
-            <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{diagnostics.guidance}</p>
+            <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{diagnostics?.guidance}</p>
           </div>
           <div className="ui-panel overflow-x-auto">
             <table className="ui-table min-w-[60rem]">
@@ -359,7 +359,7 @@ export function Protocols() {
                 </tr>
               </thead>
               <tbody>
-                {diagnostics.items.map((row) => (
+                {(diagnostics?.items ?? []).map((row) => (
                   <tr key={`${row.protocol}:${row.step}:${row.cause}`} className="align-top">
                     <td className="font-mono text-xs">{row.protocol}</td>
                     <td className="font-mono text-xs">{row.step}</td>

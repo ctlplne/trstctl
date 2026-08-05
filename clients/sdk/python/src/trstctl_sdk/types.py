@@ -1411,6 +1411,23 @@ CBOMScanRequest = TypedDict(
     total=False,
 )
 
+CMDBReconcileSchedule = TypedDict(
+    'CMDBReconcileSchedule',
+    {
+        'allow_private_endpoint': bool,
+        'ci_query': str,
+        'configured': bool,
+        'enabled': bool,
+        'guidance': str,
+        'instance_url': str,
+        'interval_seconds': int,
+        'last_error': str,
+        'last_run_at': str,
+        'token_ref': str,
+    },
+    total=False,
+)
+
 CRLDistribution = TypedDict(
     'CRLDistribution',
     {
@@ -4843,6 +4860,9 @@ Owner = TypedDict(
         'id': str,
         'kind': str,
         'name': str,
+        'ownership_source': str,
+        'ownership_source_observed_at': str,
+        'ownership_source_ref': str,
         'tenant_id': str,
     },
     total=False,
@@ -4987,6 +5007,45 @@ OwnershipAttributionOwner = TypedDict(
         'kind': str,
         'name': str,
         'tenant_id': str,
+    },
+    total=False,
+)
+
+OwnershipConflict = TypedDict(
+    'OwnershipConflict',
+    {
+        'current_attested': bool,
+        'current_source': str,
+        'current_value': str,
+        'field': str,
+        'id': str,
+        'incoming_ref': str,
+        'incoming_source': str,
+        'incoming_value': str,
+        'owner_id': str,
+        'why': str,
+    },
+    total=False,
+)
+
+OwnershipConflictList = TypedDict(
+    'OwnershipConflictList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'refused': int,
+    },
+    total=False,
+)
+
+OwnershipImportResult = TypedDict(
+    'OwnershipImportResult',
+    {
+        'applied': int,
+        'conflicts': list[dict[str, Any]],
+        'detail': str,
+        'guidance': str,
+        'unchanged': int,
     },
     total=False,
 )

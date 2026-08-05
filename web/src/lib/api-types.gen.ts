@@ -969,6 +969,19 @@ export interface CBOMScanRequest {
   tls_endpoints?: string[];
 }
 
+export interface CMDBReconcileSchedule {
+  allow_private_endpoint?: boolean;
+  ci_query?: string;
+  configured: boolean;
+  enabled: boolean;
+  guidance: string;
+  instance_url?: string;
+  interval_seconds?: number;
+  last_error?: string;
+  last_run_at?: string;
+  token_ref?: string;
+}
+
 export interface CRLDistribution {
   ca_id: string;
   delta_base_number?: number;
@@ -3435,6 +3448,9 @@ export interface Owner {
   id: string;
   kind: "user" | "team" | "workload" | "service";
   name: string;
+  ownership_source?: string;
+  ownership_source_observed_at?: string;
+  ownership_source_ref?: string;
   tenant_id: string;
 }
 
@@ -3539,6 +3555,33 @@ export interface OwnershipAttributionOwner {
   kind: "user" | "team" | "workload" | "service" | "vendor";
   name: string;
   tenant_id: string;
+}
+
+export interface OwnershipConflict {
+  current_attested: boolean;
+  current_source?: string;
+  current_value?: string;
+  field: string;
+  id?: string;
+  incoming_ref?: string;
+  incoming_source?: string;
+  incoming_value?: string;
+  owner_id?: string;
+  why?: string;
+}
+
+export interface OwnershipConflictList {
+  guidance: string;
+  items: OwnershipConflict[];
+  refused: number;
+}
+
+export interface OwnershipImportResult {
+  applied: number;
+  conflicts: OwnershipConflict[];
+  detail: string;
+  guidance: string;
+  unchanged: number;
 }
 
 export interface PAMPostgresCredential {

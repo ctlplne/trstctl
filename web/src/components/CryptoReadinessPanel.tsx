@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useEffect, useState } from "react";
+import { optionalApiCall } from "@/lib/optionalApi";
 import { translateNow } from "@/i18n/I18nProvider";
-import { api, type CryptoReadiness } from "@/lib/api";
+import { type CryptoReadiness } from "@/lib/api";
 
 // M2: sequence the crypto migration by dependency, not by severity alone.
 //
@@ -20,14 +21,22 @@ import { api, type CryptoReadiness } from "@/lib/api";
 // asset with zero of them renders identically to one sitting on a resource
 // nothing has scanned. Calling the first case safe would turn a coverage gap
 // into a green light.
+function readCryptoReadiness(): Promise<CryptoReadiness> {
+  return optionalApiCall<CryptoReadiness>("cryptoReadiness", { items: [], unlocated: 0, urgent: 0, guidance: "" });
+}
+
 export function CryptoReadinessPanel() {
   const [data, setData] = useState<CryptoReadiness | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Guard the ARRAY, not just the object — the same lesson the unowned queue
+  // learned. A response whose shape is present but whose items are absent is
+  // exactly what a fixture or a partial payload looks like, and reading .length
+  // on it takes down the whole page rather than hiding one panel.
+  const items = data?.items ?? [];
 
   useEffect(() => {
     let active = true;
-    api
-      .cryptoReadiness()
+    readCryptoReadiness()
       .then((r) => {
         if (active) {
           setData(r);
@@ -58,7 +67,7 @@ export function CryptoReadinessPanel() {
               <dt className="text-caption font-medium text-muted-foreground">
                 {translateNow("source.crypto.assets.m2seq00002")}
               </dt>
-              <dd className="text-title font-semibold tabular-nums">{data.items.length}</dd>
+              <dd className="text-title font-semibold tabular-nums">{items.length}</dd>
             </div>
             <div>
               <dt className="text-caption font-medium text-muted-foreground">
@@ -66,12 +75,12 @@ export function CryptoReadinessPanel() {
               </dt>
               <dd
                 className={
-                  data.urgent > 0
+                  (data.urgent ?? 0) > 0
                     ? "text-title font-semibold tabular-nums text-status-danger"
                     : "text-title font-semibold tabular-nums"
                 }
               >
-                {data.urgent}
+                {data.urgent ?? 0}
               </dd>
             </div>
             <div>
@@ -83,17 +92,17 @@ export function CryptoReadinessPanel() {
                   would read as coverage the table does not have. */}
               <dd
                 className={
-                  data.unlocated > 0
+                  (data.unlocated ?? 0) > 0
                     ? "text-title font-semibold tabular-nums text-status-warning"
                     : "text-title font-semibold tabular-nums"
                 }
               >
-                {data.unlocated}
+                {data.unlocated ?? 0}
               </dd>
             </div>
           </dl>
 
-          {data.items.length > 0 ? (
+          {items.length > 0 ? (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-caption">
                 <thead>
@@ -105,7 +114,7 @@ export function CryptoReadinessPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.items.map((row) => (
+                  {items.map((row) => (
                     <tr key={row.asset.id}>
                       <td className="max-w-[14rem]">
                         <span
@@ -136,7 +145,7 @@ export function CryptoReadinessPanel() {
                           <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
                             {(row.dependents ?? []).slice(0, 4).map((d) => (
                               <li key={d.node.id}>
-                                {d.node.name} <span className="opacity-70">via {d.via.name}</span>
+                                {d.node.name} <span className="opacity-70">{translateNow("source.crypto.readiness.via.m2crp00001", { value1: d.via.name })}</span>
                               </li>
                             ))}
                           </ul>

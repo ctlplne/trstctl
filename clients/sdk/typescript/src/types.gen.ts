@@ -2890,6 +2890,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/owners/cmdb-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the CMDB reconcile schedule, including when it last ran and why it last failed */
+        get: operations["getCMDBReconcileSchedule"];
+        /** Configure scheduled read-only reconciliation of ownership against a ServiceNow CMDB */
+        put: operations["putCMDBReconcileSchedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/owners/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import ownership from CSV: fills in what is unrecorded, refuses to overwrite what a human attested */
+        post: operations["importOwnership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/owners/ownership-conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List unresolved ownership disagreements between recorded owners and an external source */
+        get: operations["listOwnershipConflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/owners/unowned": {
         parameters: {
             query?: never;
@@ -5563,6 +5615,18 @@ export interface components {
             host_configs?: string[];
             tls_endpoints?: string[];
         };
+        CMDBReconcileSchedule: {
+            allow_private_endpoint?: boolean;
+            ci_query?: string;
+            configured: boolean;
+            enabled: boolean;
+            guidance: string;
+            instance_url?: string;
+            interval_seconds?: number;
+            last_error?: string;
+            last_run_at?: string;
+            token_ref?: string;
+        };
         CRLDistribution: {
             /** Format: uuid */
             ca_id: string;
@@ -8130,6 +8194,9 @@ export interface components {
             /** @enum {string} */
             kind: "user" | "team" | "workload" | "service";
             name: string;
+            ownership_source?: string;
+            ownership_source_observed_at?: string;
+            ownership_source_ref?: string;
             /** Format: uuid */
             tenant_id: string;
         };
@@ -8239,6 +8306,31 @@ export interface components {
             name: string;
             /** Format: uuid */
             tenant_id: string;
+        };
+        OwnershipConflict: {
+            current_attested: boolean;
+            current_source?: string;
+            current_value?: string;
+            field: string;
+            /** Format: uuid */
+            id?: string;
+            incoming_ref?: string;
+            incoming_source?: string;
+            incoming_value?: string;
+            owner_id?: string;
+            why?: string;
+        };
+        OwnershipConflictList: {
+            guidance: string;
+            items: components["schemas"]["OwnershipConflict"][];
+            refused: number;
+        };
+        OwnershipImportResult: {
+            applied: number;
+            conflicts: components["schemas"]["OwnershipConflict"][];
+            detail: string;
+            guidance: string;
+            unchanged: number;
         };
         PAMPostgresCredential: {
             dsn: string;
@@ -18353,6 +18445,164 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Owner"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCMDBReconcileSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CMDBReconcileSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    putCMDBReconcileSchedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CMDBReconcileSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    importOwnership: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipImportResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listOwnershipConflicts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipConflictList"];
                 };
             };
             /** @description client error */

@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -49,6 +50,13 @@ type Owner struct {
 	// true. Nil means NEVER attested, which is more urgent than attested-long-ago
 	// and must not collapse into it.
 	OwnershipVerifiedAt *time.Time
+
+	// Where this ownership claim came from (I2). OwnershipSource empty means
+	// UNKNOWN — the row predates provenance — and is never read as "manual": an
+	// unrecorded origin is not evidence that a human said so.
+	OwnershipSource           string
+	OwnershipSourceRef        string
+	OwnershipSourceObservedAt *time.Time
 }
 
 // OwnershipAttested reports whether this owner has ever been attested.
@@ -157,7 +165,9 @@ func (s *Store) ListOwnersPage(ctx context.Context, tenantID, afterID string, li
 			`SELECT id::text, tenant_id::text, kind, name, email, created_at,
 			        coalesce(application_id, ''), coalesce(service, ''),
 			        coalesce(business_unit, ''), coalesce(environment, ''),
-			        escalation_chain, ownership_verified_at
+			        escalation_chain, ownership_verified_at,
+			        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
+			        ownership_source_observed_at
 			   FROM owners WHERE tenant_id = $1 AND id > $2 ORDER BY id LIMIT $3`,
 			tenantID, afterID, limit)
 		if err != nil {
@@ -171,7 +181,8 @@ func (s *Store) ListOwnersPage(ctx context.Context, tenantID, afterID string, li
 			)
 			if err := rows.Scan(&o.ID, &o.TenantID, &kind, &o.Name, &o.Email, &o.CreatedAt,
 				&o.ApplicationID, &o.Service, &o.BusinessUnit, &o.Environment,
-				&o.EscalationChain, &o.OwnershipVerifiedAt); err != nil {
+				&o.EscalationChain, &o.OwnershipVerifiedAt,
+				&o.OwnershipSource, &o.OwnershipSourceRef, &o.OwnershipSourceObservedAt); err != nil {
 				return err
 			}
 			o.Kind = OwnerKind(kind)
@@ -325,4 +336,145 @@ func (s *Store) ListUnownedIdentities(ctx context.Context, tenantID string, limi
 		return rows.Err()
 	})
 	return out, err
+}
+
+// ListOpenOwnershipConflicts returns unresolved disagreements, newest first.
+func (s *Store) ListOpenOwnershipConflicts(ctx context.Context, tenantID string, limit int) ([]OwnershipConflict, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	var out []OwnershipConflict
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, owner_id::text, field,
+			        current_value, current_source, incoming_value, incoming_source,
+			        incoming_ref, current_attested, detected_at
+			   FROM owner_ownership_conflicts
+			  WHERE tenant_id = $1 AND resolved_at IS NULL
+			  ORDER BY detected_at DESC
+			  LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c OwnershipConflict
+			if err := rows.Scan(&c.ID, &c.OwnerID, &c.Field, &c.CurrentValue, &c.CurrentSource,
+				&c.IncomingValue, &c.IncomingSource, &c.IncomingRef, &c.CurrentAttested, &c.DetectedAt); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// OwnershipConflict is one field two sources disagree about.
+type OwnershipConflict struct {
+	ID             string
+	OwnerID        string
+	Field          string
+	CurrentValue   string
+	CurrentSource  string
+	IncomingValue  string
+	IncomingSource string
+	IncomingRef    string
+	// CurrentAttested records whether the stored side was human-attested when
+	// the disagreement was found. It is why the import declined, and without it
+	// a reader cannot tell a refused change from an applied one.
+	CurrentAttested bool
+	DetectedAt      time.Time
+}
+
+// CMDBReconcileSchedule is a tenant's standing instruction to re-read ownership
+// from its CMDB (I2). One per tenant: two would mean two pollers racing to
+// reconcile the same owners, and whichever landed last would look like truth.
+type CMDBReconcileSchedule struct {
+	ID          string
+	TenantID    string
+	InstanceURL string
+	TokenRef    string
+	CIQuery     string
+	// AllowPrivateEndpoint mirrors the ticket writer's field and is checked
+	// against the same operator binding and the same egress:private permission.
+	AllowPrivateEndpoint bool
+	IntervalSeconds      int
+	Enabled              bool
+	LastRunAt            *time.Time
+	LastError            string
+}
+
+// GetCMDBReconcileSchedule returns the tenant's schedule, or ok=false when the
+// tenant has never configured one. Absent and disabled stay distinguishable:
+// "never set up" and "deliberately paused" are different operator states.
+func (s *Store) GetCMDBReconcileSchedule(ctx context.Context, tenantID string) (CMDBReconcileSchedule, bool, error) {
+	var out CMDBReconcileSchedule
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, instance_url, token_ref, ci_query,
+			        allow_private_endpoint, interval_seconds, enabled, last_run_at, last_error
+			   FROM cmdb_reconcile_schedules WHERE tenant_id = $1`, tenantID)
+		switch err := row.Scan(&out.ID, &out.TenantID, &out.InstanceURL, &out.TokenRef, &out.CIQuery,
+			&out.AllowPrivateEndpoint, &out.IntervalSeconds, &out.Enabled, &out.LastRunAt, &out.LastError); {
+		case errors.Is(err, pgx.ErrNoRows):
+			return nil
+		case err != nil:
+			return err
+		}
+		found = true
+		return nil
+	})
+	return out, found, err
+}
+
+// TenantsWithEnabledCMDBSchedules enumerates the tenants with an enabled CMDB
+// schedule so the leader-only ticker can sweep each under its own RLS context.
+func (s *Store) TenantsWithEnabledCMDBSchedules(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants have an enabled CMDB reconcile schedule so the leader-only scheduler can sweep each tenant under its own RLS context (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM cmdb_reconcile_schedules WHERE enabled ORDER BY tenant_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// CMDBScheduleDue reports whether the tenant's schedule is due at now. A failed
+// run still stamps last_run_at, so a CMDB that is down retries on the next
+// interval instead of hot-looping every sweep.
+func (s *Store) CMDBScheduleDue(ctx context.Context, tenantID string, now time.Time) (CMDBReconcileSchedule, bool, error) {
+	sched, found, err := s.GetCMDBReconcileSchedule(ctx, tenantID)
+	if err != nil || !found || !sched.Enabled {
+		return CMDBReconcileSchedule{}, false, err
+	}
+	if sched.IntervalSeconds <= 0 {
+		return CMDBReconcileSchedule{}, false, nil
+	}
+	if sched.LastRunAt != nil && now.Sub(*sched.LastRunAt) < time.Duration(sched.IntervalSeconds)*time.Second {
+		return CMDBReconcileSchedule{}, false, nil
+	}
+	return sched, true, nil
+}
+
+// MarkCMDBScheduleRun stamps the attempt. runErr is recorded verbatim so an
+// operator reading the schedule sees why the last sync produced nothing rather
+// than a schedule that merely looks idle.
+func (s *Store) MarkCMDBScheduleRun(ctx context.Context, tenantID string, at time.Time, runErr string) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`UPDATE cmdb_reconcile_schedules SET last_run_at = $2, last_error = $3, updated_at = now()
+			  WHERE tenant_id = $1`, tenantID, at, runErr)
+		return err
+	})
 }

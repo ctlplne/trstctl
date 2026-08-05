@@ -694,6 +694,12 @@ type Server struct {
 	// behavior for notification rows while still letting producers enqueue intents.
 	notifications             *notify.Dispatcher
 	licensedBackgroundWorkers []BackgroundWorker
+	// serviceNowBindings is the operator's approved ITSM egress allow-list. The
+	// CMDB scheduler resolves the private-egress grant from it at RUN time
+	// rather than from a copy taken when the schedule was configured, so
+	// narrowing the grant takes effect on the next sync instead of on the next
+	// time somebody happens to re-save the schedule.
+	serviceNowBindings []api.ServiceNowBinding
 
 	logger    *slog.Logger
 	registry  *observ.Registry
@@ -872,6 +878,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		licensedCSRParser:         d.LicensedCSRParser,
 		licensedSPIFFESVIDFactory: d.LicensedSPIFFESVIDFactory,
 		licensedBackgroundWorkers: d.LicensedBackgroundWorkers,
+		serviceNowBindings:        d.ServiceNowBindings,
 		registry:                  observ.NewRegistry(),
 		egress:                    d.EgressGuard,
 		telemetry:                 d.TelemetryReporter,

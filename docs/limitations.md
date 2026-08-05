@@ -1770,6 +1770,41 @@ looking for a credential that was never there.
   three counts separately rather than a total. Scope, stated exactly: the console
   shows the queue and its reasons; EDITING the application model from the Owners
   page is not built, so the fields are populated through the API.
+- Ownership provenance and CMDB reconcile (I2): owners record WHERE an ownership
+  claim came from — `ownership_source` (unset / `manual` / `csv-import` / `cmdb`),
+  `ownership_source_ref`, `ownership_source_observed_at`. All three are nullable
+  and unset means UNKNOWN, never "manual": an unrecorded origin is not evidence
+  a human said so, and the Owners grid renders it as "not recorded". Two ingest
+  paths write it. `POST /api/v1/owners/import` (`trstctl owners import`) takes a
+  CSV; `PUT/GET /api/v1/owners/cmdb-schedule` (`trstctl owners cmdb-schedule
+  set|show`) configures a per-tenant, leader-only ticker that re-reads
+  ServiceNow `cmdb_ci` on the tenant's own interval. Both funnel through one
+  reconcile rule: a source FILLS IN what nobody recorded and NEVER overwrites
+  what a human attested — that becomes a row in `owner_ownership_conflicts`,
+  carrying both values and the source record that caused it, surfaced in an
+  "Ownership disagreements" panel on the Owners console. A change to a value
+  nobody attested IS applied and is still listed, because a change nobody was
+  told about is how ownership data quietly stops matching reality. A blank cell
+  is silence, not a deletion. Read-only is structural, not a flag: the reconcile
+  path builds only GETs against a fixed `/api/now/table/cmdb_ci`, and
+  `orchestrator.NormalizeServiceNowTable` — the only writer — rejects `cmdb_ci`,
+  so there is no configuration that turns this into a CMDB write. A CI naming an
+  owner this estate has never heard of does NOT create one; it is reported as
+  unattributed, because a CMDB assignment group is not evidence that a trstctl
+  owner should exist and auto-creating would build a parallel estate out of the
+  CMDB's typos. Scope, stated exactly: the reconcile runs in the CONTROL PLANE
+  against the operator-approved ServiceNow binding allow-list, not in the relay,
+  and an instance inside a private network needs the SAME two grants the ticket
+  writer needs — an operator binding with `allow_private_endpoint` and
+  `private_egress_cidrs`, plus the caller holding `egress:private` — with the
+  CIDR grant resolved at RUN time rather than copied when the schedule was
+  saved, so narrowing it takes effect on the next sync; there is no run-now
+  endpoint (a newly enabled schedule is due
+  immediately and fires within one scheduler tick, and its outcome is served as
+  `last_run_at`/`last_error`); resolving a conflict is a read surface only —
+  the console lists disagreements, and clearing one is an API-side owner edit;
+  and the CI-to-CERTIFICATE mapping is by owner NAME, so a CMDB whose owner
+  labels do not match this estate's owner names reconciles nothing and says so.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives
