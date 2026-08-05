@@ -77,3 +77,26 @@ func (a *API) agentUpgradeRoutes() []route {
 		{method: "POST", path: "/api/v1/agents/upgrade-ring", opID: "assignAgentUpgradeRing", summary: "Place an agent in a rollout ring; empty unassigns and is never read as broad", handler: a.assignAgentRing, reqSchema: "AgentRingInput", successCode: "200", mutation: true, perm: authz.AgentsWrite},
 	}
 }
+
+// The white-label brand route (AUD-14). Unauthenticated by design: the brand
+// decides what the LOGIN page looks like, and a surface requiring a session
+// could never brand the one screen a customer sees before they have one. It
+// carries presentation only.
+func (a *API) brandingRoutes() []route {
+	return []route{
+		{method: "GET", path: "/api/v1/brand", opID: "getBrand", summary: "Resolve the white-label brand for this host; presentation only, unauthenticated so the login screen can be branded", // perm is deliberately empty: "" means public on this table.
+			handler: a.getBrand, resSchema: "Brand", successCode: "200"},
+	}
+}
+
+// extractedRouteGroups is every route group split out of api.go, in one call so
+// the main table's append block stays a single line as more groups arrive.
+func (a *API) extractedRouteGroups() []route {
+	var out []route
+	out = append(out, a.ownershipDataQualityRoutes()...)
+	out = append(out, a.issuanceRequestRoutes()...)
+	out = append(out, a.mdmDeviceRoutes()...)
+	out = append(out, a.agentUpgradeRoutes()...)
+	out = append(out, a.brandingRoutes()...)
+	return out
+}

@@ -3253,6 +3253,14 @@ func componentSchemas() map[string]*Schema {
 		"conflicts": {Type: "array", Items: ref("OwnershipConflict")},
 		"detail":    str(), "guidance": str(),
 	}, "applied", "unchanged", "conflicts", "detail", "guidance")
+	brandSchema := object(map[string]*Schema{
+		"product_name": str(), "logo_data_uri": str(), "login_message": str(),
+		"token_overrides": {Type: "object"},
+		// custom separates "the default because nothing is configured" from
+		// "the default because this host has no brand". Both render identically
+		// and only one is a misconfiguration.
+		"custom": {Type: "boolean"},
+	}, "product_name", "custom")
 	agentUpgradeCampaignSchema := object(map[string]*Schema{
 		"id": uuid(), "target_version": str(),
 		// active separates "no campaign has ever run" from "one is running".
@@ -4481,6 +4489,7 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipConflictList":                    ownershipConflictList,
 		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
 		"IssuanceRequest":                          issuanceRequestSchema,
+		"Brand":                                    brandSchema,
 		"AgentUpgradeCampaign":                     agentUpgradeCampaignSchema,
 		"AgentUpgradeCampaignInput":                agentUpgradeCampaignInput,
 		"AgentRingInput":                           agentRingInput,

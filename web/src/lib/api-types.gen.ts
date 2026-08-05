@@ -556,6 +556,14 @@ export interface AuditEventList {
   events: AuditEvent[];
 }
 
+export interface Brand {
+  custom: boolean;
+  login_message?: string;
+  logo_data_uri?: string;
+  product_name: string;
+  token_overrides?: Record<string, unknown>;
+}
+
 export interface BreakglassBundle {
   approvals: string[];
   cert_der: string;

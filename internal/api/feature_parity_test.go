@@ -119,8 +119,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// MDM write operation.
 	// A5's five staged-upgrade operations raised it to 331, mapped onto the
 	// agents feature row: a rollout is fleet operation, not a separate product.
-	if len(out) != 331 {
-		t.Fatalf("OpenAPI operationIds = %d, want 331", len(out))
+	// AUD-14's brand route raised it to 332, mapped onto the platform row: it is
+	// how a provider's white-label reaches a customer's screen at all.
+	if len(out) != 332 {
+		t.Fatalf("OpenAPI operationIds = %d, want 332", len(out))
 	}
 	return out
 }

@@ -790,6 +790,18 @@ AuditEventList = TypedDict(
     total=False,
 )
 
+Brand = TypedDict(
+    'Brand',
+    {
+        'custom': bool,
+        'login_message': str,
+        'logo_data_uri': str,
+        'product_name': str,
+        'token_overrides': dict[str, Any],
+    },
+    total=False,
+)
+
 BreakglassBundle = TypedDict(
     'BreakglassBundle',
     {

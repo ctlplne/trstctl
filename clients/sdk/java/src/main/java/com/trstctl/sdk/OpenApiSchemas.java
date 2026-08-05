@@ -71,6 +71,7 @@ public final class OpenApiSchemas {
       "AuditBundle",
       "AuditEvent",
       "AuditEventList",
+      "Brand",
       "BreakglassBundle",
       "BreakglassCeremony",
       "BreakglassCrossSign",

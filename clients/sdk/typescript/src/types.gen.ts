@@ -641,6 +641,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve the white-label brand for this host; presentation only, unauthenticated so the login screen can be branded */
+        get: operations["getBrand"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/breakglass/cross-sign": {
         parameters: {
             query?: never;
@@ -5366,6 +5383,13 @@ export interface components {
         AuditEventList: {
             count?: number;
             events: components["schemas"]["AuditEvent"][];
+        };
+        Brand: {
+            custom: boolean;
+            login_message?: string;
+            logo_data_uri?: string;
+            product_name: string;
+            token_overrides?: Record<string, never>;
         };
         BreakglassBundle: {
             approvals: string[];
@@ -12177,6 +12201,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditBundle"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getBrand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
                 };
             };
             /** @description client error */

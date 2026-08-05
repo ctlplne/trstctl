@@ -2109,6 +2109,30 @@
         ],
         "type": "object"
       },
+      "Brand": {
+        "properties": {
+          "custom": {
+            "type": "boolean"
+          },
+          "login_message": {
+            "type": "string"
+          },
+          "logo_data_uri": {
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "token_overrides": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "product_name",
+          "custom"
+        ],
+        "type": "object"
+      },
       "BreakglassBundle": {
         "properties": {
           "approvals": {
@@ -23464,6 +23488,45 @@
         ],
         "summary": "Export a signed audit evidence bundle",
         "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/brand": {
+      "get": {
+        "operationId": "getBrand",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Brand"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "Resolve the white-label brand for this host; presentation only, unauthenticated so the login screen can be branded",
+        "x-trstctl-public-rationale": "public presentation only: the brand decides what the LOGIN page looks like, so a surface requiring a session could never brand the one screen a customer sees before they have one. The response carries product name, logo, login message and email strings — no tenant data, no credential material, and nothing about the tenant beyond how to render it. Resolving by Host is a lookup an unauthenticated caller can already perform by visiting that host."
       }
     },
     "/api/v1/breakglass/cross-sign": {

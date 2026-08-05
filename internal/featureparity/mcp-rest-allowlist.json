@@ -23,6 +23,12 @@
       "method": "POST",
       "path": "/api/v1/mcp/tools/{tool}",
       "justification": "MCP invocation endpoint; adding a REST-backed MCP tool for it would allow recursive tool calls"
+    },
+    {
+      "operation_id": "getBrand",
+      "method": "GET",
+      "path": "/api/v1/brand",
+      "justification": "public presentation-only endpoint; the brand tells a browser how to render the login screen and carries no tenant data, so exposing it as an AI tool action would add a tool that can only answer what the page already shows"
     }
   ]
 }

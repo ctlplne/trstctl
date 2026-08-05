@@ -664,6 +664,8 @@ func publicRationaleForRoute(r route) string {
 		return "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session."
 	case "getOpenAPISpec":
 		return "public static API contract: the document contains no tenant data or credential material."
+	case "getBrand":
+		return brandPublicRationale
 	case "getEditions":
 		return "public edition posture: the response contains only global license state, feature-table rows, and crypto posture; it carries no tenant data or credential material."
 	default:
@@ -1273,10 +1275,7 @@ func (a *API) routes() []route {
 	// Extracted so this file stays inside the served-surface size budget: the
 	// route table is the bulk of api.go, and moving a coherent workflow out is
 	// the split the budget asks for rather than a waiver.
-	routes = append(routes, a.ownershipDataQualityRoutes()...)
-	routes = append(routes, a.issuanceRequestRoutes()...)
-	routes = append(routes, a.mdmDeviceRoutes()...)
-	routes = append(routes, a.agentUpgradeRoutes()...)
+	routes = append(routes, a.extractedRouteGroups()...) // see routes_ownership.go
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.platformRoutes()...)
 	return append(routes, a.licensedRouteRegistry()...)
