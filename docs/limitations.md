@@ -264,6 +264,26 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Enrolment diagnostics (I4): a refused ACME enrolment now produces a diagnosis
+  naming the protocol, the step that failed, a cause from a CLOSED set, and a
+  remediation. The hook sits at the single point every ACME refusal passes through,
+  so a refusal added later is diagnosed without anybody remembering to wire it.
+  The design constraint is that it must DECLINE rather than guess. A tool that says
+  "your DNS record is missing" when the responder was unreachable sends an operator
+  to the zone file for an hour, and they will doubt it afterwards on the occasions it
+  was right. So the classifier matches only unambiguous evidence — RFC 8555 problem
+  types, EST status codes, the two stable AD CS error phrases — and returns `unknown`
+  for everything else, which is a first-class answer carrying NO remediation rather
+  than a fallback. SCEP's `badRequest` is deliberately unclassified: it is the value
+  a SCEP server returns for most refusals, so mapping it to any single cause would
+  invent a diagnosis from a value that carries none. "Unreachable" is detected from
+  typed network errors, never from error wording, so an error that merely mentions a
+  connection is not reported as one failing. All three properties are
+  mutation-verified.
+  SCOPE: the classifier is wired into the served ACME path. EST, SCEP and AD CS
+  classifiers exist and are tested but are not yet emitted from their served paths —
+  those protocols surface far less structure about why they refused, and wiring them
+  is a separate change rather than a line in this one.
   Relay revocation cache (R3): a relay started with `--crl-cache-listen` serves the
   control plane's CRL to relying parties in its segment. Revocation checking is the
   part of PKI that fails quietly — a client that cannot reach a distribution point

@@ -33,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/enrollmentdiag"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
@@ -259,6 +260,15 @@ type Server struct {
 
 	meta     DirectoryMeta
 	authMode profile.ACMEAuthMode
+
+	// onFailure receives a diagnosis for every refusal this server issues
+	// (epic I4). Nil disables it.
+	//
+	// Hooked at problem() rather than at each refusal site because problem() is
+	// the single place every ACME failure passes through — the diagnosis
+	// therefore cannot miss a path, and a new refusal added later is diagnosed
+	// without anybody remembering to wire it.
+	onFailure func(enrollmentdiag.Diagnosis)
 
 	mu         sync.Mutex
 	quota      QuotaConfig
@@ -1620,7 +1630,15 @@ func (s *Server) rateLimitedAfter(w http.ResponseWriter, r *http.Request, retryA
 	s.problem(w, r, http.StatusTooManyRequests, "rateLimited", detail)
 }
 
-func (s *Server) problem(w http.ResponseWriter, _ *http.Request, status int, typ, detail string) {
+func (s *Server) problem(w http.ResponseWriter, r *http.Request, status int, typ, detail string) {
+	s.mu.Lock()
+	notify := s.onFailure
+	s.mu.Unlock()
+	if notify != nil {
+		// The step comes from the path the client was on, which is the only
+		// evidence available here about where in the flow this happened.
+		notify(enrollmentdiag.ClassifyACME(acmeStepForPath(r), typ, nil))
+	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
@@ -1632,4 +1650,44 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// SetFailureDiagnosis records a diagnosis for every refusal this server issues
+// (epic I4).
+//
+// A setter rather than a constructor option, because New has a fixed two-argument
+// signature that a dozen call sites use and widening it would touch all of them
+// to express something only one caller wants.
+func (s *Server) SetFailureDiagnosis(fn func(enrollmentdiag.Diagnosis)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onFailure = fn
+}
+
+// acmeStepForPath infers which step of the flow a request was on.
+//
+// From the PATH, which is the one piece of evidence available at the refusal
+// site that says where the client had got to. It is deliberately coarse: an
+// unrecognised path yields an empty step and the classifier substitutes its own
+// default, rather than this function guessing at a stage nobody observed.
+func acmeStepForPath(r *http.Request) enrollmentdiag.Step {
+	if r == nil {
+		return ""
+	}
+	switch path := r.URL.Path; {
+	case strings.Contains(path, "/new-account"), strings.Contains(path, "/key-change"):
+		return enrollmentdiag.StepAccount
+	case strings.Contains(path, "/new-order"), strings.Contains(path, "/order"):
+		return enrollmentdiag.StepOrder
+	case strings.Contains(path, "/challenge"):
+		return enrollmentdiag.StepValidation
+	case strings.Contains(path, "/authz"):
+		return enrollmentdiag.StepAuthorize
+	case strings.Contains(path, "/finalize"), strings.Contains(path, "/cert"):
+		return enrollmentdiag.StepIssue
+	case strings.Contains(path, "/revoke"):
+		return enrollmentdiag.StepRevocation
+	default:
+		return ""
+	}
 }
