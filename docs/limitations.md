@@ -264,6 +264,32 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  SECURITY FIX (provider plane, 2026-08-05): the provider plane authenticated NOBODY.
+  `operatorFromRequest` parsed `Authorization: Bearer provider:<id>:<email>` for SHAPE
+  and returned an operator with `Role: OperatorAdmin` and `MFA: true` — no verification
+  of any kind, and multi-factor asserted on the caller's behalf. `/provider/` is mounted
+  on the root mux behind only a bulkhead whenever the provider plane is licensed, so on
+  any provider-tier binary tenant create, suspend, offboard and break-glass were
+  reachable by anyone who knew the token format. The format was in the source.
+  Break-glass was worse: `consentBreakGlass` did not authenticate at all and took the
+  consenting subject from the REQUEST BODY, so the operator who requested emergency
+  access named whatever approver they liked and consented to their own grant with a
+  second call. Two-person control defeated by a JSON string.
+  Fixed by requiring a configured `OperatorAuthenticator`. Every other dependency in the
+  provider Config falls back to a working stand-in; this one deliberately does not,
+  because the safe stand-in for "who is this caller" does not exist and a placeholder is
+  precisely how the original behaviour came to ship. A nil authenticator now refuses
+  every request — an unconfigured provider plane is closed, not open — and the consenting
+  subject is the authenticated caller, with a `subject` in the body REJECTED rather than
+  ignored so an integration cannot keep sending one and believe it has effect.
+  Unauthenticated requests answer 401 rather than 403: "I do not know who you are" is a
+  different statement from "I know, and you may not".
+  Both bypasses are mutation-verified against the real handler. The consent test creates
+  a real tenant and a real grant first — an earlier version used a made-up grant id and
+  the mutation check showed it caught the regression only because a nonexistent grant
+  404s, so its primary assertion never fired. Note that this CLOSES a surface that was
+  open: a provider-tier deployment must now wire an authenticator before `/provider/`
+  serves anything, which is a deliberate breaking change and the right direction.
   Crypto migration sequencing (M2): `GET /api/v1/graph/crypto-readiness` and a Risk
   console panel order every observed crypto asset by WHO DEPENDS ON IT, not by
   severity alone. The CBOM already said which algorithms are weak; it could not say

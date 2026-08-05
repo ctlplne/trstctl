@@ -48,9 +48,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) createTenant(w http.ResponseWriter, r *http.Request) {
-	op, ok := operatorFromRequest(r)
+	op, ok := h.operatorFromRequest(r)
 	if !ok {
-		writeProviderError(w, ErrForbidden)
+		writeProviderError(w, ErrProviderUnauthenticated)
 		return
 	}
 	var req ProvisionRequest
@@ -67,8 +67,8 @@ func (h *handler) createTenant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) listTenants(w http.ResponseWriter, r *http.Request) {
-	if _, ok := operatorFromRequest(r); !ok {
-		writeProviderError(w, ErrForbidden)
+	if _, ok := h.operatorFromRequest(r); !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
 		return
 	}
 	tenants, err := h.svc.ListTenants(r.Context())
@@ -80,9 +80,9 @@ func (h *handler) listTenants(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) updateTenant(w http.ResponseWriter, r *http.Request, status TenantStatus, suffix string) {
-	op, ok := operatorFromRequest(r)
+	op, ok := h.operatorFromRequest(r)
 	if !ok {
-		writeProviderError(w, ErrForbidden)
+		writeProviderError(w, ErrProviderUnauthenticated)
 		return
 	}
 	tenantID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), suffix)
@@ -103,9 +103,9 @@ func (h *handler) updateTenant(w http.ResponseWriter, r *http.Request, status Te
 }
 
 func (h *handler) requestBreakGlass(w http.ResponseWriter, r *http.Request) {
-	op, ok := operatorFromRequest(r)
+	op, ok := h.operatorFromRequest(r)
 	if !ok {
-		writeProviderError(w, ErrForbidden)
+		writeProviderError(w, ErrProviderUnauthenticated)
 		return
 	}
 	var body struct {
@@ -134,7 +134,24 @@ func (h *handler) requestBreakGlass(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, grant)
 }
 
+// consentBreakGlass records one operator's consent to a break-glass grant.
+//
+// The consenting subject is the AUTHENTICATED caller, never a field in the
+// request body. It used to be the body field, and this handler did not
+// authenticate at all — so the operator requesting break-glass supplied
+// whatever approver name they liked and consented to their own grant with a
+// second call. Two-person control defeated by a JSON string.
+//
+// A `subject` in the body is now rejected rather than ignored: silently
+// discarding it would let a caller keep sending one and believe it had effect,
+// and an integration built on that belief looks like it works until the day the
+// second person matters.
 func (h *handler) consentBreakGlass(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
 	grantID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/breakglass/"), "/consent")
 	var body struct {
 		TenantID string `json:"tenant_id"`
@@ -145,11 +162,15 @@ func (h *handler) consentBreakGlass(w http.ResponseWriter, r *http.Request) {
 		writeProviderError(w, err)
 		return
 	}
+	if strings.TrimSpace(body.Subject) != "" {
+		writeProviderError(w, ErrProviderConsentSubjectNotSettable)
+		return
+	}
 	approve := true
 	if body.Approve != nil {
 		approve = *body.Approve
 	}
-	grant, err := h.svc.ConsentBreakGlass(r.Context(), body.TenantID, grantID, body.Subject, approve)
+	grant, err := h.svc.ConsentBreakGlass(r.Context(), body.TenantID, grantID, op.ID, approve)
 	if err != nil {
 		writeProviderError(w, err)
 		return
@@ -158,9 +179,9 @@ func (h *handler) consentBreakGlass(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) breakGlassResults(w http.ResponseWriter, r *http.Request) {
-	op, ok := operatorFromRequest(r)
+	op, ok := h.operatorFromRequest(r)
 	if !ok {
-		writeProviderError(w, ErrForbidden)
+		writeProviderError(w, ErrProviderUnauthenticated)
 		return
 	}
 	grantID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/breakglass/"), "/results")
@@ -172,17 +193,32 @@ func (h *handler) breakGlassResults(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, snapshot)
 }
 
-func operatorFromRequest(r *http.Request) (Operator, bool) {
-	auth := strings.TrimSpace(r.Header.Get("Authorization"))
-	token, ok := strings.CutPrefix(auth, "Bearer provider:")
+// operatorFromRequest authenticates a provider operator, or refuses.
+//
+// It used to accept "Bearer provider:<id>:<email>" and return
+// Operator{Role: OperatorAdmin, MFA: true} — parsing the token for SHAPE and
+// verifying nothing. Any caller who knew the format was a provider
+// administrator with MFA asserted, and /provider/ is mounted on the root mux
+// behind only a bulkhead whenever the provider plane is licensed. Tenant
+// create, suspend, offboard and break-glass were all reachable that way.
+//
+// Now the credential is verified by a configured authenticator or the request
+// is refused. A nil authenticator refuses everything: an unconfigured provider
+// plane must be closed, not open.
+func (h *handler) operatorFromRequest(r *http.Request) (Operator, bool) {
+	if h == nil || h.svc == nil || h.svc.authenticator == nil {
+		return Operator{}, false
+	}
+	op, ok := h.svc.authenticator.AuthenticateOperator(r)
 	if !ok {
 		return Operator{}, false
 	}
-	parts := strings.SplitN(token, ":", 3)
-	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+	// A verifier that returns an operator with no identity is a broken verifier;
+	// treat it as a refusal rather than trusting an anonymous admin.
+	if strings.TrimSpace(op.ID) == "" {
 		return Operator{}, false
 	}
-	return Operator{ID: parts[0], Email: parts[1], Role: OperatorAdmin, MFA: true}, true
+	return op, true
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -199,6 +235,10 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusForbidden, CodeTenantBandExhausted
 	case errors.Is(err, ErrForbidden), errors.Is(err, ErrBreakGlassNotConsented), errors.Is(err, ErrBreakGlassWrongOperator), errors.Is(err, ErrBreakGlassExpired):
 		status, code = http.StatusForbidden, "forbidden"
+	case errors.Is(err, ErrProviderUnauthenticated):
+		status, code = http.StatusUnauthorized, "unauthenticated"
+	case errors.Is(err, ErrProviderConsentSubjectNotSettable):
+		status, code = http.StatusBadRequest, "consent_subject_not_settable"
 	case errors.Is(err, ErrUnlicensed), errors.Is(err, ErrNotFound):
 		status, code = http.StatusNotFound, "not_found"
 	case errors.Is(err, ErrReadOnly):

@@ -67,11 +67,16 @@ func TestTenantBandExhaustionIsProvisionOnly(t *testing.T) {
 }
 
 func TestProviderHandlerRendersTenantBandProblemCode(t *testing.T) {
+	// An authenticator is now REQUIRED. This test used to pass without one
+	// because any "Bearer provider:<id>:<email>" minted an admin; that was the
+	// defect, so the test has to supply a verified operator like a real
+	// deployment must.
 	handler := NewHandler(Config{
-		License: providerLicense(t, 1),
-		Store:   NewMemStore(),
-		Audit:   &captureAudit{},
-		Clock:   fixedClock(),
+		License:       providerLicense(t, 1),
+		Store:         NewMemStore(),
+		Audit:         &captureAudit{},
+		Clock:         fixedClock(),
+		Authenticator: stubAuth{accept: "Bearer provider:op-1:provider@example.test"},
 	})
 
 	postTenant := func(slug string) (int, map[string]any) {

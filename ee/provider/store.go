@@ -17,8 +17,20 @@ const (
 )
 
 var (
-	ErrTenantBandExhausted       = errors.New("provider: tenant_band_exhausted")
-	ErrForbidden                 = errors.New("provider: forbidden")
+	ErrTenantBandExhausted = errors.New("provider: tenant_band_exhausted")
+	ErrForbidden           = errors.New("provider: forbidden")
+	// ErrProviderUnauthenticated is returned when no configured authenticator
+	// positively identified the caller. A nil authenticator produces it for
+	// every request, which is the intended state of an unconfigured provider
+	// plane: closed, not open.
+	ErrProviderUnauthenticated = errors.New("provider: request is not authenticated")
+	// ErrProviderConsentSubjectNotSettable rejects a break-glass consent that
+	// tries to name its own approver. The consenting subject is the
+	// authenticated caller; accepting the body field is what let a requester
+	// approve their own grant, and silently ignoring it would let an
+	// integration keep sending one and believe it worked.
+	ErrProviderConsentSubjectNotSettable = errors.New(
+		"provider: consent subject is taken from the authenticated operator and must not be supplied")
 	ErrUnlicensed                = errors.New("provider: unlicensed")
 	ErrReadOnly                  = errors.New("provider: read-only license")
 	ErrNotFound                  = errors.New("provider: not found")

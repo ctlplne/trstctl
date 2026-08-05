@@ -270,12 +270,24 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureProviderPlane) {
+		// No Authenticator is wired yet, and the provider plane therefore
+		// REFUSES EVERY REQUEST. That is deliberate and is the fix for a real
+		// defect: this handler used to accept any "Bearer provider:<id>:<email>"
+		// as a provider administrator with MFA asserted, on a surface mounted at
+		// /provider/ behind only a bulkhead. Closed-until-wired is the only safe
+		// state, and shipping a placeholder verifier here is exactly how the
+		// original bypass came to exist.
 		deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
 			License: lic,
 			Audit:   eeprovider.NewEventLogAuditSink(deps.Log),
 		})
 		if log != nil {
-			log.Info("Provider plane attached", slog.String("feature", string(license.FeatureProviderPlane)))
+			// Says what an operator will actually observe. "Attached" alone
+			// would read as working, and the first symptom would be 401s with
+			// no explanation anywhere.
+			log.Warn("Provider plane attached but NO operator authenticator is configured; "+
+				"/provider/ will refuse every request until one is wired",
+				slog.String("feature", string(license.FeatureProviderPlane)))
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureMetering) {

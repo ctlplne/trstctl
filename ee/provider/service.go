@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -29,12 +30,36 @@ const (
 // Config wires the provider service. Core supplies this only through the tagged
 // EE attach seam when the provider-plane feature is licensed.
 type Config struct {
-	License          *license.Manager
-	Store            Store
-	Audit            AuditSink
+	License *license.Manager
+	Store   Store
+	Audit   AuditSink
+	// Authenticator verifies a provider operator credential. NIL MEANS THE
+	// PROVIDER PLANE REFUSES EVERY REQUEST, which is the only safe default.
+	//
+	// It exists because the previous code had no notion of verification at all:
+	// operatorFromRequest parsed "Bearer provider:<id>:<email>" for SHAPE and
+	// returned Operator{Role: OperatorAdmin, MFA: true}. Any string in that form
+	// was a provider administrator. On a provider-tier binary /provider/ is
+	// mounted on the root mux behind nothing but a bulkhead, so tenant create,
+	// suspend, offboard and break-glass were reachable unauthenticated.
+	//
+	// Failing closed rather than shipping a placeholder verifier is deliberate:
+	// a placeholder is how the previous behaviour came to exist, and a provider
+	// plane that returns 503 until somebody wires real authentication is
+	// strictly better than one that authorises everybody in the meantime.
+	Authenticator    OperatorAuthenticator
 	Telemetry        TelemetryReader
 	Clock            func() time.Time
 	MaxBreakGlassTTL time.Duration
+}
+
+// OperatorAuthenticator verifies a provider-operator credential from a request.
+//
+// Implementations MUST verify the credential cryptographically or against a
+// durable store; parsing it is not verification. Returning ok=false must be the
+// answer for anything not positively authenticated.
+type OperatorAuthenticator interface {
+	AuthenticateOperator(r *http.Request) (Operator, bool)
 }
 
 // ProvisionRequest creates a tenant lifecycle record.
@@ -76,6 +101,7 @@ type Service struct {
 	license          *license.Manager
 	store            Store
 	audit            AuditSink
+	authenticator    OperatorAuthenticator
 	telemetry        TelemetryReader
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
@@ -106,7 +132,12 @@ func NewService(cfg Config) *Service {
 	if maxTTL <= 0 {
 		maxTTL = defaultMaxBreakGlassTTL
 	}
-	return &Service{license: lic, store: store, audit: audit, telemetry: telemetry, clock: clock, maxBreakGlassTTL: maxTTL}
+	// cfg.Authenticator is passed through UNCHANGED, with no default. Every
+	// other dependency above falls back to a working stand-in; this one must
+	// not, because the safe stand-in for "who is this caller" does not exist.
+	// Nil here means the handler refuses every request.
+	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
+		telemetry: telemetry, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRequest) (Tenant, error) {
