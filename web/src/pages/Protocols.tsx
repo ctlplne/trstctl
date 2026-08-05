@@ -21,6 +21,7 @@ import {
   type ACMEDNS01ProviderConfig,
   type ACMEUpstreamAuthorizationList,
   type ACMEDNS01ProviderConfigRequest,
+  type EnrollmentDiagnosticList,
   type MDMSCEPPolicy,
   type MDMSCEPPolicyRequest,
   type MDMSCEPStatus,
@@ -176,6 +177,9 @@ export function Protocols() {
   const { t } = useTranslation();
   const [copied, setCopied] = useState<string | null>(null);
   const [protocolStatuses, setProtocolStatuses] = useState<ProtocolRuntimeStatus[]>([]);
+  // I4: recent enrolment refusals, classified. Loaded separately so a
+  // deployment without the surface still renders the rest of the page.
+  const [diagnostics, setDiagnostics] = useState<EnrollmentDiagnosticList | null>(null);
   const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
   const [dnsProviders, setDNSProviders] = useState<ACMEDNS01ProviderCatalogItem[]>([]);
   const [dnsProviderConfigs, setDNSProviderConfigs] = useState<ACMEDNS01ProviderConfig[]>([]);
@@ -289,6 +293,22 @@ export function Protocols() {
     toast({ kind: "success", title: t("parity.dns01ProviderConfigDeleted_9ead6a"), description: config.name });
   }
 
+  useEffect(() => {
+    let active = true;
+    if (typeof api.enrollmentDiagnostics !== "function") return;
+    api
+      .enrollmentDiagnostics()
+      .then((list) => {
+        if (active) setDiagnostics(list);
+      })
+      .catch(() => {
+        if (active) setDiagnostics(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <section aria-labelledby="protocols-heading" className="grid gap-6">
       <PageHeader
@@ -314,6 +334,59 @@ export function Protocols() {
           </>
         }
       />
+
+      {/* I4: what enrolments are failing and what to do about it. Rendered only
+          when something has failed — an empty panel on a healthy estate is
+          noise, and this surface earns attention by appearing. */}
+      {diagnostics && diagnostics.items.length > 0 ? (
+        <section aria-labelledby="enrollment-diagnostics-heading" className="grid gap-3 border-y border-border py-4">
+          <div>
+            <h2 id="enrollment-diagnostics-heading" className="text-title font-semibold">
+              {translateNow("source.enrollment.diagnostics.i4diag0001")}
+            </h2>
+            <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{diagnostics.guidance}</p>
+          </div>
+          <div className="ui-panel overflow-x-auto">
+            <table className="ui-table min-w-[60rem]">
+              <caption className="sr-only">{translateNow("source.enrollment.diagnostics.caption.i4diag0002")}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{translateNow("source.protocol.i4diag0003")}</th>
+                  <th scope="col">{translateNow("source.failing.step.i4diag0004")}</th>
+                  <th scope="col">{translateNow("source.what.happened.i4diag0005")}</th>
+                  <th scope="col">{translateNow("source.what.to.do.i4diag0006")}</th>
+                  <th scope="col">{translateNow("source.seen.i4diag0007")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diagnostics.items.map((row) => (
+                  <tr key={`${row.protocol}:${row.step}:${row.cause}`} className="align-top">
+                    <td className="font-mono text-xs">{row.protocol}</td>
+                    <td className="font-mono text-xs">{row.step}</td>
+                    <td className="max-w-[24rem] text-xs">{row.summary}</td>
+                    {/* An unclassified failure shows what it is rather than an
+                        empty cell: "we could not place this" is a real answer
+                        and a blank looks like a rendering bug. */}
+                    <td className="max-w-[26rem] text-xs">
+                      {row.actionable ? (
+                        row.remediation
+                      ) : (
+                        <span className="text-muted-foreground">{translateNow("source.cause.not.established.i4diag0008")}</span>
+                      )}
+                    </td>
+                    <td className="text-xs text-muted-foreground">
+                      {translateNow("source.times.since.i4diag0009", {
+                        value1: String(row.count),
+                        value2: formatDateTimePolicy(row.observed_at),
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
         <h2 id="protocol-status-heading" className="text-title font-semibold">
@@ -482,9 +555,7 @@ export function Protocols() {
           <h2 id="dns-upstream-error-heading" className="mb-3 text-title font-semibold">
             {t("protocols.dns01.upstreamHeading")}
           </h2>
-          <ErrorState title={t("protocols.dns01.upstreamUnavailableTitle")}>
-            {t("protocols.dns01.upstreamUnavailable")}
-          </ErrorState>
+          <ErrorState title={t("protocols.dns01.upstreamUnavailableTitle")}>{t("protocols.dns01.upstreamUnavailable")}</ErrorState>
         </section>
       )}
       {(upstreamAuthorizations?.items ?? []).length > 0 && (
@@ -1370,16 +1441,10 @@ function DNS01ConfigEditDialog({
             validation cycle — which is not what credentials given for the
             server direction were granted for. */}
         <label className="flex items-start gap-2 text-body font-medium">
-          <Checkbox
-            className="mt-1"
-            checked={allowUpstreamDV}
-            onChange={(event) => setAllowUpstreamDV(event.target.checked)}
-          />
+          <Checkbox className="mt-1" checked={allowUpstreamDV} onChange={(event) => setAllowUpstreamDV(event.target.checked)} />
           <span>
             {t("protocols.dns01.allowUpstreamDV")}
-            <span className="mt-1 block text-caption font-normal text-muted-foreground">
-              {t("protocols.dns01.allowUpstreamDVHelp")}
-            </span>
+            <span className="mt-1 block text-caption font-normal text-muted-foreground">{t("protocols.dns01.allowUpstreamDVHelp")}</span>
           </span>
         </label>
         <label className="grid gap-1 text-body font-medium">

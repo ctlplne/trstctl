@@ -2023,6 +2023,18 @@ func componentSchemas() map[string]*Schema {
 		"hardware_tested":   {Type: "boolean"},
 		"detail":            str(),
 	}, "api_contract", "proven_operations", "known_limits", "hardware_tested", "detail")
+	// I4: recent enrolment refusals, classified.
+	enrollmentDiagnostic := object(map[string]*Schema{
+		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "adcs"}},
+		"step":     str(), "cause": str(), "summary": str(),
+		"remediation": str(), "actionable": {Type: "boolean"},
+		"observed_at": timestamp(), "count": {Type: "integer"},
+	}, "protocol", "step", "cause", "summary", "actionable", "observed_at", "count")
+	enrollmentDiagnosticList := object(map[string]*Schema{
+		"items":         {Type: "array", Items: ref("EnrollmentDiagnostic")},
+		"unknown_count": {Type: "integer"},
+		"guidance":      str(),
+	}, "items", "unknown_count", "guidance")
 	connectorCatalog := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ConnectorCatalogItem")},
 	}, "items")
@@ -4129,6 +4141,8 @@ func componentSchemas() map[string]*Schema {
 		"MDMSCEPTelemetry":                         mdmSCEPTelemetry,
 		"MDMSCEPStatus":                            mdmSCEPStatus,
 		"MDMSCEPChallengeRotated":                  mdmSCEPChallengeRotated,
+		"EnrollmentDiagnostic":                     enrollmentDiagnostic,
+		"EnrollmentDiagnosticList":                 enrollmentDiagnosticList,
 		"ConnectorSupportRow":                      connectorSupportRow,
 		"ConnectorCatalogItem":                     connectorCatalogItem,
 		"ConnectorCatalog":                         connectorCatalog,

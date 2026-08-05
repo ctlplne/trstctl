@@ -1878,6 +1878,23 @@ export interface EndpointVerificationSummary {
   verified_percent: number;
 }
 
+export interface EnrollmentDiagnostic {
+  actionable: boolean;
+  cause: string;
+  count: number;
+  observed_at: string;
+  protocol: "acme" | "est" | "scep" | "adcs";
+  remediation?: string;
+  step: string;
+  summary: string;
+}
+
+export interface EnrollmentDiagnosticList {
+  guidance: string;
+  items: EnrollmentDiagnostic[];
+  unknown_count: number;
+}
+
 export interface EnrollmentToken {
   enroll_path?: string;
   roles: ("host" | "network")[];

@@ -212,6 +212,8 @@ public final class OpenApiSchemas {
       "EndpointVerification",
       "EndpointVerificationList",
       "EndpointVerificationSummary",
+      "EnrollmentDiagnostic",
+      "EnrollmentDiagnosticList",
       "EnrollmentToken",
       "EnrollmentTokenRequest",
       "EnterpriseProfessionalService",

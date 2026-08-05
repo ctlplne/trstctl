@@ -45,11 +45,13 @@ const (
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	store                     *store.Store
-	log                       *events.Log
-	idem                      *orchestrator.Idempotency
-	orch                      *orchestrator.Orchestrator
-	tenantFn                  func(*http.Request) (string, error)
+	store    *store.Store
+	log      *events.Log
+	idem     *orchestrator.Idempotency
+	orch     *orchestrator.Orchestrator
+	tenantFn func(*http.Request) (string, error)
+	// enrollmentDiagnostics holds recent enrolment refusals, classified (I4).
+	enrollmentDiagnostics     *diagnosticRecorder
 	roles                     *authz.Registry
 	principal                 func(*http.Request) (authz.Principal, error)
 	audit                     *audit.Service
@@ -404,6 +406,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		idem:                      idem,
 		orch:                      orch,
 		tenantFn:                  tenantFromHeader,
+		enrollmentDiagnostics:     newDiagnosticRecorder(),
 		roles:                     reg,
 		audit:                     cfg.audit,
 		auditTimestamper:          cfg.auditTimestamper,
@@ -1052,6 +1055,7 @@ func (a *API) routes() []route {
 		// telemetry (subsystem names + counts), never tenant rows.
 		{method: "GET", path: "/api/v1/operations/jobs", opID: "getAgentJobPosture", summary: "Get agent job-ledger queue depth and claim health", handler: a.getAgentJobPosture, resSchema: "AgentJobPosture", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/operations/renewal-slo", opID: "getRenewalSLO", summary: "Renewal success SLO and error-budget burn over the measurement window", handler: a.getRenewalSLO, resSchema: "RenewalSLO", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/enrollment/diagnostics", opID: "listEnrollmentDiagnostics", summary: "List recent enrolment refusals with the failing step, cause and remediation", handler: a.listEnrollmentDiagnostics, resSchema: "EnrollmentDiagnosticList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/operations/bulkheads", opID: "listBulkheadStats", summary: "List bounded worker-pool saturation and rejection counters", handler: a.listBulkheadStats, resSchema: "BulkheadStats", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/notification-channels", opID: "createNotificationChannel", summary: "Create a tenant-authored notification channel using secret references", handler: a.createNotificationChannel, reqSchema: "NotificationChannelRequest", resSchema: "NotificationChannel", successCode: "201", mutation: true, perm: authz.NotificationsWrite},
 		{method: "GET", path: "/api/v1/notification-channels", opID: "listNotificationChannels", summary: "List supported and configured notification channels", handler: a.listNotificationChannels, resSchema: "NotificationChannelList", successCode: "200", perm: authz.NotificationsRead},
@@ -1254,16 +1258,6 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/transit/sign", opID: "signTransit", summary: "Sign a message with a transit signing key", handler: a.signTransit, reqSchema: "TransitSignRequest", resSchema: "TransitSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/verify", opID: "verifyTransit", summary: "Verify a transit signature", handler: a.verifyTransit, reqSchema: "TransitVerifyRequest", resSchema: "TransitVerify", successCode: "200", perm: authz.KeysRead},
 
-		// Code-signing (CLM-06/F50): key-backed and keyless/Sigstore artifact signing
-		// over the served path. Requests carry only a digest and key/identity
-		// references; the authenticated principal is the signer identity. The service
-		// queues transparency-log publication through outbox (AN-6), rather than
-		// calling Rekor/Fulcio inline.
-		// B-4: which identities signed, and did the transparency entry land.
-		{method: "GET", path: "/api/v1/code-signing/identities", opID: "listCodeSigningIdentities", summary: "List signing operations with their transparency-log verification state", handler: a.listCodeSigningIdentities, resSchema: "CodeSigningIdentityList", successCode: "200", perm: authz.CertsRead},
-		{method: "POST", path: "/api/v1/code-signing/sign", opID: "signCodeArtifact", summary: "Sign an artifact digest with a managed code-signing key", handler: a.signCodeArtifact, reqSchema: "CodeSigningRequest", resSchema: "CodeSigningSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},
-		{method: "POST", path: "/api/v1/code-signing/keyless", opID: "signCodeArtifactKeyless", summary: "Sign an artifact digest with a verified Sigstore/Fulcio identity", handler: a.signCodeArtifactKeyless, reqSchema: "CodeSigningKeylessRequest", resSchema: "CodeSigningSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},
-
 		// Managed-key (BYOK/HSM) lifecycle (CRYPTO-005 / EXC-CRYPTO-01). The private
 		// material lives in the KMS/HSM and never enters this process. Generate mints
 		// new material (no prior approval); rotate/revoke/zeroize are destructive and
@@ -1278,6 +1272,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}
 	routes = append(routes, a.acmeDNS01Routes(dns01ProviderConfigPath)...)
+	// Extracted so this file stays inside the served-surface size budget: the
+	// route table is the bulk of api.go, and moving a coherent workflow out is
+	// the split the budget asks for rather than a waiver.
+	routes = append(routes, a.codeSigningRoutes()...)
 	return append(routes, a.licensedRouteRegistry()...)
 }
 

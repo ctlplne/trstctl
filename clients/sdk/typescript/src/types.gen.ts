@@ -1669,6 +1669,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/enrollment/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recent enrolment refusals with the failing step, cause and remediation */
+        get: operations["listEnrollmentDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ephemeral": {
         parameters: {
             query?: never;
@@ -6467,6 +6484,23 @@ export interface components {
             unreachable: number;
             verified: number;
             verified_percent: number;
+        };
+        EnrollmentDiagnostic: {
+            actionable: boolean;
+            cause: string;
+            count: number;
+            /** Format: date-time */
+            observed_at: string;
+            /** @enum {string} */
+            protocol: "acme" | "est" | "scep" | "adcs";
+            remediation?: string;
+            step: string;
+            summary: string;
+        };
+        EnrollmentDiagnosticList: {
+            guidance: string;
+            items: components["schemas"]["EnrollmentDiagnostic"][];
+            unknown_count: number;
         };
         EnrollmentToken: {
             enroll_path?: string;
@@ -14625,6 +14659,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointVerificationList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listEnrollmentDiagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentDiagnosticList"];
                 };
             };
             /** @description client error */

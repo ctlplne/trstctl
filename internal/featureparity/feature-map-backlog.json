@@ -7541,7 +7541,8 @@
         "getConnectorDelivery",
         "listOutboxCircuits",
         "listEndpointVerifications",
-        "listEndpointKeyCustody"
+        "listEndpointKeyCustody",
+        "listEnrollmentDiagnostics"
       ],
       "api_na": "",
       "cli_surface": [
@@ -7559,7 +7560,8 @@
         "connectors deliveries get",
         "connectors outbox-circuits",
         "endpoints verifications",
-        "endpoints key-custody"
+        "endpoints key-custody",
+        "enrollment diagnostics"
       ],
       "cli_na": "",
       "facet_evidence": {

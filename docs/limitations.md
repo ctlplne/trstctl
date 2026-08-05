@@ -280,10 +280,21 @@ never live in the API process. What you can do end to end against the running bi
   typed network errors, never from error wording, so an error that merely mentions a
   connection is not reported as one failing. All three properties are
   mutation-verified.
-  SCOPE: the classifier is wired into the served ACME path. EST, SCEP and AD CS
-  classifiers exist and are tested but are not yet emitted from their served paths —
-  those protocols surface far less structure about why they refused, and wiring them
-  is a separate change rather than a line in this one.
+  Diagnoses are served at `GET /api/v1/enrollment/diagnostics`, available as
+  `trstctl enrollment diagnostics`, and shown on the Protocols console — where an
+  unclassified failure renders "cause could not be established" rather than an empty
+  remediation cell, because a blank reads as a rendering bug and the honest answer is
+  a real one. Identical diagnoses are collapsed with a count: a broken challenge
+  fails on every retry, and a hundred identical rows would bury the second, different
+  failure that explains the first.
+  SCOPE, twice over. First: the classifier is wired into the served ACME path only.
+  EST, SCEP and AD CS classifiers exist and are tested but are not yet emitted from
+  their served paths — those protocols surface far less structure about why they
+  refused, and wiring them is a separate change. Second: diagnoses are held IN MEMORY
+  and are lost on restart. Persisting them would mean a schema, a projection and a
+  retention policy for data whose whole value is being minutes old; an operator
+  debugging an enrolment that failed last week is helped by running it again, not by
+  a row.
   Relay revocation cache (R3): a relay started with `--crl-cache-listen` serves the
   control plane's CRL to relying parties in its segment. Revocation checking is the
   part of PKI that fails quietly — a client that cannot reach a distribution point

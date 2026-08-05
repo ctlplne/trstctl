@@ -255,6 +255,12 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	if s.acmeDNS01 != nil {
 		acmeSrv = acmeSrv.WithDNS01Automation(s.acmeDNS01).WithDomainValidationPolicy(s.acmeDNS01)
 	}
+	// I4: every refusal this server issues becomes a classified diagnosis an
+	// operator can read. Wired here rather than left as a library the served
+	// binary never calls — which is what it was.
+	if s.api != nil {
+		acmeSrv.SetFailureDiagnosis(s.api.RecordEnrollmentDiagnosis)
+	}
 	eabKeys, err := acmeExternalAccountBindingKeys(cfg.ACMEEAB)
 	if err != nil {
 		return nil, err

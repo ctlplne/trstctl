@@ -2676,6 +2676,31 @@ EndpointVerificationSummary = TypedDict(
     total=False,
 )
 
+EnrollmentDiagnostic = TypedDict(
+    'EnrollmentDiagnostic',
+    {
+        'actionable': bool,
+        'cause': str,
+        'count': int,
+        'observed_at': str,
+        'protocol': str,
+        'remediation': str,
+        'step': str,
+        'summary': str,
+    },
+    total=False,
+)
+
+EnrollmentDiagnosticList = TypedDict(
+    'EnrollmentDiagnosticList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'unknown_count': int,
+    },
+    total=False,
+)
+
 EnrollmentToken = TypedDict(
     'EnrollmentToken',
     {

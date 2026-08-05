@@ -7288,6 +7288,73 @@
         ],
         "type": "object"
       },
+      "EnrollmentDiagnostic": {
+        "properties": {
+          "actionable": {
+            "type": "boolean"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "protocol": {
+            "enum": [
+              "acme",
+              "est",
+              "scep",
+              "adcs"
+            ],
+            "type": "string"
+          },
+          "remediation": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "protocol",
+          "step",
+          "cause",
+          "summary",
+          "actionable",
+          "observed_at",
+          "count"
+        ],
+        "type": "object"
+      },
+      "EnrollmentDiagnosticList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EnrollmentDiagnostic"
+            },
+            "type": "array"
+          },
+          "unknown_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "unknown_count",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "EnrollmentToken": {
         "properties": {
           "enroll_path": {
@@ -27013,6 +27080,53 @@
           }
         ],
         "summary": "List observed endpoint identity: what each listener is actually serving, per vantage",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/enrollment/diagnostics": {
+      "get": {
+        "operationId": "listEnrollmentDiagnostics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentDiagnosticList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List recent enrolment refusals with the failing step, cause and remediation",
         "x-trstctl-permission": "certs:read"
       }
     },

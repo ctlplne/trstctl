@@ -5608,6 +5608,42 @@ export const messages = {
     defaultMessage: "No physical device has been tested",
     description: "E3: this family is exercised against an API double only, never real hardware.",
   },
+  "source.enrollment.diagnostics.i4diag0001": {
+    defaultMessage: "Enrolment failures",
+    description: "I4: section heading \u2014 recent refused enrolments and what to do about them.",
+  },
+  "source.enrollment.diagnostics.caption.i4diag0002": {
+    defaultMessage: "Recent enrolment refusals with their cause and remediation",
+    description: "I4: screen-reader caption for the diagnostics table.",
+  },
+  "source.protocol.i4diag0003": {
+    defaultMessage: "Protocol",
+    description: "I4: column heading \u2014 which enrolment protocol refused.",
+  },
+  "source.failing.step.i4diag0004": {
+    defaultMessage: "Failing step",
+    description: "I4: column heading \u2014 where in the flow it failed.",
+  },
+  "source.what.happened.i4diag0005": {
+    defaultMessage: "What happened",
+    description: "I4: column heading \u2014 the plain-language summary.",
+  },
+  "source.what.to.do.i4diag0006": {
+    defaultMessage: "What to do",
+    description: "I4: column heading \u2014 the remediation.",
+  },
+  "source.seen.i4diag0007": {
+    defaultMessage: "Seen",
+    description: "I4: column heading \u2014 how often and how recently.",
+  },
+  "source.cause.not.established.i4diag0008": {
+    defaultMessage: "Cause could not be established from what the protocol reported",
+    description: "I4: shown instead of a remediation when the classifier declined to guess.",
+  },
+  "source.times.since.i4diag0009": {
+    defaultMessage: "{value1}\u00d7, last at {value2}",
+    description: "I4: how many times this diagnosis was seen and when it was last seen.",
+  },
   "source.device.proof.e1dev00001": {
     defaultMessage: "Device proof",
     description: "E1: column heading \u2014 whether this connector's deploy is exercised against a double of its device API.",
