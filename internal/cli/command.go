@@ -114,6 +114,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"endpoints", "verifications"}, Method: "GET", Path: "/api/v1/endpoints/verifications", Summary: "List observed endpoint identity: what each listener is actually serving, per vantage"},
 	{Name: []string{"endpoints", "key-custody"}, Method: "GET", Path: "/api/v1/endpoints/key-custody", Summary: "List where each deployment target's private key is generated: host agent or control plane"},
 	{Name: []string{"enrollment", "diagnostics"}, Method: "GET", Path: "/api/v1/enrollment/diagnostics", Summary: "List recent enrolment refusals with the failing step, cause and remediation"},
+	{Name: []string{"platform", "dr-posture"}, Method: "GET", Path: "/api/v1/platform/dr-posture", Summary: "Report when this deployment's backup was last verified by re-hashing its artifacts"},
 	{Name: []string{"acme", "dns-01", "upstream-authorizations"}, Method: "GET", Path: "/api/v1/acme/dns-01/upstream-authorizations", Summary: "List upstream authorization freshness: when each identifier last actually validated vs last rode a reuse"},
 	{Name: []string{"acme", "dns-01", "preflight"}, Method: "POST", Path: "/api/v1/acme/dns-01/preflight", Body: bodyFile, Summary: "Run DNS-01 propagation, CNAME, CAA, method, and wildcard policy preflight"},
 	{Name: []string{"acme", "ari", "posture"}, Method: "GET", Path: "/api/v1/acme/ari/posture", Query: []string{"limit", "cursor"}, Summary: "Show ARI publication and lifecycle scheduler-consumption posture"},

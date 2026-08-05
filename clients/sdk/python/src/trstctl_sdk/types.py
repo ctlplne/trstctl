@@ -2067,6 +2067,46 @@ CredentialRiskList = TypedDict(
     total=False,
 )
 
+DRArtifactFailure = TypedDict(
+    'DRArtifactFailure',
+    {
+        'detail': str,
+        'name': str,
+        'required': bool,
+    },
+    total=False,
+)
+
+DRDrill = TypedDict(
+    'DRDrill',
+    {
+        'detail': str,
+        'events_restored': int,
+        'limitations': list[str],
+        'outcome': str,
+        'ran_at': str,
+        'rpo_seconds': int,
+        'rto_seconds': int,
+    },
+    total=False,
+)
+
+DRPosture = TypedDict(
+    'DRPosture',
+    {
+        'artifacts_checked': int,
+        'artifacts_unverifiable': int,
+        'backup_configured': bool,
+        'detail': str,
+        'failures': list[dict[str, Any]],
+        'guidance': str,
+        'last_backup_at': str,
+        'last_verified_at': str,
+        'verified': bool,
+    },
+    total=False,
+)
+
 DeploymentTarget = TypedDict(
     'DeploymentTarget',
     {

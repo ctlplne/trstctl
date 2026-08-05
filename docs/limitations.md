@@ -264,6 +264,46 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Served DR posture (J2): `GET /api/v1/platform/dr-posture` and
+  `trstctl platform dr-posture` report when this deployment's backup was last
+  VERIFIED — meaning its artifacts were re-hashed and matched — rather than when one
+  was last taken. The distinction is the point: a nightly job that writes a corrupt
+  file runs perfectly, and reading a manifest's recorded checksums back only proves
+  the manifest agrees with itself, since one process wrote both in one pass. The
+  failures this catches are silent — bit rot, a truncated copy, an artifact restored
+  from the wrong directory — none of which change the manifest, and all of which are
+  otherwise discovered during the restore that was supposed to save you.
+  Three states are kept apart because only two are actionable: no backup directory
+  configured (not a fault — many deployments back up through infrastructure this
+  product does not see), a configured directory that cannot be read (a real finding,
+  and the state that goes unnoticed until a restore), and one read that did not
+  verify. A green verdict reports how many artifacts it covers and how many carried
+  no recorded checksum at all, because "verified" over two of eleven artifacts is not
+  the same claim as over all eleven. An artifact with no checksum is reported
+  unverifiable rather than verified, and an EMPTY backup is never verified — green on
+  an empty set is the most misleading answer available.
+  Restore drills (J2): a drill restores the backup into an EPHEMERAL PostgreSQL
+  database created for the run and dropped afterwards, through the same restore path
+  production recovery uses — a drill with its own simplified restore would prove the
+  simplified one works, which is the one nobody runs at 3am. The target must be real
+  and separate: a double cannot have the failures worth catching (a migration the
+  artifacts predate, a column the restore expects, a constraint the replayed events
+  violate), and a drill that restored into the live database would be a recovery
+  exercise that caused an outage.
+  The attestation records FAILURES as readily as successes, because without one "no
+  attestation" is ambiguous between "nobody ran a drill" and "the drill failed". A
+  restore that completes having replayed ZERO events is recorded as a failed drill,
+  not a fast one — it proved nothing and is the result most likely to be mistaken for
+  reassurance. A backup that does not verify is not restored at all, so the cause
+  reads as a sentence rather than being buried in a restore error.
+  RPO is measured from the backup's own manifest, so it is what was achievable with
+  the artifacts on disk rather than what was configured — the two diverge precisely
+  when a backup job has been quietly failing. RTO is a FLOOR and the attestation says
+  so in its own signed bytes: real recovery also includes provisioning, networking
+  and people, and that caveat is signed alongside the number so it cannot be edited
+  off a document whose signature still verifies. A deployment that has never drilled
+  serves no drill rather than a zero-valued one, since zeros render as an instant,
+  complete recovery.
   Enrolment diagnostics (I4): a refused ACME enrolment now produces a diagnosis
   naming the protocol, the step that failed, a cause from a CLOSED set, and a
   remediation. The hook sits at the single point every ACME refusal passes through,

@@ -1445,6 +1445,34 @@ export interface CredentialRiskList {
   credentials: CredentialRisk[];
 }
 
+export interface DRArtifactFailure {
+  detail: string;
+  name: string;
+  required: boolean;
+}
+
+export interface DRDrill {
+  detail: string;
+  events_restored: number;
+  limitations: string[];
+  outcome: "restored" | "failed" | "skipped";
+  ran_at: string;
+  rpo_seconds: number;
+  rto_seconds: number;
+}
+
+export interface DRPosture {
+  artifacts_checked: number;
+  artifacts_unverifiable: number;
+  backup_configured: boolean;
+  detail: string;
+  failures?: DRArtifactFailure[];
+  guidance: string;
+  last_backup_at?: string;
+  last_verified_at?: string;
+  verified: boolean;
+}
+
 export interface DeploymentTarget {
   config: Record<string, unknown>;
   connector: string;

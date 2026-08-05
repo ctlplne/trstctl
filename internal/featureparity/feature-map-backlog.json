@@ -7542,7 +7542,8 @@
         "listOutboxCircuits",
         "listEndpointVerifications",
         "listEndpointKeyCustody",
-        "listEnrollmentDiagnostics"
+        "listEnrollmentDiagnostics",
+        "getDRPosture"
       ],
       "api_na": "",
       "cli_surface": [
@@ -7561,7 +7562,8 @@
         "connectors outbox-circuits",
         "endpoints verifications",
         "endpoints key-custody",
-        "enrollment diagnostics"
+        "enrollment diagnostics",
+        "platform dr-posture"
       ],
       "cli_na": "",
       "facet_evidence": {

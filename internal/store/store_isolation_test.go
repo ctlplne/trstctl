@@ -215,6 +215,18 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// counts, one timestamp, and one refusal reason from this server's own
 		// closed set; no tenant, agent, job, statement or signature.
 		"internal/store/agent_job_receipts.go": 2,
+		// J2: CREATE DATABASE and DROP DATABASE for the restore drill's
+		// throwaway target. Neither statement has a tenant scope to be given —
+		// they are server-level DDL, and PostgreSQL will not run either inside a
+		// transaction or against a pool bound to a row-level policy.
+		//
+		// Nothing tenant-owned crosses here. The name is generated
+		// (trstctl_restore_drill_<nano>), the database exists only for the
+		// length of the drill, and it is dropped WITH (FORCE) on every path
+		// including the failure ones. The restore that populates it runs through
+		// the ordinary tenant-scoped path against that database, so the drill
+		// proves the production restore rather than a privileged shortcut.
+		"internal/server/drill.go": 2,
 	}
 	found := map[string]int{}
 

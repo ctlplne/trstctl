@@ -105,6 +105,11 @@ type IdempotencyResultMigrator interface {
 }
 
 type Deps struct {
+	// BackupDirectory is the full-backup directory the served DR posture
+	// reports on (epic J2). Empty means none is configured, which the API
+	// serves as such rather than reporting an invented path as a missing
+	// backup.
+	BackupDirectory   string
 	Store             *store.Store
 	Log               *events.Log
 	Signer            SignerProvider            // may be nil → issuance is unavailable (fail closed)
@@ -1125,6 +1130,10 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 // Named stage of configureAPI (startup-hotspot ratchet).
 func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 	return []api.Option{
+		// J2: the DR posture surface reports on this directory. An empty value
+		// is meaningful — the API then serves "not configured" rather than
+		// reporting a path nobody chose as a missing backup.
+		api.WithBackupDirectory(d.BackupDirectory),
 		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
 		api.WithSSHWorkflow(s),

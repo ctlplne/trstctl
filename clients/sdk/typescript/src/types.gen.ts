@@ -2943,6 +2943,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/dr-posture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report when this deployment's backup was last verified by re-hashing its artifacts */
+        get: operations["getDRPosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/system": {
         parameters: {
             query?: never;
@@ -6024,6 +6041,35 @@ export interface components {
         };
         CredentialRiskList: {
             credentials: components["schemas"]["CredentialRisk"][];
+        };
+        DRArtifactFailure: {
+            detail: string;
+            name: string;
+            required: boolean;
+        };
+        DRDrill: {
+            detail: string;
+            events_restored: number;
+            limitations: string[];
+            /** @enum {string} */
+            outcome: "restored" | "failed" | "skipped";
+            /** Format: date-time */
+            ran_at: string;
+            rpo_seconds: number;
+            rto_seconds: number;
+        };
+        DRPosture: {
+            artifacts_checked: number;
+            artifacts_unverifiable: number;
+            backup_configured: boolean;
+            detail: string;
+            failures?: components["schemas"]["DRArtifactFailure"][];
+            guidance: string;
+            /** Format: date-time */
+            last_backup_at?: string;
+            /** Format: date-time */
+            last_verified_at?: string;
+            verified: boolean;
         };
         DeploymentTarget: {
             config: Record<string, never>;
@@ -18464,6 +18510,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformDistributionStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDRPosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DRPosture"];
                 };
             };
             /** @description client error */

@@ -480,7 +480,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		return Deps{}, err
 	}
 	return Deps{
-		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
+		// J2: empty when the operator configured no backup directory, which the
+		// DR surface reports as "not configured" rather than as a failure.
+		BackupDirectory: cfg.Backup.Directory,
+		Store:           st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:         cfg.Signer.KeyStoreDir,
 		EgressGuard:               egressGuard,
 		ServiceNowBindings:        serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),

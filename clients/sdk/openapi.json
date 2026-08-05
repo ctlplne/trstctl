@@ -5569,6 +5569,114 @@
         ],
         "type": "object"
       },
+      "DRArtifactFailure": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "required",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "DRDrill": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "events_restored": {
+            "type": "integer"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "restored",
+              "failed",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "ran_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rpo_seconds": {
+            "type": "integer"
+          },
+          "rto_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "outcome",
+          "ran_at",
+          "rpo_seconds",
+          "rto_seconds",
+          "events_restored",
+          "detail",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "DRPosture": {
+        "properties": {
+          "artifacts_checked": {
+            "type": "integer"
+          },
+          "artifacts_unverifiable": {
+            "type": "integer"
+          },
+          "backup_configured": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/DRArtifactFailure"
+            },
+            "type": "array"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "last_backup_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_verified_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "backup_configured",
+          "verified",
+          "artifacts_checked",
+          "artifacts_unverifiable",
+          "detail",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "DeploymentTarget": {
         "properties": {
           "config": {
@@ -32568,6 +32676,53 @@
           }
         ],
         "summary": "Self-hostable run-anywhere distribution posture",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/platform/dr-posture": {
+      "get": {
+        "operationId": "getDRPosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DRPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report when this deployment's backup was last verified by re-hashing its artifacts",
         "x-trstctl-permission": "access:read"
       }
     },

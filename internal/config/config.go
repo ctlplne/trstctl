@@ -1268,6 +1268,12 @@ func (r PrivacyRetention) IntervalDuration() (time.Duration, error) {
 type Backup struct {
 	EncryptionKeyFile string `json:"encryption_key_file,omitempty"`
 	AllowUnencrypted  bool   `json:"allow_unencrypted,omitempty"`
+	// Directory is the full-backup directory the served DR posture reports on
+	// (epic J2). Empty means the control plane reports "not configured" rather
+	// than guessing a path — a guessed default would report a directory that
+	// was never meant to exist as a missing backup, which is a false alarm on
+	// every deployment that backs up some other way.
+	Directory string `json:"directory,omitempty"`
 }
 
 // RateLimit configures the PostgreSQL-backed per-tenant rate limiter (R2.3 /

@@ -2023,6 +2023,27 @@ func componentSchemas() map[string]*Schema {
 		"hardware_tested":   {Type: "boolean"},
 		"detail":            str(),
 	}, "api_contract", "proven_operations", "known_limits", "hardware_tested", "detail")
+	// J2: whether this deployment's backup was last VERIFIED, not merely taken.
+	drArtifactFailure := object(map[string]*Schema{
+		"name": str(), "required": {Type: "boolean"}, "detail": str(),
+	}, "name", "required", "detail")
+	drDrill := object(map[string]*Schema{
+		"outcome":     {Type: "string", Enum: []string{"restored", "failed", "skipped"}},
+		"ran_at":      timestamp(),
+		"rpo_seconds": {Type: "integer"}, "rto_seconds": {Type: "integer"},
+		"events_restored": {Type: "integer"}, "detail": str(),
+		"limitations": {Type: "array", Items: str()},
+	}, "outcome", "ran_at", "rpo_seconds", "rto_seconds", "events_restored", "detail", "limitations")
+	drPosture := object(map[string]*Schema{
+		"backup_configured":      {Type: "boolean"},
+		"last_backup_at":         timestamp(),
+		"last_verified_at":       timestamp(),
+		"verified":               {Type: "boolean"},
+		"artifacts_checked":      {Type: "integer"},
+		"artifacts_unverifiable": {Type: "integer"},
+		"failures":               {Type: "array", Items: ref("DRArtifactFailure")},
+		"detail":                 str(), "guidance": str(),
+	}, "backup_configured", "verified", "artifacts_checked", "artifacts_unverifiable", "detail", "guidance")
 	// I4: recent enrolment refusals, classified.
 	enrollmentDiagnostic := object(map[string]*Schema{
 		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "adcs"}},
@@ -4141,6 +4162,9 @@ func componentSchemas() map[string]*Schema {
 		"MDMSCEPTelemetry":                         mdmSCEPTelemetry,
 		"MDMSCEPStatus":                            mdmSCEPStatus,
 		"MDMSCEPChallengeRotated":                  mdmSCEPChallengeRotated,
+		"DRArtifactFailure":                        drArtifactFailure,
+		"DRDrill":                                  drDrill,
+		"DRPosture":                                drPosture,
 		"EnrollmentDiagnostic":                     enrollmentDiagnostic,
 		"EnrollmentDiagnosticList":                 enrollmentDiagnosticList,
 		"ConnectorSupportRow":                      connectorSupportRow,

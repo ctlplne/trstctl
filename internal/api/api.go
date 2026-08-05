@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/connector"
@@ -51,7 +52,16 @@ type API struct {
 	orch     *orchestrator.Orchestrator
 	tenantFn func(*http.Request) (string, error)
 	// enrollmentDiagnostics holds recent enrolment refusals, classified (I4).
-	enrollmentDiagnostics     *diagnosticRecorder
+	enrollmentDiagnostics *diagnosticRecorder
+	// drVerify re-hashes the configured backup directory (J2). Nil means no
+	// backup directory is configured, which the surface reports as such rather
+	// than as a failure — plenty of deployments back up through infrastructure
+	// this product does not see.
+	drVerify drVerifier
+	// lastDrill returns the most recent restore drill, or nil if none has run
+	// (J2). Nil-returning rather than a zero value: "no drill has run" and "a
+	// drill ran and failed" must not render the same way.
+	lastDrill                 func() *backup.DrillAttestation
 	roles                     *authz.Registry
 	principal                 func(*http.Request) (authz.Principal, error)
 	audit                     *audit.Service
@@ -136,6 +146,11 @@ type API struct {
 type Option func(*config)
 
 type config struct {
+	// backupDir is the full-backup directory this API reports DR posture on
+	// (J2). Empty means none is configured.
+	backupDir string
+	// lastDrill supplies the most recent restore drill (J2).
+	lastDrill   func() *backup.DrillAttestation
 	customRoles []authz.Role
 	eventLog    *events.Log
 	principalFn func(*http.Request) (authz.Principal, error)
@@ -407,6 +422,8 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		orch:                      orch,
 		tenantFn:                  tenantFromHeader,
 		enrollmentDiagnostics:     newDiagnosticRecorder(),
+		drVerify:                  backupVerifierFor(cfg.backupDir),
+		lastDrill:                 cfg.lastDrill,
 		roles:                     reg,
 		audit:                     cfg.audit,
 		auditTimestamper:          cfg.auditTimestamper,
@@ -1055,6 +1072,7 @@ func (a *API) routes() []route {
 		// telemetry (subsystem names + counts), never tenant rows.
 		{method: "GET", path: "/api/v1/operations/jobs", opID: "getAgentJobPosture", summary: "Get agent job-ledger queue depth and claim health", handler: a.getAgentJobPosture, resSchema: "AgentJobPosture", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/operations/renewal-slo", opID: "getRenewalSLO", summary: "Renewal success SLO and error-budget burn over the measurement window", handler: a.getRenewalSLO, resSchema: "RenewalSLO", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/platform/dr-posture", opID: "getDRPosture", summary: "Report when this deployment's backup was last verified by re-hashing its artifacts", handler: a.listDRPosture, resSchema: "DRPosture", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/enrollment/diagnostics", opID: "listEnrollmentDiagnostics", summary: "List recent enrolment refusals with the failing step, cause and remediation", handler: a.listEnrollmentDiagnostics, resSchema: "EnrollmentDiagnosticList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/operations/bulkheads", opID: "listBulkheadStats", summary: "List bounded worker-pool saturation and rejection counters", handler: a.listBulkheadStats, resSchema: "BulkheadStats", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/notification-channels", opID: "createNotificationChannel", summary: "Create a tenant-authored notification channel using secret references", handler: a.createNotificationChannel, reqSchema: "NotificationChannelRequest", resSchema: "NotificationChannel", successCode: "201", mutation: true, perm: authz.NotificationsWrite},
