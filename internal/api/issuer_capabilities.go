@@ -50,6 +50,15 @@ type IssuerCapability struct {
 	// is operational: "there is no challenge to solve" (an internal CA) and "a
 	// human completes DCV in the vendor console" are opposite situations.
 	UnattendedDVNote string `json:"unattended_dv_note,omitempty"`
+	// IssueProven reports whether an end-to-end issuance against this authority
+	// is exercised in CI (epic K3). Separate from Issue on purpose: "we
+	// implement this API" and "we have run an issuance against it" are
+	// different claims, and a surface showing only the first says the stronger
+	// one everywhere.
+	IssueProven bool `json:"issue_proven"`
+	// Evidence names the test that backs this row, so a reader can go and run
+	// it rather than take the row's word for it.
+	Evidence string `json:"evidence,omitempty"`
 }
 
 // IssuerCapabilityMatrix is the served response.
@@ -92,6 +101,7 @@ func (a *API) listIssuerCapabilities(w http.ResponseWriter, r *http.Request) {
 			KeyHandling: string(row.KeyHandling), Validation: string(row.Validation),
 			RevokeNote:   row.RevokeNote,
 			UnattendedDV: row.UnattendedDV, UnattendedDVNote: row.UnattendedDVNote,
+			IssueProven: row.IssueProven, Evidence: row.Evidence,
 		})
 		if row.Revoke {
 			out.RevokeCapableCount++

@@ -6896,7 +6896,9 @@ export interface components {
         };
         IssuerCapability: {
             discover: boolean;
+            evidence?: string;
             issue: boolean;
+            issue_proven?: boolean;
             issuer: string;
             /** @enum {string} */
             key_handling: "requester_csr" | "authority_generated";

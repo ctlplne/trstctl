@@ -1524,6 +1524,8 @@ func componentSchemas() map[string]*Schema {
 		// B7: can trstctl keep this authority validated with nobody in the loop.
 		"unattended_dv":      {Type: "boolean"},
 		"unattended_dv_note": str(),
+		"issue_proven":       {Type: "boolean"},
+		"evidence":           str(),
 	}, "issuer", "discover", "issue", "renew", "revoke", "key_handling", "validation", "unattended_dv")
 	issuerCapabilityMatrix := object(map[string]*Schema{
 		"issuers":                     {Type: "array", Items: ref("IssuerCapability")},

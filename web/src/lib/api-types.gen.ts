@@ -2301,7 +2301,9 @@ export interface Issuer {
 
 export interface IssuerCapability {
   discover: boolean;
+  evidence?: string;
   issue: boolean;
+  issue_proven?: boolean;
   issuer: string;
   key_handling: "requester_csr" | "authority_generated";
   renew: boolean;

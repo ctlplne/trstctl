@@ -8917,7 +8917,13 @@
           "discover": {
             "type": "boolean"
           },
+          "evidence": {
+            "type": "string"
+          },
           "issue": {
+            "type": "boolean"
+          },
+          "issue_proven": {
             "type": "boolean"
           },
           "issuer": {

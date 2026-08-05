@@ -3285,7 +3285,9 @@ IssuerCapability = TypedDict(
     'IssuerCapability',
     {
         'discover': bool,
+        'evidence': str,
         'issue': bool,
+        'issue_proven': bool,
         'issuer': str,
         'key_handling': str,
         'renew': bool,

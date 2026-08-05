@@ -21,11 +21,16 @@ import (
 
 func TestThePublishedMatrixMatchesTheCensus(t *testing.T) {
 	t.Parallel()
-	committed, err := os.ReadFile(filepath.Join("..", "..", outputPath))
-	if err != nil {
-		t.Fatalf("read the committed support matrix: %v", err)
+	for path, want := range map[string][]byte{outputPath: render(), issuerOutputPath: renderIssuers()} {
+		committed, err := os.ReadFile(filepath.Join("..", "..", path)) // #nosec G304 -- fixed in-tree doc paths (CWE-22)
+		if err != nil {
+			t.Fatalf("read the committed matrix %s: %v", path, err)
+		}
+		if !bytes.Equal(bytes.TrimSpace(committed), bytes.TrimSpace(want)) {
+			t.Errorf("%s no longer matches its census; run the generator and commit the result", path)
+		}
 	}
-	if !bytes.Equal(bytes.TrimSpace(committed), bytes.TrimSpace(render())) {
+	if false {
 		t.Fatal("docs/features/connector-support-matrix.md no longer matches the connector " +
 			"census. Run `go run ./tools/connectorsupportdoc` and commit the result. If the page " +
 			"changed because a capability was removed, that is the point: the published matrix " +

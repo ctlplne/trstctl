@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1049 annotated sites across 25 rules. Each row is
+1051 annotated sites across 25 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -736,7 +736,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:162` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:277` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (278 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (280 sites)
 
 | Location | Reason |
 |---|---|
@@ -959,6 +959,8 @@ not this file.
 | `scripts/perf/cmd/soakgate/main_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `scripts/perf/cmd/soakgate/main_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/cbomcoveragedoc/main.go:66` | operator/CI-supplied path to this repo's own generated page (CWE-22) |
+| `tools/connectorsupportdoc/main.go:45` | fixed in-tree doc paths (CWE-22) |
+| `tools/connectorsupportdoc/main_test.go:25` | fixed in-tree doc paths (CWE-22) |
 | `tools/dodcensus/artifact.go:85` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/artifact.go:167` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/claims.go:61` | developer tool reading the repo paths it is pointed at (CWE-22) |
