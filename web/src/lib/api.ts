@@ -15,6 +15,7 @@ import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import type {
   CryptoReadiness,
   CMDBReconcileSchedule,
+  IssuanceRequestList,
   OwnershipConflictList,
   DRPosture,
   SecretRotationScheduleRun,
@@ -411,6 +412,7 @@ export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileSchedule } from "./api-types.gen";
+export type { IssuanceRequestList, IssuanceRequest } from "./api-types.gen";
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -1276,6 +1278,8 @@ export interface Api {
   ownershipConflicts(): Promise<OwnershipConflictList>;
   /** I2: whether ownership is actually being re-read from the CMDB, and why the last read failed. */
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
+  /** I3: the request queue, including the denied and expired rows an audit needs. */
+  issuanceRequests(): Promise<IssuanceRequestList>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
@@ -1597,6 +1601,7 @@ const liveApi: Api = {
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
+  issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),

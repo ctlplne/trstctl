@@ -9173,6 +9173,18 @@
         ],
         "type": "object"
       },
+      "IssuanceDecisionInput": {
+        "properties": {
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "IssuanceRegion": {
         "properties": {
           "datastore": {
@@ -9209,6 +9221,124 @@
           "event_stream",
           "signer",
           "health_signal"
+        ],
+        "type": "object"
+      },
+      "IssuanceRequest": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "decided_at": {
+            "type": "string"
+          },
+          "decided_by": {
+            "type": "string"
+          },
+          "decision_reason": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "justification": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "requested",
+              "approved",
+              "denied",
+              "expired",
+              "cancelled",
+              "issued"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ticket_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "subject",
+          "requester",
+          "status",
+          "expires_at",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "IssuanceRequestInput": {
+        "properties": {
+          "csr_pem": {
+            "type": "string"
+          },
+          "justification": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ticket_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject"
+        ],
+        "type": "object"
+      },
+      "IssuanceRequestList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IssuanceRequest"
+            },
+            "type": "array"
+          },
+          "open": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "open",
+          "guidance"
         ],
         "type": "object"
       },
@@ -29403,6 +29533,330 @@
         ],
         "summary": "Dispatch an incident response packet to SIEM, SOAR, chat, and ITSM integrations",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/issuance-requests": {
+      "get": {
+        "operationId": "listIssuanceRequests",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequestList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List issuance requests, including the denied and expired ones an audit needs",
+        "x-trstctl-permission": "certs:read"
+      },
+      "post": {
+        "operationId": "openIssuanceRequest",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssuanceRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Open a first-class issuance request with a real lifecycle",
+        "x-trstctl-permission": "certs:request"
+      }
+    },
+    "/api/v1/issuance-requests/{id}/approve": {
+      "post": {
+        "operationId": "approveIssuanceRequest",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Approve a request; the requester can never approve their own",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/issuance-requests/{id}/cancel": {
+      "post": {
+        "operationId": "cancelIssuanceRequest",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Withdraw your own request; only the requester may",
+        "x-trstctl-permission": "certs:request"
+      }
+    },
+    "/api/v1/issuance-requests/{id}/deny": {
+      "post": {
+        "operationId": "denyIssuanceRequest",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssuanceDecisionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Deny a request with a reason the requester can act on",
+        "x-trstctl-permission": "certs:issue"
       }
     },
     "/api/v1/issuers": {

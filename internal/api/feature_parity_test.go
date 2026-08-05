@@ -109,8 +109,12 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// raised it to 319, all mapped onto the owners feature row: they are that
 	// row's data-quality half — where an ownership claim came from, and where two
 	// sources disagree. There is deliberately no CMDB *write* operation.
-	if len(out) != 319 {
-		t.Fatalf("OpenAPI operationIds = %d, want 319", len(out))
+	// I3's five issuance-request lifecycle operations raised it to 324. They map
+	// onto the certificates feature row: a request IS the front half of
+	// issuance, and giving it its own row would let the request queue look
+	// covered while issuance itself regressed.
+	if len(out) != 324 {
+		t.Fatalf("OpenAPI operationIds = %d, want 324", len(out))
 	}
 	return out
 }

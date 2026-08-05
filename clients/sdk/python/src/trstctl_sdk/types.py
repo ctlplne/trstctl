@@ -3382,6 +3382,15 @@ IncidentExecutionRequest = TypedDict(
     total=False,
 )
 
+IssuanceDecisionInput = TypedDict(
+    'IssuanceDecisionInput',
+    {
+        'identity_id': str,
+        'reason': str,
+    },
+    total=False,
+)
+
 IssuanceRegion = TypedDict(
     'IssuanceRegion',
     {
@@ -3393,6 +3402,51 @@ IssuanceRegion = TypedDict(
         'role': str,
         'signer': str,
         'writable_scope': str,
+    },
+    total=False,
+)
+
+IssuanceRequest = TypedDict(
+    'IssuanceRequest',
+    {
+        'created_at': str,
+        'decided_at': str,
+        'decided_by': str,
+        'decision_reason': str,
+        'expires_at': str,
+        'id': str,
+        'identity_id': str,
+        'justification': str,
+        'origin': str,
+        'profile': str,
+        'requester': str,
+        'status': str,
+        'subject': str,
+        'tenant_id': str,
+        'ticket_ref': str,
+    },
+    total=False,
+)
+
+IssuanceRequestInput = TypedDict(
+    'IssuanceRequestInput',
+    {
+        'csr_pem': str,
+        'justification': str,
+        'origin': str,
+        'profile': str,
+        'subject': str,
+        'ticket_ref': str,
+    },
+    total=False,
+)
+
+IssuanceRequestList = TypedDict(
+    'IssuanceRequestList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'open': int,
     },
     total=False,
 )

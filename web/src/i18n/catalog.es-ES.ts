@@ -3277,6 +3277,10 @@ const esESCatalog = {
   "source.owner.kind.eb9923cec7": "Tipo de propietario",
   "source.owner.name.id.email.or.kind.d0081dd7f1": "Nombre, ID, correo electrónico o tipo del propietario",
   "source.owner.status.74d91b61ae": "Estado del propietario",
+  "source.issuance.requests.heading.i3req00001": "Solicitudes de emisi\u00f3n",
+  "source.issuance.requests.counts.i3req00002": "{value1} esperando una decisi\u00f3n, de {value2} en total.",
+  "source.issuance.requests.decidedby.i3req00004": "{value1}, decidido por {value2}",
+  "source.issuance.requests.expired.i3req00003": "caducada: nadie decidi\u00f3",
   "source.ownership.conflicts.i2own00001": "Discrepancias de propiedad",
   "source.ownership.conflicts.blurb.i2own00002":
     "Una importaci\u00f3n encontr\u00f3 {value1} campo(s) en los que una fuente externa contradice lo registrado aqu\u00ed. La propiedad confirmada nunca se sobrescribi\u00f3.",

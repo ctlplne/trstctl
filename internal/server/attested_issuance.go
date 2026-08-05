@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/attest/tpmquote"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
@@ -430,4 +431,26 @@ func attestedIssuanceAuditor(log *events.Log) auditsink.Auditor {
 		return auditsink.Nop{}
 	}
 	return audit.NewAuditor(log)
+}
+
+// attestedIssuanceFromConfig maps the operator's config onto the served mint.
+//
+// The attestors are NOT process-supplied here. Each request builds a
+// tenant-scoped verifier from that tenant's enabled workload attester trust
+// sources, which is the self-serve path the trust-source API already exists to
+// feed. Baking a process-wide attestor list into config would make one tenant's
+// trust decision every tenant's.
+func attestedIssuanceFromConfig(c config.AttestedIssuance) AttestedIssuanceConfig {
+	out := AttestedIssuanceConfig{Enabled: c.Enabled, TrustDomain: strings.TrimSpace(c.TrustDomain)}
+	// A malformed duration is left at zero so newAttestedIssuerService applies
+	// the built-in bound. config validation reports the parse error; silently
+	// substituting a LONGER lifetime than the operator wrote would be the
+	// dangerous direction, and zero cannot do that.
+	if d, err := time.ParseDuration(strings.TrimSpace(c.DefaultTTL)); err == nil {
+		out.DefaultTTL = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.MaxTTL)); err == nil {
+		out.MaxTTL = d
+	}
+	return out
 }

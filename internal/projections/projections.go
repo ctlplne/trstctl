@@ -38,7 +38,13 @@ const (
 	// with no record of the disagreements somebody still has to resolve.
 	EventOwnershipReconciled = "ownership.reconciled"
 	// I2: a tenant's standing instruction to re-read its CMDB.
-	EventCMDBScheduleConfigured                   = "cmdb.schedule.configured"
+	EventCMDBScheduleConfigured = "cmdb.schedule.configured"
+	// I3: a first-class issuance request and every decision on it. The whole
+	// point of the object is that a denial and an expiry are DIFFERENT and both
+	// visible, so the decision is an event rather than a column somebody
+	// overwrote.
+	EventIssuanceRequestOpened                    = "issuance.request.opened"
+	EventIssuanceRequestDecided                   = "issuance.request.decided"
 	EventOwnerDeleted                             = "owner.deleted"
 	EventIssuerCreated                            = "issuer.created"
 	EventIdentityCreated                          = "identity.created"
@@ -207,6 +213,37 @@ type OwnerUpdated struct {
 	Kind  string `json:"kind"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
+}
+
+// IssuanceRequestOpened is the payload of an issuance.request.opened event (I3).
+//
+// CSRPEM carries a certificate signing request — public material by
+// construction. It must never carry a private key, and nothing in this system
+// puts one here: the requester keeps the key.
+type IssuanceRequestOpened struct {
+	ID            string    `json:"id"`
+	Subject       string    `json:"subject"`
+	Profile       string    `json:"profile,omitempty"`
+	CSRPEM        string    `json:"csr_pem,omitempty"`
+	Requester     string    `json:"requester"`
+	Justification string    `json:"justification,omitempty"`
+	Origin        string    `json:"origin,omitempty"`
+	TicketRef     string    `json:"ticket_ref,omitempty"`
+	ExpiresAt     time.Time `json:"expires_at"`
+}
+
+// IssuanceRequestDecided is the payload of an issuance.request.decided event.
+//
+// DecidedBy is EMPTY for an expiry, and that is load-bearing: nobody decided,
+// and attributing an expiry to a person would put a decision in the audit trail
+// that no human ever made.
+type IssuanceRequestDecided struct {
+	ID         string    `json:"id"`
+	Status     string    `json:"status"`
+	DecidedBy  string    `json:"decided_by,omitempty"`
+	Reason     string    `json:"reason,omitempty"`
+	IdentityID string    `json:"identity_id,omitempty"`
+	DecidedAt  time.Time `json:"decided_at"`
 }
 
 // OwnershipReconciled is the payload of an ownership.reconciled event (I2).
@@ -1750,6 +1787,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventOwnerUpdated:                             {1: true},
 	EventOwnershipReconciled:                      {1: true},
 	EventCMDBScheduleConfigured:                   {1: true},
+	EventIssuanceRequestOpened:                    {1: true},
+	EventIssuanceRequestDecided:                   {1: true},
 	EventOwnerDeleted:                             {1: true},
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
@@ -1967,6 +2006,23 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.ApplyOwnerUpdatedTx(ctx, tx, store.Owner{
 			ID: pl.ID, TenantID: e.TenantID, Kind: store.OwnerKind(pl.Kind), Name: pl.Name, Email: pl.Email,
 		})
+	case EventIssuanceRequestOpened:
+		var pl IssuanceRequestOpened
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyIssuanceRequestOpenedTx(ctx, tx, store.IssuanceRequest{
+			ID: pl.ID, TenantID: e.TenantID, Subject: pl.Subject, Profile: pl.Profile,
+			CSRPEM: pl.CSRPEM, Requester: pl.Requester, Justification: pl.Justification,
+			Origin: pl.Origin, TicketRef: pl.TicketRef, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
+		})
+	case EventIssuanceRequestDecided:
+		var pl IssuanceRequestDecided
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyIssuanceRequestDecidedTx(ctx, tx, e.TenantID, pl.ID, pl.Status,
+			pl.DecidedBy, pl.Reason, pl.IdentityID, pl.DecidedAt)
 	case EventOwnershipReconciled:
 		var pl OwnershipReconciled
 		if err := decode(e, &pl); err != nil {

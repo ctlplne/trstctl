@@ -3291,6 +3291,10 @@ const deDECatalog = {
   "source.unowned.queue.i1own00001": "L\u00fccken bei der Zust\u00e4ndigkeit",
   "source.unowned.counts.i1own00002":
     "{value1} ohne Eigent\u00fcmer, {value2} deren Eigent\u00fcmer weder Anwendung noch Umgebung nennt, {value3} nie best\u00e4tigt.",
+  "source.issuance.requests.heading.i3req00001": "Ausstellungsanfragen",
+  "source.issuance.requests.counts.i3req00002": "{value1} warten auf eine Entscheidung, von {value2} insgesamt.",
+  "source.issuance.requests.decidedby.i3req00004": "{value1}, entschieden von {value2}",
+  "source.issuance.requests.expired.i3req00003": "abgelaufen \u2014 niemand hat entschieden",
   "source.ownership.conflicts.i2own00001": "Abweichungen bei der Zust\u00e4ndigkeit",
   "source.ownership.conflicts.blurb.i2own00002":
     "Ein Import fand {value1} Feld(er), bei denen eine externe Quelle den hier erfassten Angaben widerspricht. Best\u00e4tigte Zust\u00e4ndigkeit wurde nie \u00fcberschrieben.",

@@ -537,9 +537,14 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		RestoreDrill:         drill,
 		RestoreDrillInterval: drillInterval,
 		Store:                st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
-		SignerKeyStoreDir:         cfg.Signer.KeyStoreDir,
-		EgressGuard:               egressGuard,
-		ServiceNowBindings:        serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
+		SignerKeyStoreDir:  cfg.Signer.KeyStoreDir,
+		EgressGuard:        egressGuard,
+		ServiceNowBindings: serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
+		// AUD-10: this line did not exist. Deps.AttestedIssuance was never
+		// assigned anywhere in production, so s.attestedIssuance was always nil
+		// and both routes it gates returned 503 on every deployment — with no
+		// config key an operator could set to change that.
+		AttestedIssuance:          attestedIssuanceFromConfig(cfg.AttestedIssuance),
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
 		TelemetryReporter:         outbound.telemetryReporter,
 		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st)},
@@ -1088,6 +1093,10 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// "changes reconcile on a schedule" would be true of the code and
 			// false of the running binary.
 			startRuntimeWorker(workCtx, srv.RunCMDBScheduler),
+			// I3: without this line a request that nobody decided would sit in
+			// the queue forever, and the queue's size would stop meaning
+			// anything — the exact reason the expired state exists.
+			startRuntimeWorker(workCtx, srv.RunIssuanceRequestExpiry),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),
 			startRuntimeWorker(workCtx, srv.RunRestoreDrillScheduler),
 			// D2/D3: periodic endpoint re-verification. This line was missing, and

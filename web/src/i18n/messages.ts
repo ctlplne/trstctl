@@ -12428,6 +12428,22 @@ export const messages = {
     defaultMessage: "{value1} with no owner, {value2} whose owner names no application or environment, {value3} never confirmed.",
     description: "I1: the three counts, kept separate because each needs different work.",
   },
+  "source.issuance.requests.heading.i3req00001": {
+    defaultMessage: "Issuance requests",
+    description: "I3: heading for the request queue with its real lifecycle.",
+  },
+  "source.issuance.requests.counts.i3req00002": {
+    defaultMessage: "{value1} waiting for a decision, of {value2} total.",
+    description: "I3: open count kept separate from the total — one number cannot say whether a queue needs attention or is merely long with history.",
+  },
+  "source.issuance.requests.decidedby.i3req00004": {
+    defaultMessage: "{value1}, decided by {value2}",
+    description: "I3: who asked and who decided, so a queue row names both sides.",
+  },
+  "source.issuance.requests.expired.i3req00003": {
+    defaultMessage: "expired — nobody decided",
+    description: "I3: an expiry is deliberately not attributed to a person, because no human made that decision.",
+  },
   "source.ownership.conflicts.i2own00001": {
     defaultMessage: "Ownership disagreements",
     description: "I2: heading for the queue of ownership an import refused to overwrite.",

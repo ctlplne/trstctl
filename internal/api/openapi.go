@@ -5,6 +5,7 @@ package api
 import (
 	"net/http"
 	"strings"
+	"trstctl.com/trstctl/internal/issuancerequest"
 
 	"trstctl.com/trstctl/internal/servedstatus"
 )
@@ -3252,6 +3253,29 @@ func componentSchemas() map[string]*Schema {
 		"conflicts": {Type: "array", Items: ref("OwnershipConflict")},
 		"detail":    str(), "guidance": str(),
 	}, "applied", "unchanged", "conflicts", "detail", "guidance")
+	issuanceRequestSchema := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "subject": str(), "profile": str(),
+		"requester": str(), "justification": str(), "origin": str(), "ticket_ref": str(),
+		// status is an enum drawn from issuancerequest.States, the same list the
+		// server validates against — a hand-copied second enum drifts, and the
+		// one that drifts accepts a state the other rejects.
+		"status":     {Type: "string", Enum: append([]string(nil), issuancerequest.States...)},
+		"decided_by": str(), "decision_reason": str(), "decided_at": str(),
+		"identity_id": uuid(), "expires_at": str(), "created_at": str(),
+	}, "id", "tenant_id", "subject", "requester", "status", "expires_at", "created_at")
+	issuanceRequestInput := object(map[string]*Schema{
+		"subject": str(), "profile": str(), "csr_pem": str(), "justification": str(),
+		"origin": str(), "ticket_ref": str(),
+	}, "subject")
+	issuanceDecisionInput := object(map[string]*Schema{
+		"reason": str(), "identity_id": uuid(),
+	})
+	issuanceRequestListSchema := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("IssuanceRequest")},
+		// open is separate from the item count: one number cannot say whether a
+		// queue needs attention or is merely long with history.
+		"open": {Type: "integer"}, "guidance": str(),
+	}, "items", "open", "guidance")
 	cmdbReconcileSchedule := object(map[string]*Schema{
 		// configured is separate from enabled: "never set up" and "set up and
 		// paused" are different operator states, and one flag merges them.
@@ -4406,6 +4430,10 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipImportResult":                    ownershipImportResult,
 		"OwnershipConflictList":                    ownershipConflictList,
 		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
+		"IssuanceRequest":                          issuanceRequestSchema,
+		"IssuanceRequestInput":                     issuanceRequestInput,
+		"IssuanceDecisionInput":                    issuanceDecisionInput,
+		"IssuanceRequestList":                      issuanceRequestListSchema,
 		"OwnershipConflict":                        ownershipConflictSchema,
 		"CryptoReadiness":                          cryptoReadiness,
 		"CryptoReadinessRow":                       cryptoReadinessRow,

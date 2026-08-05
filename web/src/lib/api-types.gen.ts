@@ -2368,6 +2368,11 @@ export interface IncidentExecutionRequest {
   target?: string;
 }
 
+export interface IssuanceDecisionInput {
+  identity_id?: string;
+  reason?: string;
+}
+
 export interface IssuanceRegion {
   datastore: string;
   event_stream: string;
@@ -2377,6 +2382,39 @@ export interface IssuanceRegion {
   role: string;
   signer: string;
   writable_scope: string;
+}
+
+export interface IssuanceRequest {
+  created_at: string;
+  decided_at?: string;
+  decided_by?: string;
+  decision_reason?: string;
+  expires_at: string;
+  id: string;
+  identity_id?: string;
+  justification?: string;
+  origin?: string;
+  profile?: string;
+  requester: string;
+  status: "requested" | "approved" | "denied" | "expired" | "cancelled" | "issued";
+  subject: string;
+  tenant_id: string;
+  ticket_ref?: string;
+}
+
+export interface IssuanceRequestInput {
+  csr_pem?: string;
+  justification?: string;
+  origin?: string;
+  profile?: string;
+  subject: string;
+  ticket_ref?: string;
+}
+
+export interface IssuanceRequestList {
+  guidance: string;
+  items: IssuanceRequest[];
+  open: number;
 }
 
 export interface Issuer {

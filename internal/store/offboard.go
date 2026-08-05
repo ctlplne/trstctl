@@ -68,6 +68,9 @@ var TenantScopedTables = []string{
 	"ca_key_ceremonies",
 	"issuance_approvals",         // EXC-WIRE-03: FK -> issuance_approval_requests
 	"issuance_approval_requests", // EXC-WIRE-03: served dual-control approval state
+	// I3: the first-class request object. Tenant history — who asked for what,
+	// who denied it and why — and it leaves with the tenant.
+	"issuance_requests",
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
 	// I2: ownership disagreements reference an owner_id. Listed BEFORE owners so
 	// the order stays correct if that reference ever becomes a real foreign key —

@@ -95,6 +95,7 @@ type Config struct {
 	Audit                     Audit                    `json:"audit"`
 	Breakglass                Breakglass               `json:"breakglass"`
 	Privacy                   Privacy                  `json:"privacy"`
+	AttestedIssuance          AttestedIssuance         `json:"attested_issuance"`
 	Backup                    Backup                   `json:"backup"`
 	License                   License                  `json:"license"`
 	RateLimit                 RateLimit                `json:"rate_limit"`
@@ -1162,6 +1163,30 @@ type ServiceNowBinding struct {
 	TokenRef             string   `json:"token_ref,omitempty"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
+}
+
+// AttestedIssuance turns on the attestation-gated workload SVID mint (I3/F30).
+//
+// It existed as a Deps field with no config key at all, so the two routes it
+// gates — POST /api/v1/workloads/attested-issuance and
+// POST /api/v1/ssh/attested-user-certs — were registered, documented, and
+// permanently 503 on every deployment. There was no operator switch: the zero
+// value is what production always got, and the six attestors behind them,
+// including the GitHub OIDC attestor a CI pipeline needs, were constructed by
+// code no request could reach.
+//
+// Off by default is correct for a mint that trades a cloud attestation for a
+// certificate; unreachable-when-on is not.
+type AttestedIssuance struct {
+	Enabled bool `json:"enabled"`
+	// TrustDomain is the SPIFFE trust domain minted SVIDs belong to. Required
+	// when enabled: an SVID with no trust domain names nothing.
+	TrustDomain string `json:"trust_domain,omitempty"`
+	// DefaultTTL and MaxTTL bound the lifetime. Empty takes the built-in
+	// 10-minute default and 1-hour ceiling — attested SVIDs are short-lived
+	// because the attestation they rest on is a point-in-time claim.
+	DefaultTTL string `json:"default_ttl,omitempty"`
+	MaxTTL     string `json:"max_ttl,omitempty"`
 }
 
 // Telemetry configures opt-in, off-by-default usage reporting (F-telemetry).

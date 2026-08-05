@@ -1805,6 +1805,45 @@ looking for a credential that was never there.
   the console lists disagreements, and clearing one is an API-side owner edit;
   and the CI-to-CERTIFICATE mapping is by owner NAME, so a CMDB whose owner
   labels do not match this estate's owner names reconciles nothing and says so.
+- Issuance requests as first-class objects (I3): `POST/GET /api/v1/issuance-requests`
+  plus `/{id}/approve|deny|cancel` (`trstctl issuance-requests
+  open|list|approve|deny|cancel`) give a request a real lifecycle —
+  `requested` then `approved`, `denied`, `expired`, or `cancelled`, and
+  `approved` is NOT terminal because issuance can still fail. Collapsing
+  approved and issued would make a request whose mint failed read as fulfilled.
+  Denial and expiry are deliberately distinct: a denial is somebody's decision
+  and REQUIRES a reason (a denial with none teaches the requester only that
+  somebody said no, so they re-ask); an expiry is nobody's, and the leader-only
+  sweep records it with an EMPTY `decided_by`, because stamping a person on it
+  would put a decision in the audit trail that no human made. The requester can
+  withdraw their own request and can never decide it — self-approval would leave
+  an approval record that looks legitimate while nobody independent looked — and
+  only the requester may cancel, so anyone else closing it is a denial and is
+  recorded as one. Permissions reuse the existing `certs:request` / `certs:issue`
+  split rather than inventing a parallel `certs:approve` that could drift out of
+  agreement with the gate guarding direct issuance. Requests default to a 7-day
+  expiry; the list surface serves closed rows too and counts open separately,
+  because one total cannot say whether a queue needs attention or is merely long
+  with history. Scope, stated exactly: TICKET-DRIVEN INTAKE is a recorded
+  `origin`/`ticket_ref` on a request the caller opens — trstctl does not poll
+  ServiceNow or Jira for new tickets, so a ticket does not yet open a request by
+  itself; the published GITHUB ACTION is not built; and approving a request does
+  not itself mint — `issued` is set by the caller that performs the issuance and
+  links the identity, so an approved request is outstanding work until then.
+- Attested issuance is reachable (AUD-10, I3 prerequisite): `attested_issuance`
+  in the config file turns on `POST /api/v1/workloads/attested-issuance` and
+  `POST /api/v1/ssh/attested-user-certs`. Before this there was NO config key at
+  all — `Deps.AttestedIssuance` was never assigned anywhere in production, so
+  both routes were registered, documented, and permanently 503 on every
+  deployment, and the six attestors behind them (including the GitHub OIDC
+  attestor a CI pipeline needs) were constructed by code no request could reach.
+  Off by default is correct for a mint that trades a cloud attestation for a
+  certificate; unreachable when on was the defect. Attestors stay per-tenant from
+  the workload attester-trust API rather than process-wide, so one tenant's trust
+  decision does not become every tenant's. Still unreachable for the same reason
+  and NOT fixed here: `Deps.AgentBroker` (`POST /api/v1/broker/agent-identities`)
+  and `Deps.PAM` (`POST /api/v1/access/sessions` and three more) have no config
+  key either.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives

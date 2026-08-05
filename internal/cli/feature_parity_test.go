@@ -154,8 +154,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// I2's `owners import`, `owners ownership-conflicts`, and the two
 	// `owners cmdb-schedule` commands raised it to 329, mapped onto the same
 	// owners row as the rest of the ownership surface.
-	if len(out) != 329 {
-		t.Fatalf("CLI commands = %d, want 329", len(out))
+	// I3's five `issuance-requests` commands raised it to 334, mapped onto the
+	// same certificates row as the rest of the issuance surface.
+	if len(out) != 334 {
+		t.Fatalf("CLI commands = %d, want 334", len(out))
 	}
 	return out
 }

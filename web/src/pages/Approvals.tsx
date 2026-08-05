@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { IssuanceRequestsPanel } from "@/components/IssuanceRequestsPanel";
 import { Info } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ApiError, UnauthorizedError, api, type EphemeralApproval, type Identity } from "@/lib/api";
@@ -158,6 +159,7 @@ export function Approvals() {
         titleId="approvals-heading"
         description="Dual-control issue, rotate, and revoke decisions for a distinct approver. The queue is built from pending identities; quorum and requester details appear when identity attributes carry them."
       />
+      <IssuanceRequestsPanel />
 
       {notice && (
         <p role="status" className="text-body text-status-success">

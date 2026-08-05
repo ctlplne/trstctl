@@ -40,6 +40,41 @@ func (s *Store) ApplyOwnerUpdatedTx(ctx context.Context, tx pgx.Tx, o Owner) err
 	return err
 }
 
+// ApplyIssuanceRequestOpenedTx projects an issuance.request.opened event (I3).
+func (s *Store) ApplyIssuanceRequestOpenedTx(ctx context.Context, tx pgx.Tx, r IssuanceRequest) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO issuance_requests
+		   (id, tenant_id, subject, profile, csr_pem, requester, justification, origin,
+		    ticket_ref, status, expires_at, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'requested', $10, $11)
+		 ON CONFLICT (id) DO NOTHING`,
+		r.ID, r.TenantID, r.Subject, r.Profile, r.CSRPEM, r.Requester, r.Justification,
+		r.Origin, r.TicketRef, r.ExpiresAt, r.CreatedAt)
+	return err
+}
+
+// ApplyIssuanceRequestDecidedTx projects an issuance.request.decided event (I3).
+//
+// The WHERE clause pins the expected prior status, so a replay or a concurrent
+// second decision cannot overwrite a decision that already landed. A denial
+// silently becoming an approval because two reviewers clicked at once is the
+// failure this guards.
+func (s *Store) ApplyIssuanceRequestDecidedTx(ctx context.Context, tx pgx.Tx, tenantID, id, status, decidedBy, reason, identityID string, at time.Time) error {
+	var identity any
+	if identityID != "" {
+		identity = identityID
+	}
+	_, err := tx.Exec(ctx,
+		`UPDATE issuance_requests
+		    SET status = $3, decided_by = $4, decision_reason = $5,
+		        identity_id = coalesce($6::uuid, identity_id),
+		        decided_at = $7, updated_at = now()
+		  WHERE tenant_id = $1 AND id = $2
+		    AND status IN ('requested', 'approved')`,
+		tenantID, id, status, decidedBy, reason, identity, at)
+	return err
+}
+
 // ApplyOwnershipReconciledTx projects an ownership.reconciled event (I2).
 //
 // It writes BOTH halves in one transaction: the fields the reconcile was
@@ -416,7 +451,9 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	// the log — the cost is one extra sync within a minute of the rebuild, and the
 	// alternative (calling them independent PG state) would claim the operator's
 	// instruction is not event-sourced when it is.
-	"owner_ownership_conflicts", "cmdb_reconcile_schedules"}
+	"owner_ownership_conflicts", "cmdb_reconcile_schedules",
+	// I3: projected from issuance.request.opened / .decided.
+	"issuance_requests"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

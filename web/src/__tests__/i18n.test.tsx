@@ -453,9 +453,14 @@ describe("i18n boundary", () => {
       // human said so, and a translation that blurred that would undo the point
       // of the column. One M2 key was folded in at the same time: "via" was a
       // hardcoded literal the extractor caught.
+      // I3 issuance-request re-pin: four keys for the request queue. Every state
+      // is named rather than folded into open/closed, and "expired" says
+      // "nobody decided" in all three locales — an expiry is the ABSENCE of a
+      // decision, and a translation that rendered it as a decision would put a
+      // judgement in the record that no human made.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "21645facc00aa91377988e488a645df127bb51b4c254db48349e11c53ecc9377",
-      "de-DE": "d70db950c494dbd6dfce073e7748c90cc9b910986d2524cae3bcbc020bfe1b6b",
+      "es-ES": "dd575c8aceaa736e1b1ff606a7a6177d932b4a4665cfa698b46761e71ec588c1",
+      "de-DE": "0abd0c51ee158b24407696a9ffe5f6889c67872dc8f9a6ded7ecbc577dd0b6e9",
     });
   });
 

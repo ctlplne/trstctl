@@ -1274,6 +1274,7 @@ func (a *API) routes() []route {
 	// route table is the bulk of api.go, and moving a coherent workflow out is
 	// the split the budget asks for rather than a waiver.
 	routes = append(routes, a.ownershipDataQualityRoutes()...)
+	routes = append(routes, a.issuanceRequestRoutes()...)
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.platformRoutes()...)
 	return append(routes, a.licensedRouteRegistry()...)
