@@ -121,8 +121,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// agents feature row: a rollout is fleet operation, not a separate product.
 	// AUD-14's brand route raised it to 332, mapped onto the platform row: it is
 	// how a provider's white-label reaches a customer's screen at all.
-	if len(out) != 332 {
-		t.Fatalf("OpenAPI operationIds = %d, want 332", len(out))
+	// I2 conflict resolution raised it to 333: the queue was read-only until now.
+	if len(out) != 333 {
+		t.Fatalf("OpenAPI operationIds = %d, want 333", len(out))
 	}
 	return out
 }

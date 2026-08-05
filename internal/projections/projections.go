@@ -47,6 +47,10 @@ const (
 	EventIssuanceRequestDecided = "issuance.request.decided"
 	// I5: one MDM device record joined to one SCEP transaction.
 	EventMDMDeviceCorrelated = "mdm.device.correlated"
+	// I2: an operator closing an ownership disagreement. An event because the
+	// resolution is a JUDGEMENT — which side was right and why — and a
+	// judgement that lives only in a mutable column cannot be audited later.
+	EventOwnershipConflictResolved = "ownership.conflict.resolved"
 	// A5: a staged agent-upgrade campaign and every state change on it. The
 	// halt is the product, so it is an event: an automatic halt that lived only
 	// in a mutable column could not be audited after the fact.
@@ -247,6 +251,18 @@ type AgentUpgradeCampaignAdvanced struct {
 type AgentUpgradeRingAssigned struct {
 	AgentID string `json:"agent_id"`
 	Ring    string `json:"ring"`
+}
+
+// OwnershipConflictResolved is the payload of ownership.conflict.resolved (I2).
+//
+// Resolution is required and free-text on purpose: "resolved" with no reason
+// tells the next reader nothing about which side was right, and a queue whose
+// closed entries explain nothing is one people stop trusting.
+type OwnershipConflictResolved struct {
+	ID         string    `json:"id"`
+	ResolvedBy string    `json:"resolved_by"`
+	Resolution string    `json:"resolution"`
+	ResolvedAt time.Time `json:"resolved_at"`
 }
 
 // MDMDeviceCorrelated is the payload of an mdm.device.correlated event (I5).
@@ -1841,6 +1857,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
+	EventOwnershipConflictResolved:                {1: true},
 	EventAgentUpgradeCampaignOpened:               {1: true},
 	EventAgentUpgradeCampaignAdvanced:             {1: true},
 	EventAgentUpgradeRingAssigned:                 {1: true},
@@ -2079,6 +2096,12 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		return p.store.ApplyAgentUpgradeRingAssignedTx(ctx, tx, e.TenantID, pl.AgentID, pl.Ring)
+	case EventOwnershipConflictResolved:
+		var pl OwnershipConflictResolved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyOwnershipConflictResolvedTx(ctx, tx, e.TenantID, pl.ID, pl.ResolvedBy, pl.Resolution, pl.ResolvedAt)
 	case EventMDMDeviceCorrelated:
 		var pl MDMDeviceCorrelated
 		if err := decode(e, &pl); err != nil {

@@ -5198,6 +5198,14 @@ OwnershipImportResult = TypedDict(
     total=False,
 )
 
+OwnershipResolveInput = TypedDict(
+    'OwnershipResolveInput',
+    {
+        'resolution': str,
+    },
+    total=False,
+)
+
 PAMPostgresCredential = TypedDict(
     'PAMPostgresCredential',
     {

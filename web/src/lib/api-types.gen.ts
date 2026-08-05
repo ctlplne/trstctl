@@ -3684,6 +3684,10 @@ export interface OwnershipImportResult {
   unchanged: number;
 }
 
+export interface OwnershipResolveInput {
+  resolution: string;
+}
+
 export interface PAMPostgresCredential {
   dsn: string;
   username: string;

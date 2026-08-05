@@ -161,8 +161,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A5's five `agents upgrade-*` commands raised it to 341, on the same agents
 	// row as the rest of the fleet surface.
 	// AUD-14's `brand show` raised it to 342.
-	if len(out) != 342 {
-		t.Fatalf("CLI commands = %d, want 342", len(out))
+	// `owners resolve-conflict` raised it to 343.
+	if len(out) != 343 {
+		t.Fatalf("CLI commands = %d, want 343", len(out))
 	}
 	return out
 }

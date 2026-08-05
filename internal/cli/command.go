@@ -317,6 +317,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"graph", "blast-radius"}, Method: "GET", Path: "/api/v1/graph/blast-radius/{id}", Summary: "Blast radius of a node"},
 	{Name: []string{"owners", "import"}, Method: "POST", Path: "/api/v1/owners/import", Body: bodyFile, Summary: "Import ownership from CSV; fills in what is unrecorded and refuses to overwrite what a human attested"},
 	{Name: []string{"owners", "ownership-conflicts"}, Method: "GET", Path: "/api/v1/owners/ownership-conflicts", Summary: "List unresolved ownership disagreements between recorded owners and an external source"},
+	{Name: []string{"owners", "resolve-conflict"}, Method: "POST", Path: "/api/v1/owners/ownership-conflicts/{id}/resolve", Body: bodyFile, Summary: "Close an ownership disagreement with the reason it was decided"},
 	{Name: []string{"owners", "cmdb-schedule", "set"}, Method: "PUT", Path: "/api/v1/owners/cmdb-schedule", Body: bodyFile, Summary: "Configure scheduled read-only ownership reconciliation against a ServiceNow CMDB"},
 	{Name: []string{"owners", "cmdb-schedule", "show"}, Method: "GET", Path: "/api/v1/owners/cmdb-schedule", Summary: "Show the CMDB reconcile schedule, when it last ran, and why it last failed"},
 	{Name: []string{"issuance-requests", "open"}, Method: "POST", Path: "/api/v1/issuance-requests", Body: bodyFile, Summary: "Open an issuance request with a real lifecycle"},

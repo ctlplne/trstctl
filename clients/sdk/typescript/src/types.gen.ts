@@ -3131,6 +3131,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/owners/ownership-conflicts/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close an ownership disagreement with the reason it was decided */
+        post: operations["resolveOwnershipConflict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/owners/unowned": {
         parameters: {
             query?: never;
@@ -8632,6 +8649,9 @@ export interface components {
             detail: string;
             guidance: string;
             unchanged: number;
+        };
+        OwnershipResolveInput: {
+            resolution: string;
         };
         PAMPostgresCredential: {
             dsn: string;
@@ -19448,6 +19468,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OwnershipConflictList"];
                 };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resolveOwnershipConflict: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnershipResolveInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description client error */
             "4XX": {

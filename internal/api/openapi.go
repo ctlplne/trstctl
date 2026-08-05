@@ -3344,6 +3344,7 @@ func componentSchemas() map[string]*Schema {
 		// otherwise looks identical to one that found nothing to do.
 		"last_run_at": str(), "last_error": str(), "guidance": str(),
 	}, "configured", "enabled", "guidance")
+	ownershipResolveInput := object(map[string]*Schema{"resolution": str()}, "resolution")
 	ownershipConflictList := object(map[string]*Schema{
 		"items":    {Type: "array", Items: ref("OwnershipConflict")},
 		"refused":  {Type: "integer"},
@@ -4487,6 +4488,7 @@ func componentSchemas() map[string]*Schema {
 		"GraphImpact":                              graphImpact,
 		"OwnershipImportResult":                    ownershipImportResult,
 		"OwnershipConflictList":                    ownershipConflictList,
+		"OwnershipResolveInput":                    ownershipResolveInput,
 		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
 		"IssuanceRequest":                          issuanceRequestSchema,
 		"Brand":                                    brandSchema,

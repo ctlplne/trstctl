@@ -1802,7 +1802,13 @@ looking for a credential that was never there.
   endpoint (a newly enabled schedule is due
   immediately and fires within one scheduler tick, and its outcome is served as
   `last_run_at`/`last_error`); resolving a conflict is a read surface only —
-  the console lists disagreements, and clearing one is an API-side owner edit;
+  a disagreement is CLOSED through `POST /api/v1/owners/ownership-conflicts/{id}/resolve`
+  (`trstctl owners resolve-conflict`), which REQUIRES both a reason and an
+  attributed operator — "resolved" with no explanation tells the next reader
+  nothing about which side was right, and an unattributed judgement cannot be
+  questioned later. The projection pins `resolved_at IS NULL` so a second
+  operator cannot overwrite the first one's judgement. The console lists
+  disagreements but has no resolve control yet;
   and the CI-to-CERTIFICATE mapping is by owner NAME, so a CMDB whose owner
   labels do not match this estate's owner names reconciles nothing and says so.
 - Issuance requests as first-class objects (I3): `POST/GET /api/v1/issuance-requests`

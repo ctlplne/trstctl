@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/ownership"
@@ -180,4 +181,33 @@ func (a *API) listOwnershipConflicts(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	a.writeJSON(w, http.StatusOK, out)
+}
+
+type ownershipResolveBody struct {
+	Resolution string `json:"resolution"`
+}
+
+// resolveOwnershipConflict closes a disagreement (I2).
+//
+// Until this existed the conflict queue was READ-ONLY: an operator could see
+// that two sources disagreed and had no way to record which side won. A queue
+// that only ever grows is one people stop reading, and the disagreements it
+// holds are exactly the rows somebody needed to act on.
+func (a *API) resolveOwnershipConflict(w http.ResponseWriter, r *http.Request) {
+	idem := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idem, func(ctx context.Context, tenantID string) (int, any, error) {
+		var body ownershipResolveBody
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if strings.TrimSpace(body.Resolution) == "" {
+			return 0, nil, errStatus(http.StatusBadRequest,
+				"resolution is required: closing a disagreement without saying which side was right leaves the next reader exactly where they started")
+		}
+		if err := a.orch.ResolveOwnershipConflict(ctx, tenantID, r.PathValue("id"),
+			principalSubject(ctx), body.Resolution); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, map[string]string{"id": r.PathValue("id"), "resolution": body.Resolution}, nil
+	})
 }

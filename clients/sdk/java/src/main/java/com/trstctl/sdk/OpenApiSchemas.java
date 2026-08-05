@@ -391,6 +391,7 @@ public final class OpenApiSchemas {
       "OwnershipConflict",
       "OwnershipConflictList",
       "OwnershipImportResult",
+      "OwnershipResolveInput",
       "PAMPostgresCredential",
       "PAMSSHCredential",
       "PAMSession",

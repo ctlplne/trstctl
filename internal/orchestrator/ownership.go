@@ -5,6 +5,8 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/projections"
@@ -51,5 +53,34 @@ func (o *Orchestrator) ConfigureCMDBSchedule(ctx context.Context, tenantID strin
 		return err
 	}
 	_, err = o.emit(ctx, projections.EventCMDBScheduleConfigured, tenantID, payload)
+	return err
+}
+
+// ResolveOwnershipConflict closes an ownership disagreement (I2).
+//
+// A resolution REQUIRES a reason. "Resolved" with no explanation tells the next
+// reader nothing about which side was right, and a queue whose closed entries
+// explain nothing is one people stop trusting — which is how the queue stops
+// being read at all.
+func (o *Orchestrator) ResolveOwnershipConflict(ctx context.Context, tenantID, id, by, resolution string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("orchestrator: no conflict named")
+	}
+	if strings.TrimSpace(by) == "" {
+		return fmt.Errorf("orchestrator: a resolution needs the operator who made it; an " +
+			"unattributed judgement cannot be questioned later")
+	}
+	if strings.TrimSpace(resolution) == "" {
+		return fmt.Errorf("orchestrator: a resolution needs a reason. Closing a disagreement " +
+			"without saying which side was right leaves the next reader exactly where they started")
+	}
+	payload, err := json.Marshal(projections.OwnershipConflictResolved{
+		ID: id, ResolvedBy: strings.TrimSpace(by),
+		Resolution: strings.TrimSpace(resolution), ResolvedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventOwnershipConflictResolved, tenantID, payload)
 	return err
 }

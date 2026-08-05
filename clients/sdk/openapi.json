@@ -14410,6 +14410,17 @@
         ],
         "type": "object"
       },
+      "OwnershipResolveInput": {
+        "properties": {
+          "resolution": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resolution"
+        ],
+        "type": "object"
+      },
       "PAMPostgresCredential": {
         "properties": {
           "dsn": {
@@ -34035,6 +34046,76 @@
         ],
         "summary": "List unresolved ownership disagreements between recorded owners and an external source",
         "x-trstctl-permission": "owners:read"
+      }
+    },
+    "/api/v1/owners/ownership-conflicts/{id}/resolve": {
+      "post": {
+        "operationId": "resolveOwnershipConflict",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnershipResolveInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Close an ownership disagreement with the reason it was decided",
+        "x-trstctl-permission": "owners:write"
       }
     },
     "/api/v1/owners/unowned": {

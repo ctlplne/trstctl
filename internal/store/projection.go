@@ -107,6 +107,22 @@ func (s *Store) ApplyIssuanceRequestDecidedTx(ctx context.Context, tx pgx.Tx, te
 	return err
 }
 
+// ApplyOwnershipConflictResolvedTx closes an ownership disagreement (I2).
+//
+// The WHERE pins resolved_at IS NULL, so a second operator resolving the same
+// row cannot overwrite the first one's judgement. Two people closing a conflict
+// with different reasons and the later one silently winning is exactly what the
+// queue exists to prevent.
+func (s *Store) ApplyOwnershipConflictResolvedTx(ctx context.Context, tx pgx.Tx, tenantID, id, by, resolution string, at time.Time) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE owner_ownership_conflicts
+		    SET resolved_at = $4, resolution = $5
+		  WHERE tenant_id = $1 AND id = $2 AND resolved_at IS NULL
+		    AND $3 <> ''`,
+		tenantID, id, by, at, resolution)
+	return err
+}
+
 // ApplyOwnershipReconciledTx projects an ownership.reconciled event (I2).
 //
 // It writes BOTH halves in one transaction: the fields the reconcile was
