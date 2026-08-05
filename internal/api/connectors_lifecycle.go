@@ -71,6 +71,27 @@ type connectorCatalogItem struct {
 	// unaudited work stays where it always ran. Read from the live registry
 	// census, never hardcoded beside the description.
 	TargetVantage string `json:"target_vantage"`
+	// RelayParity is this family's position in the E1 relay migration. Nil for
+	// anything that is not an appliance: a host connector has no migration to be
+	// partway through, and an empty object would read as one that has not
+	// started.
+	RelayParity *connectorRelayParity `json:"relay_parity,omitempty"`
+}
+
+// connectorRelayParity is one appliance family's E1 gate status.
+//
+// Missing gates are named individually rather than summarised as a percentage.
+// A number lets a reader believe the remainder is small and similar; the names
+// say that cisco is held back by having no rollback and no readback, which is a
+// different conversation from f5 being held back by HA-peer sync.
+type connectorRelayParity struct {
+	Met     []string `json:"met"`
+	Missing []string `json:"missing"`
+	// Outstanding are E1 deliverables that do not block migration but are not
+	// built. Reported so a migrated family cannot read as a finished one.
+	Outstanding   []string `json:"outstanding"`
+	RelayMigrated bool     `json:"relay_migrated"`
+	Detail        string   `json:"detail"`
 }
 
 // connectorSupportRow is what this repository can truthfully attest about a
@@ -903,6 +924,20 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		item.TargetVantage = string(connector.VantageControlPlane)
 		item.ExecutesRollback = connector.CanRollback(item.Name)
 		item.DeviceProven = connector.DeviceProven(item.Name)
+		if connector.IsRelayVantageFamily(item.Name) {
+			status := connector.ParityStatusFor(item.Name)
+			item.RelayParity = &connectorRelayParity{
+				Met:           parityGateNames(status.Met),
+				Missing:       parityGateNames(status.Missing),
+				Outstanding:   parityGateNames(status.Outstanding),
+				RelayMigrated: status.RelayMigrated,
+				Detail: "E1 moves each appliance family's execution to the relay runtime and " +
+					"refuses the control-plane path once the family is through its gates. A " +
+					"family that is not migrated still deploys from the control plane, which " +
+					"is the behaviour that predates E1 and is not a fault — it is simply not " +
+					"the claim E1 makes.",
+			}
+		}
 		if row, ok := connector.SupportRowFor(item.Name); ok {
 			item.Support = &connectorSupportRow{
 				APIContract:      row.APIContract,
@@ -972,4 +1007,16 @@ func predecessorRollbackRef(ctx context.Context, st *store.Store, tenantID strin
 		previous.Serial + " (fingerprint " + previous.Fingerprint + "), which replaced-by serial " + current.Serial +
 		". trstctl cannot execute this: after CSR-first issuance the control plane holds no subject key to re-upload, " +
 		"and no connector yet exposes a rebind-only operation"
+}
+
+// parityGateNames renders gates for the wire, never nil.
+//
+// An omitted array and an empty one decode differently in most clients, and
+// "this family is missing nothing" is a claim worth transmitting explicitly.
+func parityGateNames(gates []connector.ParityGate) []string {
+	out := make([]string, 0, len(gates))
+	for _, gate := range gates {
+		out = append(out, string(gate))
+	}
+	return out
 }

@@ -5931,6 +5931,7 @@ export interface components {
             kind: string;
             name: string;
             native: boolean;
+            relay_parity?: components["schemas"]["ConnectorRelayParity"];
             /** @enum {string} */
             replay_safety: "at-most-once" | "reconciled";
             rollback: string;
@@ -5965,6 +5966,13 @@ export interface components {
         ConnectorDeliveryList: {
             items: components["schemas"]["ConnectorDelivery"][];
             next_cursor?: string;
+        };
+        ConnectorRelayParity: {
+            detail: string;
+            met: string[];
+            missing: string[];
+            outstanding: string[];
+            relay_migrated: boolean;
         };
         ConnectorSupportRow: {
             api_contract: string;
@@ -6067,6 +6075,7 @@ export interface components {
             guidance: string;
             /** Format: date-time */
             last_backup_at?: string;
+            last_drill?: components["schemas"]["DRDrill"];
             /** Format: date-time */
             last_verified_at?: string;
             verified: boolean;

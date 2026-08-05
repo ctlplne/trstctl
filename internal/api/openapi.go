@@ -2012,7 +2012,20 @@ func componentSchemas() map[string]*Schema {
 		"replay_safety": {Type: "string", Enum: []string{"at-most-once", "reconciled"}},
 		// A3: where this connector's deploy work executes, from the live census.
 		"target_vantage": {Type: "string", Enum: []string{"control_plane", "host_agent", "network_relay"}},
+		// E1: appliance families only. Absent on host and cloud connectors,
+		// which have no relay migration to be partway through.
+		"relay_parity": ref("ConnectorRelayParity"),
 	}, "name", "kind", "delivery_mode", "rollback", "native", "capabilities", "replay_safety", "target_vantage", "device_proven")
+	// E1: which per-family gates a family has cleared, and which hold it back.
+	// Missing gates are named rather than counted: "two gates left" invites a
+	// reader to assume the remaining two are small and alike.
+	connectorRelayParity := object(map[string]*Schema{
+		"met":            {Type: "array", Items: str()},
+		"missing":        {Type: "array", Items: str()},
+		"outstanding":    {Type: "array", Items: str()},
+		"relay_migrated": {Type: "boolean"},
+		"detail":         str(),
+	}, "met", "missing", "outstanding", "relay_migrated", "detail")
 	// E3: deliberately no firmware version field. A version range is a claim
 	// about hardware nothing here runs, and a schema field for one would invite
 	// somebody to fill it.
@@ -2043,6 +2056,10 @@ func componentSchemas() map[string]*Schema {
 		"artifacts_unverifiable": {Type: "integer"},
 		"failures":               {Type: "array", Items: ref("DRArtifactFailure")},
 		"detail":                 str(), "guidance": str(),
+		// J2: absent until a drill has run, and absent is the point — an
+		// always-present object would give a never-drilled deployment a
+		// zero-valued drill that reads as a clean one.
+		"last_drill": ref("DRDrill"),
 	}, "backup_configured", "verified", "artifacts_checked", "artifacts_unverifiable", "detail", "guidance")
 	// I4: recent enrolment refusals, classified.
 	enrollmentDiagnostic := object(map[string]*Schema{
@@ -4168,6 +4185,7 @@ func componentSchemas() map[string]*Schema {
 		"EnrollmentDiagnostic":                     enrollmentDiagnostic,
 		"EnrollmentDiagnosticList":                 enrollmentDiagnosticList,
 		"ConnectorSupportRow":                      connectorSupportRow,
+		"ConnectorRelayParity":                     connectorRelayParity,
 		"ConnectorCatalogItem":                     connectorCatalogItem,
 		"ConnectorCatalog":                         connectorCatalog,
 		"DeploymentTargetRequest":                  deploymentTargetReq,

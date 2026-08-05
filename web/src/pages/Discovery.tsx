@@ -965,13 +965,7 @@ export function Discovery() {
                 <dl className="grid gap-2 rounded-md border border-border p-3 text-sm sm:grid-cols-3">
                   <div>
                     <dt className="text-caption text-muted-foreground">{t("discovery.coverage.segmentPercent")}</dt>
-                    <dd
-                      className={
-                        coverageReport.segment_coverage_percent >= 100
-                          ? "font-medium"
-                          : "font-medium text-status-warning"
-                      }
-                    >
+                    <dd className={coverageReport.segment_coverage_percent >= 100 ? "font-medium" : "font-medium text-status-warning"}>
                       {(coverageReport.segments ?? []).length === 0
                         ? t("discovery.coverage.noSegments")
                         : t("discovery.coverage.percentValue", { percent: coverageReport.segment_coverage_percent })}
@@ -1012,9 +1006,7 @@ export function Discovery() {
                           <tr key={seg.name}>
                             <td className="font-mono text-xs">{seg.name}</td>
                             <td className={seg.status === "swept" ? undefined : "text-status-warning"}>{seg.status}</td>
-                            <td className="text-sm">
-                              {seg.last_swept_at ? formatDateTime(seg.last_swept_at) : t("discovery.coverage.never")}
-                            </td>
+                            <td className="text-sm">{seg.last_swept_at ? formatDateTime(seg.last_swept_at) : t("discovery.coverage.never")}</td>
                             <td className="max-w-[28rem] text-sm text-muted-foreground">
                               {seg.status === "excluded" ? seg.exclusion_reason : (seg.ranges ?? []).join(", ")}
                             </td>

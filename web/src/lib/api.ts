@@ -13,6 +13,7 @@ import { translateNow } from "@/i18n/I18nProvider";
 import * as estate from "./estateApi";
 import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import type {
+  DRPosture,
   SecretRotationScheduleRun,
   MDMSCEPPolicyRequest,
   MDMSCEPPolicy,
@@ -372,6 +373,7 @@ export type CertificateIngestRequest = CertificateIngest;
 export type CTSubmission = CTLogSubmission;
 export type CTSubmissionRequest = CTLogSubmissionRequest;
 export type { CTMonitoring, CTMonitoringRequest };
+export type { DRPosture, DRDrill } from "./api-types.gen";
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -1214,6 +1216,8 @@ export interface Api {
   managedOfferingStatus(): Promise<ManagedOfferingStatus>;
   scaleOrchestration(): Promise<ScaleOrchestrationPlan>;
   platformSystem(): Promise<SystemReadout>;
+  /** J2: when the backup last VERIFIED, and what the last restore drill found. */
+  drPosture(): Promise<DRPosture>;
   tenantKeyDomain(): Promise<TenantKeyDomainStatus>;
   migrateTenantKeyDomain(input: TenantKeyDomainMigrateRequest): Promise<TenantKeyDomainStatus>;
   sealTenantKeyDomain(): Promise<TenantKeyDomainSealReceipt>;
@@ -1539,6 +1543,11 @@ const liveApi: Api = {
   managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),
   scaleOrchestration: () => req<ScaleOrchestrationPlan>("/api/v1/scale/orchestration"),
   platformSystem: () => req<SystemReadout>("/api/v1/platform/system"),
+  // J2: when the backup was last VERIFIED by re-hashing its artifacts, and what
+  // the last restore drill established. Both, because they answer different
+  // questions: verification says the bytes still match, a drill says they
+  // reproduce state.
+  drPosture: () => req<DRPosture>("/api/v1/platform/dr-posture"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),

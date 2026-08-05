@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authmethod"
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/broker"
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -109,12 +110,25 @@ type Deps struct {
 	// reports on (epic J2). Empty means none is configured, which the API
 	// serves as such rather than reporting an invented path as a missing
 	// backup.
-	BackupDirectory   string
-	Store             *store.Store
-	Log               *events.Log
-	Signer            SignerProvider            // may be nil → issuance is unavailable (fail closed)
-	SignAuthorizer    *crypto.SignAuthorizer    // test/eval token provider; production should use SignTokenProvider
-	SignTokenProvider signing.SignTokenProvider // independent approval-token source for dual-control signer handles
+	BackupDirectory string
+	// RestoreDrill runs one restore drill and returns its attestation (J2).
+	//
+	// A function rather than a config struct because the drill needs the
+	// PostgreSQL DSN to build a throwaway database, and handing the whole
+	// configuration to the Server so it could reach one field would give every
+	// other part of the Server the same reach. The composition root already
+	// holds the config; it closes over what the drill needs and passes nothing
+	// else. Nil means this deployment cannot drill, which the DR surface
+	// reports rather than hides.
+	RestoreDrill func(context.Context) (backup.DrillAttestation, error)
+	// RestoreDrillInterval is how often it runs. Zero takes the default;
+	// negative disables it.
+	RestoreDrillInterval time.Duration
+	Store                *store.Store
+	Log                  *events.Log
+	Signer               SignerProvider            // may be nil → issuance is unavailable (fail closed)
+	SignAuthorizer       *crypto.SignAuthorizer    // test/eval token provider; production should use SignTokenProvider
+	SignTokenProvider    signing.SignTokenProvider // independent approval-token source for dual-control signer handles
 	// SignerKeyStoreDir is the local signer provisioning/keystore directory when
 	// the deployment has one. Licensed APIs may use it through generic, file-based
 	// provisioning seams; external signer deployments can leave it empty or point it
@@ -773,6 +787,14 @@ type Server struct {
 	// endpointVerificationInterval is how often endpoints are re-probed (D2).
 	// Zero uses defaultEndpointVerificationInterval.
 	endpointVerificationInterval time.Duration
+	// restoreDrill runs one drill; nil means this deployment cannot drill (J2).
+	// restoreDrillInterval is zero for the default and negative when disabled.
+	// lastRestoreDrill stays nil until one has run, which is what lets the DR
+	// surface tell "never drilled" from "drilled and found nothing wrong".
+	restoreDrill         func(context.Context) (backup.DrillAttestation, error)
+	restoreDrillInterval time.Duration
+	restoreDrillMu       sync.Mutex
+	lastRestoreDrill     *backup.DrillAttestation
 	// maintenanceWindows restrict when the scheduler may renew (D6). Empty
 	// means unrestricted — an operator who configured no windows did not ask
 	// for a freeze.
@@ -1134,6 +1156,9 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		// is meaningful — the API then serves "not configured" rather than
 		// reporting a path nobody chose as a missing backup.
 		api.WithBackupDirectory(d.BackupDirectory),
+		// J2: the last drill's attestation, or nil when none has run. The API
+		// distinguishes the two; a zero attestation would read as a perfect one.
+		api.WithRestoreDrill(s.LastRestoreDrill),
 		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
 		api.WithSSHWorkflow(s),
@@ -1664,6 +1689,8 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.lifecycleLeafValidity = d.LifecycleLeafValidity
 	s.lifecycleInterval = d.LifecycleInterval
 	s.endpointVerificationInterval = d.EndpointVerificationInterval
+	s.restoreDrill = d.RestoreDrill
+	s.restoreDrillInterval = d.RestoreDrillInterval
 	s.maintenanceWindows = d.MaintenanceWindows
 	s.mLifecycleQueued = s.registry.CounterVec("trstctl_lifecycle_renewals_queued_total", "Identities queued by the lifecycle renewal scheduler.", nil).WithLabelValues()
 	s.mLifecycleAlerts = s.registry.CounterVec("trstctl_lifecycle_expiry_alerts_queued_total", "Expiry notifications queued by the lifecycle scheduler.", nil).WithLabelValues()

@@ -373,7 +373,9 @@ export function RequestCredential() {
                   </Field>
                   <div className="grid gap-1 rounded-panel border border-border bg-muted/40 p-3 text-caption">
                     <span className="text-muted-foreground">{t("request.csr.generate")}</span>
-                    <code className="break-all font-mono text-xs">{translateNow("source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2", { value1: name.trim() || "service" })}</code>
+                    <code className="break-all font-mono text-xs">
+                      {translateNow("source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2", { value1: name.trim() || "service" })}
+                    </code>
                     <span className="text-muted-foreground">{t("request.csr.omitted")}</span>
                   </div>
                 </div>

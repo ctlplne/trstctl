@@ -73,12 +73,24 @@ describe("CA hierarchy and custody surface", () => {
     apiMock.issuerCapabilities.mockReset().mockResolvedValue({
       issuers: [
         {
-          issuer: "letsencrypt", discover: false, issue: true, renew: true, revoke: true,
-          key_handling: "requester_csr", validation: "acme_challenge", unattended_dv: true,
+          issuer: "letsencrypt",
+          discover: false,
+          issue: true,
+          renew: true,
+          revoke: true,
+          key_handling: "requester_csr",
+          validation: "acme_challenge",
+          unattended_dv: true,
         },
         {
-          issuer: "digicert", discover: false, issue: true, renew: true, revoke: false,
-          key_handling: "requester_csr", validation: "organizational", unattended_dv: false,
+          issuer: "digicert",
+          discover: false,
+          issue: true,
+          renew: true,
+          revoke: false,
+          key_handling: "requester_csr",
+          validation: "organizational",
+          unattended_dv: false,
           revoke_note: "Revoke from the DigiCert console.",
           unattended_dv_note: "Complete DCV in the DigiCert console.",
         },
@@ -657,9 +669,7 @@ describe("CA hierarchy and custody surface", () => {
   //
   // The bridge is the external-CA registry, where `type` IS the authority kind.
   it("shows each external issuer's real revocation and domain-validation capability", async () => {
-    apiMock.externalCAs.mockResolvedValue([
-      { id: "iss-ssh", type: "digicert", name: "SSH CA", status: "available" },
-    ]);
+    apiMock.externalCAs.mockResolvedValue([{ id: "iss-ssh", type: "digicert", name: "SSH CA", status: "available" }]);
     renderCAHierarchy();
 
     // DigiCert: no shipped revocation, no unattended DV — and both notes say
@@ -693,5 +703,4 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("trstctl issues and revokes this")).toBeInTheDocument();
     expect(screen.getByText("No domain validation")).toBeInTheDocument();
   });
-
 });

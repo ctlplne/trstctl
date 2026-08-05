@@ -87,9 +87,7 @@ export function EABCredentialsPanel() {
             <span className="text-xs text-muted-foreground">{t("protocols.eab.unscoped")}</span>
           )}
           <span className="text-2xs text-muted-foreground">
-            {credential.max_orders
-              ? t("protocols.eab.quota", { used: credential.orders_created, max: credential.max_orders })
-              : t("protocols.eab.noQuota")}
+            {credential.max_orders ? t("protocols.eab.quota", { used: credential.orders_created, max: credential.max_orders }) : t("protocols.eab.noQuota")}
           </span>
           {credential.not_after ? <span className="text-2xs text-muted-foreground">{formatDateTime(credential.not_after)}</span> : null}
         </span>
@@ -142,13 +140,7 @@ export function EABCredentialsPanel() {
       ) : rows.length === 0 && !query.loading ? (
         <p className="text-sm text-muted-foreground">{t("protocols.eab.notConfigured")}</p>
       ) : (
-        <DataGrid
-          ariaLabel={t("protocols.eab.listLabel")}
-          rows={rows}
-          columns={columns}
-          getRowId={(credential) => credential.key_id}
-          virtualization={false}
-        />
+        <DataGrid ariaLabel={t("protocols.eab.listLabel")} rows={rows} columns={columns} getRowId={(credential) => credential.key_id} virtualization={false} />
       )}
       <p className="text-2xs text-muted-foreground">{t("protocols.eab.rotation")}</p>
     </section>

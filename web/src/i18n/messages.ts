@@ -5571,6 +5571,87 @@ export const messages = {
     defaultMessage: "Upstream domain validation not allowed",
     description: "B7: saved state of the consent flag; the default, and the safe one.",
   },
+  "source.dr.posture.j2dr000001": {
+    defaultMessage: "Backup & disaster-recovery posture",
+    description: "J2: panel heading \u2014 reports when the backup was last verified, not when one last ran.",
+  },
+  "source.loading.4f9d1e0e3a": {
+    defaultMessage: "Loading\u2026",
+    description: "Placeholder while the DR posture request is in flight.",
+  },
+  "source.last.verified.j2dr000002": {
+    defaultMessage: "Last verified",
+    description: "J2: when the artifacts were last re-hashed and matched \u2014 not when a backup was taken.",
+  },
+  "source.never.j2dr000003": {
+    defaultMessage: "Never",
+    description: "J2: no verification has ever succeeded, which is a finding rather than a blank.",
+  },
+  "source.artifacts.checked.j2dr000004": {
+    defaultMessage: "Artifacts checked",
+    description: "J2: how many artifacts the verdict covers, so a partial verification cannot read as a full one.",
+  },
+  "source.unverifiable.j2dr000005": {
+    defaultMessage: "unverifiable (no recorded checksum)",
+    description: "J2: an artifact the backup never checksummed \u2014 there is nothing to compare it against.",
+  },
+  "source.verification.j2dr000006": {
+    defaultMessage: "Verification",
+    description: "J2: whether the last re-hash matched what was recorded.",
+  },
+  "source.verified.j2dr000007": {
+    defaultMessage: "Verified",
+    description: "J2: the artifacts still match what was recorded when they were written.",
+  },
+  "source.not.verified.j2dr000008": {
+    defaultMessage: "Not verified",
+    description: "J2: the artifacts no longer match, so a restore would not reproduce the claimed state.",
+  },
+  "source.restore.drill.j2dr000009": {
+    defaultMessage: "Restore drill",
+    description: "J2: sub-heading \u2014 what the last actual restore into a throwaway target established.",
+  },
+  "source.no.drill.yet.j2dr000010": {
+    defaultMessage:
+      "No restore drill has run on this deployment. Verification proves the bytes on disk still match what was recorded; only a drill proves they reproduce state.",
+    description: "J2: never-drilled is its own state and must not read like a drill that passed.",
+  },
+  "source.outcome.j2dr000011": {
+    defaultMessage: "Outcome",
+    description: "J2: restored, failed or skipped \u2014 a closed set.",
+  },
+  "source.events.restored.j2dr000012": {
+    defaultMessage: "Events restored",
+    description: "J2: zero events restored is a failed drill, not a fast one.",
+  },
+  "source.rpo.j2dr000013": {
+    defaultMessage: "RPO (achieved)",
+    description: "J2: how old the restored state was, measured from the backup's own manifest.",
+  },
+  "source.rto.floor.j2dr000014": {
+    defaultMessage: "RTO (floor)",
+    description: "J2: a drill on an idle machine is not a measurement of a bad afternoon; the number is a floor.",
+  },
+  "source.relay.migration.e1par00001": {
+    defaultMessage: "Relay migration",
+    description: "E1: column heading \u2014 whether this appliance family executes on a relay yet.",
+  },
+  "source.parity.not.applicable.e1par00002": {
+    defaultMessage: "Not an appliance",
+    description: "E1: a host or cloud connector has no relay migration to be partway through.",
+  },
+  "source.relay.migrated.e1par00003": {
+    defaultMessage: "Relay-executed",
+    description: "E1: every required gate cleared and the control-plane path refused.",
+  },
+  "source.not.migrated.e1par00004": {
+    defaultMessage: "Still control-plane executed",
+    description: "E1: not a fault \u2014 it is the behaviour that predates E1, and the gates below say what is left.",
+  },
+  "source.outstanding.gates.e1par00005": {
+    defaultMessage: "Outstanding (does not block migration):",
+    description: "E1: named E1 deliverables that are not built, so a migrated family cannot read as a finished one.",
+  },
   "source.deployment.truth.d3tri00001": {
     defaultMessage: "Deployment truth",
     description: "D3: panel heading \u2014 issued/delivered/verified counted separately.",

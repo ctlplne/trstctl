@@ -612,5 +612,4 @@ describe("auth + dashboards", () => {
     // wrong certificate is the thing to act on — not the 75%.
     expect(within(dash).getByText("1 diverged")).toBeInTheDocument();
   });
-
 });

@@ -1339,6 +1339,7 @@ export interface ConnectorCatalogItem {
   kind: string;
   name: string;
   native: boolean;
+  relay_parity?: ConnectorRelayParity;
   replay_safety: "at-most-once" | "reconciled";
   rollback: string;
   support?: ConnectorSupportRow;
@@ -1367,6 +1368,14 @@ export interface ConnectorDelivery {
 export interface ConnectorDeliveryList {
   items: ConnectorDelivery[];
   next_cursor?: string;
+}
+
+export interface ConnectorRelayParity {
+  detail: string;
+  met: string[];
+  missing: string[];
+  outstanding: string[];
+  relay_migrated: boolean;
 }
 
 export interface ConnectorSupportRow {
@@ -1469,6 +1478,7 @@ export interface DRPosture {
   failures?: DRArtifactFailure[];
   guidance: string;
   last_backup_at?: string;
+  last_drill?: DRDrill;
   last_verified_at?: string;
   verified: boolean;
 }

@@ -868,8 +868,8 @@ describe("protocol surface", () => {
       expect(within(panel as HTMLElement).getByText("*.app.example.test")).toBeInTheDocument();
       expect(within(panel as HTMLElement).getByText(/never validated here/i)).toBeInTheDocument();
       // Singular, because the count is 1. "1 identifiers" is the kind of detail
-    // that quietly tells a reader nobody looked at this screen.
-    expect(within(panel as HTMLElement).getByText(/1 identifier has never been validated/i)).toBeInTheDocument();
+      // that quietly tells a reader nobody looked at this screen.
+      expect(within(panel as HTMLElement).getByText(/1 identifier has never been validated/i)).toBeInTheDocument();
 
       // A name that genuinely validates shows its date rather than the warning.
       // Rendered through the locale/timezone policy like every other panel in
@@ -889,9 +889,7 @@ describe("protocol surface", () => {
       await renderProtocols();
 
       expect(await screen.findByText(/upstream authorization freshness unavailable/i)).toBeInTheDocument();
-      expect(
-        screen.getByText(/nothing here should be taken as evidence that validation is healthy/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/nothing here should be taken as evidence that validation is healthy/i)).toBeInTheDocument();
     });
 
     it("stays out of the way when nothing upstream has been observed", async () => {

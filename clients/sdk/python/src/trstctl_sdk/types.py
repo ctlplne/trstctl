@@ -1923,6 +1923,7 @@ ConnectorCatalogItem = TypedDict(
         'kind': str,
         'name': str,
         'native': bool,
+        'relay_parity': dict[str, Any],
         'replay_safety': str,
         'rollback': str,
         'support': dict[str, Any],
@@ -1959,6 +1960,18 @@ ConnectorDeliveryList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+ConnectorRelayParity = TypedDict(
+    'ConnectorRelayParity',
+    {
+        'detail': str,
+        'met': list[str],
+        'missing': list[str],
+        'outstanding': list[str],
+        'relay_migrated': bool,
     },
     total=False,
 )
@@ -2101,6 +2114,7 @@ DRPosture = TypedDict(
         'failures': list[dict[str, Any]],
         'guidance': str,
         'last_backup_at': str,
+        'last_drill': dict[str, Any],
         'last_verified_at': str,
         'verified': bool,
     },

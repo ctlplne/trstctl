@@ -104,12 +104,17 @@ type TargetConfig struct {
 	SecretName       string `json:"secret_name,omitempty"`
 }
 
-// RelayConnectorKinds is the closed set a relay can execute. It is exactly the
-// connectors the control plane's census declares VantageNetworkRelay; anything
-// else reaching a relay is a bug in the claim gate, and is refused here too
-// rather than trusted.
+// RelayConnectorKinds is the closed set a relay can execute.
+//
+// It READS the control plane's census rather than repeating it. The previous
+// version was a second literal list under a comment asserting it was "exactly
+// the connectors the control plane's census declares VantageNetworkRelay" — an
+// alignment nothing enforced, and the same shape as the duplicated executor
+// marker B2's review found, where a comment claimed a guard test existed and no
+// such test did. Anything else reaching a relay is a bug in the claim gate and
+// is refused here too rather than trusted.
 func RelayConnectorKinds() []string {
-	return []string{"a10", "cisco", "f5", "fortigate", "kemp", "netscaler", "paloalto"}
+	return connector.RelayVantageFamilies()
 }
 
 // Executes reports whether this relay can execute the named connector.

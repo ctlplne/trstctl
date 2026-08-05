@@ -89,7 +89,9 @@ export function AgentJobLedgerPanel() {
           </div>
           <div>
             <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.oldest")}</dt>
-            <dd className="font-medium">{redemptions.oldest_live_seconds ? waitLabel(redemptions.oldest_live_seconds) : t("operations.jobs.redemptions.none")}</dd>
+            <dd className="font-medium">
+              {redemptions.oldest_live_seconds ? waitLabel(redemptions.oldest_live_seconds) : t("operations.jobs.redemptions.none")}
+            </dd>
           </div>
           <p className="text-caption text-muted-foreground sm:col-span-3">{t("operations.jobs.redemptions.help")}</p>
         </dl>
@@ -111,9 +113,7 @@ export function AgentJobLedgerPanel() {
           <div>
             <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.lastRejected")}</dt>
             <dd className="font-medium">
-              {receipts.rejected > 0 && receipts.last_rejected_reason
-                ? receipts.last_rejected_reason
-                : t("operations.jobs.receipts.none")}
+              {receipts.rejected > 0 && receipts.last_rejected_reason ? receipts.last_rejected_reason : t("operations.jobs.receipts.none")}
             </dd>
           </div>
           <p className="text-caption text-muted-foreground sm:col-span-3">{t("operations.jobs.receipts.help")}</p>

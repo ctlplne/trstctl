@@ -264,6 +264,48 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Relay migration parity (E1, PARTIAL — the control-plane path is NOT yet
+  refused): `GET /api/v1/connectors/catalog` and the Connectors console publish a
+  per-family gate table for the seven appliance families, and the honest headline
+  is that NONE of them is migrated. What is true today: each family's connector is
+  proven against a faithful double of its management API, a deploy driven through
+  `relay.Execute` reaches that double and the certificate is read back out of it
+  byte-for-byte, and a10, f5, kemp and netscaler can additionally roll back and be
+  asked what they hold. What is NOT true is the sentence E1 exists to make true —
+  that these families execute on a relay instead of in the control plane. The
+  control-plane dispatcher sweeps every `connector.*` outbox row on a one-second
+  ticker, and the outbox claim query carries no `required_agent_role` predicate;
+  that column is read by `ClaimAgentJobs` when an agent asks for work, not by the
+  dispatcher. So an appliance deploy stamped `network` for a relay is executed by
+  the control plane, which gets there first. The A3 role stamp is correct in the
+  column and does not decide who runs the row.
+  Refusing in the dispatcher is a three-line change and is deliberately not made
+  here. The only end-to-end evidence that an appliance deploy works through the
+  served API is the DoD connector suite, which drives a10, cisco, kemp and
+  netscaler through the CONTROL PLANE to their device doubles and reads the
+  certificate back off each one. Flipping the refusal without first re-homing that
+  suite onto a relay would retire a proven path in favour of one proven only by a
+  unit test, and would make every appliance deploy require an enrolled network
+  relay — a real change in what a deployment needs, which belongs in a change that
+  can prove the replacement works. `cp_path_refusal` is therefore published as an
+  unmet gate against all seven families rather than left as a silent gap.
+  The design intended for that change, recorded here so it is not re-derived: the
+  dispatcher refuses when a network relay is ENROLLED for the tenant, and executes
+  as it does today when none is. That keeps "configured but the relay is down" as
+  a wait — which is the correct outcome, since a deploy racing past an unavailable
+  relay is the failure this gate exists to prevent — while an estate that never
+  enrolled one is unaffected rather than broken. An unconditional refusal would
+  make a relay a hard prerequisite for every appliance deploy, which is a larger
+  promise than E1 needs to keep.
+  Two further E1 deliverables are unbuilt and named per family in the same table:
+  F5 HA-peer sync, which blocks F5 specifically because a deploy that updates one
+  peer of an HA pair reports success while the other keeps serving the old
+  certificate until a failover surfaces it as expired; and device-generated CSR
+  mode, which five families' APIs support and none is wired for. Device-generated
+  CSR is reported as outstanding rather than blocking, because the current mode —
+  the relay generates the key inside the segment and installs it — is correct as
+  it stands, and holding four families in the control plane to avoid an
+  improvement would be the worse trade.
   Served DR posture (J2): `GET /api/v1/platform/dr-posture` and
   `trstctl platform dr-posture` report when this deployment's backup was last
   VERIFIED — meaning its artifacts were re-hashed and matched — rather than when one
@@ -304,6 +346,26 @@ never live in the API process. What you can do end to end against the running bi
   off a document whose signature still verifies. A deployment that has never drilled
   serves no drill rather than a zero-valued one, since zeros render as an instant,
   complete recovery.
+  The drill RUNS: `RunRestoreDrillScheduler` is registered as a runtime worker and
+  fires on `backup.drill_interval` (daily by default, `"0"` to disable, and an
+  unparseable value fails startup rather than silently defaulting). It is worth
+  recording that the first cut of this work did not have that. The drill, the
+  attestation, the ephemeral target and the endpoint were all built and all tested,
+  and nothing in the running binary ever called any of it — the fourth instance in
+  this backlog of a capability that is complete, tested, documented and unreachable,
+  after D2's VerifyAddress with no producer, B2's `endpoint.renew` with no enqueue,
+  and B5's custody projection that was never written. Unit tests cannot catch it by
+  construction: they are the caller that production lacks. Two tests now assert the
+  wiring itself, and the DR panel on the Platform page reads the attestation the
+  scheduler writes rather than a second source that could agree with nothing.
+  A deployment that CANNOT drill — no external PostgreSQL to build a throwaway
+  database in — records a skipped attestation saying so, rather than reporting that
+  it has never drilled. Those are different facts, and the second is the one an
+  operator would read as an oversight worth chasing.
+  Scope: the drill restores the EVENT LOG. Configuration and key material are not
+  restored, because copying an operator's signer keystore into a throwaway database
+  to prove a point is not a proof worth having; so a green drill establishes that the
+  event log reproduces state, not that a full deployment would come back.
   Enrolment diagnostics (I4): a refused ACME enrolment now produces a diagnosis
   naming the protocol, the step that failed, a cause from a CLOSED set, and a
   remediation. The hook sits at the single point every ACME refusal passes through,

@@ -479,11 +479,27 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
+	// J2: an unparseable drill interval fails startup rather than falling back
+	// to the default. Silently defaulting would mean an operator who typed
+	// "24hours" gets a daily drill and never learns the setting was ignored,
+	// and the one who typed it intending to DISABLE the drill gets one running
+	// they did not ask for.
+	drillInterval, err := cfg.Backup.DrillIntervalDuration()
+	if err != nil {
+		return Deps{}, fmt.Errorf("backup drill_interval: %w", err)
+	}
 	return Deps{
 		// J2: empty when the operator configured no backup directory, which the
 		// DR surface reports as "not configured" rather than as a failure.
 		BackupDirectory: cfg.Backup.Directory,
-		Store:           st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
+		// J2: the drill closes over the config here, in the one place that
+		// already holds it, so the Server never gets a handle on the DSN it
+		// would have no other reason to have. Nil when no backup directory is
+		// configured — there is nothing to drill, and a drill against a path
+		// nobody chose would fail nightly and mean nothing.
+		RestoreDrill:         restoreDrillRunner(cfg),
+		RestoreDrillInterval: drillInterval,
+		Store:                st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:         cfg.Signer.KeyStoreDir,
 		EgressGuard:               egressGuard,
 		ServiceNowBindings:        serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
@@ -1031,6 +1047,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunDiscoveryScheduler),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),
+			startRuntimeWorker(workCtx, srv.RunRestoreDrillScheduler),
 			startRuntimeWorker(workCtx, srv.RunLicensedBackgroundWorkers),
 		}
 		<-workCtx.Done()

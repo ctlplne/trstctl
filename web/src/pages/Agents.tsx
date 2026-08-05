@@ -322,8 +322,16 @@ export function Agents() {
           <p className="text-sm text-muted-foreground">{translateNow("source.agent.role.help.a2r0le0002")}</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {AGENT_ROLE_CHOICES.map((choice) => (
-              <label key={choice.value} className="flex items-start gap-2 text-sm">
+              // Explicitly paired rather than relying on the wrapping label:
+              // the control is a component, so neither a reader of this code nor
+              // the a11y linter can see that a form control is inside it.
+              <label
+                key={choice.value}
+                htmlFor={`agent-role-${choice.value}`}
+                className="flex items-start gap-2 text-sm"
+              >
                 <Checkbox
+                  id={`agent-role-${choice.value}`}
                   className="mt-1"
                   checked={tokenRoles.includes(choice.value)}
                   onChange={(event) =>

@@ -133,9 +133,7 @@ export function CTMonitoringPanel() {
 
       <p className="mt-3 text-xs text-muted-foreground">{t("discovery.ct.coverageHonesty")}</p>
 
-      {read?.kind === "unavailable" ? (
-        <p className="mt-3 text-sm text-muted-foreground">{t("discovery.ct.notConfigured")}</p>
-      ) : null}
+      {read?.kind === "unavailable" ? <p className="mt-3 text-sm text-muted-foreground">{t("discovery.ct.notConfigured")}</p> : null}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="grid content-start gap-2">
@@ -154,9 +152,7 @@ export function CTMonitoringPanel() {
               ))}
             </ul>
           )}
-          {monitoring?.run?.completed_at ? (
-            <p className="text-2xs text-muted-foreground">{formatDateTime(monitoring.run.completed_at)}</p>
-          ) : null}
+          {monitoring?.run?.completed_at ? <p className="text-2xs text-muted-foreground">{formatDateTime(monitoring.run.completed_at)}</p> : null}
         </div>
 
         <div className="grid content-start gap-2">

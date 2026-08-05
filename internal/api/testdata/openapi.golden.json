@@ -5130,6 +5130,9 @@
           "native": {
             "type": "boolean"
           },
+          "relay_parity": {
+            "$ref": "#/components/schemas/ConnectorRelayParity"
+          },
           "replay_safety": {
             "enum": [
               "at-most-once",
@@ -5265,6 +5268,42 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "ConnectorRelayParity": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "met": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "outstanding": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "relay_migrated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "met",
+          "missing",
+          "outstanding",
+          "relay_migrated",
+          "detail"
         ],
         "type": "object"
       },
@@ -5658,6 +5697,9 @@
           "last_backup_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "last_drill": {
+            "$ref": "#/components/schemas/DRDrill"
           },
           "last_verified_at": {
             "format": "date-time",

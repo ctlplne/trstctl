@@ -161,6 +161,7 @@ public final class OpenApiSchemas {
       "ConnectorCatalogItem",
       "ConnectorDelivery",
       "ConnectorDeliveryList",
+      "ConnectorRelayParity",
       "ConnectorSupportRow",
       "ConnectorTargetActionRequest",
       "ContextualRiskPriorities",

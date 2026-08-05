@@ -77,9 +77,7 @@ describe("agent job receipt health", () => {
   });
 
   it("marks refusals as needing attention, and leaves a clean fabric unmarked", async () => {
-    apiMock.agentJobPosture.mockResolvedValue(
-      posture({ receipts: { verified: 12, rejected: 1, last_rejected_reason: "unsigned" } }),
-    );
+    apiMock.agentJobPosture.mockResolvedValue(posture({ receipts: { verified: 12, rejected: 1, last_rejected_reason: "unsigned" } }));
     const { unmount } = renderPanel();
     await waitFor(() => expect(screen.getByText("Receipts refused")).toBeInTheDocument());
     expect(valueFor("Receipts refused")).toHaveClass("text-status-warning");

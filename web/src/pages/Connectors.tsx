@@ -484,6 +484,7 @@ export function Connectors() {
                     <th scope="col">{translateNow("source.executes.on.a3vant0001")}</th>
                     <th scope="col">{translateNow("source.rollback.evidence.bf960c995c")}</th>
                     <th scope="col">{translateNow("source.device.proof.e1dev00001")}</th>
+                    <th scope="col">{translateNow("source.relay.migration.e1par00001")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -542,6 +543,45 @@ export function Connectors() {
                               <span className="mt-1 block text-xs text-status-warning">{translateNow("source.no.hardware.tested.e3sup00001")}</span>
                             ) : null}
                           </>
+                        ) : null}
+                      </td>
+                      {/* E1: the relay migration, per family.
+                          The honest headline is that none of the seven is
+                          migrated, and the reason is named rather than
+                          summarised: cisco is held back by having no rollback
+                          and no readback, f5 by HA-peer sync, and all of them by
+                          the control plane still executing their deploys. A
+                          percentage would let a reader assume the remainder is
+                          small and alike. */}
+                      <td className="max-w-[26rem]">
+                        {!connector.relay_parity ? (
+                          /* Not an appliance. There is no relay migration for a
+                             connector that writes files on a host, so silence
+                             here is accurate rather than a gap. */
+                          <span className="text-muted-foreground">
+                            {translateNow("source.parity.not.applicable.e1par00002")}
+                          </span>
+                        ) : connector.relay_parity.relay_migrated ? (
+                          <span className="font-medium text-status-success">
+                            {translateNow("source.relay.migrated.e1par00003")}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="text-status-warning">
+                              {translateNow("source.not.migrated.e1par00004")}
+                            </span>
+                            <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
+                              {connector.relay_parity.missing.map((gate) => (
+                                <li key={gate}>{gate}</li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                        {connector.relay_parity && connector.relay_parity.outstanding.length > 0 ? (
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {translateNow("source.outstanding.gates.e1par00005")}{" "}
+                            {connector.relay_parity.outstanding.join(", ")}
+                          </span>
                         ) : null}
                       </td>
                     </tr>

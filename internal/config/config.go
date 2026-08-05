@@ -1274,6 +1274,29 @@ type Backup struct {
 	// was never meant to exist as a missing backup, which is a false alarm on
 	// every deployment that backs up some other way.
 	Directory string `json:"directory,omitempty"`
+	// DrillInterval is how often the scheduled restore drill runs (epic J2).
+	// Empty uses the default; "0" disables the drill.
+	//
+	// Disabling is spelled explicitly rather than inferred from an absent
+	// setting, because a drill that quietly never runs leaves the DR surface
+	// reporting "never drilled" forever — a state indistinguishable from a
+	// configuration oversight, which is exactly the confusion this surface
+	// exists to remove.
+	DrillInterval string `json:"drill_interval,omitempty"`
+}
+
+// DrillIntervalDuration is how often the restore drill runs, and whether it runs
+// at all (epic J2).
+//
+// Defaults to daily. A drill is not free — it creates a database, replays the
+// event log into it, and drops it — so the default is the longest interval that
+// still answers "could we restore what we backed up last night" before the next
+// night's backup replaces the evidence.
+func (b Backup) DrillIntervalDuration() (time.Duration, error) {
+	if strings.TrimSpace(b.DrillInterval) == "" {
+		return 24 * time.Hour, nil
+	}
+	return time.ParseDuration(b.DrillInterval)
 }
 
 // RateLimit configures the PostgreSQL-backed per-tenant rate limiter (R2.3 /

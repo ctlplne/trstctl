@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,6 +33,98 @@ import (
 
 // ErrDrillTargetUnavailable is returned when no ephemeral target can be created.
 var ErrDrillTargetUnavailable = errors.New("server: no ephemeral database is available for a restore drill")
+
+// RunRestoreDrillScheduler runs the restore drill on its interval (epic J2).
+//
+// This exists because the first cut of J2 did not have it, and that omission is
+// worth recording rather than quietly fixing: the drill, the attestation, the
+// ephemeral target and the DR posture endpoint were all built and all tested,
+// and NOTHING in the running binary ever called RunRestoreDrill. The capability
+// was unreachable in production — the same defect class as D2's VerifyAddress
+// with no producer, B2's endpoint.renew with no enqueue, and B5's custody
+// projection that was never written. Three previous instances, and it happened
+// again inside the change that was supposed to prove backups are real.
+//
+// The failure mode it would have shipped is specific and bad: the DR surface
+// would have reported "never drilled" on every deployment forever, which reads
+// as "nobody has got around to configuring it" rather than "this product cannot
+// do it", so no operator would ever have asked why.
+func (s *Server) RunRestoreDrillScheduler(ctx context.Context) {
+	if s.restoreDrill == nil || s.restoreDrillInterval < 0 {
+		// No drill configured, or explicitly disabled. Block until shutdown so
+		// the worker's lifecycle matches its siblings.
+		<-ctx.Done()
+		return
+	}
+	interval := s.restoreDrillInterval
+	if interval == 0 {
+		interval = defaultRestoreDrillInterval
+	}
+	// Not at startup. A restore drill replays the whole event log into a fresh
+	// database, and doing that while the process is still opening its listeners
+	// would make every cold start slower and every crash-loop restart heavier at
+	// exactly the moment the deployment is least healthy.
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			_, _ = s.RunRestoreDrillOnce(ctx)
+		}
+	}
+}
+
+// defaultRestoreDrillInterval is how often the drill runs when unconfigured.
+const defaultRestoreDrillInterval = 24 * time.Hour
+
+// RunRestoreDrillOnce runs one drill and records its attestation.
+//
+// Exported so a served-path test can run exactly one drill on demand rather than
+// waiting an interval — the acceptance criterion is that a drill produces a
+// signed attestation, and a test has to be able to make one happen.
+//
+// A FAILED drill is recorded, not discarded. The attestation whose outcome is
+// "failed" is the single most valuable thing this surface can hold: it means the
+// backup exists and cannot be restored, which is the state every other signal in
+// the system reports as healthy.
+func (s *Server) RunRestoreDrillOnce(ctx context.Context) (backup.DrillAttestation, error) {
+	if s.restoreDrill == nil {
+		return backup.DrillAttestation{}, ErrDrillTargetUnavailable
+	}
+	attestation, err := s.restoreDrill(ctx)
+	// An attestation that names an outcome is recorded even when an error came
+	// back with it, and the case that matters is the SKIPPED one: RunDrill
+	// returns a populated "no ephemeral target" attestation alongside a sentinel
+	// error. Treating that as a plain failure and dropping the attestation would
+	// leave a deployment that CANNOT drill reporting that it has NEVER drilled —
+	// the two states this surface exists to tell apart, collapsed by the code
+	// that serves it.
+	//
+	// An empty outcome is different: the drill did not get far enough to say
+	// anything, so the previous attestation stands rather than being replaced by
+	// a blank that would read as a clean run.
+	if attestation.Outcome == "" {
+		return backup.DrillAttestation{}, err
+	}
+	s.restoreDrillMu.Lock()
+	s.lastRestoreDrill = &attestation
+	s.restoreDrillMu.Unlock()
+	return attestation, err
+}
+
+// LastRestoreDrill returns the most recent attestation, or nil if none has run.
+//
+// Nil is the honest answer and the API depends on it being distinguishable: a
+// zero-valued DrillAttestation would present as a drill that restored zero
+// events in zero time and found nothing wrong, which is precisely how a
+// never-drilled deployment would come to look like a perfectly drilled one.
+func (s *Server) LastRestoreDrill() *backup.DrillAttestation {
+	s.restoreDrillMu.Lock()
+	defer s.restoreDrillMu.Unlock()
+	return s.lastRestoreDrill
+}
 
 // RunRestoreDrill restores the configured backup into a throwaway database and
 // returns the attestation.
@@ -61,6 +154,27 @@ func RunRestoreDrill(ctx context.Context, cfg *config.Config, backupDir string) 
 		drillCfg.Postgres.DSN = target
 		return restoreEventLog(ctx, &drillCfg, latestBackupArtifact(backupDir), false)
 	}, nil)
+}
+
+// restoreDrillRunner builds the drill closure for a configuration, or nil when
+// this deployment has nothing to drill (epic J2).
+//
+// Nil rather than a closure that always fails. The difference reaches an
+// operator: a nil runner leaves the DR surface reporting that no drill is
+// configured, which is a true statement about a deployment that backs up
+// elsewhere and not a fault. A closure that ran nightly and failed nightly
+// would manufacture an alert out of a choice somebody made deliberately.
+func restoreDrillRunner(cfg *config.Config) func(context.Context) (backup.DrillAttestation, error) {
+	if cfg == nil || strings.TrimSpace(cfg.Backup.Directory) == "" {
+		return nil
+	}
+	dir := cfg.Backup.Directory
+	// The config is captured by value at assembly, so a later mutation of the
+	// caller's struct cannot redirect a drill at a different database.
+	snapshot := *cfg
+	return func(ctx context.Context) (backup.DrillAttestation, error) {
+		return RunRestoreDrill(ctx, &snapshot, dir)
+	}
 }
 
 // createEphemeralDatabase makes a throwaway database and returns its DSN plus a
