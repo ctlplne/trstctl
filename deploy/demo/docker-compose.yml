@@ -132,6 +132,18 @@ services:
         condition: service_completed_successfully
     environment:
       TRSTCTL_SERVER_ADDR: ":8443"
+      # A5: the agent channel is OFF by default, which is the right production
+      # default and wrong for a demo. Without it the seed job advertises agent
+      # enrollment tokens that nothing can redeem — an evaluator gets a token,
+      # starts an agent, and it cannot dial anything. Turning it on here makes
+      # the advertised tokens mean something.
+      TRSTCTL_AGENT_CHANNEL_ENABLED: "true"
+      TRSTCTL_AGENT_CHANNEL_ADDR: ":9443"
+      # An empty claimable set serves the job ledger and hands nothing out, so an
+      # enrolled agent idles while every surface looks healthy. Deliberately
+      # excludes connector.deploy: a demo stack must not mutate an appliance
+      # somebody pointed it at by accident.
+      TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS: "discovery.run,endpoint.verify,connector.test"
       TRSTCTL_POSTGRES_MODE: external
       TRSTCTL_POSTGRES_DSN: "postgres://trstctl:trstctl_demo@postgres:5432/trstctl?sslmode=disable"
       TRSTCTL_NATS_MODE: external

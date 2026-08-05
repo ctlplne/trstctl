@@ -213,6 +213,21 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 }
 
 var reviewedExecUses = map[string]map[string]bool{
+	// A5's single-box demo spawns the SIBLING trstctl-agent binary. Reviewed
+	// rather than refactored because there is nothing to validate away: the
+	// program is resolved beside this executable (or from PATH) and never comes
+	// from a request, every argv entry is built from this process's own
+	// configuration, and no shell is involved. Exec is also the POINT — the
+	// agent binary must not link the control plane
+	// (docs/agent_binary_import_boundary_test.go), so a demo that avoided the
+	// process boundary would violate a stronger rule than this one.
+	//
+	// Covered by cmd/trstctl/demo_test.go, which pins that the demo execs rather
+	// than imports the agent and that the bootstrap token travels by 0600 file
+	// rather than as an argument.
+	"cmd/trstctl/demo.go": {
+		"runDemoAgent": true,
+	},
 	"tools/pqclab/main.go": {
 		"newValidatedCommand": true,
 	},

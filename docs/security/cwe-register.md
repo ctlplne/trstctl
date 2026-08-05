@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1067 annotated sites across 25 rules. Each row is
+1068 annotated sites across 25 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -135,7 +135,7 @@ not this file.
 | `internal/config/audit_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:80` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config.go:1874` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:2455` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2472` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:169` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:353` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -526,7 +526,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (136 sites)
+### G204 — CWE-78 OS command injection (137 sites)
 
 | Location | Reason |
 |---|---|
@@ -540,6 +540,7 @@ not this file.
 | `clients/embedded/est_client_test.go:217` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `cmd/trstctl-agent/sshtrust.go:167` | operator-configured sshd reload command; running it is the feature (CWE-78) |
 | `cmd/trstctl/backup_cmd_test.go:40` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `cmd/trstctl/demo.go:151` | binary resolved beside this executable, args are our own config (CWE-78) |
 | `deploy/deploycheck_test.go:119` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:442` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |

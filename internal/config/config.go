@@ -2059,13 +2059,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	// its declared FIPS requirement, operator-settable via env.
 	setString(getenv, "TRSTCTL_CA_GOVERNANCE_MODE", &c.CA.GovernanceMode)
 	setBool(getenv, "TRSTCTL_CA_REQUIRE_FIPS", &c.CA.RequireFIPS)
-	// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005).
-	setBool(getenv, "TRSTCTL_AGENT_CHANNEL_ENABLED", &c.AgentChannel.Enabled)
-	setString(getenv, "TRSTCTL_AGENT_CHANNEL_ADDR", &c.AgentChannel.Addr)
-	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR", &c.AgentChannel.HTTPRenewalAddr)
-	setString(getenv, "TRSTCTL_AGENT_CHANNEL_SERVER_NAME", &c.AgentChannel.ServerName)
-	setString(getenv, "TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &c.AgentChannel.CACertFile)
-	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &c.AgentChannel.HeartbeatInterval)
+	applyAgentChannelEnv(getenv, &c.AgentChannel)
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
 	applyProtocolsEnv(getenv, &c.Protocols)
 	applyAuthEnv(getenv, &c.Auth)
@@ -2102,6 +2096,29 @@ func (c *Config) applyEnv(getenv func(string) string) {
 		c.Federation.Peers = []FederationPeer{peer}
 	}
 	applyPCASEnv(getenv, &c.PCAS)
+}
+
+// applyAgentChannelEnv resolves the served agent steady-state mTLS gRPC channel
+// (WIRE-004 / OPS-005).
+//
+// Its own named stage because applyEnv is at the startup-hotspot line budget,
+// and that budget is not bookkeeping: applyEnv is where every subsystem's
+// environment is resolved, and a function nobody can hold in their head is
+// where a precedence bug hides.
+func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
+	setBool(getenv, "TRSTCTL_AGENT_CHANNEL_ENABLED", &a.Enabled)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_ADDR", &a.Addr)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR", &a.HTTPRenewalAddr)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_SERVER_NAME", &a.ServerName)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &a.CACertFile)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &a.HeartbeatInterval)
+	// The claimable-job allowlist was the ONE AgentChannel field with no env key,
+	// so a container deployment could enable the channel and had no way to let an
+	// agent claim anything — the ledger is served, hands nothing out, and the
+	// enrolled agent idles while every surface looks healthy. Every sibling above
+	// is env-settable; this closes the gap rather than leaving a compose file to
+	// set a variable nothing reads.
+	setCSV(getenv, "TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS", &a.ClaimableJobKinds)
 }
 
 func applyServerAndSpineEnv(getenv func(string) string, c *Config) {

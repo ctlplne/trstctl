@@ -115,12 +115,17 @@ type rootFlags struct {
 	migrateStatus        bool
 	migrate              bool
 	fipsRequired         bool
+	demo                 bool
 }
 
 func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
 	flags := rootFlags{}
 	fs := flag.NewFlagSet("trstctl", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	fs.BoolVar(&flags.demo, "demo", false,
+		"single-box evaluation: serve the control plane AND start a colocated host agent (A5). "+
+			"Enables the agent channel and a conservative claimable-job set, and reports every "+
+			"setting it changes. Refuses to start rather than serving a control plane with no agent.")
 	fs.BoolVar(&flags.showVersion, "version", false, "print version information and exit")
 	fs.BoolVar(&flags.checkConfig, "check-config", false, "resolve and print the effective configuration, then exit")
 	fs.BoolVar(&flags.healthCheck, "health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
@@ -258,9 +263,46 @@ func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(stri
 	// projections, orchestrator, and API in order, supervises the signer as a
 	// child process (AN-4), serves until ctx is cancelled, and then shuts down
 	// gracefully (drain the outbox, close connections in order).
+	// A5: single-box demo. The config is adjusted BEFORE the summary prints, so
+	// what an operator reads is what actually runs — and every change is listed
+	// rather than applied quietly.
+	var demoCtx context.Context
+	var stopDemo context.CancelFunc
+	if flags.demo {
+		for _, change := range ApplyDemoDefaults(cfg) {
+			_, _ = fmt.Fprintf(stderr, "demo: forcing %s\n", change)
+		}
+		demoCtx, stopDemo = context.WithCancel(ctx)
+		defer stopDemo()
+	}
+
 	_, _ = fmt.Fprintf(stderr, "starting %s\n", buildinfo.String("trstctl"))
 	_, _ = io.WriteString(stderr, configSummary(cfg))
 	_, _ = fmt.Fprintf(stderr, "crypto.fips: %s\n", fipsStatus.Summary())
+
+	if flags.demo {
+		// Supervised alongside the control plane: RunWithExtraMigrations blocks
+		// until ctx ends, so the agent has to be brought up from a goroutine
+		// that waits for the server to answer /healthz first.
+		//
+		// A failure here CANCELS THE WHOLE PROCESS rather than logging and
+		// continuing. --demo is an explicit request for a colocated agent, and a
+		// run that serves the control plane while silently omitting the agent is
+		// the "looks like it worked" outcome this flag exists to prevent.
+		go func() {
+			token, err := demoAPIToken(demoCtx, cfg, getenv)
+			if err != nil {
+				_, _ = fmt.Fprintf(stderr, "demo: %v\n", err)
+				stopDemo()
+				return
+			}
+			if err := runDemoAgent(demoCtx, cfg, token, stderr); err != nil {
+				_, _ = fmt.Fprintf(stderr, "demo: %v\n", err)
+				stopDemo()
+			}
+		}()
+	}
+
 	if err := server.RunWithExtraMigrations(ctx, cfg, extraMigrationSources(), attachEE); err != nil {
 		return err
 	}

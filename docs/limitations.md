@@ -264,6 +264,41 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Single-box demo (A5): `trstctl --demo` serves the control plane AND starts a
+  colocated host agent. Evaluating this product otherwise needs two installs, and
+  until both exist nothing the product is FOR can be shown — no deploy executes, no
+  endpoint verifies, no renewal lands on a host. It is also the cheapest defence
+  against the defect this programme keeps finding: six capabilities have been
+  complete, tested and unreachable from the running binary, and every one would have
+  been obvious the first time somebody drove it end to end on one machine.
+  The agent is EXEC'd, never linked. `cmd/trstctl-agent` must not link the control
+  plane and a guard pins that; importing it here to save a process would put both on
+  the same side of the boundary the architecture rests on, and the demo would stop
+  exercising the real channel. Two binaries over the real gRPC channel is what a
+  deployment does, so the demo tests the actual path.
+  `--demo` FORCES two settings and reports both rather than applying them quietly:
+  the agent channel (off by default — correct for production, fatal for a demo,
+  because the agent has nothing to dial) and a conservative claimable-job set
+  (`discovery.run`, `endpoint.verify`, `connector.test`). An empty claimable
+  allowlist is the trap worth naming: the job ledger is served, hands nothing out,
+  and the agent enrols successfully and idles while every surface looks healthy —
+  the most misleading possible demo. `connector.deploy` is deliberately NOT enabled;
+  an evaluation box must not mutate an appliance somebody pointed it at by accident.
+  Settings an operator did set are never overwritten.
+  A missing agent binary is a FATAL error naming where it looked and how to build
+  one, not a warning. `--demo` is an explicit request for a colocated agent, and a
+  run that serves the control plane while silently omitting the agent is exactly the
+  "looks like it worked" outcome the flag exists to prevent. The bootstrap token is
+  minted through the SERVED enrolment API — not by reaching into the store, because
+  reaching in would let the demo work while the served enrolment path was broken —
+  and written to a 0600 file, never passed as an argument, since process arguments
+  expose bearer credentials and the agent refuses them for that reason.
+  Also fixed here: `agent_channel.claimable_job_kinds` was the ONE AgentChannel
+  field with no environment key, so a container deployment could enable the channel
+  and had no way to let an agent claim anything. `deploy/demo/docker-compose.yml`
+  set no agent-channel variables at all while its seed job advertised enrollment
+  tokens nothing could redeem; it now enables the channel and the same conservative
+  claimable set.
   SECURITY FIX (provider plane, 2026-08-05): the provider plane authenticated NOBODY.
   `operatorFromRequest` parsed `Authorization: Bearer provider:<id>:<email>` for SHAPE
   and returned an operator with `Role: OperatorAdmin` and `MFA: true` — no verification
