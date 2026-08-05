@@ -1943,6 +1943,28 @@ looking for a credential that was never there.
   and this surface observes and gates rather than pushes; ring assignment is
   manual with no automatic canary selection; and there is no per-ring soak
   window beyond the 10-minute grace before silence counts against a ring.
+- XREC reconciliation rounds are configurable (AUD-1, C4): a `reconcile` block
+  in the config file supplies the schedules the rounds worker needs. Before
+  this, `roundSchedules` was declared and never assigned, so the worker —
+  registered, licensed, and visible in the runtime roster — hit its
+  `len(Schedules)==0` guard on the first tick and blocked for the life of the
+  process. Zero anti-entropy rounds ever ran, no `xrec.witness.recorded` event
+  was ever appended, and `GET /api/v1/reconcile/agreement` answered "0 open
+  witnesses" forever. A licensed operator watching a healthy worker would
+  reasonably conclude reconciliation was running while nothing was ever
+  compared. A schedule naming FEWER THAN TWO authorities is dropped rather than
+  scheduled: comparing an authority to itself produces no witness and would make
+  the report claim `collecting=true` on a deployment that still compares
+  nothing — the same illusion in a new place. An unparseable cadence or liveness
+  takes a sane default rather than zero, because a zero cadence busy-loops the
+  scheduler against a customer's authorities and a zero liveness marks every
+  authority instantly stale. Scope, stated exactly: this makes rounds
+  SCHEDULABLE. The runtime's authority adapters are still nil, so a scheduled
+  round has no durable external source to collect from — `collecting` reports
+  the schedule count, not that any authority was successfully read — and the
+  end-to-end claim-1 flow in C4's acceptance (two seeded authorities producing a
+  witness identifying exactly the differing subset, verified offline) is NOT
+  demonstrated.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives

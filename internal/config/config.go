@@ -96,6 +96,7 @@ type Config struct {
 	Breakglass                Breakglass               `json:"breakglass"`
 	Privacy                   Privacy                  `json:"privacy"`
 	AttestedIssuance          AttestedIssuance         `json:"attested_issuance"`
+	Reconcile                 Reconcile                `json:"reconcile"`
 	Backup                    Backup                   `json:"backup"`
 	License                   License                  `json:"license"`
 	RateLimit                 RateLimit                `json:"rate_limit"`
@@ -1187,6 +1188,43 @@ type AttestedIssuance struct {
 	// because the attestation they rest on is a point-in-time claim.
 	DefaultTTL string `json:"default_ttl,omitempty"`
 	MaxTTL     string `json:"max_ttl,omitempty"`
+}
+
+// Reconcile configures cross-authority reconciliation rounds (C4/XREC, AUD-1).
+//
+// The rounds worker existed, was registered, and appeared in the runtime worker
+// roster — and hit a len(Schedules)==0 guard on its first tick, then blocked for
+// the life of the process. Zero rounds ever ran, no witness was ever raised, and
+// the served agreement report answered "0 open witnesses" forever. A licensed
+// operator saw a healthy registered worker and concluded reconciliation was
+// running while nothing was ever compared.
+//
+// There was no config key to populate schedules. This is it.
+type Reconcile struct {
+	// Schedules is the set of reconciliation rounds to run. EMPTY means nothing
+	// compares anything, which the served report already states as
+	// collecting=false rather than letting zero witnesses read as agreement.
+	Schedules []ReconcileSchedule `json:"schedules,omitempty"`
+}
+
+// ReconcileSchedule is one tenant's reconciliation round.
+type ReconcileSchedule struct {
+	TenantID string `json:"tenant_id"`
+	// Cadence is how often a round runs, e.g. "1h".
+	Cadence string `json:"cadence,omitempty"`
+	// Jitter spreads rounds so a fleet of control planes does not stampede one
+	// authority in the same second.
+	Jitter string `json:"jitter,omitempty"`
+	// Liveness is how stale an authority's digest may be before staleness is
+	// itself a witness. An authority nobody collected from is not agreeing.
+	Liveness    string               `json:"liveness,omitempty"`
+	Authorities []ReconcileAuthority `json:"authorities,omitempty"`
+}
+
+// ReconcileAuthority names one authority in a round.
+type ReconcileAuthority struct {
+	AuthorityID string `json:"authority_id"`
+	Liveness    string `json:"liveness,omitempty"`
 }
 
 // Telemetry configures opt-in, off-by-default usage reporting (F-telemetry).

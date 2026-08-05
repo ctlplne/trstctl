@@ -5,6 +5,9 @@
 package main
 
 import (
+	"strings"
+	"time"
+
 	"context"
 	"io/fs"
 	"log/slog"
@@ -30,6 +33,7 @@ import (
 	eereconcile "trstctl.com/trstctl/ee/reconcile"
 	eereconcileapi "trstctl.com/trstctl/ee/reconcile/api"
 	eereconcileplanremediation "trstctl.com/trstctl/ee/reconcile/plan/remediation"
+	"trstctl.com/trstctl/ee/reconcile/rounds"
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eesuccessionapi "trstctl.com/trstctl/ee/succession/api"
 	eesuccessionbackground "trstctl.com/trstctl/ee/succession/background"
@@ -161,7 +165,7 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		attachAgentDelegation(cfg, log, deps)
 	}
 	if lic != nil && lic.Has(license.FeatureReconcile) {
-		if err := attachReconcile(log, deps); err != nil {
+		if err := attachReconcile(cfg, log, deps); err != nil {
 			return err
 		}
 	}
@@ -372,7 +376,64 @@ func attachFederation(ctx context.Context, cfg *config.Config, log *slog.Logger,
 	return nil
 }
 
-func attachReconcile(log *slog.Logger, deps *server.Deps) error {
+// reconcileConfigOf tolerates a nil config so a caller that never loaded one
+// schedules nothing rather than panicking — fail closed, not fail loud.
+func reconcileConfigOf(cfg *config.Config) config.Reconcile {
+	if cfg == nil {
+		return config.Reconcile{}
+	}
+	return cfg.Reconcile
+}
+
+// reconcileSchedulesFromConfig maps operator config onto reconciliation rounds.
+//
+// A schedule with no authorities is DROPPED rather than scheduled: a round that
+// compares one authority to nothing produces no witness and would inflate the
+// served schedule count, making "collecting" true on a deployment that still
+// compares nothing.
+func reconcileSchedulesFromConfig(c config.Reconcile) []rounds.Config {
+	var out []rounds.Config
+	for _, s := range c.Schedules {
+		if strings.TrimSpace(s.TenantID) == "" || len(s.Authorities) < 2 {
+			continue
+		}
+		rc := rounds.Config{
+			TenantID: strings.TrimSpace(s.TenantID),
+			Cadence:  parseReconcileDuration(s.Cadence, time.Hour),
+			Jitter:   parseReconcileDuration(s.Jitter, 5*time.Minute),
+			Liveness: parseReconcileDuration(s.Liveness, 24*time.Hour),
+		}
+		for _, a := range s.Authorities {
+			if strings.TrimSpace(a.AuthorityID) == "" {
+				continue
+			}
+			rc.Planes = append(rc.Planes, rounds.PlaneConfig{
+				AuthorityID: strings.TrimSpace(a.AuthorityID),
+				Liveness:    parseReconcileDuration(a.Liveness, rc.Liveness),
+			})
+		}
+		if len(rc.Planes) < 2 {
+			// Fewer than two planes survived. Comparing an authority to itself
+			// is not reconciliation.
+			continue
+		}
+		out = append(out, rc)
+	}
+	return out
+}
+
+// parseReconcileDuration falls back to a sane default rather than zero: a zero
+// cadence would busy-loop the scheduler, and a zero liveness would make every
+// authority instantly stale.
+func parseReconcileDuration(v string, fallback time.Duration) time.Duration {
+	d, err := time.ParseDuration(strings.TrimSpace(v))
+	if err != nil || d <= 0 {
+		return fallback
+	}
+	return d
+}
+
+func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) error {
 	// AN-9 activation point for XREC. This helper is called only by the single
 	// FeatureReconcile block in attachEE; later XREC cards extend it instead of
 	// scattering license checks. Community and core-only builds schedule zero XREC rounds.
@@ -380,6 +441,14 @@ func attachReconcile(log *slog.Logger, deps *server.Deps) error {
 		Store:  deps.Store,
 		Log:    deps.Log,
 		Signer: deps.Signer,
+		// AUD-1: this was the missing half. The rounds worker registered, hit a
+		// len(Schedules)==0 guard on its first tick and blocked for the life of
+		// the process — zero rounds, zero witnesses, and a served agreement
+		// report answering "0 open witnesses" forever while a licensed operator
+		// watched a healthy worker in the roster. There was no config key to
+		// populate schedules; now there is, and an empty one still reports
+		// collecting=false rather than letting silence read as agreement.
+		Schedules: reconcileSchedulesFromConfig(reconcileConfigOf(cfg)),
 	})
 	if err != nil {
 		return err

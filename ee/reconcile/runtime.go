@@ -37,6 +37,10 @@ type RuntimeConfig struct {
 	Log         *events.Log
 	Idempotency idem.Idempotencer
 	Signer      server.SignerProvider
+	// Schedules are the reconciliation rounds to run. Empty means nothing
+	// compares anything — which the served agreement report states as
+	// collecting=false rather than letting zero witnesses read as agreement.
+	Schedules []rounds.Config
 }
 
 // Runtime is the XREC object graph mounted by cmd/trstctl/ee_attach.go. Nil
@@ -131,10 +135,11 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		Policy:      quarantine.ReferencePolicy(),
 	})
 	driftProjection := rounds.NewDriftProjection(time.Hour)
-	// No schedules are configured yet — reconciliation rounds are not driven by
-	// this runtime. Named as a variable rather than omitted so the count can be
-	// served, and so the day schedules arrive there is one place to fill in.
-	var roundSchedules []rounds.Config
+	// AUD-1: schedules now come from operator config. Before this the variable
+	// was always empty, so the rounds worker hit its len(Schedules)==0 guard on
+	// the first tick and blocked forever — a registered, healthy-looking worker
+	// that compared nothing for the life of the process.
+	roundSchedules := cfg.Schedules
 
 	var remediationManager *remediation.Manager
 	if cfg.Store != nil {
