@@ -464,8 +464,14 @@ describe("i18n boundary", () => {
       // rendered "unknown" as a failure would send an admin to re-push a
       // profile that is already installed, and the counts are deliberately
       // separate for the same reason.
-      "es-ES": "b438b806bbbc310c167f80e859c278e29d5f12689f7f48b7408649af9857b58b",
-      "de-DE": "d1bd8686e0ce244bebdb95c3232751badb73dccd6de88768a3a2dc544197cebb",
+      // A5 rollout re-pin: four keys. HALTED and PAUSED must read differently in
+      // every locale — one is the machine's finding that a build is bad, the
+      // other a person stopping deliberately, and an operator resuming a pause
+      // they made must not silently resume a halt they never saw. The halted
+      // string also says a resume restarts AT that ring, not past it.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "c65b91c909b99190b9618960181978c0c1a330bcc6ec9e80b8d105be4e0e537c",
+      "de-DE": "44788856e0ecc1e1897b06197b5a1cee81844bfb226efa11f338793cfdf6d368",
     });
   });
 

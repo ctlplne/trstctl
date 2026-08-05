@@ -17,6 +17,7 @@ import type {
   CMDBReconcileSchedule,
   IssuanceRequestList,
   MDMDeviceList,
+  AgentUpgradeCampaign,
   OwnershipConflictList,
   DRPosture,
   SecretRotationScheduleRun,
@@ -415,6 +416,7 @@ export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } 
 export type { CMDBReconcileSchedule } from "./api-types.gen";
 export type { IssuanceRequestList, IssuanceRequest } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace } from "./api-types.gen";
+export type { AgentUpgradeCampaign } from "./api-types.gen";
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -1284,6 +1286,8 @@ export interface Api {
   issuanceRequests(): Promise<IssuanceRequestList>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
   mdmDevices(): Promise<MDMDeviceList>;
+  /** A5: staged rollout state, ring assignment, and the fleet version histogram. */
+  agentUpgradeCampaign(): Promise<AgentUpgradeCampaign>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
@@ -1607,6 +1611,7 @@ const liveApi: Api = {
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
+  agentUpgradeCampaign: () => req<AgentUpgradeCampaign>("/api/v1/agents/upgrade-campaign"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),

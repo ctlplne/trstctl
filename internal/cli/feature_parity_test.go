@@ -158,8 +158,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// same certificates row as the rest of the issuance surface.
 	// I5's `mdm devices` and `mdm trace` raised it to 336, on the same
 	// certificates row as the rest of the issuance-to-endpoint surface.
-	if len(out) != 336 {
-		t.Fatalf("CLI commands = %d, want 336", len(out))
+	// A5's five `agents upgrade-*` commands raised it to 341, on the same agents
+	// row as the rest of the fleet surface.
+	if len(out) != 341 {
+		t.Fatalf("CLI commands = %d, want 341", len(out))
 	}
 	return out
 }

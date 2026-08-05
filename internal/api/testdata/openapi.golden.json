@@ -1766,6 +1766,87 @@
         ],
         "type": "object"
       },
+      "AgentRingInput": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ring": {
+            "enum": [
+              "canary",
+              "early",
+              "broad",
+              ""
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "type": "object"
+      },
+      "AgentUpgradeCampaign": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "current_ring": {
+            "type": "string"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "halted_at_ring": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rings": {
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "halted",
+              "paused",
+              "complete"
+            ],
+            "type": "string"
+          },
+          "target_version": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "active",
+          "rings",
+          "versions",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "AgentUpgradeCampaignInput": {
+        "properties": {
+          "target_version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_version"
+        ],
+        "type": "object"
+      },
       "AgentWorkloadAPIStatus": {
         "properties": {
           "detail": {
@@ -22536,6 +22617,296 @@
         "summary": "Mint a one-time agent bootstrap token",
         "x-trstctl-permission": "agents:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/agents/upgrade-campaign": {
+      "get": {
+        "operationId": "getAgentUpgradeCampaign",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUpgradeCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Campaign state with the fleet's ring assignment and version histogram",
+        "x-trstctl-permission": "agents:read"
+      },
+      "post": {
+        "operationId": "openAgentUpgradeCampaign",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentUpgradeCampaignInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUpgradeCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start a staged rollout that halts automatically when a ring fails",
+        "x-trstctl-permission": "agents:write"
+      }
+    },
+    "/api/v1/agents/upgrade-campaign/pause": {
+      "post": {
+        "operationId": "pauseAgentUpgradeCampaign",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUpgradeCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Pause a rollout; this gates dispatch, not just the button",
+        "x-trstctl-permission": "agents:write"
+      }
+    },
+    "/api/v1/agents/upgrade-campaign/resume": {
+      "post": {
+        "operationId": "resumeAgentUpgradeCampaign",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUpgradeCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Resume at the ring that halted, never past it",
+        "x-trstctl-permission": "agents:write"
+      }
+    },
+    "/api/v1/agents/upgrade-ring": {
+      "post": {
+        "operationId": "assignAgentUpgradeRing",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Place an agent in a rollout ring; empty unassigns and is never read as broad",
+        "x-trstctl-permission": "agents:write"
       }
     },
     "/api/v1/agents/{id}/cert-revocations": {

@@ -46,7 +46,13 @@ const (
 	EventIssuanceRequestOpened  = "issuance.request.opened"
 	EventIssuanceRequestDecided = "issuance.request.decided"
 	// I5: one MDM device record joined to one SCEP transaction.
-	EventMDMDeviceCorrelated                      = "mdm.device.correlated"
+	EventMDMDeviceCorrelated = "mdm.device.correlated"
+	// A5: a staged agent-upgrade campaign and every state change on it. The
+	// halt is the product, so it is an event: an automatic halt that lived only
+	// in a mutable column could not be audited after the fact.
+	EventAgentUpgradeCampaignOpened               = "agent.upgrade.campaign.opened"
+	EventAgentUpgradeCampaignAdvanced             = "agent.upgrade.campaign.advanced"
+	EventAgentUpgradeRingAssigned                 = "agent.upgrade.ring.assigned"
 	EventOwnerDeleted                             = "owner.deleted"
 	EventIssuerCreated                            = "issuer.created"
 	EventIdentityCreated                          = "identity.created"
@@ -215,6 +221,32 @@ type OwnerUpdated struct {
 	Kind  string `json:"kind"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
+}
+
+// AgentUpgradeCampaignOpened is the payload of agent.upgrade.campaign.opened (A5).
+type AgentUpgradeCampaignOpened struct {
+	ID            string `json:"id"`
+	TargetVersion string `json:"target_version"`
+	CreatedBy     string `json:"created_by,omitempty"`
+}
+
+// AgentUpgradeCampaignAdvanced records every state change, including the halt.
+//
+// Reason is not decoration: "halted" alone sends an operator to read logs, and
+// the whole point of an automatic halt is that it explains itself.
+type AgentUpgradeCampaignAdvanced struct {
+	ID           string `json:"id"`
+	Status       string `json:"status"`
+	CurrentRing  string `json:"current_ring,omitempty"`
+	HaltedAtRing string `json:"halted_at_ring,omitempty"`
+	Reason       string `json:"reason"`
+}
+
+// AgentUpgradeRingAssigned places an agent in a rollout ring. Empty ring means
+// UNASSIGNED and is never read as "broad".
+type AgentUpgradeRingAssigned struct {
+	AgentID string `json:"agent_id"`
+	Ring    string `json:"ring"`
 }
 
 // MDMDeviceCorrelated is the payload of an mdm.device.correlated event (I5).
@@ -1809,6 +1841,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
+	EventAgentUpgradeCampaignOpened:               {1: true},
+	EventAgentUpgradeCampaignAdvanced:             {1: true},
+	EventAgentUpgradeRingAssigned:                 {1: true},
 	EventOwnerDeleted:                             {1: true},
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
@@ -2026,6 +2061,24 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.ApplyOwnerUpdatedTx(ctx, tx, store.Owner{
 			ID: pl.ID, TenantID: e.TenantID, Kind: store.OwnerKind(pl.Kind), Name: pl.Name, Email: pl.Email,
 		})
+	case EventAgentUpgradeCampaignOpened:
+		var pl AgentUpgradeCampaignOpened
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, e.TenantID, pl.ID, pl.TargetVersion, pl.CreatedBy, e.Time)
+	case EventAgentUpgradeCampaignAdvanced:
+		var pl AgentUpgradeCampaignAdvanced
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyAgentUpgradeCampaignAdvancedTx(ctx, tx, e.TenantID, pl.ID, pl.Status, pl.CurrentRing, pl.HaltedAtRing, pl.Reason)
+	case EventAgentUpgradeRingAssigned:
+		var pl AgentUpgradeRingAssigned
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyAgentUpgradeRingAssignedTx(ctx, tx, e.TenantID, pl.AgentID, pl.Ring)
 	case EventMDMDeviceCorrelated:
 		var pl MDMDeviceCorrelated
 		if err := decode(e, &pl); err != nil {

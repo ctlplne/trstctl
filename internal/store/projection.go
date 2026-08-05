@@ -40,6 +40,38 @@ func (s *Store) ApplyOwnerUpdatedTx(ctx context.Context, tx pgx.Tx, o Owner) err
 	return err
 }
 
+// ApplyAgentUpgradeCampaignOpenedTx projects agent.upgrade.campaign.opened (A5).
+func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx, tenantID, id, version, createdBy string, at time.Time) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO agent_upgrade_campaigns (id, tenant_id, target_version, created_by, created_at)
+		 VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
+		id, tenantID, version, createdBy, at)
+	return err
+}
+
+// ApplyAgentUpgradeCampaignAdvancedTx projects a campaign state change (A5).
+//
+// halted_at_ring is only ever SET, never cleared by an advance: it is the
+// record of which ring stopped the rollout, and Resume restarts there. Clearing
+// it on resume would lose the one fact needed to restart correctly.
+func (s *Store) ApplyAgentUpgradeCampaignAdvancedTx(ctx context.Context, tx pgx.Tx, tenantID, id, status, currentRing, haltedAtRing, reason string) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE agent_upgrade_campaigns
+		    SET status = $3, current_ring = $4,
+		        halted_at_ring = CASE WHEN $5 <> '' THEN $5 ELSE halted_at_ring END,
+		        reason = $6, updated_at = now()
+		  WHERE tenant_id = $1 AND id = $2`,
+		tenantID, id, status, currentRing, haltedAtRing, reason)
+	return err
+}
+
+// ApplyAgentUpgradeRingAssignedTx places an agent in a rollout ring (A5).
+func (s *Store) ApplyAgentUpgradeRingAssignedTx(ctx context.Context, tx pgx.Tx, tenantID, agentID, ring string) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE agents SET upgrade_ring = nullif($3, '') WHERE tenant_id = $1 AND id = $2`, tenantID, agentID, ring)
+	return err
+}
+
 // ApplyIssuanceRequestOpenedTx projects an issuance.request.opened event (I3).
 func (s *Store) ApplyIssuanceRequestOpenedTx(ctx context.Context, tx pgx.Tx, r IssuanceRequest) error {
 	_, err := tx.Exec(ctx,
@@ -455,7 +487,9 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	// I3: projected from issuance.request.opened / .decided.
 	"issuance_requests",
 	// I5: projected from mdm.device.correlated.
-	"mdm_device_correlations"}
+	"mdm_device_correlations",
+	// A5: projected from agent.upgrade.campaign.* events.
+	"agent_upgrade_campaigns"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

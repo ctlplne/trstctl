@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { UpgradeCampaignPanel } from "@/components/UpgradeCampaignPanel";
 import { Copy, Loader2, RefreshCw, ShieldOff, UserX, X } from "lucide-react";
 import { CredentialChip } from "@/components/CredentialChip";
 import { Dialog } from "@/components/Dialog";
@@ -286,6 +287,7 @@ export function Agents() {
           </Button>
         }
       />
+      <UpgradeCampaignPanel />
 
       <section aria-labelledby="enrollment-heading" className="border-y border-border py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

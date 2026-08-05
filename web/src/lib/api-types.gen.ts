@@ -463,6 +463,28 @@ export interface AgentRelayCapability {
   kind: string;
 }
 
+export interface AgentRingInput {
+  agent_id: string;
+  ring?: "canary" | "early" | "broad" | "";
+}
+
+export interface AgentUpgradeCampaign {
+  active: boolean;
+  current_ring?: string;
+  guidance: string;
+  halted_at_ring?: string;
+  id?: string;
+  reason?: string;
+  rings: Record<string, unknown>;
+  status?: "pending" | "running" | "halted" | "paused" | "complete";
+  target_version?: string;
+  versions: Record<string, unknown>;
+}
+
+export interface AgentUpgradeCampaignInput {
+  target_version: string;
+}
+
 export interface AgentWorkloadAPIStatus {
   detail: string;
   reported_at?: string;

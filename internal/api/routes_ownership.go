@@ -64,3 +64,16 @@ func (a *API) mdmDeviceRoutes() []route {
 		{method: "GET", path: "/api/v1/mdm/{mdm}/devices/{id}/trace", opID: "getMDMDeviceTrace", summary: "Per-device enrollment trace showing which step an enrollment broke at", handler: a.getMDMDeviceTrace, pathParams: devicePath, resSchema: "MDMDeviceTrace", successCode: "200", perm: authz.CertsRead},
 	}
 }
+
+// The A5 staged agent-upgrade surface. Pause and resume share one handler
+// constructor so the state rules cannot be enforced on one verb and forgotten
+// on the other.
+func (a *API) agentUpgradeRoutes() []route {
+	return []route{
+		{method: "GET", path: "/api/v1/agents/upgrade-campaign", opID: "getAgentUpgradeCampaign", summary: "Campaign state with the fleet's ring assignment and version histogram", handler: a.getUpgradeCampaign, resSchema: "AgentUpgradeCampaign", successCode: "200", perm: authz.AgentsRead},
+		{method: "POST", path: "/api/v1/agents/upgrade-campaign", opID: "openAgentUpgradeCampaign", summary: "Start a staged rollout that halts automatically when a ring fails", handler: a.openUpgradeCampaign, reqSchema: "AgentUpgradeCampaignInput", resSchema: "AgentUpgradeCampaign", successCode: "201", mutation: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/agents/upgrade-campaign/pause", opID: "pauseAgentUpgradeCampaign", summary: "Pause a rollout; this gates dispatch, not just the button", handler: a.campaignControl("pause"), resSchema: "AgentUpgradeCampaign", successCode: "200", mutation: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/agents/upgrade-campaign/resume", opID: "resumeAgentUpgradeCampaign", summary: "Resume at the ring that halted, never past it", handler: a.campaignControl("resume"), resSchema: "AgentUpgradeCampaign", successCode: "200", mutation: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/agents/upgrade-ring", opID: "assignAgentUpgradeRing", summary: "Place an agent in a rollout ring; empty unassigns and is never read as broad", handler: a.assignAgentRing, reqSchema: "AgentRingInput", successCode: "200", mutation: true, perm: authz.AgentsWrite},
+	}
+}

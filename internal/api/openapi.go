@@ -3253,6 +3253,23 @@ func componentSchemas() map[string]*Schema {
 		"conflicts": {Type: "array", Items: ref("OwnershipConflict")},
 		"detail":    str(), "guidance": str(),
 	}, "applied", "unchanged", "conflicts", "detail", "guidance")
+	agentUpgradeCampaignSchema := object(map[string]*Schema{
+		"id": uuid(), "target_version": str(),
+		// active separates "no campaign has ever run" from "one is running".
+		"active": {Type: "boolean"},
+		"status": {Type: "string", Enum: []string{"pending", "running", "halted", "paused", "complete"}},
+		// halted_at_ring is served alongside current_ring because an operator
+		// needs to know where a resume would restart — the halted ring, not the
+		// next one.
+		"current_ring": str(), "halted_at_ring": str(), "reason": str(),
+		// rings carries an "unassigned" key; it is never folded into broad.
+		"rings": {Type: "object"}, "versions": {Type: "object"}, "guidance": str(),
+	}, "active", "rings", "versions", "guidance")
+	agentUpgradeCampaignInput := object(map[string]*Schema{"target_version": str()}, "target_version")
+	agentRingInput := object(map[string]*Schema{
+		"agent_id": uuid(),
+		"ring":     {Type: "string", Enum: []string{"canary", "early", "broad", ""}},
+	}, "agent_id")
 	mdmDeviceSchema := object(map[string]*Schema{
 		"mdm": {Type: "string", Enum: []string{"intune", "jamf"}},
 		// mdm_device_id is a plain string, not a uuid: it is whatever the MDM
@@ -4464,6 +4481,9 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipConflictList":                    ownershipConflictList,
 		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
 		"IssuanceRequest":                          issuanceRequestSchema,
+		"AgentUpgradeCampaign":                     agentUpgradeCampaignSchema,
+		"AgentUpgradeCampaignInput":                agentUpgradeCampaignInput,
+		"AgentRingInput":                           agentRingInput,
 		"MDMDevice":                                mdmDeviceSchema,
 		"MDMDeviceList":                            mdmDeviceListSchema,
 		"MDMTraceStep":                             mdmTraceStepSchema,

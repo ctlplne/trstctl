@@ -1097,6 +1097,10 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// the queue forever, and the queue's size would stop meaning
 			// anything — the exact reason the expired state exists.
 			startRuntimeWorker(workCtx, srv.RunIssuanceRequestExpiry),
+			// A5: without this line the halt logic would be decision code no
+			// rollout ever reaches — the exact defect class this backlog keeps
+			// finding.
+			startRuntimeWorker(workCtx, srv.RunAgentUpgradeCampaigns),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),
 			startRuntimeWorker(workCtx, srv.RunRestoreDrillScheduler),
 			// D2/D3: periodic endpoint re-verification. This line was missing, and

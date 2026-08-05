@@ -645,6 +645,40 @@ AgentRelayCapability = TypedDict(
     total=False,
 )
 
+AgentRingInput = TypedDict(
+    'AgentRingInput',
+    {
+        'agent_id': str,
+        'ring': str,
+    },
+    total=False,
+)
+
+AgentUpgradeCampaign = TypedDict(
+    'AgentUpgradeCampaign',
+    {
+        'active': bool,
+        'current_ring': str,
+        'guidance': str,
+        'halted_at_ring': str,
+        'id': str,
+        'reason': str,
+        'rings': dict[str, Any],
+        'status': str,
+        'target_version': str,
+        'versions': dict[str, Any],
+    },
+    total=False,
+)
+
+AgentUpgradeCampaignInput = TypedDict(
+    'AgentUpgradeCampaignInput',
+    {
+        'target_version': str,
+    },
+    total=False,
+)
+
 AgentWorkloadAPIStatus = TypedDict(
     'AgentWorkloadAPIStatus',
     {

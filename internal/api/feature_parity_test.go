@@ -117,8 +117,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// the certificates row: a device's enrollment trace is that row's "did the
 	// certificate actually reach the endpoint" half. There is deliberately no
 	// MDM write operation.
-	if len(out) != 326 {
-		t.Fatalf("OpenAPI operationIds = %d, want 326", len(out))
+	// A5's five staged-upgrade operations raised it to 331, mapped onto the
+	// agents feature row: a rollout is fleet operation, not a separate product.
+	if len(out) != 331 {
+		t.Fatalf("OpenAPI operationIds = %d, want 331", len(out))
 	}
 	return out
 }

@@ -1912,6 +1912,37 @@ looking for a credential that was never there.
   front-end that would issue a leaf through an AD CS template under a trstctl
   policy gate is not built; and there is no "modernize this template" console
   action or AD CS issuer health view.
+- Staged agent upgrades with an automatic canary halt (A5): `GET/POST
+  /api/v1/agents/upgrade-campaign`, `/pause`, `/resume`, and
+  `POST /api/v1/agents/upgrade-ring` (`trstctl agents upgrade-campaign
+  show|start|pause|resume`, `trstctl agents upgrade-ring`) run a rollout through
+  canary, early, then broad rings, and a leader-only sweep advances it. The halt
+  is the product: ONE unhealthy agent halts, with no percentage tolerance,
+  because a tolerance on a deliberately small canary means the ring can never
+  stop anything — which is the entire reason the ring exists. SILENCE halts too;
+  an agent that took an upgrade and stopped answering is the most likely shape
+  of a bad build, so it is never scored as a success. An EMPTY ring halts as
+  well: an unassigned canary proves nothing, and advancing through it would skip
+  the stage whose failure is supposed to stop the rollout, on exactly the fleet
+  nobody has triaged. Resume restarts AT the ring that halted, never past it —
+  skipping ahead would leave the agents whose failure stopped the rollout on the
+  broken build while the campaign reported success — and a halted campaign never
+  un-halts on its own, so a flapping agent cannot resume a rollout nobody
+  re-approved. Pause GATES DISPATCH (the sweep returns early and `fleet.Advance`
+  refuses independently), not merely the button; a pause that greyed out UI
+  while jobs kept flowing would be worse than none because the operator believes
+  they stopped it. `upgrade_ring` empty means UNASSIGNED and is never read as
+  `broad`, and the console counts unassigned separately. Halted and paused are
+  distinct states: one is the machine's finding, the other a person's decision.
+  Scope, stated exactly: VERIFICATION is "the agent came back and reported the
+  target version, and has been seen since dispatch" — a real post-upgrade health
+  signal, since an agent that took a bad build and cannot start never reports
+  it, but NOT a functional check of the agent's work and not a dedicated signed
+  upgrade receipt; the sweep does not itself DISPATCH upgrade jobs, so an
+  operator or an external mechanism still moves agents onto the target version
+  and this surface observes and gates rather than pushes; ring assignment is
+  manual with no automatic canary selection; and there is no per-ring soak
+  window beyond the 10-minute grace before silence counts against a ring.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives

@@ -12428,6 +12428,22 @@ export const messages = {
     defaultMessage: "{value1} with no owner, {value2} whose owner names no application or environment, {value3} never confirmed.",
     description: "I1: the three counts, kept separate because each needs different work.",
   },
+  "source.fleet.upgrade.heading.a5fl000001": {
+    defaultMessage: "Agent upgrade campaign",
+    description: "A5: heading for the staged rollout panel.",
+  },
+  "source.fleet.upgrade.halted.a5fl000002": {
+    defaultMessage: "Halted automatically at the {value1} ring. Resuming restarts there, not past it.",
+    description: "A5: a halt is the machine's finding, and resume restarts at the ring that stopped it.",
+  },
+  "source.fleet.upgrade.paused.a5fl000003": {
+    defaultMessage: "Paused. Dispatch is stopped, not just this button.",
+    description: "A5: says the pause actually gates execution.",
+  },
+  "source.fleet.upgrade.rings.a5fl000004": {
+    defaultMessage: "Rings: {value1}. Agents with no ring are unassigned and never join broad by default.",
+    description: "A5: unassigned is shown separately; an agent nobody placed must not join the largest ring.",
+  },
   "source.mdm.devices.heading.i5mdm00001": {
     defaultMessage: "MDM device correlation",
     description: "I5: heading for the read-only Intune/Jamf device correlation.",

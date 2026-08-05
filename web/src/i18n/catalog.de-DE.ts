@@ -3291,6 +3291,10 @@ const deDECatalog = {
   "source.unowned.queue.i1own00001": "L\u00fccken bei der Zust\u00e4ndigkeit",
   "source.unowned.counts.i1own00002":
     "{value1} ohne Eigent\u00fcmer, {value2} deren Eigent\u00fcmer weder Anwendung noch Umgebung nennt, {value3} nie best\u00e4tigt.",
+  "source.fleet.upgrade.heading.a5fl000001": "Agent-Upgrade-Kampagne",
+  "source.fleet.upgrade.halted.a5fl000002": "Automatisch beim Ring {value1} angehalten. Ein Fortsetzen startet dort neu, nicht danach.",
+  "source.fleet.upgrade.paused.a5fl000003": "Pausiert. Die Ausf\u00fchrung ist gestoppt, nicht nur diese Schaltfl\u00e4che.",
+  "source.fleet.upgrade.rings.a5fl000004": "Ringe: {value1}. Agenten ohne Ring sind nicht zugewiesen und treten nie automatisch dem breiten Ring bei.",
   "source.mdm.devices.heading.i5mdm00001": "MDM-Ger\u00e4tezuordnung",
   "source.mdm.devices.counts.i5mdm00002": "{value1} Ger\u00e4te; {value2} meldeten einen Fehler und {value3} wurden \u00fcberhaupt nicht beobachtet.",
   "source.mdm.devices.unobserved.i5mdm00003": "nicht beobachtet \u2014 das MDM hat dieses Ger\u00e4t nicht gemeldet",
