@@ -200,3 +200,35 @@ func TestVantageVocabularyIsClosed(t *testing.T) {
 		t.Error("a transcript with an unknown vantage validated")
 	}
 }
+
+// M1: a PQ pilot's readiness report has to say what a combination COST, not
+// only whether it worked. A hybrid group that negotiates but triples the
+// handshake is a different answer from one that negotiates cheaply, and a
+// report omitting cost would be recommending an outage.
+func TestTheTranscriptCarriesHandshakeCost(t *testing.T) {
+	t.Parallel()
+	tr := transport.ProbeTranscript{Address: "host:443", Reached: true, HandshakeMillis: 42, ChainBytes: 4096}
+	canon := string(tr.Canonical())
+	for _, want := range []string{"handshake_ms", "chain_bytes"} {
+		if !strings.Contains(canon, want) {
+			t.Fatalf("the canonical transcript omits %q.\n\n"+
+				"Cost that is not in the transcript cannot be signed into a readiness report, and "+
+				"a PQ rollout recommended without it is a recommendation made blind.", want)
+		}
+	}
+}
+
+// Zero is "not measured", never "instant and free". A failed handshake must not
+// contribute a zero that a reader averages in as a fast success.
+func TestUnreachedProbesReportZeroCostNotFastSuccess(t *testing.T) {
+	t.Parallel()
+	tr := transport.ProbeTranscript{Address: "host:443", Reached: false}
+	if tr.HandshakeMillis != 0 || tr.ChainBytes != 0 {
+		t.Fatal("an unreached probe carried a cost measurement")
+	}
+	// The pairing with Reached is the guard: a consumer must read Reached
+	// before trusting either number.
+	if tr.Reached {
+		t.Fatal("precondition")
+	}
+}

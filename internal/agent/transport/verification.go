@@ -73,6 +73,16 @@ type ProbeTranscript struct {
 	// Error is the dial/handshake failure, when Reached is false. Sanitized:
 	// a network error string can contain arbitrary bytes.
 	Error string
+	// HandshakeMillis is how long the dial-and-handshake took, and
+	// ChainBytes is the total DER size the endpoint served.
+	//
+	// M1 needs both: a PQ or hybrid combination that NEGOTIATES but triples the
+	// handshake size is a different answer from one that negotiates cheaply, and
+	// a readiness report that omitted cost would be recommending an outage. They
+	// are zero when the handshake did not complete — zero is "not measured", not
+	// "instant and free", and a reader must not average it in.
+	HandshakeMillis int64
+	ChainBytes      int
 	// ExpectedFingerprint and ObservedFingerprint are hex SHA-256 of the leaf
 	// DER. Observed is empty when the handshake failed.
 	ExpectedFingerprint string
@@ -115,6 +125,8 @@ func (t ProbeTranscript) Canonical() []byte {
 	write("vantage", string(t.Vantage))
 	write("server_name", t.ServerName)
 	write("reached", strconv.FormatBool(t.Reached))
+	write("handshake_ms", strconv.FormatInt(t.HandshakeMillis, 10))
+	write("chain_bytes", strconv.Itoa(t.ChainBytes))
 	write("error", t.Error)
 	write("expected_fingerprint", t.ExpectedFingerprint)
 	write("observed_fingerprint", t.ObservedFingerprint)

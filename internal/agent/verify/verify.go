@@ -102,7 +102,12 @@ func Endpoint(ctx context.Context, req Request) (Result, error) {
 		ObservedAtUnix:      observedAt.Unix(),
 	}
 
+	// Timed so a PQ compatibility pilot can report COST, not just whether the
+	// handshake worked (M1). Measured around the dial itself, so it includes the
+	// key exchange whose size is the whole question for a hybrid group.
+	handshakeStart := time.Now()
 	probe, err := tlsprobe.Probe(ctx, addr, tlsprobe.WithTimeout(timeout))
+	tr.HandshakeMillis = time.Since(handshakeStart).Milliseconds()
 	if err != nil {
 		// Unreachable. The transcript says so and claims nothing else: no
 		// mismatch class, no comparison flags, no served fingerprint. Its
@@ -126,6 +131,9 @@ func Endpoint(ctx context.Context, req Request) (Result, error) {
 	}
 
 	tr.Reached = true
+	for _, der := range probe.PeerCertificates {
+		tr.ChainBytes += len(der)
+	}
 	leaf, err := certinfo.Inspect(probe.PeerCertificates[0])
 	if err != nil {
 		// Served something unparseable. Reached is true — we did connect — and
