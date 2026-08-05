@@ -3253,6 +3253,39 @@ func componentSchemas() map[string]*Schema {
 		"conflicts": {Type: "array", Items: ref("OwnershipConflict")},
 		"detail":    str(), "guidance": str(),
 	}, "applied", "unchanged", "conflicts", "detail", "guidance")
+	mdmDeviceSchema := object(map[string]*Schema{
+		"mdm": {Type: "string", Enum: []string{"intune", "jamf"}},
+		// mdm_device_id is a plain string, not a uuid: it is whatever the MDM
+		// assigns, and that is the identifier an admin pastes from their console.
+		"mdm_device_id": str(), "device_name": str(), "serial_number": str(),
+		"transaction_id": str(), "identity_id": uuid(),
+		// unknown is NOT failed — an MDM we could not reach tells us nothing.
+		"install_state":  {Type: "string", Enum: []string{"ok", "failed", "unknown"}},
+		"install_detail": str(), "observed_at": str(),
+	}, "mdm", "mdm_device_id", "install_state")
+	mdmDeviceListSchema := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("MDMDevice")},
+		// failed and unobserved are separate counts: one device reported
+		// trouble, the other is one nothing has heard from, and a single
+		// "unhealthy" number would merge two different problems.
+		"failed": {Type: "integer"}, "unobserved": {Type: "integer"}, "guidance": str(),
+	}, "items", "failed", "unobserved", "guidance")
+	mdmTraceStepSchema := object(map[string]*Schema{
+		"stage":   {Type: "string", Enum: []string{"requested", "issued", "installed", "renewing"}},
+		"outcome": {Type: "string", Enum: []string{"ok", "failed", "pending", "unknown"}},
+		"at":      str(), "detail": str(), "source": str(),
+	}, "stage", "outcome")
+	mdmDeviceTraceSchema := object(map[string]*Schema{
+		"trace": object(map[string]*Schema{
+			"device_id": str(), "mdm_device_id": str(), "mdm": str(), "device_name": str(),
+			"serial_number": str(), "transaction_id": str(),
+			"steps": {Type: "array", Items: ref("MDMTraceStep")},
+			// broke_at names the FIRST failed stage; reporting the last would
+			// send an operator to the symptom rather than the cause.
+			"broke_at": str(), "summary": str(),
+		}, "steps", "summary"),
+		"guidance": str(),
+	}, "trace", "guidance")
 	issuanceRequestSchema := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "subject": str(), "profile": str(),
 		"requester": str(), "justification": str(), "origin": str(), "ticket_ref": str(),
@@ -4431,6 +4464,10 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipConflictList":                    ownershipConflictList,
 		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
 		"IssuanceRequest":                          issuanceRequestSchema,
+		"MDMDevice":                                mdmDeviceSchema,
+		"MDMDeviceList":                            mdmDeviceListSchema,
+		"MDMTraceStep":                             mdmTraceStepSchema,
+		"MDMDeviceTrace":                           mdmDeviceTraceSchema,
 		"IssuanceRequestInput":                     issuanceRequestInput,
 		"IssuanceDecisionInput":                    issuanceDecisionInput,
 		"IssuanceRequestList":                      issuanceRequestListSchema,

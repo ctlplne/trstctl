@@ -2507,6 +2507,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mdm/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List MDM devices correlated to SCEP transactions, with unobserved counted apart from failed */
+        get: operations["listMDMDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mdm/scep/policies": {
         parameters: {
             query?: never;
@@ -2570,6 +2587,23 @@ export interface paths {
         };
         /** Get served MDM SCEP policy and challenge telemetry status */
         get: operations["getMDMSCEPStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mdm/{mdm}/devices/{id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per-device enrollment trace showing which step an enrollment broke at */
+        get: operations["getMDMDeviceTrace"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7356,6 +7390,40 @@ export interface components {
             text: string;
             tool: string;
         };
+        MDMDevice: {
+            device_name?: string;
+            /** Format: uuid */
+            identity_id?: string;
+            install_detail?: string;
+            /** @enum {string} */
+            install_state: "ok" | "failed" | "unknown";
+            /** @enum {string} */
+            mdm: "intune" | "jamf";
+            mdm_device_id: string;
+            observed_at?: string;
+            serial_number?: string;
+            transaction_id?: string;
+        };
+        MDMDeviceList: {
+            failed: number;
+            guidance: string;
+            items: components["schemas"]["MDMDevice"][];
+            unobserved: number;
+        };
+        MDMDeviceTrace: {
+            guidance: string;
+            trace: {
+                broke_at?: string;
+                device_id?: string;
+                device_name?: string;
+                mdm?: string;
+                mdm_device_id?: string;
+                serial_number?: string;
+                steps: components["schemas"]["MDMTraceStep"][];
+                summary: string;
+                transaction_id?: string;
+            };
+        };
         MDMSCEPChallengeRotated: {
             policy: components["schemas"]["MDMSCEPPolicy"];
         };
@@ -7411,6 +7479,15 @@ export interface components {
             last_failure_reason?: string;
             last_transaction_id?: string;
             replay_rejected: number;
+        };
+        MDMTraceStep: {
+            at?: string;
+            detail?: string;
+            /** @enum {string} */
+            outcome: "ok" | "failed" | "pending" | "unknown";
+            source?: string;
+            /** @enum {string} */
+            stage: "requested" | "issued" | "installed" | "renewing";
         };
         MachineAuthMethod: {
             allow_unexpiring?: boolean;
@@ -17297,6 +17374,44 @@ export interface operations {
             };
         };
     };
+    listMDMDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMDeviceList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listMDMSCEPPolicies: {
         parameters: {
             query?: never;
@@ -17567,6 +17682,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MDMSCEPStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMDMDeviceTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description intune or jamf */
+                mdm: string;
+                /** @description the MDM's own device id, as shown in its console */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMDeviceTrace"];
                 };
             };
             /** @description client error */

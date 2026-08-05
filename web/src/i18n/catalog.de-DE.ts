@@ -3291,6 +3291,9 @@ const deDECatalog = {
   "source.unowned.queue.i1own00001": "L\u00fccken bei der Zust\u00e4ndigkeit",
   "source.unowned.counts.i1own00002":
     "{value1} ohne Eigent\u00fcmer, {value2} deren Eigent\u00fcmer weder Anwendung noch Umgebung nennt, {value3} nie best\u00e4tigt.",
+  "source.mdm.devices.heading.i5mdm00001": "MDM-Ger\u00e4tezuordnung",
+  "source.mdm.devices.counts.i5mdm00002": "{value1} Ger\u00e4te; {value2} meldeten einen Fehler und {value3} wurden \u00fcberhaupt nicht beobachtet.",
+  "source.mdm.devices.unobserved.i5mdm00003": "nicht beobachtet \u2014 das MDM hat dieses Ger\u00e4t nicht gemeldet",
   "source.issuance.requests.heading.i3req00001": "Ausstellungsanfragen",
   "source.issuance.requests.counts.i3req00002": "{value1} warten auf eine Entscheidung, von {value2} insgesamt.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, entschieden von {value2}",

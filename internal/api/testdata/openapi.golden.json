@@ -10078,6 +10078,130 @@
         ],
         "type": "object"
       },
+      "MDMDevice": {
+        "properties": {
+          "device_name": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "install_detail": {
+            "type": "string"
+          },
+          "install_state": {
+            "enum": [
+              "ok",
+              "failed",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "mdm": {
+            "enum": [
+              "intune",
+              "jamf"
+            ],
+            "type": "string"
+          },
+          "mdm_device_id": {
+            "type": "string"
+          },
+          "observed_at": {
+            "type": "string"
+          },
+          "serial_number": {
+            "type": "string"
+          },
+          "transaction_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mdm",
+          "mdm_device_id",
+          "install_state"
+        ],
+        "type": "object"
+      },
+      "MDMDeviceList": {
+        "properties": {
+          "failed": {
+            "type": "integer"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MDMDevice"
+            },
+            "type": "array"
+          },
+          "unobserved": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "failed",
+          "unobserved",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "MDMDeviceTrace": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "trace": {
+            "properties": {
+              "broke_at": {
+                "type": "string"
+              },
+              "device_id": {
+                "type": "string"
+              },
+              "device_name": {
+                "type": "string"
+              },
+              "mdm": {
+                "type": "string"
+              },
+              "mdm_device_id": {
+                "type": "string"
+              },
+              "serial_number": {
+                "type": "string"
+              },
+              "steps": {
+                "items": {
+                  "$ref": "#/components/schemas/MDMTraceStep"
+                },
+                "type": "array"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "transaction_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "steps",
+              "summary"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "trace",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "MDMSCEPChallengeRotated": {
         "properties": {
           "policy": {
@@ -10271,6 +10395,42 @@
           "allowed",
           "denied",
           "replay_rejected"
+        ],
+        "type": "object"
+      },
+      "MDMTraceStep": {
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "ok",
+              "failed",
+              "pending",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "requested",
+              "issued",
+              "installed",
+              "renewing"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "outcome"
         ],
         "type": "object"
       },
@@ -31027,6 +31187,53 @@
         "x-trstctl-permission": "graph:read"
       }
     },
+    "/api/v1/mdm/devices": {
+      "get": {
+        "operationId": "listMDMDevices",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMDeviceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List MDM devices correlated to SCEP transactions, with unobserved counted apart from failed",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
     "/api/v1/mdm/scep/policies": {
       "get": {
         "operationId": "listMDMSCEPPolicies",
@@ -31443,6 +31650,73 @@
         ],
         "summary": "Get served MDM SCEP policy and challenge telemetry status",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/mdm/{mdm}/devices/{id}/trace": {
+      "get": {
+        "operationId": "getMDMDeviceTrace",
+        "parameters": [
+          {
+            "description": "intune or jamf",
+            "in": "path",
+            "name": "mdm",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the MDM's own device id, as shown in its console",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMDeviceTrace"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Per-device enrollment trace showing which step an enrollment broke at",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/migrations/assess": {

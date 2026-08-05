@@ -3694,6 +3694,42 @@ MCPToolResult = TypedDict(
     total=False,
 )
 
+MDMDevice = TypedDict(
+    'MDMDevice',
+    {
+        'device_name': str,
+        'identity_id': str,
+        'install_detail': str,
+        'install_state': str,
+        'mdm': str,
+        'mdm_device_id': str,
+        'observed_at': str,
+        'serial_number': str,
+        'transaction_id': str,
+    },
+    total=False,
+)
+
+MDMDeviceList = TypedDict(
+    'MDMDeviceList',
+    {
+        'failed': int,
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'unobserved': int,
+    },
+    total=False,
+)
+
+MDMDeviceTrace = TypedDict(
+    'MDMDeviceTrace',
+    {
+        'guidance': str,
+        'trace': dict[str, Any],
+    },
+    total=False,
+)
+
 MDMSCEPChallengeRotated = TypedDict(
     'MDMSCEPChallengeRotated',
     {
@@ -3768,6 +3804,18 @@ MDMSCEPTelemetry = TypedDict(
         'last_failure_reason': str,
         'last_transaction_id': str,
         'replay_rejected': int,
+    },
+    total=False,
+)
+
+MDMTraceStep = TypedDict(
+    'MDMTraceStep',
+    {
+        'at': str,
+        'detail': str,
+        'outcome': str,
+        'source': str,
+        'stage': str,
     },
     total=False,
 )

@@ -324,6 +324,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"issuance-requests", "approve"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/approve", Summary: "Approve a request; the requester can never approve their own"},
 	{Name: []string{"issuance-requests", "deny"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/deny", Body: bodyFile, Summary: "Deny a request with a reason the requester can act on"},
 	{Name: []string{"issuance-requests", "cancel"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/cancel", Summary: "Withdraw your own request; only the requester may"},
+	{Name: []string{"mdm", "devices"}, Method: "GET", Path: "/api/v1/mdm/devices", Summary: "List MDM devices correlated to SCEP transactions (read-only)"},
+	{Name: []string{"mdm", "trace"}, Method: "GET", Path: "/api/v1/mdm/{mdm}/devices/{id}/trace", Summary: "Show which step a device's certificate enrollment broke at"},
 	{Name: []string{"graph", "crypto-readiness"}, Method: "GET", Path: "/api/v1/graph/crypto-readiness", Summary: "Sequence crypto assets for migration by observed dependency, not severity alone"},
 	{Name: []string{"graph", "trust-stores"}, Method: "GET", Path: "/api/v1/graph/trust-stores/{id}", Summary: "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on"},
 	{Name: []string{"migrations", "assess"}, Method: "POST", Path: "/api/v1/migrations/assess", Summary: "Assess a migration plan read-only: what it would touch and what is unknown"},

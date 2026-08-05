@@ -16,6 +16,7 @@ import type {
   CryptoReadiness,
   CMDBReconcileSchedule,
   IssuanceRequestList,
+  MDMDeviceList,
   OwnershipConflictList,
   DRPosture,
   SecretRotationScheduleRun,
@@ -413,6 +414,7 @@ export type { CryptoReadiness, CryptoReadinessRow, CryptoDependent } from "./api
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileSchedule } from "./api-types.gen";
 export type { IssuanceRequestList, IssuanceRequest } from "./api-types.gen";
+export type { MDMDeviceList, MDMDevice, MDMDeviceTrace } from "./api-types.gen";
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -1280,6 +1282,8 @@ export interface Api {
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
   issuanceRequests(): Promise<IssuanceRequestList>;
+  /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
+  mdmDevices(): Promise<MDMDeviceList>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
@@ -1602,6 +1606,7 @@ const liveApi: Api = {
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
+  mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),

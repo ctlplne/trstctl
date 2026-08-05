@@ -453,7 +453,9 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	// instruction is not event-sourced when it is.
 	"owner_ownership_conflicts", "cmdb_reconcile_schedules",
 	// I3: projected from issuance.request.opened / .decided.
-	"issuance_requests"}
+	"issuance_requests",
+	// I5: projected from mdm.device.correlated.
+	"mdm_device_correlations"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

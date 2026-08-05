@@ -2596,6 +2596,30 @@ export interface MCPToolResult {
   tool: string;
 }
 
+export interface MDMDevice {
+  device_name?: string;
+  identity_id?: string;
+  install_detail?: string;
+  install_state: "ok" | "failed" | "unknown";
+  mdm: "intune" | "jamf";
+  mdm_device_id: string;
+  observed_at?: string;
+  serial_number?: string;
+  transaction_id?: string;
+}
+
+export interface MDMDeviceList {
+  failed: number;
+  guidance: string;
+  items: MDMDevice[];
+  unobserved: number;
+}
+
+export interface MDMDeviceTrace {
+  guidance: string;
+  trace: { broke_at?: string; device_id?: string; device_name?: string; mdm?: string; mdm_device_id?: string; serial_number?: string; steps: MDMTraceStep[]; summary: string; transaction_id?: string };
+}
+
 export interface MDMSCEPChallengeRotated {
   policy: MDMSCEPPolicy;
 }
@@ -2648,6 +2672,14 @@ export interface MDMSCEPTelemetry {
   last_failure_reason?: string;
   last_transaction_id?: string;
   replay_rejected: number;
+}
+
+export interface MDMTraceStep {
+  at?: string;
+  detail?: string;
+  outcome: "ok" | "failed" | "pending" | "unknown";
+  source?: string;
+  stage: "requested" | "issued" | "installed" | "renewing";
 }
 
 export interface MachineAuthMethod {

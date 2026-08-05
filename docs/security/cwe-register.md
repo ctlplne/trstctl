@@ -406,7 +406,7 @@ not this file.
 | `internal/store/pam.go:73` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:378` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:433` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:546` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:548` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:78` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:93` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/snapshot.go:170` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |

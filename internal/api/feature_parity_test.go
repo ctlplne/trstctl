@@ -113,8 +113,12 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// onto the certificates feature row: a request IS the front half of
 	// issuance, and giving it its own row would let the request queue look
 	// covered while issuance itself regressed.
-	if len(out) != 324 {
-		t.Fatalf("OpenAPI operationIds = %d, want 324", len(out))
+	// I5's two read-only MDM correlation operations raised it to 326, mapped onto
+	// the certificates row: a device's enrollment trace is that row's "did the
+	// certificate actually reach the endpoint" half. There is deliberately no
+	// MDM write operation.
+	if len(out) != 326 {
+		t.Fatalf("OpenAPI operationIds = %d, want 326", len(out))
 	}
 	return out
 }

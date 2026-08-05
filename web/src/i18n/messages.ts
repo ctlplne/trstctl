@@ -12428,6 +12428,18 @@ export const messages = {
     defaultMessage: "{value1} with no owner, {value2} whose owner names no application or environment, {value3} never confirmed.",
     description: "I1: the three counts, kept separate because each needs different work.",
   },
+  "source.mdm.devices.heading.i5mdm00001": {
+    defaultMessage: "MDM device correlation",
+    description: "I5: heading for the read-only Intune/Jamf device correlation.",
+  },
+  "source.mdm.devices.counts.i5mdm00002": {
+    defaultMessage: "{value1} devices; {value2} reported a failure and {value3} have not been observed at all.",
+    description: "I5: failed and unobserved are counted apart — one device reported trouble, the other is one nothing has heard from.",
+  },
+  "source.mdm.devices.unobserved.i5mdm00003": {
+    defaultMessage: "not observed — the MDM has not reported this device",
+    description: "I5: an unobserved device is NOT a failed one; treating it as failed sends somebody to re-push a profile that is already installed.",
+  },
   "source.issuance.requests.heading.i3req00001": {
     defaultMessage: "Issuance requests",
     description: "I3: heading for the request queue with its real lifecycle.",

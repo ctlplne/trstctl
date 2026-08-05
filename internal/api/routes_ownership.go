@@ -46,3 +46,21 @@ func (a *API) issuanceRequestRoutes() []route {
 		{method: "POST", path: "/api/v1/issuance-requests/{id}/cancel", opID: "cancelIssuanceRequest", summary: "Withdraw your own request; only the requester may", handler: a.decideIssuanceRequest(issuancerequest.StateCancelled), pathParams: idPath, resSchema: "IssuanceRequest", successCode: "200", mutation: true, perm: authz.CertsRequest},
 	}
 }
+
+// The I5 MDM device-correlation surface. READ ONLY, and deliberately so: there
+// is no write route here, and internal/mdm has no request builder that can emit
+// anything but a GET. A bad write to an MDM does not corrupt a record — it
+// pushes a profile to real laptops.
+func (a *API) mdmDeviceRoutes() []route {
+	// The MDM's own device id is NOT a uuid — it is whatever Intune or Jamf
+	// assigns, and that is precisely the identifier an admin can paste from
+	// their console. Typing it as a uuid would reject every real Jamf id.
+	devicePath := []param{
+		pathString("mdm", "intune or jamf"),
+		pathString("id", "the MDM's own device id, as shown in its console"),
+	}
+	return []route{
+		{method: "GET", path: "/api/v1/mdm/devices", opID: "listMDMDevices", summary: "List MDM devices correlated to SCEP transactions, with unobserved counted apart from failed", handler: a.listMDMDevices, resSchema: "MDMDeviceList", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/mdm/{mdm}/devices/{id}/trace", opID: "getMDMDeviceTrace", summary: "Per-device enrollment trace showing which step an enrollment broke at", handler: a.getMDMDeviceTrace, pathParams: devicePath, resSchema: "MDMDeviceTrace", successCode: "200", perm: authz.CertsRead},
+	}
+}

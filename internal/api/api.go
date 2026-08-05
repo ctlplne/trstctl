@@ -1275,6 +1275,7 @@ func (a *API) routes() []route {
 	// the split the budget asks for rather than a waiver.
 	routes = append(routes, a.ownershipDataQualityRoutes()...)
 	routes = append(routes, a.issuanceRequestRoutes()...)
+	routes = append(routes, a.mdmDeviceRoutes()...)
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.platformRoutes()...)
 	return append(routes, a.licensedRouteRegistry()...)

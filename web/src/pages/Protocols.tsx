@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { MDMDevicesPanel } from "@/components/MDMDevicesPanel";
 import { Link } from "react-router-dom";
 import { Braces, CheckCircle2, Copy, MinusCircle, Signature, X, XCircle } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
@@ -322,6 +323,7 @@ export function Protocols() {
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
             >
               <Braces className="h-4 w-4" aria-hidden="true" />
+      <MDMDevicesPanel />
               {t("nav.item.sshTrust")}
             </Link>
             <Link

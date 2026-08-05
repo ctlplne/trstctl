@@ -1844,6 +1844,43 @@ looking for a credential that was never there.
   and NOT fixed here: `Deps.AgentBroker` (`POST /api/v1/broker/agent-identities`)
   and `Deps.PAM` (`POST /api/v1/access/sessions` and three more) have no config
   key either.
+- MDM device correlation and per-device enrollment trace (I5): `GET
+  /api/v1/mdm/devices` and `GET /api/v1/mdm/{mdm}/devices/{id}/trace`
+  (`trstctl mdm devices|trace`) join Intune and Jamf device records to SCEP
+  transactions and answer the question a status field cannot: WHICH STEP an
+  enrollment broke at. The trace runs `requested -> issued -> installed ->
+  renewing` and the distinctions are the feature. A step nobody reported is
+  `pending` only if an earlier step SUCCEEDED — otherwise a device that never
+  asked would look mid-flight and sit in an "in progress" queue forever. Steps
+  after a failure are `unknown`, not `pending`: nothing downstream was
+  attempted, and `pending` suggests it still might happen. Only the FIRST
+  failure is reported as the break, because reporting the last sends an operator
+  to the symptom rather than the cause. An MDM that could not be reached yields
+  `unknown`, never "not installed", and the list counts `unobserved` separately
+  from `failed` — merging them sends somebody to re-push a profile that is
+  already there. An unrecognised Intune registration state maps to `unknown`
+  rather than `failed`, so a value Microsoft ships that we have not seen does
+  not raise alerts on healthy devices. Jamf's computers-inventory endpoint does
+  not report per-profile install state, so Jamf rows are `unknown` by
+  construction: claiming `ok` because a device is enrolled would assert
+  something never observed. READ-ONLY IS STRUCTURAL — no code under
+  `internal/mdm` or `internal/api/mdm_devices.go` constructs a non-GET request,
+  both endpoint helpers use fixed paths (`/v1.0/deviceManagement/managedDevices`,
+  `/api/v1/computers-inventory`), a caller-supplied filter travels only as an
+  encoded query parameter, and there is no write route; `TestNoMDMCodePathCanWrite`
+  fails if any of those files references a mutating verb. Devices with no
+  matching certificate and certificates with no matching device are BOTH
+  reported, because a correlation that showed only its successes would make an
+  estate look covered by hiding the gaps; the join key is the hardware serial,
+  matched case-insensitively, because device NAME would silently join two
+  laptops an admin happened to name the same. Scope, stated exactly: the
+  correlation runs in the CONTROL PLANE, not the relay, so an MDM reachable only
+  from a private segment is not yet supported; there is no scheduled poller —
+  correlations are recorded through `mdm.device.correlated` by a caller, so
+  nothing yet fetches Intune or Jamf on a timer; RENEWAL-WINDOW AWARENESS FOR
+  OFFLINE DEVICES is not built, so the `renewing` stage is present in the trace
+  vocabulary but no producer sets it; and credential JIT-resolution on the relay
+  is not built for this path, since the path does not yet run on the relay.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives

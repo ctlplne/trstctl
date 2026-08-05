@@ -43,8 +43,10 @@ const (
 	// point of the object is that a denial and an expiry are DIFFERENT and both
 	// visible, so the decision is an event rather than a column somebody
 	// overwrote.
-	EventIssuanceRequestOpened                    = "issuance.request.opened"
-	EventIssuanceRequestDecided                   = "issuance.request.decided"
+	EventIssuanceRequestOpened  = "issuance.request.opened"
+	EventIssuanceRequestDecided = "issuance.request.decided"
+	// I5: one MDM device record joined to one SCEP transaction.
+	EventMDMDeviceCorrelated                      = "mdm.device.correlated"
 	EventOwnerDeleted                             = "owner.deleted"
 	EventIssuerCreated                            = "issuer.created"
 	EventIdentityCreated                          = "identity.created"
@@ -213,6 +215,23 @@ type OwnerUpdated struct {
 	Kind  string `json:"kind"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
+}
+
+// MDMDeviceCorrelated is the payload of an mdm.device.correlated event (I5).
+//
+// InstallState is 'ok' | 'failed' | 'unknown' and UNKNOWN IS NOT FAILED: an MDM
+// we could not reach tells us nothing about the device, and recording that as a
+// failure would send somebody to re-push a profile that is already installed.
+type MDMDeviceCorrelated struct {
+	MDM           string     `json:"mdm"`
+	MDMDeviceID   string     `json:"mdm_device_id"`
+	DeviceName    string     `json:"device_name,omitempty"`
+	SerialNumber  string     `json:"serial_number,omitempty"`
+	TransactionID string     `json:"transaction_id,omitempty"`
+	IdentityID    string     `json:"identity_id,omitempty"`
+	InstallState  string     `json:"install_state"`
+	InstallDetail string     `json:"install_detail,omitempty"`
+	ObservedAt    *time.Time `json:"observed_at,omitempty"`
 }
 
 // IssuanceRequestOpened is the payload of an issuance.request.opened event (I3).
@@ -1789,6 +1808,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCMDBScheduleConfigured:                   {1: true},
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
+	EventMDMDeviceCorrelated:                      {1: true},
 	EventOwnerDeleted:                             {1: true},
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
@@ -2005,6 +2025,18 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyOwnerUpdatedTx(ctx, tx, store.Owner{
 			ID: pl.ID, TenantID: e.TenantID, Kind: store.OwnerKind(pl.Kind), Name: pl.Name, Email: pl.Email,
+		})
+	case EventMDMDeviceCorrelated:
+		var pl MDMDeviceCorrelated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyMDMDeviceCorrelatedTx(ctx, tx, store.MDMDeviceCorrelation{
+			TenantID: e.TenantID, MDM: pl.MDM, MDMDeviceID: pl.MDMDeviceID,
+			DeviceName: pl.DeviceName, SerialNumber: pl.SerialNumber,
+			TransactionID: pl.TransactionID, IdentityID: pl.IdentityID,
+			InstallState: pl.InstallState, InstallDetail: pl.InstallDetail,
+			ObservedAt: pl.ObservedAt,
 		})
 	case EventIssuanceRequestOpened:
 		var pl IssuanceRequestOpened

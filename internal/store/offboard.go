@@ -123,6 +123,9 @@ var TenantScopedTables = []string{
 	"acme_dns01_provider_configs",
 	"acme_upstream_authorizations",
 	"endpoint_verifications",
+	// I5: the MDM device join. It names the tenant's own devices and leaves
+	// with the tenant.
+	"mdm_device_correlations",
 	"mdm_scep_policies",
 	"audit_checkpoints",
 	"notification_channels",

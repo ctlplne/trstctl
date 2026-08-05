@@ -459,8 +459,13 @@ describe("i18n boundary", () => {
       // decision, and a translation that rendered it as a decision would put a
       // judgement in the record that no human made.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "dd575c8aceaa736e1b1ff606a7a6177d932b4a4665cfa698b46761e71ec588c1",
-      "de-DE": "0abd0c51ee158b24407696a9ffe5f6889c67872dc8f9a6ded7ecbc577dd0b6e9",
+      // I5 MDM re-pin: three keys. The load-bearing one says an unobserved
+      // device is NOT a failed one, in every locale — a translation that
+      // rendered "unknown" as a failure would send an admin to re-push a
+      // profile that is already installed, and the counts are deliberately
+      // separate for the same reason.
+      "es-ES": "b438b806bbbc310c167f80e859c278e29d5f12689f7f48b7408649af9857b58b",
+      "de-DE": "d1bd8686e0ce244bebdb95c3232751badb73dccd6de88768a3a2dc544197cebb",
     });
   });
 
