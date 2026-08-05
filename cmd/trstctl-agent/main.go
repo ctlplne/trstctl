@@ -64,6 +64,10 @@ func main() {
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
 	enrollProxyListen := flag.String("enroll-proxy-listen", "", "serve a LAN-local ACME/EST/SCEP proxy on this address for hosts and devices in this segment that have no route to the control plane (epic A4). The proxy is pass-through: it forwards protocol traffic unaltered, adds no credential of its own, and makes no trust decision — the control plane's validators and policy still decide. Empty disables it")
 	enrollProxyUpstream := flag.String("enroll-proxy-upstream", "", "comma-separated https control-plane endpoints the enrolment proxy forwards to. More than one gives automatic failover when an endpoint stops answering; a control-plane ERROR is passed back to the client rather than retried, because it is an answer")
+	revCacheListen := flag.String("crl-cache-listen", "", "serve the control plane's CRL to relying parties in this segment on this address (epic R3). The relay holds the CA's signed bytes and hands them over — it signs nothing — and REFUSES to serve a list past its nextUpdate, because a stale CRL still verifies and would have a relying party trust a certificate revoked yesterday. Empty disables it")
+	revCacheUpstream := flag.String("crl-cache-upstream", "", "the control plane CRL URL this relay caches, e.g. https://cp.example/crl/<tenant>.crl")
+	revCacheIssuer := flag.String("crl-cache-issuer", "", "PEM file holding the issuing CA certificate the cached CRL must verify against. Required with --crl-cache-listen: without it the relay cannot tell a CRL from a captive portal's login page")
+	revCacheGrace := flag.Duration("crl-cache-grace", 0, "how long past nextUpdate a cached CRL may still be served. Zero — the default — serves nothing past nextUpdate; any other value is a decision to serve a list the CA said had expired, which only the operator can weigh")
 	pluginDir := flag.String("connector-plugin-dir", "", "directory of signature-verified third-party WASM connectors this relay may execute (epic E4). Each <name>.wasm needs a sibling <name>.wasm.sig from a key named by --connector-plugin-key. Empty disables third-party connectors; a directory with no trust keys is refused rather than loaded")
 	pluginKeys := flag.String("connector-plugin-key", "", "comma-separated PEM files holding the publisher public keys whose signatures this relay accepts for third-party connectors. Required whenever --connector-plugin-dir is set: loading unverified partner code inside a customer network is refused, not warned about")
 	pluginPins := flag.String("connector-plugin-pin", "", "comma-separated hex SHA-256 digests restricting third-party connectors to exactly these builds. A signature says who built a module; a pin says which build, which is what stops a compromised publisher key from shipping a new one")
@@ -221,6 +225,10 @@ func main() {
 		workloadAPISocket:                 *workloadAPISocket,
 		enrollProxyListen:                 *enrollProxyListen,
 		enrollProxyUpstream:               *enrollProxyUpstream,
+		revCacheListen:                    *revCacheListen,
+		revCacheUpstream:                  *revCacheUpstream,
+		revCacheIssuer:                    *revCacheIssuer,
+		revCacheGrace:                     *revCacheGrace,
 		pluginDir:                         *pluginDir,
 		pluginKeys:                        *pluginKeys,
 		pluginPins:                        *pluginPins,
@@ -317,6 +325,12 @@ type agentOptions struct {
 	// A4: the LAN-local enrolment proxy for dark segments.
 	enrollProxyListen   string
 	enrollProxyUpstream string
+
+	// R3: the LAN revocation cache.
+	revCacheListen   string
+	revCacheUpstream string
+	revCacheIssuer   string
+	revCacheGrace    time.Duration
 
 	pluginDir       string
 	pluginKeys      string
@@ -475,6 +489,11 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	// plane through the one outbound pipe this relay already has.
 	stopEnrollProxy := startEnrollProxy(ctx, o)
 	defer stopEnrollProxy()
+
+	// R3: the revocation cache, so relying parties in this segment can check
+	// revocation without a route to the control plane.
+	stopRevCache := startRevocationCache(ctx, o)
+	defer stopRevCache()
 
 	// E4: third-party connectors, verified and loaded before any work is
 	// claimed. A configuration error here is fatal rather than a warning: an

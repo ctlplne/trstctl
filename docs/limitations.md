@@ -264,6 +264,29 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Relay revocation cache (R3): a relay started with `--crl-cache-listen` serves the
+  control plane's CRL to relying parties in its segment. Revocation checking is the
+  part of PKI that fails quietly — a client that cannot reach a distribution point
+  usually proceeds rather than refusing — so a segment with no route silently stops
+  checking, and nobody finds out until a compromised certificate is used.
+  The relay SIGNS NOTHING: it holds the CA's signed bytes and hands them over, so a
+  compromised relay can withhold a CRL (visible: the fetch fails) but cannot forge
+  one (which would not be). It verifies a fetched CRL against the configured issuer
+  before caching, which is not the relay adding trust — a relying party checks the
+  signature regardless — but the relay declining to store what no client would
+  accept, such as a captive portal's login page.
+  IT FAILS CLOSED ON STALENESS, and that is the property the feature exists for. A
+  stale CRL is dangerous precisely BECAUSE it still verifies: nextUpdate has passed
+  and the signature is good, so a relying party accepts it and trusts a certificate
+  revoked yesterday. Past nextUpdate the relay serves 503 and no bytes — not the
+  stale list with a warning header, because a client that receives bytes will use
+  them. `--crl-cache-grace` can extend the window, defaults to zero, and is
+  deliberately an operator decision: serving a list the CA declared expired is a risk
+  only they can weigh. A CRL whose number went BACKWARDS is refused, since replaying
+  an older list is how a revoked certificate comes back to life. A failed refresh
+  keeps a still-valid cached list rather than discarding it. Both fail-closed
+  properties are mutation-verified, and the heartbeat reports cached-but-stale as its
+  own state — it is working as designed and looks exactly like an outage.
   Enrolment proxy for dark segments (A4): a relay started with
   `--enroll-proxy-listen` serves ACME, EST and SCEP on the LAN so hosts and devices
   with no route to the control plane can enrol through the one outbound pipe the
