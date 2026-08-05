@@ -1881,6 +1881,37 @@ looking for a credential that was never there.
   OFFLINE DEVICES is not built, so the `renewing` stage is present in the trace
   vocabulary but no producer sets it; and credential JIT-resolution on the relay
   is not built for this path, since the path does not yet run on the relay.
+- AD CS coexistence, first increment (F4): the `/certsrv` transport now REFUSES
+  to send a password over plaintext. Basic is base64, not encryption, and on a
+  plaintext hop anyone on the path reads a credential that can issue from the
+  enterprise CA directly — the compromise is not "an eavesdropper saw a request"
+  but "an attacker can mint certificates the whole domain trusts". The refusal
+  is at CONSTRUCTION, so a misconfiguration fails when an operator sets it up
+  rather than silently on the first production issuance. A domain-joined relay
+  can supply Kerberos/NTLM through a `WebEnrollmentConfig.Authenticator`, an
+  interface rather than a GSSAPI dependency because the credential belongs in
+  the host's credential store and core must have no code path that could
+  serialise a domain password. Configuring BOTH a password and an authenticator
+  is refused: the authenticator would win, leaving a live domain credential in
+  configuration that nothing reads — which is exactly what somebody later
+  "fixes" by making it take effect. A failing authenticator fails the request
+  and never falls back to Basic, so a transient Kerberos problem cannot put the
+  password on the wire. AD CS certificate-database rows parse into a vocabulary
+  that keeps PENDING distinct from FAILED and from DENIED (a pending request
+  rendered as failed makes an operator re-submit instead of going to get it
+  approved; a human decided a denial), an unrecognised disposition code maps to
+  `unknown` rather than `failed` so a code Microsoft adds does not report
+  healthy certificates as broken, serials normalise so the same certificate from
+  two exports is not two inventory rows, and an unparseable NotAfter is counted
+  as a VISIBILITY GAP rather than treated as an expiry in year zero. Scope,
+  stated exactly: this is the transport and parsing layer only. NOTHING YET
+  CALLS THE DATABASE INGESTION — there is no scheduled or served ingest that
+  pulls a CA database into inventory, so issued/pending/revoked state is not
+  reconciled by C4/XREC; no Kerberos or NTLM Authenticator IMPLEMENTATION ships
+  (the seam exists, the relay-side implementation does not); the ACME/EST
+  front-end that would issue a leaf through an AD CS template under a trstctl
+  policy gate is not built; and there is no "modernize this template" console
+  action or AD CS issuer health view.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives

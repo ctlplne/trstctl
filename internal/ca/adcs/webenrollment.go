@@ -31,11 +31,35 @@ var requestIDPattern = regexp.MustCompile(`(?i)(?:ReqID=|Request\s*ID[^0-9]*)([0
 // A reverse proxy may supply Kerberos/NTLM and inject an already-authenticated
 // HTTPClient instead.
 type WebEnrollmentConfig struct {
-	BaseURL    string
-	Username   string
-	Password   []byte
-	HTTPClient *http.Client
-	Timeout    time.Duration
+	BaseURL  string
+	Username string
+	Password []byte
+	// Authenticator supplies domain-integrated authentication (F4). When set it
+	// REPLACES Basic entirely: the relay is domain-joined, so it can answer a
+	// Negotiate or NTLM challenge without this process ever holding a password.
+	//
+	// An interface rather than a Kerberos implementation because the credential
+	// lives on the relay host, not here. Core stays free of a GSSAPI dependency
+	// and, more importantly, of any code path that could serialise a domain
+	// password.
+	Authenticator Authenticator
+	HTTPClient    *http.Client
+	Timeout       time.Duration
+}
+
+// Authenticator answers an AD CS authentication challenge on behalf of a
+// domain-joined host.
+type Authenticator interface {
+	// Authorize sets whatever credential header the scheme needs. It is given
+	// the challenge the server sent, so a multi-leg scheme (NTLM's three-way,
+	// SPNEGO's mutual auth) can drive its own state machine.
+	//
+	// It must never receive or return a password: the point of domain
+	// integration is that the secret stays in the host's credential store.
+	Authorize(req *http.Request, challenge string) error
+	// Scheme names what it implements, for the WWW-Authenticate match and for
+	// operator-facing diagnostics that have to say which auth was used.
+	Scheme() string
 }
 
 // WebEnrollmentTransport implements the documented certsrv new-request and
@@ -45,6 +69,7 @@ type WebEnrollmentTransport struct {
 	baseURL  string
 	username string
 	password []byte
+	auth     Authenticator
 	client   *http.Client
 	timeout  time.Duration
 }
@@ -59,6 +84,30 @@ func NewWebEnrollmentTransport(cfg WebEnrollmentConfig) (*WebEnrollmentTransport
 	u, err := url.Parse(base)
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return nil, errors.New("adcs: Web Enrollment base URL must be absolute")
+	}
+	// F4: configuring both a password and a domain authenticator is ambiguous,
+	// and the ambiguity is dangerous. The authenticator wins, so the password
+	// is dead config — but dead config in a credential field is exactly what
+	// somebody later "fixes" by making it take effect. Refuse it instead.
+	if cfg.Authenticator != nil && len(cfg.Password) > 0 {
+		return nil, errors.New(
+			"adcs: both a password and a domain authenticator are configured; the authenticator " +
+				"is used and the password would never be sent. Remove the password rather than " +
+				"leaving a live domain credential in configuration that nothing reads")
+	}
+	// F4: a password may not leave this process over plaintext.
+	//
+	// Basic sends base64, which is an encoding and not a protection — anyone on
+	// the path reads the CA operator's domain credential and can then issue from
+	// the enterprise CA directly. This is refused at CONSTRUCTION rather than at
+	// send time so a misconfiguration fails when the operator sets it up, not
+	// silently on the first issuance in production.
+	if len(cfg.Password) > 0 && !strings.EqualFold(u.Scheme, "https") {
+		return nil, fmt.Errorf(
+			"adcs: refusing to send a password to %s over %s; Basic is base64, not encryption, and "+
+				"anyone on the path would read a credential that can issue from your enterprise CA. "+
+				"Use https, or a domain-integrated Authenticator that never sends the password at all",
+			u.Host, u.Scheme)
 	}
 	// Accept both https://host and https://host/certsrv without duplicating the
 	// conventional virtual directory.
@@ -78,6 +127,7 @@ func NewWebEnrollmentTransport(cfg WebEnrollmentConfig) (*WebEnrollmentTransport
 	}
 	return &WebEnrollmentTransport{
 		baseURL: base, username: cfg.Username, password: secrettext.Clone(cfg.Password),
+		auth:   cfg.Authenticator,
 		client: client, timeout: timeout,
 	}, nil
 }
@@ -125,7 +175,15 @@ func (t *WebEnrollmentTransport) RetrievePending(ctx context.Context, _ string, 
 }
 
 func (t *WebEnrollmentTransport) roundTrip(req *http.Request) (Submission, error) {
-	if t.username != "" {
+	if t.auth != nil {
+		// A failure here fails the request. Falling back would downgrade to the
+		// scheme the operator deliberately moved away from — and construction
+		// already refused the combination that would make a password available
+		// to fall back TO.
+		if err := t.auth.Authorize(req, ""); err != nil {
+			return Submission{}, fmt.Errorf("adcs: %s authentication failed: %w", t.auth.Scheme(), err)
+		}
+	} else if t.username != "" {
 		// net/http's SetBasicAuth takes a password string and builds additional
 		// immutable copies. Assemble user:password and base64 in erasable buffers,
 		// then cross the forced string boundary exactly once at Header.Set.
