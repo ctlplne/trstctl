@@ -50,15 +50,11 @@ var ErrDrillTargetUnavailable = errors.New("server: no ephemeral database is ava
 // as "nobody has got around to configuring it" rather than "this product cannot
 // do it", so no operator would ever have asked why.
 func (s *Server) RunRestoreDrillScheduler(ctx context.Context) {
-	if s.restoreDrill == nil || s.restoreDrillInterval < 0 {
-		// No drill configured, or explicitly disabled. Block until shutdown so
-		// the worker's lifecycle matches its siblings.
+	interval, enabled := restoreDrillSchedule(s.restoreDrill != nil, s.restoreDrillInterval)
+	if !enabled {
+		// Block until shutdown so the worker's lifecycle matches its siblings.
 		<-ctx.Done()
 		return
-	}
-	interval := s.restoreDrillInterval
-	if interval == 0 {
-		interval = defaultRestoreDrillInterval
 	}
 	// Not at startup. A restore drill replays the whole event log into a fresh
 	// database, and doing that while the process is still opening its listeners
@@ -76,8 +72,26 @@ func (s *Server) RunRestoreDrillScheduler(ctx context.Context) {
 	}
 }
 
-// defaultRestoreDrillInterval is how often the drill runs when unconfigured.
-const defaultRestoreDrillInterval = 24 * time.Hour
+// restoreDrillSchedule decides whether the drill runs, and how often.
+//
+// A pure function because the decision is what needs testing and a timing test
+// cannot see it: a scheduler wrongly turning a zero interval into the daily
+// default looks EXACTLY like a correctly disabled one for any window shorter
+// than a day. My first test here asserted no drill fired within 150ms and
+// passed against the bug it was written to catch, which is the same
+// passes-for-the-wrong-reason failure this programme keeps finding elsewhere.
+//
+// The config layer resolves an unset interval to DefaultBackupDrillInterval, so
+// a zero arriving here can only mean the operator wrote "0" — documented as the
+// way to switch the drill off. Non-positive is therefore disabled, full stop;
+// no default is applied at this layer, because applying one here is precisely
+// how "0" came to mean "daily".
+func restoreDrillSchedule(haveRunner bool, configured time.Duration) (time.Duration, bool) {
+	if !haveRunner || configured <= 0 {
+		return 0, false
+	}
+	return configured, true
+}
 
 // RunRestoreDrillOnce runs one drill and records its attestation.
 //

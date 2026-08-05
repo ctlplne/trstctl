@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { AuthorityAgreementPanel } from "@/components/AuthorityAgreementPanel";
 import { ADCSTemplatePanel } from "@/components/posture/ADCSTemplatePanel";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { PQCReadinessSummary } from "@/components/pqc";
@@ -342,6 +343,10 @@ export function Posture() {
       </section>
 
       <ADCSTemplatePanel />
+      {/* C4: whether the authorities agree about what was issued. Sits beside
+          the AD CS template posture because both answer "what does that
+          authority actually say", one about policy and one about inventory. */}
+      <AuthorityAgreementPanel />
 
       <section aria-labelledby="drift-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex items-start gap-3">

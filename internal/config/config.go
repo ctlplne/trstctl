@@ -1294,10 +1294,21 @@ type Backup struct {
 // night's backup replaces the evidence.
 func (b Backup) DrillIntervalDuration() (time.Duration, error) {
 	if strings.TrimSpace(b.DrillInterval) == "" {
-		return 24 * time.Hour, nil
+		return DefaultBackupDrillInterval, nil
 	}
 	return time.ParseDuration(b.DrillInterval)
 }
+
+// DefaultBackupDrillInterval is how often the restore drill runs when the
+// operator sets nothing.
+//
+// Resolved HERE rather than in the scheduler, and that placement is the fix for
+// a real bug: while the scheduler also applied a default, a zero could mean
+// either "unset" or "the operator asked for no drill", the scheduler could not
+// tell them apart, and "0" — documented as the way to disable — silently ran
+// the drill daily instead. With the default resolved at parse time, a zero
+// reaching the scheduler can only mean disabled.
+const DefaultBackupDrillInterval = 24 * time.Hour
 
 // RateLimit configures the PostgreSQL-backed per-tenant rate limiter (R2.3 /
 // AN-7): each tenant may make Requests calls per Window (a token bucket admitting

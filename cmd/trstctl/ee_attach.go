@@ -28,6 +28,7 @@ import (
 	eepqcruntime "trstctl.com/trstctl/ee/pqcruntime"
 	eeprovider "trstctl.com/trstctl/ee/provider"
 	eereconcile "trstctl.com/trstctl/ee/reconcile"
+	eereconcileapi "trstctl.com/trstctl/ee/reconcile/api"
 	eereconcileplanremediation "trstctl.com/trstctl/ee/reconcile/plan/remediation"
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eesuccessionapi "trstctl.com/trstctl/ee/succession/api"
@@ -376,6 +377,12 @@ func attachReconcile(log *slog.Logger, deps *server.Deps) error {
 	deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, runtime.BackgroundWorkers...)
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, runtime.RemediationOutboxFactory)
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, runtime.QuarantineOutboxFactory)
+	// C4: the agreement surface. Until this line the drift projection
+	// accumulated every authority's divergence history and no route could read
+	// it, so XREC could detect that two authorities disagreed and had no way to
+	// tell anybody.
+	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory,
+		eereconcileapi.NewAPIOptionsFactory(runtime.DriftProjection, runtime.RoundsScheduled))
 	if log != nil {
 		log.Info("Enterprise XREC reconciliation attached", slog.String("feature", string(license.FeatureReconcile)))
 	}

@@ -204,21 +204,17 @@ func gateMet(family string, gate ParityGate) bool {
 		// breaks the build rather than quietly reading as proven here.
 		return IsRelayVantageFamily(family)
 	case ParityGateCPPathRefusal:
-		// Not met for any family, and this is the honest blocker on the whole
-		// migration rather than an oversight.
+		// Met for every relay family: internal/server's handleDeploy refuses a
+		// migrated family's deploy when the tenant has a network relay
+		// enrolled, so the control plane no longer races the relay for work the
+		// A3 stamp reserved for it.
 		//
-		// The control-plane dispatcher sweeps every connector.* row on a
-		// one-second ticker and the outbox claim query carries no
-		// required_agent_role predicate, so the control plane wins the race for
-		// a deploy the A3 stamp reserved for a relay. Refusing there is a
-		// three-line change and is deliberately NOT made yet: the end-to-end
-		// evidence that an appliance deploy works through the served API is the
-		// DoD connector suite, which drives a10, cisco, kemp and netscaler
-		// through the CONTROL PLANE to their device doubles. Flipping the
-		// refusal without re-homing that suite onto a relay would retire a
-		// proven path in favour of one whose only proof is a unit test — the
-		// opposite of what this gate is for.
-		return false
+		// The refusal is CONDITIONAL on a relay existing, and this census says
+		// "met" for that rather than inventing a fourth state. An estate with no
+		// relay still deploys from the control plane, which is the behaviour
+		// that predates E1 and is not a defect — E1's claim is that a relay,
+		// where you run one, is the executor and not merely a candidate.
+		return IsRelayVantageFamily(family)
 	case ParityGateHAPeerSync, ParityGateDeviceCSR:
 		return false
 	default:

@@ -36,14 +36,14 @@ coverage ledger applies to assets, applied to weaknesses.
 
 | CWE | Waived sites | Register section |
 |---|---|---|
-| CWE-22 | 336 | [cwe-register.md](cwe-register.md) |
+| CWE-22 | 337 | [cwe-register.md](cwe-register.md) |
 | CWE-798 | 239 | [cwe-register.md](cwe-register.md) |
 | CWE-276 | 148 | [cwe-register.md](cwe-register.md) |
 | CWE-78 | 142 | [cwe-register.md](cwe-register.md) |
 | CWE-190 | 130 | [cwe-register.md](cwe-register.md) |
 | CWE-1004 | 31 | [cwe-register.md](cwe-register.md) |
 | CWE-367 | 22 | [cwe-register.md](cwe-register.md) |
-| CWE-338 | 15 | [cwe-register.md](cwe-register.md) |
+| CWE-338 | 20 | [cwe-register.md](cwe-register.md) |
 | CWE-79 | 11 | [cwe-register.md](cwe-register.md) |
 | CWE-328 | 8 | [cwe-register.md](cwe-register.md) |
 | CWE-400 | 8 | [cwe-register.md](cwe-register.md) |

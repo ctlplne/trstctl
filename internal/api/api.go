@@ -918,25 +918,6 @@ func (a *API) routes() []route {
 		{name: "subject_ref", typ: "string", desc: "tenant-bound subject reference to filter evidence"},
 	}
 	routes := []route{
-		{method: "GET", path: "/api/v1/posture/adcs", opID: "getADCSPosture", summary: "AD CS certificate template posture observed by an in-domain relay", handler: a.getADCSPosture, resSchema: "ADCSPosture", successCode: "200", perm: authz.DiscoveryRead},
-		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
-		// B-5: what is running and is the spine reachable — the readout an
-		// operator wants on /admin/system, which only /healthz answered.
-		{method: "GET", path: "/api/v1/platform/system", opID: "getPlatformSystem", summary: "Running build, uptime, signer topology, and spine reachability", handler: a.getPlatformSystem, resSchema: "SystemReadout", successCode: "200", perm: authz.AccessRead},
-		{method: "GET", path: "/api/v1/platform/tenant-key-domain", opID: "getTenantKeyDomain", summary: "Get this tenant's cryptographic protection and lifecycle status", handler: a.getTenantKeyDomain, resSchema: "TenantKeyDomainStatus", successCode: "200", perm: authz.KeysRead},
-		{method: "POST", path: "/api/v1/platform/tenant-key-domain/migrate", opID: "migrateTenantKeyDomain", summary: "Migrate this tenant into an independently wrapped cryptographic domain", handler: a.migrateTenantKeyDomain, reqSchema: "TenantKeyDomainMigrateRequest", resSchema: "TenantKeyDomainStatus", successCode: "200", mutation: true, perm: authz.KeysWrite},
-		{method: "POST", path: "/api/v1/platform/tenant-key-domain/seal", opID: "sealTenantKeyDomain", summary: "Queue an independently replayable seal for this tenant's cryptographic domain", handler: a.sealTenantKeyDomain, resSchema: "TenantKeyDomainSealReceipt", successCode: "202", mutation: true, perm: authz.KeysWrite},
-		{method: "POST", path: "/api/v1/platform/tenant-key-domain/unseal", opID: "unsealTenantKeyDomain", summary: "Unseal this tenant through its configured operator wrapper", handler: a.unsealTenantKeyDomain, resSchema: "TenantKeyDomainStatus", successCode: "200", mutation: true, perm: authz.KeysWrite},
-		{method: "GET", path: "/api/v1/platform/distribution", opID: "getPlatformDistribution", summary: "Self-hostable run-anywhere distribution posture", handler: a.getPlatformDistribution, resSchema: "PlatformDistributionStatus", successCode: "200", perm: authz.AccessRead},
-		{method: "GET", path: "/api/v1/support/enterprise", opID: "getEnterpriseSupportStatus", summary: "Enterprise support, SLA, and services posture", handler: a.getEnterpriseSupportStatus, resSchema: "EnterpriseSupportStatus", successCode: "200", perm: authz.AccessRead},
-		{method: "GET", path: "/api/v1/managed-offering/status", opID: "getManagedOfferingStatus", summary: "Managed offering/provider-plane posture", handler: a.getManagedOfferingStatus, resSchema: "ManagedOfferingStatus", successCode: "200", perm: authz.AccessRead},
-		{method: "GET", path: "/api/v1/scale/orchestration", opID: "getScaleOrchestration", summary: "High-volume orchestration posture for 100k-1M+ credentials", handler: a.getScaleOrchestration, resSchema: "ScaleOrchestrationPlan", successCode: "200", perm: authz.AccessRead},
-		{method: "GET", path: "/api/v1/scale/ha-issuance", opID: "getActiveActiveIssuance", summary: "Multi-region HA issuance posture", handler: a.getActiveActiveIssuance, resSchema: "ActiveActiveIssuancePlan", successCode: "200", perm: authz.AccessRead},
-		// Provider-plane tenant creation is a tenant-scoped system operation: the
-		// provider tenant is authorized by the bearer principal, while the command
-		// emits tenant.registered for the hosted tenant so PostgreSQL RLS creates a
-		// separate boundary from the first projected row.
-		{method: "POST", path: "/api/v1/managed-offering/tenants", opID: "provisionManagedTenant", summary: "Provision a hosted tenant in the managed offering", handler: a.provisionManagedTenant, reqSchema: "ManagedTenantProvisionRequest", resSchema: "ManagedTenant", successCode: "201", mutation: true, perm: authz.AccessWrite},
 
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},
@@ -1072,7 +1053,6 @@ func (a *API) routes() []route {
 		// telemetry (subsystem names + counts), never tenant rows.
 		{method: "GET", path: "/api/v1/operations/jobs", opID: "getAgentJobPosture", summary: "Get agent job-ledger queue depth and claim health", handler: a.getAgentJobPosture, resSchema: "AgentJobPosture", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/operations/renewal-slo", opID: "getRenewalSLO", summary: "Renewal success SLO and error-budget burn over the measurement window", handler: a.getRenewalSLO, resSchema: "RenewalSLO", successCode: "200", perm: authz.AccessRead},
-		{method: "GET", path: "/api/v1/platform/dr-posture", opID: "getDRPosture", summary: "Report when this deployment's backup was last verified by re-hashing its artifacts", handler: a.listDRPosture, resSchema: "DRPosture", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/enrollment/diagnostics", opID: "listEnrollmentDiagnostics", summary: "List recent enrolment refusals with the failing step, cause and remediation", handler: a.listEnrollmentDiagnostics, resSchema: "EnrollmentDiagnosticList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/operations/bulkheads", opID: "listBulkheadStats", summary: "List bounded worker-pool saturation and rejection counters", handler: a.listBulkheadStats, resSchema: "BulkheadStats", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/notification-channels", opID: "createNotificationChannel", summary: "Create a tenant-authored notification channel using secret references", handler: a.createNotificationChannel, reqSchema: "NotificationChannelRequest", resSchema: "NotificationChannel", successCode: "201", mutation: true, perm: authz.NotificationsWrite},
@@ -1294,6 +1274,7 @@ func (a *API) routes() []route {
 	// route table is the bulk of api.go, and moving a coherent workflow out is
 	// the split the budget asks for rather than a waiver.
 	routes = append(routes, a.codeSigningRoutes()...)
+	routes = append(routes, a.platformRoutes()...)
 	return append(routes, a.licensedRouteRegistry()...)
 }
 

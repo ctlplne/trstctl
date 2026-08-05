@@ -372,6 +372,37 @@ export type CertificatePage = CertificateList;
 export type CertificateIngestRequest = CertificateIngest;
 export type CTSubmission = CTLogSubmission;
 export type CTSubmissionRequest = CTLogSubmissionRequest;
+// C4: XREC's authority-agreement surface.
+//
+// Hand-declared rather than generated. The route is licensed (Enterprise
+// `reconcile`) and its schemas are contributed at attach time by ee/, so they
+// are not in the core OpenAPI golden the generator reads. Keep this in step
+// with ee/reconcile/api/openapi.go by hand.
+export interface AuthorityWitnessClassCount {
+  class: string;
+  count: number;
+}
+export interface AuthorityAgreement {
+  authority_id: string;
+  witnesses: AuthorityWitnessClassCount[];
+  total: number;
+  last_witness_at?: string;
+}
+export interface AuthorityAgreementReport {
+  authorities: AuthorityAgreement[];
+  open_witnesses: number;
+  /** How far the projection has consumed the log. Every count above is only as current as this. */
+  replay_watermark: number;
+  median_resolution_seconds: number;
+  resolved_in_window: number;
+  /** False means the zeros are the absence of collection, not the absence of disagreement. */
+  configured: boolean;
+  /** False means NO reconciliation schedule exists — nothing is looking for divergence at all. */
+  collecting: boolean;
+  detail: string;
+  guidance: string;
+}
+
 export type { CTMonitoring, CTMonitoringRequest };
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type Owner = GenOwner;
@@ -1231,6 +1262,8 @@ export interface Api {
   rogueCertificates(): Promise<RogueCertificatePosture>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
   ctMonitoring(): Promise<CTMonitoring>;
+  /** C4: whether the configured authorities agree. Licensed; 402/403 when not entitled. */
+  authorityAgreement(): Promise<AuthorityAgreementReport>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
@@ -1548,6 +1581,7 @@ const liveApi: Api = {
   // questions: verification says the bytes still match, a drill says they
   // reproduce state.
   drPosture: () => req<DRPosture>("/api/v1/platform/dr-posture"),
+  authorityAgreement: () => req<AuthorityAgreementReport>("/api/v1/reconcile/agreement"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),

@@ -98,12 +98,15 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // protocolIssuer. A future identity key-algorithm parameter is roadmap work,
 // not a dormant seam here.
 type issuanceDispatcher struct {
-	issue     issueFunc
-	orch      *orchestrator.Orchestrator
-	idem      *orchestrator.Idempotency
-	outbox    *orchestrator.Outbox
-	store     *store.Store
-	admission editionseam.AdmissionHook
+	// relayPresence overrides the store for the E1 control-plane refusal; nil in
+	// production, where the store answers.
+	relayPresence relayPresence
+	issue         issueFunc
+	orch          *orchestrator.Orchestrator
+	idem          *orchestrator.Idempotency
+	outbox        *orchestrator.Outbox
+	store         *store.Store
+	admission     editionseam.AdmissionHook
 
 	// log is the event log used to emit the profile-gated issuance decision
 	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the
@@ -307,6 +310,29 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		}
 		if strings.HasPrefix(m.Destination, "managedkey.") {
 			return fmt.Errorf("server: managed-key outbox destination is not configured")
+		}
+		// An AGENT-CLAIMABLE kind with no control-plane handler is not unknown —
+		// it is work waiting for an agent, and it must wait rather than die.
+		//
+		// This is the general form of a bug that had already been fixed twice by
+		// hand and was still live four times over. connector.rollback and
+		// connector.test got explicit deferral cases above, with a comment
+		// explaining that without them the default branch burns the row's
+		// attempt budget and lands it in status='failed' — where ClaimAgentJobs,
+		// which requires 'pending', can never see it. Nobody added the same case
+		// for endpoint.verify, endpoint.renew, revocation.probe, adcs.inventory
+		// or trust.distribute, so each of those enqueued a row that dead-lettered
+		// before any agent could claim it, while the API had already told the
+		// operator the work was queued.
+		//
+		// Deriving the answer from agentJobKindAllowlist instead of adding a
+		// fifth case means a kind added to that allowlist can never again be
+		// missing from here. The allowlist is the one place that decides what an
+		// agent may execute; this reads it rather than restating it.
+		if agentJobKindAllowlist[m.Destination] {
+			return orchestrator.DeferDelivery(fmt.Errorf(
+				"server: %s is agent-claimable work with no control-plane executor; it waits for "+
+					"an agent to claim it", m.Destination))
 		}
 		// This dispatcher is the sole handler passed to every scoped and unscoped
 		// outbox sweep. There is no second worker to own an unknown destination, so
@@ -1052,6 +1078,42 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 			"missing_connector", "identity has no connector target configured",
 			errors.New("server: connector.deploy has no configured connector"))
 	}
+	// E1: a family through its relay parity gate executes on a relay, and the
+	// control plane must not race the relay for its work.
+	//
+	// The outbox claim query carries no required_agent_role predicate — that
+	// column is read by ClaimAgentJobs when an agent asks for work, never by the
+	// dispatcher — so without this the control plane sweeps the same pending row
+	// on a one-second ticker and beats every relay to it. The A3 role stamp
+	// would be correct in the column and decide nothing.
+	//
+	// Conditional on a relay actually being ENROLLED, and that condition is the
+	// difference between a guarantee and an outage. Refusing unconditionally
+	// would turn "this estate has not deployed a relay yet" into "this estate's
+	// appliance deploys stopped working", and would retire the one path with
+	// end-to-end proof through the served API. Refusing only when a relay exists
+	// keeps the promise where it can be kept: if you run a relay, the control
+	// plane will not do its work behind its back.
+	//
+	// DeferDelivery rather than a failure, matching connector.rollback and
+	// connector.test: attempt-budget-neutral, so the row re-pends and stays
+	// claimable by the relay that is supposed to run it. An aged row is already
+	// reported by the ops doctor probe rather than lost silently.
+	if connector.RelayMigrated(p.Connector) && d.relayPresenceSource() != nil {
+		hasRelay, relayErr := d.relayPresenceSource().TenantHasNetworkRelay(ctx, m.TenantID)
+		if relayErr != nil {
+			// Failing the lookup must not silently hand the work back to the
+			// control plane: that is the fallback direction that removes the
+			// guarantee. Defer and let the next tick re-ask.
+			return orchestrator.DeferDelivery(fmt.Errorf(
+				"server: check network relay before %s deploy: %w", p.Connector, relayErr))
+		}
+		if hasRelay {
+			return orchestrator.DeferDelivery(fmt.Errorf(
+				"server: %s completed its relay parity gate and this tenant has a network relay "+
+					"enrolled, so its deploys execute there, not in the control plane", p.Connector))
+		}
+	}
 	if d.connectorRegistry != nil && d.connectorRegistry.Has(p.Connector) {
 		if len(p.CertPEM) == 0 || len(p.KeyPEM) == 0 {
 			return d.failConnectorDelivery(ctx, m.TenantID, receipt,
@@ -1705,4 +1767,25 @@ func decodeSubjectCSR(csrPEM []byte) (der []byte, dnsNames []string, err error) 
 		names = []string{info.CommonName}
 	}
 	return append([]byte(nil), blk.Bytes...), names, nil
+}
+
+// relayPresence answers whether a tenant runs a network relay (epic E1).
+//
+// An interface with a test seam rather than a direct store call, because the
+// property worth testing is the DECISION — refuse when a relay exists, execute
+// when none does, defer when the answer is unknown — and a test that had to
+// stand up PostgreSQL to exercise three branches would end up exercising one.
+type relayPresence interface {
+	TenantHasNetworkRelay(ctx context.Context, tenantID string) (bool, error)
+}
+
+// relayPresenceSource prefers an injected seam and falls back to the store.
+func (d *issuanceDispatcher) relayPresenceSource() relayPresence {
+	if d.relayPresence != nil {
+		return d.relayPresence
+	}
+	if d.store != nil {
+		return d.store
+	}
+	return nil
 }

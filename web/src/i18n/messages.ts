@@ -5652,6 +5652,56 @@ export const messages = {
     defaultMessage: "Outstanding (does not block migration):",
     description: "E1: named E1 deliverables that are not built, so a migrated family cannot read as a finished one.",
   },
+  "source.authority.agreement.c4xr000001": {
+    defaultMessage:
+      "Authority agreement (XREC)",
+    description: "C4: panel heading \u2014 whether the configured authorities agree about what was issued.",
+  },
+  "source.agreement.unavailable.c4xr000002": {
+    defaultMessage:
+      "Cross-authority reconciliation is not available on this deployment, so no authority state has been collected and no divergence could have been detected. This is not a report that your authorities agree.",
+    description: "C4: unlicensed or unattached \u2014 must not render as a clean result.",
+  },
+  "source.open.witnesses.c4xr000003": {
+    defaultMessage:
+      "Open witnesses",
+    description: "C4: unresolved divergences right now \u2014 the number that matters.",
+  },
+  "source.replay.watermark.c4xr000004": {
+    defaultMessage:
+      "Replay watermark",
+    description: "C4: how far the projection has consumed the log; every count is only as current as this.",
+  },
+  "source.median.resolution.c4xr000005": {
+    defaultMessage:
+      "Median resolution",
+    description: "C4: median rather than mean \u2014 one witness left open over a weekend makes a mean meaningless.",
+  },
+  "source.over.n.resolved.c4xr000006": {
+    defaultMessage:
+      "over resolved witnesses:",
+    description: "C4: sample size, so a median over one witness cannot pass for a trend.",
+  },
+  "source.authority.c4xr000007": {
+    defaultMessage:
+      "Authority",
+    description: "C4: table column \u2014 the authority a divergence was raised against.",
+  },
+  "source.divergences.c4xr000008": {
+    defaultMessage:
+      "Divergences",
+    description: "C4: total witnesses raised against this authority in the window.",
+  },
+  "source.by.class.c4xr000009": {
+    defaultMessage:
+      "By class",
+    description: "C4: presence, attribute conflict, policy violation, staleness.",
+  },
+  "source.not.collecting.c4xr000010": {
+    defaultMessage:
+      "Attached, but no reconciliation schedule is configured — nothing is comparing authority state, so the counts below are the absence of collection rather than the absence of disagreement.",
+    description: "C4: attached-but-not-collecting is indistinguishable from perfect agreement unless said out loud.",
+  },
   "source.deployment.truth.d3tri00001": {
     defaultMessage: "Deployment truth",
     description: "D3: panel heading \u2014 issued/delivered/verified counted separately.",

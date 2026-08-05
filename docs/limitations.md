@@ -264,48 +264,140 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
-  Relay migration parity (E1, PARTIAL — the control-plane path is NOT yet
-  refused): `GET /api/v1/connectors/catalog` and the Connectors console publish a
-  per-family gate table for the seven appliance families, and the honest headline
-  is that NONE of them is migrated. What is true today: each family's connector is
-  proven against a faithful double of its management API, a deploy driven through
-  `relay.Execute` reaches that double and the certificate is read back out of it
-  byte-for-byte, and a10, f5, kemp and netscaler can additionally roll back and be
-  asked what they hold. What is NOT true is the sentence E1 exists to make true —
-  that these families execute on a relay instead of in the control plane. The
-  control-plane dispatcher sweeps every `connector.*` outbox row on a one-second
-  ticker, and the outbox claim query carries no `required_agent_role` predicate;
-  that column is read by `ClaimAgentJobs` when an agent asks for work, not by the
-  dispatcher. So an appliance deploy stamped `network` for a relay is executed by
-  the control plane, which gets there first. The A3 role stamp is correct in the
-  column and does not decide who runs the row.
-  Refusing in the dispatcher is a three-line change and is deliberately not made
-  here. The only end-to-end evidence that an appliance deploy works through the
-  served API is the DoD connector suite, which drives a10, cisco, kemp and
-  netscaler through the CONTROL PLANE to their device doubles and reads the
-  certificate back off each one. Flipping the refusal without first re-homing that
-  suite onto a relay would retire a proven path in favour of one proven only by a
-  unit test, and would make every appliance deploy require an enrolled network
-  relay — a real change in what a deployment needs, which belongs in a change that
-  can prove the replacement works. `cp_path_refusal` is therefore published as an
-  unmet gate against all seven families rather than left as a silent gap.
-  The design intended for that change, recorded here so it is not re-derived: the
-  dispatcher refuses when a network relay is ENROLLED for the tenant, and executes
-  as it does today when none is. That keeps "configured but the relay is down" as
-  a wait — which is the correct outcome, since a deploy racing past an unavailable
-  relay is the failure this gate exists to prevent — while an estate that never
-  enrolled one is unaffected rather than broken. An unconditional refusal would
-  make a relay a hard prerequisite for every appliance deploy, which is a larger
-  promise than E1 needs to keep.
-  Two further E1 deliverables are unbuilt and named per family in the same table:
-  F5 HA-peer sync, which blocks F5 specifically because a deploy that updates one
-  peer of an HA pair reports success while the other keeps serving the old
-  certificate until a failover surfaces it as expired; and device-generated CSR
-  mode, which five families' APIs support and none is wired for. Device-generated
-  CSR is reported as outstanding rather than blocking, because the current mode —
-  the relay generates the key inside the segment and installs it — is correct as
-  it stands, and holding four families in the control plane to avoid an
-  improvement would be the worse trade.
+  CORRECTION (D2/D3, B2, R1, F1, H2 — 2026-08-05): FIVE agent-claimable job kinds
+  dead-lettered before any agent could claim them. The control-plane dispatcher is
+  the sole handler for every outbox sweep, and its default branch returns a hard
+  error for an unrecognised destination — right for a genuinely unknown one, fatal
+  for work an AGENT is meant to execute. A hard error burns the row's attempt budget
+  and lands it in `status='failed'`, and `ClaimAgentJobs` only ever hands out rows in
+  `pending`. So `endpoint.verify` (D2/D3), `endpoint.renew` (B2's host-generated
+  renewal — the epic's central path), `revocation.probe` (R1), `adcs.inventory` (F1)
+  and `trust.distribute` (H2) each enqueued rows that died on arrival, while the API
+  had already told the operator the work was queued.
+  This was already understood for two of the nine claimable kinds:
+  `connector.rollback` and `connector.test` carry explicit deferral cases whose
+  comment spells out this exact failure. Nobody applied it to the other five. The
+  dispatcher now derives the answer from `agentJobKindAllowlist` — the one place that
+  decides what an agent may execute — so a kind added there cannot be forgotten here,
+  because there is nothing here to forget. A genuinely unknown destination still
+  fails closed: the dispatcher must not become a global silent ACK, which loses a row
+  quietly instead of dead-lettering it loudly.
+  Related and separate: `RunEndpointVerificationScheduler` was also never registered
+  as a runtime worker, so nothing produced `endpoint.verify` rows at all. Registering
+  it is what made the dead-lettering visible — the scheduler began producing work
+  that immediately died. Both halves are fixed; either alone would have left the
+  capability dark.
+  That makes SIX instances of one defect in this programme: D2's VerifyAddress with
+  no producer, B2's `endpoint.renew` with no enqueue, B5's custody projection never
+  written, J2's restore drill with no production caller, the unregistered
+  verification scheduler, and this dead-letter path. The shape never varies — the
+  capability is complete, its unit tests drive it directly, and the composition root
+  does not reach it — and unit tests cannot catch it by construction, because they
+  stand in for the caller that does not exist. Two guards now do:
+  `TestEveryDeclaredRuntimeWorkerIsActuallyStarted` fails on any declared `Run*(ctx)`
+  scheduler that is not started, and `TestNoAgentClaimableKindIsEverDeadLettered`
+  walks the claimable allowlist and fails on any kind the dispatcher would refuse.
+  Both mutation-verified; the second names all five kinds when the fix is removed.
+  Offline renewal resilience (A5, PARTIAL): a host agent now schedules its next
+  rotation from the credential's REMAINING LIFE on its own clock, not from
+  `--rotate-every` alone. The old timer was the configured interval and nothing
+  else, which let three ordinary situations end with an agent asleep past its own
+  expiry: an interval set longer than the certificate lifetime, a control-plane
+  outage spanning a whole interval so the single attempt inside it failed and the
+  next was a full interval away, and an agent restarting while holding a credential
+  already most of the way through its life. All three end identically — the agent
+  wakes with an expired certificate and can no longer authenticate to renew it,
+  which needs a person on the box, for a fleet whose value is not needing one.
+  The next attempt is therefore `min(two-thirds of remaining life, --rotate-every)`,
+  jittered ±10%. The min() is the guarantee and only one half of it carries any
+  weight: two-thirds-of-remaining is strictly below remaining, so no configured
+  cadence can push an attempt past expiry. A first draft also clamped to
+  `remaining - remaining/10` with a comment calling that the load-bearing line;
+  mutation-testing showed deleting it changed no outcome, and it was removed rather
+  than left as dead code under a false claim. The jitter is not cosmetic: agents
+  installed by the same automation hold near-identical expiries, and without spread
+  a fleet renews in one second — arriving during recovery from the very outage that
+  synchronised it.
+  Local clock, deliberately: the agent that cannot reach the control plane is exactly
+  the agent that most needs to renew early, and it has no other clock to consult. A
+  host with a badly wrong clock renews at the wrong time, which is a real limitation
+  and is stated here rather than defended against with machinery that would need the
+  network the agent does not have.
+  NOT done in A5: upgrade rings (canary to broad) as scheduled jobs, staged agent
+  self-update, and the `--demo` colocated single-box mode. Agent/control-plane
+  version skew IS already enforced — `agentProtocolInterceptor` refuses a handshake
+  outside `MinSupportedVersion..MaxSupportedVersion` — so that item of A5 was
+  already met before this change and is not claimed as new work here.
+  Authority agreement (C4, PARTIAL — the surface is served, the PIPELINE HAS NO
+  PRODUCER): reconciliation rounds are not scheduled and no witness is ever
+  recorded, so this surface has nothing to report and says so rather than reporting
+  agreement. `rounds.Worker` returns immediately when it has no schedules and the
+  runtime passes none; `witness.Recorder.RecordWitness` has no production caller at
+  all. Every ingredient of "we checked and your authorities agree" is therefore
+  present on a shipped deployment — attached, warm projection, zero open witnesses,
+  no divergence — except anything doing the checking. The served response carries a
+  `collecting` field that is false in exactly that state, and the detail says the
+  zeros are the absence of collection rather than the absence of disagreement.
+  Without it the surface would have shipped the precise false reassurance it was
+  written to refuse, defeated one layer below where it was defending. Found by an
+  adversarial audit, not by the tests that already passed.
+  Authority agreement (C4, Enterprise `reconcile`): `GET /api/v1/reconcile/agreement`
+  and a Posture console panel report whether the configured authorities agree about
+  what was issued, and where they do not. XREC already built the hard part — canonical
+  records per authority, signed Merkle digests over them, and witnesses naming the
+  exact differing subset — and had nowhere to say so: the drift projection accumulated
+  every witness class per authority and was never exposed on the runtime, so no route
+  could read it. The system could detect that two authorities disagreed and could not
+  tell anybody.
+  The design constraint is that SILENCE RENDERS AS AGREEMENT. "0 open witnesses" looks
+  identical whether reconciliation found nothing, is unlicensed, is unconfigured, or
+  has consumed no events yet, so the surface refuses to show a reassuring zero it
+  cannot stand behind. A deployment with no reconciliation runtime reports that fact
+  and states plainly that it is NOT a report that the authorities agree; a configured
+  but cold projection says its counts are not yet evidence; and every response carries
+  the replay watermark beside the count, because a projection lagging the event log
+  reports an old world confidently. Resolution time is a MEDIAN over a stated sample
+  size — one witness left open over a weekend drags a mean into fiction, and a median
+  over a single sample is not a trend.
+  Scope, stated exactly: this surface is READ-ONLY. Remediation is deliberately not
+  reachable through it, because a corrective operation runs only through a plan
+  verified inside the signer, and a REST route that could start one would be a way
+  around that verification wearing the same URL prefix as a status page. Authorities
+  are ranked worst-first; an authority that has never been collected from does not
+  appear in the table at all, which is why `configured` is a field rather than
+  something a reader is left to infer from an empty list.
+  Relay migration parity (E1, PARTIAL — 3 of 7 families migrated): the connector
+  catalog and Connectors console publish a per-family gate table for the seven
+  appliance families, and the control plane now REFUSES a migrated family's deploy
+  when the tenant has a network relay enrolled. Before this, the A3 role stamp
+  reserved an appliance deploy for a relay by writing `required_agent_role` on the
+  outbox row and nothing enforced it: the outbox claim query has no predicate on
+  that column — it is read by `ClaimAgentJobs` when an agent asks for work, never
+  by the dispatcher — while the dispatcher swept every `connector.*` row on a
+  one-second ticker. The stamp was correct in the column and decided nothing.
+  The refusal is CONDITIONAL on a relay actually being enrolled, and that condition
+  is the design rather than a hedge. Refusing unconditionally would turn "this
+  estate has not deployed a relay yet" into "this estate's appliance deploys
+  stopped working", and would retire the only path with end-to-end proof through
+  the served API — the DoD connector suite drives a10, cisco, kemp and netscaler
+  through the control plane to their device doubles and enrols no relay. So what is
+  promised is narrower and keepable: if you run a relay, the control plane will not
+  do its work behind its back. An estate with no relay deploys exactly as it did
+  before. A failed relay-presence lookup DEFERS rather than falling through, because
+  falling through is the direction that silently removes the guarantee.
+  Migrated today: a10, kemp, netscaler — device proof, rollback, readback, a
+  published support row, a relay deploy proven byte-for-byte against the device
+  double, and the refusal above. NOT migrated, with the reason named per family in
+  the console: f5 needs HA-peer sync, because a deploy that updates one peer of an
+  HA pair reports success while the other serves the old certificate until a
+  failover months later surfaces it as expired — migrating it would make the
+  migrated path WRONG rather than incomplete; cisco, fortigate and paloalto have no
+  rollback and no readback, so migrating them would remove the control plane's
+  fallback without providing the recovery path that justifies removing it.
+  Device-generated CSR is reported as outstanding rather than blocking on the five
+  families whose APIs support it: the current mode — the relay generates the key
+  inside the segment and installs it — is correct as it stands, and holding four
+  families back to avoid an improvement is the worse trade.
   Served DR posture (J2): `GET /api/v1/platform/dr-posture` and
   `trstctl platform dr-posture` report when this deployment's backup was last
   VERIFIED — meaning its artifacts were re-hashed and matched — rather than when one
@@ -348,7 +440,10 @@ never live in the API process. What you can do end to end against the running bi
   complete recovery.
   The drill RUNS: `RunRestoreDrillScheduler` is registered as a runtime worker and
   fires on `backup.drill_interval` (daily by default, `"0"` to disable, and an
-  unparseable value fails startup rather than silently defaulting). It is worth
+  unparseable value fails startup rather than silently defaulting; the default is
+  resolved at config-parse time so a zero reaching the scheduler can only mean the
+  operator asked for none — an earlier cut applied the default in the scheduler too,
+  which made the documented `"0"` run the drill daily instead of disabling it). It is worth
   recording that the first cut of this work did not have that. The drill, the
   attestation, the ephemeral target and the endpoint were all built and all tested,
   and nothing in the running binary ever called any of it — the fourth instance in

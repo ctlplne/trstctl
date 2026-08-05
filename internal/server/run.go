@@ -16,8 +16,11 @@ import (
 	"time"
 	"trstctl.com/trstctl/internal/lifecycle"
 
+	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/authmethod"
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/cloudauth"
@@ -403,6 +406,57 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 	}, nil
 }
 
+// runRestoreDrill resolves the J2 restore drill from configuration: the closure
+// that performs one, and how often the scheduler should.
+//
+// A named stage rather than eight lines inside buildRunDeps, which is at the
+// startup-hotspot line budget. That budget is not bookkeeping — buildRunDeps is
+// where every subsystem's configuration is resolved, and a function nobody can
+// hold in their head is where a startup ordering bug hides.
+//
+// An unparseable interval fails startup rather than falling back to the default.
+// Silently defaulting would give an operator who typed "24hours" a daily drill
+// they never asked to confirm, and give one who typed it meaning to DISABLE the
+// drill a drill that runs anyway.
+func runRestoreDrill(cfg *config.Config) (func(context.Context) (backup.DrillAttestation, error), time.Duration, error) {
+	interval, err := cfg.Backup.DrillIntervalDuration()
+	if err != nil {
+		return nil, 0, fmt.Errorf("backup drill_interval: %w", err)
+	}
+	return restoreDrillRunner(cfg), interval, nil
+}
+
+// runLeafPluginAndModelConfig resolves the four independent configuration
+// blocks that have nothing to do with each other except that each one fails
+// startup on its own terms: leaf validity, the plugin host, the AI model, and
+// the secrets machine-auth methods.
+//
+// Grouped as one named stage for the startup-hotspot budget. They are genuinely
+// unrelated, and that is worth saying rather than implying a cohesion that does
+// not exist — what they share is only that each must be resolved before Deps is
+// assembled and each returns a wrapped error naming its own config section.
+func runLeafPluginAndModelConfig(cfg *config.Config, egressGuard *egress.Guard) (
+	time.Duration, PluginConfig, *aimodel.Adapter, api.AIModelStatus, func(string) []authmethod.Method, error,
+) {
+	leafValidity, err := cfg.Lifecycle.LeafValidityDuration()
+	if err != nil {
+		return 0, PluginConfig{}, nil, api.AIModelStatus{}, nil, fmt.Errorf("lifecycle leaf validity: %w", err)
+	}
+	pluginCfg, err := buildPluginConfig(cfg.Plugins)
+	if err != nil {
+		return 0, PluginConfig{}, nil, api.AIModelStatus{}, nil, fmt.Errorf("plugins: %w", err)
+	}
+	aiModel, aiModelStatus, err := aiModelFromConfig(cfg.AI.Model, egressGuard)
+	if err != nil {
+		return 0, PluginConfig{}, nil, api.AIModelStatus{}, nil, fmt.Errorf("ai model: %w", err)
+	}
+	machineAuthMethods, err := machineAuthMethodsFromConfig(cfg.Secrets.MachineAuth)
+	if err != nil {
+		return 0, PluginConfig{}, nil, api.AIModelStatus{}, nil, fmt.Errorf("secrets machine auth: %w", err)
+	}
+	return leafValidity, pluginCfg, aiModel, aiModelStatus, machineAuthMethods, nil
+}
+
 func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
 	auditKey, err := loadRunAuditSigningKey(cfg, suppliedAuditKey)
 	if err != nil {
@@ -424,21 +478,9 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	leafValidity, err := cfg.Lifecycle.LeafValidityDuration()
+	leafValidity, pluginCfg, aiModel, aiModelStatus, machineAuthMethods, err := runLeafPluginAndModelConfig(cfg, egressGuard)
 	if err != nil {
-		return Deps{}, fmt.Errorf("lifecycle leaf validity: %w", err)
-	}
-	pluginCfg, err := buildPluginConfig(cfg.Plugins)
-	if err != nil {
-		return Deps{}, fmt.Errorf("plugins: %w", err)
-	}
-	aiModel, aiModelStatus, err := aiModelFromConfig(cfg.AI.Model, egressGuard)
-	if err != nil {
-		return Deps{}, fmt.Errorf("ai model: %w", err)
-	}
-	machineAuthMethods, err := machineAuthMethodsFromConfig(cfg.Secrets.MachineAuth)
-	if err != nil {
-		return Deps{}, fmt.Errorf("secrets machine auth: %w", err)
+		return Deps{}, err
 	}
 	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, err := runTenantCustodyFromConfig(
 		cfg.Secrets, st, log, sec.kek, auditKey,
@@ -479,14 +521,9 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	// J2: an unparseable drill interval fails startup rather than falling back
-	// to the default. Silently defaulting would mean an operator who typed
-	// "24hours" gets a daily drill and never learns the setting was ignored,
-	// and the one who typed it intending to DISABLE the drill gets one running
-	// they did not ask for.
-	drillInterval, err := cfg.Backup.DrillIntervalDuration()
+	drill, drillInterval, err := runRestoreDrill(cfg)
 	if err != nil {
-		return Deps{}, fmt.Errorf("backup drill_interval: %w", err)
+		return Deps{}, err
 	}
 	return Deps{
 		// J2: empty when the operator configured no backup directory, which the
@@ -497,7 +534,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		// would have no other reason to have. Nil when no backup directory is
 		// configured — there is nothing to drill, and a drill against a path
 		// nobody chose would fail nightly and mean nothing.
-		RestoreDrill:         restoreDrillRunner(cfg),
+		RestoreDrill:         drill,
 		RestoreDrillInterval: drillInterval,
 		Store:                st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:         cfg.Signer.KeyStoreDir,
@@ -1048,6 +1085,12 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunDiscoveryScheduler),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),
 			startRuntimeWorker(workCtx, srv.RunRestoreDrillScheduler),
+			// D2/D3: periodic endpoint re-verification. This line was missing, and
+			// endpoint_verification_scheduler.go is the ONLY producer of
+			// endpoint.verify work — so no deployment ever re-probed an endpoint and
+			// the acceptance criterion "a renewal that never lands is detected
+			// within one interval" could not be met by any running binary.
+			startRuntimeWorker(workCtx, srv.RunEndpointVerificationScheduler),
 			startRuntimeWorker(workCtx, srv.RunLicensedBackgroundWorkers),
 		}
 		<-workCtx.Done()

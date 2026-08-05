@@ -472,7 +472,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 
 	heartbeatTimer := time.NewTimer(nextHeartbeat)
 	defer heartbeatTimer.Stop()
-	rotateTimer := time.NewTimer(o.rotateEvery)
+	rotateTimer := time.NewTimer(nextRotationDelay(o.rotateEvery, a.CertificateNotAfter(), time.Now(), rng))
 	defer rotateTimer.Stop()
 	// The relay loop (epic A3) runs beside the heartbeat and renewal timers
 	// rather than as its own scheduler, so one agent has one cadence story. It
@@ -549,7 +549,10 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			// attempt that then waits a full rotate-every interval. The existing
 			// certificate stays valid until expiry and the identity survives restart.
 			renewWithBackoff(ctx, a, ch, o.rotateEvery, rng)
-			resetTimer(rotateTimer, o.rotateEvery)
+			// A5: re-armed from the credential's remaining life, not from the
+			// configured cadence alone, so a renewal that failed through an
+			// outage comes back before expiry rather than one interval later.
+			resetTimer(rotateTimer, nextRotationDelay(o.rotateEvery, a.CertificateNotAfter(), time.Now(), rng))
 		}
 	}
 }
@@ -996,4 +999,73 @@ func resetTimer(t *time.Timer, d time.Duration) {
 		}
 	}
 	t.Reset(d)
+}
+
+// nextRotationDelay decides when the agent next attempts to rotate (epic A5).
+//
+// The rotate timer used to be the configured interval and nothing else, which
+// makes the agent's own expiry a thing it can sleep through. Three ordinary
+// situations produce that: --rotate-every set longer than the certificate's
+// lifetime, a control-plane outage spanning a whole interval so the one attempt
+// in the window fails and the next is a full interval away, and an agent that
+// starts late holding a certificate already most of the way through its life.
+// In each the agent wakes up after its credential expired and can no longer
+// authenticate to renew it — the failure that needs a human on the box, for a
+// fleet whose whole point is not needing one.
+//
+// So the delay is bounded by the credential's REMAINING LIFE as the local clock
+// sees it, not by the configured cadence. This is deliberately a local-clock
+// decision: an agent that cannot reach the control plane is exactly the agent
+// that needs to renew early, and it has no other clock to consult.
+//
+// Jitter spreads a fleet that enrolled together. Without it ten thousand agents
+// installed by the same automation renew in the same second, and the thundering
+// herd arrives precisely when the control plane is least able to absorb it —
+// during the recovery from the outage that synchronised them.
+func nextRotationDelay(rotateEvery time.Duration, notAfter, now time.Time, rng *rand.Rand) time.Duration {
+	if rotateEvery <= 0 {
+		rotateEvery = 12 * time.Hour
+	}
+	if notAfter.IsZero() {
+		// No credential expiry known — bootstrap, or an identity that carries
+		// no NotAfter. Fall back to the configured cadence rather than
+		// inventing urgency from an absent value.
+		return rotateEvery
+	}
+	remaining := notAfter.Sub(now)
+	if remaining <= 0 {
+		// Already expired. Retry promptly; the backoff inside renewWithBackoff
+		// is what keeps this from becoming a spin.
+		return time.Second
+	}
+	// Aim to renew with a third of the lifetime left, and take the configured
+	// cadence only when it is SOONER.
+	//
+	// This min() is the whole guarantee, and it is worth being precise about
+	// which half carries it: two-thirds-of-remaining is strictly less than
+	// remaining, so the next attempt lands before expiry no matter how long the
+	// operator set --rotate-every. A first draft also clamped to
+	// remaining-remaining/10 "so it never sleeps past expiry"; mutation-testing
+	// showed deleting that clamp changed no outcome, because 2/3 is already
+	// below 9/10. It was dead code under a comment claiming to be load-bearing,
+	// which is worse than no comment.
+	//
+	// Two thirds through is early enough that a failed attempt has room for
+	// several retries before anything is at risk, and late enough not to churn
+	// certificates.
+	target := remaining * 2 / 3
+	if target > rotateEvery {
+		target = rotateEvery
+	}
+	// +/-10% jitter, floored so it never returns zero or negative.
+	if rng != nil && target > 0 {
+		spread := target / 5
+		if spread > 0 {
+			target = target - spread/2 + time.Duration(rng.Int63n(int64(spread)))
+		}
+	}
+	if target < time.Second {
+		target = time.Second
+	}
+	return target
 }

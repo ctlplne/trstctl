@@ -16,7 +16,8 @@ allowlist='cmd/trstctl/ee_attach.go cmd/trstctl-signer/ee_attach.go cmd/trstctl-
 # file's own package. The AST-level licenseboundary analyzer in tools/trstctllint
 # enforces the real rule for compiled code; this grep-based guard skips the
 # fixtures so it does not false-positive on them.
-fixture_excludes='tools/trstctllint/repo_selftest_test.go'
+fixture_excludes='tools/trstctllint/repo_selftest_test.go
+tools/trstctllint/cryptoboundary/cryptoboundary_test.go'
 
 is_allowlisted() {
   local f="${1#./}"
@@ -31,6 +32,17 @@ is_fixture_excluded() {
   for x in ${fixture_excludes}; do
     [ "${f}" = "${x}" ] && return 0
   done
+  # Analyzer fixture corpora under a testdata/ directory. The Go toolchain does
+  # not build these, and the trstctllint fixtures under them import ee/ ON
+  # PURPOSE so the analyzers have a violation to detect — flagging them means
+  # the guard is reporting its own test corpus as the thing it is testing for.
+  #
+  # Scoped to tools/, so a testdata/ directory anywhere in the shipped tree is
+  # still scanned. That matters: "it is under testdata" must not become a way to
+  # park a real core->ee import where the guard cannot see it.
+  case "${f}" in
+    tools/*/testdata/*) return 0 ;;
+  esac
   return 1
 }
 

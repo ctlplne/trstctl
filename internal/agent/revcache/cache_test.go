@@ -38,7 +38,16 @@ func testCA(t *testing.T) (issuerDER []byte, signCRL func(nextUpdate time.Time, 
 		t.Fatal(err)
 	}
 	return caDER, func(nextUpdate time.Time, number int64) []byte {
-		der, err := crypto.CreateCRL(caDER, key, nil, number, time.Now().Add(-time.Minute), nextUpdate)
+		// thisUpdate is derived from nextUpdate, not from a second time.Now().
+		//
+		// It used to read time.Now().Add(-time.Minute), which is evaluated AFTER
+		// the caller computed its own time.Now()-relative nextUpdate — so for an
+		// already-expired CRL the two landed on the same instant and x509
+		// rejected the template whenever the two clock reads straddled a second
+		// boundary. That is a test which passes on most runs and fails on some,
+		// and a flaky test in a revocation gate is one somebody re-runs until it
+		// goes green. Deriving the ordering makes it structural.
+		der, err := crypto.CreateCRL(caDER, key, nil, number, nextUpdate.Add(-time.Hour), nextUpdate)
 		if err != nil {
 			t.Fatalf("sign CRL: %v", err)
 		}

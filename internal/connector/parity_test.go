@@ -27,36 +27,32 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		missing     []ParityGate
 		outstanding []ParityGate
 	}{
-		// Nothing is migrated, and cp_path_refusal is why. Every family below
-		// carries it, because the control plane still executes all seven: the
-		// dispatcher sweeps connector.* on a one-second ticker and the outbox
-		// claim query has no required_agent_role predicate, so the A3 role stamp
-		// reserves the row for a relay that never gets to it. This census is the
-		// first place that fact is written down where a reader can see it.
-		//
-		// These three are otherwise through: device proof, rollback, readback,
-		// a published support row, and a relay deploy proven against the device
-		// double. They are the families the refusal would flip first.
-		"a10": {missing: []ParityGate{ParityGateCPPathRefusal},
-			outstanding: []ParityGate{ParityGateDeviceCSR}},
-		"kemp": {missing: []ParityGate{ParityGateCPPathRefusal}},
-		"netscaler": {missing: []ParityGate{ParityGateCPPathRefusal},
-			outstanding: []ParityGate{ParityGateDeviceCSR}},
-		// F5 has everything those three have and one more gate to clear. A
-		// migrated F5 without HA-peer sync would be WRONG rather than
-		// incomplete: the deploy updates one peer, reports success, and the
-		// other keeps serving the old certificate until a failover months later
-		// surfaces it as expired.
-		"f5": {missing: []ParityGate{ParityGateCPPathRefusal, ParityGateHAPeerSync},
+		// MIGRATED. Device proof, rollback, readback, a published support row,
+		// a relay deploy proven against the device double, and a control plane
+		// that refuses their deploys when a relay is enrolled. For these three,
+		// E1's sentence is now true: where you run a relay, the relay is the
+		// executor rather than one of two candidates racing.
+		"a10":       {migrated: true, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		"kemp":      {migrated: true},
+		"netscaler": {migrated: true, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// F5 has everything those three have and one gate left. Migrating it
+		// without HA-peer sync would make the migrated path WRONG rather than
+		// incomplete: a deploy updates one peer of an HA pair, reports success,
+		// and the other keeps serving the old certificate until a failover
+		// months later surfaces it as expired.
+		"f5": {migrated: false, missing: []ParityGate{ParityGateHAPeerSync},
 			outstanding: []ParityGate{ParityGateDeviceCSR}},
 		// Device-proven and relay-proven, but they cannot be asked what they
 		// hold or told to put back what they held. Migrating them would remove
 		// the control plane's fallback without providing the recovery path that
 		// justifies removing it.
-		"cisco": {missing: []ParityGate{ParityGateCPPathRefusal, ParityGateRollback, ParityGateReadback},
+		"cisco": {migrated: false,
+			missing:     []ParityGate{ParityGateRollback, ParityGateReadback},
 			outstanding: []ParityGate{ParityGateDeviceCSR}},
-		"fortigate": {missing: []ParityGate{ParityGateCPPathRefusal, ParityGateRollback, ParityGateReadback}},
-		"paloalto": {missing: []ParityGate{ParityGateCPPathRefusal, ParityGateRollback, ParityGateReadback},
+		"fortigate": {migrated: false,
+			missing: []ParityGate{ParityGateRollback, ParityGateReadback}},
+		"paloalto": {migrated: false,
+			missing:     []ParityGate{ParityGateRollback, ParityGateReadback},
 			outstanding: []ParityGate{ParityGateDeviceCSR}},
 	}
 
@@ -115,13 +111,13 @@ func TestOnlyApplianceFamiliesCanBeRelayMigrated(t *testing.T) {
 	}
 }
 
-// Every migrated family must be relay-vantage, and today none is.
+// A family may read as migrated only if the control plane really refuses it.
 //
-// The zero is asserted rather than tolerated. A green "0 of 7 migrated" is the
-// true state and it is the whole reason this census was written; the failure
-// mode it guards against is somebody making a family read as migrated without
-// the control-plane refusal actually landing, which would put a claim on the
-// console that the running binary does not honour.
+// This started life asserting that NOTHING was migrated, which was true while
+// cp_path_refusal was unimplemented. The assertion that mattered was never the
+// zero — it was that the console cannot claim a migration the running binary
+// does not honour. That is what is asserted now, so the test survived the
+// change it was written to catch instead of being deleted by it.
 func TestNothingReadsAsMigratedWhileTheControlPlaneStillExecutesIt(t *testing.T) {
 	t.Parallel()
 	for _, family := range RelayMigratedConnectors() {
@@ -130,15 +126,14 @@ func TestNothingReadsAsMigratedWhileTheControlPlaneStillExecutesIt(t *testing.T)
 		}
 	}
 	for _, status := range ParityProgram() {
-		refused := gateMet(status.Family, ParityGateCPPathRefusal)
-		if status.RelayMigrated && !refused {
+		if status.RelayMigrated && !gateMet(status.Family, ParityGateCPPathRefusal) {
 			t.Errorf("%s reads as migrated while the control plane still executes its deploys",
 				status.Family)
 		}
-		if refused != status.RelayMigrated && refused {
-			t.Errorf("%s: the control plane refuses it but it does not read as migrated; the "+
-				"refusal and the census have come apart", status.Family)
-		}
+	}
+	if len(RelayMigratedConnectors()) == 0 {
+		t.Error("no family is relay-migrated, so the control-plane refusal is wired to a " +
+			"predicate that is always false and E1 serves nothing")
 	}
 }
 

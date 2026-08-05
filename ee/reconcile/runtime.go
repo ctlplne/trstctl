@@ -50,6 +50,30 @@ type Runtime struct {
 	RemediationOperationGate remediation.OperationGrant
 	QuarantineState          quarantine.AdmissionState
 	QuarantineProjection     *quarantine.StateProjection
+	// DriftProjection is the agreement state the round scheduler accumulates:
+	// witness counts per authority and class, how long resolved witnesses took,
+	// and how many are still open (epic C4).
+	//
+	// Exposed because until C4 it was NOT. The projection was constructed here,
+	// wired into ProjectionOptions, and dropped on the floor — it accumulated
+	// every authority's divergence history into a struct no caller could reach.
+	// XREC had reducers, digests, witnesses, quarantine and remediation, and no
+	// way for an operator to be told any authority disagreed with another.
+	DriftProjection *rounds.DriftProjection
+	// RoundsScheduled is how many reconciliation schedules the rounds worker was
+	// given. ZERO TODAY, and that is why it is served rather than assumed.
+	//
+	// rounds.Worker returns immediately when it has no schedules, and nothing
+	// calls witness.Recorder.RecordWitness in production, so no round runs and no
+	// witness is ever recorded. The drift projection therefore counts nothing —
+	// not because the authorities agree, but because nothing is looking.
+	//
+	// Without this the agreement surface cannot tell those apart: its replay
+	// watermark advances with the event log like any projection, so it would
+	// report "consumed events, raised no divergence" on a deployment where
+	// divergence is undetectable. That is the exact false reassurance the surface
+	// exists to refuse, and it would have shipped inside it.
+	RoundsScheduled          int
 	IssuanceAdmission        server.AdmissionHook
 	ProjectionOptions        []projections.Option
 	BackgroundWorkers        []server.BackgroundWorker
@@ -107,6 +131,10 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		Policy:      quarantine.ReferencePolicy(),
 	})
 	driftProjection := rounds.NewDriftProjection(time.Hour)
+	// No schedules are configured yet — reconciliation rounds are not driven by
+	// this runtime. Named as a variable rather than omitted so the count can be
+	// served, and so the day schedules arrive there is one place to fill in.
+	var roundSchedules []rounds.Config
 
 	var remediationManager *remediation.Manager
 	if cfg.Store != nil {
@@ -125,11 +153,14 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		RemediationOperationGate: remediation.NewOperationGrant("rotate-key", "disable-key", "delete-secret"),
 		QuarantineState:          quarantineState,
 		QuarantineProjection:     quarantineProjection,
+		DriftProjection:          driftProjection,
+		RoundsScheduled:          len(roundSchedules),
 		IssuanceAdmission:        quarantineManager,
 		ProjectionOptions:        []projections.Option{projections.WithEventProjection(quarantineProjection), rounds.WithDriftProjection(driftProjection)},
 		BackgroundWorkers: rounds.NewWorkers(rounds.WorkerOptions{
-			Log:    roundsLog,
-			Source: &runtimeDigestSource{reducers: reducerRegistry, signer: cfg.Signer},
+			Log:       roundsLog,
+			Source:    &runtimeDigestSource{reducers: reducerRegistry, signer: cfg.Signer},
+			Schedules: roundSchedules,
 		}),
 		RemediationOutboxFactory: remediation.NewLicensedOutboxFactory(),
 		QuarantineOutboxFactory:  quarantine.NewLicensedOutboxFactory(quarantineState),

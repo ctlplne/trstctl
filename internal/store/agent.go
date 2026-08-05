@@ -4,10 +4,13 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // Agent is an in-network agent that performs discovery, deployment, and drift
@@ -344,4 +347,34 @@ func (s *Store) AgentFleetHealth(ctx context.Context, staleBefore time.Time) (Ag
 		   FROM agents`,
 		staleBefore).Scan(&out.Total, &out.Stale)
 	return out, err
+}
+
+// TenantHasNetworkRelay reports whether this tenant has an active network relay
+// enrolled (epic E1).
+//
+// It exists so the control-plane dispatcher can REFUSE an appliance deploy that
+// a relay is supposed to run, without making a relay a hard prerequisite for
+// every estate. Refusing unconditionally would turn "you have not deployed a
+// relay yet" into "your appliance deploys no longer work"; refusing never means
+// the control plane races the relay on a one-second ticker and wins, which
+// makes the A3 role stamp decoration.
+//
+// Offboarded agents do not count. An estate that retired its last relay is one
+// where the honest answer is that nothing will claim relay work, and blocking
+// its deploys on an agent that no longer exists would be a silent outage.
+func (s *Store) TenantHasNetworkRelay(ctx context.Context, tenantID string) (bool, error) {
+	var present bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			     SELECT 1 FROM agents
+			      WHERE tenant_id = $1
+			        AND offboarded_at IS NULL
+			        AND $2 = ANY(roles)
+			 )`, tenantID, mtls.AgentRoleNetwork).Scan(&present)
+	})
+	if err != nil {
+		return false, fmt.Errorf("store: check tenant network relay: %w", err)
+	}
+	return present, nil
 }

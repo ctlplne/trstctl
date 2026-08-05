@@ -224,6 +224,69 @@ func TestADeploymentThatCannotDrillSaysSoRatherThanStayingSilent(t *testing.T) {
 	}
 }
 
+// "0" must actually DISABLE the drill, not merely parse to zero.
+//
+// Two layers were wrong and one test was worse than useless. config's "0"
+// parsed to a zero Duration — asserted, and true. The scheduler treated only a
+// NEGATIVE interval as disabled, so zero fell through to a daily default, and
+// every deployment that asked for no drill got one. The claim lived one layer
+// below the test that was supposed to cover it.
+//
+// The replacement I wrote first was no better: it ran the scheduler and
+// asserted no drill fired within 150ms. Against the bug, zero became a 24-hour
+// ticker — which also fires nothing in 150ms. It passed against the defect it
+// existed to catch. Timing cannot see this difference for any window shorter
+// than a day, so the decision is a pure function and the assertion is on the
+// decision.
+func TestAZeroDrillIntervalDisablesRatherThanDefaulting(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		haveRunner  bool
+		configured  time.Duration
+		wantEnabled bool
+		wantEvery   time.Duration
+	}{
+		{"explicit \"0\" disables", true, 0, false, 0},
+		{"negative disables", true, -time.Second, false, 0},
+		{"no runner disables", false, time.Hour, false, 0},
+		{"a positive interval is honoured exactly", true, 6 * time.Hour, true, 6 * time.Hour},
+		{"the resolved default is honoured", true, config.DefaultBackupDrillInterval, true, config.DefaultBackupDrillInterval},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			every, enabled := restoreDrillSchedule(tc.haveRunner, tc.configured)
+			if enabled != tc.wantEnabled {
+				t.Fatalf("enabled = %v, want %v. A zero reaching this layer can only mean the "+
+					"operator wrote \"0\", which is documented as switching the drill off; "+
+					"applying a default here is exactly how \"0\" came to mean \"daily\".",
+					enabled, tc.wantEnabled)
+			}
+			if every != tc.wantEvery {
+				t.Fatalf("interval = %v, want %v", every, tc.wantEvery)
+			}
+		})
+	}
+}
+
+// An unset interval still gets the daily default — disabling must be explicit,
+// not something an operator falls into by leaving a field out.
+func TestAnUnsetDrillIntervalStillGetsTheDailyDefault(t *testing.T) {
+	t.Parallel()
+	var b config.Backup
+	got, err := b.DrillIntervalDuration()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != config.DefaultBackupDrillInterval {
+		t.Fatalf("unset drill interval = %v, want the daily default", got)
+	}
+	if got <= 0 {
+		t.Fatal("the default resolved to a non-positive value, which the scheduler now reads as " +
+			"disabled — leaving a field out would silently turn the drill off")
+	}
+}
+
 // An unparseable interval must fail startup rather than silently defaulting.
 func TestABadDrillIntervalIsAConfigurationError(t *testing.T) {
 	t.Parallel()
@@ -241,4 +304,7 @@ func TestABadDrillIntervalIsAConfigurationError(t *testing.T) {
 	if d, err := b.DrillIntervalDuration(); err != nil || d != 0 {
 		t.Errorf("explicit \"0\" = %v, %v; want zero", d, err)
 	}
+	// Parsing to zero is only half the promise; that zero DISABLES the drill is
+	// asserted by TestAZeroDrillIntervalStopsTheDrillRatherThanDefaultingIt,
+	// because this assertion alone passed happily while the drill ran daily.
 }
