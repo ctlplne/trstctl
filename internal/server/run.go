@@ -540,11 +540,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SignerKeyStoreDir:  cfg.Signer.KeyStoreDir,
 		EgressGuard:        egressGuard,
 		ServiceNowBindings: serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
-		// AUD-10: this line did not exist. Deps.AttestedIssuance was never
-		// assigned anywhere in production, so s.attestedIssuance was always nil
-		// and both routes it gates returned 503 on every deployment — with no
-		// config key an operator could set to change that.
-		AttestedIssuance:          attestedIssuanceFromConfig(cfg.AttestedIssuance),
+		// AUD-10/12/13: none of these three was ever assigned in production, so
+		// seven served routes were permanently unavailable with no operator
+		// switch. One line because they are one decision — the surfaces that
+		// mint or broker access, each opted into deliberately.
+		AttestedIssuance: attestedIssuanceFromConfig(cfg.AttestedIssuance), AgentBroker: agentBrokerFromConfig(cfg.AgentBroker), PAM: pamFromConfig(cfg.PAM),
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
 		TelemetryReporter:         outbound.telemetryReporter,
 		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st)},

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/config"
 
 	"github.com/google/uuid"
 
@@ -449,4 +450,27 @@ func brokerAuditor(log *events.Log) auditsink.Auditor {
 		return auditsink.Nop{}
 	}
 	return audit.NewAuditor(log)
+}
+
+// agentBrokerFromConfig maps the operator's config onto the brokered mint.
+//
+// Attestors stay per-tenant from the workload attester-trust API rather than
+// process-wide, for the reason AUD-10's fix gives: baking a process-wide
+// attestor list into config makes one tenant's trust decision every tenant's.
+func agentBrokerFromConfig(c config.AgentBroker) AgentBrokerConfig {
+	out := AgentBrokerConfig{
+		Enabled:      c.Enabled,
+		TrustDomain:  strings.TrimSpace(c.TrustDomain),
+		PolicyModule: strings.TrimSpace(c.PolicyModule),
+	}
+	// A malformed duration leaves zero so the built-in bound applies. Silently
+	// substituting a LONGER lifetime than the operator wrote is the dangerous
+	// direction, and zero cannot do that.
+	if d, err := time.ParseDuration(strings.TrimSpace(c.DefaultTTL)); err == nil {
+		out.DefaultTTL = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.MaxTTL)); err == nil {
+		out.MaxTTL = d
+	}
+	return out
 }

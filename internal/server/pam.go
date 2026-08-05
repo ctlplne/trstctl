@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/config"
 
 	"github.com/google/uuid"
 
@@ -489,6 +490,27 @@ func jsonMap(raw []byte) map[string]any {
 	var out map[string]any
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil
+	}
+	return out
+}
+
+// pamFromConfig maps the operator's config onto the PAM surface.
+//
+// Targets are deliberately absent: a Postgres DSN or SSH credential in the main
+// config file is a credential in every backup of that file. Enabling with no
+// targets gives a working surface with nothing to open a session against, which
+// is honest and safe — and better than the previous state, where the routes
+// existed and could never work at all.
+func pamFromConfig(c config.PAM) PAMConfig {
+	out := PAMConfig{Enabled: c.Enabled}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.DefaultTTL)); err == nil {
+		out.DefaultTTL = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.MaxTTL)); err == nil {
+		out.MaxTTL = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.ExpiryInterval)); err == nil {
+		out.ExpiryInterval = d
 	}
 	return out
 }

@@ -1840,10 +1840,19 @@ looking for a credential that was never there.
   Off by default is correct for a mint that trades a cloud attestation for a
   certificate; unreachable when on was the defect. Attestors stay per-tenant from
   the workload attester-trust API rather than process-wide, so one tenant's trust
-  decision does not become every tenant's. Still unreachable for the same reason
-  and NOT fixed here: `Deps.AgentBroker` (`POST /api/v1/broker/agent-identities`)
-  and `Deps.PAM` (`POST /api/v1/access/sessions` and three more) have no config
-  key either.
+  decision does not become every tenant's. The other two members of this family
+  are now fixed too (AUD-12, AUD-13): `agent_broker` turns on
+  `POST /api/v1/broker/agent-identities`, and `pam` turns on
+  `POST /api/v1/access/sessions` and its three siblings. All three were dead for
+  one reason — a `Deps` field never assigned anywhere in production and no
+  config key to populate it — so five routes were registered, documented, and
+  permanently unavailable on every deployment while looking healthy. PAM TARGETS
+  are deliberately NOT config: a Postgres DSN or SSH credential in the main
+  config file is a credential in every backup of that file, so enabling PAM
+  yields a working surface with no targets rather than one that asks for secrets
+  in the wrong place. A malformed TTL on any of the three leaves zero so the
+  built-in bound applies — silently substituting a LONGER lifetime than the
+  operator wrote is the dangerous direction, and zero cannot do that.
 - MDM device correlation and per-device enrollment trace (I5): `GET
   /api/v1/mdm/devices` and `GET /api/v1/mdm/{mdm}/devices/{id}/trace`
   (`trstctl mdm devices|trace`) join Intune and Jamf device records to SCEP

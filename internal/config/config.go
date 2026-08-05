@@ -97,6 +97,8 @@ type Config struct {
 	Privacy                   Privacy                  `json:"privacy"`
 	AttestedIssuance          AttestedIssuance         `json:"attested_issuance"`
 	Reconcile                 Reconcile                `json:"reconcile"`
+	AgentBroker               AgentBroker              `json:"agent_broker"`
+	PAM                       PAM                      `json:"pam"`
 	Backup                    Backup                   `json:"backup"`
 	License                   License                  `json:"license"`
 	RateLimit                 RateLimit                `json:"rate_limit"`
@@ -1188,6 +1190,38 @@ type AttestedIssuance struct {
 	// because the attestation they rest on is a point-in-time claim.
 	DefaultTTL string `json:"default_ttl,omitempty"`
 	MaxTTL     string `json:"max_ttl,omitempty"`
+}
+
+// AgentBroker turns on the brokered agent-identity mint (AUD-12).
+//
+// Same defect as AUD-10: Deps.AgentBroker was never assigned anywhere in
+// production, so POST /api/v1/broker/agent-identities returned
+// ErrBrokerUnavailable on every deployment with no config key an operator could
+// set. Off by default is right for a mint; unreachable when on is not.
+type AgentBroker struct {
+	Enabled bool `json:"enabled"`
+	// TrustDomain is required when enabled — an identity with no trust domain
+	// names nothing.
+	TrustDomain string `json:"trust_domain,omitempty"`
+	DefaultTTL  string `json:"default_ttl,omitempty"`
+	MaxTTL      string `json:"max_ttl,omitempty"`
+	// PolicyModule is an optional policy gate over brokered identities.
+	PolicyModule string `json:"policy_module,omitempty"`
+}
+
+// PAM turns on just-in-time privileged access sessions (AUD-13).
+//
+// Four served routes returned ErrPAMUnavailable on every deployment because
+// Deps.PAM was never assigned and there was no config key. Targets are
+// deliberately NOT configured here yet: a DSN in the main config file is a
+// credential in every backup of that file, and PAM's own target model resolves
+// them by reference. Enabling without targets yields a working surface with
+// nothing to open a session against, which is honest and safe.
+type PAM struct {
+	Enabled        bool   `json:"enabled"`
+	DefaultTTL     string `json:"default_ttl,omitempty"`
+	MaxTTL         string `json:"max_ttl,omitempty"`
+	ExpiryInterval string `json:"expiry_interval,omitempty"`
 }
 
 // Reconcile configures cross-authority reconciliation rounds (C4/XREC, AUD-1).
