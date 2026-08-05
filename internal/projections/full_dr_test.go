@@ -471,6 +471,10 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			sql  string
 			args []any
 		}{
+			// L4: silo placement and residency. An operator's placement decision,
+			// never derived from the event log — a restore that lost it would
+			// silently revert this tenant to the shared isolation default.
+			{`INSERT INTO tenant_silos (tenant_id, slug, isolation_model, residency_zone, status) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "tenant-a", "silo", "eu-west", "active"}},
 			// L2: provider billing meters. Not a log projection — usage is
 			// counted from live activity and can never be replayed — so a
 			// restore that lost them means the provider cannot invoice for the

@@ -268,7 +268,10 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureSiloedIsolation) {
-		eesilo.InstallInMemory()
+		// L4: durable silo placement. InstallInMemory reverted every tenant to
+		// the shared isolation default on restart, SILENTLY — a customer who
+		// bought hard isolation had it until the first deploy.
+		eesilo.InstallDurable(deps.Store)
 		if log != nil {
 			log.Info("Provider siloed isolation attached", slog.String("feature", string(license.FeatureSiloedIsolation)))
 		}

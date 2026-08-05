@@ -88,6 +88,11 @@ var RecoveredFromPostgresBackup = []string{
 	"secret_store",
 	"secret_store_versions",
 	"ssh_keys",
+	// L4: silo placement and residency. RecoveredFromPostgresBackup — it is an
+	// operator's placement decision, never derived from the event log, and a
+	// rebuild that lost it would silently revert every tenant to the shared
+	// default.
+	"tenant_silos",
 	// L2: provider-plane billing meters. RecoveredFromPostgresBackup, NOT a log
 	// projection — usage is counted from live activity, never replayed from the
 	// event log, so a rebuild cannot reconstruct it. Losing these to a

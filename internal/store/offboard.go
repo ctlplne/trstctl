@@ -142,6 +142,10 @@ var TenantScopedTables = []string{
 	"outbox",
 	"rate_limits",
 	// The tenant's own identity row, last.
+	// L4: the tenant's silo placement and residency zone. It leaves with the
+	// tenant — a placement row outliving its tenant would keep asserting a
+	// residency guarantee for an account that no longer exists.
+	"tenant_silos",
 	// L2: the provider plane's own billing record for this tenant. Not
 	// tenant-readable (a tenant must not see or edit the meter that bills them),
 	// but it is about this tenant and must leave when they do.
