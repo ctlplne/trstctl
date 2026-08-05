@@ -62,6 +62,8 @@ func main() {
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
+	enrollProxyListen := flag.String("enroll-proxy-listen", "", "serve a LAN-local ACME/EST/SCEP proxy on this address for hosts and devices in this segment that have no route to the control plane (epic A4). The proxy is pass-through: it forwards protocol traffic unaltered, adds no credential of its own, and makes no trust decision — the control plane's validators and policy still decide. Empty disables it")
+	enrollProxyUpstream := flag.String("enroll-proxy-upstream", "", "comma-separated https control-plane endpoints the enrolment proxy forwards to. More than one gives automatic failover when an endpoint stops answering; a control-plane ERROR is passed back to the client rather than retried, because it is an answer")
 	pluginDir := flag.String("connector-plugin-dir", "", "directory of signature-verified third-party WASM connectors this relay may execute (epic E4). Each <name>.wasm needs a sibling <name>.wasm.sig from a key named by --connector-plugin-key. Empty disables third-party connectors; a directory with no trust keys is refused rather than loaded")
 	pluginKeys := flag.String("connector-plugin-key", "", "comma-separated PEM files holding the publisher public keys whose signatures this relay accepts for third-party connectors. Required whenever --connector-plugin-dir is set: loading unverified partner code inside a customer network is refused, not warned about")
 	pluginPins := flag.String("connector-plugin-pin", "", "comma-separated hex SHA-256 digests restricting third-party connectors to exactly these builds. A signature says who built a module; a pin says which build, which is what stops a compromised publisher key from shipping a new one")
@@ -217,6 +219,8 @@ func main() {
 		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
 		workloadAPISocket:                 *workloadAPISocket,
+		enrollProxyListen:                 *enrollProxyListen,
+		enrollProxyUpstream:               *enrollProxyUpstream,
 		pluginDir:                         *pluginDir,
 		pluginKeys:                        *pluginKeys,
 		pluginPins:                        *pluginPins,
@@ -310,6 +314,10 @@ type agentOptions struct {
 	// pinned, and the capabilities they run under. None of it is derived from
 	// the module or from the control plane, because a publisher who could widen
 	// their own grant would make the sandbox decorative.
+	// A4: the LAN-local enrolment proxy for dark segments.
+	enrollProxyListen   string
+	enrollProxyUpstream string
+
 	pluginDir       string
 	pluginKeys      string
 	pluginPins      string
@@ -462,6 +470,11 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if relayTimer != nil {
 		defer relayTimer.Stop()
 	}
+
+	// A4: the enrolment proxy, so devices in this segment can reach the control
+	// plane through the one outbound pipe this relay already has.
+	stopEnrollProxy := startEnrollProxy(ctx, o)
+	defer stopEnrollProxy()
 
 	// E4: third-party connectors, verified and loaded before any work is
 	// claimed. A configuration error here is fatal rather than a warning: an

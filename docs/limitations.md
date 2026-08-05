@@ -264,6 +264,29 @@ never live in the API process. What you can do end to end against the running bi
   load-bearing by stubbing the connector's Deploy to return nil and confirming the
   tests fail. A guard test refuses a family that claims device proof without both an
   emulator package and a test that drives it.
+  Enrolment proxy for dark segments (A4): a relay started with
+  `--enroll-proxy-listen` serves ACME, EST and SCEP on the LAN so hosts and devices
+  with no route to the control plane can enrol through the one outbound pipe the
+  relay already has. Stock clients (certbot, sscep, estclient) point at it
+  unmodified.
+  IT MAKES NO TRUST DECISION, and that is the design rather than a caveat. The relay
+  sits inside the customer's network, which is where an attacker with a foothold
+  already is, so a proxy that interpreted a challenge, cached an authorization, or
+  spoke with its own agent identity would hand that attacker the ability to mint
+  certificates. Requests are forwarded byte-identical — an ACME JWS is signed, so a
+  proxy that reformatted it would invalidate every request — and the proxy attaches
+  NO credential of its own: the client authenticates as itself through EST's TLS
+  client certificate, SCEP's challenge password or ACME's account key, exactly as it
+  would reaching the control plane directly. Both properties are mutation-verified.
+  The forwarded paths are an allowlist, not a catch-all: a segment able to reach
+  /api/v1 through a relay would hold the control plane's entire administrative
+  surface, which is a far larger grant than "devices here can enrol".
+  Failover: several `--enroll-proxy-upstream` endpoints give automatic failover when
+  one stops answering. It works because the proxy is stateless — an ACME order lives
+  in the control plane, not in a relay — so a client whose endpoint dies simply
+  retries and its order is still there. A 5xx FROM the control plane is NOT a
+  failover trigger: it is an answer, and retrying elsewhere would ask a second
+  endpoint the same question while hiding the real error from the client.
   Third-party connectors in the relay (E4): a relay started with
   `--connector-plugin-dir` executes signature-verified WASM connectors inside the
   customer's network, under a capability grant its own operator sets. The control

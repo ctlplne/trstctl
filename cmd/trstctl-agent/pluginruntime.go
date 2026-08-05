@@ -4,9 +4,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
+	"time"
+
+	"trstctl.com/trstctl/internal/agent/enrollproxy"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -136,3 +142,50 @@ func pluginCapability(name string) (pluginhost.Capability, bool) {
 		return "", false
 	}
 }
+
+// startEnrollProxy serves the LAN-local enrolment proxy, if configured.
+//
+// Returns a stop function that is always safe to call. A failure to bind is
+// reported and does NOT bring the agent down: the proxy is one of several things
+// this process does, and an address already in use must not also stop this
+// segment's connector deploys and inventory.
+func startEnrollProxy(ctx context.Context, o agentOptions) func() {
+	listen := strings.TrimSpace(o.enrollProxyListen)
+	if listen == "" {
+		return func() {}
+	}
+	upstreams := splitList(o.enrollProxyUpstream)
+	if len(upstreams) == 0 {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: --enroll-proxy-listen is set but "+
+			"--enroll-proxy-upstream is not; the proxy has nowhere to forward to and will not start")
+		return func() {}
+	}
+	pool, err := enrollproxy.NewPool(upstreams, nil, 0)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: enrolment proxy:", err)
+		return func() {}
+	}
+	srv := &http.Server{
+		Addr:              listen,
+		Handler:           pool,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fmt.Printf("trstctl-agent: enrolment proxy serving on %s -> %v\n", listen, upstreams)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: enrolment proxy stopped:", err)
+		}
+	}()
+	enrollProxyPool.Store(pool)
+	return func() {
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutCtx)
+		<-done
+	}
+}
+
+// enrollProxyPool holds the running pool so the heartbeat can report its health.
+var enrollProxyPool atomic.Pointer[enrollproxy.Pool]
