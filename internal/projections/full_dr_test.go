@@ -471,6 +471,13 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			sql  string
 			args []any
 		}{
+			// L2: provider billing meters. Not a log projection — usage is
+			// counted from live activity and can never be replayed — so a
+			// restore that lost them means the provider cannot invoice for the
+			// period, and the coverage row is exactly what would have told them
+			// the figure was short.
+			{`INSERT INTO provider_usage_meters (tenant_id, meter, period_start, kind, value) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "certificates.issued", now.Truncate(time.Hour), "counter", int64(17)}},
+			{`INSERT INTO provider_usage_coverage (tenant_id, observed_from, observed_to) VALUES ($1, $2, $3)`, []any{tenantA, now.Add(-time.Hour), now}},
 			{`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, scopes, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{"00000000-0000-0000-0000-00000000a001", tenantA, "full-dr-api-token-hash", "ci", []string{"owners:read"}, now.Add(time.Hour)}},
 			{`INSERT INTO agent_bootstrap_tokens (id, tenant_id, token_hash, allowed_identity, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{"00000000-0000-0000-0000-00000000a002", tenantA, "full-dr-bootstrap-hash", "edge-1", now.Add(time.Hour)}},
 			// A3: the credential-redemption ledger must survive a restore intact.

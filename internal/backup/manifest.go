@@ -88,6 +88,13 @@ var RecoveredFromPostgresBackup = []string{
 	"secret_store",
 	"secret_store_versions",
 	"ssh_keys",
+	// L2: provider-plane billing meters. RecoveredFromPostgresBackup, NOT a log
+	// projection — usage is counted from live activity, never replayed from the
+	// event log, so a rebuild cannot reconstruct it. Losing these to a
+	// classification mistake means a provider cannot invoice for the period,
+	// and the coverage row is what would have told them the figure was short.
+	"provider_usage_meters",
+	"provider_usage_coverage",
 }
 
 // Ephemeral state is not required for a correct restore (it regenerates).

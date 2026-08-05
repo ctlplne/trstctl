@@ -295,7 +295,11 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureMetering) {
-		eebilling.InstallInMemory(ctx, log, nil)
+		// L2: durable metering. InstallInMemory lost usage on every restart
+		// SILENTLY, so a provider invoiced from a figure that was quietly short.
+		// The durable path records what it observed, which is what lets invoice
+		// evidence be signed at all.
+		eebilling.InstallDurable(ctx, log, nil, deps.Store)
 		if log != nil {
 			log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
 		}

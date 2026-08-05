@@ -3,6 +3,8 @@
 package billing
 
 import (
+	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -101,4 +103,40 @@ func TestEveryRefusalExplainsWhatIsMissing(t *testing.T) {
 			t.Errorf("%s refusal is too terse to act on: %q", tc.name, tc.got.Reason)
 		}
 	}
+}
+
+// L2's wiring: the durable installation must actually be reachable, and the
+// in-memory fallback must stay VISIBLE rather than silently pretending.
+//
+// This is the defect class this backlog keeps finding — a capability built and
+// never reached. Here it would be worse than usual: an unreachable durable
+// store means the provider keeps invoicing from in-memory counters while the
+// code that would have fixed it sits unused.
+func TestTheDurableInstallationIsReachableAndTheFallbackIsVisible(t *testing.T) {
+	t.Parallel()
+	src, err := readBillingSource("../../cmd/trstctl/ee_attach.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(src, "eebilling.InstallDurable(") {
+		t.Fatal("ee_attach.go does not call InstallDurable.\n\n" +
+			"A durable metering store nothing installs leaves the provider invoicing from " +
+			"in-memory counters that are silently short on every restart — with the fix sitting " +
+			"in the tree, unused.")
+	}
+	if strings.Contains(src, "eebilling.InstallInMemory(") {
+		t.Fatal("ee_attach.go still installs the in-memory store; usage is still lost on restart")
+	}
+	// A nil store must fall back visibly, not claim durability it does not have.
+	inst := InstallDurable(context.Background(), nil, nil, nil)
+	if inst.Durable {
+		t.Fatal("an installation with no database claimed to be durable.\n\n" +
+			"MaySign consults exactly this flag, so a false claim here is how unsignable usage " +
+			"gets signed anyway.")
+	}
+}
+
+func readBillingSource(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	return string(b), err
 }

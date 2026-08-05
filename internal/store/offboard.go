@@ -142,6 +142,11 @@ var TenantScopedTables = []string{
 	"outbox",
 	"rate_limits",
 	// The tenant's own identity row, last.
+	// L2: the provider plane's own billing record for this tenant. Not
+	// tenant-readable (a tenant must not see or edit the meter that bills them),
+	// but it is about this tenant and must leave when they do.
+	"provider_usage_meters",
+	"provider_usage_coverage",
 	"tenants",
 }
 
