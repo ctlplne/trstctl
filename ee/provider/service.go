@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -47,7 +48,14 @@ type Config struct {
 	// a placeholder is how the previous behaviour came to exist, and a provider
 	// plane that returns 503 until somebody wires real authentication is
 	// strictly better than one that authorises everybody in the meantime.
-	Authenticator    OperatorAuthenticator
+	Authenticator OperatorAuthenticator
+	// Delegations supplies which customers each operator may act on. NIL MEANS
+	// THE PROVIDER PLANE REFUSES EVERY CUSTOMER-SCOPED ACTION, for the same
+	// reason Authenticator has no default: authentication answers who an
+	// operator is and answers nothing about which customers they may touch, and
+	// a plane that cannot express the partition hands every operator the union
+	// of every customer's risk.
+	Delegations      DelegationSource
 	Telemetry        TelemetryReader
 	Clock            func() time.Time
 	MaxBreakGlassTTL time.Duration
@@ -102,6 +110,7 @@ type Service struct {
 	store            Store
 	audit            AuditSink
 	authenticator    OperatorAuthenticator
+	delegations      DelegationSource
 	telemetry        TelemetryReader
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
@@ -136,8 +145,11 @@ func NewService(cfg Config) *Service {
 	// other dependency above falls back to a working stand-in; this one must
 	// not, because the safe stand-in for "who is this caller" does not exist.
 	// Nil here means the handler refuses every request.
+	// delegations is deliberately NOT defaulted. A default here would be a
+	// default answer to "which customers may this operator touch", and the only
+	// safe default answer is none.
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
-		telemetry: telemetry, clock: clock, maxBreakGlassTTL: maxTTL}
+		delegations: cfg.Delegations, telemetry: telemetry, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRequest) (Tenant, error) {
@@ -148,6 +160,13 @@ func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRe
 	name := strings.TrimSpace(req.Name)
 	if slug == "" || name == "" {
 		return Tenant{}, errors.New("provider: tenant slug and name are required")
+	}
+	// The customer does not exist yet, so the grant is over the ID it WILL get.
+	// Onboarding is scoped like every other operation rather than being a
+	// blanket "may create customers": an operator who can conjure a tenancy of
+	// any name can conjure one whose name collides with a real customer's.
+	if err := s.authorize(ctx, actor, "tenant-"+slug, OpProvision); err != nil {
+		return Tenant{}, err
 	}
 	if band := s.license.TenantBand(); band > 0 {
 		count, err := s.store.CountBillableTenants(ctx)
@@ -169,11 +188,49 @@ func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRe
 	return tenant, nil
 }
 
-func (s *Service) ListTenants(ctx context.Context) ([]Tenant, error) {
+// ListTenants returns only the customers this operator is delegated.
+//
+// The unfiltered version leaked the provider's whole customer list to every
+// operator. That is a disclosure on its own — a competitor's engineer working
+// one tenancy could read the names of every other customer the provider has —
+// and it is also the reconnaissance step for the cross-customer action the
+// delegation set refuses: you cannot ask to suspend a tenancy you cannot name.
+//
+// Filtering here rather than in the handler because the handler is not the only
+// caller, and a list built from an unfiltered read is one refactor away from
+// being returned.
+func (s *Service) ListTenants(ctx context.Context, actor Operator) ([]Tenant, error) {
 	if s.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
 		return nil, ErrUnlicensed
 	}
-	return s.store.ListTenants(ctx)
+	if err := s.requireOperator(actor); err != nil {
+		return nil, err
+	}
+	if s.delegations == nil {
+		return nil, fmt.Errorf("%w: no delegation source is configured", ErrForbidden)
+	}
+	set, err := s.delegations.Delegations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: delegations could not be read", ErrForbidden)
+	}
+	visible := map[string]bool{}
+	for _, customer := range set.CustomersFor(actor.ID) {
+		visible[customer] = true
+	}
+	all, err := s.store.ListTenants(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Non-nil empty rather than nil: an operator with no delegations gets an
+	// empty list, which is the true answer, not a null the caller may render as
+	// "could not load".
+	out := make([]Tenant, 0, len(all))
+	for _, t := range all {
+		if visible[t.ID] {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) Suspend(ctx context.Context, actor Operator, tenantID string) error {
@@ -186,6 +243,12 @@ func (s *Service) Offboard(ctx context.Context, actor Operator, tenantID string)
 
 func (s *Service) DirectTenantSnapshot(ctx context.Context, actor Operator, tenantID string) (TenantSnapshot, error) {
 	if err := s.requireOperator(actor); err != nil {
+		return TenantSnapshot{}, err
+	}
+	// A snapshot is a read of a customer's whole estate, so it is delegated
+	// like any other action. "Read-only" is not "harmless" when the thing read
+	// is another customer's inventory.
+	if err := s.authorize(ctx, actor, tenantID, OpRead); err != nil {
 		return TenantSnapshot{}, err
 	}
 	return s.store.DirectTenantSnapshot(ctx, tenantID)
@@ -203,6 +266,13 @@ func (s *Service) RequestBreakGlass(ctx context.Context, actor Operator, req Bre
 	}
 	if req.TTL < 0 || req.TTL > s.maxBreakGlassTTL {
 		return BreakGlassGrant{}, ErrBreakGlassInvalidDuration
+	}
+	// Break-glass is its own grant. An operator trusted to run a customer's
+	// day-to-day tenancy is not automatically trusted to ask for emergency
+	// access into it, and the tenant consent that follows is a second gate, not
+	// a substitute for this one.
+	if err := s.authorize(ctx, actor, req.TenantID, OpBreakGlass); err != nil {
+		return BreakGlassGrant{}, err
 	}
 	if _, err := s.store.Tenant(ctx, req.TenantID); err != nil {
 		return BreakGlassGrant{}, err
@@ -273,6 +343,13 @@ func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID
 	if grant.OperatorID != actor.ID {
 		return TenantSnapshot{}, ErrBreakGlassWrongOperator
 	}
+	// Re-checked at USE time, not only when the grant was requested. A
+	// delegation revoked after a grant was consented must stop the access it
+	// would otherwise still authorise — otherwise revocation only takes effect
+	// for operators who had not already asked.
+	if err := s.authorize(ctx, actor, grant.TenantID, OpBreakGlass); err != nil {
+		return TenantSnapshot{}, err
+	}
 	now := s.clock()
 	switch state := grant.State(now); state {
 	case GrantActive:
@@ -298,11 +375,57 @@ func (s *Service) setTenantStatus(ctx context.Context, actor Operator, tenantID 
 	if err := s.requireMutation(actor, true); err != nil {
 		return err
 	}
+	// Suspend and offboard are separate grants. Suspend interrupts a live
+	// service; offboard DESTROYS. Being trusted with the first is not being
+	// trusted with the second, so the operation is derived from the status
+	// rather than folded into one "may change status" permission.
+	//
+	// The mapping is TOTAL rather than "offboard, else suspend". There is no
+	// resume route today, so OpResume is granted and never checked — but the
+	// day one is added, a defaulting map would authorise resuming a customer
+	// with a suspend grant, and "may pause" would silently become "may
+	// un-pause" for every operator who already had it.
+	var op Operation
+	switch status {
+	case TenantOffboarded:
+		op = OpOffboard
+	case TenantSuspended:
+		op = OpSuspend
+	case TenantActive:
+		op = OpResume
+	default:
+		// An unknown status is refused rather than mapped to the mildest
+		// operation available.
+		return fmt.Errorf("%w: no delegable operation corresponds to status %q", ErrForbidden, status)
+	}
+	if err := s.authorize(ctx, actor, tenantID, op); err != nil {
+		return err
+	}
 	tenant, err := s.store.UpdateTenantStatus(ctx, tenantID, status, s.clock())
 	if err != nil {
 		return err
 	}
-	return s.record(ctx, AuditEvent{Type: auditType, TenantID: tenant.ID, OperatorID: actor.ID, OperatorEmail: actor.Email, At: s.clock()})
+	if err := s.record(ctx, AuditEvent{Type: auditType, TenantID: tenant.ID, OperatorID: actor.ID, OperatorEmail: actor.Email, At: s.clock()}); err != nil {
+		return err
+	}
+	if status == TenantOffboarded {
+		// Grants over a destroyed tenancy are dangling authority. Tenant ids
+		// here are derived from the slug, so reusing an offboarded customer's
+		// slug would hand the new tenancy to whoever held grants on the old
+		// one — with nothing in the system saying so.
+		//
+		// Reported rather than swallowed: the offboard DID happen and the audit
+		// record above is correct, but the caller must learn that the grant rows
+		// survived so somebody clears them.
+		if revoker, ok := s.delegations.(customerRevoker); ok {
+			if err := revoker.RevokeAllForCustomer(ctx, tenant.ID); err != nil {
+				return fmt.Errorf("provider: customer %s was offboarded but its operator "+
+					"delegations could not be cleared, so reusing the slug would restore that "+
+					"access: %w", tenant.ID, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Service) requireMutation(actor Operator, adminOnly bool) error {
@@ -317,6 +440,32 @@ func (s *Service) requireMutation(actor Operator, adminOnly bool) error {
 	}
 	if adminOnly && actor.Role != OperatorAdmin {
 		return ErrForbidden
+	}
+	return nil
+}
+
+// authorize is the ONE place a customer-scoped provider action is permitted.
+//
+// Both axes must be satisfied explicitly: the operator must be delegated this
+// customer, and delegated this operation on it. Every failure mode — no source
+// configured, the source erroring, no grant — refuses. They are deliberately
+// indistinguishable to the caller in outcome, because an operator who could
+// tell "the delegation service is down" from "you have no grant" could probe
+// which customers exist by watching which error they get.
+func (s *Service) authorize(ctx context.Context, actor Operator, customerID string, op Operation) error {
+	if s.delegations == nil {
+		return fmt.Errorf("%w: no delegation source is configured, so no operator may act on any "+
+			"customer. Reading an absent delegation source as \"everything is permitted\" is how one "+
+			"customer's operator reaches into another's tenancy", ErrForbidden)
+	}
+	set, err := s.delegations.Delegations(ctx)
+	if err != nil {
+		// Fail closed on a read failure. Serving on an unreadable grant table
+		// would mean the plane is widest exactly when it is least healthy.
+		return fmt.Errorf("%w: delegations could not be read, so the action is refused", ErrForbidden)
+	}
+	if err := set.Authorize(actor, customerID, op); err != nil {
+		return fmt.Errorf("%w: %s", ErrForbidden, err.Error())
 	}
 	return nil
 }

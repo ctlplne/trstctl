@@ -67,11 +67,12 @@ func (h *handler) createTenant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) listTenants(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.operatorFromRequest(r); !ok {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
 		writeProviderError(w, ErrProviderUnauthenticated)
 		return
 	}
-	tenants, err := h.svc.ListTenants(r.Context())
+	tenants, err := h.svc.ListTenants(r.Context(), op)
 	if err != nil {
 		writeProviderError(w, err)
 		return

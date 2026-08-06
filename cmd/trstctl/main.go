@@ -75,6 +75,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if len(args) > 0 && args[0] == "support-bundle" {
 		return runSupportBundle(ctx, args[1:], getenv, stdout, stderr)
 	}
+	// EE-only local subcommands (provider-grant). Returns handled=false on the
+	// core build, which links the no-op twin.
+	if handled, err := eeLocalCommand(ctx, args, getenv, stdout, stderr); handled || err != nil {
+		return err
+	}
 	if len(args) > 0 && args[0] == "doctor" {
 		// Invariant probes against the live deployment (doctor.ExitError
 		// carries the 0/1/2 command contract through main's exit path).

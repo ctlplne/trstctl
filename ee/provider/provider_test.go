@@ -22,7 +22,8 @@ func TestTenantBandExhaustionIsProvisionOnly(t *testing.T) {
 	ctx := context.Background()
 	clock := fixedClock()
 	audit := &captureAudit{}
-	svc := NewService(Config{License: providerLicense(t, 2), Store: NewMemStore(), Audit: audit, Clock: clock})
+	svc := NewService(Config{License: providerLicense(t, 2), Store: NewMemStore(), Audit: audit, Clock: clock,
+		Delegations: fullyDelegated("op-1", "tenant-alpha", "tenant-beta", "tenant-gamma")})
 	op := providerOperator("op-1")
 
 	alpha, err := svc.Provision(ctx, op, ProvisionRequest{Slug: "alpha", Name: "Alpha"})
@@ -50,7 +51,7 @@ func TestTenantBandExhaustionIsProvisionOnly(t *testing.T) {
 		t.Fatalf("provision after offboard should use the freed band slot: %v", err)
 	}
 
-	tenants, err := svc.ListTenants(ctx)
+	tenants, err := svc.ListTenants(ctx, op)
 	if err != nil {
 		t.Fatalf("list tenants: %v", err)
 	}
@@ -77,6 +78,7 @@ func TestProviderHandlerRendersTenantBandProblemCode(t *testing.T) {
 		Audit:         &captureAudit{},
 		Clock:         fixedClock(),
 		Authenticator: stubAuth{accept: "Bearer provider:op-1:provider@example.test"},
+		Delegations:   fullyDelegated("op-1", "tenant-alpha", "tenant-beta"),
 	})
 
 	postTenant := func(slug string) (int, map[string]any) {
@@ -112,6 +114,9 @@ func TestBreakGlassRequiresConsentAndAuditsBeforeTenantData(t *testing.T) {
 		Audit:     audit,
 		Telemetry: telemetry,
 		Clock:     fixedClock(),
+		// Delegated everything, so what this test observes is the break-glass
+		// consent gate rather than a missing grant refusing first.
+		Delegations: fullyDelegated("op-1", "tenant-alpha"),
 	})
 	op := providerOperator("op-1")
 	tenant, err := svc.Provision(ctx, op, ProvisionRequest{Slug: "alpha", Name: "Alpha"})
@@ -194,6 +199,20 @@ func (t *auditCheckingTelemetry) TenantSnapshot(_ context.Context, tenantID stri
 
 func providerOperator(id string) Operator {
 	return Operator{ID: id, Email: id + "@provider.example.test", Role: OperatorAdmin, MFA: true}
+}
+
+// fullyDelegated grants one operator every operation over the named customers.
+//
+// Tests that are not ABOUT delegation still have to state it, because the
+// plane refuses without it. That is the fail-closed rule doing its job: a test
+// helper that quietly widened scope would make the refusal untested by every
+// test that did not mean to exercise it.
+func fullyDelegated(operatorID string, customerIDs ...string) StaticDelegations {
+	out := make(StaticDelegations, 0, len(customerIDs))
+	for _, customer := range customerIDs {
+		out = append(out, Delegation{OperatorID: operatorID, CustomerID: customer, Operations: Operations})
+	}
+	return out
 }
 
 func providerLicense(t *testing.T, tenantBand int) *license.Manager {

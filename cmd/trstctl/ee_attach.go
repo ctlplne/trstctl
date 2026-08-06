@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"context"
+	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 
@@ -134,6 +136,29 @@ func (c chainedOutboxHandler) DeliverLicensedTerminalFailure(ctx context.Context
 // attachEE is the single sanctioned open-core seam. S-E0 attaches no features:
 // the table is empty and behavior stays Community. Later cards add exactly one
 // lic.Has(feature) block per gated capability here.
+// eeLocalCommand dispatches EE-only local subcommands.
+//
+// `provider-grant` is the bootstrap path for delegation (L1). Without it the
+// gate is unreachable in the other direction: the plane refuses every
+// customer-scoped action until operators hold grants, and nothing could create
+// one — a refusal nobody can lift is an outage, not a control.
+//
+// It is a LOCAL subcommand against the database, not a served route, because of
+// the bootstrap problem: a route handing out provider authority must itself be
+// authorised by somebody holding provider authority, and at install time no
+// such operator exists. Requiring direct database access states the real trust
+// level instead of inventing a self-referential API gate.
+func eeLocalCommand(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) (bool, error) {
+	if len(args) == 0 || args[0] != "provider-grant" {
+		return false, nil
+	}
+	cfg, err := config.Load(getenv)
+	if err != nil {
+		return true, fmt.Errorf("configuration: %w", err)
+	}
+	return true, eeprovider.RunGrantCommand(ctx, cfg.Postgres.DSN, args[1:], stdout, stderr)
+}
+
 func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
 	if lic != nil && lic.Has(license.FeatureRemediation) {
 		attachRemediation(log, deps)
@@ -284,9 +309,17 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		// /provider/ behind only a bulkhead. Closed-until-wired is the only safe
 		// state, and shipping a placeholder verifier here is exactly how the
 		// original bypass came to exist.
+		// L1: the delegation source. Without it the rule in
+		// ee/provider/delegation.go was a library nothing called, and every
+		// served provider route still authorised any authenticated operator
+		// against any customer. The constructor returns nil with no database,
+		// and a nil source refuses every customer-scoped action — the same
+		// closed-until-wired stance as the authenticator.
+		delegations := eeprovider.NewPGDelegationSource(deps.Store)
 		deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
-			License: lic,
-			Audit:   eeprovider.NewEventLogAuditSink(deps.Log),
+			License:     lic,
+			Audit:       eeprovider.NewEventLogAuditSink(deps.Log),
+			Delegations: delegations,
 		})
 		if log != nil {
 			// Says what an operator will actually observe. "Attached" alone
@@ -295,6 +328,14 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 			log.Warn("Provider plane attached but NO operator authenticator is configured; "+
 				"/provider/ will refuse every request until one is wired",
 				slog.String("feature", string(license.FeatureProviderPlane)))
+			if delegations == nil {
+				// Two separate silences to break. An operator who wires
+				// authentication and still gets 403 needs to be told the second
+				// gate exists, or they read a working plane as broken.
+				log.Warn("Provider plane has NO delegation source; every customer-scoped action "+
+					"will be refused until operators are granted customers",
+					slog.String("feature", string(license.FeatureProviderPlane)))
+			}
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureMetering) {

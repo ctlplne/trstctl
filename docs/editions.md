@@ -67,10 +67,62 @@ Provider inherits every Enterprise row below, then adds the Provider rows.
 | `agent-delegation` | Enterprise | Chain-bound AI agent identity lifecycle enforcement. |
 | `reconcile` | Enterprise | Cross-plane trust reconciliation rounds and evidence machinery. |
 | `vdec` | Enterprise | Verifiable decommissioning dependency-state re-protection and destruction proof machinery. |
-| `provider_plane` | Provider | Managed-provider control plane features. |
+| `provider_plane` | Provider | Managed-provider control plane features, gated by per-customer delegation (see below). |
 | `metering` | Provider | Provider usage metering, durable per-customer, pullable as invoice evidence (see below). |
 | `white_label` | Provider | Provider branding controls. |
 | `siloed_isolation` | Provider | Provider tenant-silo operating mode. |
+
+### Provider operator delegation
+
+The provider plane has two independent gates, and both fail closed.
+
+**Authentication** answers who an operator is. With no `Authenticator`
+configured, `/provider/` refuses every request; there is deliberately no
+placeholder verifier.
+
+**Delegation** answers which customers that operator may touch, and through
+which operations. Grants live in `provider_operator_delegations` and are read on
+every customer-scoped action:
+
+- An operator acts only on customers explicitly granted to them. Naming any
+  other customer is refused, and the refusal happens before the store is
+  written — a suspended customer and an audited refusal must never disagree.
+- Operations are granted separately (`read`, `provision`, `suspend`, `resume`,
+  `offboard`, `break-glass`) because they carry different blast radii.
+  Suspending interrupts a live service and is reversible; offboarding destroys.
+  Being trusted with one is not being trusted with the other.
+- There is no wildcard customer. A wildcard grant is indistinguishable from the
+  unscoped access this replaces.
+- The tenant list returns only delegated customers. The full roster is the
+  provider's commercial information, and it is the map an operator would need to
+  attempt a cross-customer action.
+- Break-glass is re-checked when the grant is USED, not only when it was
+  requested, so revoking a delegation stops access an operator already holds.
+- No delegation source, or a delegation source that cannot be read, refuses
+  everything. Failing open on a read error would make the plane widest exactly
+  when it is least healthy.
+
+Grants are minted with a local subcommand against the database:
+
+```
+trstctl provider-grant -operator op-1 -customer tenant-acme -operations read,suspend
+trstctl provider-grant -operator op-1 -customer tenant-acme -operations offboard -revoke
+```
+
+Offboarding a customer clears every grant over it. Tenant ids are derived from
+the customer slug, so a grant that outlived the tenancy would hand a reused slug
+to whoever held access on the old customer. This applies to database-backed
+grants; a deployment still keeping grants in a static configuration file must
+remove those lines itself, since rewriting an operator's config file from the
+running process would put the file out of step with the system it describes.
+
+This is a local command rather than a served route because of the bootstrap
+problem: a route that hands out provider authority must itself be authorised by
+somebody holding provider authority, and at install time no such operator
+exists. Requiring direct database access states the real trust level.
+
+Not yet built: IdP federation for provider operators (OIDC/SAML with SCIM
+provisioning), and a provider access console for reviewing grants.
 
 ### Usage metering and invoice evidence
 
