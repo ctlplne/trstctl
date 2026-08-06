@@ -482,6 +482,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"secret_store",
 		"secret_store_versions",
 		"ssh_keys",
+		"tenant_branding",
 		"tenant_silos",
 		// L2: provider billing meters. No foreign keys, so placement is free —
 		// but they restore LAST on purpose: they are the provider's record of

@@ -88,6 +88,10 @@ var RecoveredFromPostgresBackup = []string{
 	"secret_store",
 	"secret_store_versions",
 	"ssh_keys",
+	// L3: white-label branding. RecoveredFromPostgresBackup — an operator's
+	// presentation choice, never derived from the event log, and a rebuild that
+	// lost it would silently show every customer our name instead of theirs.
+	"tenant_branding",
 	// L4: silo placement and residency. RecoveredFromPostgresBackup — it is an
 	// operator's placement decision, never derived from the event log, and a
 	// rebuild that lost it would silently revert every tenant to the shared

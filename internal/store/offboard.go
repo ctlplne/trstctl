@@ -142,6 +142,9 @@ var TenantScopedTables = []string{
 	"outbox",
 	"rate_limits",
 	// The tenant's own identity row, last.
+	// L3: the tenant's white-label brand. It leaves with the tenant — a brand
+	// row outliving its tenant would keep claiming a custom domain nobody owns.
+	"tenant_branding",
 	// L4: the tenant's silo placement and residency zone. It leaves with the
 	// tenant — a placement row outliving its tenant would keep asserting a
 	// residency guarantee for an account that no longer exists.

@@ -308,7 +308,10 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureWhiteLabel) {
-		eewhitelabel.InstallInMemory()
+		// L3/AUD-14: durable branding. InstallInMemory lost a provider's brand on
+		// every deploy SILENTLY — their customers went back to seeing our
+		// product name with nothing saying why.
+		eewhitelabel.InstallDurable(deps.Store)
 		if log != nil {
 			log.Info("Provider white-label branding attached", slog.String("feature", string(license.FeatureWhiteLabel)))
 		}

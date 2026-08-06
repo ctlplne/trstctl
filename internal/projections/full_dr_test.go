@@ -471,6 +471,9 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			sql  string
 			args []any
 		}{
+			// L3: white-label branding. A restore that lost it would silently show
+			// this tenant's customers our product name instead of theirs.
+			{`INSERT INTO tenant_branding (tenant_id, product_name, custom_domain) VALUES ($1, $2, $3)`, []any{tenantA, "AcmeTrust", "acme.example"}},
 			// L4: silo placement and residency. An operator's placement decision,
 			// never derived from the event log — a restore that lost it would
 			// silently revert this tenant to the shared isolation default.
