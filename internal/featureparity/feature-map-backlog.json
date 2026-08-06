@@ -13182,7 +13182,8 @@
         "platform tenant-key-domain status",
         "platform tenant-key-domain migrate",
         "platform tenant-key-domain seal",
-        "platform tenant-key-domain unseal"
+        "platform tenant-key-domain unseal",
+        "usage evidence"
       ],
       "cli_na": "",
       "facet_evidence": {

@@ -162,8 +162,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// row as the rest of the fleet surface.
 	// AUD-14's `brand show` raised it to 342.
 	// `owners resolve-conflict` raised it to 343.
-	if len(out) != 343 {
-		t.Fatalf("CLI commands = %d, want 343", len(out))
+	// L2's `usage evidence` raised it to 344, on the multi-tenant topology row
+	// with the rest of the managed-offering surface.
+	if len(out) != 344 {
+		t.Fatalf("CLI commands = %d, want 344", len(out))
 	}
 	return out
 }

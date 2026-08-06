@@ -4,8 +4,15 @@ import { Dialog } from "@/components/Dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, type SystemReadout, type TenantKeyDomainStatus } from "@/lib/api";
+import { api, type SystemReadout, type TenantKeyDomainStatus, type UsageEvidence } from "@/lib/api";
 import type { StatusTone } from "@/lib/statusVocab";
+
+// The default window is the previous whole calendar month: the only period a
+// provider can bill without waiting, because it is the only one that is closed.
+const previousMonthEnd = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+const previousMonthStart = new Date(Date.UTC(previousMonthEnd.getUTCFullYear(), previousMonthEnd.getUTCMonth() - 1, 1));
+const defaultPeriodStart = previousMonthStart.toISOString().slice(0, 10);
+const defaultPeriodEnd = previousMonthEnd.toISOString().slice(0, 10);
 
 export function IdempotencyResultProtectionPanel({
   readout,
@@ -409,6 +416,123 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
           </Button>
         </div>
       </Dialog>
+    </section>
+  );
+}
+
+// L2: usage as invoice evidence.
+//
+// The panel leads with WHETHER THE PERIOD MAY BE BILLED, not with the totals.
+// A number a finance team reads as an invoice, drawn from metering that could
+// not cover the period, is worse than no panel at all: it turns a gap somebody
+// might have questioned into a figure they will act on. So `signable` and its
+// reason render above the table, and the table is visibly a partial view when
+// the answer is no.
+export function UsageEvidencePanel() {
+  const { t } = useTranslation();
+  const [doc, setDoc] = useState<UsageEvidence | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [periodStart, setPeriodStart] = useState(defaultPeriodStart);
+  const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
+
+  async function pull(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setRequestError(null);
+    try {
+      setDoc(await api.usageEvidence(`${periodStart}T00:00:00Z`, `${periodEnd}T00:00:00Z`));
+    } catch (err) {
+      setDoc(null);
+      setRequestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section className="ui-panel p-comfortable" aria-labelledby="usage-evidence-heading">
+      <h2 id="usage-evidence-heading" className="text-title font-semibold">
+        {t("platform.usageEvidence.heading")}
+      </h2>
+      <p className="mt-1 max-w-3xl text-caption text-muted-foreground">{t("platform.usageEvidence.description")}</p>
+
+      <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={pull}>
+        <label className="flex flex-col gap-1 text-caption">
+          {t("platform.usageEvidence.periodStart")}
+          <input
+            type="date"
+            value={periodStart}
+            onChange={(e) => setPeriodStart(e.target.value)}
+            className="rounded-control border border-border bg-background px-2 py-1"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-caption">
+          {t("platform.usageEvidence.periodEnd")}
+          <input
+            type="date"
+            value={periodEnd}
+            onChange={(e) => setPeriodEnd(e.target.value)}
+            className="rounded-control border border-border bg-background px-2 py-1"
+          />
+        </label>
+        <Button type="submit" disabled={loading}>
+          {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          {t("platform.usageEvidence.pull")}
+        </Button>
+      </form>
+
+      {loading && <p className="mt-3 text-caption text-muted-foreground">{t("platform.usageEvidence.loading")}</p>}
+      {requestError && (
+        <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {requestError}
+        </p>
+      )}
+
+      {doc && (
+        <div className="mt-4 grid gap-3">
+          {/* The verdict comes first and carries its reason. Rendering the
+              totals above this would let a reader stop before reaching it. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge
+              value={doc.signable ? "billable" : "not-billable"}
+              label={doc.signable ? t("platform.usageEvidence.billable") : t("platform.usageEvidence.notBillable")}
+              tone={(doc.signable ? "success" : "warning") as StatusTone}
+            />
+            <span className="text-caption text-muted-foreground">{doc.reason}</span>
+          </div>
+          {doc.observed_from && doc.observed_to && (
+            <p className="text-caption text-muted-foreground">
+              {t("platform.usageEvidence.coverage")}: {doc.observed_from} → {doc.observed_to}
+            </p>
+          )}
+          {doc.lines && doc.lines.length > 0 ? (
+            <table className="w-full text-caption">
+              <thead>
+                <tr className="text-left text-muted-foreground">
+                  <th className="py-1">{t("platform.usageEvidence.meter")}</th>
+                  <th className="py-1">{t("platform.usageEvidence.kind")}</th>
+                  <th className="py-1 text-right">{t("platform.usageEvidence.value")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {doc.lines.map((line) => (
+                  <tr key={`${line.meter}:${line.kind}`} className="border-t border-border">
+                    <td className="py-1">{line.meter}</td>
+                    <td className="py-1">{line.kind}</td>
+                    <td className="py-1 text-right tabular-nums">{line.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-caption text-muted-foreground">{t("platform.usageEvidence.noLines")}</p>
+          )}
+          <p className="text-caption text-muted-foreground">
+            {t("platform.usageEvidence.digest")}: <code className="font-mono">{doc.digest}</code>
+          </p>
+        </div>
+      )}
     </section>
   );
 }

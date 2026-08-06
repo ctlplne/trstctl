@@ -409,6 +409,28 @@ export interface AuthorityAgreementReport {
   guidance: string;
 }
 
+/** L2 invoice evidence. Licensed route, so hand-declared like the block above. */
+export interface UsageEvidenceLine {
+  meter: string;
+  kind: string;
+  value: number;
+  unit?: string;
+}
+export interface UsageEvidence {
+  customer_id: string;
+  period_start: string;
+  period_end: string;
+  lines?: UsageEvidenceLine[];
+  /** Read this BEFORE the numbers: false means the totals are a partial view, not an invoice. */
+  signable: boolean;
+  /** Why it may or may not be signed, in words a finance team can act on. */
+  reason: string;
+  observed_from?: string;
+  observed_to?: string;
+  digest: string;
+  guidance?: string;
+}
+
 export type { CTMonitoring, CTMonitoringRequest };
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
@@ -1276,6 +1298,7 @@ export interface Api {
   ctMonitoring(): Promise<CTMonitoring>;
   /** C4: whether the configured authorities agree. Licensed; 402/403 when not entitled. */
   authorityAgreement(): Promise<AuthorityAgreementReport>;
+  usageEvidence(periodStart: string, periodEnd: string): Promise<UsageEvidence>;
   /** M2: crypto assets sequenced for migration by observed dependency, not severity alone. */
   cryptoReadiness(): Promise<CryptoReadiness>;
   /** I2: ownership an import refused to overwrite, and changes it made and recorded. */
@@ -1608,6 +1631,12 @@ const liveApi: Api = {
   // reproduce state.
   drPosture: () => req<DRPosture>("/api/v1/platform/dr-posture"),
   authorityAgreement: () => req<AuthorityAgreementReport>("/api/v1/reconcile/agreement"),
+  // No customer_id: the route serves the caller's own tenancy and refuses a
+  // query naming anyone else, so sending one could only ever be a 403.
+  usageEvidence: (periodStart, periodEnd) =>
+    req<UsageEvidence>(
+      `/api/v1/provider/usage-evidence?period_start=${encodeURIComponent(periodStart)}&period_end=${encodeURIComponent(periodEnd)}`,
+    ),
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),
   // Through mutate(), not a hand-rolled req(): mutate is what attaches the

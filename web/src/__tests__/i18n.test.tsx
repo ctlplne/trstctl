@@ -477,8 +477,17 @@ describe("i18n boundary", () => {
       // would let an operator try, be refused by the route, and learn the rule
       // from an error instead of the form.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "c6b5f83ab016a22f51caddc8d1960a80d8d43cf349a80d6fda1c421d21941fd1",
-      "de-DE": "e68dc12764bb25135ec3f4cfa55052f17d3c7004c1631721c5b9c538d7cb66b4",
+      // L2 invoice-evidence re-pin: fourteen platform.usageEvidence.* keys for
+      // the usage panel. The two that carry weight are the billable /
+      // not-billable badge labels: a locale that rendered an unsignable period
+      // as billable would hand a finance team an invoice figure the system
+      // itself refuses to stand behind, and the panel's whole design is that
+      // the verdict is read before the numbers. The description says a period
+      // the metering store could not cover end to end is a partial view rather
+      // than an invoice, in every locale.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "8c6686f8bd19f631cb4d228561c52b55b3b3fffacf744901cd3cf6f2728097df",
+      "de-DE": "c2ef4bf92b44456cae9fd101ba28b8641af0dfa8d478ef8f6761eb08cfa318f9",
     });
   });
 

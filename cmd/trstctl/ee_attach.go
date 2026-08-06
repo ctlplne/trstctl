@@ -302,7 +302,22 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		// SILENTLY, so a provider invoiced from a figure that was quietly short.
 		// The durable path records what it observed, which is what lets invoice
 		// evidence be signed at all.
-		eebilling.InstallDurable(ctx, log, nil, deps.Store)
+		billingInst := eebilling.InstallDurable(ctx, log, nil, deps.Store)
+		// L2: the served evidence route. Without this the document builder and
+		// the durable meters exist and no provider can ever pull an invoice —
+		// the defect class this backlog keeps finding.
+		//
+		// Mounted unconditionally. On an in-memory fallback the MemStore reports
+		// coverage as not durable, so the route answers with an UNSIGNABLE
+		// document that says why — which is the fact an operator needs. Leaving
+		// it unmounted would answer 404 and read as "no such feature" on a
+		// deployment that is metering.
+		var evidenceReader eebilling.EvidenceReader = billingInst.Store
+		if billingInst.PG != nil {
+			evidenceReader = billingInst.PG
+		}
+		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory,
+			eebilling.NewAPIOptionsFactory(evidenceReader))
 		if log != nil {
 			log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
 		}

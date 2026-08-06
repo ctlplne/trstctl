@@ -7,7 +7,7 @@ import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DRPosturePanel } from "@/components/DRPosturePanel";
-import { IdempotencyResultProtectionPanel, TenantKeyDomainPanel } from "@/components/TenantCustodyPanels";
+import { IdempotencyResultProtectionPanel, TenantKeyDomainPanel, UsageEvidencePanel } from "@/components/TenantCustodyPanels";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatCurrency as formatCurrencyPolicy, formatDateTime, formatNumber as formatNumberPolicy, type FormatPolicy } from "@/i18n/format";
@@ -269,6 +269,7 @@ export function AdminSystem() {
       <div className="grid gap-6">
         <TenantKeyDomainPanel canWrite={Boolean(user?.permissions?.includes("keys:write"))} />
         <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
+        <UsageEvidencePanel />
 
         <DRPosturePanel posture={drPosture} error={drError} formatPolicy={formatPolicy} />
 

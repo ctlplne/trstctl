@@ -92,6 +92,18 @@ func (m *MemStore) SetGauge(_ context.Context, tenantID, meter string, period ti
 	return nil
 }
 
+// CoverageFor makes MemStore an EvidenceReader so the evidence route is served
+// even without a database — and always answers NOT DURABLE.
+//
+// The alternative was to leave the route unmounted on an in-memory install,
+// which returns 404: "this feature does not exist" for a deployment that IS
+// metering, just into memory. The operator needs to be told the difference
+// between no metering and metering that cannot be billed from, and only a
+// served document with signable=false and a reason says that.
+func (m *MemStore) CoverageFor(context.Context, string) (Coverage, error) {
+	return Coverage{Durable: false}, nil
+}
+
 func (m *MemStore) Query(_ context.Context, from, to time.Time, tenantID string) ([]UsageRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

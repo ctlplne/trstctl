@@ -671,6 +671,24 @@ export const messages = {
   "platform.idempotency.installed": { defaultMessage: "Installed and validated", description: "Database floor installed status." },
   "platform.idempotency.notInstalled": { defaultMessage: "Not installed", description: "Database floor absent status." },
   "platform.idempotency.recoveryHeading": { defaultMessage: "Recovery", description: "Recovery guidance label." },
+  "platform.usageEvidence.heading": { defaultMessage: "Usage & invoice evidence", description: "L2 invoice-evidence panel heading." },
+  "platform.usageEvidence.description": {
+    defaultMessage:
+      "Metered usage for this tenancy, as the document a provider bills from. Read the billable state before the numbers: a period the metering store could not cover end to end is a partial view, not an invoice.",
+    description: "L2 invoice-evidence panel description.",
+  },
+  "platform.usageEvidence.loading": { defaultMessage: "Loading usage evidence.", description: "L2 evidence loading state." },
+  "platform.usageEvidence.periodStart": { defaultMessage: "Period start", description: "L2 evidence period start field." },
+  "platform.usageEvidence.periodEnd": { defaultMessage: "Period end", description: "L2 evidence period end field." },
+  "platform.usageEvidence.pull": { defaultMessage: "Pull evidence", description: "L2 evidence submit button." },
+  "platform.usageEvidence.billable": { defaultMessage: "Billable", description: "L2 evidence signable badge." },
+  "platform.usageEvidence.notBillable": { defaultMessage: "Not billable", description: "L2 evidence unsignable badge." },
+  "platform.usageEvidence.meter": { defaultMessage: "Meter", description: "L2 evidence table column." },
+  "platform.usageEvidence.kind": { defaultMessage: "Kind", description: "L2 evidence table column." },
+  "platform.usageEvidence.value": { defaultMessage: "Value", description: "L2 evidence table column." },
+  "platform.usageEvidence.noLines": { defaultMessage: "No metered usage in this period.", description: "L2 evidence empty state." },
+  "platform.usageEvidence.digest": { defaultMessage: "Digest", description: "L2 evidence digest label." },
+  "platform.usageEvidence.coverage": { defaultMessage: "Metering covers", description: "L2 evidence coverage window label." },
   "platform.tenantSeal.heading": { defaultMessage: "Tenant cryptographic custody", description: "Tenant key-domain lifecycle panel heading." },
   "platform.tenantSeal.description": {
     defaultMessage:

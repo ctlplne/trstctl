@@ -68,6 +68,30 @@ Provider inherits every Enterprise row below, then adds the Provider rows.
 | `reconcile` | Enterprise | Cross-plane trust reconciliation rounds and evidence machinery. |
 | `vdec` | Enterprise | Verifiable decommissioning dependency-state re-protection and destruction proof machinery. |
 | `provider_plane` | Provider | Managed-provider control plane features. |
-| `metering` | Provider | Provider usage metering. |
+| `metering` | Provider | Provider usage metering, durable per-customer, pullable as invoice evidence (see below). |
 | `white_label` | Provider | Provider branding controls. |
 | `siloed_isolation` | Provider | Provider tenant-silo operating mode. |
+
+### Usage metering and invoice evidence
+
+Metering is durable: usage is recorded in PostgreSQL under the same row-level
+security fence as every other tenant table, so it survives a restart and cannot
+be read across tenancies.
+
+`GET /api/v1/provider/usage-evidence` (CLI: `trstctl usage evidence`, console:
+Platform → Usage & invoice evidence) returns the evidence document for a period.
+Two properties of that document matter more than the totals:
+
+- **It is scoped to the caller's own tenancy.** A `customer_id` naming any other
+  tenant is refused with 403 before the store is touched. A provider pulls a
+  customer's evidence from inside that customer's tenancy.
+- **It says whether it may be billed.** `signable` is false, with a `reason`, for
+  any period the metering store cannot vouch for end to end — an open period,
+  metering that was not durable for the whole window, or coverage that starts
+  after the period does. The totals are still returned, because "your usage is
+  incomplete and here is how" is actionable and an error is not, but they are a
+  partial view rather than an invoice. There is deliberately no way to get the
+  numbers without the verdict attached.
+
+An absent metering store returns 503 rather than a zero-usage document: no
+metering and no usage are different facts.
