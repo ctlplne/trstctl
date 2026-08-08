@@ -35,13 +35,12 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		"a10":       {migrated: true, outstanding: []ParityGate{ParityGateDeviceCSR}},
 		"kemp":      {migrated: true},
 		"netscaler": {migrated: true, outstanding: []ParityGate{ParityGateDeviceCSR}},
-		// F5 has everything those three have and one gate left. Migrating it
-		// without HA-peer sync would make the migrated path WRONG rather than
-		// incomplete: a deploy updates one peer of an HA pair, reports success,
-		// and the other keeps serving the old certificate until a failover
-		// months later surfaces it as expired.
-		"f5": {migrated: false, missing: []ParityGate{ParityGateHAPeerSync},
-			outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// F5 now closes the last gate: HAPair deploys, rolls back, and reads
+		// back BOTH peers, so the migrated path is no longer wrong on an HA
+		// pair. A deploy that reaches only the active node fails rather than
+		// reporting success, and a readback reports the pair serving only when
+		// both peers are bound to the deployed certificate.
+		"f5": {migrated: true, outstanding: []ParityGate{ParityGateDeviceCSR}},
 		// Device-proven and relay-proven, but they cannot be asked what they
 		// hold or told to put back what they held. Migrating them would remove
 		// the control plane's fallback without providing the recovery path that

@@ -102,6 +102,15 @@ type TargetConfig struct {
 	ClientSSLProfile string `json:"client_ssl_profile,omitempty"`
 	FileLocation     string `json:"file_location,omitempty"`
 	SecretName       string `json:"secret_name,omitempty"`
+	// PeerEndpoint names the standby BIG-IP of an F5 HA pair (epic E1). When
+	// set, the relay deploys, rolls back, and reads back BOTH peers, because an
+	// F5 pair keeps its certificate objects in separate stores — updating only
+	// the active node leaves the standby serving the old certificate until a
+	// failover. Empty is a single appliance, unchanged. The peer shares the
+	// pair's synced admin credential; PeerObjectName overrides the crypto
+	// object base name on the peer when it differs.
+	PeerEndpoint   string `json:"peer_endpoint,omitempty"`
+	PeerObjectName string `json:"peer_object_name,omitempty"`
 }
 
 // RelayConnectorKinds is the closed set a relay can execute.
@@ -283,7 +292,22 @@ func buildRelayConnector(name string, target TargetConfig, material Material) (c
 		if target.ObjectName != "" {
 			options = append(options, f5.WithName(target.ObjectName))
 		}
-		return f5.New(target.Endpoint, target.ClientSSLProfile, options...), nil
+		active := f5.New(target.Endpoint, target.ClientSSLProfile, options...)
+		if strings.TrimSpace(target.PeerEndpoint) == "" {
+			return active, nil
+		}
+		// HA pair: the standby shares the synced admin credential (E1). Both
+		// peers must converge, so the relay drives an HAPair over them.
+		peerOptions := []f5.Option{f5.WithBasicAuthBytes(target.Username, password)}
+		peerName := target.ObjectName
+		if target.PeerObjectName != "" {
+			peerName = target.PeerObjectName
+		}
+		if peerName != "" {
+			peerOptions = append(peerOptions, f5.WithName(peerName))
+		}
+		peer := f5.New(target.PeerEndpoint, target.ClientSSLProfile, peerOptions...)
+		return f5.NewHAPair(active, peer), nil
 	case "netscaler":
 		password, err := require(target.PasswordRef, "netscaler password")
 		if err != nil {

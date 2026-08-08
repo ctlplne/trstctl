@@ -224,11 +224,19 @@ func wouldMutate(connectorName string, target TargetConfig) []string {
 		if profile == "" {
 			profile = "the configured client-SSL profile"
 		}
-		return []string{
+		steps := []string{
 			"upload the certificate and key to /mgmt/shared/file-transfer as " + object,
 			"create or replace the sys crypto cert and key objects for " + object,
 			"point client-SSL profile " + profile + " at the new certificate",
 		}
+		if peer := strings.TrimSpace(target.PeerEndpoint); peer != "" {
+			// HA pair (E1): the same three changes happen on the standby too,
+			// because its certificate store does not replicate from the active
+			// node. Naming the peer here is what tells an operator this is a
+			// two-appliance change before they authorize it.
+			steps = append(steps, "repeat all of the above on the HA peer "+peer+" (its certificate store does not sync)")
+		}
+		return steps
 	case "netscaler":
 		location := strings.TrimSpace(target.FileLocation)
 		if location == "" {

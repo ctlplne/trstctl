@@ -111,6 +111,20 @@ var haPairedFamilies = []string{
 	"f5",
 }
 
+// haPeerSyncFamilies are the HA-paired families whose connector deploys to,
+// rolls back, and reads back BOTH peers — closing the split-config-store gap
+// that would otherwise make their migrated path wrong. It is the census that
+// OWNS the "HA-peer sync is built for this family" fact; requiredParityGates
+// adds the gate for haPairedFamilies and this list answers it.
+//
+// f5's HAPair (internal/connector/f5/hapair.go) is a Connector over both peers,
+// exercised end to end in the relay HA proof test. NetScaler and A10 are HA
+// too but their pairs replicate certificate objects, so they are not in
+// haPairedFamilies and need nothing here.
+var haPeerSyncFamilies = []string{
+	"f5",
+}
+
 // deviceCSRCapableFamilies are appliances whose management API can generate a
 // key on the device and return a CSR.
 //
@@ -180,11 +194,22 @@ func deviceCSRCapable(family string) bool {
 	return false
 }
 
+// haPeerSyncBuilt reports whether a family's connector deploys to both HA peers.
+func haPeerSyncBuilt(family string) bool {
+	for _, n := range haPeerSyncFamilies {
+		if n == family {
+			return true
+		}
+	}
+	return false
+}
+
 // gateMet answers one gate from the census that owns it.
 //
-// ParityGateHAPeerSync and ParityGateDeviceCSR have no census because nothing
-// implements them; they answer false, and the day one is built this switch is
-// where the census it grows gets consulted.
+// ParityGateDeviceCSR has no census because nothing implements it; it answers
+// false, and the day it is built this switch is where the census it grows gets
+// consulted. ParityGateHAPeerSync gained exactly such a census (haPeerSyncFamilies)
+// when F5's HAPair was built.
 func gateMet(family string, gate ParityGate) bool {
 	switch gate {
 	case ParityGateDeviceProof:
@@ -215,7 +240,12 @@ func gateMet(family string, gate ParityGate) bool {
 		// that predates E1 and is not a defect — E1's claim is that a relay,
 		// where you run one, is the executor and not merely a candidate.
 		return IsRelayVantageFamily(family)
-	case ParityGateHAPeerSync, ParityGateDeviceCSR:
+	case ParityGateHAPeerSync:
+		// Met for families whose connector reaches BOTH HA peers, enforced by
+		// the relay HA proof test: it drives a deploy to two device doubles and
+		// fails if either is left behind, so this cannot drift into a claim.
+		return haPeerSyncBuilt(family)
+	case ParityGateDeviceCSR:
 		return false
 	default:
 		// An unknown gate is not met. Failing closed here means adding a gate

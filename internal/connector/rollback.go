@@ -189,7 +189,14 @@ func RunRollback(ctx context.Context, c Connector, ops Ops, rb Rollback) (Stats,
 //
 // Returns the PREFIX, not a full fingerprint — the name only ever carried a
 // prefix. Callers compare with strings.HasPrefix, and ClassifyReadback does.
+//
+// A deployed object often carries a file extension: the F5 deploy binds the
+// profile to <base>-<fp>.crt, so a readback reading that back must strip the
+// extension before the fingerprint is visible. A 12-hex-char fingerprint can
+// never itself end in ".crt"/".key" (those letters are not hex), so stripping a
+// known extension cannot swallow a real fingerprint.
 func FingerprintFromObjectName(name string) string {
+	name = strings.TrimSuffix(strings.TrimSuffix(name, ".crt"), ".key")
 	idx := strings.LastIndex(name, "-")
 	if idx < 0 || idx+1 >= len(name) {
 		return ""

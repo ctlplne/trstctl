@@ -85,10 +85,15 @@ var supportMatrix = []SupportRow{
 		ProvenOperations: []string{
 			"deploy: upload, crypto-install, and bind to a Client SSL profile",
 			"rollback: re-bind the profile to a previously installed crypto object",
+			"readback: report the certificate the Client SSL profile is bound to",
+			"HA-peer sync: deploy, rollback, and readback reach BOTH peers when a peer " +
+				"endpoint is configured — a pair whose certificate stores do not replicate " +
+				"is treated as one target, and a readback reports serving only when both " +
+				"peers are bound to the deployed certificate",
 		},
 		KnownLimits: []string{
-			"HA peer synchronisation is not performed; a deploy targets one management address " +
-				"and does not push to a peer",
+			"the HA peer shares the pair's synced admin credential; a pair with per-peer " +
+				"credentials is not modelled",
 			"partition (folder) routing is not modelled beyond the default",
 		},
 	},

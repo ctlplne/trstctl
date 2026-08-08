@@ -507,7 +507,7 @@ never live in the API process. What you can do end to end against the running bi
   are ranked worst-first; an authority that has never been collected from does not
   appear in the table at all, which is why `configured` is a field rather than
   something a reader is left to infer from an empty list.
-  Relay migration parity (E1, PARTIAL — 3 of 7 families migrated): the connector
+  Relay migration parity (E1, PARTIAL — 4 of 7 families migrated): the connector
   catalog and Connectors console publish a per-family gate table for the seven
   appliance families, and the control plane now REFUSES a migrated family's deploy
   when the tenant has a network relay enrolled. Before this, the A3 role stamp
@@ -526,15 +526,21 @@ never live in the API process. What you can do end to end against the running bi
   do its work behind its back. An estate with no relay deploys exactly as it did
   before. A failed relay-presence lookup DEFERS rather than falling through, because
   falling through is the direction that silently removes the guarantee.
-  Migrated today: a10, kemp, netscaler — device proof, rollback, readback, a
+  Migrated today: a10, kemp, netscaler, f5 — device proof, rollback, readback, a
   published support row, a relay deploy proven byte-for-byte against the device
-  double, and the refusal above. NOT migrated, with the reason named per family in
-  the console: f5 needs HA-peer sync, because a deploy that updates one peer of an
-  HA pair reports success while the other serves the old certificate until a
-  failover months later surfaces it as expired — migrating it would make the
-  migrated path WRONG rather than incomplete; cisco, fortigate and paloalto have no
-  rollback and no readback, so migrating them would remove the control plane's
-  fallback without providing the recovery path that justifies removing it.
+  double, and the refusal above. F5 closes the last gate it needed: an F5 HA pair
+  keeps its certificate objects in separate stores, so a deploy that reached only
+  the active node reported success while the standby served the old certificate
+  until a failover surfaced it as expired. The relay now drives an `HAPair` over
+  both peers when a peer endpoint is configured — a deploy must reach BOTH or it
+  fails, a rollback re-binds both, and a readback reports the pair serving only
+  when both peers are bound to the deployed certificate; the two-peer deploy is
+  proven end-to-end through `relay.Execute` against two device doubles. NOT
+  migrated, with the reason named per family in the console: cisco, fortigate and
+  paloalto have no rollback and no readback — their management APIs import a
+  certificate by name with no separately-addressable installed object to re-bind
+  or query — so migrating them would remove the control plane's fallback without
+  providing the recovery path that justifies removing it.
   Device-generated CSR is reported as outstanding rather than blocking on the five
   families whose APIs support it: the current mode — the relay generates the key
   inside the segment and installs it — is correct as it stands, and holding four

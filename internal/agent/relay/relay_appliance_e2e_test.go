@@ -276,3 +276,54 @@ func TestARelayDeployWithoutItsRedeemedCredentialNeverReachesTheDevice(t *testin
 			certificates, bindings)
 	}
 }
+
+// F5 HA-peer sync through the relay (epic E1): a deploy with a peer endpoint
+// configured must reach BOTH BIG-IPs. An F5 pair keeps certificate objects in
+// separate stores, so a relay that updated only the active node would report
+// success while the standby served the old certificate until a failover. This
+// drives relay.Execute against two device doubles and confirms both hold the
+// deployed certificate.
+func TestARelayF5DeployReachesBothHAPeers(t *testing.T) {
+	certPEM := []byte(testCertPEM)
+	const (
+		user = "svc-trstctl"
+		pass = "appliance-secret"
+	)
+	active := f5test.New(user, pass)
+	t.Cleanup(active.Close)
+	standby := f5test.New(user, pass)
+	t.Cleanup(standby.Close)
+
+	cfg, err := json.Marshal(relay.TargetConfig{ // #nosec G101 -- credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798)
+		Endpoint:         active.URL(),
+		PeerEndpoint:     standby.URL(),
+		Username:         user,
+		PasswordRef:      "credential.f5_password",
+		ClientSSLProfile: "clientssl-app",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := connector.CertificateFingerprint(certPEM)
+	if _, err := relay.Execute(context.Background(), active.Client(), relay.DeployIntent{
+		Connector:    "f5",
+		Target:       "app",
+		Fingerprint:  fingerprint,
+		TargetConfig: cfg,
+	}, relay.Material{
+		"credential.f5_password": []byte(pass),
+		"credential.cert_pem":    certPEM,
+		"credential.key_pem":     []byte(testKeyPEM),
+	}); err != nil {
+		t.Fatalf("relay HA deploy: %v", err)
+	}
+
+	base := connector.DeployedObjectName("clientssl-app", fingerprint)
+	for name, srv := range map[string]*f5test.Server{"active": active, "standby": standby} {
+		got, ok := srv.Uploaded(base + ".crt")
+		if !ok || !bytes.Equal(got, certPEM) {
+			t.Fatalf("%s BIG-IP does not hold the deployed certificate at %s.crt (ok=%v); a relay HA "+
+				"deploy that skips a peer is the defect this gate closes", name, base, ok)
+		}
+	}
+}
