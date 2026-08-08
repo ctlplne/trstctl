@@ -324,6 +324,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"issuance-requests", "list"}, Method: "GET", Path: "/api/v1/issuance-requests", Summary: "List issuance requests, including the denied and expired ones an audit needs"},
 	{Name: []string{"issuance-requests", "approve"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/approve", Summary: "Approve a request; the requester can never approve their own"},
 	{Name: []string{"issuance-requests", "deny"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/deny", Body: bodyFile, Summary: "Deny a request with a reason the requester can act on"},
+	{Name: []string{"issuance-requests", "intake-schedule", "set"}, Method: "PUT", Path: "/api/v1/issuance-requests/intake-schedule", Body: bodyFile, Summary: "Configure ITSM ticket intake: tickets become issuance requests, idempotently by ticket reference"},
+	{Name: []string{"issuance-requests", "intake-schedule", "show"}, Method: "GET", Path: "/api/v1/issuance-requests/intake-schedule", Summary: "Show the configured ticket intake with its last outcome"},
 	{Name: []string{"issuance-requests", "cancel"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/cancel", Summary: "Withdraw your own request; only the requester may"},
 	{Name: []string{"mdm", "devices"}, Method: "GET", Path: "/api/v1/mdm/devices", Summary: "List MDM devices correlated to SCEP transactions (read-only)"},
 	{Name: []string{"mdm", "trace"}, Method: "GET", Path: "/api/v1/mdm/{mdm}/devices/{id}/trace", Summary: "Show which step a device's certificate enrollment broke at"},

@@ -46,6 +46,9 @@ const (
 	// overwrote.
 	EventIssuanceRequestOpened  = "issuance.request.opened"
 	EventIssuanceRequestDecided = "issuance.request.decided"
+	// I3: a tenant's standing instruction to read its ITSM for
+	// certificate-request tickets.
+	EventTicketIntakeConfigured = "ticket.intake.configured"
 	// I5: one MDM device record joined to one SCEP transaction.
 	EventMDMDeviceCorrelated = "mdm.device.correlated"
 	// I5: a tenant's standing instruction to re-read an MDM.
@@ -346,6 +349,24 @@ type IssuanceRequestOpened struct {
 	Origin        string    `json:"origin,omitempty"`
 	TicketRef     string    `json:"ticket_ref,omitempty"`
 	ExpiresAt     time.Time `json:"expires_at"`
+}
+
+// TicketIntakeConfigured is the payload of ticket.intake.configured (I3).
+// TokenRef is a REFERENCE, never a token value.
+type TicketIntakeConfigured struct {
+	System             string   `json:"system"`
+	InstanceURL        string   `json:"instance_url"`
+	TokenRef           string   `json:"token_ref"`
+	SNTable            string   `json:"sn_table"`
+	Query              string   `json:"query,omitempty"`
+	SubjectField       string   `json:"subject_field"`
+	ProfileField       string   `json:"profile_field"`
+	RequesterField     string   `json:"requester_field,omitempty"`
+	JustificationField string   `json:"justification_field,omitempty"`
+	IntervalSeconds    int      `json:"interval_seconds"`
+	Enabled            bool     `json:"enabled"`
+	AllowPrivate       bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateCIDRs       []string `json:"private_egress_cidrs,omitempty"`
 }
 
 // IssuanceRequestDecided is the payload of an issuance.request.decided event.
@@ -1909,6 +1930,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCMDBScheduleConfigured:                   {1: true},
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
+	EventTicketIntakeConfigured:                   {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
 	EventMDMPollConfigured:                        {1: true},
 	EventOwnershipConflictResolved:                {1: true},
@@ -2171,6 +2193,19 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		return p.store.ApplyOwnershipConflictResolvedTx(ctx, tx, e.TenantID, pl.ID, pl.ResolvedBy, pl.Resolution, pl.ResolvedAt)
+	case EventTicketIntakeConfigured:
+		var pl TicketIntakeConfigured
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyTicketIntakeConfiguredTx(ctx, tx, e.TenantID, store.TicketIntakeSchedule{
+			System: pl.System, InstanceURL: pl.InstanceURL, TokenRef: pl.TokenRef,
+			SNTable: pl.SNTable, Query: pl.Query,
+			SubjectField: pl.SubjectField, ProfileField: pl.ProfileField,
+			RequesterField: pl.RequesterField, JustificationField: pl.JustificationField,
+			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
+			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
+		})
 	case EventMDMPollConfigured:
 		var pl MDMPollConfigured
 		if err := decode(e, &pl); err != nil {

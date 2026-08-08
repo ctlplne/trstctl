@@ -1098,6 +1098,10 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// and the console panel all exist while the table they read is
 			// written by nothing, which is precisely the audit's defect class.
 			startRuntimeWorker(workCtx, srv.RunMDMPoller),
+			// I3: the ITSM ticket intake — "ticket-driven" is the epic's own
+			// wording, and without this line a configured intake would sit in
+			// its table while requesters re-typed tickets into the console.
+			startRuntimeWorker(workCtx, srv.RunTicketIntake),
 			// I3: without this line a request that nobody decided would sit in
 			// the queue forever, and the queue's size would stop meaning
 			// anything — the exact reason the expired state exists.

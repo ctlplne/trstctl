@@ -107,3 +107,14 @@ func (o *Orchestrator) DecideIssuanceRequest(ctx context.Context, tenantID, id, 
 	}
 	return current, nil
 }
+
+// ConfigureTicketIntake records the standing instruction to read the ITSM for
+// certificate-request tickets (I3). TokenRef is a reference, never a value.
+func (o *Orchestrator) ConfigureTicketIntake(ctx context.Context, tenantID string, in projections.TicketIntakeConfigured) error {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventTicketIntakeConfigured, tenantID, payload)
+	return err
+}

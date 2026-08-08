@@ -2235,6 +2235,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issuance-requests/intake-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The configured ticket intake with its last outcome */
+        get: operations["getTicketIntakeSchedule"];
+        /** Configure ITSM ticket intake: tickets become issuance requests, idempotently by ticket reference */
+        put: operations["putTicketIntakeSchedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuance-requests/{id}/approve": {
         parameters: {
             query?: never;
@@ -10137,6 +10155,44 @@ export interface components {
             source_id: string;
             status: string;
         };
+        TicketIntakeInput: {
+            allow_private_endpoint?: boolean;
+            enabled?: boolean;
+            instance_url: string;
+            interval_seconds: number;
+            justification_field?: string;
+            private_egress_cidrs?: string[];
+            profile_field: string;
+            query?: string;
+            requester_field?: string;
+            /** @enum {string} */
+            sn_table: "incident" | "sc_req_item" | "sc_request" | "change_request";
+            subject_field: string;
+            /** @enum {string} */
+            system: "servicenow";
+            token_ref: string;
+        };
+        TicketIntakeSchedule: {
+            allow_private_endpoint?: boolean;
+            configured: boolean;
+            enabled: boolean;
+            guidance: string;
+            instance_url?: string;
+            interval_seconds?: number;
+            justification_field?: string;
+            last_error?: string;
+            last_run_at?: string;
+            private_egress_cidrs?: string[];
+            profile_field?: string;
+            query?: string;
+            requester_field?: string;
+            /** @enum {string} */
+            sn_table?: "incident" | "sc_req_item" | "sc_request" | "change_request";
+            subject_field?: string;
+            /** @enum {string} */
+            system?: "servicenow";
+            token_ref?: string;
+        };
         TransitCiphertext: {
             ciphertext: string;
             version: number;
@@ -16859,6 +16915,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssuanceRequest"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getTicketIntakeSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketIntakeSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    putTicketIntakeSchedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketIntakeInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketIntakeSchedule"];
                 };
             };
             /** @description client error */

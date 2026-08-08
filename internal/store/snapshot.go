@@ -49,6 +49,7 @@ import (
 // "nothing is wrong".
 // Bumped to 14 when the I5 MDM poll schedule joined the read model and the
 // snapshot set together — the pairing the class-closing test now enforces.
+// Bumped to 15 when the I3 ticket intake schedule did the same.
 // Bumped to 13 when EIGHT tables that were truncated by restore but never
 // reloaded joined the snapshot set: tenant_members, ca_authorities,
 // agent_cert_revocations, and the I2/I3/I5/A5 projections. A v12 snapshot's
@@ -56,7 +57,7 @@ import (
 // the covered offset skipped their history. The class is now closed by
 // TestEveryTruncatedReadModelTableIsRestoredBySnapshots rather than by
 // remembering to update two lists.
-const SnapshotFormatVersion = 14
+const SnapshotFormatVersion = 15
 
 // snapshotTables are the read-model tables captured in a per-tenant snapshot, in
 // dependency order (parents before children) so a restore's inserts never trip a
@@ -85,7 +86,9 @@ var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme
 	// Format 14: the I5 poll schedule joined ReadModelTables, so it must join
 	// the snapshot set in the same change — the class test enforces exactly
 	// this pairing now.
-	"mdm_poll_schedules"}
+	"mdm_poll_schedules",
+	// Format 15: the I3 ticket intake, same pairing.
+	"ticket_intake_schedules"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -192,7 +195,8 @@ SELECT jsonb_build_object(
   'mdm_device_correlations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_device_correlations t),
   'agent_upgrade_campaigns', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_upgrade_campaigns t),
   'agent_upgrade_dispatches', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_upgrade_dispatches t),
-  'mdm_poll_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_poll_schedules t)
+  'mdm_poll_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_poll_schedules t),
+  'ticket_intake_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ticket_intake_schedules t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL).Scan(&payload); err != nil {

@@ -537,6 +537,8 @@ public final class OpenApiSchemas {
       "ThirdPartySecretScanPosture",
       "ThirdPartySecretScanProvider",
       "ThirdPartySecretScanReceipt",
+      "TicketIntakeInput",
+      "TicketIntakeSchedule",
       "TransitCiphertext",
       "TransitDecryptRequest",
       "TransitEncryptRequest",

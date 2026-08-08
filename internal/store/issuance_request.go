@@ -142,3 +142,141 @@ func (s *Store) DueIssuanceRequests(ctx context.Context, tenantID string, now ti
 // ErrIssuanceRequestNotFound is returned when a decision names a request that
 // does not exist in the caller's tenant.
 var ErrIssuanceRequestNotFound = errors.New("store: issuance request not found")
+
+// TicketIntakeSchedule is a tenant's standing instruction to read its ITSM for
+// certificate-request tickets (I3).
+type TicketIntakeSchedule struct {
+	TenantID    string
+	System      string
+	InstanceURL string
+	TokenRef    string
+	// SNTable is bounded by the schema CHECK to the request-shaped tables.
+	SNTable string
+	Query   string
+	// The field mapping is explicit, never inferred. A ticket missing the
+	// mapped subject or profile is skipped and counted, not guessed at.
+	SubjectField         string
+	ProfileField         string
+	RequesterField       string
+	JustificationField   string
+	IntervalSeconds      int
+	Enabled              bool
+	AllowPrivateEndpoint bool
+	PrivateEgressCIDRs   []string
+	LastRunAt            *time.Time
+	LastError            string
+}
+
+const ticketIntakeCols = `tenant_id::text, system, instance_url, token_ref, sn_table, query,
+	subject_field, profile_field, requester_field, justification_field,
+	interval_seconds, enabled, allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
+	last_run_at, last_error`
+
+func scanTicketIntake(row pgx.Row) (TicketIntakeSchedule, error) {
+	var s TicketIntakeSchedule
+	err := row.Scan(&s.TenantID, &s.System, &s.InstanceURL, &s.TokenRef, &s.SNTable, &s.Query,
+		&s.SubjectField, &s.ProfileField, &s.RequesterField, &s.JustificationField,
+		&s.IntervalSeconds, &s.Enabled, &s.AllowPrivateEndpoint, &s.PrivateEgressCIDRs,
+		&s.LastRunAt, &s.LastError)
+	return s, err
+}
+
+// GetTicketIntakeSchedule returns the tenant's intake schedule for one system.
+func (s *Store) GetTicketIntakeSchedule(ctx context.Context, tenantID, system string) (TicketIntakeSchedule, bool, error) {
+	var out TicketIntakeSchedule
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		sched, err := scanTicketIntake(tx.QueryRow(ctx,
+			`SELECT `+ticketIntakeCols+` FROM ticket_intake_schedules
+			  WHERE tenant_id = $1 AND system = $2`, tenantID, system))
+		switch {
+		case err == nil:
+			out, found = sched, true
+			return nil
+		case err.Error() == pgx.ErrNoRows.Error():
+			return nil
+		default:
+			return err
+		}
+	})
+	return out, found, err
+}
+
+// TenantsWithEnabledTicketIntake enumerates tenants for the leader ticker.
+func (s *Store) TenantsWithEnabledTicketIntake(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants have an enabled ticket intake so the leader-only scheduler can sweep each tenant under its own RLS context (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM ticket_intake_schedules WHERE enabled ORDER BY tenant_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// TicketIntakeDue reports whether the tenant's schedule is due at now.
+func (s *Store) TicketIntakeDue(ctx context.Context, tenantID string, now time.Time) (TicketIntakeSchedule, bool, error) {
+	sched, found, err := s.GetTicketIntakeSchedule(ctx, tenantID, "servicenow")
+	if err != nil || !found || !sched.Enabled || sched.IntervalSeconds <= 0 {
+		return TicketIntakeSchedule{}, false, err
+	}
+	if sched.LastRunAt != nil && now.Sub(*sched.LastRunAt) < time.Duration(sched.IntervalSeconds)*time.Second {
+		return TicketIntakeSchedule{}, false, nil
+	}
+	return sched, true, nil
+}
+
+// MarkTicketIntakeRun stamps the attempt.
+func (s *Store) MarkTicketIntakeRun(ctx context.Context, tenantID, system string, at time.Time, runErr string) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`UPDATE ticket_intake_schedules SET last_run_at = $3, last_error = $4, updated_at = now()
+			  WHERE tenant_id = $1 AND system = $2`, tenantID, system, at.UTC(), runErr)
+		return err
+	})
+}
+
+// ApplyTicketIntakeConfiguredTx projects ticket.intake.configured (I3).
+func (s *Store) ApplyTicketIntakeConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in TicketIntakeSchedule) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO ticket_intake_schedules
+		   (tenant_id, system, instance_url, token_ref, sn_table, query,
+		    subject_field, profile_field, requester_field, justification_field,
+		    interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		 ON CONFLICT (tenant_id, system) DO UPDATE SET
+		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref,
+		   sn_table = EXCLUDED.sn_table, query = EXCLUDED.query,
+		   subject_field = EXCLUDED.subject_field, profile_field = EXCLUDED.profile_field,
+		   requester_field = EXCLUDED.requester_field, justification_field = EXCLUDED.justification_field,
+		   interval_seconds = EXCLUDED.interval_seconds, enabled = EXCLUDED.enabled,
+		   allow_private_endpoint = EXCLUDED.allow_private_endpoint,
+		   private_egress_cidrs = EXCLUDED.private_egress_cidrs, updated_at = now()`,
+		tenantID, in.System, in.InstanceURL, in.TokenRef, in.SNTable, in.Query,
+		in.SubjectField, in.ProfileField, in.RequesterField, in.JustificationField,
+		in.IntervalSeconds, in.Enabled, in.AllowPrivateEndpoint, in.PrivateEgressCIDRs)
+	return err
+}
+
+// IssuanceRequestExistsForTicket reports whether a request already carries this
+// ticket reference — the intake's idempotency: one ticket, one request, however
+// many polls see it. Closed or expired requests still count; a ticket whose
+// request was denied must not silently reopen on the next sweep, because the
+// denial WAS the answer to that ticket.
+func (s *Store) IssuanceRequestExistsForTicket(ctx context.Context, tenantID, ticketRef string) (bool, error) {
+	var exists bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM issuance_requests WHERE tenant_id = $1 AND ticket_ref = $2)`,
+			tenantID, ticketRef).Scan(&exists)
+	})
+	return exists, err
+}

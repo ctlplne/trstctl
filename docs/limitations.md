@@ -1879,12 +1879,45 @@ looking for a credential that was never there.
   agreement with the gate guarding direct issuance. Requests default to a 7-day
   expiry; the list surface serves closed rows too and counts open separately,
   because one total cannot say whether a queue needs attention or is merely long
-  with history. Scope, stated exactly: TICKET-DRIVEN INTAKE is a recorded
-  `origin`/`ticket_ref` on a request the caller opens — trstctl does not poll
-  ServiceNow or Jira for new tickets, so a ticket does not yet open a request by
-  itself; the published GITHUB ACTION is not built; and approving a request does
-  not itself mint — `issued` is set by the caller that performs the issuance and
-  links the identity, so an approved request is outstanding work until then.
+  with history. TICKET-DRIVEN INTAKE is now real: `PUT/GET
+  /api/v1/issuance-requests/intake-schedule` (`trstctl issuance-requests
+  intake-schedule set|show`) configures a per-tenant ServiceNow read — a
+  leader-only ticker polls one of the four request-shaped tables (`incident`,
+  `sc_req_item`, `sc_request`, `change_request`; the closed set is a schema
+  CHECK, because an unbounded table name would aim the intake token at records
+  that are not tickets) and opens one issuance request per ticket,
+  IDEMPOTENTLY by ticket reference: a re-seen ticket opens nothing, and a
+  DENIED request does not reopen — the denial was the answer to that ticket,
+  and a fresh ask needs a fresh ticket. The field mapping is explicit
+  (`subject_field`, `profile_field`, optional requester/justification); a
+  ticket missing the mapped subject or profile is SKIPPED AND COUNTED, never
+  guessed at, because an intake that opened requests from prose would fill the
+  approval queue with noise. Requests opened here carry `origin=servicenow`
+  and the exact ticket reference, and the existing lifecycle — separation of
+  duties, denial with a reason, expiry (7 days for intake-opened requests) —
+  decides them unchanged. The GITHUB ACTION is published in-repo at
+  `clients/github-action` (composite, `action.yml` + README with the sample
+  workflow): the workflow's ambient OIDC token is fetched with the requested
+  audience, an EC key is generated INSIDE the runner (only the public half
+  travels), and `POST /api/v1/workloads/attested-issuance` with
+  `method=github_oidc` returns the certificate — idempotent per run attempt.
+  The flow is CI-proven against the served binary
+  (`TestServedGitHubActionFlowIssuesAndRefusesForeignOwners`): the exact
+  request shape the action sends issues for the pinned owner and a FORK's
+  token — valid signature, right audience, wrong `repository_owner` — is
+  refused, which is the property that makes the action safe in public
+  repositories; a contract guard pins `action.yml` to the served route and
+  field names so the two cannot drift apart silently. Scope, stated exactly:
+  JIRA INTAKE IS NOT BUILT and the config refuses `system: jira` by name
+  rather than accepting a poll that never runs; the intake reads one page
+  (100 tickets) per sweep; the action requires an API token scoped to
+  `certs:issue` alongside the OIDC attestation (the token authorizes nothing
+  but issuance — that is the point); marketplace publication is a push-time
+  act this unpushed repository cannot perform, so "published" means the
+  in-repo action a workflow references by path; and approving a request does
+  not itself mint — `issued` is set by the caller that performs the issuance
+  and links the identity, so an approved request is outstanding work until
+  then.
 - Attested issuance is reachable (AUD-10, I3 prerequisite): `attested_issuance`
   in the config file turns on `POST /api/v1/workloads/attested-issuance` and
   `POST /api/v1/ssh/attested-user-certs`. Before this there was NO config key at

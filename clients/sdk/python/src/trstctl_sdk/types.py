@@ -7231,6 +7231,50 @@ ThirdPartySecretScanReceipt = TypedDict(
     total=False,
 )
 
+TicketIntakeInput = TypedDict(
+    'TicketIntakeInput',
+    {
+        'allow_private_endpoint': bool,
+        'enabled': bool,
+        'instance_url': str,
+        'interval_seconds': int,
+        'justification_field': str,
+        'private_egress_cidrs': list[str],
+        'profile_field': str,
+        'query': str,
+        'requester_field': str,
+        'sn_table': str,
+        'subject_field': str,
+        'system': str,
+        'token_ref': str,
+    },
+    total=False,
+)
+
+TicketIntakeSchedule = TypedDict(
+    'TicketIntakeSchedule',
+    {
+        'allow_private_endpoint': bool,
+        'configured': bool,
+        'enabled': bool,
+        'guidance': str,
+        'instance_url': str,
+        'interval_seconds': int,
+        'justification_field': str,
+        'last_error': str,
+        'last_run_at': str,
+        'private_egress_cidrs': list[str],
+        'profile_field': str,
+        'query': str,
+        'requester_field': str,
+        'sn_table': str,
+        'subject_field': str,
+        'system': str,
+        'token_ref': str,
+    },
+    total=False,
+)
+
 TransitCiphertext = TypedDict(
     'TransitCiphertext',
     {

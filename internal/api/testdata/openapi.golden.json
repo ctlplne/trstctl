@@ -19927,6 +19927,144 @@
         ],
         "type": "object"
       },
+      "TicketIntakeInput": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "instance_url": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "justification_field": {
+            "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "profile_field": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "requester_field": {
+            "type": "string"
+          },
+          "sn_table": {
+            "enum": [
+              "incident",
+              "sc_req_item",
+              "sc_request",
+              "change_request"
+            ],
+            "type": "string"
+          },
+          "subject_field": {
+            "type": "string"
+          },
+          "system": {
+            "enum": [
+              "servicenow"
+            ],
+            "type": "string"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "system",
+          "instance_url",
+          "token_ref",
+          "sn_table",
+          "subject_field",
+          "profile_field",
+          "interval_seconds"
+        ],
+        "type": "object"
+      },
+      "TicketIntakeSchedule": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "instance_url": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "justification_field": {
+            "type": "string"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "last_run_at": {
+            "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "profile_field": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "requester_field": {
+            "type": "string"
+          },
+          "sn_table": {
+            "enum": [
+              "incident",
+              "sc_req_item",
+              "sc_request",
+              "change_request"
+            ],
+            "type": "string"
+          },
+          "subject_field": {
+            "type": "string"
+          },
+          "system": {
+            "enum": [
+              "servicenow"
+            ],
+            "type": "string"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured",
+          "enabled",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "TransitCiphertext": {
         "properties": {
           "ciphertext": {
@@ -30426,6 +30564,119 @@
         ],
         "summary": "Open a first-class issuance request with a real lifecycle",
         "x-trstctl-permission": "certs:request"
+      }
+    },
+    "/api/v1/issuance-requests/intake-schedule": {
+      "get": {
+        "operationId": "getTicketIntakeSchedule",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketIntakeSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "The configured ticket intake with its last outcome",
+        "x-trstctl-permission": "certs:read"
+      },
+      "put": {
+        "operationId": "putTicketIntakeSchedule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketIntakeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketIntakeSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Configure ITSM ticket intake: tickets become issuance requests, idempotently by ticket reference",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/issuance-requests/{id}/approve": {

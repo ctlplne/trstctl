@@ -124,8 +124,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// I2 conflict resolution raised it to 333: the queue was read-only until now.
 	// I5's two poll-schedule operations raised it to 335: the correlation
 	// surface gained its producer.
-	if len(out) != 335 {
-		t.Fatalf("OpenAPI operationIds = %d, want 335", len(out))
+	// I3's two intake-schedule operations raised it to 337: tickets became a
+	// first-class request origin.
+	if len(out) != 337 {
+		t.Fatalf("OpenAPI operationIds = %d, want 337", len(out))
 	}
 	return out
 }

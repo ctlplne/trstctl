@@ -41,11 +41,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1082 annotated sites across 25 rules. Each row is
+1083 annotated sites across 25 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (245 sites)
+### G101 — CWE-798 Use of hardcoded credentials (246 sites)
 
 | Location | Reason |
 |---|---|
@@ -283,6 +283,7 @@ not this file.
 | `internal/server/secrets_sync_served_test.go:397` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:407` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:416` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/ticket_intake_served_test.go:21` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:28` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:149` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:150` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -411,10 +412,10 @@ not this file.
 | `internal/store/pam.go:73` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:464` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:519` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:638` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:640` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:78` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:93` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/snapshot.go:211` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:215` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:27` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:49` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:67` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -949,7 +950,7 @@ not this file.
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/run.go:959` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1337` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1341` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/server.go:1844` | operator-configured local file path from deployment config (CWE-22) |

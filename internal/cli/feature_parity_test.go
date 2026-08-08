@@ -166,8 +166,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// with the rest of the managed-offering surface.
 	// I5's two `mdm poll-schedule` commands raised it to 346, on the same
 	// certificates row as the rest of the MDM correlation surface.
-	if len(out) != 346 {
-		t.Fatalf("CLI commands = %d, want 346", len(out))
+	// I3's two `issuance-requests intake-schedule` commands raised it to 348.
+	if len(out) != 348 {
+		t.Fatalf("CLI commands = %d, want 348", len(out))
 	}
 	return out
 }

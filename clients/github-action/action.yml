@@ -1,0 +1,97 @@
+# trstctl attested issuance for GitHub Actions (epic I3).
+#
+# The workflow proves WHO IT IS with its ambient GitHub OIDC token; trstctl's
+# github_oidc attestor verifies the token against GitHub's JWKS (issuer,
+# audience, expiry, and — when configured — the allowed repository owners) and
+# only then signs. The pipeline never holds a CA credential: the API token it
+# carries is scoped to certs:issue, and the OIDC attestation is what says
+# WHICH workflow, repository and ref asked.
+#
+# The private key is generated INSIDE the runner and never leaves it. Only the
+# public key travels; the certificate comes back.
+name: "trstctl attested issuance"
+description: >-
+  Issue a short-lived X.509 certificate from trstctl using this workflow's
+  GitHub OIDC identity. The private key never leaves the runner.
+branding:
+  icon: "lock"
+  color: "blue"
+inputs:
+  url:
+    description: "trstctl base URL, e.g. https://trstctl.example.com"
+    required: true
+  token:
+    description: "trstctl API token scoped to certs:issue (store it as a repository secret)"
+    required: true
+  audience:
+    description: "OIDC audience; must match the attestation source's configured audience"
+    required: false
+    default: "trstctl"
+  ttl-seconds:
+    description: "requested certificate lifetime in seconds"
+    required: false
+    default: "3600"
+  out-dir:
+    description: "directory to write key.pem and certificate.pem into"
+    required: false
+    default: "trstctl-credentials"
+outputs:
+  certificate:
+    description: "path of the issued certificate PEM"
+    value: ${{ steps.issue.outputs.certificate }}
+  key:
+    description: "path of the private key PEM (never left the runner)"
+    value: ${{ steps.issue.outputs.key }}
+runs:
+  using: "composite"
+  steps:
+    - id: issue
+      shell: bash
+      env:
+        TRSTCTL_URL: ${{ inputs.url }}
+        TRSTCTL_TOKEN: ${{ inputs.token }}
+        TRSTCTL_AUDIENCE: ${{ inputs.audience }}
+        TRSTCTL_TTL_SECONDS: ${{ inputs.ttl-seconds }}
+        TRSTCTL_OUT_DIR: ${{ inputs.out-dir }}
+      run: |
+        set -euo pipefail
+        # The id-token: write permission is what makes the two request
+        # variables exist. Failing here with the fix beats a 401 later.
+        if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+          echo "::error::no OIDC token available: add 'permissions: id-token: write' to the job" >&2
+          exit 1
+        fi
+        mkdir -p "$TRSTCTL_OUT_DIR"
+        umask 077
+
+        # Key stays here. Only the public half travels.
+        openssl ecparam -name prime256v1 -genkey -noout -out "$TRSTCTL_OUT_DIR/key.pem"
+        openssl ec -in "$TRSTCTL_OUT_DIR/key.pem" -pubout -out "$TRSTCTL_OUT_DIR/public.pem"
+
+        OIDC_JWT="$(curl --fail --silent --show-error \
+          -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${TRSTCTL_AUDIENCE}" | jq -r '.value')"
+
+        PAYLOAD_B64="$(printf '%s' "$OIDC_JWT" | base64 | tr -d '\n')"
+        PUBKEY_JSON="$(jq -Rs '.' < "$TRSTCTL_OUT_DIR/public.pem")"
+
+        HTTP_CODE="$(jq -n \
+            --arg method "github_oidc" \
+            --arg payload "$PAYLOAD_B64" \
+            --argjson pubkey "$PUBKEY_JSON" \
+            --argjson ttl "$TRSTCTL_TTL_SECONDS" \
+            '{method: $method, payload_base64: $payload, public_key_pem: $pubkey, ttl_seconds: $ttl}' \
+          | curl --silent --show-error --output "$TRSTCTL_OUT_DIR/response.json" --write-out '%{http_code}' \
+            -X POST "${TRSTCTL_URL%/}/api/v1/workloads/attested-issuance" \
+            -H "Authorization: Bearer ${TRSTCTL_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -H "Idempotency-Key: gha-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}" \
+            --data-binary @-)"
+        if [ "$HTTP_CODE" != "201" ]; then
+          echo "::error::attested issuance failed with HTTP $HTTP_CODE: $(cat "$TRSTCTL_OUT_DIR/response.json")" >&2
+          exit 1
+        fi
+        jq -r '.certificate_pem' "$TRSTCTL_OUT_DIR/response.json" > "$TRSTCTL_OUT_DIR/certificate.pem"
+        rm -f "$TRSTCTL_OUT_DIR/response.json" "$TRSTCTL_OUT_DIR/public.pem"
+        echo "certificate=$TRSTCTL_OUT_DIR/certificate.pem" >> "$GITHUB_OUTPUT"
+        echo "key=$TRSTCTL_OUT_DIR/key.pem" >> "$GITHUB_OUTPUT"

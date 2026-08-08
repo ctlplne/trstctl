@@ -544,6 +544,8 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	// rebuild loses the poll's last_run_at/last_error (scheduler observations),
 	// costing one extra poll within a minute — same trade as the CMDB schedule.
 	"mdm_device_correlations", "mdm_poll_schedules",
+	// I3: projected from ticket.intake.configured, same trade again.
+	"ticket_intake_schedules",
 	// A5: projected from agent.upgrade.campaign.* / agent.upgrade.ring.dispatched.
 	"agent_upgrade_campaigns", "agent_upgrade_dispatches"}
 

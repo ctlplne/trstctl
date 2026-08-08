@@ -82,6 +82,9 @@ var TenantScopedTables = []string{
 	// and a schedule that outlived its tenant would keep dialling an external
 	// system on behalf of an account that no longer exists.
 	"cmdb_reconcile_schedules",
+	// I3: the ticket intake, for the same reason — a schedule that outlived
+	// its tenant would keep reading an ITSM for an account that is gone.
+	"ticket_intake_schedules",
 	"owners",
 	"issuers",
 	"deployment_target_revisions",

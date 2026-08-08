@@ -5133,6 +5133,42 @@ export interface ThirdPartySecretScanReceipt {
   status: string;
 }
 
+export interface TicketIntakeInput {
+  allow_private_endpoint?: boolean;
+  enabled?: boolean;
+  instance_url: string;
+  interval_seconds: number;
+  justification_field?: string;
+  private_egress_cidrs?: string[];
+  profile_field: string;
+  query?: string;
+  requester_field?: string;
+  sn_table: "incident" | "sc_req_item" | "sc_request" | "change_request";
+  subject_field: string;
+  system: "servicenow";
+  token_ref: string;
+}
+
+export interface TicketIntakeSchedule {
+  allow_private_endpoint?: boolean;
+  configured: boolean;
+  enabled: boolean;
+  guidance: string;
+  instance_url?: string;
+  interval_seconds?: number;
+  justification_field?: string;
+  last_error?: string;
+  last_run_at?: string;
+  private_egress_cidrs?: string[];
+  profile_field?: string;
+  query?: string;
+  requester_field?: string;
+  sn_table?: "incident" | "sc_req_item" | "sc_request" | "change_request";
+  subject_field?: string;
+  system?: "servicenow";
+  token_ref?: string;
+}
+
 export interface TransitCiphertext {
   ciphertext: string;
   version: number;
