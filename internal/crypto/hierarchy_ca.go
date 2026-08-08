@@ -28,9 +28,14 @@ const (
 type HierarchyCAProfile struct {
 	CommonName          string
 	PermittedDNSDomains []string
-	MaxPathLen          int
-	EKUs                []string
-	TTL                 time.Duration
+	// ExcludedDNSDomains carves holes out of the permitted set, IN the
+	// certificate's name-constraints extension — an excluded subtree the
+	// verifier enforces, not a note in our records (B6). Exclusion beats
+	// permission in X.509 semantics, which is exactly why it exists here.
+	ExcludedDNSDomains []string
+	MaxPathLen         int
+	EKUs               []string
+	TTL                time.Duration
 }
 
 // IssuedHierarchyCA is the public result of CA certificate creation. It contains
@@ -582,7 +587,8 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 		IsCA:                        true,
 		SubjectKeyId:                ski,
 		PermittedDNSDomains:         profile.PermittedDNSDomains,
-		PermittedDNSDomainsCritical: len(profile.PermittedDNSDomains) > 0,
+		ExcludedDNSDomains:          profile.ExcludedDNSDomains,
+		PermittedDNSDomainsCritical: len(profile.PermittedDNSDomains) > 0 || len(profile.ExcludedDNSDomains) > 0,
 		ExtKeyUsage:                 knownEKUs,
 		UnknownExtKeyUsage:          customEKUs,
 	}

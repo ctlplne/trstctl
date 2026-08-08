@@ -439,6 +439,38 @@ never live in the API process. What you can do end to end against the running bi
   skew IS enforced — `agentProtocolInterceptor` refuses a handshake outside
   `MinSupportedVersion..MaxSupportedVersion` — and was met before this
   programme, so it is not claimed as new work.
+  Constrained edge sub-CA (B6, THE one deliberate exception to AN-3/AN-4): a
+  host with no path to the brain issues leaves locally under a delegated CA,
+  and every bound that makes that defensible is enforced, not documented.
+  Minted BY the central isolated signer over a CSR (the edge key never
+  travels), with name constraints taken from the SEGMENT'S POLICY — never the
+  request — in the certificate itself (permitted and excluded subtrees,
+  exclusion beating permission), path length pinned to zero, and a 30-day
+  ceiling on life that is refused rather than clamped. Default OFF: minting
+  requires a declared segment's explicit opt-in, and the opt-in is one
+  declaration carrying both the pinned TPM attestation roots and the segment's
+  identifiers. An un-attested host is refused; an attestation over a different
+  key than the CSR's is refused (a TPM vouching for one key must not license
+  delegating another). The delegation is revocable from the brain and its
+  serial lives in the parent CA's issued ledger, so OCSP and the CRL answer
+  for it with no new machinery; expiry is the certificate's own clock. Local
+  issuance (agent `-edge-issue`) enforces the constraints read FROM THE
+  DELEGATION CERTIFICATE and fails closed on an out-of-constraint name; every
+  issuance lands in a journal in exactly the reconcile request's shape, and
+  `trstctl edge delegations reconcile -f <journal>` posts it when a path or a
+  courier exists. Reconciliation re-verifies each leaf (signature chains to
+  the delegated CA; names re-checked) and records an out-of-constraint leaf AS
+  A VIOLATION — visible, never silently dropped and never silently accepted —
+  while reconciled leaves enter the certificate inventory so there is no
+  shadow estate. Boundaries, stated exactly: the delegated key is
+  SOFTWARE-BACKED on the host (a PEM file the host operator protects);
+  TPM/PKCS#11-backed key STORAGE is not built — what the TPM provides today is
+  the attestation gate at mint time, and the honest bound either way is the
+  certificate's constraints and short life. Issuances made while the host is
+  unreachable are invisible until its journal reconciles, and the console
+  panel says so rather than rendering silence as inactivity; there is no
+  automatic renewal of a delegation — expiry is the design, and a host that
+  needs longer asks again through the same attested flow.
   Authority agreement (C4): the pipeline now has a PRODUCER. A scheduled round
   observes the store-backed authorities, and when two signed digests commit to
   different state the scheduler hands every disagreeing pair to a sink that

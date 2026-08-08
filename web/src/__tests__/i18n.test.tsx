@@ -509,8 +509,15 @@ describe("i18n boundary", () => {
       // drawer, and a translation that reads as a failure alert would send
       // operators hunting for an error that does not exist.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "529506c96ed3db1c8531d8f14814f857b751b0bd64d1a021b24453e18d7f0500",
-      "de-DE": "4dbca90fb688bff08dfdd56c4e151f4695f669676db965cedabbb5ef2e8d8ab1",
+      // B6 edge-delegation re-pin: fifteen source.edge.* keys for the
+      // delegated edge sub-CA panel. Two sentences carry the safety story and
+      // must survive review intact in every locale: default-OFF as the healthy
+      // baseline (an empty list is the design, not a gap), and the journal
+      // honesty rule — an air-gapped host's silence is absence of evidence,
+      // never evidence of inactivity.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "8bf161d32323390f25858657e67eb5fb598739de2543c6c545a783ac730c0f76",
+      "de-DE": "93a3195500d932caf26705c5f5225adb721c1edeeaac2030e67cf40927a8d7aa",
     });
   });
 

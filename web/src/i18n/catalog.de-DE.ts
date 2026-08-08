@@ -4287,6 +4287,42 @@ const deDECatalog = {
   "platform.tenantSeal.confirm": "Versiegelung bestätigen",
   "source.plaintext.local.preview.no.private.cert.ke.e5059d6667":
     "Unverschlüsselte lokale Vorschau. In dieser Browseransicht werden keine Bytes privater Zertifikate oder Schlüssel offengelegt.",
+  // B6 edge delegation panel — Machine-authored translations, FLAG FOR HUMAN REVIEW
+  // (added with the EdgeDelegationsPanel; same convention as previous machine-authored additions).
+  "source.edge.delegations.b6edge00001":
+    "Delegierte Edge-Sub-CAs (Air-Gap)",
+  "source.edge.unavailable.b6edge00002":
+    "Die Edge-Delegationsoberfläche ist in dieser Installation nicht aktiviert. Delegierte Edge-CAs sind die einzige begrenzte Ausnahme davon, dass Signieren nur im isolierten Signierer stattfindet; die Ablehnung des Ablaufs ist die Standardhaltung.",
+  "source.edge.none.b6edge00003":
+    "Kein Segment hat sich angemeldet. Delegierte Edge-CAs sind standardmäßig deaktiviert; die Anmeldung eines deklarierten Segments legt die TPM-Attestierungswurzeln fest, die für seine Hosts bürgen dürfen, sowie die Bezeichner, auf die jede Delegation beschränkt ist.",
+  "source.edge.segments.b6edge00004":
+    "Segment-Anmeldungen",
+  "source.edge.live.b6edge00005":
+    "Delegationen",
+  "source.edge.host.b6edge00006":
+    "Host",
+  "source.edge.constraints.b6edge00007":
+    "Namensbeschränkungen",
+  "source.edge.status.b6edge00008":
+    "Status",
+  "source.edge.expires.b6edge00009":
+    "Läuft ab",
+  "source.edge.segment.b6edge00010":
+    "Segment",
+  "source.edge.enabled.b6edge00011":
+    "Aktiviert",
+  "source.edge.attestation.roots.b6edge00012":
+    "Attestierungswurzeln",
+  "source.edge.excluding.b6edge00013":
+    "— ausgenommen",
+  "source.edge.on.b6edge00016":
+    "an",
+  "source.edge.off.b6edge00017":
+    "aus",
+  "source.edge.attested.key.b6edge00014":
+    "Attestierter Schlüssel",
+  "source.edge.reconcile.note.b6edge00015":
+    "Ausstellungen, die erfolgen, während ein Host unerreichbar ist, werden erst sichtbar, wenn sein Journal abgeglichen wird; eine Delegation ohne Einträge kann weiterhin ausstellen. Abgeglichene Blattzertifikate außerhalb der Beschränkungen der Delegation werden sichtbar als Verstöße erfasst.",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

@@ -5740,6 +5740,91 @@ export const messages = {
       "Attached, but no reconciliation schedule is configured — nothing is comparing authority state, so the counts below are the absence of collection rather than the absence of disagreement.",
     description: "C4: attached-but-not-collecting is indistinguishable from perfect agreement unless said out loud.",
   },
+  "source.edge.delegations.b6edge00001": {
+    defaultMessage:
+      "Delegated edge CAs (air-gap)",
+    description: "B6: panel heading — the constrained edge sub-CA surface for hosts with no path to the brain.",
+  },
+  "source.edge.unavailable.b6edge00002": {
+    defaultMessage:
+      "The edge delegation surface is not enabled on this deployment. Delegated edge CAs are the one bounded exception to signing living only in the isolated signer; refusing the flow is the default posture.",
+    description: "B6: shown when the routes answer not-enabled — refusal is the default, not an error.",
+  },
+  "source.edge.none.b6edge00003": {
+    defaultMessage:
+      "No segment has opted in. Delegated edge CAs are off by default; opting a declared segment in pins the TPM attestation roots that may vouch for its hosts and the identifiers every delegation is constrained to.",
+    description: "B6: empty state — default-off is the design, so an empty list is the healthy baseline, not a gap.",
+  },
+  "source.edge.segments.b6edge00004": {
+    defaultMessage:
+      "Segment opt-ins",
+    description: "B6: table heading for per-segment policies.",
+  },
+  "source.edge.live.b6edge00005": {
+    defaultMessage:
+      "Delegations",
+    description: "B6: table heading for minted delegated CAs.",
+  },
+  "source.edge.host.b6edge00006": {
+    defaultMessage:
+      "Host",
+    description: "B6: table column — the no-path host the delegation was minted for.",
+  },
+  "source.edge.constraints.b6edge00007": {
+    defaultMessage:
+      "Name constraints",
+    description: "B6: the DNS subtrees the delegation may issue within, read from the certificate itself.",
+  },
+  "source.edge.status.b6edge00008": {
+    defaultMessage:
+      "Status",
+    description: "B6: active, expired (the certificate's own clock), or revoked from the brain.",
+  },
+  "source.edge.expires.b6edge00009": {
+    defaultMessage:
+      "Expires",
+    description: "B6: the auto-expiry that makes delegating a signing key defensible.",
+  },
+  "source.edge.segment.b6edge00010": {
+    defaultMessage:
+      "Segment",
+    description: "B6: table column — the declared segment the policy or delegation scopes to.",
+  },
+  "source.edge.enabled.b6edge00011": {
+    defaultMessage:
+      "Enabled",
+    description: "B6: whether the segment has opted in.",
+  },
+  "source.edge.attestation.roots.b6edge00012": {
+    defaultMessage:
+      "Attestation roots",
+    description: "B6: how many TPM roots may vouch for this segment's hosts.",
+  },
+  "source.edge.excluding.b6edge00013": {
+    defaultMessage:
+      "\u2014 excluding",
+    description: "B6: joins the excluded subtrees onto the permitted list in the constraints column.",
+  },
+  "source.edge.on.b6edge00016": {
+    defaultMessage:
+      "on",
+    description: "B6: segment opt-in state.",
+  },
+  "source.edge.off.b6edge00017": {
+    defaultMessage:
+      "off",
+    description: "B6: segment opt-in state (the default).",
+  },
+  "source.edge.attested.key.b6edge00014": {
+    defaultMessage:
+      "Attested key",
+    description: "B6: digest of the TPM-vouched key the delegation was minted over.",
+  },
+  "source.edge.reconcile.note.b6edge00015": {
+    defaultMessage:
+      "Issuances made while a host is unreachable become visible only when its journal reconciles; a delegation listing none may still be issuing. Reconciled leaves outside the delegation's constraints are recorded as violations, visibly.",
+    description: "B6: the honesty rule — silence from an air-gapped host is absence of evidence, and the panel must not render it as inactivity.",
+  },
   "source.crypto.readiness.m2seq00001": {
     defaultMessage:
       "Crypto migration sequencing",

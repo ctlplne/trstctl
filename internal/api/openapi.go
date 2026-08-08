@@ -3345,6 +3345,73 @@ func componentSchemas() map[string]*Schema {
 		"items":    {Type: "array", Items: ref("MDMPollSchedule")},
 		"guidance": str(),
 	}, "items", "guidance")
+	edgeSegmentPolicySchema := object(map[string]*Schema{
+		"segment_id": str(), "segment_name": str(),
+		"enabled":               {Type: "boolean"},
+		"attestation_roots":     {Type: "integer"},
+		"permitted_dns_domains": {Type: "array", Items: str()},
+		"excluded_dns_domains":  {Type: "array", Items: str()},
+		"updated_at":            {Type: "string", Format: "date-time"},
+	}, "segment_id", "enabled", "attestation_roots", "updated_at")
+	edgeSegmentPolicyInput := object(map[string]*Schema{
+		"segment_id":            str(),
+		"enabled":               {Type: "boolean"},
+		"attestation_roots_pem": {Type: "array", Items: str()},
+		"permitted_dns_domains": {Type: "array", Items: str()},
+		"excluded_dns_domains":  {Type: "array", Items: str()},
+	}, "enabled")
+	edgeDelegationSchema := object(map[string]*Schema{
+		"id": str(), "segment_id": str(), "ca_id": str(), "host": str(),
+		"common_name": str(), "serial": str(), "certificate_pem": str(),
+		"permitted_dns_domains": {Type: "array", Items: str()},
+		"excluded_dns_domains":  {Type: "array", Items: str()},
+		"attested_key_sha256":   str(),
+		"status":                {Type: "string", Enum: []string{"active", "revoked", "expired"}},
+		"not_before":            {Type: "string", Format: "date-time"},
+		"not_after":             {Type: "string", Format: "date-time"},
+		"revoked_at":            {Type: "string", Format: "date-time"},
+		"revoke_reason":         str(),
+	}, "id", "segment_id", "ca_id", "host", "common_name", "serial", "permitted_dns_domains", "status", "not_before", "not_after")
+	edgeDelegationMintInput := object(map[string]*Schema{
+		"segment_id": str(), "ca_id": str(), "host": str(), "common_name": str(),
+		"ttl_seconds":                 {Type: "integer"},
+		"csr_der":                     {Type: "string", Format: "byte"},
+		"attestation_credential_json": {Type: "string", Format: "byte"},
+	}, "segment_id", "ca_id", "host", "csr_der", "attestation_credential_json")
+	edgeIssuanceSchema := object(map[string]*Schema{
+		"serial": str(), "subject": str(),
+		"dns_names":          {Type: "array", Items: str()},
+		"not_before":         {Type: "string", Format: "date-time"},
+		"not_after":          {Type: "string", Format: "date-time"},
+		"issued_at":          {Type: "string", Format: "date-time"},
+		"reconciled_at":      {Type: "string", Format: "date-time"},
+		"within_constraints": {Type: "boolean"},
+		"violation":          str(),
+	}, "serial", "subject", "not_before", "not_after", "issued_at", "reconciled_at", "within_constraints")
+	edgeDelegationDetailSchema := object(map[string]*Schema{
+		"delegation": ref("EdgeDelegation"),
+		"issuances":  {Type: "array", Items: ref("EdgeIssuance")},
+	}, "delegation")
+	edgeDelegationRevokeInput := object(map[string]*Schema{
+		"reason": str(),
+	})
+	edgeReconcileInput := object(map[string]*Schema{
+		"host":             str(),
+		"certificates_pem": {Type: "array", Items: str()},
+	}, "certificates_pem")
+	edgeReconcileResultSchema := object(map[string]*Schema{
+		"reconciled": {Type: "integer"}, "violations": {Type: "integer"},
+		"already": {Type: "integer"}, "rejected": {Type: "integer"},
+		"guidance": str(),
+	}, "reconciled", "violations", "already", "rejected")
+	edgeSegmentPolicyList := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("EdgeSegmentPolicy")},
+		"guidance": str(),
+	}, "items", "guidance")
+	edgeDelegationList := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("EdgeDelegation")},
+		"guidance": str(),
+	}, "items", "guidance")
 	ticketIntakeSchema := object(map[string]*Schema{
 		"configured":   {Type: "boolean"},
 		"system":       {Type: "string", Enum: []string{"servicenow"}},
@@ -4581,6 +4648,17 @@ func componentSchemas() map[string]*Schema {
 		"MDMPollScheduleList":                      mdmPollScheduleList,
 		"TicketIntakeSchedule":                     ticketIntakeSchema,
 		"TicketIntakeInput":                        ticketIntakeInput,
+		"EdgeSegmentPolicy":                        edgeSegmentPolicySchema,
+		"EdgeSegmentPolicyInput":                   edgeSegmentPolicyInput,
+		"EdgeSegmentPolicyList":                    edgeSegmentPolicyList,
+		"EdgeDelegation":                           edgeDelegationSchema,
+		"EdgeDelegationMintInput":                  edgeDelegationMintInput,
+		"EdgeDelegationList":                       edgeDelegationList,
+		"EdgeIssuance":                             edgeIssuanceSchema,
+		"EdgeDelegationDetail":                     edgeDelegationDetailSchema,
+		"EdgeDelegationRevokeInput":                edgeDelegationRevokeInput,
+		"EdgeReconcileInput":                       edgeReconcileInput,
+		"EdgeReconcileResult":                      edgeReconcileResultSchema,
 		"MDMTraceStep":                             mdmTraceStepSchema,
 		"MDMDeviceTrace":                           mdmDeviceTraceSchema,
 		"IssuanceRequestInput":                     issuanceRequestInput,

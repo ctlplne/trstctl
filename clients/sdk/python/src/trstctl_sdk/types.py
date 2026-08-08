@@ -2664,6 +2664,140 @@ DynamicLeaseRequest = TypedDict(
     total=False,
 )
 
+EdgeDelegation = TypedDict(
+    'EdgeDelegation',
+    {
+        'attested_key_sha256': str,
+        'ca_id': str,
+        'certificate_pem': str,
+        'common_name': str,
+        'excluded_dns_domains': list[str],
+        'host': str,
+        'id': str,
+        'not_after': str,
+        'not_before': str,
+        'permitted_dns_domains': list[str],
+        'revoke_reason': str,
+        'revoked_at': str,
+        'segment_id': str,
+        'serial': str,
+        'status': str,
+    },
+    total=False,
+)
+
+EdgeDelegationDetail = TypedDict(
+    'EdgeDelegationDetail',
+    {
+        'delegation': dict[str, Any],
+        'issuances': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+EdgeDelegationList = TypedDict(
+    'EdgeDelegationList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+EdgeDelegationMintInput = TypedDict(
+    'EdgeDelegationMintInput',
+    {
+        'attestation_credential_json': str,
+        'ca_id': str,
+        'common_name': str,
+        'csr_der': str,
+        'host': str,
+        'segment_id': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
+EdgeDelegationRevokeInput = TypedDict(
+    'EdgeDelegationRevokeInput',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+EdgeIssuance = TypedDict(
+    'EdgeIssuance',
+    {
+        'dns_names': list[str],
+        'issued_at': str,
+        'not_after': str,
+        'not_before': str,
+        'reconciled_at': str,
+        'serial': str,
+        'subject': str,
+        'violation': str,
+        'within_constraints': bool,
+    },
+    total=False,
+)
+
+EdgeReconcileInput = TypedDict(
+    'EdgeReconcileInput',
+    {
+        'certificates_pem': list[str],
+        'host': str,
+    },
+    total=False,
+)
+
+EdgeReconcileResult = TypedDict(
+    'EdgeReconcileResult',
+    {
+        'already': int,
+        'guidance': str,
+        'reconciled': int,
+        'rejected': int,
+        'violations': int,
+    },
+    total=False,
+)
+
+EdgeSegmentPolicy = TypedDict(
+    'EdgeSegmentPolicy',
+    {
+        'attestation_roots': int,
+        'enabled': bool,
+        'excluded_dns_domains': list[str],
+        'permitted_dns_domains': list[str],
+        'segment_id': str,
+        'segment_name': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+EdgeSegmentPolicyInput = TypedDict(
+    'EdgeSegmentPolicyInput',
+    {
+        'attestation_roots_pem': list[str],
+        'enabled': bool,
+        'excluded_dns_domains': list[str],
+        'permitted_dns_domains': list[str],
+        'segment_id': str,
+    },
+    total=False,
+)
+
+EdgeSegmentPolicyList = TypedDict(
+    'EdgeSegmentPolicyList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 EditionFeature = TypedDict(
     'EditionFeature',
     {

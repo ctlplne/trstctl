@@ -130,7 +130,41 @@ func main() {
 	workloadTenant := flag.String("workload-tenant", "", "workload tenant id for the co-sign binding")
 	workloadDeployment := flag.String("workload-deployment", "", "workload deployment scope for the co-sign binding")
 	workloadPredecessorKey := flag.String("workload-predecessor-key", "", "path to the workload predecessor key (PKCS#8 PEM) the agent holds and co-signs with")
+	// B6: one-shot, fully offline edge sub-CA modes for a host with no path to
+	// the brain. edge-csr generates the delegated key locally (it never
+	// travels) and prints the attestation challenge; edge-issue issues one
+	// leaf under the delegated certificate, whose OWN name constraints bound
+	// the request — out-of-constraint fails closed here, not at reconcile.
+	edgeCSRMode := flag.Bool("edge-csr", false, "one-shot: generate the delegated edge CA's keypair and CSR on this host, print the TPM attestation challenge, and exit")
+	edgeTenant := flag.String("edge-tenant", "", "tenant id the delegation is for (bound into the attestation challenge)")
+	edgeSegment := flag.String("edge-segment", "", "declared segment id the delegation is for (bound into the attestation challenge)")
+	edgeCN := flag.String("edge-cn", "", "common name for the delegated edge CA (edge-csr)")
+	edgeKeyOut := flag.String("edge-key-out", "edge-ca.key", "where edge-csr writes the delegated CA private key (0600; never leaves this host)")
+	edgeCSROut := flag.String("edge-csr-out", "edge-ca.csr", "where edge-csr writes the CSR (DER) the operator carries to the brain")
+	edgeIssueMode := flag.Bool("edge-issue", false, "one-shot: issue a leaf locally under the delegated edge CA and record it in the journal, then exit")
+	edgeCACert := flag.String("edge-ca-cert", "", "the delegated edge CA certificate (PEM) minted by the brain")
+	edgeCAKey := flag.String("edge-ca-key", "", "the delegated edge CA private key written by edge-csr")
+	edgeIssueCN := flag.String("edge-issue-cn", "", "leaf common name (edge-issue)")
+	edgeIssueDNS := flag.String("edge-issue-dns", "", "comma-separated leaf DNS SANs; every one must sit inside the delegation's name constraints")
+	edgeIssueTTL := flag.Duration("edge-issue-ttl", 24*time.Hour, "leaf validity; capped so a leaf never outlives the delegated CA")
+	edgeCertOut := flag.String("edge-cert-out", "edge-leaf.crt", "where edge-issue writes the leaf certificate")
+	edgeLeafKeyOut := flag.String("edge-leaf-key-out", "edge-leaf.key", "where edge-issue writes the leaf private key (0600)")
+	edgeJournalPath := flag.String("edge-journal", "edge-journal.json", "issuance journal, maintained in the exact shape `trstctl edge delegations reconcile -f` posts")
 	flag.Parse()
+
+	if handled, err := runEdgeCAOps(edgeCAOptions{
+		csrMode: *edgeCSRMode, tenantID: *edgeTenant, segmentID: *edgeSegment,
+		commonName: *edgeCN, keyOut: *edgeKeyOut, csrOut: *edgeCSROut,
+		issueMode: *edgeIssueMode, caCert: *edgeCACert, caKey: *edgeCAKey,
+		leafCN: *edgeIssueCN, leafDNS: *edgeIssueDNS, leafTTL: *edgeIssueTTL,
+		certOut: *edgeCertOut, leafKeyOut: *edgeLeafKeyOut, journal: *edgeJournalPath,
+	}, *commonName); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if *showVersion {
 		fmt.Println(buildinfo.String("trstctl-agent"))

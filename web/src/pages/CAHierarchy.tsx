@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { CAOverview } from "@/components/ca";
+import { EdgeDelegationsPanel } from "@/components/EdgeDelegationsPanel";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
@@ -719,6 +720,13 @@ export function CAHierarchy() {
           onShowDetail={setAuthorityDetail}
           onSignCSR={setSignTarget}
         />
+      </div>
+
+      <div className={tab === "authorities" ? undefined : "hidden"}>
+        {/* B6: the delegated edge sub-CA lives beside the authorities it hangs
+            from — the one bounded exception to in-signer signing, shown with
+            its bounds. */}
+        <EdgeDelegationsPanel />
       </div>
 
       <div className={tab === "authorities" ? undefined : "hidden"}>

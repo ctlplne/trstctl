@@ -1127,6 +1127,9 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if hierarchySvc := s.buildCAHierarchyService(d); hierarchySvc != nil {
 		defaults = append(defaults, api.WithCAHierarchy(hierarchySvc))
 	}
+	if edgeSvc := s.buildEdgeDelegationService(d, orch); edgeSvc != nil {
+		defaults = append(defaults, api.WithEdgeDelegations(edgeSvc))
+	}
 	if externalCAs, err := s.buildExternalCAService(d, idem); err != nil {
 		return nil, nil, err
 	} else if externalCAs != nil {

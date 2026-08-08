@@ -127,6 +127,17 @@ func (i *TPMIdentity) CSRDER() []byte {
 	return append([]byte(nil), i.csrDER...)
 }
 
+// CredentialKeyPEM exports the attested credential key (PKCS#8 PEM). Tests
+// that play the EDGE HOST need it: the host holds the key its TPM attested,
+// and B6's local-issuance flow signs with exactly that key.
+func (i *TPMIdentity) CredentialKeyPEM() ([]byte, error) {
+	der, err := x509.MarshalPKCS8PrivateKey(i.credentialKey)
+	if err != nil {
+		return nil, fmt.Errorf("marshal credential key: %w", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), nil
+}
+
 // RootPEM returns a copy of the operator trust anchor.
 func (i *TPMIdentity) RootPEM() []byte {
 	return append([]byte(nil), i.rootPEM...)

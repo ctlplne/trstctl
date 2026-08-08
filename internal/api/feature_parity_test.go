@@ -126,8 +126,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// surface gained its producer.
 	// I3's two intake-schedule operations raised it to 337: tickets became a
 	// first-class request origin.
-	if len(out) != 337 {
-		t.Fatalf("OpenAPI operationIds = %d, want 337", len(out))
+	// B6's seven edge-delegation operations raised it to 344: the constrained
+	// edge sub-CA became a served surface — opt-in, attested mint, revocation,
+	// and reconciliation of what the no-path host issued.
+	if len(out) != 344 {
+		t.Fatalf("OpenAPI operationIds = %d, want 344", len(out))
 	}
 	return out
 }

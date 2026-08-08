@@ -87,6 +87,7 @@ type API struct {
 	breakglassRotation        BreakglassRotationService
 	breakglassAdmin           *breakglass.AdminService
 	caHierarchy               CAHierarchyService
+	edgeDelegations           EdgeDelegationService
 	externalCAs               ExternalCAService
 	attestedIssuer            AttestedIssuerService
 	sshWorkflow               SSHWorkflowService
@@ -181,6 +182,7 @@ type config struct {
 	breakglassRotation        BreakglassRotationService
 	breakglassAdmin           *breakglass.AdminService
 	caHierarchy               CAHierarchyService
+	edgeDelegations           EdgeDelegationService
 	externalCAs               ExternalCAService
 	attestedIssuer            AttestedIssuerService
 	sshWorkflow               SSHWorkflowService
@@ -447,6 +449,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		breakglassRotation:        cfg.breakglassRotation,
 		breakglassAdmin:           cfg.breakglassAdmin,
 		caHierarchy:               cfg.caHierarchy,
+		edgeDelegations:           cfg.edgeDelegations,
 		externalCAs:               cfg.externalCAs,
 		attestedIssuer:            cfg.attestedIssuer,
 		sshWorkflow:               cfg.sshWorkflow,
@@ -950,6 +953,15 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/ca/authorities/{id}/issue", opID: "issueHierarchyLeaf", summary: "Issue a leaf certificate from a served CA authority", handler: a.issueHierarchyLeaf, pathParams: caAuthorityPath, reqSchema: "CAIssueLeafRequest", resSchema: "CAIssuedLeaf", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/authorities/{id}/rotate", opID: "rotateCAAuthority", summary: "Activate a signer-backed successor CA without changing the stable issue URL", handler: a.rotateCAAuthority, pathParams: caAuthorityPath, reqSchema: "CAAuthorityRotationRequest", resSchema: "CAAuthorityRotation", successCode: "200", mutation: true, perm: authz.IssuersWrite, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/authorities/{id}/rekey", opID: "rekeyCAAuthority", summary: "Re-key a signer-backed CA authority after ceremony quorum", handler: a.rekeyCAAuthority, pathParams: caAuthorityPath, reqSchema: "CAAuthorityRekeyRequest", resSchema: "CAAuthorityRotation", successCode: "201", mutation: true, perm: authz.IssuersWrite, scope: scopeIssuerPath("id")},
+		// B6: the constrained edge sub-CA — per-segment opt-in, attestation-gated
+		// mint, revocation from the brain, reconciliation of local issuances.
+		{method: "GET", path: "/api/v1/edge/segments", opID: "listEdgeSegmentPolicies", summary: "List per-segment edge delegation policies", handler: a.listEdgeSegmentPolicies, resSchema: "EdgeSegmentPolicyList", successCode: "200", perm: authz.IssuersRead},
+		{method: "PUT", path: "/api/v1/edge/segments/{segmentID}", opID: "putEdgeSegmentPolicy", summary: "Opt a declared segment in or out of delegated edge CAs", handler: a.putEdgeSegmentPolicy, pathParams: []param{pathUUID("segmentID")}, reqSchema: "EdgeSegmentPolicyInput", resSchema: "EdgeSegmentPolicy", successCode: "200", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/edge/delegations", opID: "mintEdgeDelegation", summary: "Mint an attested, name-constrained delegated edge CA in the isolated signer", handler: a.mintEdgeDelegation, reqSchema: "EdgeDelegationMintInput", resSchema: "EdgeDelegation", successCode: "201", mutation: true, perm: authz.IssuersWrite},
+		{method: "GET", path: "/api/v1/edge/delegations", opID: "listEdgeDelegations", summary: "List delegated edge CAs", handler: a.listEdgeDelegations, resSchema: "EdgeDelegationList", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/edge/delegations/{id}", opID: "getEdgeDelegation", summary: "Get a delegated edge CA with its reconciled issuances", handler: a.getEdgeDelegation, pathParams: idPath, resSchema: "EdgeDelegationDetail", successCode: "200", perm: authz.IssuersRead},
+		{method: "POST", path: "/api/v1/edge/delegations/{id}/revoke", opID: "revokeEdgeDelegation", summary: "Revoke a delegated edge CA from the brain", handler: a.revokeEdgeDelegation, pathParams: idPath, reqSchema: "EdgeDelegationRevokeInput", resSchema: "EdgeDelegation", successCode: "200", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/edge/delegations/{id}/reconcile", opID: "reconcileEdgeDelegation", summary: "Reconcile leaves an edge host issued while unreachable", handler: a.reconcileEdgeDelegation, pathParams: idPath, reqSchema: "EdgeReconcileInput", resSchema: "EdgeReconcileResult", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/ca/authorities/{id}/cross-sign", opID: "crossSignCAAuthority", summary: "Cross-sign a CA certificate with a signer-backed authority after ceremony quorum", handler: a.crossSignCAAuthority, pathParams: caAuthorityPath, reqSchema: "CACrossSignRequest", resSchema: "CACrossSign", successCode: "201", mutation: true, perm: authz.IssuersWrite, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/authorities/{id}/offline-cross-signs", opID: "importOfflineRootCrossSign", summary: "Verify and import a public cross-certificate produced by an offline root", handler: a.importOfflineRootCrossSign, pathParams: caAuthorityPath, reqSchema: "CAOfflineCrossSignImportRequest", resSchema: "CACrossSign", successCode: "201", mutation: true, perm: authz.IssuersWrite, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/authorities/{id}/offline-rekey", opID: "rekeyOfflineRoot", summary: "Import and activate an offline-root successor with bidirectional cross-signatures", handler: a.rekeyOfflineRoot, pathParams: caAuthorityPath, reqSchema: "CAOfflineRootRekeyRequest", resSchema: "CAOfflineRootRekey", successCode: "201", mutation: true, perm: authz.IssuersWrite, scope: scopeIssuerPath("id")},
@@ -1802,6 +1814,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		a.writeProblem(w, p)
 	case a.writeExternalCAError(w, err):
 	case a.writeCAHierarchyError(w, err):
+	case a.writeEdgeDelegationError(w, err):
 	case a.writeAttestedIssuanceError(w, err):
 	case a.writeBrokerError(w, err):
 	case a.writeEphemeralError(w, err):

@@ -4274,6 +4274,42 @@ const esESCatalog = {
   "platform.tenantSeal.confirm": "Confirmar sellado",
   "source.plaintext.local.preview.no.private.cert.ke.e5059d6667":
     "Vista previa local en texto plano. En esta vista del navegador no se expone ningún byte de certificados o claves privadas.",
+  // B6 edge delegation panel — Machine-authored translations, FLAG FOR HUMAN REVIEW
+  // (added with the EdgeDelegationsPanel; same convention as previous machine-authored additions).
+  "source.edge.delegations.b6edge00001":
+    "CA subordinadas de borde delegadas (aislamiento)",
+  "source.edge.unavailable.b6edge00002":
+    "La superficie de delegación de borde no está habilitada en este despliegue. Las CA de borde delegadas son la única excepción acotada a que la firma viva solo en el firmador aislado; rechazar el flujo es la postura por omisión.",
+  "source.edge.none.b6edge00003":
+    "Ningún segmento ha optado por participar. Las CA de borde delegadas están desactivadas por omisión; al optar un segmento declarado se fijan las raíces de atestación TPM que pueden avalar a sus hosts y los identificadores a los que se restringe cada delegación.",
+  "source.edge.segments.b6edge00004":
+    "Segmentos participantes",
+  "source.edge.live.b6edge00005":
+    "Delegaciones",
+  "source.edge.host.b6edge00006":
+    "Host",
+  "source.edge.constraints.b6edge00007":
+    "Restricciones de nombre",
+  "source.edge.status.b6edge00008":
+    "Estado",
+  "source.edge.expires.b6edge00009":
+    "Caduca",
+  "source.edge.segment.b6edge00010":
+    "Segmento",
+  "source.edge.enabled.b6edge00011":
+    "Habilitado",
+  "source.edge.attestation.roots.b6edge00012":
+    "Raíces de atestación",
+  "source.edge.excluding.b6edge00013":
+    "— excluyendo",
+  "source.edge.on.b6edge00016":
+    "activado",
+  "source.edge.off.b6edge00017":
+    "desactivado",
+  "source.edge.attested.key.b6edge00014":
+    "Clave atestada",
+  "source.edge.reconcile.note.b6edge00015":
+    "Las emisiones realizadas mientras un host está inalcanzable solo se hacen visibles cuando su diario se reconcilia; una delegación sin ninguna listada puede seguir emitiendo. Las hojas reconciliadas fuera de las restricciones de la delegación se registran como violaciones, de forma visible.",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

@@ -369,6 +369,9 @@ import type {
   WorkloadAttesterTrustSourceRevokeRequest,
   WorkloadAttesterTrustSourceRotated,
   WorkloadAttesterTrustSourceRotateRequest,
+  EdgeSegmentPolicyList,
+  EdgeDelegationList,
+  EdgeDelegationDetail,
 } from "./api-types.gen";
 
 // Re-export the generated, contract-bound resource types under the names the SPA uses.
@@ -1500,6 +1503,9 @@ export interface Api {
   revokeAgentCert(id: string, input: AgentCertRevocationRequest): Promise<AgentCertRevocation>;
   caCeremony(id: string): Promise<CAKeyCeremony>;
   caAuthorities(): Promise<CAAuthorityList>;
+  edgeSegmentPolicies(): Promise<EdgeSegmentPolicyList>;
+  edgeDelegations(): Promise<EdgeDelegationList>;
+  edgeDelegation(id: string): Promise<EdgeDelegationDetail>;
   createRootCA(input: CACreateRootRequest): Promise<CAAuthority>;
   createIntermediateCA(input: CACreateIntermediateRequest): Promise<CAAuthority>;
   signIntermediateCSR(id: string, input: CAIssueIntermediateRequest): Promise<CAIssuedIntermediate>;
@@ -1895,6 +1901,9 @@ const liveApi: Api = {
   revokeAgentCert: (id, input) => mutate<AgentCertRevocation>("POST", `/api/v1/agents/${encodeURIComponent(id)}/cert-revocations`, input),
   caCeremony: (id) => req<CAKeyCeremony>(`/api/v1/ca/ceremonies/${encodeURIComponent(id)}`),
   caAuthorities: () => req<CAAuthorityList>("/api/v1/ca/authorities"),
+  edgeSegmentPolicies: () => req<EdgeSegmentPolicyList>("/api/v1/edge/segments"),
+  edgeDelegations: () => req<EdgeDelegationList>("/api/v1/edge/delegations"),
+  edgeDelegation: (id) => req<EdgeDelegationDetail>(`/api/v1/edge/delegations/${encodeURIComponent(id)}`),
   createRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/roots", input),
   createIntermediateCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/intermediates", input),
   signIntermediateCSR: (id, input) => mutate<CAIssuedIntermediate>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/intermediates/csr`, input),

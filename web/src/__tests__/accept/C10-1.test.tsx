@@ -20,6 +20,8 @@ const { apiMock } = vi.hoisted(() => ({
     revokeManagedKey: vi.fn(),
     zeroizeManagedKey: vi.fn(),
     caAuthorities: vi.fn(),
+    edgeSegmentPolicies: vi.fn(),
+    edgeDelegations: vi.fn(),
   },
 }));
 
@@ -56,6 +58,8 @@ describe("C10-1 issuer catalog and connection tests", () => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.caAuthorities.mockResolvedValue({ items: [] });
+    apiMock.edgeSegmentPolicies.mockResolvedValue({ items: [], guidance: "" });
+    apiMock.edgeDelegations.mockResolvedValue({ items: [], guidance: "" });
     apiMock.issuers.mockResolvedValue([
       issuer({ id: "acme-prod", name: "Production ACME" }),
       issuer({ id: "missing-upstream", name: "Unregistered External" }),

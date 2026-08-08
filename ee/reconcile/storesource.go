@@ -4,12 +4,11 @@ package reconcile
 
 import (
 	"context"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"time"
 
 	"trstctl.com/trstctl/ee/reconcile/canon/reducers"
+	"trstctl.com/trstctl/internal/crypto"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -85,14 +84,14 @@ func (s *storeInventorySource) SelfSnapshot(ctx context.Context, tenantID string
 				// comparison; it still exists in the inventory read model.
 				continue
 			}
-			cert, err := x509.ParseCertificate(row.CertificateDER)
+			issuerDER, serialHex, err := crypto.CertificateIssuerAndSerial(row.CertificateDER)
 			if err != nil {
 				// Stored bytes that no longer parse are an inventory data
 				// problem, not a reconciliation claim; refusing the whole
 				// observation for one bad row would silence the comparison.
 				continue
 			}
-			if _, ok := issuers[string(cert.RawIssuer)]; !ok {
+			if _, ok := issuers[string(issuerDER)]; !ok {
 				// Outside the internal-CA jurisdiction (external CA, scan of a
 				// foreign cert). The ledger makes no claim about it.
 				continue
@@ -102,8 +101,8 @@ func (s *storeInventorySource) SelfSnapshot(ctx context.Context, tenantID string
 				status = canonStatusRevoked
 			}
 			snap.Certificates = append(snap.Certificates, reducers.SelfCertificate{
-				IssuerNameDER: append([]byte(nil), cert.RawIssuer...),
-				SerialHex:     cert.SerialNumber.Text(16),
+				IssuerNameDER: issuerDER,
+				SerialHex:     serialHex,
 				Status:        status,
 				NativeID:      row.Fingerprint,
 			})
@@ -175,7 +174,7 @@ func internalCASubjectsByID(ctx context.Context, store *corestore.Store, tenantI
 	}
 	out := make(map[string][]byte, len(cas))
 	for _, ca := range cas {
-		subject, err := caSubjectDER(ca.CertificatePEM)
+		subject, err := crypto.CertificateSubjectNameDERFromPEM([]byte(ca.CertificatePEM))
 		if err != nil {
 			// A CA row whose stored PEM does not parse cannot anchor identities.
 			// Its issued certs are skipped by the same rule in both adapters,
@@ -199,20 +198,6 @@ func internalCAIssuers(ctx context.Context, store *corestore.Store, tenantID str
 		out[string(subject)] = struct{}{}
 	}
 	return out, nil
-}
-
-// caSubjectDER parses the FIRST certificate in a CA's stored PEM (the CA cert
-// itself; the rest is chain) and returns its raw subject name.
-func caSubjectDER(pemText string) ([]byte, error) {
-	block, _ := pem.Decode([]byte(pemText))
-	if block == nil || block.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("xrec store source: CA PEM has no certificate block")
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("xrec store source: parse CA certificate: %w", err)
-	}
-	return append([]byte(nil), cert.RawSubject...), nil
 }
 
 // storeWatermark stamps an observation with its read time. Both adapters read

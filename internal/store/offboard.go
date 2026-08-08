@@ -85,6 +85,13 @@ var TenantScopedTables = []string{
 	// I3: the ticket intake, for the same reason — a schedule that outlived
 	// its tenant would keep reading an ITSM for an account that is gone.
 	"ticket_intake_schedules",
+	// B6: the edge sub-CA ledger. Issuances reference their delegation and
+	// delegations their segment policy only logically (no FKs), but erase
+	// leaf-first anyway so a partial failure never leaves issuance rows whose
+	// delegation is gone.
+	"edge_issuances",
+	"edge_delegations",
+	"edge_segment_policies",
 	"owners",
 	"issuers",
 	"deployment_target_revisions",

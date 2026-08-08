@@ -3,7 +3,9 @@
 package crypto
 
 import (
+	"crypto/x509"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 )
@@ -40,6 +42,87 @@ type EdgeCARequest struct {
 	PermittedDNSDomains []string
 	ExcludedDNSDomains  []string
 	TTL                 time.Duration
+}
+
+// EdgeReportedLeaf is what the brain can verify about a leaf an edge host
+// reports having issued: its identity and names, after the signature has been
+// checked against the delegated CA that supposedly issued it.
+type EdgeReportedLeaf struct {
+	SerialHex string
+	Subject   string
+	DNSNames  []string
+	IPSANs    []net.IP
+	NotBefore time.Time
+	NotAfter  time.Time
+	DER       []byte
+}
+
+// InspectEdgeReportedLeaf parses a reported leaf and verifies its signature
+// against the delegated CA's certificate. A leaf that does not chain is an
+// error, not a record: reconciling it under this delegation would let anyone
+// stuff another delegation's ledger with certificates it never issued.
+func InspectEdgeReportedLeaf(delegationCertDER, leafDER []byte) (EdgeReportedLeaf, error) {
+	delegation, err := x509.ParseCertificate(delegationCertDER)
+	if err != nil {
+		return EdgeReportedLeaf{}, fmt.Errorf("crypto: parse delegated CA certificate: %w", err)
+	}
+	leaf, err := x509.ParseCertificate(leafDER)
+	if err != nil {
+		return EdgeReportedLeaf{}, fmt.Errorf("crypto: parse reported leaf: %w", err)
+	}
+	if err := leaf.CheckSignatureFrom(delegation); err != nil {
+		return EdgeReportedLeaf{}, fmt.Errorf("crypto: reported leaf was not issued by this delegated CA: %w", err)
+	}
+	return EdgeReportedLeaf{
+		SerialHex: leaf.SerialNumber.Text(16),
+		Subject:   leaf.Subject.String(),
+		DNSNames:  append([]string(nil), leaf.DNSNames...),
+		IPSANs:    append([]net.IP(nil), leaf.IPAddresses...),
+		NotBefore: leaf.NotBefore,
+		NotAfter:  leaf.NotAfter,
+		DER:       append([]byte(nil), leafDER...),
+	}, nil
+}
+
+// EdgeAttestationChallenge derives the challenge an edge host's TPM
+// attestation must sign to receive a delegated CA. It binds the attestation to
+// this tenant, this segment, and THIS key (via the CSR bytes): an attestation
+// captured for one segment cannot be replayed to widen another, and an
+// attestation over someone else's key vouches for nothing. Both the brain and
+// the agent derive it independently — it never travels.
+func EdgeAttestationChallenge(tenantID, segmentID string, csrDER []byte) []byte {
+	material := make([]byte, 0, len(tenantID)+len(segmentID)+len(csrDER)+32)
+	material = append(material, []byte("trstctl-edge-delegation\x00")...)
+	material = append(material, []byte(tenantID)...)
+	material = append(material, 0)
+	material = append(material, []byte(segmentID)...)
+	material = append(material, 0)
+	material = append(material, csrDER...)
+	return SHA256Sum(material)
+}
+
+// MintDelegatedEdgeCAFromCSR is MintDelegatedEdgeCA for the served flow: the
+// edge host generated its key locally (ideally in hardware) and sent only a
+// CSR, so the delegated key never travels. The CSR's self-signature is the
+// proof of possession; the certificate's contents come from the REQUEST the
+// operator's policy built, never from the CSR's own asks — an edge host does
+// not get to choose its own scope.
+func MintDelegatedEdgeCAFromCSR(parentCertDER []byte, parentSigner DigestSigner, csrDER []byte, req EdgeCARequest) (IssuedHierarchyCA, error) {
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse edge CA CSR: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: verify edge CA CSR signature: %w", err)
+	}
+	pubDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: marshal edge CA CSR public key: %w", err)
+	}
+	if strings.TrimSpace(req.CommonName) == "" {
+		req.CommonName = csr.Subject.CommonName
+	}
+	return MintDelegatedEdgeCA(parentCertDER, parentSigner, PublicKey{DER: pubDER}, req)
 }
 
 // MintDelegatedEdgeCA signs a name-constrained, short-lived delegated CA under
@@ -86,6 +169,7 @@ func MintDelegatedEdgeCA(parentCertDER []byte, parentSigner DigestSigner, childP
 	return SignIntermediateHierarchyCA(parentCertDER, parentSigner, childPublic, HierarchyCAProfile{
 		CommonName:          strings.TrimSpace(req.CommonName),
 		PermittedDNSDomains: append([]string(nil), req.PermittedDNSDomains...),
+		ExcludedDNSDomains:  append([]string(nil), req.ExcludedDNSDomains...),
 		// An edge CA issues leaves and never another CA.
 		MaxPathLen: 0,
 		TTL:        ttl,

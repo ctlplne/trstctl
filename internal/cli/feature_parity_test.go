@@ -167,8 +167,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// I5's two `mdm poll-schedule` commands raised it to 346, on the same
 	// certificates row as the rest of the MDM correlation surface.
 	// I3's two `issuance-requests intake-schedule` commands raised it to 348.
-	if len(out) != 348 {
-		t.Fatalf("CLI commands = %d, want 348", len(out))
+	// B6's seven `edge` commands raised it to 355, on the private-CA row: the
+	// delegated edge sub-CA is that CA's one bounded exception, not a product.
+	if len(out) != 355 {
+		t.Fatalf("CLI commands = %d, want 355", len(out))
 	}
 	return out
 }

@@ -27,6 +27,8 @@ const { apiMock } = vi.hoisted(() => ({
     zeroizeManagedKey: vi.fn(),
     issueExternalCA: vi.fn(),
     caAuthorities: vi.fn(),
+    edgeSegmentPolicies: vi.fn(),
+    edgeDelegations: vi.fn(),
   },
 }));
 
@@ -50,6 +52,8 @@ describe("CA hierarchy and custody surface", () => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.caAuthorities.mockResolvedValue({ items: [] });
+    apiMock.edgeSegmentPolicies.mockResolvedValue({ items: [], guidance: "" });
+    apiMock.edgeDelegations.mockResolvedValue({ items: [], guidance: "" });
     apiMock.issuers.mockReset().mockResolvedValue([
       {
         id: "iss-root",

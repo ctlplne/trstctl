@@ -53,6 +53,22 @@ const (
 	EventMDMDeviceCorrelated = "mdm.device.correlated"
 	// I5: a tenant's standing instruction to re-read an MDM.
 	EventMDMPollConfigured = "mdm.poll.configured"
+	// B6: the constrained edge sub-CA ledger. The policy event is a segment's
+	// opt-in (attestation roots + the identifiers its delegations are scoped
+	// to); issued/revoked are the delegated CA's lifecycle; reconciled is one
+	// locally-issued leaf reported back to the brain — the record that keeps a
+	// no-path host's issuance from being shadow issuance.
+	EventEdgeSegmentPolicySet   = "edge.segment.policy_set"
+	EventEdgeDelegationIssued   = "edge.delegation.issued"
+	EventEdgeDelegationRevoked  = "edge.delegation.revoked"
+	EventEdgeIssuanceReconciled = "edge.issuance.reconciled"
+)
+
+// edgeIssuanceCertNamespace derives stable inventory row ids for reconciled
+// edge leaves, so direct projection and tail replay converge on one row.
+var edgeIssuanceCertNamespace = uuid.MustParse("7be1a6f4-52f0-5c2e-9d61-8a7ce3f14b02")
+
+const (
 	// I2: an operator closing an ownership disagreement. An event because the
 	// resolution is a JUDGEMENT — which side was right and why — and a
 	// judgement that lives only in a mutable column cannot be audited later.
@@ -367,6 +383,63 @@ type TicketIntakeConfigured struct {
 	Enabled            bool     `json:"enabled"`
 	AllowPrivate       bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateCIDRs       []string `json:"private_egress_cidrs,omitempty"`
+}
+
+// EdgeSegmentPolicySet is the payload of edge.segment.policy_set (B6).
+type EdgeSegmentPolicySet struct {
+	SegmentID           string   `json:"segment_id"`
+	Enabled             bool     `json:"enabled"`
+	AttestationRootsPEM []string `json:"attestation_roots_pem,omitempty"`
+	PermittedDNSDomains []string `json:"permitted_dns_domains,omitempty"`
+	ExcludedDNSDomains  []string `json:"excluded_dns_domains,omitempty"`
+	SetBy               string   `json:"set_by,omitempty"`
+}
+
+// EdgeDelegationIssued is the payload of edge.delegation.issued (B6).
+type EdgeDelegationIssued struct {
+	ID                    string    `json:"id"`
+	SegmentID             string    `json:"segment_id"`
+	CAID                  string    `json:"ca_id"`
+	Host                  string    `json:"host"`
+	CommonName            string    `json:"common_name"`
+	Serial                string    `json:"serial"`
+	CertificatePEM        string    `json:"certificate_pem"`
+	PermittedDNSDomains   []string  `json:"permitted_dns_domains"`
+	ExcludedDNSDomains    []string  `json:"excluded_dns_domains,omitempty"`
+	AttestedKeySHA256     string    `json:"attested_key_sha256"`
+	AttestationCertSHA256 string    `json:"attestation_cert_sha256"`
+	NotBefore             time.Time `json:"not_before"`
+	NotAfter              time.Time `json:"not_after"`
+}
+
+// EdgeDelegationRevoked is the payload of edge.delegation.revoked (B6).
+type EdgeDelegationRevoked struct {
+	ID        string    `json:"id"`
+	CAID      string    `json:"ca_id"`
+	Serial    string    `json:"serial"`
+	Reason    string    `json:"reason"`
+	RevokedAt time.Time `json:"revoked_at"`
+}
+
+// EdgeIssuanceReconciled is the payload of edge.issuance.reconciled (B6): one
+// leaf a delegated CA issued while its host had no path to the brain, verified
+// on receipt (signature chains to the delegated CA; names checked against its
+// constraints). WithinConstraints=false is a recorded VIOLATION, not a
+// rejection — refusing the report would leave the shadow issuance invisible.
+type EdgeIssuanceReconciled struct {
+	DelegationID      string    `json:"delegation_id"`
+	Host              string    `json:"host"`
+	Serial            string    `json:"serial"`
+	Subject           string    `json:"subject"`
+	DNSNames          []string  `json:"dns_names,omitempty"`
+	NotBefore         time.Time `json:"not_before"`
+	NotAfter          time.Time `json:"not_after"`
+	IssuedAt          time.Time `json:"issued_at"`
+	CertificateDER    []byte    `json:"certificate_der"`
+	CertificatePEM    string    `json:"certificate_pem"`
+	Fingerprint       string    `json:"fingerprint"`
+	WithinConstraints bool      `json:"within_constraints"`
+	Violation         string    `json:"violation,omitempty"`
 }
 
 // IssuanceRequestDecided is the payload of an issuance.request.decided event.
@@ -1933,6 +2006,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTicketIntakeConfigured:                   {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
 	EventMDMPollConfigured:                        {1: true},
+	EventEdgeSegmentPolicySet:                     {1: true},
+	EventEdgeDelegationIssued:                     {1: true},
+	EventEdgeDelegationRevoked:                    {1: true},
+	EventEdgeIssuanceReconciled:                   {1: true},
 	EventOwnershipConflictResolved:                {1: true},
 	EventAgentUpgradeCampaignOpened:               {1: true},
 	EventAgentUpgradeCampaignAdvanced:             {1: true},
@@ -2205,6 +2282,81 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			RequesterField: pl.RequesterField, JustificationField: pl.JustificationField,
 			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
+		})
+	case EventEdgeSegmentPolicySet:
+		var pl EdgeSegmentPolicySet
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyEdgeSegmentPolicyTx(ctx, tx, store.EdgeSegmentPolicy{
+			TenantID: e.TenantID, SegmentID: pl.SegmentID, Enabled: pl.Enabled,
+			AttestationRootsPEM: pl.AttestationRootsPEM,
+			PermittedDNSDomains: pl.PermittedDNSDomains,
+			ExcludedDNSDomains:  pl.ExcludedDNSDomains,
+			UpdatedAt:           e.Time,
+		}, e.Sequence)
+	case EventEdgeDelegationIssued:
+		var pl EdgeDelegationIssued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if err := p.store.ApplyEdgeDelegationIssuedTx(ctx, tx, store.EdgeDelegation{
+			TenantID: e.TenantID, ID: pl.ID, SegmentID: pl.SegmentID, CAID: pl.CAID,
+			Host: pl.Host, CommonName: pl.CommonName, Serial: pl.Serial,
+			CertificatePEM:      pl.CertificatePEM,
+			PermittedDNSDomains: pl.PermittedDNSDomains,
+			ExcludedDNSDomains:  pl.ExcludedDNSDomains,
+			AttestedKeySHA256:   pl.AttestedKeySHA256, AttestationCertSHA256: pl.AttestationCertSHA256,
+			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, CreatedAt: e.Time,
+		}, e.Sequence); err != nil {
+			return err
+		}
+		// The delegated CA's certificate is an issuance OF THE PARENT CA, so it
+		// joins the parent's issued ledger: OCSP answers for it and revoking
+		// the delegation from the brain rides the existing CRL machinery.
+		return p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, e.Time)
+	case EventEdgeDelegationRevoked:
+		var pl EdgeDelegationRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		revokedAt := pl.RevokedAt
+		if revokedAt.IsZero() {
+			revokedAt = e.Time
+		}
+		if err := p.store.ApplyEdgeDelegationRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.Reason, revokedAt, e.Sequence); err != nil {
+			return err
+		}
+		return p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, 0, revokedAt)
+	case EventEdgeIssuanceReconciled:
+		var pl EdgeIssuanceReconciled
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if err := p.store.ApplyEdgeIssuanceReconciledTx(ctx, tx, store.EdgeIssuance{
+			TenantID: e.TenantID, DelegationID: pl.DelegationID, Serial: pl.Serial,
+			Subject: pl.Subject, DNSNames: pl.DNSNames,
+			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter,
+			IssuedAt: pl.IssuedAt, ReconciledAt: e.Time,
+			WithinConstraints: pl.WithinConstraints, Violation: pl.Violation,
+		}, e.Sequence); err != nil {
+			return err
+		}
+		// The leaf exists in the world whether or not it honoured the
+		// constraints, so it enters the inventory either way; hiding a
+		// violating certificate from the estate would compound the violation
+		// with invisibility. The row id derives from (tenant, fingerprint) so
+		// replaying the event converges on the same row.
+		notBefore, notAfter := pl.NotBefore, pl.NotAfter
+		return p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
+			ID:       uuid.NewSHA1(edgeIssuanceCertNamespace, []byte(e.TenantID+"\x00"+pl.Fingerprint)).String(),
+			TenantID: e.TenantID, Subject: pl.Subject, SANs: pl.DNSNames,
+			Serial: pl.Serial, Fingerprint: pl.Fingerprint,
+			NotBefore: &notBefore, NotAfter: &notAfter,
+			Source:         "edge-delegation",
+			CertificateDER: pl.CertificateDER, CertificatePEM: []byte(pl.CertificatePEM),
+			CreatedAt:  e.Time,
+			ObservedBy: pl.Host, ObservedKind: "edge-reconcile", LastSeenAt: &e.Time,
 		})
 	case EventMDMPollConfigured:
 		var pl MDMPollConfigured

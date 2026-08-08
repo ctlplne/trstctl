@@ -1866,6 +1866,96 @@ export interface DynamicLeaseRequest {
   ttl_seconds: number;
 }
 
+export interface EdgeDelegation {
+  attested_key_sha256?: string;
+  ca_id: string;
+  certificate_pem?: string;
+  common_name: string;
+  excluded_dns_domains?: string[];
+  host: string;
+  id: string;
+  not_after: string;
+  not_before: string;
+  permitted_dns_domains: string[];
+  revoke_reason?: string;
+  revoked_at?: string;
+  segment_id: string;
+  serial: string;
+  status: "active" | "revoked" | "expired";
+}
+
+export interface EdgeDelegationDetail {
+  delegation: EdgeDelegation;
+  issuances?: EdgeIssuance[];
+}
+
+export interface EdgeDelegationList {
+  guidance: string;
+  items: EdgeDelegation[];
+}
+
+export interface EdgeDelegationMintInput {
+  attestation_credential_json: string;
+  ca_id: string;
+  common_name?: string;
+  csr_der: string;
+  host: string;
+  segment_id: string;
+  ttl_seconds?: number;
+}
+
+export interface EdgeDelegationRevokeInput {
+  reason?: string;
+}
+
+export interface EdgeIssuance {
+  dns_names?: string[];
+  issued_at: string;
+  not_after: string;
+  not_before: string;
+  reconciled_at: string;
+  serial: string;
+  subject: string;
+  violation?: string;
+  within_constraints: boolean;
+}
+
+export interface EdgeReconcileInput {
+  certificates_pem: string[];
+  host?: string;
+}
+
+export interface EdgeReconcileResult {
+  already: number;
+  guidance?: string;
+  reconciled: number;
+  rejected: number;
+  violations: number;
+}
+
+export interface EdgeSegmentPolicy {
+  attestation_roots: number;
+  enabled: boolean;
+  excluded_dns_domains?: string[];
+  permitted_dns_domains?: string[];
+  segment_id: string;
+  segment_name?: string;
+  updated_at: string;
+}
+
+export interface EdgeSegmentPolicyInput {
+  attestation_roots_pem?: string[];
+  enabled: boolean;
+  excluded_dns_domains?: string[];
+  permitted_dns_domains?: string[];
+  segment_id?: string;
+}
+
+export interface EdgeSegmentPolicyList {
+  guidance: string;
+  items: EdgeSegmentPolicy[];
+}
+
 export interface EditionFeature {
   licensed: boolean;
   mode: "enabled" | "read_only" | "off";
