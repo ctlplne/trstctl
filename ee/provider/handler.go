@@ -43,6 +43,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.getQuota(w, r)
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/brand"):
 		h.setBrand(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/isolation-drill":
+		h.runIsolationDrill(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/breakglass":
 		h.requestBreakGlass(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/breakglass/") && strings.HasSuffix(r.URL.Path, "/consent"):
@@ -85,6 +87,23 @@ func (h *handler) listTenants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tenants": tenants})
+}
+
+func (h *handler) runIsolationDrill(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	report, err := h.svc.RunIsolationDrill(r.Context(), op)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	// A drill that RAN and found isolation broken is a successful request with a
+	// failing result, not an HTTP error: the operator asked for the truth and
+	// got it. The body carries pass/fail; the status is 200 either way.
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (h *handler) updateTenant(w http.ResponseWriter, r *http.Request, status TenantStatus, suffix string) {

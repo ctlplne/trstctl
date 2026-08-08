@@ -63,8 +63,12 @@ type Config struct {
 	// Quotas is the durable per-customer limit store (L2). NIL MEANS QUOTA
 	// ADMINISTRATION REFUSES: accepting a cap that cannot survive a restart
 	// would tell a provider their customer is limited when nothing is.
-	Quotas           QuotaStore
-	Telemetry        TelemetryReader
+	Quotas    QuotaStore
+	Telemetry TelemetryReader
+	// Drills runs the on-demand isolation drill (L3). NIL MEANS THE DRILL
+	// ENDPOINT REFUSES: a provider must not be told isolation "passed" by a
+	// plane that has nothing wired to actually test it.
+	Drills           IsolationDriller
 	Clock            func() time.Time
 	MaxBreakGlassTTL time.Duration
 }
@@ -111,6 +115,28 @@ type TelemetryReader interface {
 	TenantSnapshot(context.Context, string) (TenantSnapshot, error)
 }
 
+// IsolationDriller runs an on-demand tenant-isolation drill and reports the
+// outcome. The provider plane holds only this narrow interface so it does not
+// depend on the core store's drill implementation; the attach seam adapts the
+// core store to it.
+type IsolationDriller interface {
+	RunIsolationDrill(ctx context.Context) (IsolationDrillReport, error)
+}
+
+// IsolationDrillCheck is one assertion in a drill and whether it held.
+type IsolationDrillCheck struct {
+	Name   string `json:"name"`
+	Passed bool   `json:"passed"`
+	Detail string `json:"detail"`
+}
+
+// IsolationDrillReport is the outcome the provider console shows and records.
+type IsolationDrillReport struct {
+	Passed bool                  `json:"passed"`
+	Checks []IsolationDrillCheck `json:"checks"`
+	RanAt  time.Time             `json:"ran_at"`
+}
+
 // Service enforces provider privilege-domain, license, tenant-band, and
 // break-glass rules over the storage boundary.
 type Service struct {
@@ -122,6 +148,7 @@ type Service struct {
 	telemetry        TelemetryReader
 	quotas           QuotaStore
 	brands           BrandStore
+	drills           IsolationDriller
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
 }
@@ -159,7 +186,8 @@ func NewService(cfg Config) *Service {
 	// default answer to "which customers may this operator touch", and the only
 	// safe default answer is none.
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
-		delegations: cfg.Delegations, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands, clock: clock, maxBreakGlassTTL: maxTTL}
+		delegations: cfg.Delegations, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
+		drills: cfg.Drills, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRequest) (Tenant, error) {
@@ -249,6 +277,39 @@ func (s *Service) ListTenants(ctx context.Context, actor Operator) ([]Tenant, er
 		}
 	}
 	return out, nil
+}
+
+// RunIsolationDrill runs the on-demand tenant-isolation drill and records an
+// attestation of the outcome.
+//
+// This is deployment-wide assurance, not a per-customer read, so it is gated on
+// provider ADMIN rather than a per-customer delegation: no single customer
+// "owns" the isolation invariant, and an operator delegated one tenancy has no
+// standing to probe the whole deployment. The attestation is recorded whatever
+// the result — a FAILED drill is the one you most need on the record, so a
+// failure is returned as a report with Passed=false, not swallowed as an error.
+func (s *Service) RunIsolationDrill(ctx context.Context, actor Operator) (IsolationDrillReport, error) {
+	if err := s.requireMutation(actor, true); err != nil {
+		return IsolationDrillReport{}, err
+	}
+	if s.drills == nil {
+		return IsolationDrillReport{}, fmt.Errorf("%w: no isolation driller is attached on this deployment, so a "+
+			"drill result would be fabricated; refusing to report a pass nothing tested", ErrForbidden)
+	}
+	report, err := s.drills.RunIsolationDrill(ctx)
+	if err != nil {
+		return IsolationDrillReport{}, err
+	}
+	report.RanAt = s.clock()
+	outcome := "passed"
+	if !report.Passed {
+		outcome = "failed"
+	}
+	if err := s.record(ctx, AuditEvent{Type: "provider.isolation.drill", OperatorID: actor.ID,
+		OperatorEmail: actor.Email, Reason: outcome, At: report.RanAt}); err != nil {
+		return IsolationDrillReport{}, err
+	}
+	return report, nil
 }
 
 func (s *Service) Suspend(ctx context.Context, actor Operator, tenantID string) error {

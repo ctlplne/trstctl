@@ -53,6 +53,7 @@ import (
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/server"
+	corestore "trstctl.com/trstctl/internal/store"
 )
 
 // extraMigrationSources returns edition migration bundles for the full binary.
@@ -378,6 +379,10 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 			// gate. Nil when white-label is not licensed, which refuses every
 			// brand write — a brand nobody can resolve is not white-label.
 			Brands: providerBrandStore(brandInstall),
+			// L3: the on-demand isolation drill runs the core store's real
+			// cross-tenant read/write proof so a provider operator can attest,
+			// at any moment, that tenant isolation holds.
+			Drills: isolationDrillerAdapter{store: deps.Store},
 		})
 		if log != nil {
 			// Says what an operator will actually observe. "Attached" alone
@@ -659,4 +664,23 @@ func (a brandStoreAdapter) SetTenantBrand(ctx context.Context, b eeprovider.Tena
 		a.inst.Resolver.Invalidate()
 	}
 	return nil
+}
+
+// isolationDrillerAdapter adapts the core store's isolation drill to the
+// provider plane's IsolationDriller (L3), mapping the store's report type to the
+// provider's so the plane holds no dependency on the store's internals. It lives
+// in the attach seam for the same reason the brand adapter does: only here may
+// both ee/provider and the core store be named without an edition cycle.
+type isolationDrillerAdapter struct{ store *corestore.Store }
+
+func (a isolationDrillerAdapter) RunIsolationDrill(ctx context.Context) (eeprovider.IsolationDrillReport, error) {
+	r, err := a.store.RunIsolationDrill(ctx)
+	if err != nil {
+		return eeprovider.IsolationDrillReport{}, err
+	}
+	out := eeprovider.IsolationDrillReport{Passed: r.Passed}
+	for _, c := range r.Checks {
+		out.Checks = append(out.Checks, eeprovider.IsolationDrillCheck{Name: c.Name, Passed: c.Passed, Detail: c.Detail})
+	}
+	return out, nil
 }
