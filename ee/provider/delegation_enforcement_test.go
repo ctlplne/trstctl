@@ -221,6 +221,11 @@ func TestBreakGlassIsRecheckedAtUseNotOnlyAtRequest(t *testing.T) {
 	if _, err := svc.ConsentBreakGlass(ctx, "tenant-alpha", grant.ID, "customer-admin", true); err != nil {
 		t.Fatalf("consent: %v", err)
 	}
+	// L4 dual consent: a second distinct approver is required before the grant
+	// is active and this revocation test is meaningful.
+	if _, err := svc.ConsentBreakGlass(ctx, "tenant-alpha", grant.ID, "customer-admin-2", true); err != nil {
+		t.Fatalf("co-consent: %v", err)
+	}
 
 	// The customer revokes the operator's delegation.
 	revocable.set = StaticDelegations{}

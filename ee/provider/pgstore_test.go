@@ -135,6 +135,53 @@ func TestProviderRegistrySurvivesARestart(t *testing.T) {
 	}
 }
 
+// Both approvers' consents survive a restart: a grant that reached two-person
+// approval reads back active through a fresh store handle, not silently
+// downgraded to awaiting a co-approver because the second consent was dropped.
+func TestBreakGlassDualConsentIsDurable(t *testing.T) {
+	ctx := context.Background()
+	s1 := openProviderStore(t)
+	writer := NewPGStore(s1)
+	id := CustomerID("bgc")
+	if _, err := writer.CreateTenant(ctx, Tenant{ID: id, Slug: "bgc", Name: "BG Corp", Status: TenantActive}); err != nil {
+		t.Fatalf("CreateTenant: %v", err)
+	}
+	base := time.Unix(1000, 0).UTC()
+	if _, err := writer.CreateBreakGlassGrant(ctx, BreakGlassGrant{
+		ID: "bg-dual", TenantID: id, OperatorID: "requester", Reason: "incident",
+		RequestedAt: base, ExpiresAt: base.Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("CreateBreakGlassGrant: %v", err)
+	}
+	// Record both consents, from two distinct approvers, and persist them.
+	both := BreakGlassGrant{
+		ID: "bg-dual", TenantID: id, OperatorID: "requester", Reason: "incident",
+		RequestedAt: base, ExpiresAt: base.Add(time.Hour),
+		ConsentedAt: base.Add(time.Minute), ConsentedBy: "approver-a",
+		SecondConsentedAt: base.Add(2 * time.Minute), SecondConsentedBy: "approver-b",
+	}
+	if _, err := writer.UpdateBreakGlassGrant(ctx, both); err != nil {
+		t.Fatalf("UpdateBreakGlassGrant: %v", err)
+	}
+	s1.Close()
+
+	s2, err := corestore.Open(ctx, providerTestDSN)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	t.Cleanup(func() { s2.Close() })
+	got, err := NewPGStore(s2).BreakGlassGrant(ctx, "bg-dual")
+	if err != nil {
+		t.Fatalf("BreakGlassGrant after restart: %v", err)
+	}
+	if got.ConsentedBy != "approver-a" || got.SecondConsentedBy != "approver-b" || got.SecondConsentedAt.IsZero() {
+		t.Fatalf("consents after restart = %+v, want both approvers persisted", got)
+	}
+	if st := got.State(base.Add(3 * time.Minute)); st != GrantActive {
+		t.Fatalf("state after restart = %q, want active (both consents durable)", st)
+	}
+}
+
 // The per-customer health view counts a customer's OWN active certificates,
 // under that customer's RLS context, and derives health from status. A
 // certificate belonging to another customer must not be counted — the count is

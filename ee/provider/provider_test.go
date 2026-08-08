@@ -141,6 +141,14 @@ func TestBreakGlassRequiresConsentAndAuditsBeforeTenantData(t *testing.T) {
 	if _, err := svc.ConsentBreakGlass(ctx, tenant.ID, grant.ID, "tenant-admin@example.test", true); err != nil {
 		t.Fatalf("tenant consent: %v", err)
 	}
+	// L4 dual consent: one approval leaves the grant awaiting a co-approver, so
+	// tenant data is still refused until a distinct second operator consents.
+	if _, err := svc.BreakGlassResults(ctx, op, grant.ID); !errors.Is(err, ErrBreakGlassNotConsented) {
+		t.Fatalf("singly-consented break-glass error = %v, want ErrBreakGlassNotConsented", err)
+	}
+	if _, err := svc.ConsentBreakGlass(ctx, tenant.ID, grant.ID, "tenant-admin-2@example.test", true); err != nil {
+		t.Fatalf("co-consent: %v", err)
+	}
 	if _, err := svc.BreakGlassResults(ctx, providerOperator("op-2"), grant.ID); !errors.Is(err, ErrBreakGlassWrongOperator) {
 		t.Fatalf("wrong operator error = %v, want ErrBreakGlassWrongOperator", err)
 	}

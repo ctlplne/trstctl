@@ -378,6 +378,7 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, tenantID, grantID, subj
 	if s.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
 		return BreakGlassGrant{}, ErrUnlicensed
 	}
+	subject = strings.TrimSpace(subject)
 	grant, err := s.store.BreakGlassGrant(ctx, grantID)
 	if err != nil {
 		return BreakGlassGrant{}, err
@@ -385,24 +386,55 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, tenantID, grantID, subj
 	if grant.TenantID != tenantID {
 		return BreakGlassGrant{}, ErrForbidden
 	}
-	if grant.State(s.clock()) != GrantPending {
-		return BreakGlassGrant{}, ErrBreakGlassNotConsented
-	}
 	now := s.clock()
-	auditType := AuditBreakGlassConsented
-	if approve {
-		grant.ConsentedAt = now
-		grant.ConsentedBy = subject
-	} else {
+	switch grant.State(now) {
+	case GrantPending, GrantAwaitingCoConsent:
+		// Consentable states: nobody has approved yet, or one approver has and a
+		// second is awaited.
+	default:
+		// Already active, denied, revoked, or expired — nothing to consent to.
+		return BreakGlassGrant{}, ErrBreakGlassAlreadyResolved
+	}
+
+	// A denial by ANY approver, at either stage, kills the grant. One person
+	// refusing is enough to stop emergency access even if another already
+	// consented — two-person control protects access, not denial.
+	if !approve {
 		grant.DeniedAt = now
 		grant.DeniedBy = subject
-		auditType = AuditBreakGlassDenied
+		grant, err = s.store.UpdateBreakGlassGrant(ctx, grant)
+		if err != nil {
+			return BreakGlassGrant{}, err
+		}
+		if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassDenied, TenantID: grant.TenantID, GrantID: grant.ID, Subject: subject, At: now}); err != nil {
+			return BreakGlassGrant{}, err
+		}
+		return grant, nil
+	}
+
+	// Two-person control on approval: a real approver identity, never the
+	// requester, and the two approvers must be distinct operators.
+	if subject == "" {
+		return BreakGlassGrant{}, ErrForbidden
+	}
+	if subject == grant.OperatorID {
+		return BreakGlassGrant{}, ErrBreakGlassConsentByRequester
+	}
+	if grant.State(now) == GrantPending {
+		grant.ConsentedAt = now
+		grant.ConsentedBy = subject
+	} else { // GrantAwaitingCoConsent
+		if subject == grant.ConsentedBy {
+			return BreakGlassGrant{}, ErrBreakGlassConsentNotDistinct
+		}
+		grant.SecondConsentedAt = now
+		grant.SecondConsentedBy = subject
 	}
 	grant, err = s.store.UpdateBreakGlassGrant(ctx, grant)
 	if err != nil {
 		return BreakGlassGrant{}, err
 	}
-	if err := s.record(ctx, AuditEvent{Type: auditType, TenantID: grant.TenantID, GrantID: grant.ID, Subject: subject, At: now}); err != nil {
+	if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassConsented, TenantID: grant.TenantID, GrantID: grant.ID, Subject: subject, At: now}); err != nil {
 		return BreakGlassGrant{}, err
 	}
 	return grant, nil

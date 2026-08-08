@@ -42,6 +42,17 @@ var (
 	ErrBreakGlassExpired         = errors.New("provider: break-glass grant expired")
 	ErrBreakGlassReasonRequired  = errors.New("provider: break-glass reason is required")
 	ErrBreakGlassInvalidDuration = errors.New("provider: break-glass duration is invalid")
+	// ErrBreakGlassConsentByRequester rejects the requester approving their own
+	// break-glass request. The requester asking for emergency access is not one
+	// of the two independent approvers that access requires (L4 dual consent).
+	ErrBreakGlassConsentByRequester = errors.New("provider: the break-glass requester cannot approve their own request")
+	// ErrBreakGlassConsentNotDistinct rejects one operator supplying both
+	// consents. Two-person control needs two DIFFERENT people; the same operator
+	// approving twice is one person, not two.
+	ErrBreakGlassConsentNotDistinct = errors.New("provider: break-glass needs two distinct approvers; this operator already consented")
+	// ErrBreakGlassAlreadyResolved rejects consenting to a grant that is no
+	// longer awaiting consent (already active, denied, revoked, or expired).
+	ErrBreakGlassAlreadyResolved = errors.New("provider: break-glass grant is no longer awaiting consent")
 )
 
 // OperatorRole names a provider-plane privilege set. Provider operators are not
@@ -111,10 +122,15 @@ type GrantState string
 
 const (
 	GrantPending GrantState = "pending"
-	GrantActive  GrantState = "active"
-	GrantDenied  GrantState = "denied"
-	GrantRevoked GrantState = "revoked"
-	GrantExpired GrantState = "expired"
+	// GrantAwaitingCoConsent is a grant with ONE consent, waiting for the
+	// second. It is not active — a single approver cannot open a customer's
+	// tenancy (L4 dual consent / two-person control), so this is a distinct
+	// state from both "nobody has approved" and "approved".
+	GrantAwaitingCoConsent GrantState = "awaiting_co_consent"
+	GrantActive            GrantState = "active"
+	GrantDenied            GrantState = "denied"
+	GrantRevoked           GrantState = "revoked"
+	GrantExpired           GrantState = "expired"
 )
 
 // BreakGlassGrant is time-bounded, operator-bound tenant consent.
@@ -128,10 +144,16 @@ type BreakGlassGrant struct {
 	ExpiresAt     time.Time `json:"expires_at"`
 	ConsentedAt   time.Time `json:"consented_at,omitempty"`
 	ConsentedBy   string    `json:"consented_by,omitempty"`
-	DeniedAt      time.Time `json:"denied_at,omitempty"`
-	DeniedBy      string    `json:"denied_by,omitempty"`
-	RevokedAt     time.Time `json:"revoked_at,omitempty"`
-	UseCount      int       `json:"use_count"`
+	// SecondConsentedAt/By is the co-approver's consent (L4 dual consent). A
+	// grant is active only once BOTH are set, and the two approvers must be
+	// distinct operators, neither of them the requester — otherwise two-person
+	// control is a formality one person can satisfy alone.
+	SecondConsentedAt time.Time `json:"second_consented_at,omitempty"`
+	SecondConsentedBy string    `json:"second_consented_by,omitempty"`
+	DeniedAt          time.Time `json:"denied_at,omitempty"`
+	DeniedBy          string    `json:"denied_by,omitempty"`
+	RevokedAt         time.Time `json:"revoked_at,omitempty"`
+	UseCount          int       `json:"use_count"`
 }
 
 func (g BreakGlassGrant) State(now time.Time) GrantState {
@@ -140,10 +162,16 @@ func (g BreakGlassGrant) State(now time.Time) GrantState {
 		return GrantRevoked
 	case !g.DeniedAt.IsZero():
 		return GrantDenied
-	case !g.ConsentedAt.IsZero() && now.Before(g.ExpiresAt):
+	case !g.ConsentedAt.IsZero() && !g.SecondConsentedAt.IsZero() && now.Before(g.ExpiresAt):
+		// Active requires BOTH consents. A single consent never opens the
+		// tenancy — that is the whole point of two-person control.
 		return GrantActive
 	case !g.ExpiresAt.IsZero() && !now.Before(g.ExpiresAt):
+		// Past expiry the grant is spent, whether it had zero, one, or two
+		// consents — a half-approved grant that timed out is not left dangling.
 		return GrantExpired
+	case !g.ConsentedAt.IsZero():
+		return GrantAwaitingCoConsent
 	default:
 		return GrantPending
 	}

@@ -171,10 +171,10 @@ func (p *PGStore) UpdateBreakGlassGrant(ctx context.Context, g BreakGlassGrant) 
 	tag, err := p.store.SystemPool().Exec(ctx,
 		`UPDATE provider_breakglass_grants
 		    SET consented_at = $2, consented_by = $3, denied_at = $4, denied_by = $5,
-		        revoked_at = $6, use_count = $7
+		        revoked_at = $6, use_count = $7, consented_at_2 = $8, consented_by_2 = $9
 		  WHERE id = $1`,
 		g.ID, nullTime(g.ConsentedAt), g.ConsentedBy, nullTime(g.DeniedAt), g.DeniedBy,
-		nullTime(g.RevokedAt), g.UseCount)
+		nullTime(g.RevokedAt), g.UseCount, nullTime(g.SecondConsentedAt), g.SecondConsentedBy)
 	if err != nil {
 		return BreakGlassGrant{}, err
 	}
@@ -197,7 +197,8 @@ func (p *PGStore) IncrementBreakGlassUse(ctx context.Context, id string, _ time.
 }
 
 const breakGlassSelect = `SELECT id, tenant_id::text, operator_id, operator_email, reason,
-	requested_at, expires_at, consented_at, consented_by, denied_at, denied_by, revoked_at, use_count
+	requested_at, expires_at, consented_at, consented_by, denied_at, denied_by, revoked_at, use_count,
+	consented_at_2, COALESCE(consented_by_2, '')
 	FROM provider_breakglass_grants`
 
 func scanProviderTenant(row pgx.Row) (Tenant, error) {
@@ -212,14 +213,17 @@ func scanProviderTenant(row pgx.Row) (Tenant, error) {
 
 func scanBreakGlassGrant(row pgx.Row) (BreakGlassGrant, error) {
 	var g BreakGlassGrant
-	var consentedAt, deniedAt, revokedAt *time.Time
+	var consentedAt, deniedAt, revokedAt, secondConsentedAt *time.Time
 	if err := row.Scan(&g.ID, &g.TenantID, &g.OperatorID, &g.OperatorEmail, &g.Reason,
 		&g.RequestedAt, &g.ExpiresAt, &consentedAt, &g.ConsentedBy, &deniedAt, &g.DeniedBy,
-		&revokedAt, &g.UseCount); err != nil {
+		&revokedAt, &g.UseCount, &secondConsentedAt, &g.SecondConsentedBy); err != nil {
 		return BreakGlassGrant{}, err
 	}
 	if consentedAt != nil {
 		g.ConsentedAt = *consentedAt
+	}
+	if secondConsentedAt != nil {
+		g.SecondConsentedAt = *secondConsentedAt
 	}
 	if deniedAt != nil {
 		g.DeniedAt = *deniedAt
