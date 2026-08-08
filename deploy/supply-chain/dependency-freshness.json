@@ -49,11 +49,11 @@
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Store/Operations",
-      "status": "planned",
+      "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
-      "deferral_until": "",
-      "rationale": "Bundled eval PostgreSQL affects local integration tests and single-node eval startup; upgrades must refresh committed archive pins and Trivy receipts instead of moving only go.mod."
+      "next_review_by": "2026-08-29",
+      "deferral_until": "2026-09-05",
+      "rationale": "AUD-15 dated deferral. Bundled eval PostgreSQL affects local integration tests and single-node eval startup only; it is not in a served path, which is why it carries the shortest deferral of the four. The upgrade must refresh committed archive pins and Trivy receipts rather than moving only go.mod, so it is one reviewed change and not a manifest bump."
     },
     {
       "ecosystem": "gomod",
@@ -63,11 +63,11 @@
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Spine/Events",
-      "status": "planned",
+      "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
-      "deferral_until": "",
-      "rationale": "Embedded JetStream is the AN-2 event source of truth; update work must run replay, projection, chaos, and outbox recovery tests together."
+      "next_review_by": "2026-09-12",
+      "deferral_until": "2026-09-19",
+      "rationale": "AUD-15 dated deferral. Embedded JetStream is the AN-2 event source of truth, so the upgrade has to run replay, projection, chaos and outbox recovery together — a bad landing corrupts the log every read model is rebuilt from. govulncheck reports zero called vulnerabilities on the current pin."
     },
     {
       "ecosystem": "gomod",
@@ -77,11 +77,11 @@
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Policy/Security",
-      "status": "planned",
+      "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
-      "deferral_until": "",
-      "rationale": "OPA evaluates tenant policy in-process; upgrades must keep Rego behavior, policy property tests, and not-reachable advisory documentation aligned."
+      "next_review_by": "2026-09-26",
+      "deferral_until": "2026-10-03",
+      "rationale": "AUD-15 dated deferral, the longest of the four because the gap is the largest: v1.4.0 against v1.18.2 is fourteen minors. OPA evaluates tenant policy in-process, so the upgrade must keep Rego behaviour, the policy property tests, and the not-reachable advisory documentation aligned. Deliberately not bundled with the others: a fourteen-minor jump that fails is not diagnosable inside a combined dependency change."
     },
     {
       "ecosystem": "gomod",
@@ -91,25 +91,25 @@
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Pluginhost/Security",
-      "status": "planned",
+      "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
-      "deferral_until": "",
-      "rationale": "WASM sandbox upgrades can change capability and host-call behavior; they need pluginhost conformance and sandbox regression tests."
+      "next_review_by": "2026-09-12",
+      "deferral_until": "2026-09-19",
+      "rationale": "AUD-15 dated deferral. A WASM sandbox upgrade can change capability and host-call behaviour, which is the security boundary third-party connectors run inside; it needs pluginhost conformance and sandbox regression tests in the same change. govulncheck reports zero called vulnerabilities on the current pin, so this is hygiene debt and not live exposure."
     },
     {
       "ecosystem": "gomod",
       "name": "github.com/jackc/pgx/v5",
-      "current_version": "v5.9.2",
+      "current_version": "v5.10.0",
       "latest_observed_version": "v5.10.0",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Store/Tenant-isolation",
-      "status": "planned",
-      "behind_since": "2026-06-21",
+      "status": "current",
+      "behind_since": "",
       "next_review_by": "2026-08-26",
       "deferral_until": "",
-      "rationale": "pgx sits under every RLS-enforced PostgreSQL path; upgrades must keep tenant context, migrations, and integration tests green."
+      "rationale": "AUD-15: upgraded v5.9.2 -> v5.10.0, one minor and the cheapest row in the critical-go-runtime queue. pgx sits under every RLS-enforced PostgreSQL path, so the acceptance gate was the full internal/store suite including the RLS force inventory and the doctor ISO-1..ISO-7 isolation probes."
     },
     {
       "ecosystem": "gomod",
@@ -163,9 +163,9 @@
       "owner": "Web/Console",
       "status": "needs_human",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
+      "next_review_by": "2026-08-20",
       "deferral_until": "",
-      "rationale": "SEC-5b43d4b3: upgraded to the latest published compatible release and kept all route tests green, but that release has a newer advisory and the named fully patched release is not published; do not suppress npm audit."
+      "rationale": "SEC-5b43d4b3: upgraded to the latest published compatible release and kept all route tests green, but that release has a newer advisory and the named fully patched release is not published; do not suppress npm audit. AUD-15 moved next_review_by from 2026-08-26 to 2026-08-20: the 60-day web-runtime budget expires that day, and a review booked after it would have let this row go red with nobody scheduled to look."
     },
     {
       "ecosystem": "npm",

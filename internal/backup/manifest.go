@@ -104,6 +104,16 @@ var RecoveredFromPostgresBackup = []string{
 	// and the coverage row is what would have told them the figure was short.
 	"provider_usage_meters",
 	"provider_usage_coverage",
+	// L1: provider operator delegations. RecoveredFromPostgresBackup, NOT a log
+	// projection — a grant is written directly by `trstctl provider-grant`, so
+	// there is no event to replay and a rebuild cannot reconstruct it.
+	//
+	// The failure mode of losing these is the QUIET one: the plane fails closed,
+	// so a restore that dropped the table would leave every operator refused on
+	// every customer, reading as "the provider plane is broken" rather than "the
+	// grants did not come back". Failing safe is not the same as failing
+	// visibly.
+	"provider_operator_delegations",
 }
 
 // Ephemeral state is not required for a correct restore (it regenerates).

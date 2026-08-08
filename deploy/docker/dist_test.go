@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -991,12 +992,32 @@ func TestReleasePinsContainerBasesByDigest(t *testing.T) {
 	mustContainAny(t, "release records the pinned bases", rel, "GITHUB_STEP_SUMMARY", "pinned container base")
 }
 
-// TestPgxIsBumpedAndClean encodes the dependency bump: go.mod pins jackc/pgx/v5
-// at the advisory-clearing v5.9.2 floor, not older vulnerable releases.
+// TestPgxIsBumpedAndClean encodes the dependency FLOOR: go.mod must pin
+// jackc/pgx/v5 at or above the advisory-clearing v5.9.2, never below it.
+//
+// This asserted string equality with v5.9.2 until AUD-15, which made it a
+// ratchet pointing the wrong way: the comment said "floor" but the check
+// blocked every upgrade, so the routine v5.9.2 -> v5.10.0 bump failed a guard
+// whose stated purpose it satisfied. A security floor written as an equality
+// stops being a floor the first time somebody moves forward, and the pressure
+// then is to delete it rather than fix it.
 func TestPgxIsBumpedAndClean(t *testing.T) {
+	const minMinor, minPatch = 9, 2
 	gomod := repoFile(t, "go.mod")
-	mustContainAll(t, "go.mod pins pgx v5.9.2", gomod, "github.com/jackc/pgx/v5 v5.9.2")
-	if strings.Contains(gomod, "github.com/jackc/pgx/v5 v5.6.0") {
-		t.Error("go.mod still references the vulnerable pgx v5.6.0")
+	match := regexp.MustCompile(`github\.com/jackc/pgx/v5 v5\.(\d+)\.(\d+)`).FindStringSubmatch(gomod)
+	if match == nil {
+		t.Fatal("go.mod does not pin github.com/jackc/pgx/v5 at a readable v5.MINOR.PATCH version")
+	}
+	minor, err := strconv.Atoi(match[1])
+	if err != nil {
+		t.Fatalf("unreadable pgx minor %q: %v", match[1], err)
+	}
+	patch, err := strconv.Atoi(match[2])
+	if err != nil {
+		t.Fatalf("unreadable pgx patch %q: %v", match[2], err)
+	}
+	if minor < minMinor || (minor == minMinor && patch < minPatch) {
+		t.Errorf("go.mod pins pgx v5.%d.%d, below the advisory-clearing v5.%d.%d floor",
+			minor, patch, minMinor, minPatch)
 	}
 }

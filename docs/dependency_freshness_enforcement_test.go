@@ -88,6 +88,12 @@ func TestDependencyFreshnessFailsWhenBehindSinceExceedsTheClassBudget(t *testing
 		if row["name"] != "github.com/open-policy-agent/opa" {
 			return false
 		}
+		// Forced to planned with no deferral. AUD-15 moved this row to a dated
+		// accepted_deferral, and a live deferral legitimately covers an
+		// over-budget row -- so without this the mutation would test nothing and
+		// pass for the wrong reason.
+		row["status"] = "planned"
+		row["deferral_until"] = ""
 		row["behind_since"] = stale
 		return true
 	})
@@ -95,8 +101,10 @@ func TestDependencyFreshnessFailsWhenBehindSinceExceedsTheClassBudget(t *testing
 	if !failed {
 		t.Fatalf("CODE-111: a critical-go-runtime dependency behind since %s (60 days against a 45-day budget) must fail the gate, got success:\n%s", stale, out)
 	}
-	if !strings.Contains(out, "45-day critical-go-runtime budget") {
-		t.Errorf("CODE-111: the failure must name the class budget that was exceeded, got:\n%s", out)
+	if !strings.Contains(out, "over the 45-day critical-go-runtime budget") {
+		t.Errorf("CODE-111: the failure must name the class budget that was EXCEEDED. "+
+			"Matching a looser substring would also accept AUD-15's scheduling message, which is "+
+			"a different defect, and this guard would pass without the budget ever biting. Got:\n%s", out)
 	}
 }
 
@@ -296,5 +304,88 @@ func TestDependencyFreshnessRejectsAnExpiredDeferralOnAMajorGap(t *testing.T) {
 	want := fmt.Sprintf("over the 1-major gap cap, and its deferral_until %s does not cover today", expired)
 	if !strings.Contains(out, want) {
 		t.Errorf("CODE-111: the failure must say the deferral no longer covers the major gap; want %q, got:\n%s", want, out)
+	}
+}
+
+// AUD-15: a review scheduled after the deadline it exists to protect is a deadline
+// the policy has already given up on.
+//
+// This is what let five critical-go-runtime rows go red the moment the budget started
+// biting. They were authored 36 days behind with next_review_by 30 days out, so they
+// were always going to breach nine days before anyone was scheduled to look. Nothing
+// was misfiled: a 45-day budget measured from the upstream release date, combined with
+// a 30-day report cycle, GUARANTEES that for any row already 15+ days behind when the
+// report is written. The contradiction has to be uncommittable, not discovered when CI
+// turns red.
+func TestFreshnessRejectsAReviewScheduledAfterItsOwnBudgetExpires(t *testing.T) {
+	// embedded-postgres is an accepted_deferral, so move it back to planned with a
+	// behind_since inside its 45-day budget and a review booked just past the end of it.
+	behind := time.Now().UTC().AddDate(0, 0, -10).Format(time.DateOnly)
+	late := time.Now().UTC().AddDate(0, 0, 40).Format(time.DateOnly) // behind+45 is +35
+	body := mutateFreshnessReport(t, func(row map[string]any) bool {
+		if row["name"] != "github.com/fergusstrange/embedded-postgres" {
+			return false
+		}
+		row["status"] = "planned"
+		row["deferral_until"] = ""
+		row["behind_since"] = behind
+		row["next_review_by"] = late
+		return true
+	})
+	out, failed := runFreshnessChecker(t, body)
+	if !failed {
+		t.Fatalf("AUD-15: a row behind since %s with next_review_by %s — 40 days out against a "+
+			"45-day budget that expires in 35 — must fail: the review cannot prevent the breach "+
+			"it is scheduled for. Got success:\n%s", behind, late, out)
+	}
+	if !strings.Contains(out, "AFTER the 45-day critical-go-runtime budget") {
+		t.Errorf("AUD-15: the failure must name the budget the review was booked past, got:\n%s", out)
+	}
+}
+
+// A deferred row is measured against its deferral_until instead, because that date —
+// not the original budget — is the promise it is making. Booking the review past the
+// deferral is the same defect one level up.
+func TestFreshnessRejectsAReviewScheduledAfterItsDeferralLapses(t *testing.T) {
+	until := time.Now().UTC().AddDate(0, 0, 20).Format(time.DateOnly)
+	late := time.Now().UTC().AddDate(0, 0, 30).Format(time.DateOnly)
+	body := mutateFreshnessReport(t, func(row map[string]any) bool {
+		if row["name"] != "github.com/open-policy-agent/opa" {
+			return false
+		}
+		row["status"] = "accepted_deferral"
+		row["deferral_until"] = until
+		row["next_review_by"] = late
+		return true
+	})
+	out, failed := runFreshnessChecker(t, body)
+	if !failed {
+		t.Fatalf("AUD-15: a deferral lapsing %s with its review booked %s must fail; the row "+
+			"would go red with nobody scheduled to look. Got success:\n%s", until, late, out)
+	}
+	if !strings.Contains(out, "AFTER its deferral_until") {
+		t.Errorf("AUD-15: the failure must name the deferral the review was booked past, got:\n%s", out)
+	}
+}
+
+// The guard must not fire on a review booked exactly ON the deadline: a review that
+// lands the same day still prevents the breach, and an off-by-one here would force
+// every row to be re-dated a day early for no reason.
+func TestFreshnessAcceptsAReviewOnTheDeadlineItself(t *testing.T) {
+	behind := time.Now().UTC().AddDate(0, 0, -10)
+	body := mutateFreshnessReport(t, func(row map[string]any) bool {
+		if row["name"] != "github.com/fergusstrange/embedded-postgres" {
+			return false
+		}
+		row["status"] = "planned"
+		row["deferral_until"] = ""
+		row["behind_since"] = behind.Format(time.DateOnly)
+		row["next_review_by"] = behind.AddDate(0, 0, 45).Format(time.DateOnly)
+		return true
+	})
+	out, failed := runFreshnessChecker(t, body)
+	if failed {
+		t.Fatalf("AUD-15: a review booked exactly on the budget expiry was rejected; it lands in "+
+			"time and must be allowed:\n%s", out)
 	}
 }

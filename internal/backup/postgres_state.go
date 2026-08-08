@@ -491,6 +491,13 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// invoiced anyway.
 		"provider_usage_meters",
 		"provider_usage_coverage",
+		// L1: provider operator delegations. No foreign keys either, and it
+		// restores after the meters for the same reason they restore last: this
+		// is authority data, and a half-restored grant table is worse than an
+		// obviously absent one — the plane fails closed on what is missing, so
+		// a partial restore reads as a working plane that refuses some
+		// operators rather than as an incomplete restore.
+		"provider_operator_delegations",
 	}
 	if err := validatePostgresStateRestoreOrder(parentFirst); err != nil {
 		return nil, err

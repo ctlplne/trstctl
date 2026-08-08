@@ -47,6 +47,14 @@ function daysBetween(start, end) {
   return Math.floor((end.getTime() - start.getTime()) / 86400000);
 }
 
+function addDays(date, days) {
+  return new Date(date.getTime() + days * 86400000);
+}
+
+function formatDateOnly(date) {
+  return date.toISOString().slice(0, 10);
+}
+
 // AH-fad87256: an age budget and a major-version gap are different debts. A row can sit
 // well inside its class age budget and still be two majors behind -- where TypeScript was
 // (5.9.3 against a published 7.0.2, in the 90-day developer-tooling class) while this gate
@@ -218,11 +226,36 @@ for (const upgrade of report.tracked_upgrades ?? []) {
         fail(`tracked upgrade ${upgrade.name} behind_since ${upgrade.behind_since} is in the future`);
       } else if (behindSince && budgetDays !== undefined) {
         const behindDays = daysBetween(behindSince, today);
-        if (behindDays > budgetDays) {
-          if (upgrade.status !== "accepted_deferral") {
-            fail(`tracked upgrade ${upgrade.name} has been behind since ${upgrade.behind_since} (${behindDays} days), over the ${budgetDays}-day ${upgrade.freshness_slo_class} budget: upgrade it, or record status accepted_deferral with a dated deferral_until`);
-          } else if (!deferralUntil || deferralUntil < today) {
-            fail(`tracked upgrade ${upgrade.name} has been behind since ${upgrade.behind_since} (${behindDays} days), over the ${budgetDays}-day ${upgrade.freshness_slo_class} budget, and its deferral_until ${upgrade.deferral_until || "(missing)"} does not cover today`);
+        const breached = behindDays > budgetDays;
+        const deferralLive = upgrade.status === "accepted_deferral" && deferralUntil && deferralUntil >= today;
+
+        if (breached && upgrade.status !== "accepted_deferral") {
+          fail(`tracked upgrade ${upgrade.name} has been behind since ${upgrade.behind_since} (${behindDays} days), over the ${budgetDays}-day ${upgrade.freshness_slo_class} budget: upgrade it, or record status accepted_deferral with a dated deferral_until`);
+        } else if (breached && !deferralLive) {
+          fail(`tracked upgrade ${upgrade.name} has been behind since ${upgrade.behind_since} (${budgetDays} day budget, ${behindDays} days behind), over the ${budgetDays}-day ${upgrade.freshness_slo_class} budget, and its deferral_until ${upgrade.deferral_until || "(missing)"} does not cover today`);
+        } else {
+          // AUD-15: a review scheduled AFTER the deadline it exists to protect is
+          // a deadline the policy has already given up on.
+          //
+          // This is what let five critical-go-runtime rows go red the moment the
+          // budget started biting. They were authored 36 days behind with a review
+          // 30 days out, so they were always going to breach nine days before
+          // anyone was scheduled to look. Nothing was misfiled: a 45-day budget
+          // measured from the upstream release date, combined with a 30-day report
+          // cycle, GUARANTEES that for any row already 15+ days behind when the
+          // report is written. A policy that cannot satisfy itself must be
+          // impossible to commit, not discovered when CI turns red.
+          //
+          // The deadline is the deferral_until when one is live, because that date
+          // -- not the original budget -- is the promise the row is making. It is
+          // skipped only for a row that has already breached with no cover, where
+          // the failure above is the point and scheduling advice is noise.
+          const reviewDeadline = deferralLive ? deferralUntil : addDays(behindSince, budgetDays);
+          if (nextReview && reviewDeadline && nextReview > reviewDeadline) {
+            const which = deferralLive
+              ? `its deferral_until ${upgrade.deferral_until}`
+              : `the ${budgetDays}-day ${upgrade.freshness_slo_class} budget, which expires ${formatDateOnly(reviewDeadline)}`;
+            fail(`tracked upgrade ${upgrade.name} schedules next_review_by ${upgrade.next_review_by} AFTER ${which}: a review booked past its own deadline cannot prevent the breach it exists to prevent, so move the review earlier or record a deferral that covers it`);
           }
         }
       }

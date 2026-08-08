@@ -485,6 +485,12 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			// the figure was short.
 			{`INSERT INTO provider_usage_meters (tenant_id, meter, period_start, kind, value) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "certificates.issued", now.Truncate(time.Hour), "counter", int64(17)}},
 			{`INSERT INTO provider_usage_coverage (tenant_id, observed_from, observed_to) VALUES ($1, $2, $3)`, []any{tenantA, now.Add(-time.Hour), now}},
+			// L1: a provider operator's delegation over a customer. Nothing in the
+			// event log can rebuild it — the grant is written directly by
+			// `trstctl provider-grant` — and losing it fails CLOSED, so a restore
+			// that dropped this table would leave every operator refused on every
+			// customer and read as a broken plane rather than a lost table.
+			{`INSERT INTO provider_operator_delegations (operator_id, customer_tenant_id, operation, granted_by) VALUES ($1, $2, $3, $4)`, []any{"full-dr-operator", tenantA, "suspend", "full-dr-admin"}},
 			{`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, scopes, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{"00000000-0000-0000-0000-00000000a001", tenantA, "full-dr-api-token-hash", "ci", []string{"owners:read"}, now.Add(time.Hour)}},
 			{`INSERT INTO agent_bootstrap_tokens (id, tenant_id, token_hash, allowed_identity, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{"00000000-0000-0000-0000-00000000a002", tenantA, "full-dr-bootstrap-hash", "edge-1", now.Add(time.Hour)}},
 			// A3: the credential-redemption ledger must survive a restore intact.

@@ -43,6 +43,31 @@ before that date, the real date is earlier and the recorded value understates th
 Move it earlier whenever a better-evidenced date is known; never move it later to buy
 time.
 
+## A review may not be scheduled past its own deadline
+
+`next_review_by` must land on or before the date the row is actually due:
+`behind_since + max_age_days` normally, or `deferral_until` when a deferral is live.
+A later review fails the gate.
+
+This exists because the policy was, for a while, unable to satisfy itself. Five
+`critical-go-runtime` rows shared `behind_since: 2026-06-21` and were authored into a
+report observed on `2026-07-27` — already 36 days into a 45-day budget — with
+`next_review_by: 2026-08-26`. They were always going to breach on 2026-08-05, three days
+after the gate was made real, and 21 days before anyone was scheduled to look. Nothing
+was misfiled. A 45-day budget measured from the upstream release date, combined with a
+30-day report cycle, guarantees that outcome for any row already 15 or more days behind
+when the report is written.
+
+The guard also caught a latent second case: `react-router-dom` was comfortably inside
+its 60-day budget but had its review booked six days after that budget expired, so it
+would have gone red on 2026-08-20 with nobody due to look until the 26th.
+
+The check is skipped for a row that has already breached with no live deferral — there
+the age failure is the point, and scheduling advice would only be noise.
+
+The remedy is never to widen `max_age_days` so the red goes away. Move the review
+earlier, record a dated `accepted_deferral` that covers it, or do the upgrade.
+
 ## The major-version gap cap
 
 The age budget and the major-version gap are different debts. A row can sit well inside
