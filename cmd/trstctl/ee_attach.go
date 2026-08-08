@@ -304,6 +304,18 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 			log.Info("Provider siloed isolation attached", slog.String("feature", string(license.FeatureSiloedIsolation)))
 		}
 	}
+	// L3/AUD-14: durable branding, installed BEFORE the provider block so the
+	// provider console's brand-set route can write through the same store and
+	// invalidate the same resolver. InstallDurable lost a provider's brand on
+	// every deploy SILENTLY — their customers went back to seeing our product
+	// name with nothing saying why.
+	var brandInstall *eewhitelabel.Installation
+	if lic != nil && lic.Has(license.FeatureWhiteLabel) {
+		brandInstall = eewhitelabel.InstallDurable(deps.Store)
+		if log != nil {
+			log.Info("Provider white-label branding attached", slog.String("feature", string(license.FeatureWhiteLabel)))
+		}
+	}
 	if lic != nil && lic.Has(license.FeatureProviderPlane) {
 		// L1: the operator authenticator, federated to the provider's own IdP.
 		// Unconfigured means NIL, and a nil authenticator REFUSES EVERY
@@ -357,6 +369,11 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 			// would refuse every quota write — correct, but only for a
 			// deployment with no Postgres, which this branch has.
 			Quotas: eebilling.NewPGStore(deps.Store),
+			// L3: brand administration writes through the durable white-label
+			// store and invalidates its resolver, behind the same delegation
+			// gate. Nil when white-label is not licensed, which refuses every
+			// brand write — a brand nobody can resolve is not white-label.
+			Brands: providerBrandStore(brandInstall),
 		})
 		if log != nil {
 			// Says what an operator will actually observe. "Attached" alone
@@ -427,15 +444,6 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 			}))
 		if log != nil {
 			log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
-		}
-	}
-	if lic != nil && lic.Has(license.FeatureWhiteLabel) {
-		// L3/AUD-14: durable branding. InstallInMemory lost a provider's brand on
-		// every deploy SILENTLY — their customers went back to seeing our
-		// product name with nothing saying why.
-		eewhitelabel.InstallDurable(deps.Store)
-		if log != nil {
-			log.Info("Provider white-label branding attached", slog.String("feature", string(license.FeatureWhiteLabel)))
 		}
 	}
 	return nil
@@ -612,4 +620,39 @@ func attachConfig(cfg *config.Config) config.Config {
 		return config.Config{}
 	}
 	return *cfg
+}
+
+// providerBrandStore adapts the durable white-label installation to the
+// provider plane's BrandStore (L3). It lives in the attach seam because only
+// here may both ee/provider and ee/whitelabel be imported without an edition
+// cycle. A nil installation (white-label unlicensed) yields a nil store, and a
+// nil BrandStore makes the provider's SetTenantBrand refuse — fail closed.
+func providerBrandStore(inst *eewhitelabel.Installation) eeprovider.BrandStore {
+	if inst == nil || inst.PG == nil {
+		return nil
+	}
+	return brandStoreAdapter{inst: inst}
+}
+
+type brandStoreAdapter struct{ inst *eewhitelabel.Installation }
+
+func (a brandStoreAdapter) SetTenantBrand(ctx context.Context, b eeprovider.TenantBrand) error {
+	if err := a.inst.PG.SetTenantBrand(ctx, eewhitelabel.Record{
+		TenantID:      b.TenantID,
+		ProductName:   b.ProductName,
+		LogoDataURI:   b.LogoDataURI,
+		LoginMessage:  b.LoginMessage,
+		EmailFromName: b.EmailFromName,
+		EmailFooter:   b.EmailFooter,
+		CustomDomain:  b.CustomDomain,
+	}); err != nil {
+		return err
+	}
+	// Invalidate the resolver cache so the new brand resolves immediately
+	// rather than after the cache TTL — a provider who just set a customer's
+	// brand expects to see it, not to wait a minute wondering if it took.
+	if a.inst.Resolver != nil {
+		a.inst.Resolver.Invalidate()
+	}
+	return nil
 }

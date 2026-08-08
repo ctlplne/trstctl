@@ -56,6 +56,10 @@ type Config struct {
 	// a plane that cannot express the partition hands every operator the union
 	// of every customer's risk.
 	Delegations DelegationSource
+	// Brands is the durable white-label store (L3). NIL MEANS BRAND
+	// ADMINISTRATION REFUSES, like Quotas: a brand that cannot survive a
+	// restart is not a white-label guarantee.
+	Brands BrandStore
 	// Quotas is the durable per-customer limit store (L2). NIL MEANS QUOTA
 	// ADMINISTRATION REFUSES: accepting a cap that cannot survive a restart
 	// would tell a provider their customer is limited when nothing is.
@@ -117,6 +121,7 @@ type Service struct {
 	delegations      DelegationSource
 	telemetry        TelemetryReader
 	quotas           QuotaStore
+	brands           BrandStore
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
 }
@@ -154,7 +159,7 @@ func NewService(cfg Config) *Service {
 	// default answer to "which customers may this operator touch", and the only
 	// safe default answer is none.
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
-		delegations: cfg.Delegations, telemetry: telemetry, quotas: cfg.Quotas, clock: clock, maxBreakGlassTTL: maxTTL}
+		delegations: cfg.Delegations, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRequest) (Tenant, error) {

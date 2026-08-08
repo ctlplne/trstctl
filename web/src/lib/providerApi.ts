@@ -51,6 +51,15 @@ export interface ProviderQuota {
   updated_by?: string;
 }
 
+export interface ProviderBrand {
+  product_name?: string;
+  logo_data_uri?: string;
+  login_message?: string;
+  email_from_name?: string;
+  email_footer?: string;
+  custom_domain?: string;
+}
+
 /** ProviderAuthError is thrown when no operator token is present or the plane
  * refuses the credential — the console renders the login gate rather than an
  * error banner, because "not signed in" is not a failure. */
@@ -104,4 +113,6 @@ export const providerApi = {
     providerReq<ProviderQuota>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`),
   setQuota: (id: string, quota: ProviderQuota): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`, { method: "PUT", body: JSON.stringify(quota) }),
+  setBrand: (id: string, brand: ProviderBrand): Promise<void> =>
+    providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/brand`, { method: "PUT", body: JSON.stringify(brand) }),
 };

@@ -14,6 +14,7 @@ import {
   ProviderAuthError,
   type ProviderTenant,
   type ProviderQuota,
+  type ProviderBrand,
 } from "@/lib/providerApi";
 
 /**
@@ -165,6 +166,68 @@ type QuotaViewState =
   | { id: string; state: "error" }
   | { id: string; state: "ok"; data: ProviderQuota };
 
+function BrandEditor({
+  tenantId,
+  onSaved,
+  onAuthError,
+}: {
+  tenantId: string;
+  onSaved: () => void;
+  onAuthError: () => void;
+}) {
+  const [productName, setProductName] = useState("");
+  const [customDomain, setCustomDomain] = useState("");
+  const [loginMessage, setLoginMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const field = (labelKey: MessageKey, value: string, setValue: (v: string) => void) => (
+    <label className="grid gap-1">
+      <span className="font-medium text-muted-foreground">{translateNow(labelKey)}</span>
+      <Input value={value} onChange={(e) => setValue(e.target.value)} aria-label={translateNow(labelKey)} className="w-56" />
+    </label>
+  );
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError(null);
+    const brand: ProviderBrand = {
+      product_name: productName.trim() || undefined,
+      custom_domain: customDomain.trim() || undefined,
+      login_message: loginMessage.trim() || undefined,
+    };
+    try {
+      await providerApi.setBrand(tenantId, brand);
+      onSaved();
+    } catch (err) {
+      if (err instanceof ProviderAuthError) {
+        onAuthError();
+        return;
+      }
+      // A custom-domain collision (another customer already claims the host)
+      // surfaces here as the store's refusal — shown, not swallowed.
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-muted-foreground">{translateNow("source.provider.brand.hint.l3prov0031")}</p>
+      <div className="flex flex-wrap items-end gap-3">
+        {field("source.provider.brand.product.l3prov0032", productName, setProductName)}
+        {field("source.provider.brand.domain.l3prov0033", customDomain, setCustomDomain)}
+        {field("source.provider.brand.message.l3prov0034", loginMessage, setLoginMessage)}
+        <Button type="button" disabled={saving} onClick={() => void save()}>
+          {translateNow("source.provider.brand.save.l3prov0035")}
+        </Button>
+      </div>
+      {saveError ? <p className="text-status-danger">{saveError}</p> : null}
+    </div>
+  );
+}
+
 function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   const [tenants, setTenants] = useState<ProviderTenant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +237,10 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   // The customer whose quota is expanded, as a discriminated union so the
   // render narrows cleanly between loading, a load failure, and a value.
   const [quotaView, setQuotaView] = useState<QuotaViewState | null>(null);
+  // The customer whose brand editor is expanded. Brand has no read route here,
+  // so it opens to an empty form the operator fills — a write surface, not a
+  // round-trip.
+  const [brandFor, setBrandFor] = useState<string | null>(null);
 
   const viewQuota = useCallback(
     async (id: string) => {
@@ -357,6 +424,16 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                       >
                         {translateNow("source.provider.quota.l3prov0022")}
                       </Button>
+                      {tenant.status !== "offboarded" ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="ml-2"
+                          onClick={() => setBrandFor((cur) => (cur === tenant.id ? null : tenant.id))}
+                        >
+                          {translateNow("source.provider.brand.l3prov0030")}
+                        </Button>
+                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -366,30 +443,48 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                      absence of a limit, not a limit of nothing. */
                   .flatMap((rowEl, i) => {
                     const tenant = tenants[i];
-                    if (quotaView?.id !== tenant.id) return [rowEl];
-                    return [
-                      rowEl,
-                      <tr key={`${tenant.id}-quota`} className="bg-muted/30">
-                        <td colSpan={5} className="px-4 py-2 text-xs">
-                          {quotaView.state === "loading" ? (
-                            translateNow("source.loading.4f9d1e0e3a")
-                          ) : quotaView.state === "error" ? (
-                            <span className="text-muted-foreground">{translateNow("source.provider.quota.none.l3prov0023")}</span>
-                          ) : (
-                            <QuotaEditor
-                              key={tenant.id}
+                    const extras = [rowEl];
+                    if (quotaView?.id === tenant.id) {
+                      extras.push(
+                        <tr key={`${tenant.id}-quota`} className="bg-muted/30">
+                          <td colSpan={5} className="px-4 py-2 text-xs">
+                            {quotaView.state === "loading" ? (
+                              translateNow("source.loading.4f9d1e0e3a")
+                            ) : quotaView.state === "error" ? (
+                              <span className="text-muted-foreground">{translateNow("source.provider.quota.none.l3prov0023")}</span>
+                            ) : (
+                              <QuotaEditor
+                                key={tenant.id}
+                                tenantId={tenant.id}
+                                initial={quotaView.data}
+                                onSaved={(saved) => setQuotaView({ id: tenant.id, state: "ok", data: saved })}
+                                onAuthError={() => {
+                                  clearProviderToken();
+                                  onSignOut();
+                                }}
+                              />
+                            )}
+                          </td>
+                        </tr>,
+                      );
+                    }
+                    if (brandFor === tenant.id) {
+                      extras.push(
+                        <tr key={`${tenant.id}-brand`} className="bg-muted/30">
+                          <td colSpan={5} className="px-4 py-2 text-xs">
+                            <BrandEditor
                               tenantId={tenant.id}
-                              initial={quotaView.data}
-                              onSaved={(saved) => setQuotaView({ id: tenant.id, state: "ok", data: saved })}
+                              onSaved={() => setBrandFor(null)}
                               onAuthError={() => {
                                 clearProviderToken();
                                 onSignOut();
                               }}
                             />
-                          )}
-                        </td>
-                      </tr>,
-                    ];
+                          </td>
+                        </tr>,
+                      );
+                    }
+                    return extras;
                   })}
               </tbody>
             </table>

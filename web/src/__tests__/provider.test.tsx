@@ -12,6 +12,7 @@ const { providerMock } = vi.hoisted(() => ({
     offboardTenant: vi.fn(),
     getQuota: vi.fn(),
     setQuota: vi.fn(),
+    setBrand: vi.fn(),
   },
 }));
 
@@ -114,6 +115,25 @@ describe("provider console (L3)", () => {
     expect(sent.max_agents).toBe(10);
     expect(sent.max_certificates_stored).toBeUndefined();
     expect(sent.max_secrets_stored).toBeUndefined();
+  });
+
+  it("sets a customer's white-label brand through the plane", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "t-1", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    providerMock.setBrand.mockResolvedValue(undefined);
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    const row = (await screen.findByText("Acme Corp")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Brand" }));
+    fireEvent.change(await screen.findByLabelText("Product name"), { target: { value: "Acme PKI" } });
+    fireEvent.change(screen.getByLabelText("Custom domain"), { target: { value: "certs.acme.example" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save brand" }));
+    await waitFor(() => expect(providerMock.setBrand).toHaveBeenCalledWith("t-1", expect.objectContaining({
+      product_name: "Acme PKI",
+      custom_domain: "certs.acme.example",
+    })));
   });
 
   it("drops the operator back to the gate when the plane refuses the token", async () => {

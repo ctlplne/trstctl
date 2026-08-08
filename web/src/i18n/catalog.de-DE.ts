@@ -4413,6 +4413,19 @@ const deDECatalog = {
     "Lassen Sie ein Feld leer für keine Begrenzung. Ein Limit von null bedeutet, dass der Kunde nichts erstellen darf — anders als keine Obergrenze.",
   "source.provider.quota.save.l3prov0029":
     "Kontingent speichern",
+  // L3 brand editor — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "source.provider.brand.l3prov0030":
+    "Marke",
+  "source.provider.brand.hint.l3prov0031":
+    "Legen Sie die White-Label-Marke dieses Kunden fest. Eine benutzerdefinierte Domain muss eindeutig sein — zwei Kunden können nicht einen Host beanspruchen, und die Ebene lehnt ein Duplikat ab.",
+  "source.provider.brand.product.l3prov0032":
+    "Produktname",
+  "source.provider.brand.domain.l3prov0033":
+    "Benutzerdefinierte Domain",
+  "source.provider.brand.message.l3prov0034":
+    "Anmeldenachricht",
+  "source.provider.brand.save.l3prov0035":
+    "Marke speichern",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

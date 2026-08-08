@@ -5885,6 +5885,36 @@ export const messages = {
       "Save quota",
     description: "L3: quota save button.",
   },
+  "source.provider.brand.l3prov0030": {
+    defaultMessage:
+      "Brand",
+    description: "L3: per-customer brand action.",
+  },
+  "source.provider.brand.hint.l3prov0031": {
+    defaultMessage:
+      "Set this customer's white-label brand. A custom domain must be unique \u2014 two customers cannot claim one host, and the plane refuses a duplicate.",
+    description: "L3: brand editor hint \u2014 custom domain uniqueness.",
+  },
+  "source.provider.brand.product.l3prov0032": {
+    defaultMessage:
+      "Product name",
+    description: "L3: brand product name.",
+  },
+  "source.provider.brand.domain.l3prov0033": {
+    defaultMessage:
+      "Custom domain",
+    description: "L3: brand custom domain.",
+  },
+  "source.provider.brand.message.l3prov0034": {
+    defaultMessage:
+      "Login message",
+    description: "L3: brand login message.",
+  },
+  "source.provider.brand.save.l3prov0035": {
+    defaultMessage:
+      "Save brand",
+    description: "L3: brand save button.",
+  },
   "source.adcs.database.error.f4adcs0013": {
     defaultMessage:
       "Could not load the AD CS certificate-database summary.",

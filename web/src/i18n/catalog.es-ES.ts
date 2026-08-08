@@ -4400,6 +4400,19 @@ const esESCatalog = {
     "Deje un campo en blanco para no poner límite. Un límite de cero significa que el cliente no puede crear nada, distinto de sin tope.",
   "source.provider.quota.save.l3prov0029":
     "Guardar cuota",
+  // L3 brand editor — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "source.provider.brand.l3prov0030":
+    "Marca",
+  "source.provider.brand.hint.l3prov0031":
+    "Establezca la marca de marca blanca de este cliente. Un dominio personalizado debe ser único: dos clientes no pueden reclamar un mismo host, y el plano rechaza un duplicado.",
+  "source.provider.brand.product.l3prov0032":
+    "Nombre del producto",
+  "source.provider.brand.domain.l3prov0033":
+    "Dominio personalizado",
+  "source.provider.brand.message.l3prov0034":
+    "Mensaje de inicio de sesión",
+  "source.provider.brand.save.l3prov0035":
+    "Guardar marca",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

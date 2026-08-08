@@ -41,6 +41,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.setQuota(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/quota"):
 		h.getQuota(w, r)
+	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/brand"):
+		h.setBrand(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/breakglass":
 		h.requestBreakGlass(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/breakglass/") && strings.HasSuffix(r.URL.Path, "/consent"):
@@ -121,6 +123,39 @@ func (h *handler) setQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.SetTenantQuota(r.Context(), op, customerID, q); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handler) setBrand(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/brand")
+	var body struct {
+		ProductName   string `json:"product_name"`
+		LogoDataURI   string `json:"logo_data_uri"`
+		LoginMessage  string `json:"login_message"`
+		EmailFromName string `json:"email_from_name"`
+		EmailFooter   string `json:"email_footer"`
+		CustomDomain  string `json:"custom_domain"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	if err := h.svc.SetTenantBrand(r.Context(), op, customerID, TenantBrand{
+		ProductName:   body.ProductName,
+		LogoDataURI:   body.LogoDataURI,
+		LoginMessage:  body.LoginMessage,
+		EmailFromName: body.EmailFromName,
+		EmailFooter:   body.EmailFooter,
+		CustomDomain:  body.CustomDomain,
+	}); err != nil {
 		writeProviderError(w, err)
 		return
 	}

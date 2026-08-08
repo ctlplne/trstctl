@@ -2155,11 +2155,16 @@ looking for a credential that was never there.
   "unlimited", never zero, because a missing cap is the absence of a limit, not
   a limit of nothing. Scope, stated exactly: this is the tenant-lifecycle
   console with per-customer quota MANAGEMENT — each customer row expands to
-  view and EDIT its limits (max agents, certificates, secrets), and a blank
-  field is saved as unlimited, never zero, because a limit of zero means the
-  customer may create nothing, a real but different instruction. Applying
-  white-label brand and custom domain FROM the console, and triggering
-  the siloed-isolation drills from the provider plane are not built. The auth
+  view and EDIT its limits (max agents, certificates, secrets), a blank field
+  saved as unlimited never zero — and per-customer WHITE-LABEL BRANDING: a brand
+  editor (product name, custom domain, login message) that writes through
+  `/provider/v1/tenants/{id}/brand`, a route this change added and wired to the
+  durable white-label store, behind the same per-customer delegation gate (an
+  operator can brand only a customer they are delegated, because a custom domain
+  is a claim on a host and branding another's customer could seize it). A
+  duplicate custom domain is refused by the store's uniqueness constraint and
+  the refusal is surfaced. Triggering the siloed-isolation drills from the
+  provider plane is not built. The auth
   is a memory-held bearer the
   operator supplies; the HttpOnly provider-session cookie flow (a proper OIDC
   redirect + server session, so the token never enters JS) is the follow-on
