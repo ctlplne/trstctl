@@ -75,6 +75,7 @@ func TestSelfUpgradeRefusesDigestMismatchAndLeavesBinaryAlone(t *testing.T) {
 			URL: srv.URL, SHA256: crypto.SHA256Hex([]byte("the-published-build"))}},
 	})}}
 	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0",
+		Client:  srv.Client(),
 		Restart: func() error { t.Error("restarted onto bytes that failed verification"); return nil }})
 
 	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed ||
@@ -126,7 +127,7 @@ func TestSelfUpgradeStagesSwapsReportsThenRestarts(t *testing.T) {
 	reportsAtRestart := -1
 	restarted := 0
 	executed, err := relay.RunOnceSelfUpgradeOnly(t.Context(), ch, &relay.SelfUpgrade{
-		ExecutablePath: exe, CurrentVersion: "1.0.0",
+		ExecutablePath: exe, CurrentVersion: "1.0.0", Client: srv.Client(),
 		Restart: func() error {
 			restarted++
 			reportsAtRestart = len(ch.reports)
@@ -179,6 +180,7 @@ func TestSelfUpgradeRestartFailureKeepsTheExecutedReport(t *testing.T) {
 			URL: srv.URL, SHA256: crypto.SHA256Hex(newBinary)}},
 	})}}
 	runUpgrade(t, ch, &relay.SelfUpgrade{ExecutablePath: exe, CurrentVersion: "1.0.0",
+		Client:  srv.Client(),
 		Restart: func() error { return os.ErrPermission }})
 	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeExecuted {
 		t.Fatalf("reports = %+v; the stage DID succeed and the report must say so — if this "+

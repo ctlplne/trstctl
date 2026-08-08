@@ -42,6 +42,11 @@ export function CMDBSyncPanel() {
           {translateNow("source.cmdb.sync.failing.i2own00013", { value1: s.last_error })}
         </p>
       ) : null}
+      {s.execution === "relay" ? (
+        <p className="text-caption text-muted-foreground">
+          {translateNow("source.cmdb.sync.relay.i2own00014")}
+        </p>
+      ) : null}
       <p className="text-caption text-muted-foreground">{s.guidance}</p>
     </section>
   );

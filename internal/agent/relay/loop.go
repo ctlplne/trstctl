@@ -55,6 +55,9 @@ func ClaimableKinds() []string {
 	return []string{
 		"connector.deploy", "connector.test", KindConnectorRollback,
 		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindEndpointVerify,
+		// I2: the CMDB read. Network-vantage work like the sweeps above; the
+		// server's role gate refuses it to host agents.
+		KindCMDBSync,
 		// B2: host-generated renewal. Asked for by every agent and granted only
 		// to host-role ones — the vantage gate is the server's, not the agent's,
 		// which is why this list is not split by role. A network relay asking
@@ -215,6 +218,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// (D2).
 	if job.Kind == KindEndpointVerify {
 		return runEndpointVerify(ctx, ch, job)
+	}
+	// I2: the CMDB read manages its own redemption — the token reference it
+	// resolves is named in its intent, not in a sealed deploy container — so
+	// it routes before the deploy path's generic decode.
+	if job.Kind == KindCMDBSync {
+		return runCMDBSync(ctx, ch, client, job)
 	}
 	// B2: a host-generated renewal redeems NOTHING. It is routed before the
 	// credential step because there is no credential to redeem — the key it

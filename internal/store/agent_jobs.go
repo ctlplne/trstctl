@@ -524,3 +524,21 @@ func (s *Store) AgentJobAttemptSignedOtherCSR(ctx context.Context, tenantID stri
 	})
 	return signed, err
 }
+
+// HasPendingAgentJob reports whether an unfinished job of this kind is already
+// queued for the tenant. The CMDB relay scheduler uses it to keep ONE sync in
+// flight: stacking identical reads behind an unclaimed job would have the
+// eventual relay replay a backlog against the instance (I2).
+func (s *Store) HasPendingAgentJob(ctx context.Context, tenantID, destination string) (bool, error) {
+	var pending bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM outbox
+			     WHERE tenant_id = $1 AND destination = $2
+			       AND status IN ('pending', 'processing')
+			       AND claim_completed_at IS NULL
+			)`, tenantID, destination).Scan(&pending)
+	})
+	return pending, err
+}

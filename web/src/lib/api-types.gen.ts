@@ -1008,6 +1008,7 @@ export interface CMDBReconcileSchedule {
   ci_query?: string;
   configured: boolean;
   enabled: boolean;
+  execution?: "control_plane" | "relay" | "";
   guidance: string;
   instance_url?: string;
   interval_seconds?: number;

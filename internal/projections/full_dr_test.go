@@ -485,6 +485,10 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			// the figure was short.
 			{`INSERT INTO provider_usage_meters (tenant_id, meter, period_start, kind, value) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "certificates.issued", now.Truncate(time.Hour), "counter", int64(17)}},
 			{`INSERT INTO provider_usage_coverage (tenant_id, observed_from, observed_to) VALUES ($1, $2, $3)`, []any{tenantA, now.Add(-time.Hour), now}},
+			// L2: a customer's cap. Losing it fails OPEN — the customer creates
+			// freely again — which is the pre-durability defect a restore must
+			// not reintroduce.
+			{`INSERT INTO provider_tenant_quotas (tenant_id, max_certificates_stored, updated_by) VALUES ($1, $2, $3)`, []any{tenantA, 25, "full-dr-admin"}},
 			// L1: a provider operator's delegation over a customer. Nothing in the
 			// event log can rebuild it — the grant is written directly by
 			// `trstctl provider-grant` — and losing it fails CLOSED, so a restore

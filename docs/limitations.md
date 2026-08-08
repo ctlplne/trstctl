@@ -1825,13 +1825,29 @@ looking for a credential that was never there.
   owner this estate has never heard of does NOT create one; it is reported as
   unattributed, because a CMDB assignment group is not evidence that a trstctl
   owner should exist and auto-creating would build a parallel estate out of the
-  CMDB's typos. Scope, stated exactly: the reconcile runs in the CONTROL PLANE
-  against the operator-approved ServiceNow binding allow-list, not in the relay,
-  and an instance inside a private network needs the SAME two grants the ticket
-  writer needs — an operator binding with `allow_private_endpoint` and
-  `private_egress_cidrs`, plus the caller holding `egress:private` — with the
-  CIDR grant resolved at RUN time rather than copied when the schedule was
-  saved, so narrowing it takes effect on the next sync; there is no run-now
+  CMDB's typos. The sync's VANTAGE is now the operator's choice (`execution` on
+  the schedule): `control_plane` — the default — fetches from the brain against
+  the operator-approved ServiceNow binding allow-list, and an instance inside a
+  private network then needs the SAME two grants the ticket writer needs (an
+  operator binding with `allow_private_endpoint` and `private_egress_cidrs`,
+  plus the caller holding `egress:private`), with the CIDR grant resolved at
+  RUN time so narrowing it takes effect on the next sync. `relay` inverts the
+  reach: the scheduler dispatches a `cmdb.sync` job that a NETWORK relay inside
+  the segment claims over its own outbound channel — no hole through the
+  firewall at all. The relay redeems the ServiceNow token per attempt through
+  the job-credential path (which is why relay execution REQUIRES a `secret://`
+  token_ref: an `env:` reference names a variable in the control plane's
+  environment, which the relay is not), reads the one permitted table through
+  the SAME endpoint builder the control plane uses, parses in place, and
+  reports records — never the raw response, bounded at 8MB. The RECONCILE
+  stays in the control plane on the reported records, so the
+  never-overwrite-an-attestation rule has exactly one implementation whichever
+  vantage read the CMDB. One sync in flight per tenant: a second due tick
+  behind an unclaimed job stamps the schedule with the waiting state ("if no
+  network relay is enrolled and claiming, none will run it") instead of
+  stacking identical reads for the eventual relay to replay. Scope, stated
+  exactly: relay mode is per-schedule opt-in, the dispatched read is one page
+  (500 CIs) like the control-plane path; there is no run-now
   endpoint (a newly enabled schedule is due
   immediately and fires within one scheduler tick, and its outcome is served as
   `last_run_at`/`last_error`); resolving a conflict is a read surface only —

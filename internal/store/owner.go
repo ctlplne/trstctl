@@ -401,8 +401,12 @@ type CMDBReconcileSchedule struct {
 	AllowPrivateEndpoint bool
 	IntervalSeconds      int
 	Enabled              bool
-	LastRunAt            *time.Time
-	LastError            string
+	// Execution says which vantage runs the sync (I2): "" or "control_plane"
+	// for the control plane's own fetch, "relay" to dispatch a cmdb.sync job a
+	// network relay inside the segment claims.
+	Execution string
+	LastRunAt *time.Time
+	LastError string
 }
 
 // GetCMDBReconcileSchedule returns the tenant's schedule, or ok=false when the
@@ -414,10 +418,10 @@ func (s *Store) GetCMDBReconcileSchedule(ctx context.Context, tenantID string) (
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, instance_url, token_ref, ci_query,
-			        allow_private_endpoint, interval_seconds, enabled, last_run_at, last_error
+			        allow_private_endpoint, interval_seconds, enabled, coalesce(execution, ''), last_run_at, last_error
 			   FROM cmdb_reconcile_schedules WHERE tenant_id = $1`, tenantID)
 		switch err := row.Scan(&out.ID, &out.TenantID, &out.InstanceURL, &out.TokenRef, &out.CIQuery,
-			&out.AllowPrivateEndpoint, &out.IntervalSeconds, &out.Enabled, &out.LastRunAt, &out.LastError); {
+			&out.AllowPrivateEndpoint, &out.IntervalSeconds, &out.Enabled, &out.Execution, &out.LastRunAt, &out.LastError); {
 		case errors.Is(err, pgx.ErrNoRows):
 			return nil
 		case err != nil:

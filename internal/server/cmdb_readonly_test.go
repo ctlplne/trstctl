@@ -126,3 +126,28 @@ func readSourceFile(name string) (string, error) {
 	b, err := os.ReadFile(name) // #nosec G304 -- test reads repo source files it names itself (CWE-22)
 	return string(b), err
 }
+
+// The relay executor is under the same two structural rules as the
+// control-plane path (I2): it only ever GETs, and it never creates owners.
+//
+// The relay file lives in another package, so the read-only property there
+// cannot lean on this package's helpers being absent — it has to be checked
+// against the source, the same way the control-plane half is.
+func TestRelayCMDBSyncIsStructurallyReadOnly(t *testing.T) {
+	t.Parallel()
+	src, err := readSourceFile("../agent/relay/cmdbsync.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"MethodPost", "MethodPut", "MethodPatch", "MethodDelete", "CreateOwner"} {
+		if strings.Contains(src, forbidden) {
+			t.Fatalf("the relay CMDB executor references %s. The relay READS from its vantage and "+
+				"decides nothing; a mutating verb here is a write into a customer's system of "+
+				"record from a machine inside their network", forbidden)
+		}
+	}
+	if !strings.Contains(src, "ownership.CMDBEndpoint(") {
+		t.Fatal("the relay builds its own CMDB URL instead of using the shared endpoint builder; " +
+			"two implementations of 'which table may be read' is how one drifts onto sys_user_password")
+	}
+}

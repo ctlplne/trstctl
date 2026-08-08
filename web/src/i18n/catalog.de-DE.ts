@@ -3320,6 +3320,8 @@ const deDECatalog = {
   "source.cmdb.sync.lastrun.i2own00011": "Zuletzt gelesen {value1}, alle {value2} Minuten.",
   "source.cmdb.sync.neverran.i2own00012": "Aktiviert und hat die CMDB noch nicht gelesen.",
   "source.cmdb.sync.failing.i2own00013": "Der letzte Lesevorgang ist fehlgeschlagen: {value1}",
+  "source.cmdb.sync.relay.i2own00014":
+    "Ausgeführt von einem Netzwerk-Relay innerhalb des Segments; das Token wird pro Versuch eingelöst und der Abgleich läuft weiterhin in der Steuerungsebene.",
   "source.ownership.source.column.i2own00006": "Herkunft der Zust\u00e4ndigkeit",
   "source.ownership.source.observed.i2own00008": "{value1}, zuletzt gesehen {value2}",
   "source.ownership.source.unrecorded.i2own00007": "nicht erfasst",

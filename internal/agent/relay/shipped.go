@@ -118,6 +118,13 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags: []string{"--relay-claim"},
 		},
 		{
+			// I2: the CMDB read from inside the segment. Redeems the ServiceNow
+			// token per attempt; reports parsed records, never the raw response.
+			// The reconcile stays in the control plane.
+			Kind:  KindCMDBSync,
+			Flags: []string{"--relay-claim"},
+		},
+		{
 			// A5: this agent's own staged upgrade. It redeems nothing — the
 			// artifact URL travels in the payload and the pinned sha256 is the
 			// trust anchor — and it declares no connectors because the thing it

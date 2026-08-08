@@ -3363,6 +3363,10 @@ func componentSchemas() map[string]*Schema {
 		"configured": {Type: "boolean"}, "instance_url": str(), "token_ref": str(),
 		"ci_query": str(), "allow_private_endpoint": {Type: "boolean"},
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
+		// execution is the sync vantage (I2): control_plane fetches from the
+		// brain; relay dispatches a cmdb.sync job a network relay inside the
+		// segment claims.
+		"execution": {Type: "string", Enum: []string{"control_plane", "relay", ""}},
 		// last_error is served rather than only logged: a sync failing for a week
 		// otherwise looks identical to one that found nothing to do.
 		"last_run_at": str(), "last_error": str(), "guidance": str(),

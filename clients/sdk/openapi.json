@@ -3751,6 +3751,14 @@
           "enabled": {
             "type": "boolean"
           },
+          "execution": {
+            "enum": [
+              "control_plane",
+              "relay",
+              ""
+            ],
+            "type": "string"
+          },
           "guidance": {
             "type": "string"
           },

@@ -12570,6 +12570,10 @@ export const messages = {
     defaultMessage: "The last read failed: {value1}",
     description: "I2: the served failure reason. A sync failing for a week otherwise looks like one with nothing to do.",
   },
+  "source.cmdb.sync.relay.i2own00014": {
+    defaultMessage: "Executed by a network relay inside the segment; the token is redeemed per attempt and the reconcile still runs in the control plane.",
+    description: "I2: relay-mode syncs read from a different vantage, and an operator debugging one needs to know which machine performed the read.",
+  },
   "source.ownership.source.column.i2own00006": {
     defaultMessage: "Ownership source",
     description: "I2: column header for where an ownership claim came from.",

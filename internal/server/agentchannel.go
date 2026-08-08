@@ -241,6 +241,9 @@ type agentService struct {
 	// D5). Nil means dry-run receipts are not recorded and the plan lives only
 	// in the event log.
 	recordDryRun func(ctx context.Context, tenantID, agent, idempotencyKey, plan string)
+	// recordCMDBSync turns a relay's CMDB observation into ownership
+	// reconciliation (I2), through the same core the control-plane fetch uses.
+	recordCMDBSync func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
 	// recordADCSPosture turns a relay's AD CS observation into the Posture
 	// console's read model (epic F1).
 	recordADCSPosture func(ctx context.Context, tenantID, agent, idempotencyKey, report string)

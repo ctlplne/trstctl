@@ -498,8 +498,13 @@ describe("i18n boundary", () => {
       // the gap) and `unsigned` (an unsigned document must not read as
       // attested — the absence is itself information).
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "83a919bcf78adc8fb82fad60fced09364c2df17440efba619d30f2594a9fb65b",
-      "de-DE": "81f10b1a8ec66cd5acc1ca9e8b516f03cb1b612b32b68e8de13db8034527d3f9",
+      // I2 relay-vantage re-pin: one source.cmdb.sync.relay key saying which
+      // machine performed the read — an operator debugging a relay-mode sync
+      // against firewall logs needs to know the request never left the
+      // segment.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "5068865851b5cc36ec6de1a626c7fc71e2ce0127517f621c744af8603d3f38a4",
+      "de-DE": "2ee39e8f230e473e2e4860dad42f99b934d68cd9bc8f5f62045c19d217cf05b2",
     });
   });
 

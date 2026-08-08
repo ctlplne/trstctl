@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -48,18 +47,25 @@ type CMDBReconcileResult struct {
 // decides, and its rule is that a source fills in what nobody recorded and
 // never overwrites what a human attested.
 func (s *Server) RunCMDBReconcileOnce(ctx context.Context, tenantID string, sched store.CMDBReconcileSchedule) (CMDBReconcileResult, error) {
-	var out CMDBReconcileResult
 	body, err := s.fetchCMDBPage(ctx, sched)
 	if err != nil {
-		return out, err
+		return CMDBReconcileResult{}, err
 	}
 	defer func() { _ = body.Close() }()
 	records, unattributed, err := ownership.ParseCMDB(body)
 	if err != nil {
-		return out, err
+		return CMDBReconcileResult{}, err
 	}
-	out.Read = len(records)
-	out.Unattributed = unattributed
+	return s.reconcileCMDBRecords(ctx, tenantID, records, unattributed)
+}
+
+// reconcileCMDBRecords is the reconcile core, shared by BOTH vantages: the
+// control plane's own fetch above, and a relay's reported observation (I2).
+// One implementation, because the rule that matters — a source fills in what
+// nobody recorded and never overwrites what a human attested — must not have
+// a second copy that drifts on the vantage exercised less.
+func (s *Server) reconcileCMDBRecords(ctx context.Context, tenantID string, records []ownership.Record, unattributed []string) (CMDBReconcileResult, error) {
+	out := CMDBReconcileResult{Read: len(records), Unattributed: unattributed}
 
 	owners, err := s.store.ListOwnersPage(ctx, tenantID, store.ZeroUUID, cmdbPageLimit)
 	if err != nil {
@@ -158,30 +164,10 @@ func (s *Server) fetchCMDBPage(ctx context.Context, sched store.CMDBReconcileSch
 	return resp.Body, nil
 }
 
-// cmdbEndpoint builds the read URL.
-//
-// The path is fixed to the cmdb_ci table: a schedule cannot name an arbitrary
-// table, so a tenant cannot turn this read into a read of sys_user_password.
-// display_value=all is requested because a reference field's raw value is a
-// sys_id, and a sys_id in an owner column is a value nobody can act on.
+// cmdbEndpoint delegates to the shared builder beside ParseCMDB, so the
+// control plane and the relay (I2) cannot drift on which table may be read.
 func cmdbEndpoint(instanceURL, query string) (string, error) {
-	base, err := url.Parse(strings.TrimSpace(instanceURL))
-	if err != nil {
-		return "", fmt.Errorf("server: parse ServiceNow instance URL: %w", err)
-	}
-	if base.Scheme == "" || base.Host == "" {
-		return "", fmt.Errorf("server: ServiceNow instance URL must be absolute")
-	}
-	base.Path = strings.TrimRight(base.Path, "/") + "/api/now/table/cmdb_ci"
-	q := url.Values{}
-	q.Set("sysparm_display_value", "all")
-	q.Set("sysparm_limit", fmt.Sprintf("%d", cmdbPageLimit))
-	if trimmed := strings.TrimSpace(query); trimmed != "" {
-		q.Set("sysparm_query", trimmed)
-	}
-	base.RawQuery = q.Encode()
-	base.Fragment = ""
-	return base.String(), nil
+	return ownership.CMDBEndpoint(instanceURL, query, cmdbPageLimit)
 }
 
 // RunCMDBScheduler is the leader-only ticker. A failed sync stamps the schedule
@@ -200,6 +186,13 @@ func (s *Server) RunCMDBScheduler(ctx context.Context) {
 		for _, tenantID := range tenants {
 			sched, due, err := s.store.CMDBScheduleDue(ctx, tenantID, time.Now())
 			if err != nil || !due {
+				continue
+			}
+			if sched.Execution == "relay" {
+				// I2: the read happens from a network relay inside the segment.
+				// The scheduler's job shrinks to dispatching; the report path
+				// runs the reconcile and stamps the real outcome.
+				s.dispatchCMDBSyncJob(ctx, tenantID, sched)
 				continue
 			}
 			res, runErr := s.RunCMDBReconcileOnce(ctx, tenantID, sched)

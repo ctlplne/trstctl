@@ -5860,6 +5860,8 @@ export interface components {
             ci_query?: string;
             configured: boolean;
             enabled: boolean;
+            /** @enum {string} */
+            execution?: "control_plane" | "relay" | "";
             guidance: string;
             instance_url?: string;
             interval_seconds?: number;

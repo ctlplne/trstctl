@@ -65,6 +65,11 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// payload is not a sealed connector deploy, so it resolves the
 		// secret:// references named in the job payload directly.
 		return r.resolveJobReferences(ctx, tenantID, job)
+	case "cmdb.sync":
+		// I2: a CMDB read redeems the ServiceNow token the schedule names as a
+		// secret:// reference — same custody as the AD CS bind above: resolved
+		// per attempt, never carried on the queue.
+		return r.resolveJobReferences(ctx, tenantID, job)
 	case "connector.deploy", "connector.rollback", "connector.test":
 		// connector.test redeems too (D5). A dry-run exists to find out whether
 		// the credential works; one that skipped redemption would pass right up

@@ -1468,6 +1468,7 @@ CMDBReconcileSchedule = TypedDict(
         'ci_query': str,
         'configured': bool,
         'enabled': bool,
+        'execution': str,
         'guidance': str,
         'instance_url': str,
         'interval_seconds': int,

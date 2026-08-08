@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"github.com/jackc/pgx/v5"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -30,6 +32,10 @@ import (
 // resolves at request time), never a credential value. Named once so gosec's
 // hardcoded-credential heuristic does not fire on every map literal carrying it.
 const servedCMDBTokenRef = "env:TRSTCTL_SERVICENOW_TOKEN" // #nosec G101 -- credential reference (env: pointer), no credential value present (CWE-798)
+
+// servedCMDBSecretRef is the secret-store REFERENCE relay-mode schedules carry;
+// the relay redeems the value per attempt. No credential value present.
+const servedCMDBSecretRef = "secret://itsm/servicenow-token" // #nosec G101 -- credential reference (secret store pointer), no credential value present (CWE-798)
 
 type cmdbSink struct {
 	mu       sync.Mutex
@@ -280,5 +286,141 @@ func TestServedCMDBScheduleRefusesAnUnauthenticatedRead(t *testing.T) {
 	}
 	if status != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", status)
+	}
+}
+
+// I2's relay half at the served layer: a relay-mode schedule DISPATCHES a
+// targeted job instead of fetching, keeps exactly one in flight, and the
+// relay's reported records run through the SAME reconcile core — attestation
+// rule included.
+func TestRelayModeCMDBScheduleDispatchesAndIngestsTheReport(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ServiceNowBindings = []api.ServiceNowBinding{{
+			InstanceURL: "https://cmdb.internal.example",
+			TokenRef:    servedCMDBSecretRef,
+		}}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "owners:read")
+
+	// An env: ref cannot ride relay execution: the variable lives in the
+	// control plane's environment, which the relay is not.
+	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok,
+		"cmdb-relay-bad", map[string]any{
+			"instance_url":     "https://cmdb.internal.example",
+			"token_ref":        servedCMDBTokenRef,
+			"interval_seconds": 3600,
+			"enabled":          true,
+			"execution":        "relay",
+		})
+	if status != http.StatusBadRequest || !strings.Contains(string(out), "secret://") {
+		t.Fatalf("relay execution with an env: ref = %d %s; accepting it configures a sync that "+
+			"fails on its first claim, three hops from the mistake", status, out)
+	}
+
+	status, out = secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok,
+		"cmdb-relay-ok", map[string]any{
+			"instance_url":     "https://cmdb.internal.example",
+			"token_ref":        servedCMDBSecretRef,
+			"interval_seconds": 3600,
+			"enabled":          true,
+			"execution":        "relay",
+		})
+	if status != http.StatusOK {
+		t.Fatalf("configure relay schedule: %d %s", status, out)
+	}
+	sched, found, err := h.store.GetCMDBReconcileSchedule(t.Context(), h.tenant)
+	if err != nil || !found || sched.Execution != "relay" {
+		t.Fatalf("schedule not persisted with relay execution: found=%v exec=%q err=%v", found, sched.Execution, err)
+	}
+
+	// Dispatch: one targeted job appears, stamped for the network vantage.
+	h.srv.dispatchCMDBSyncJob(t.Context(), h.tenant, sched)
+	var jobs int
+	var role string
+	var payload []byte
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(),
+			`SELECT count(*), max(required_agent_role), max(convert_from(payload, 'utf8'))
+			   FROM outbox WHERE tenant_id = $1 AND destination = 'cmdb.sync'`,
+			h.tenant).Scan(&jobs, &role, &payload)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if jobs != 1 || role != "network" {
+		t.Fatalf("dispatch produced %d jobs with role %q, want exactly one network-stamped job", jobs, role)
+	}
+	var intent struct {
+		TokenRef string `json:"token_ref"`
+	}
+	if err := json.Unmarshal(payload, &intent); err != nil || intent.TokenRef != servedCMDBSecretRef {
+		t.Fatalf("job intent = %s (%v); the relay redeems exactly this reference", payload, err)
+	}
+
+	// A second due tick must NOT stack a second identical read behind the
+	// unclaimed first — it stamps the schedule with the waiting state instead.
+	h.srv.dispatchCMDBSyncJob(t.Context(), h.tenant, sched)
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(),
+			`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = 'cmdb.sync'`,
+			h.tenant).Scan(&jobs)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if jobs != 1 {
+		t.Fatalf("second tick stacked a job: %d in queue.\n\n"+
+			"The eventual relay would replay a backlog of identical reads against the instance.", jobs)
+	}
+	sched2, _, err := h.store.GetCMDBReconcileSchedule(t.Context(), h.tenant)
+	if err != nil || !strings.Contains(sched2.LastError, "waiting") {
+		t.Fatalf("the waiting state is not on the schedule (last_error=%q); an operator cannot "+
+			"tell 'no relay enrolled' from 'healthy'", sched2.LastError)
+	}
+
+	// The report lands: the reconcile core runs on the relay's records, fills
+	// the unattested owner, refuses the attested one.
+	unknown, err := h.store.CreateOwner(t.Context(), store.Owner{
+		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "payments"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attested, err := h.store.CreateOwner(t.Context(), store.Owner{
+		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "platform", ApplicationID: "APP-HUMAN"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attested.TenantID = h.tenant
+	now := time.Now().UTC()
+	attested.OwnershipVerifiedAt = &now
+	if err := h.store.UpdateOwner(t.Context(), attested); err != nil {
+		t.Fatal(err)
+	}
+	report, err := json.Marshal(CMDBSyncReport{Records: []ownership.Record{
+		{OwnerName: "payments", ApplicationID: "APP-RELAY", SourceRef: "ci-1"},
+		{OwnerName: "platform", ApplicationID: "APP-RELAY-2", SourceRef: "ci-2"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.srv.recordCMDBSync(t.Context(), h.tenant, "relay-1", "idem-1", string(report))
+
+	owners, err := h.store.ListOwnersPage(t.Context(), h.tenant, store.ZeroUUID, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]store.Owner{}
+	for _, o := range owners {
+		byID[o.ID] = o
+	}
+	if got := byID[unknown.ID].ApplicationID; got != "APP-RELAY" {
+		t.Fatalf("unattested owner's application = %q, want APP-RELAY from the relay's report", got)
+	}
+	if got := byID[attested.ID].ApplicationID; got != "APP-HUMAN" {
+		t.Fatalf("attested owner's application = %q, want APP-HUMAN untouched.\n\n"+
+			"The reconcile core is SHARED between vantages precisely so the relay path cannot "+
+			"grow a version that overwrites what a human attested", got)
+	}
+	sched3, _, err := h.store.GetCMDBReconcileSchedule(t.Context(), h.tenant)
+	if err != nil || sched3.LastError != "" {
+		t.Fatalf("after a successful relay report the schedule still carries error %q", sched3.LastError)
 	}
 }

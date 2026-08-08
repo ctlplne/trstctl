@@ -3308,6 +3308,8 @@ const esESCatalog = {
   "source.cmdb.sync.lastrun.i2own00011": "\u00daltima lectura {value1}, cada {value2} minutos.",
   "source.cmdb.sync.neverran.i2own00012": "Activado y todav\u00eda no ha le\u00eddo la CMDB.",
   "source.cmdb.sync.failing.i2own00013": "La \u00faltima lectura fall\u00f3: {value1}",
+  "source.cmdb.sync.relay.i2own00014":
+    "Ejecutado por un relé de red dentro del segmento; el token se canjea por intento y la reconciliación sigue ejecutándose en el plano de control.",
   "source.ownership.source.column.i2own00006": "Origen de la propiedad",
   "source.ownership.source.observed.i2own00008": "{value1}, visto por \u00faltima vez {value2}",
   "source.ownership.source.unrecorded.i2own00007": "sin registrar",

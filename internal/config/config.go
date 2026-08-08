@@ -1851,7 +1851,7 @@ type AgentChannel struct {
 	// ClaimableJobKinds are the estate-touching job kinds enrolled agents may claim
 	// and execute (A1): connector.deploy, connector.rollback, connector.test,
 	// endpoint.verify, endpoint.renew, discovery.run, revocation.probe,
-	// adcs.inventory, trust.distribute, agent.upgrade.
+	// adcs.inventory, trust.distribute, agent.upgrade, cmdb.sync.
 	//
 	// Empty — the default — means the job ledger is served but hands nothing out.
 	// That is deliberate: a kind should be enabled when an agent-side executor for

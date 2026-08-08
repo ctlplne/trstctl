@@ -80,6 +80,9 @@ var agentJobKindAllowlist = map[string]bool{
 	// it makes it possible for the agents a campaign names. The agent side
 	// has its own -self-upgrade opt-in on top of this one.
 	agentJobKindUpgrade: true,
+	// I2: relay-executed CMDB read. The relay observes; the reconcile — and
+	// its never-overwrite-an-attestation rule — stays in the control plane.
+	agentJobKindCMDBSync: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -136,6 +139,9 @@ var agentJobKindVantage = map[string][]string{
 	// rings exactly as much as a host's. Role is the wrong axis here; identity
 	// is the right one, and the claim SQL enforces it.
 	agentJobKindUpgrade: {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+	// I2: a CMDB read is a vantage question — the instance worth relaying to
+	// is the one behind a firewall only the in-segment relay sits inside.
+	agentJobKindCMDBSync: {mtls.AgentRoleNetwork},
 }
 
 // agentRolePermitsKind reports whether an agent holding roles may execute kind.
@@ -422,6 +428,12 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// in the report from the run that found it.
 	if destination == "adcs.inventory" && a.recordADCSPosture != nil {
 		a.recordADCSPosture(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+	}
+	// I2: a relay's CMDB observation becomes ownership reconciliation. The
+	// reconcile runs HERE — the relay reads, the control plane decides — so
+	// the attestation rule has one implementation whichever vantage fetched.
+	if destination == agentJobKindCMDBSync && a.recordCMDBSync != nil {
+		a.recordCMDBSync(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
 	}
 	// D2: a verification sweep becomes observed endpoint state. The report is
 	// the whole point of the job — a sweep whose findings stayed in the job row

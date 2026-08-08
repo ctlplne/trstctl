@@ -32,6 +32,12 @@ type cmdbScheduleBody struct {
 	// system and a tight poll buys nothing but rate limiting.
 	IntervalSeconds int  `json:"interval_seconds"`
 	Enabled         bool `json:"enabled"`
+	// Execution picks the sync vantage (I2): "" / "control_plane" runs the
+	// read from the control plane under the private-egress rules above;
+	// "relay" dispatches a cmdb.sync job that a network relay inside the
+	// segment claims — the model for a ServiceNow instance the control plane
+	// cannot reach at all.
+	Execution string `json:"execution,omitempty"`
 }
 
 type cmdbScheduleResponse struct {
@@ -44,6 +50,7 @@ type cmdbScheduleResponse struct {
 	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
 	IntervalSeconds      int    `json:"interval_seconds"`
 	Enabled              bool   `json:"enabled"`
+	Execution            string `json:"execution,omitempty"`
 	LastRunAt            string `json:"last_run_at,omitempty"`
 	// LastError is served, not just logged. A sync that has been failing for a
 	// week otherwise looks identical to one that found nothing to do.
@@ -80,6 +87,24 @@ func (a *API) putCMDBSchedule(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"interval_seconds must be at least 300; a CMDB's ownership columns change on the order of days, and a tighter poll buys rate limiting rather than freshness")
 		}
+		execution := strings.TrimSpace(body.Execution)
+		switch execution {
+		case "", "control_plane", "relay":
+		default:
+			return 0, nil, errStatus(http.StatusBadRequest,
+				"execution must be control_plane or relay")
+		}
+		if execution == "relay" && !strings.HasPrefix(strings.TrimSpace(body.TokenRef), "secret://") {
+			// The relay redeems the token through the job-credential path, which
+			// resolves secret:// references. An env: reference names a variable
+			// in the CONTROL PLANE's environment — a process the relay is not —
+			// so accepting it would configure a sync that fails on its first
+			// claim with an error three hops from the mistake.
+			return 0, nil, errStatus(http.StatusBadRequest,
+				"relay execution requires a secret:// token_ref: the relay redeems the token from the "+
+					"secret store per attempt, and an env: reference lives in the control plane's "+
+					"environment, which the relay does not share")
+		}
 		// The instance must already be an operator-approved ServiceNow
 		// destination. Without this a tenant could aim the control plane's
 		// credentials at any host it liked and call it a CMDB.
@@ -104,11 +129,13 @@ func (a *API) putCMDBSchedule(w http.ResponseWriter, r *http.Request) {
 			AllowPrivateEndpoint: body.AllowPrivateEndpoint,
 			IntervalSeconds:      body.IntervalSeconds,
 			Enabled:              body.Enabled,
+			Execution:            execution,
 		}
 		if err := a.orch.ConfigureCMDBSchedule(ctx, tenantID, projections.CMDBScheduleConfigured{
 			InstanceURL: saved.InstanceURL, TokenRef: saved.TokenRef, CIQuery: saved.CIQuery,
 			AllowPrivateEndpoint: saved.AllowPrivateEndpoint,
 			IntervalSeconds:      saved.IntervalSeconds, Enabled: saved.Enabled,
+			Execution: saved.Execution,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -142,6 +169,7 @@ func cmdbScheduleFrom(s store.CMDBReconcileSchedule, found bool) cmdbScheduleRes
 		AllowPrivateEndpoint: s.AllowPrivateEndpoint,
 		IntervalSeconds:      s.IntervalSeconds,
 		Enabled:              s.Enabled,
+		Execution:            s.Execution,
 		LastError:            s.LastError,
 		Guidance:             cmdbScheduleGuidance,
 	}

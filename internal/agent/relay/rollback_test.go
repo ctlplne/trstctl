@@ -174,6 +174,13 @@ func TestEveryShippedKindIsActuallyClaimed(t *testing.T) {
 	for _, kind := range relay.ClaimableKinds() {
 		claimed[kind] = true
 	}
+	// agent.upgrade is asked for CONDITIONALLY — RunOnceWithSelfUpgrade appends
+	// it only when the machine operator passed -self-upgrade, because the ask
+	// itself is the consent to binary replacement (A5). The kind is still
+	// claimed by the binary; it is just not in the unconditional list, and the
+	// loop test TestUpgradeKindIsClaimedOnlyWithTheOptIn pins both directions
+	// of that conditionality.
+	claimed[relay.KindAgentUpgrade] = true
 	for _, shipped := range relay.ShippedJobKinds() {
 		if !claimed[shipped.Kind] {
 			t.Errorf("%q is declared shipped but is not in ClaimableKinds, so no relay ever "+

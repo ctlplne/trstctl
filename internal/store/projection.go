@@ -216,15 +216,15 @@ func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenan
 // that had simply never run.
 func (s *Store) ApplyCMDBScheduleConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in CMDBReconcileSchedule) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO cmdb_reconcile_schedules (tenant_id, instance_url, token_ref, ci_query, allow_private_endpoint, interval_seconds, enabled)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO cmdb_reconcile_schedules (tenant_id, instance_url, token_ref, ci_query, allow_private_endpoint, interval_seconds, enabled, execution)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, nullif($8, ''))
 		 ON CONFLICT (tenant_id) DO UPDATE SET
 		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref,
 		   ci_query = EXCLUDED.ci_query, allow_private_endpoint = EXCLUDED.allow_private_endpoint,
 		   interval_seconds = EXCLUDED.interval_seconds,
-		   enabled = EXCLUDED.enabled, updated_at = now()`,
+		   enabled = EXCLUDED.enabled, execution = EXCLUDED.execution, updated_at = now()`,
 		tenantID, in.InstanceURL, in.TokenRef, in.CIQuery, in.AllowPrivateEndpoint,
-		in.IntervalSeconds, in.Enabled)
+		in.IntervalSeconds, in.Enabled, in.Execution)
 	return err
 }
 

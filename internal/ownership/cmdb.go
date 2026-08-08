@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 )
 
@@ -153,4 +154,48 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// CMDBEndpoint builds the fixed read URL for one page of cmdb_ci.
+//
+// It lives beside ParseCMDB because BOTH vantages build it — the control
+// plane's own fetch and the relay's (I2) — and two implementations of "which
+// table may be read" is how one of them drifts onto sys_user_password. The
+// path is fixed to cmdb_ci; a schedule cannot name an arbitrary table.
+// display_value=all is requested because a reference field's raw value is a
+// sys_id, and a sys_id in an owner column is a value nobody can act on.
+func CMDBEndpoint(instanceURL, query string, limit int) (string, error) {
+	base, err := url.Parse(strings.TrimSpace(instanceURL))
+	if err != nil {
+		return "", fmt.Errorf("ownership: parse ServiceNow instance URL: %w", err)
+	}
+	if base.Scheme == "" || base.Host == "" {
+		return "", fmt.Errorf("ownership: ServiceNow instance URL must be absolute")
+	}
+	base.Path = strings.TrimRight(base.Path, "/") + "/api/now/table/cmdb_ci"
+	q := url.Values{}
+	q.Set("sysparm_display_value", "all")
+	q.Set("sysparm_limit", fmt.Sprintf("%d", limit))
+	if trimmed := strings.TrimSpace(query); trimmed != "" {
+		q.Set("sysparm_query", trimmed)
+	}
+	base.RawQuery = q.Encode()
+	base.Fragment = ""
+	return base.String(), nil
+}
+
+// CMDBSyncIntent is the payload of one relay-executed cmdb.sync job (I2). It
+// lives here, beside the parser and the endpoint builder, because both sides
+// of the job decode it — the control plane enqueues it and the relay executes
+// it, and a drift between those two shapes fails every sync while both halves
+// pass their own tests.
+//
+// TokenRef is a secret:// REFERENCE; the relay redeems the value through the
+// job-credential path for exactly one attempt. A token value here would be a
+// token value on the queue, in every backup of it.
+type CMDBSyncIntent struct {
+	InstanceURL string `json:"instance_url"`
+	CIQuery     string `json:"ci_query,omitempty"`
+	TokenRef    string `json:"token_ref"`
+	PageLimit   int    `json:"page_limit"`
 }

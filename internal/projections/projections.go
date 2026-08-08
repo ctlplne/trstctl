@@ -404,6 +404,10 @@ type CMDBScheduleConfigured struct {
 	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
 	IntervalSeconds      int    `json:"interval_seconds"`
 	Enabled              bool   `json:"enabled"`
+	// Execution is the sync vantage (I2): "" / "control_plane", or "relay" to
+	// dispatch the read to a network relay inside the segment. Absent on old
+	// events, which decodes to "" — the control-plane behaviour they had.
+	Execution string `json:"execution,omitempty"`
 }
 
 // OwnerDeleted is the payload of an owner.deleted event.
@@ -2206,6 +2210,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			InstanceURL: pl.InstanceURL, TokenRef: pl.TokenRef, CIQuery: pl.CIQuery,
 			AllowPrivateEndpoint: pl.AllowPrivateEndpoint,
 			IntervalSeconds:      pl.IntervalSeconds, Enabled: pl.Enabled,
+			Execution: pl.Execution,
 		})
 	case EventOwnerDeleted:
 		var pl OwnerDeleted
