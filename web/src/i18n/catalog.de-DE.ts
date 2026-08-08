@@ -4408,6 +4408,11 @@ const deDECatalog = {
     "Max. Geheimnisse",
   "source.provider.quota.unlimited.l3prov0027":
     "unbegrenzt",
+  // L3 quota editor — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "source.provider.quota.edit.hint.l3prov0028":
+    "Lassen Sie ein Feld leer für keine Begrenzung. Ein Limit von null bedeutet, dass der Kunde nichts erstellen darf — anders als keine Obergrenze.",
+  "source.provider.quota.save.l3prov0029":
+    "Kontingent speichern",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

@@ -89,9 +89,31 @@ describe("provider console (L3)", () => {
     const row = (await screen.findByText("Acme Corp")).closest("tr")!;
     fireEvent.click(within(row).getByRole("button", { name: "Quota" }));
     await waitFor(() => expect(providerMock.getQuota).toHaveBeenCalledWith("t-1"));
-    expect(await screen.findByText("50")).toBeInTheDocument();
-    // The unset limits render as unlimited, not 0.
-    expect(screen.getAllByText("unlimited").length).toBeGreaterThanOrEqual(2);
+    // max_agents is 50 in its field; the unset limits are blank (unlimited).
+    expect(await screen.findByLabelText("Max agents")).toHaveValue(50);
+    expect(screen.getByLabelText("Max certificates")).toHaveValue(null);
+  });
+
+  it("edits a quota, sending a blank field as unlimited (never zero)", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "t-1", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    providerMock.getQuota.mockResolvedValue({ tenant_id: "t-1", max_agents: 50 });
+    providerMock.setQuota.mockResolvedValue(undefined);
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    const row = (await screen.findByText("Acme Corp")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Quota" }));
+    const agents = await screen.findByLabelText("Max agents");
+    fireEvent.change(agents, { target: { value: "10" } });
+    // Leave certificates blank -> must be sent as undefined (unlimited), NOT 0.
+    fireEvent.click(screen.getByRole("button", { name: "Save quota" }));
+    await waitFor(() => expect(providerMock.setQuota).toHaveBeenCalled());
+    const [, sent] = providerMock.setQuota.mock.calls[0];
+    expect(sent.max_agents).toBe(10);
+    expect(sent.max_certificates_stored).toBeUndefined();
+    expect(sent.max_secrets_stored).toBeUndefined();
   });
 
   it("drops the operator back to the gate when the plane refuses the token", async () => {

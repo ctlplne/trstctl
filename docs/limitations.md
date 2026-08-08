@@ -2154,8 +2154,11 @@ looking for a credential that was never there.
   secrets), reading `/provider/v1/tenants/{id}/quota`; an UNSET limit renders as
   "unlimited", never zero, because a missing cap is the absence of a limit, not
   a limit of nothing. Scope, stated exactly: this is the tenant-lifecycle
-  console with per-customer quota VISIBILITY. Editing a quota from the console,
-  applying white-label brand and custom domain FROM the console, and triggering
+  console with per-customer quota MANAGEMENT — each customer row expands to
+  view and EDIT its limits (max agents, certificates, secrets), and a blank
+  field is saved as unlimited, never zero, because a limit of zero means the
+  customer may create nothing, a real but different instruction. Applying
+  white-label brand and custom domain FROM the console, and triggering
   the siloed-isolation drills from the provider plane are not built. The auth
   is a memory-held bearer the
   operator supplies; the HttpOnly provider-session cookie flow (a proper OIDC

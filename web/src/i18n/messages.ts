@@ -5875,6 +5875,16 @@ export const messages = {
       "unlimited",
     description: "L3: an unset quota limit is the absence of a cap, not a cap of zero.",
   },
+  "source.provider.quota.edit.hint.l3prov0028": {
+    defaultMessage:
+      "Leave a field blank for no limit. A limit of zero means the customer may create nothing \u2014 different from no cap.",
+    description: "L3: quota editor hint \u2014 blank is unlimited, not zero.",
+  },
+  "source.provider.quota.save.l3prov0029": {
+    defaultMessage:
+      "Save quota",
+    description: "L3: quota save button.",
+  },
   "source.adcs.database.error.f4adcs0013": {
     defaultMessage:
       "Could not load the AD CS certificate-database summary.",

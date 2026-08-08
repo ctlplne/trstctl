@@ -4395,6 +4395,11 @@ const esESCatalog = {
     "Máx. secretos",
   "source.provider.quota.unlimited.l3prov0027":
     "ilimitado",
+  // L3 quota editor — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "source.provider.quota.edit.hint.l3prov0028":
+    "Deje un campo en blanco para no poner límite. Un límite de cero significa que el cliente no puede crear nada, distinto de sin tope.",
+  "source.provider.quota.save.l3prov0029":
+    "Guardar cuota",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

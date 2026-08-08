@@ -74,16 +74,96 @@ function ProviderLogin({ onAuthed }: { onAuthed: () => void }) {
   );
 }
 
-function QuotaItem({ labelKey, value }: { labelKey: MessageKey; value?: number }) {
+// numberOrUndefined turns a quota field's edit string into the value the plane
+// stores: a blank field is UNLIMITED (undefined/omitted), never zero. A limit
+// of zero would mean "may create nothing", which is a real but very different
+// instruction from "no cap", and conflating them by treating blank as 0 would
+// silently lock a customer out.
+function editValue(v?: number): string {
+  return v === undefined || v === null ? "" : String(v);
+}
+function numberOrUndefined(s: string): number | undefined {
+  const trimmed = s.trim();
+  if (trimmed === "") return undefined;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+function QuotaEditor({
+  tenantId,
+  initial,
+  onSaved,
+  onAuthError,
+}: {
+  tenantId: string;
+  initial: ProviderQuota;
+  onSaved: (saved: ProviderQuota) => void;
+  onAuthError: () => void;
+}) {
+  const [agents, setAgents] = useState(editValue(initial.max_agents));
+  const [certs, setCerts] = useState(editValue(initial.max_certificates_stored));
+  const [secrets, setSecrets] = useState(editValue(initial.max_secrets_stored));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const field = (labelKey: MessageKey, value: string, setValue: (v: string) => void) => (
+    <label className="grid gap-1">
+      <span className="font-medium text-muted-foreground">{translateNow(labelKey)}</span>
+      <Input
+        type="number"
+        min={0}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={translateNow("source.provider.quota.unlimited.l3prov0027")}
+        aria-label={translateNow(labelKey)}
+        className="w-28"
+      />
+    </label>
+  );
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError(null);
+    const next: ProviderQuota = {
+      tenant_id: tenantId,
+      max_agents: numberOrUndefined(agents),
+      max_certificates_stored: numberOrUndefined(certs),
+      max_secrets_stored: numberOrUndefined(secrets),
+    };
+    try {
+      await providerApi.setQuota(tenantId, next);
+      onSaved(await providerApi.getQuota(tenantId));
+    } catch (err) {
+      if (err instanceof ProviderAuthError) {
+        onAuthError();
+        return;
+      }
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div>
-      <dt className="inline font-medium text-muted-foreground">{translateNow(labelKey)}: </dt>
-      <dd className="inline tabular-nums">
-        {value === undefined ? translateNow("source.provider.quota.unlimited.l3prov0027") : value}
-      </dd>
+    <div className="grid gap-2">
+      <p className="text-muted-foreground">{translateNow("source.provider.quota.edit.hint.l3prov0028")}</p>
+      <div className="flex flex-wrap items-end gap-3">
+        {field("source.provider.quota.agents.l3prov0024", agents, setAgents)}
+        {field("source.provider.quota.certs.l3prov0025", certs, setCerts)}
+        {field("source.provider.quota.secrets.l3prov0026", secrets, setSecrets)}
+        <Button type="button" disabled={saving} onClick={() => void save()}>
+          {translateNow("source.provider.quota.save.l3prov0029")}
+        </Button>
+      </div>
+      {saveError ? <p className="text-status-danger">{saveError}</p> : null}
     </div>
   );
 }
+
+type QuotaViewState =
+  | { id: string; state: "loading" }
+  | { id: string; state: "error" }
+  | { id: string; state: "ok"; data: ProviderQuota };
 
 function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   const [tenants, setTenants] = useState<ProviderTenant[] | null>(null);
@@ -91,9 +171,9 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   const [busy, setBusy] = useState(false);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
-  // The customer whose quota is expanded, and its loaded value. undefined data
-  // means "loading"; a null value inside the record means the fetch failed.
-  const [quotaView, setQuotaView] = useState<{ id: string; data?: ProviderQuota | null } | null>(null);
+  // The customer whose quota is expanded, as a discriminated union so the
+  // render narrows cleanly between loading, a load failure, and a value.
+  const [quotaView, setQuotaView] = useState<QuotaViewState | null>(null);
 
   const viewQuota = useCallback(
     async (id: string) => {
@@ -101,16 +181,16 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
         setQuotaView(null); // toggle closed
         return;
       }
-      setQuotaView({ id });
+      setQuotaView({ id, state: "loading" });
       try {
-        setQuotaView({ id, data: await providerApi.getQuota(id) });
+        setQuotaView({ id, state: "ok", data: await providerApi.getQuota(id) });
       } catch (err) {
         if (err instanceof ProviderAuthError) {
           clearProviderToken();
           onSignOut();
           return;
         }
-        setQuotaView({ id, data: null });
+        setQuotaView({ id, state: "error" });
       }
     },
     [quotaView, onSignOut],
@@ -291,16 +371,21 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                       rowEl,
                       <tr key={`${tenant.id}-quota`} className="bg-muted/30">
                         <td colSpan={5} className="px-4 py-2 text-xs">
-                          {!("data" in quotaView) ? (
+                          {quotaView.state === "loading" ? (
                             translateNow("source.loading.4f9d1e0e3a")
-                          ) : quotaView.data === null ? (
+                          ) : quotaView.state === "error" ? (
                             <span className="text-muted-foreground">{translateNow("source.provider.quota.none.l3prov0023")}</span>
                           ) : (
-                            <dl className="flex flex-wrap gap-x-6 gap-y-1">
-                              <QuotaItem labelKey="source.provider.quota.agents.l3prov0024" value={quotaView.data?.max_agents} />
-                              <QuotaItem labelKey="source.provider.quota.certs.l3prov0025" value={quotaView.data?.max_certificates_stored} />
-                              <QuotaItem labelKey="source.provider.quota.secrets.l3prov0026" value={quotaView.data?.max_secrets_stored} />
-                            </dl>
+                            <QuotaEditor
+                              key={tenant.id}
+                              tenantId={tenant.id}
+                              initial={quotaView.data}
+                              onSaved={(saved) => setQuotaView({ id: tenant.id, state: "ok", data: saved })}
+                              onAuthError={() => {
+                                clearProviderToken();
+                                onSignOut();
+                              }}
+                            />
                           )}
                         </td>
                       </tr>,

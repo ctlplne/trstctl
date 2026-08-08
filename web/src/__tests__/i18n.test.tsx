@@ -526,8 +526,8 @@ describe("i18n boundary", () => {
       // honesty rule — an air-gapped host's silence is absence of evidence,
       // never evidence of inactivity.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "ce2f41f0ea8d231a536fc7eb0ec4eb2617b31bd4265ec6b41c4fd411ef876037",
-      "de-DE": "4714f6ca1f08d0309e301c792a49496439d90aa564322277e18b8009328ab385",
+      "es-ES": "f415640a5b26bb79bd626f279bc72037968d0d4a5bc8a38fc6b12730184c36ac",
+      "de-DE": "c474b6eee2ba51a69c6087759f9f7b1d37acfe014ad38f4902476404c86a3204",
     });
   });
 
