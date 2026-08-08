@@ -4,6 +4,7 @@ package provider
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -27,7 +28,7 @@ func TestTheDelegationSourceIsWiredIntoTheBinary(t *testing.T) {
 			"rather than leaking, so nothing would break loudly — the plane would simply be " +
 			"permanently unusable while the delegation code sat unused in the tree.")
 	}
-	if !strings.Contains(string(src), "Delegations: delegations") {
+	if !regexp.MustCompile(`Delegations:\s+delegations`).Match(src) {
 		t.Fatal("the delegation source is constructed but never passed to eeprovider.Config; " +
 			"a source the handler does not hold is a source no request consults")
 	}
@@ -136,5 +137,26 @@ func TestTheGrantCommandIsReachableFromTheBinary(t *testing.T) {
 	}
 	if !strings.Contains(string(main), "eeLocalCommand(") {
 		t.Fatal("main never calls eeLocalCommand, so the subcommand is defined and unreachable")
+	}
+}
+
+// L1's federation must be REACHED from the binary, like the delegation source
+// before it: an authenticator that exists only in this package leaves the
+// plane refusing every request while the config key reads as supported.
+func TestTheOIDCAuthenticatorIsWiredIntoTheBinary(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("../../cmd/trstctl/ee_attach.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(src)
+	if !strings.Contains(body, "eeprovider.NewOIDCAuthenticator(") {
+		t.Fatal("ee_attach.go never constructs the OIDC authenticator; provider.oidc config would " +
+			"parse, validate, and change nothing — the plane stays closed while the operator " +
+			"believes it is wired")
+	}
+	if !regexp.MustCompile(`Authenticator:\s+operatorAuth`).MatchString(body) {
+		t.Fatal("the authenticator is constructed but never passed to eeprovider.Config; an " +
+			"authenticator the handler does not hold verifies nobody")
 	}
 }

@@ -96,6 +96,7 @@ type Config struct {
 	Breakglass                Breakglass               `json:"breakglass"`
 	Privacy                   Privacy                  `json:"privacy"`
 	AttestedIssuance          AttestedIssuance         `json:"attested_issuance"`
+	Provider                  Provider                 `json:"provider"`
 	Reconcile                 Reconcile                `json:"reconcile"`
 	AgentBroker               AgentBroker              `json:"agent_broker"`
 	PAM                       PAM                      `json:"pam"`
@@ -1168,6 +1169,44 @@ type ServiceNowBinding struct {
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
 
+// Provider configures the Provider/MSP plane (L1). OIDC is the operator
+// authenticator: without it the plane refuses every request — closed until
+// wired, deliberately, because the safe stand-in for "who is this caller"
+// does not exist and a placeholder verifier is how the original
+// accept-anything defect came to ship.
+type Provider struct {
+	OIDC ProviderOIDC `json:"oidc"`
+}
+
+// ProviderOIDC pins what a provider-operator bearer token must prove. The
+// JWKS is pinned OFFLINE (file or inline): this plane must not fetch keys
+// from a URL an attacker who minted the token might also control.
+type ProviderOIDC struct {
+	Issuer   string `json:"issuer,omitempty"`
+	Audience string `json:"audience,omitempty"`
+	JWKSFile string `json:"jwks_file,omitempty"`
+	JWKSJSON string `json:"jwks_json,omitempty"`
+	// RoleClaim names the claim carrying role values (default "roles").
+	// AdminValues / OperatorValues map its entries onto the provider roles; a
+	// token matching neither is refused outright — federation is not
+	// enrollment, and the IdP vouching for the whole workforce must not make
+	// every employee someone who can suspend customers.
+	RoleClaim      string   `json:"role_claim,omitempty"`
+	AdminValues    []string `json:"admin_values,omitempty"`
+	OperatorValues []string `json:"operator_values,omitempty"`
+	// MFAClaim (default "amr") and MFAValues (default mfa/otp/hwk/swk) decide
+	// the Operator's MFA flag; the plane separately refuses mutations without
+	// it.
+	MFAClaim  string   `json:"mfa_claim,omitempty"`
+	MFAValues []string `json:"mfa_values,omitempty"`
+}
+
+// Configured reports whether the operator pinned an IdP.
+func (p ProviderOIDC) Configured() bool {
+	return strings.TrimSpace(p.Issuer) != "" || strings.TrimSpace(p.Audience) != "" ||
+		strings.TrimSpace(p.JWKSFile) != "" || strings.TrimSpace(p.JWKSJSON) != ""
+}
+
 // AttestedIssuance turns on the attestation-gated workload SVID mint (I3/F30).
 //
 // It existed as a Deps field with no config key at all, so the two routes it
@@ -2074,6 +2113,13 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_CONNECTORS_ALLOW_INSECURE_HTTP", &c.Connectors.AllowInsecureHTTP)
 	setNotificationEnv(getenv, &c.Notifications)
 	applyCodeSigningEnv(getenv, &c.CodeSigning)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_ISSUER", &c.Provider.OIDC.Issuer)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_AUDIENCE", &c.Provider.OIDC.Audience)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_JWKS_FILE", &c.Provider.OIDC.JWKSFile)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_JWKS_JSON", &c.Provider.OIDC.JWKSJSON)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_ROLE_CLAIM", &c.Provider.OIDC.RoleClaim)
+	setCSV(getenv, "TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES", &c.Provider.OIDC.AdminValues)
+	setCSV(getenv, "TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES", &c.Provider.OIDC.OperatorValues)
 	setServiceNowEnv(getenv, &c.ITSM.ServiceNow)
 	setBool(getenv, "TRSTCTL_AIRGAP_ENABLED", &c.AirGap.Enabled)
 	setBool(getenv, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", &c.AirGap.AllowPrivate)
@@ -2668,6 +2714,34 @@ func setInt(getenv func(string) string, key string, dst *int) {
 
 // Validate reports whether the configuration is internally consistent,
 // reporting all problems together.
+// validateProviderConfig checks the provider OIDC pinning (L1): a partial pin
+// would leave the plane refusing everything while the operator believes it is
+// wired, and the error must say which piece is missing rather than 401-ing
+// forever.
+func validateProviderConfig(c *Config) []error {
+	var errs []error
+	oidc := c.Provider.OIDC
+	if !oidc.Configured() {
+		return nil
+	}
+	if strings.TrimSpace(oidc.Issuer) == "" {
+		errs = append(errs, errors.New("provider.oidc.issuer is required when provider OIDC is configured"))
+	}
+	if strings.TrimSpace(oidc.Audience) == "" {
+		errs = append(errs, errors.New("provider.oidc.audience is required when provider OIDC is configured"))
+	}
+	if strings.TrimSpace(oidc.JWKSFile) == "" && strings.TrimSpace(oidc.JWKSJSON) == "" {
+		errs = append(errs, errors.New("provider.oidc needs jwks_file or jwks_json: the IdP's keys are pinned offline, never fetched from a URL the token's minter might control"))
+	}
+	if strings.TrimSpace(oidc.JWKSFile) != "" && strings.TrimSpace(oidc.JWKSJSON) != "" {
+		errs = append(errs, errors.New("provider.oidc.jwks_file and jwks_json are mutually exclusive; two key sets invite the wrong one to win silently"))
+	}
+	if len(oidc.AdminValues) == 0 && len(oidc.OperatorValues) == 0 {
+		errs = append(errs, errors.New("provider.oidc needs admin_values and/or operator_values: without a role mapping every authenticated token is refused, and the plane reads as broken rather than unmapped"))
+	}
+	return errs
+}
+
 func (c *Config) Validate() error {
 	var errs []error
 	for _, validate := range []func(*Config) []error{
@@ -2686,6 +2760,7 @@ func (c *Config) Validate() error {
 		validateHAConfig,
 		validateFederationConfig,
 		validatePCASConfig,
+		validateProviderConfig,
 	} {
 		errs = append(errs, validate(c)...)
 	}

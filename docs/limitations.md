@@ -325,6 +325,27 @@ never live in the API process. What you can do end to end against the running bi
   404s, so its primary assertion never fired. Note that this CLOSES a surface that was
   open: a provider-tier deployment must now wire an authenticator before `/provider/`
   serves anything, which is a deliberate breaking change and the right direction.
+  THE AUTHENTICATOR NOW EXISTS (L1): `provider.oidc` in the config federates
+  operator identity to the provider's own IdP — bearer tokens verified OFFLINE
+  against a pinned JWKS (`jwks_file`/`jwks_json`; the plane never fetches keys
+  from a URL the token's minter might control), issuer, audience, expiry and
+  nbf all required, and ROLE AND MFA read from claims the IdP signed
+  (`role_claim` values mapped by `admin_values`/`operator_values`; `mfa_claim`,
+  default `amr`). A token the IdP vouches for that matches NO configured role
+  is refused outright — federation is not enrollment, and the IdP vouching for
+  the whole workforce must not make every employee someone who can suspend
+  customers. A single-factor operator authenticates and is then refused
+  mutations (403 at the act, not 401 at the door — the gap is MFA and the
+  error should say so). Federation answers WHO; the per-customer delegation
+  still answers WHICH customers, and the combined test proves a federated
+  admin delegated one customer cannot suspend another. Scope, stated exactly:
+  OIDC only — SAML federation and SCIM provisioning are NOT built (role
+  membership lives in the IdP's groups claim, so joiner/leaver flows are the
+  IdP's; a leaver's tokens expire and new ones fail the role mapping, but
+  standing DELEGATION rows are trstctl's and must be revoked with
+  `trstctl provider-grant` when an operator leaves); and there is no
+  interactive login flow on the plane — it verifies bearer tokens the
+  operator's own tooling obtains from the IdP.
   Crypto migration sequencing (M2): `GET /api/v1/graph/crypto-readiness` and a Risk
   console panel order every observed crypto asset by WHO DEPENDS ON IT, not by
   severity alone. The CBOM already said which algorithms are weak; it could not say

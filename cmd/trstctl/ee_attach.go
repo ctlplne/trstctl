@@ -5,6 +5,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"time"
 
@@ -304,13 +305,41 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureProviderPlane) {
-		// No Authenticator is wired yet, and the provider plane therefore
-		// REFUSES EVERY REQUEST. That is deliberate and is the fix for a real
-		// defect: this handler used to accept any "Bearer provider:<id>:<email>"
-		// as a provider administrator with MFA asserted, on a surface mounted at
-		// /provider/ behind only a bulkhead. Closed-until-wired is the only safe
-		// state, and shipping a placeholder verifier here is exactly how the
-		// original bypass came to exist.
+		// L1: the operator authenticator, federated to the provider's own IdP.
+		// Unconfigured means NIL, and a nil authenticator REFUSES EVERY
+		// REQUEST — closed-until-wired is the only safe state, and shipping a
+		// placeholder verifier here is exactly how the original
+		// accept-anything bypass came to exist. The JWKS is pinned OFFLINE:
+		// this plane must not fetch keys from a URL the token's minter might
+		// also control.
+		var operatorAuth eeprovider.OperatorAuthenticator
+		if cfg.Provider.OIDC.Configured() {
+			jwksJSON := cfg.Provider.OIDC.JWKSJSON
+			if path := strings.TrimSpace(cfg.Provider.OIDC.JWKSFile); path != "" {
+				raw, readErr := os.ReadFile(path) // #nosec G304 -- operator-supplied path to their own IdP's JWKS (CWE-22)
+				if readErr != nil {
+					return fmt.Errorf("provider.oidc.jwks_file: %w", readErr)
+				}
+				jwksJSON = string(raw)
+			}
+			jwks, parseErr := crypto.ParseJWKS([]byte(jwksJSON))
+			if parseErr != nil {
+				return fmt.Errorf("provider.oidc jwks: %w", parseErr)
+			}
+			auth := eeprovider.NewOIDCAuthenticator(eeprovider.OIDCAuthenticatorConfig{
+				Issuer:         cfg.Provider.OIDC.Issuer,
+				Audience:       cfg.Provider.OIDC.Audience,
+				JWKS:           jwks,
+				RoleClaim:      cfg.Provider.OIDC.RoleClaim,
+				AdminValues:    cfg.Provider.OIDC.AdminValues,
+				OperatorValues: cfg.Provider.OIDC.OperatorValues,
+				MFAClaim:       cfg.Provider.OIDC.MFAClaim,
+				MFAValues:      cfg.Provider.OIDC.MFAValues,
+			})
+			if auth != nil {
+				operatorAuth = auth
+			}
+		}
 		// L1: the delegation source. Without it the rule in
 		// ee/provider/delegation.go was a library nothing called, and every
 		// served provider route still authorised any authenticated operator
@@ -319,9 +348,10 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		// closed-until-wired stance as the authenticator.
 		delegations := eeprovider.NewPGDelegationSource(deps.Store)
 		deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
-			License:     lic,
-			Audit:       eeprovider.NewEventLogAuditSink(deps.Log),
-			Delegations: delegations,
+			License:       lic,
+			Audit:         eeprovider.NewEventLogAuditSink(deps.Log),
+			Authenticator: operatorAuth,
+			Delegations:   delegations,
 			// L2: quota administration writes through the same durable store
 			// the checker reads, behind the per-customer delegation gate. Nil
 			// would refuse every quota write — correct, but only for a
@@ -332,9 +362,15 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 			// Says what an operator will actually observe. "Attached" alone
 			// would read as working, and the first symptom would be 401s with
 			// no explanation anywhere.
-			log.Warn("Provider plane attached but NO operator authenticator is configured; "+
-				"/provider/ will refuse every request until one is wired",
-				slog.String("feature", string(license.FeatureProviderPlane)))
+			if operatorAuth == nil {
+				log.Warn("Provider plane attached but NO operator authenticator is configured; "+
+					"/provider/ will refuse every request until provider.oidc is wired",
+					slog.String("feature", string(license.FeatureProviderPlane)))
+			} else {
+				log.Info("Provider plane attached with OIDC operator federation",
+					slog.String("issuer", cfg.Provider.OIDC.Issuer),
+					slog.String("feature", string(license.FeatureProviderPlane)))
+			}
 			if delegations == nil {
 				// Two separate silences to break. An operator who wires
 				// authentication and still gets 403 needs to be told the second
