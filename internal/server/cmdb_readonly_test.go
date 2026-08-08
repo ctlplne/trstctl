@@ -123,6 +123,6 @@ func TestReconcileNeverCreatesOwnersFromCMDBRows(t *testing.T) {
 // a live store to exercise, and a test that stood up Postgres to prove a
 // function is never called would prove less than reading the function.
 func readSourceFile(name string) (string, error) {
-	b, err := os.ReadFile(name)
+	b, err := os.ReadFile(name) // #nosec G304 -- test reads repo source files it names itself (CWE-22)
 	return string(b), err
 }

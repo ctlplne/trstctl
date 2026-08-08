@@ -26,6 +26,11 @@ import (
 // have the scheduler read a real (fake) ServiceNow instance, and read the
 // results back off the served surfaces.
 
+// servedCMDBTokenRef is a credential REFERENCE (an env: pointer the server
+// resolves at request time), never a credential value. Named once so gosec's
+// hardcoded-credential heuristic does not fire on every map literal carrying it.
+const servedCMDBTokenRef = "env:TRSTCTL_SERVICENOW_TOKEN" // #nosec G101 -- credential reference (env: pointer), no credential value present (CWE-798)
+
 type cmdbSink struct {
 	mu       sync.Mutex
 	methods  []string
@@ -75,7 +80,7 @@ func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          sink.srv.URL,
-			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
+			TokenRef:             servedCMDBTokenRef,
 			AllowPrivateEndpoint: true,
 			PrivateEgressCIDRs:   []string{serviceNowSinkCIDR(t, sink.srv.URL)},
 		}}
@@ -103,7 +108,7 @@ func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "owners:read", string(authz.PrivateEgress))
 	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-1", map[string]any{
 		"instance_url":           sink.srv.URL,
-		"token_ref":              "env:TRSTCTL_SERVICENOW_TOKEN",
+		"token_ref":              servedCMDBTokenRef,
 		"interval_seconds":       3600,
 		"enabled":                true,
 		"allow_private_endpoint": true,
@@ -206,7 +211,7 @@ func TestServedCMDBScheduleRefusesAnUnapprovedInstance(t *testing.T) {
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")
 	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-unapproved", map[string]any{
 		"instance_url":     "https://attacker.example.com",
-		"token_ref":        "env:TRSTCTL_SERVICENOW_TOKEN",
+		"token_ref":        servedCMDBTokenRef,
 		"interval_seconds": 3600,
 		"enabled":          true,
 	})
@@ -223,7 +228,7 @@ func TestServedCMDBScheduleRefusesAHotPoll(t *testing.T) {
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")
 	status, _ := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-hot", map[string]any{
 		"instance_url":     "https://example.service-now.com",
-		"token_ref":        "env:TRSTCTL_SERVICENOW_TOKEN",
+		"token_ref":        servedCMDBTokenRef,
 		"interval_seconds": 5,
 		"enabled":          true,
 	})

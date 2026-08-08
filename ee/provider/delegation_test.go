@@ -120,9 +120,9 @@ func TestCustomersForCannotBeUsedToWidenScope(t *testing.T) {
 	if len(got) != 1 || got[0] != "bank-a" {
 		t.Fatalf("customers = %v", got)
 	}
-	got = append(got, "bank-b")
+	got[0] = "bank-b"
 	if err := s.Authorize(opr("op-1", "a@provider"), "bank-b", OpRead); err == nil {
-		t.Fatal("appending to the returned slice widened the operator's real scope")
+		t.Fatal("writing into the returned slice widened the operator's real scope")
 	}
 }
 

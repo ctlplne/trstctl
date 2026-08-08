@@ -24,9 +24,6 @@ const (
 	// schedule's own interval decides when it is due; this is detection latency
 	// only, matching the discovery scheduler.
 	cmdbSchedulerInterval = time.Minute
-	// cmdbReconcileActor names the scheduler on the provenance it writes, so an
-	// operator can tell a scheduled sync from an operator-run one.
-	cmdbReconcileActor = "cmdb-reconcile-scheduler"
 	// cmdbPageLimit bounds one sweep's read. A CMDB with a hundred thousand CIs
 	// must not turn one tick into an unbounded fetch-and-reconcile (AN-7).
 	cmdbPageLimit = 500

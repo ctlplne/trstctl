@@ -138,7 +138,7 @@ func (d EvidenceDocument) canonicalDigest() string {
 	b.WriteString(d.ObservedTo)
 	b.WriteByte('\n')
 	for _, l := range d.Lines {
-		b.WriteString(fmt.Sprintf("%s|%s|%d\n", l.Meter, l.Kind, l.Value))
+		fmt.Fprintf(&b, "%s|%s|%d\n", l.Meter, l.Kind, l.Value)
 	}
 	// Through internal/crypto, not crypto/sha256 directly: AN-3 keeps every
 	// hash in one place so an algorithm change is a single-package change, and

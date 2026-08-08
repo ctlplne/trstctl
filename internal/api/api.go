@@ -663,11 +663,11 @@ func publicRationaleForRoute(r route) string {
 	case "machineLogin":
 		return "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session."
 	case "getOpenAPISpec":
-		return "public static API contract: the document contains no tenant data or credential material."
+		return specPublicRationale
 	case "getBrand":
 		return brandPublicRationale
 	case "getEditions":
-		return "public edition posture: the response contains only global license state, feature-table rows, and crypto posture; it carries no tenant data or credential material."
+		return editionsPublicRationale
 	default:
 		return ""
 	}

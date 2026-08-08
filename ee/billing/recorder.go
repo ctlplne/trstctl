@@ -79,7 +79,10 @@ func (r *Recorder) Run(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-ctx.Done():
-			flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// The final flush runs BECAUSE ctx is done, so it cannot inherit
+			// that cancellation — WithoutCancel detaches it while keeping the
+			// parent's values, bounded by its own timeout.
+			flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			if err := r.Flush(flushCtx); err != nil && r.log != nil {
 				r.log.Warn("metering final flush failed", slog.String("error", err.Error()))
 			}

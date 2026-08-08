@@ -137,6 +137,6 @@ func TestTheDurableInstallationIsReachableAndTheFallbackIsVisible(t *testing.T) 
 }
 
 func readBillingSource(path string) (string, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- test reads repo source files it names itself (CWE-22)
 	return string(b), err
 }
