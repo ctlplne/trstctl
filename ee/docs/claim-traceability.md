@@ -23,7 +23,7 @@ it cannot drift from the code it describes.
 | VDEC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 | XREC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 
-Citations parsed: **984 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **989 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
@@ -153,7 +153,7 @@ Citations parsed: **984 qualified**, **0 bare** (bare citations infer their fami
 
 | Claim | Implementation | Tests | Verified |
 |---|---|---|---|
-| 1 | `ee/reconcile/doc.go`, `ee/reconcile/runtime.go` | `ee/reconcile/conformance/e2e_integration_test.go` | _[counsel]_ |
+| 1 | `ee/reconcile/doc.go`, `ee/reconcile/rounds/types.go`, `ee/reconcile/runtime.go` | `ee/reconcile/conformance/e2e_integration_test.go`, `ee/reconcile/conformance/storebacked_e2e_test.go` | _[counsel]_ |
 | 2 | `ee/reconcile/witness/doc.go`, `ee/reconcile/witness/types.go` | `ee/reconcile/witness/witness_test.go` | _[counsel]_ |
 | 3 | `ee/reconcile/rounds/doc.go`, `ee/reconcile/rounds/scheduler.go`, `ee/reconcile/rounds/watermark.go` | `ee/reconcile/rounds/rounds_test.go` | _[counsel]_ |
 | 4 | `ee/reconcile/quarantine/doc.go`, `ee/reconcile/quarantine/manager.go` | `ee/reconcile/quarantine/quarantine_test.go` | _[counsel]_ |
@@ -167,8 +167,8 @@ Citations parsed: **984 qualified**, **0 bare** (bare citations infer their fami
 | 12 | `ee/reconcile/rounds/doc.go`, `ee/reconcile/rounds/drift.go` | `ee/reconcile/rounds/drift_test.go` | _[counsel]_ |
 | 13 | `ee/reconcile/plan/doc.go`, `ee/reconcile/plan/refusal.go` | `ee/reconcile/plan/plan_test.go` | _[counsel]_ |
 | 14 | `ee/reconcile/plan/remediation/doc.go`, `ee/reconcile/plan/remediation/manager.go` | `ee/reconcile/plan/remediation/remediation_test.go` | _[counsel]_ |
-| 15 | `ee/reconcile/verify/doc.go`, `ee/reconcile/witness/doc.go`, `ee/reconcile/witness/evidence.go` | `ee/reconcile/verify/verify_test.go`, `ee/reconcile/witness/events_test.go` | _[counsel]_ |
-| 16 | `ee/reconcile/doc.go`, `ee/reconcile/intgate/doc.go`, `ee/reconcile/runtime.go` | `ee/reconcile/conformance/e2e_integration_test.go`, `ee/reconcile/intgate/rta_strong_test.go` | _[counsel]_ |
+| 15 | `ee/reconcile/verify/doc.go`, `ee/reconcile/witness/doc.go`, `ee/reconcile/witness/evidence.go` _(+1 more)_ | `ee/reconcile/conformance/storebacked_e2e_test.go`, `ee/reconcile/verify/verify_test.go`, `ee/reconcile/witness/events_test.go` | _[counsel]_ |
+| 16 | `ee/reconcile/doc.go`, `ee/reconcile/intgate/doc.go`, `ee/reconcile/runtime.go` | `ee/reconcile/conformance/e2e_integration_test.go`, `ee/reconcile/conformance/storebacked_e2e_test.go`, `ee/reconcile/intgate/rta_strong_test.go` | _[counsel]_ |
 | 17 | `ee/reconcile/canon/reducers/doc.go`, `ee/reconcile/canon/reducers/kmip/doc.go`, `ee/reconcile/canon/reducers/registry.go` | `ee/reconcile/canon/reducers/reducers_test.go` | _[counsel]_ |
 | 18 | `ee/reconcile/plan/remediation/connector.go`, `ee/reconcile/plan/remediation/doc.go` | `ee/reconcile/plan/remediation/connector_test.go` | _[counsel]_ |
 | 19 | `ee/reconcile/witness/doc.go`, `ee/reconcile/witness/ledger.go` | `ee/reconcile/witness/events_test.go` | _[counsel]_ |

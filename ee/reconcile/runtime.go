@@ -5,6 +5,7 @@ package reconcile
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"trstctl.com/trstctl/ee/reconcile/canon/reducers"
@@ -27,6 +28,7 @@ const (
 	defaultVaultAuthority    = "vault"
 	defaultCloudKMSAuthority = "cloud-kms"
 	defaultSelfAuthority     = "trstctl-self"
+	defaultCAAuthority       = "trstctl-ca"
 	defaultKMIPAuthority     = "kmip"
 )
 
@@ -37,15 +39,20 @@ type RuntimeConfig struct {
 	Log         *events.Log
 	Idempotency idem.Idempotencer
 	Signer      server.SignerProvider
+	Logger      *slog.Logger
 	// Schedules are the reconciliation rounds to run. Empty means nothing
 	// compares anything — which the served agreement report states as
 	// collecting=false rather than letting zero witnesses read as agreement.
 	Schedules []rounds.Config
+	// RoundInterval is how often the rounds worker checks for due schedules.
+	// Zero means the worker default (one minute); tests shorten it.
+	RoundInterval time.Duration
 }
 
-// Runtime is the XREC object graph mounted by cmd/trstctl/ee_attach.go. Nil
-// external sources keep the runtime fail-closed until INT-WIRE/config supplies
-// durable authority adapters; the binary still owns the real product path.
+// Runtime is the XREC object graph mounted by cmd/trstctl/ee_attach.go. The
+// "trstctl-self" and "trstctl-ca" authorities are store-backed (epic C4); the
+// vault, cloud-kms and kmip reducers keep nil sources — fail-closed — until
+// operator config supplies external credentials and endpoints.
 type Runtime struct {
 	Reducers                 *reducers.Registry
 	ObservationSandbox       *reducers.ObservationSandbox
@@ -64,19 +71,17 @@ type Runtime struct {
 	// XREC had reducers, digests, witnesses, quarantine and remediation, and no
 	// way for an operator to be told any authority disagreed with another.
 	DriftProjection *rounds.DriftProjection
-	// RoundsScheduled is how many reconciliation schedules the rounds worker was
-	// given. ZERO TODAY, and that is why it is served rather than assumed.
+	// RoundsScheduled is how many reconciliation schedules the rounds worker
+	// was given, served so the agreement surface can distinguish "no divergence
+	// found" from "nothing is looking". Zero schedules means the worker parks
+	// and the drift projection counts nothing — not because the authorities
+	// agree, but because no round compares them; the surface reports that as
+	// collecting=false rather than letting silence read as agreement.
 	//
-	// rounds.Worker returns immediately when it has no schedules, and nothing
-	// calls witness.Recorder.RecordWitness in production, so no round runs and no
-	// witness is ever recorded. The drift projection therefore counts nothing —
-	// not because the authorities agree, but because nothing is looking.
-	//
-	// Without this the agreement surface cannot tell those apart: its replay
-	// watermark advances with the event log like any projection, so it would
-	// report "consumed events, raised no divergence" on a deployment where
-	// divergence is undetectable. That is the exact false reassurance the surface
-	// exists to refuse, and it would have shipped inside it.
+	// With C4, a deployment that DOES schedule rounds gets the whole chain:
+	// store-backed authorities observed, digests signed in the isolated signer,
+	// disagreements witnessed into the ledger, quarantine admission updated,
+	// and the drift projection rebuilt from those events.
 	RoundsScheduled          int
 	IssuanceAdmission        server.AdmissionHook
 	ProjectionOptions        []projections.Option
@@ -85,9 +90,10 @@ type Runtime struct {
 	QuarantineOutboxFactory  editionseam.LicensedOutboxFactory
 }
 
-// NewRuntime builds the shipped XREC runtime object graph. Authority reducers
-// are registered with nil sources so observation fails closed rather than
-// pretending an unconfigured authority is healthy.
+// NewRuntime builds the shipped XREC runtime object graph. The two
+// control-plane authorities are registered with store-backed sources; external
+// reducers keep nil sources so observation of an unconfigured authority fails
+// closed rather than pretending it is healthy.
 // NewRuntime assembles the whole XREC system — reducers, digester, round
 // scheduler, witness recorder, quarantine manager and remediation manager — into
 // the single runtime the attach seam mounts (XREC-claim-16), and drives the
@@ -111,7 +117,24 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	if err := reducerRegistry.Register(defaultCloudKMSAuthority, reducers.NewCloudKMSReducer(reducerConfig(defaultCloudKMSAuthority, reducers.ModePoll), nil)); err != nil {
 		return nil, err
 	}
-	if err := reducerRegistry.Register(defaultSelfAuthority, reducers.NewSelfReducer(defaultSelfAuthority, nil)); err != nil {
+	// C4: the first two DURABLE authority adapters. "trstctl-self" is the
+	// certificate inventory's view and "trstctl-ca" is the internal CA issuance
+	// ledger's view — independently written state the platform already keeps
+	// under RLS, projected onto the shared assertion vocabulary in
+	// storesource.go. Before this every reducer had a nil source, so a
+	// scheduled round observed nothing and errored: "collecting" reported the
+	// schedule count while no authority was ever read. Without a store the
+	// sources stay nil and observation still fails closed.
+	var selfSource reducers.SelfInventorySource
+	var caLedgerSource reducers.SelfInventorySource
+	if cfg.Store != nil {
+		selfSource = newStoreInventorySource(cfg.Store)
+		caLedgerSource = newStoreCALedgerSource(cfg.Store)
+	}
+	if err := reducerRegistry.Register(defaultSelfAuthority, reducers.NewSelfReducer(defaultSelfAuthority, selfSource)); err != nil {
+		return nil, err
+	}
+	if err := reducerRegistry.Register(defaultCAAuthority, reducers.NewSelfReducer(defaultCAAuthority, caLedgerSource)); err != nil {
 		return nil, err
 	}
 	kmipClient := kmip.NewClient(defaultKMIPAuthority, nil)
@@ -150,10 +173,11 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		}
 	}
 
+	witnessRecorder := witness.NewRecorder(witnessLog, cfg.Idempotency)
 	return &Runtime{
 		Reducers:                 reducerRegistry,
 		ObservationSandbox:       reducers.NewObservationSandbox(reducers.ReadOnlyObservationGrant("xrec"), nil),
-		WitnessRecorder:          witness.NewRecorder(witnessLog, cfg.Idempotency),
+		WitnessRecorder:          witnessRecorder,
 		RemediationManager:       remediationManager,
 		RemediationOperationGate: remediation.NewOperationGrant("rotate-key", "disable-key", "delete-secret"),
 		QuarantineState:          quarantineState,
@@ -166,6 +190,18 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 			Log:       roundsLog,
 			Source:    &runtimeDigestSource{reducers: reducerRegistry, signer: cfg.Signer},
 			Schedules: roundSchedules,
+			Interval:  cfg.RoundInterval,
+			// C4: the disagreement sink closes the loop the scheduler could not.
+			// A round that detects two authorities committing to different
+			// state now produces a signed witness in the ledger and a
+			// quarantine admission decision, instead of appending nothing.
+			Sink: &witnessEmitter{
+				signer:     cfg.Signer,
+				recorder:   witnessRecorder,
+				quarantine: quarantineManager,
+				now:        func() time.Time { return time.Now().UTC() },
+			},
+			Logger: cfg.Logger,
 		}),
 		RemediationOutboxFactory: remediation.NewLicensedOutboxFactory(),
 		QuarantineOutboxFactory:  quarantine.NewLicensedOutboxFactory(quarantineState),
@@ -186,13 +222,13 @@ type runtimeDigestSource struct {
 	signer   server.SignerProvider
 }
 
-func (s *runtimeDigestSource) DigestForRound(ctx context.Context, req rounds.DigestRequest) (digest.SignedDigest, error) {
+func (s *runtimeDigestSource) DigestForRound(ctx context.Context, req rounds.DigestRequest) (rounds.PlaneObservation, error) {
 	if s == nil || s.reducers == nil {
-		return digest.SignedDigest{}, fmt.Errorf("xrec runtime: reducer registry is not configured")
+		return rounds.PlaneObservation{}, fmt.Errorf("xrec runtime: reducer registry is not configured")
 	}
 	observation, err := s.reducers.Observe(ctx, req.AuthorityID, req.TenantID)
 	if err != nil {
-		return digest.SignedDigest{}, err
+		return rounds.PlaneObservation{}, err
 	}
 	built, err := digest.Build(digest.BuildRequest{
 		Set:         observation.Set,
@@ -204,10 +240,17 @@ func (s *runtimeDigestSource) DigestForRound(ctx context.Context, req rounds.Dig
 		GeneratedAt: time.Now().UTC().Unix(),
 	})
 	if err != nil {
-		return digest.SignedDigest{}, err
+		return rounds.PlaneObservation{}, err
 	}
 	if s.signer == nil || s.signer.Client() == nil {
-		return digest.SignedDigest{}, fmt.Errorf("xrec runtime: signer is not configured")
+		return rounds.PlaneObservation{}, fmt.Errorf("xrec runtime: signer is not configured")
 	}
-	return digest.Sign(ctx, s.signer.Client(), built.Body, "")
+	signed, err := digest.Sign(ctx, s.signer.Client(), built.Body, "")
+	if err != nil {
+		return rounds.PlaneObservation{}, err
+	}
+	// The set and tree travel WITH the signed digest so a disagreement can be
+	// witnessed against exactly the state the digest committed to, not a
+	// re-observation racing the authority (epic C4).
+	return rounds.PlaneObservation{Digest: signed, Set: observation.Set, Tree: built.Tree}, nil
 }

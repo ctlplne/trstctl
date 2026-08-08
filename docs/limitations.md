@@ -439,19 +439,17 @@ never live in the API process. What you can do end to end against the running bi
   skew IS enforced — `agentProtocolInterceptor` refuses a handshake outside
   `MinSupportedVersion..MaxSupportedVersion` — and was met before this
   programme, so it is not claimed as new work.
-  Authority agreement (C4, PARTIAL — the surface is served, the PIPELINE HAS NO
-  PRODUCER): reconciliation rounds are not scheduled and no witness is ever
-  recorded, so this surface has nothing to report and says so rather than reporting
-  agreement. `rounds.Worker` returns immediately when it has no schedules and the
-  runtime passes none; `witness.Recorder.RecordWitness` has no production caller at
-  all. Every ingredient of "we checked and your authorities agree" is therefore
-  present on a shipped deployment — attached, warm projection, zero open witnesses,
-  no divergence — except anything doing the checking. The served response carries a
-  `collecting` field that is false in exactly that state, and the detail says the
-  zeros are the absence of collection rather than the absence of disagreement.
-  Without it the surface would have shipped the precise false reassurance it was
-  written to refuse, defeated one layer below where it was defending. Found by an
-  adversarial audit, not by the tests that already passed.
+  Authority agreement (C4): the pipeline now has a PRODUCER. A scheduled round
+  observes the store-backed authorities, and when two signed digests commit to
+  different state the scheduler hands every disagreeing pair to a sink that
+  builds the witness, signs it in the isolated signer, records it in the event
+  ledger (with both signed digests on the event, so offline verification needs
+  nothing else) and passes it to quarantine admission. An earlier audit found
+  the opposite: rounds were never scheduled, `witness.Recorder.RecordWitness`
+  had no production caller, and every ingredient of "we checked and your
+  authorities agree" shipped except anything doing the checking — the
+  `collecting=false` state and its wording exist because of that finding, and
+  they still guard the zero-schedule deployment today.
   Authority agreement (C4, Enterprise `reconcile`): `GET /api/v1/reconcile/agreement`
   and a Posture console panel report whether the configured authorities agree about
   what was issued, and where they do not. XREC already built the hard part — canonical
@@ -2119,13 +2117,28 @@ looking for a credential that was never there.
   nothing — the same illusion in a new place. An unparseable cadence or liveness
   takes a sane default rather than zero, because a zero cadence busy-loops the
   scheduler against a customer's authorities and a zero liveness marks every
-  authority instantly stale. Scope, stated exactly: this makes rounds
-  SCHEDULABLE. The runtime's authority adapters are still nil, so a scheduled
-  round has no durable external source to collect from — `collecting` reports
-  the schedule count, not that any authority was successfully read — and the
-  end-to-end claim-1 flow in C4's acceptance (two seeded authorities producing a
-  witness identifying exactly the differing subset, verified offline) is NOT
-  demonstrated.
+  authority instantly stale. With C4's adapters, two authorities are DURABLE:
+  `trstctl-self` reads the certificate inventory and `trstctl-ca` reads the
+  internal CA issuance ledger — independently written state under RLS — both
+  projected onto the shared assertion vocabulary (issuer+serial identity,
+  active-vs-revoked standing, scoped to the internal-CA jurisdiction so a
+  DigiCert certificate in inventory is not reported as drift the ledger never
+  claimed to know about). A round whose digests disagree hands each differing
+  pair to the runtime's witness emitter: witness built over the exact sets the
+  digests committed to, signed in the isolated signer, recorded with both
+  signed digests on the ledger event, quarantine admission updated, and the
+  rounds worker now survives a failed round (logged, retried next tick) instead
+  of dying on the first transient error. The claim-1 acceptance is demonstrated
+  end-to-end on the production assembly in
+  `ee/reconcile/conformance/storebacked_e2e_test.go`: seeded divergence, a real
+  scheduled round, a witness naming exactly the differing subset, offline
+  verification from the recorded event alone, and remediation authorized only
+  after in-signer plan verification. Boundaries, stated exactly: the vault,
+  cloud-kms and kmip reducers still have nil sources — scheduling them fails
+  observation closed and logs, it does not fabricate an authority — and
+  inventory rows with no captured DER cannot participate in the comparison
+  (no issuer bytes to derive the shared identity from), so a metadata-only
+  scanner import is invisible to this pair of authorities.
 - CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction, and the destruction record once it exists. The REFUSAL itself lives

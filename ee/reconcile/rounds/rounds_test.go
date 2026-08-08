@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -176,14 +177,14 @@ func (m *memoryLog) Append(_ context.Context, e eventspec.Event) (eventspec.Even
 
 type digestSource map[string]digest.SignedDigest
 
-func (d digestSource) DigestForRound(_ context.Context, req rounds.DigestRequest) (digest.SignedDigest, error) {
+func (d digestSource) DigestForRound(_ context.Context, req rounds.DigestRequest) (rounds.PlaneObservation, error) {
 	calls := d["__calls__"]
 	calls.Body.AuthorityID += "," + req.AuthorityID
 	d["__calls__"] = calls
 	if out, ok := d[req.AuthorityID]; ok {
-		return out, nil
+		return rounds.PlaneObservation{Digest: out}, nil
 	}
-	return digest.SignedDigest{}, errors.New("missing digest fixture")
+	return rounds.PlaneObservation{}, errors.New("missing digest fixture")
 }
 
 func (d digestSource) calls() []string {
@@ -301,4 +302,220 @@ func splitCalls(s string) []string {
 		s = s[i+1:]
 	}
 	return out
+}
+
+// A sink that records what the scheduler hands it, failing on demand.
+type captureSink struct {
+	mu       sync.Mutex
+	got      []rounds.Disagreement
+	failWith error
+}
+
+func (c *captureSink) RecordDisagreement(_ context.Context, d rounds.Disagreement) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.got = append(c.got, d)
+	return c.failWith
+}
+
+func (c *captureSink) calls() []rounds.Disagreement {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]rounds.Disagreement(nil), c.got...)
+}
+
+func disagreementScheduler(t *testing.T, src digestSource, sink rounds.DisagreementSink, log rounds.EventAppender, planes ...string) *rounds.Scheduler {
+	t.Helper()
+	cfg := rounds.Config{TenantID: "tenant-a", Cadence: time.Hour, Liveness: 2 * time.Hour}
+	for _, p := range planes {
+		cfg.Planes = append(cfg.Planes, rounds.PlaneConfig{AuthorityID: p, Liveness: 2 * time.Hour})
+	}
+	s, err := rounds.NewScheduler(cfg, src, log,
+		rounds.WithClock(func() time.Time { return time.Date(2026, 7, 8, 4, 0, 0, 0, time.UTC) }),
+		rounds.WithIDGenerator(func(time.Time) string { return "round-sink" }),
+		rounds.WithDisagreementSink(sink))
+	if err != nil {
+		t.Fatalf("NewScheduler: %v", err)
+	}
+	return s
+}
+
+// The C4 defect this package carried: a round that DETECTED two authorities
+// committing to different state appended nothing and told nobody. Every
+// disagreeing pair must now reach the sink, carrying the exact observations
+// whose digests disagreed, and an agreeing pair must not.
+func TestRounds_DisagreementReachesSinkPairwise(t *testing.T) {
+	log := &memoryLog{}
+	rootA := bytes.Repeat([]byte{0x11}, 32)
+	rootB := bytes.Repeat([]byte{0x22}, 32)
+	src := digestSource{
+		"vault": signedDigest(t, "tenant-a", "vault", "1", rootA),
+		"kms":   signedDigest(t, "tenant-a", "kms", "1", rootB),
+		"self":  signedDigest(t, "tenant-a", "self", "1", rootB),
+	}
+	sink := &captureSink{}
+	s := disagreementScheduler(t, src, sink, log, "vault", "kms", "self")
+
+	result, _, err := s.RunDue(context.Background())
+	if err != nil {
+		t.Fatalf("RunDue: %v", err)
+	}
+	if result.Agreed {
+		t.Fatal("round with disagreeing digests reported Agreed")
+	}
+	got := sink.calls()
+	if len(got) != 2 {
+		t.Fatalf("sink calls = %d, want 2 (vault/kms and vault/self; kms and self agree).\n"+
+			"A disagreement the sink never sees is a divergence nobody witnesses — the exact "+
+			"silence the sink exists to remove.", len(got))
+	}
+	for _, d := range got {
+		if d.RoundID != "round-sink" || d.TenantID != "tenant-a" {
+			t.Fatalf("disagreement carries %q/%q, want round-sink/tenant-a", d.RoundID, d.TenantID)
+		}
+		if d.Left.Digest.Body.AuthorityID != "vault" {
+			t.Fatalf("left authority = %q, want vault (the differing plane)", d.Left.Digest.Body.AuthorityID)
+		}
+	}
+	if got[0].Right.Digest.Body.AuthorityID == got[1].Right.Digest.Body.AuthorityID {
+		t.Fatalf("both disagreements name the same right plane %q", got[0].Right.Digest.Body.AuthorityID)
+	}
+	for _, ev := range log.events {
+		if ev.Type == rounds.EventTypeRoundAgreement {
+			t.Fatal("disagreeing round appended an agreement event")
+		}
+	}
+}
+
+func TestRounds_AgreementDoesNotInvokeSink(t *testing.T) {
+	log := &memoryLog{}
+	root := bytes.Repeat([]byte{0x33}, 32)
+	src := digestSource{
+		"vault": signedDigest(t, "tenant-a", "vault", "1", root),
+		"kms":   signedDigest(t, "tenant-a", "kms", "1", root),
+	}
+	sink := &captureSink{}
+	s := disagreementScheduler(t, src, sink, log, "vault", "kms")
+	result, _, err := s.RunDue(context.Background())
+	if err != nil {
+		t.Fatalf("RunDue: %v", err)
+	}
+	if !result.Agreed {
+		t.Fatal("identical digests did not agree")
+	}
+	if calls := sink.calls(); len(calls) != 0 {
+		t.Fatalf("agreeing round reached the sink %d times; a witness over agreement is a false alarm", len(calls))
+	}
+}
+
+// One failing pair must not silence the others: with vault disagreeing with
+// BOTH kms and self, a sink error on the first pair still leaves the second
+// pair attempted, and the error surfaces from RunDue rather than vanishing.
+func TestRounds_SinkErrorCollectedNotFatal(t *testing.T) {
+	log := &memoryLog{}
+	src := digestSource{
+		"vault": signedDigest(t, "tenant-a", "vault", "1", bytes.Repeat([]byte{0x44}, 32)),
+		"kms":   signedDigest(t, "tenant-a", "kms", "1", bytes.Repeat([]byte{0x55}, 32)),
+		"self":  signedDigest(t, "tenant-a", "self", "1", bytes.Repeat([]byte{0x55}, 32)),
+	}
+	sinkErr := errors.New("signer unavailable")
+	sink := &captureSink{failWith: sinkErr}
+	s := disagreementScheduler(t, src, sink, log, "vault", "kms", "self")
+	_, _, err := s.RunDue(context.Background())
+	if !errors.Is(err, sinkErr) {
+		t.Fatalf("RunDue error = %v, want the sink's error surfaced", err)
+	}
+	if calls := sink.calls(); len(calls) != 2 {
+		t.Fatalf("sink attempts = %d, want 2: the first pair's failure must not skip the second", len(calls))
+	}
+}
+
+// lockedLog is memoryLog for concurrent use by the worker goroutine.
+type lockedLog struct {
+	mu     sync.Mutex
+	events []eventspec.Event
+}
+
+func (l *lockedLog) Append(_ context.Context, e eventspec.Event) (eventspec.Event, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	e.Sequence = uint64(len(l.events) + 1)
+	l.events = append(l.events, e)
+	return e, nil
+}
+
+func (l *lockedLog) count(typ string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := 0
+	for _, ev := range l.events {
+		if ev.Type == typ {
+			n++
+		}
+	}
+	return n
+}
+
+// flakySource fails its first observation, then behaves. Before C4 the worker
+// returned on the FIRST RunDue error: one transient store or signer failure
+// ended reconciliation for the life of the process while the worker stayed
+// registered and healthy-looking. The worker must log and keep comparing.
+type flakySource struct {
+	mu     sync.Mutex
+	failed bool
+	inner  digestSource
+}
+
+func (f *flakySource) DigestForRound(ctx context.Context, req rounds.DigestRequest) (rounds.PlaneObservation, error) {
+	f.mu.Lock()
+	first := !f.failed
+	f.failed = true
+	f.mu.Unlock()
+	if first {
+		return rounds.PlaneObservation{}, errors.New("transient store failure")
+	}
+	return f.inner.DigestForRound(ctx, req)
+}
+
+func TestRounds_WorkerSurvivesRoundErrors(t *testing.T) {
+	log := &lockedLog{}
+	root := bytes.Repeat([]byte{0x66}, 32)
+	src := &flakySource{inner: digestSource{
+		"vault": signedDigest(t, "tenant-a", "vault", "1", root),
+		"kms":   signedDigest(t, "tenant-a", "kms", "1", root),
+	}}
+	workers := rounds.NewWorkers(rounds.WorkerOptions{
+		Log:    log,
+		Source: src,
+		Schedules: []rounds.Config{{
+			TenantID: "tenant-a",
+			Cadence:  time.Millisecond,
+			Liveness: time.Hour,
+			Planes: []rounds.PlaneConfig{
+				{AuthorityID: "vault", Liveness: time.Hour},
+				{AuthorityID: "kms", Liveness: time.Hour},
+			},
+		}},
+		Interval: 2 * time.Millisecond,
+	})
+	if len(workers) != 1 {
+		t.Fatalf("workers = %d, want 1", len(workers))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- workers[0].Run(ctx) }()
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		if log.count(rounds.EventTypeRoundAgreement) > 0 {
+			cancel()
+			<-done
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	err := <-done
+	t.Fatalf("no agreement event after the transient failure cleared (worker exit: %v); "+
+		"the worker died on the first error instead of logging and continuing", err)
 }

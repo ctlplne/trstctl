@@ -28,6 +28,7 @@ type Scheduler struct {
 	source  DigestSource
 	log     EventAppender
 	tracker *WatermarkTracker
+	sink    DisagreementSink
 
 	clock  func() time.Time
 	idgen  func(time.Time) string
@@ -87,6 +88,17 @@ func WithJitter(f func(time.Duration) time.Duration) Option {
 	}
 }
 
+// WithDisagreementSink installs the seam that turns digest disagreements into
+// witnesses. Without it a round that detects two authorities committing to
+// different state records nothing — the exact silence C4 removes.
+func WithDisagreementSink(sink DisagreementSink) Option {
+	return func(s *Scheduler) {
+		if sink != nil {
+			s.sink = sink
+		}
+	}
+}
+
 func (s *Scheduler) NextDue() time.Time {
 	return s.nextDue
 }
@@ -120,24 +132,27 @@ func (s *Scheduler) runRound(ctx context.Context, roundID string, now time.Time)
 	}
 
 	var (
-		result RoundResult
-		bodies []digest.Body
-		retErr error
+		result       RoundResult
+		bodies       []digest.Body
+		observations []PlaneObservation
+		retErr       error
 	)
 	result.RoundID = roundID
 	for _, plane := range s.cfg.Planes {
-		signed, err := s.source.DigestForRound(ctx, DigestRequest{
+		observation, err := s.source.DigestForRound(ctx, DigestRequest{
 			RoundID: roundID, TenantID: s.cfg.TenantID, AuthorityID: plane.AuthorityID,
 		})
 		if err != nil {
 			return result, err
 		}
+		signed := observation.Digest
 		ref, wm, err := digestRef(plane.AuthorityID, signed)
 		if err != nil {
 			return result, err
 		}
 		result.Digests = append(result.Digests, ref)
 		bodies = append(bodies, signed.Body)
+		observations = append(observations, observation)
 		decision, derr := s.tracker.Advance(plane.AuthorityID, wm, now)
 		if decision.Divergent {
 			div := Divergence{
@@ -166,6 +181,28 @@ func (s *Scheduler) runRound(ctx context.Context, roundID string, now time.Time)
 			RecordedAt: now.Format(time.RFC3339Nano),
 		}); err != nil {
 			return result, err
+		}
+	}
+	// Every pair whose digests committed to different state goes to the sink,
+	// which builds and records the signed witness naming the differing subset.
+	// Before C4 this branch did not exist: a round that DETECTED disagreement
+	// appended nothing and told nobody. One failing pair must not silence the
+	// others, so sink errors are collected, not returned early.
+	if s.sink != nil {
+		for i := 0; i < len(observations); i++ {
+			for j := i + 1; j < len(observations); j++ {
+				if stateBodyEqual(bodies[i], bodies[j]) {
+					continue
+				}
+				if err := s.sink.RecordDisagreement(ctx, Disagreement{
+					RoundID:  roundID,
+					TenantID: s.cfg.TenantID,
+					Left:     observations[i],
+					Right:    observations[j],
+				}); err != nil && retErr == nil {
+					retErr = err
+				}
+			}
 		}
 	}
 	return result, retErr

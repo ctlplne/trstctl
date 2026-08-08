@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"trstctl.com/trstctl/ee/reconcile/digest"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/idem"
 )
@@ -34,6 +35,13 @@ type WitnessRecorded struct {
 	WitnessHash string   `json:"witness_hash"`
 	Authorities []string `json:"authorities"`
 	Evidence    Evidence `json:"evidence"`
+	// Digests are the full signed state digests the witness's DigestRefs point
+	// at (epic C4). The evidence alone carries only digest hashes and
+	// signatures; VerifyOffline needs the signed bodies to re-derive them. With
+	// the digests ON the recorded event, the ledger event is the complete
+	// offline verification input — no callback to either authority, and no
+	// separate digest store that could diverge from the witness (XREC-claim-15).
+	Digests []digest.SignedDigest `json:"digests,omitempty"`
 }
 
 type WitnessCountersigned struct {
@@ -66,8 +74,9 @@ func NewRecorder(log EventAppender, idempotencer idem.Idempotencer) *Recorder {
 
 // RecordWitness appends the witness-recorded event. Together with the
 // countersigned and disputed events it forms the XREC ledger vocabulary the
-// drift projection is rebuilt from (XREC-claim-19).
-func (r *Recorder) RecordWitness(ctx context.Context, idempotencyKey string, evidence Evidence) (eventspec.Event, error) {
+// drift projection is rebuilt from (XREC-claim-19). Pass the round's signed
+// digests so the event carries the complete offline verification input.
+func (r *Recorder) RecordWitness(ctx context.Context, idempotencyKey string, evidence Evidence, digests ...digest.SignedDigest) (eventspec.Event, error) {
 	if err := evidence.validateShape(); err != nil {
 		return eventspec.Event{}, err
 	}
@@ -78,6 +87,7 @@ func (r *Recorder) RecordWitness(ctx context.Context, idempotencyKey string, evi
 		WitnessHash: hex.EncodeToString(evidence.ContentHash()),
 		Authorities: evidenceAuthorities(evidence),
 		Evidence:    evidence,
+		Digests:     digests,
 	}
 	return r.append(ctx, idempotencyKey, EventTypeWitnessRecorded, evidence.Body.TenantID, payload)
 }

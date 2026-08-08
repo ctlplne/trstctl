@@ -570,9 +570,14 @@ func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) er
 	// FeatureReconcile block in attachEE; later XREC cards extend it instead of
 	// scattering license checks. Community and core-only builds schedule zero XREC rounds.
 	runtime, err := eereconcile.NewRuntime(eereconcile.RuntimeConfig{
-		Store:  deps.Store,
-		Log:    deps.Log,
-		Signer: deps.Signer,
+		Store: deps.Store,
+		Log:   deps.Log,
+		// C4: witness recording and quarantine admission are idempotent per
+		// (round, authority pair); a replayed round re-derives the same keys
+		// and no-ops (AN-5).
+		Idempotency: orchestrator.NewIdempotency(deps.Store),
+		Signer:      deps.Signer,
+		Logger:      log,
 		// AUD-1: this was the missing half. The rounds worker registered, hit a
 		// len(Schedules)==0 guard on its first tick and blocked for the life of
 		// the process — zero rounds, zero witnesses, and a served agreement

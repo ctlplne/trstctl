@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"trstctl.com/trstctl/ee/reconcile/canon"
 	"trstctl.com/trstctl/ee/reconcile/digest"
 	"trstctl.com/trstctl/internal/eventspec"
 )
@@ -31,14 +32,47 @@ type EventAppender interface {
 
 // DigestSource supplies an already-signed state digest for one authority in a
 // round. Rounds never sign; XREC-02 keeps signing inside the isolated signer.
+//
+// The observation carries the canonical set and Merkle tree ALONGSIDE the
+// signed digest (epic C4): when two digests disagree, the round must hand a
+// witness builder the sets those digests committed to. Re-observing at witness
+// time would race the authorities — the witness would name a subset the
+// compared digests never saw.
 type DigestSource interface {
-	DigestForRound(context.Context, DigestRequest) (digest.SignedDigest, error)
+	DigestForRound(context.Context, DigestRequest) (PlaneObservation, error)
+}
+
+// PlaneObservation is one authority's contribution to a round: the signed
+// digest plus the exact canonical set and tree the digest was built from.
+type PlaneObservation struct {
+	Digest digest.SignedDigest
+	Set    canon.Set
+	Tree   *digest.Tree
 }
 
 type DigestRequest struct {
 	RoundID     string
 	TenantID    string
 	AuthorityID string
+}
+
+// Disagreement is a pair of planes in one round whose signed digests committed
+// to different canonical state. The scheduler detects it; the sink turns it
+// into a signed witness naming exactly the differing subset (XREC-claim-1).
+type Disagreement struct {
+	RoundID  string
+	TenantID string
+	Left     PlaneObservation
+	Right    PlaneObservation
+}
+
+// DisagreementSink receives digest disagreements the round detected. Rounds
+// never sign (XREC-02), so witness building and signing live behind this seam;
+// the production sink builds, signs and records the witness and hands it to
+// quarantine. A nil sink drops disagreements on the floor — which is exactly
+// the pre-C4 defect — so the runtime always supplies one.
+type DisagreementSink interface {
+	RecordDisagreement(context.Context, Disagreement) error
 }
 
 type Config struct {

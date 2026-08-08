@@ -115,6 +115,36 @@ func (s *Store) HasIssuedCerts(ctx context.Context, tenantID, caID string) (bool
 }
 
 // ListRevokedCerts returns a CA's revoked certificates (for CRL generation).
+// ListIssuedCerts returns every certificate the internal CA issuance ledger
+// records for the tenant, across all of its CAs, revoked or not. This is the
+// ledger's full assertion of "what I issued and where it stands" — the read a
+// cross-authority reconciliation compares against the inventory. Ordered by
+// (ca_id, serial) so repeated reads of unchanged state are byte-stable.
+func (s *Store) ListIssuedCerts(ctx context.Context, tenantID string) ([]IssuedCert, error) {
+	var out []IssuedCert
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, ca_id::text, serial, issued_at, revoked_at, reason_code
+			   FROM ca_issued_certs
+			  WHERE tenant_id = $1
+			  ORDER BY ca_id, serial`,
+			tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c IssuedCert
+			if err := rows.Scan(&c.TenantID, &c.CAID, &c.Serial, &c.IssuedAt, &c.RevokedAt, &c.ReasonCode); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 func (s *Store) ListRevokedCerts(ctx context.Context, tenantID, caID string) ([]IssuedCert, error) {
 	var out []IssuedCert
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
