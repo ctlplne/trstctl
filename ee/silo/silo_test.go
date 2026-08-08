@@ -29,7 +29,7 @@ func TestRouterRoutesSiloedTenantToPhysicalTargetsAndLeavesPooledTenantAlone(t *
 	if got, err := tenancy.PostgresSchema(ctx, siloTenant); err != nil || got != "t_11111111111111111111111111111111" {
 		t.Fatalf("silo postgres schema = %q err=%v", got, err)
 	}
-	if got, err := tenancy.EventSubject(ctx, siloTenant, "events", "certificate.recorded"); err != nil || got != "events.t-acme.certificate.recorded" {
+	if got, err := tenancy.EventSubject(ctx, siloTenant, "events", "certificate.recorded"); err != nil || got != "events.t-acme-11111111111111111111111111111111.certificate.recorded" {
 		t.Fatalf("silo event subject = %q err=%v", got, err)
 	}
 	if got, err := tenancy.ObjectPrefix(ctx, siloTenant); err != nil || got != "silo/11111111-1111-1111-1111-111111111111/" {
@@ -50,8 +50,8 @@ func TestRouterRoutesSiloedTenantToPhysicalTargetsAndLeavesPooledTenantAlone(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lanes) != 1 || lanes[0] != "t-acme" {
-		t.Fatalf("subject lanes = %v, want [t-acme]", lanes)
+	if len(lanes) != 1 || lanes[0] != "t-acme-11111111111111111111111111111111" {
+		t.Fatalf("subject lanes = %v, want [t-acme-11111111111111111111111111111111]", lanes)
 	}
 }
 
@@ -68,7 +68,7 @@ func TestProvisionerIsIdempotentRecreatesRLSAndTearsDownCleanly(t *testing.T) {
 	if _, err := provisioner.Provision(ctx, tenant); err != nil {
 		t.Fatalf("idempotent reprovision: %v", err)
 	}
-	if targets.PostgresSchema != "t_11111111111111111111111111111111" || targets.JetStreamSubjectLane != "t-acme" {
+	if targets.PostgresSchema != "t_11111111111111111111111111111111" || targets.JetStreamSubjectLane != "t-acme-11111111111111111111111111111111" {
 		t.Fatalf("targets = %+v", targets)
 	}
 	if n := plane.EnsureCount(targets.PostgresSchema); n != 1 {
@@ -103,5 +103,64 @@ func TestUnlicensedDefaultRemainsSinglePooledShape(t *testing.T) {
 	}
 	if got, err := tenancy.ObjectPrefix(context.Background(), siloTenant); err != nil || got != "tenant/"+siloTenant+"/" {
 		t.Fatalf("default object prefix = %q err=%v, want pooled", got, err)
+	}
+}
+
+// The isolation guarantee, structurally: two DISTINCT tenants must never share
+// a Postgres schema, a JetStream subject lane, or an object-key prefix — those
+// are the physical boundaries the sovereignty feature sells, and one shared
+// boundary is one tenant able to reach another's data.
+//
+// The load-bearing case is the SLUG COLLISION. Slugs are operator free text
+// with no charset validation, and lane derivation normalizes them lossily, so
+// "acme-corp", "acme_corp" and "acme.corp" all collapse to the same readable
+// part. Before the lane was keyed on the tenant ID, those three tenants shared
+// ONE event lane — a cross-tenant breach. This proves distinct tenants stay
+// disjoint on all three axes however their slugs collide.
+func TestDistinctTenantsGetDisjointIsolationTargetsEvenWithCollidingSlugs(t *testing.T) {
+	tenants := []Tenant{
+		{ID: "aaaaaaaa-0000-0000-0000-000000000001", Slug: "acme-corp"},
+		{ID: "bbbbbbbb-0000-0000-0000-000000000002", Slug: "acme_corp"}, // normalizes to the same readable part
+		{ID: "cccccccc-0000-0000-0000-000000000003", Slug: "acme.corp"}, // and again
+		{ID: "dddddddd-0000-0000-0000-000000000004", Slug: "globex"},
+	}
+	schemas := map[string]string{}
+	lanes := map[string]string{}
+	prefixes := map[string]string{}
+	for _, tn := range tenants {
+		schema := SchemaName(tn.ID)
+		lane := SubjectLane(tn.ID, tn.Slug)
+		prefix := ObjectPrefix(tn.ID)
+
+		if prior, ok := schemas[schema]; ok {
+			t.Fatalf("tenants %s and %s SHARE postgres schema %q — a siloed tenant could read the other's rows", prior, tn.ID, schema)
+		}
+		if prior, ok := lanes[lane]; ok {
+			t.Fatalf("tenants %s and %s SHARE event lane %q — one tenant's events would land in the other's stream. "+
+				"This is the slug-collision breach the ID-keyed lane exists to prevent.", prior, tn.ID, lane)
+		}
+		if prior, ok := prefixes[prefix]; ok {
+			t.Fatalf("tenants %s and %s SHARE object prefix %q — one tenant could address the other's objects", prior, tn.ID, prefix)
+		}
+		schemas[schema] = tn.ID
+		lanes[lane] = tn.ID
+		prefixes[prefix] = tn.ID
+	}
+
+	// And no object prefix may be a PREFIX of another's, or a tenant could
+	// enumerate another's key space by listing under a shorter prefix.
+	all := make([]string, 0, len(prefixes))
+	for p := range prefixes {
+		all = append(all, p)
+	}
+	for i := range all {
+		for j := range all {
+			if i == j {
+				continue
+			}
+			if strings.HasPrefix(all[i], all[j]) {
+				t.Fatalf("object prefix %q is a prefix of %q — one tenant's key space contains another's", all[j], all[i])
+			}
+		}
 	}
 }

@@ -111,7 +111,7 @@ func (r *Router) TargetsFor(ctx context.Context, tenantID string) (tenancy.Targe
 	}
 	targets := tenancy.Targets{
 		Model:                tenant.Model,
-		JetStreamSubjectLane: SubjectLane(tenant.Slug),
+		JetStreamSubjectLane: SubjectLane(tenant.ID, tenant.Slug),
 		ObjectKeyPrefix:      ObjectPrefix(tenant.ID),
 	}
 	if tenant.Model == tenancy.IsolationSiloed {
@@ -131,7 +131,7 @@ func (r *Router) JetStreamSubjectLanes(ctx context.Context) ([]string, error) {
 			continue
 		}
 		if tenant.Model == tenancy.IsolationSiloed || tenant.Model == tenancy.IsolationHybrid {
-			lanes = append(lanes, SubjectLane(tenant.Slug))
+			lanes = append(lanes, SubjectLane(tenant.ID, tenant.Slug))
 		}
 	}
 	sort.Strings(lanes)

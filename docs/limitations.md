@@ -2158,6 +2158,22 @@ looking for a credential that was never there.
   caller supplies it; the relay records handshake cost (`HandshakeMillis`,
   `ChainBytes`) but no wave orchestration, canary-halt execution, or PQC lab
   console view is built. The acceptance's end-to-end pilot is not demonstrated.
+- Per-tenant silo isolation identifiers all key on the tenant ID (L4): a siloed
+  tenant's Postgres schema, JetStream subject lane, and object-key prefix are
+  each derived from the tenant's unique, immutable ID. The event LANE used to be
+  the exception — it was derived from the operator-supplied slug, which has no
+  charset validation and normalizes lossily, so `acme-corp`, `acme_corp` and
+  `acme.corp` all collapsed to one lane and two distinct tenants with those
+  slugs would have SHARED a JetStream stream — one customer's events landing in
+  another's, a cross-tenant isolation breach in the sovereignty feature. The
+  lane now carries the slug only as a readable prefix with the ID as the
+  uniqueness suffix, and a structural assurance test proves distinct tenants
+  stay disjoint on all three axes (schema, lane, object prefix — with no prefix
+  a prefix of another's) even when their slugs collide. Scope, stated exactly:
+  this hardens the derivation and adds the assurance; the per-tenant KEK/HSM,
+  the per-tenant audit stream, tenant-scoped break-glass with dual consent, and
+  the provider assurance console remain unbuilt, and the doctor's operator-run
+  isolation suite does not yet drive an object-store lane against a live backend.
 - XREC reconciliation rounds are configurable (AUD-1, C4): a `reconcile` block
   in the config file supplies the schedules the rounds worker needs. Before
   this, `roundSchedules` was declared and never assigned, so the worker —

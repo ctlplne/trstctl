@@ -68,7 +68,7 @@ func targetsFor(tenant Tenant) tenancy.Targets {
 	}
 	targets := tenancy.Targets{
 		Model:                tenant.Model,
-		JetStreamSubjectLane: SubjectLane(tenant.Slug),
+		JetStreamSubjectLane: SubjectLane(tenant.ID, tenant.Slug),
 		ObjectKeyPrefix:      ObjectPrefix(tenant.ID),
 	}
 	if tenant.Model == tenancy.IsolationSiloed {
