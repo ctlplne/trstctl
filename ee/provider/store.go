@@ -8,8 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -67,6 +70,23 @@ const (
 	TenantSuspended  TenantStatus = "suspended"
 	TenantOffboarded TenantStatus = "offboarded"
 )
+
+// providerCustomerNamespace names the space customer ids are minted in. A fixed
+// namespace makes CustomerID(slug) stable across processes and deployments, so
+// the same slug always resolves to the same tenancy uuid.
+var providerCustomerNamespace = uuid.NewSHA1(uuid.NameSpaceURL, []byte("trstctl.com/provider/customer"))
+
+// CustomerID is the durable tenancy uuid for a customer slug.
+//
+// A provider customer is a core tenancy — the same uuid that keys its quotas,
+// usage meters, and certificate inventory — so the id must be a uuid, not a
+// "tenant-<slug>" label. It is derived deterministically from the slug (RFC 4122
+// v5) so a not-yet-created customer can be authorized against the id it will
+// receive, and so a re-provision of the same slug is an idempotent hit on the
+// same row rather than a second tenancy.
+func CustomerID(slug string) string {
+	return uuid.NewSHA1(providerCustomerNamespace, []byte(strings.ToLower(strings.TrimSpace(slug)))).String()
+}
 
 // Tenant is provider-plane metadata only. It is not tenant credential data.
 type Tenant struct {

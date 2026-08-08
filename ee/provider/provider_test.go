@@ -23,7 +23,7 @@ func TestTenantBandExhaustionIsProvisionOnly(t *testing.T) {
 	clock := fixedClock()
 	audit := &captureAudit{}
 	svc := NewService(Config{License: providerLicense(t, 2), Store: NewMemStore(), Audit: audit, Clock: clock,
-		Delegations: fullyDelegated("op-1", "tenant-alpha", "tenant-beta", "tenant-gamma")})
+		Delegations: fullyDelegated("op-1", CustomerID("alpha"), CustomerID("beta"), CustomerID("gamma"))})
 	op := providerOperator("op-1")
 
 	alpha, err := svc.Provision(ctx, op, ProvisionRequest{Slug: "alpha", Name: "Alpha"})
@@ -78,7 +78,7 @@ func TestProviderHandlerRendersTenantBandProblemCode(t *testing.T) {
 		Audit:         &captureAudit{},
 		Clock:         fixedClock(),
 		Authenticator: stubAuth{accept: "Bearer provider:op-1:provider@example.test"},
-		Delegations:   fullyDelegated("op-1", "tenant-alpha", "tenant-beta"),
+		Delegations:   fullyDelegated("op-1", CustomerID("alpha"), CustomerID("beta")),
 	})
 
 	postTenant := func(slug string) (int, map[string]any) {
@@ -116,7 +116,7 @@ func TestBreakGlassRequiresConsentAndAuditsBeforeTenantData(t *testing.T) {
 		Clock:     fixedClock(),
 		// Delegated everything, so what this test observes is the break-glass
 		// consent gate rather than a missing grant refusing first.
-		Delegations: fullyDelegated("op-1", "tenant-alpha"),
+		Delegations: fullyDelegated("op-1", CustomerID("alpha")),
 	})
 	op := providerOperator("op-1")
 	tenant, err := svc.Provision(ctx, op, ProvisionRequest{Slug: "alpha", Name: "Alpha"})

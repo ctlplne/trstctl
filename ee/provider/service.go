@@ -175,7 +175,15 @@ func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRe
 	// Onboarding is scoped like every other operation rather than being a
 	// blanket "may create customers": an operator who can conjure a tenancy of
 	// any name can conjure one whose name collides with a real customer's.
-	if err := s.authorize(ctx, actor, "tenant-"+slug, OpProvision); err != nil {
+	//
+	// The id is a uuid derived deterministically from the slug (not "tenant-"+
+	// slug) so it fits the durable registry's uuid key and lines up with the
+	// core tenant world every other provider table keys on — quotas, meters,
+	// and the per-customer certificate count all live under this same uuid. It
+	// must be deterministic, not random, precisely because we authorize against
+	// it here BEFORE the row exists: a random id could not be pre-delegated.
+	id := CustomerID(slug)
+	if err := s.authorize(ctx, actor, id, OpProvision); err != nil {
 		return Tenant{}, err
 	}
 	if band := s.license.TenantBand(); band > 0 {
@@ -188,7 +196,7 @@ func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRe
 		}
 	}
 	now := s.clock()
-	tenant, err := s.store.CreateTenant(ctx, Tenant{ID: "tenant-" + slug, Slug: slug, Name: name, Status: TenantActive, CreatedAt: now, UpdatedAt: now})
+	tenant, err := s.store.CreateTenant(ctx, Tenant{ID: id, Slug: slug, Name: name, Status: TenantActive, CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		return Tenant{}, err
 	}

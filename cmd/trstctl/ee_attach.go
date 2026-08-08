@@ -360,7 +360,11 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		// closed-until-wired stance as the authenticator.
 		delegations := eeprovider.NewPGDelegationSource(deps.Store)
 		deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
-			License:       lic,
+			License: lic,
+			// L3: durable tenant registry. Nil defaulted to MemStore, so the
+			// provider's whole customer list vanished on every deploy — the
+			// registry they run their business from, lost silently.
+			Store:         eeprovider.NewPGStore(deps.Store),
 			Audit:         eeprovider.NewEventLogAuditSink(deps.Log),
 			Authenticator: operatorAuth,
 			Delegations:   delegations,

@@ -42,7 +42,7 @@ func providerHandler(t *testing.T, auth OperatorAuthenticator) http.Handler {
 		// This file is about AUTHENTICATION failing closed. Delegation is the
 		// separate axis, granted here so an authentication result is what these
 		// tests actually observe.
-		Delegations: fullyDelegated("op-1", "tenant-acme", "tenant-bg-tenant"),
+		Delegations: fullyDelegated("op-1", CustomerID("acme"), CustomerID("bg-tenant")),
 	})
 }
 

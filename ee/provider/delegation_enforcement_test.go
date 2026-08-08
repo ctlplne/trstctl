@@ -244,7 +244,7 @@ func (m *mutableDelegations) Delegations(ctx context.Context) (*DelegationSet, e
 func TestProvisioningIsScopedToTheCustomerBeingCreated(t *testing.T) {
 	t.Parallel()
 	h, _ := twoCustomerHandler(t, StaticDelegations{
-		{OperatorID: "op-1", CustomerID: "tenant-permitted", Operations: []Operation{OpProvision}},
+		{OperatorID: "op-1", CustomerID: CustomerID("permitted"), Operations: []Operation{OpProvision}},
 	})
 	rec := providerRequest(t, h, http.MethodPost, "/provider/v1/tenants",
 		`{"slug":"not-permitted","name":"Not Permitted"}`)
