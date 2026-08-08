@@ -38,8 +38,18 @@ const (
 // misconfiguration it is. Refusing here says so once, at startup, in words.
 func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.Timer, relay.Channel, connector.LocalOpsConfig) {
 	var hostProfile connector.LocalOpsConfig
-	if !o.relayClaim {
+	if !o.relayClaim && !o.selfUpgrade {
 		return nil, nil, hostProfile
+	}
+	if !o.relayClaim {
+		// Self-upgrade only (A5): the claim loop runs so this agent can pick
+		// up its own agent.upgrade jobs, and asks for nothing else — an agent
+		// with no exec profile claiming connector work would spend the queue's
+		// attempts discovering it cannot do any of it.
+		fmt.Printf("trstctl-agent: self-upgrade claiming enabled every %s\n", o.relayPollEvery)
+		return time.NewTimer(o.relayPollEvery),
+			relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity},
+			hostProfile
 	}
 	// The host exec profile is loaded and VALIDATED at startup, not at first
 	// job. An operator who mistyped a path finds out when they start the agent,
@@ -79,6 +89,13 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 			"trstctl-agent: --relay-claim was set but this agent's certificate carries roles %v, not %q; "+
 				"relay work will not be claimed. Re-enroll with a network-role bootstrap token to make this agent a relay.\n",
 			roles, mtls.AgentRoleNetwork)
+		if o.selfUpgrade {
+			// The relay grant is missing but the self-upgrade opt-in stands on
+			// its own: upgrades are per-agent work either role may do.
+			return time.NewTimer(o.relayPollEvery),
+				relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity},
+				hostProfile
+		}
 		return nil, nil, hostProfile
 	}
 	fmt.Printf("trstctl-agent: relay claiming enabled for %v every %s\n",

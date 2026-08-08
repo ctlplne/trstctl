@@ -81,6 +81,7 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			           AND c.delivered_at IS NULL
 			           AND (c.claimed_by_agent_id IS NULL OR c.claim_expires_at < $5)
 			           AND (c.required_agent_role = '' OR c.required_agent_role = ANY($7::text[]))
+			           AND (c.required_agent_id IS NULL OR c.required_agent_id = $2::uuid)
 			         ORDER BY c.id
 			         LIMIT $4
 			         FOR UPDATE SKIP LOCKED

@@ -41,11 +41,11 @@ func (s *Store) ApplyOwnerUpdatedTx(ctx context.Context, tx pgx.Tx, o Owner) err
 }
 
 // ApplyAgentUpgradeCampaignOpenedTx projects agent.upgrade.campaign.opened (A5).
-func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx, tenantID, id, version, createdBy string, at time.Time) error {
+func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx, tenantID, id, version, createdBy string, artifacts []byte, at time.Time) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO agent_upgrade_campaigns (id, tenant_id, target_version, created_by, created_at)
-		 VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
-		id, tenantID, version, createdBy, at)
+		`INSERT INTO agent_upgrade_campaigns (id, tenant_id, target_version, created_by, artifacts, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING`,
+		id, tenantID, version, createdBy, artifacts, at)
 	return err
 }
 
@@ -54,14 +54,52 @@ func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx
 // halted_at_ring is only ever SET, never cleared by an advance: it is the
 // record of which ring stopped the rollout, and Resume restarts there. Clearing
 // it on resume would lose the one fact needed to restart correctly.
+//
+// dispatched_ring IS cleared whenever the campaign enters running. Entering
+// running is what "the current ring should have jobs" means, and clearing the
+// stamp is what makes the sweep dispatch them — including a re-dispatch of the
+// same ring after a resume, which is required: the agent whose failure halted
+// the round needs a fresh job after the fix, and the old round's receipts must
+// stop counting.
 func (s *Store) ApplyAgentUpgradeCampaignAdvancedTx(ctx context.Context, tx pgx.Tx, tenantID, id, status, currentRing, haltedAtRing, reason string) error {
 	_, err := tx.Exec(ctx,
 		`UPDATE agent_upgrade_campaigns
 		    SET status = $3, current_ring = $4,
 		        halted_at_ring = CASE WHEN $5 <> '' THEN $5 ELSE halted_at_ring END,
+		        dispatched_ring = CASE WHEN $3 = 'running' THEN NULL ELSE dispatched_ring END,
 		        reason = $6, updated_at = now()
 		  WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id, status, currentRing, haltedAtRing, reason)
+	return err
+}
+
+// UpgradeDispatchJob names one dispatched agent and its outbox job key (A5).
+type UpgradeDispatchJob struct {
+	AgentID string
+	JobKey  string
+}
+
+// ApplyAgentUpgradeRingDispatchedTx projects agent.upgrade.ring.dispatched (A5).
+//
+// Replay-safe twice over: dispatch rows land ON CONFLICT DO NOTHING (the PK is
+// the event's own identity), and the campaign's round only moves FORWARD — a
+// replayed round cannot drag dispatch_round backwards past a later one.
+func (s *Store) ApplyAgentUpgradeRingDispatchedTx(ctx context.Context, tx pgx.Tx, tenantID, campaignID, ring string, round int, jobs []UpgradeDispatchJob, at time.Time) error {
+	for _, j := range jobs {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO agent_upgrade_dispatches (tenant_id, campaign_id, round, ring, agent_id, job_key, dispatched_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			 ON CONFLICT (tenant_id, campaign_id, round, agent_id) DO NOTHING`,
+			tenantID, campaignID, round, ring, j.AgentID, j.JobKey, at); err != nil {
+			return err
+		}
+	}
+	_, err := tx.Exec(ctx,
+		`UPDATE agent_upgrade_campaigns
+		    SET dispatch_round = $3, dispatched_ring = $4, status = 'running',
+		        current_ring = $4, updated_at = now()
+		  WHERE tenant_id = $1 AND id = $2 AND coalesce(dispatch_round, 0) < $3`,
+		tenantID, campaignID, round, ring)
 	return err
 }
 
@@ -504,8 +542,8 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	"issuance_requests",
 	// I5: projected from mdm.device.correlated.
 	"mdm_device_correlations",
-	// A5: projected from agent.upgrade.campaign.* events.
-	"agent_upgrade_campaigns"}
+	// A5: projected from agent.upgrade.campaign.* / agent.upgrade.ring.dispatched.
+	"agent_upgrade_campaigns", "agent_upgrade_dispatches"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

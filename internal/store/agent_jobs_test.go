@@ -434,3 +434,44 @@ func TestRedemptionAfterLeaseLapseGoesToTheNewHolder(t *testing.T) {
 		t.Fatalf("new holder's redemption refused: ok=%v err=%v", ok, err)
 	}
 }
+
+// TestClaimHonorsPerRowAgentIdentityDemand is A5's targeting rule at the
+// store: an agent.upgrade row names ONE agent, and no other agent may claim it
+// however right its roles are. Role says what a machine CAN do; the upgrade
+// row says which machine this order is FOR, and a fleet where those blur hands
+// agent A the instruction to replace agent B's binary.
+func TestClaimHonorsPerRowAgentIdentityDemand(t *testing.T) {
+	st, tenantID := newStore(t), tenantA
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	target := "cccccccc-0000-0000-0000-000000000001"
+	bystander := "cccccccc-0000-0000-0000-000000000002"
+
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_id)
+			 VALUES ($1, 'agent.upgrade', $2, 'agent-upgrade:c1:1:target', $3::uuid)`,
+			tenantID, []byte(`{}`), target)
+		return err
+	}); err != nil {
+		t.Fatalf("seed targeted job: %v", err)
+	}
+
+	got, err := st.ClaimAgentJobs(ctx, tenantID, bystander, []string{"agent.upgrade"}, []string{"host", "network"}, 10, time.Minute, now)
+	if err != nil {
+		t.Fatalf("bystander claim: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("an agent claimed another agent's upgrade job: %v.\n\n"+
+			"The first symptom in production would be the WRONG BOX restarting on a new binary", got)
+	}
+
+	got, err = st.ClaimAgentJobs(ctx, tenantID, target, []string{"agent.upgrade"}, []string{"host"}, 10, time.Minute, now)
+	if err != nil {
+		t.Fatalf("target claim: %v", err)
+	}
+	if len(got) != 1 || got[0].IdempotencyKey != "agent-upgrade:c1:1:target" {
+		t.Fatalf("the named agent could not claim its own upgrade: %v", got)
+	}
+}

@@ -1849,8 +1849,9 @@ type AgentChannel struct {
 	// "30s"). Empty selects a conservative default.
 	HeartbeatInterval string `json:"heartbeat_interval,omitempty"`
 	// ClaimableJobKinds are the estate-touching job kinds enrolled agents may claim
-	// and execute (A1): connector.deploy, connector.rollback, endpoint.verify,
-	// discovery.run, revocation.probe, trust.distribute.
+	// and execute (A1): connector.deploy, connector.rollback, connector.test,
+	// endpoint.verify, endpoint.renew, discovery.run, revocation.probe,
+	// adcs.inventory, trust.distribute, agent.upgrade.
 	//
 	// Empty — the default — means the job ledger is served but hands nothing out.
 	// That is deliberate: a kind should be enabled when an agent-side executor for

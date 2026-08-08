@@ -47,7 +47,14 @@ import (
 // resuming would leave the estate showing no verification state at all while
 // boot considered itself caught up — and "no divergences recorded" reads as
 // "nothing is wrong".
-const SnapshotFormatVersion = 12
+// Bumped to 13 when EIGHT tables that were truncated by restore but never
+// reloaded joined the snapshot set: tenant_members, ca_authorities,
+// agent_cert_revocations, and the I2/I3/I5/A5 projections. A v12 snapshot's
+// payload carries none of them, so restoring one would empty all eight while
+// the covered offset skipped their history. The class is now closed by
+// TestEveryTruncatedReadModelTableIsRestoredBySnapshots rather than by
+// remembering to update two lists.
+const SnapshotFormatVersion = 13
 
 // snapshotTables are the read-model tables captured in a per-tenant snapshot, in
 // dependency order (parents before children) so a restore's inserts never trip a
@@ -57,7 +64,22 @@ const SnapshotFormatVersion = 12
 // identity_transitions (which references identities) comes last. The revocation
 // responder tables have no foreign keys, but they are pure projections too, so
 // snapshots carry them with the rest of the tenant read model.
-var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions"}
+var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
+	// Format 13. EIGHT tables sat in ReadModelTables without entering this
+	// list or the capture payload — and the restore truncates the WHOLE read
+	// model, then reloads only what snapshots carry, so any restore erased
+	// them while boot considered itself caught up past their events. Five are
+	// recent (I2/I3/I5/A5); tenant_members, ca_authorities and
+	// agent_cert_revocations were older, found by the class-closing test
+	// rather than by anyone reading lists. The version bump is what protects
+	// existing deployments: a v12 snapshot's payload does not contain these
+	// tables, and restoring one would wipe them again. ca_authorities is
+	// captured ordered by (created_at, id) because it references itself
+	// (parent_id, replaces_id) and both always point at strictly older rows,
+	// so creation order is insertion-safe.
+	"tenant_members", "ca_authorities", "agent_cert_revocations",
+	"owner_ownership_conflicts", "cmdb_reconcile_schedules", "issuance_requests",
+	"mdm_device_correlations", "agent_upgrade_campaigns", "agent_upgrade_dispatches"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -151,7 +173,19 @@ SELECT jsonb_build_object(
   'endpoint_verifications', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM endpoint_verifications t),
   'workload_attester_trust_sources', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM workload_attester_trust_sources t),
   'secret_sync_workload_identity_sources', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_sync_workload_identity_sources t),
-  'tenant_key_domains', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM tenant_key_domains t)
+  'tenant_key_domains', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM tenant_key_domains t),
+  'tenant_members', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM tenant_members t),
+  -- ORDER BY inside the aggregate: ca_authorities references itself
+  -- (parent_id, replaces_id), both FKs point at strictly older rows, and the
+  -- restore inserts each table as one statement in array order.
+  'ca_authorities', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.created_at, t.id), '[]'::jsonb) FROM ca_authorities t),
+  'agent_cert_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_cert_revocations t),
+  'owner_ownership_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM owner_ownership_conflicts t),
+  'cmdb_reconcile_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM cmdb_reconcile_schedules t),
+  'issuance_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM issuance_requests t),
+  'mdm_device_correlations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_device_correlations t),
+  'agent_upgrade_campaigns', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_upgrade_campaigns t),
+  'agent_upgrade_dispatches', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_upgrade_dispatches t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL).Scan(&payload); err != nil {

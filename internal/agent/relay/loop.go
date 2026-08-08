@@ -119,16 +119,65 @@ func RunOnceWithPlugins(
 	plugins *PluginRuntime,
 	limit, leaseSeconds int,
 ) (int, error) {
+	return RunOnceWithSelfUpgrade(ctx, ch, client, hostProfile, plugins, nil, limit, leaseSeconds)
+}
+
+// RunOnceSelfUpgradeOnly claims NOTHING but this agent's own agent.upgrade
+// jobs (epic A5). It exists for the agent that opted into self-upgrade without
+// opting into relay or host execution: asking for connector kinds from a box
+// with no exec profile would spend the queue's attempts proving it cannot do
+// any of it.
+func RunOnceSelfUpgradeOnly(ctx context.Context, ch Channel, selfUp *SelfUpgrade, limit, leaseSeconds int) (int, error) {
 	if ch == nil {
 		return 0, errors.New("relay: no channel")
 	}
-	jobs, err := ch.ClaimJobs(ctx, ClaimableKinds(), limit, leaseSeconds)
+	if selfUp == nil {
+		return 0, errors.New("relay: self-upgrade loop needs a SelfUpgrade config")
+	}
+	jobs, err := ch.ClaimJobs(ctx, []string{KindAgentUpgrade}, limit, leaseSeconds)
 	if err != nil {
 		return 0, fmt.Errorf("relay: claim: %w", err)
 	}
 	executed := 0
 	for _, job := range jobs {
-		if runJob(ctx, ch, client, hostProfile, plugins, job) {
+		if runJob(ctx, ch, nil, connector.LocalOpsConfig{}, nil, selfUp, job) {
+			executed++
+		}
+	}
+	return executed, nil
+}
+
+// RunOnceWithSelfUpgrade is RunOnceWithPlugins plus this agent's own upgrade
+// executor (epic A5).
+//
+// The kind is ASKED FOR only when selfUp is non-nil: an agent whose operator
+// did not opt into self-upgrade never claims its own upgrade job, so the job
+// sits unclaimed until the ring's grace expires and the campaign halts with
+// silence — an actionable verdict naming the ring, rather than a binary
+// replaced under an operator who never agreed to it.
+func RunOnceWithSelfUpgrade(
+	ctx context.Context,
+	ch Channel,
+	client *http.Client,
+	hostProfile connector.LocalOpsConfig,
+	plugins *PluginRuntime,
+	selfUp *SelfUpgrade,
+	limit, leaseSeconds int,
+) (int, error) {
+	if ch == nil {
+		return 0, errors.New("relay: no channel")
+	}
+	kinds := ClaimableKinds()
+	if selfUp != nil {
+		kinds = append(kinds, KindAgentUpgrade)
+	}
+	jobs, err := ch.ClaimJobs(ctx, kinds, limit, leaseSeconds)
+	if err != nil {
+		return 0, fmt.Errorf("relay: claim: %w", err)
+	}
+	executed := 0
+	for _, job := range jobs {
+		if runJob(ctx, ch, client, hostProfile, plugins, selfUp, job) {
 			executed++
 		}
 	}
@@ -142,7 +191,13 @@ func RunOnceWithPlugins(
 // than waiting out its lease: a relay that dies silently is indistinguishable
 // from a slow one, and the difference matters to whoever is waiting for the
 // certificate to land.
-func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, plugins *PluginRuntime, job Job) bool {
+func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, plugins *PluginRuntime, selfUp *SelfUpgrade, job Job) bool {
+	// A5: a self-upgrade redeems nothing — the artifact URL travels in the
+	// payload and its sha256 is the trust anchor. Routed first because it is
+	// the one kind whose executor is about to replace this process.
+	if job.Kind == KindAgentUpgrade {
+		return runSelfUpgrade(ctx, ch, selfUp, job)
+	}
 	// A revocation probe carries a different payload and needs no credential at
 	// all — it reads public distribution points. Routing it before the deploy
 	// path keeps it from redeeming material it has no use for (R1).

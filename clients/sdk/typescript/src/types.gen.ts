@@ -5317,10 +5317,13 @@ export interface components {
         AgentUpgradeCampaign: {
             active: boolean;
             current_ring?: string;
+            dispatch_round?: number;
+            dispatched_ring?: string;
             guidance: string;
             halted_at_ring?: string;
             /** Format: uuid */
             id?: string;
+            observe_only?: boolean;
             reason?: string;
             rings: Record<string, never>;
             /** @enum {string} */
@@ -5329,6 +5332,7 @@ export interface components {
             versions: Record<string, never>;
         };
         AgentUpgradeCampaignInput: {
+            artifacts?: components["schemas"]["UpgradeArtifact"][];
             target_version: string;
         };
         AgentWorkloadAPIStatus: {
@@ -10214,6 +10218,12 @@ export interface components {
             name: string;
             sync_configured: boolean;
             sync_supported: boolean;
+        };
+        UpgradeArtifact: {
+            arch: string;
+            os: string;
+            sha256: string;
+            url: string;
         };
         UsageMeterDefinition: {
             classification: string;

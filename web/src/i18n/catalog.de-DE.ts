@@ -3295,6 +3295,10 @@ const deDECatalog = {
   "source.fleet.upgrade.halted.a5fl000002": "Automatisch beim Ring {value1} angehalten. Ein Fortsetzen startet dort neu, nicht danach.",
   "source.fleet.upgrade.paused.a5fl000003": "Pausiert. Die Ausf\u00fchrung ist gestoppt, nicht nur diese Schaltfl\u00e4che.",
   "source.fleet.upgrade.rings.a5fl000004": "Ringe: {value1}. Agenten ohne Ring sind nicht zugewiesen und treten nie automatisch dem breiten Ring bei.",
+  "source.fleet.upgrade.observe.a5fl000005":
+    "Nur Beobachtung: Diese Kampagne bewertet die von den Agenten gemeldeten Versionen; sie verteilt nichts. Starten Sie eine Kampagne mit Artefakten, damit die Ringe das Upgrade ausrollen.",
+  "source.fleet.upgrade.dispatching.a5fl000006":
+    "Wird verteilt: Runde {value1} an den Ring {value2} gesendet. Jeder Agent übernimmt seinen eigenen gezielten Auftrag und meldet eine signierte Quittung.",
   "source.mdm.devices.heading.i5mdm00001": "MDM-Ger\u00e4tezuordnung",
   "source.mdm.devices.counts.i5mdm00002": "{value1} Ger\u00e4te; {value2} meldeten einen Fehler und {value3} wurden \u00fcberhaupt nicht beobachtet.",
   "source.mdm.devices.unobserved.i5mdm00003": "nicht beobachtet \u2014 das MDM hat dieses Ger\u00e4t nicht gemeldet",

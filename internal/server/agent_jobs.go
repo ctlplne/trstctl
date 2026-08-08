@@ -74,7 +74,16 @@ var agentJobKindAllowlist = map[string]bool{
 	// deliberately and target by target rather than have it arrive with a
 	// version bump.
 	agentJobKindEndpointRenew: true,
+	// A5: agent self-upgrade. Every row is narrowed to ONE agent by
+	// required_agent_id and enqueued only by the campaign dispatcher, so
+	// enabling the kind does not make binary replacement fleet-claimable —
+	// it makes it possible for the agents a campaign names. The agent side
+	// has its own -self-upgrade opt-in on top of this one.
+	agentJobKindUpgrade: true,
 }
+
+// agentJobKindUpgrade is the self-upgrade kind (epic A5).
+const agentJobKindUpgrade = "agent.upgrade"
 
 // agentJobKindEndpointRenew is the host-generated renewal kind (epic B2).
 const agentJobKindEndpointRenew = "endpoint.renew"
@@ -122,6 +131,11 @@ var agentJobKindVantage = map[string][]string{
 	// the exact custody hop the epic removes, with an extra machine in the
 	// chain instead of one fewer.
 	agentJobKindEndpointRenew: {mtls.AgentRoleHost},
+	// A5: any enrolled agent may upgrade ITSELF — the row's required_agent_id
+	// is what narrows the work to one machine, and a relay's binary needs
+	// rings exactly as much as a host's. Role is the wrong axis here; identity
+	// is the right one, and the claim SQL enforces it.
+	agentJobKindUpgrade: {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 }
 
 // agentRolePermitsKind reports whether an agent holding roles may execute kind.

@@ -1795,6 +1795,12 @@
           "current_ring": {
             "type": "string"
           },
+          "dispatch_round": {
+            "type": "integer"
+          },
+          "dispatched_ring": {
+            "type": "string"
+          },
           "guidance": {
             "type": "string"
           },
@@ -1804,6 +1810,9 @@
           "id": {
             "format": "uuid",
             "type": "string"
+          },
+          "observe_only": {
+            "type": "boolean"
           },
           "reason": {
             "type": "string"
@@ -1838,6 +1847,12 @@
       },
       "AgentUpgradeCampaignInput": {
         "properties": {
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/UpgradeArtifact"
+            },
+            "type": "array"
+          },
           "target_version": {
             "type": "string"
           }
@@ -20300,6 +20315,29 @@
           "augmentation_mode",
           "capabilities",
           "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "UpgradeArtifact": {
+        "properties": {
+          "arch": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "os",
+          "arch",
+          "url",
+          "sha256"
         ],
         "type": "object"
       },

@@ -117,6 +117,16 @@ func ShippedJobKinds() []ShippedJobKind {
 			Kind:  KindADCSInventory,
 			Flags: []string{"--relay-claim"},
 		},
+		{
+			// A5: this agent's own staged upgrade. It redeems nothing — the
+			// artifact URL travels in the payload and the pinned sha256 is the
+			// trust anchor — and it declares no connectors because the thing it
+			// deploys is this binary itself. Its own flag rather than
+			// --relay-claim, because replacing the executable is a consent the
+			// machine's operator gives separately from executing connector work.
+			Kind:  KindAgentUpgrade,
+			Flags: []string{"--self-upgrade"},
+		},
 	}
 }
 

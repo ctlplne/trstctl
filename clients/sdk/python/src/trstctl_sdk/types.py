@@ -659,9 +659,12 @@ AgentUpgradeCampaign = TypedDict(
     {
         'active': bool,
         'current_ring': str,
+        'dispatch_round': int,
+        'dispatched_ring': str,
         'guidance': str,
         'halted_at_ring': str,
         'id': str,
+        'observe_only': bool,
         'reason': str,
         'rings': dict[str, Any],
         'status': str,
@@ -674,6 +677,7 @@ AgentUpgradeCampaign = TypedDict(
 AgentUpgradeCampaignInput = TypedDict(
     'AgentUpgradeCampaignInput',
     {
+        'artifacts': list[dict[str, Any]],
         'target_version': str,
     },
     total=False,
@@ -7402,6 +7406,17 @@ UnvaultedSecretVaultProvider = TypedDict(
         'name': str,
         'sync_configured': bool,
         'sync_supported': bool,
+    },
+    total=False,
+)
+
+UpgradeArtifact = TypedDict(
+    'UpgradeArtifact',
+    {
+        'arch': str,
+        'os': str,
+        'sha256': str,
+        'url': str,
     },
     total=False,
 )

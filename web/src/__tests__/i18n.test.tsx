@@ -486,8 +486,14 @@ describe("i18n boundary", () => {
       // the metering store could not cover end to end is a partial view rather
       // than an invoice, in every locale.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "8c6686f8bd19f631cb4d228561c52b55b3b3fffacf744901cd3cf6f2728097df",
-      "de-DE": "c2ef4bf92b44456cae9fd101ba28b8641af0dfa8d478ef8f6761eb08cfa318f9",
+      // A5 dispatch re-pin: two source.fleet.upgrade.* keys separate an
+      // observe-only campaign from a dispatching one. The distinction is the
+      // point: a gating campaign that reads as a pushing one looks like a
+      // rollout that hangs, and an operator would "fix" it by pushing builds
+      // around the rings the campaign exists to run.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "46cf8c7574a374461eb9bbbf5d52b3e34fa54544d6e0493d21b1c234574e32e4",
+      "de-DE": "fb88ebcff456f64f086435f616d9226689b78022d84ff496fac1ea6975999933",
     });
   });
 

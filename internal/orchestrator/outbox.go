@@ -47,6 +47,11 @@ type Entry struct {
 	// knows what the target is — and read back as a plain column by the claim
 	// SQL, which cannot decode a sealed payload.
 	RequiredAgentRole string
+	// RequiredAgentID narrows the row to ONE agent (epic A5). An agent.upgrade
+	// job is an instruction to a specific machine to replace its own binary;
+	// letting any fleet member claim it would hand agent A the order meant for
+	// agent B. Empty means no per-agent demand.
+	RequiredAgentID string
 }
 
 // Record is the observable state of an outbox row, including its retry bookkeeping.
@@ -411,10 +416,10 @@ func (o *Outbox) Enqueue(ctx context.Context, tx pgx.Tx, e Entry) (int64, error)
 	lane := effectiveOutboxLane(e.Destination, e.EffectLane)
 	var id int64
 	err := tx.QueryRow(ctx,
-		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, nullif($7, '')::uuid)
 		 RETURNING id`,
-		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole).Scan(&id)
+		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole, e.RequiredAgentID).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("orchestrator: enqueue outbox: %w", err)
 	}
@@ -443,12 +448,12 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 		return false, fmt.Errorf("orchestrator: lock enqueue-if-absent outbox: %w", err)
 	}
 	tag, err := tx.Exec(ctx,
-		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role)
-		 SELECT $1, $2, $3, $4, $5, $6
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+		 SELECT $1, $2, $3, $4, $5, $6, nullif($7, '')::uuid
 		 WHERE NOT EXISTS (
 		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
 		 )`,
-		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole)
+		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey, lane, e.RequiredAgentRole, e.RequiredAgentID)
 	if err != nil {
 		return false, fmt.Errorf("orchestrator: enqueue-if-absent outbox: %w", err)
 	}
@@ -611,6 +616,13 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		       FROM outbox o
 		      WHERE o.status = 'pending'
 		        AND o.next_attempt_at <= $1
+		        -- A row demanding one specific agent (A5: agent.upgrade) can
+		        -- never be delivered by the control plane; only ClaimAgentJobs
+		        -- may hand it out. Without this predicate the dispatcher would
+		        -- sweep it on every tick into a handler that does not exist —
+		        -- the exact stamped-but-unenforced defect E1 documented for
+		        -- required_agent_role.
+		        AND o.required_agent_id IS NULL
 		        AND o.tenant_id::text <> ALL($7::text[])
 			        AND COALESCE(NULLIF(o.effect_lane, ''), o.destination) <> ALL($8::text[])
 			        AND (o.tenant_id::text || chr(31) || COALESCE(NULLIF(o.effect_lane, ''), o.destination)) <> ALL($9::text[])

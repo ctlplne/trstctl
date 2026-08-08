@@ -37,6 +37,7 @@ import (
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 func main() {
@@ -61,6 +62,7 @@ func main() {
 	inventoryBrowserTrustRoots := flag.String("inventory-browser-trust-roots", "", "comma-separated browser profile export files/directories whose public CA certificates the agent inventories")
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
+	selfUpgrade := flag.Bool("self-upgrade", false, "claim this agent's own agent.upgrade jobs from staged rollout campaigns (epic A5): download the campaign's artifact for this platform, verify its sha256, swap the binary, and restart. Off by default because it replaces this executable — the control-plane operator starts the campaign, but replacing the binary on THIS machine is this machine's operator's decision. The previous binary is kept beside it as .old")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
 	enrollProxyListen := flag.String("enroll-proxy-listen", "", "serve a LAN-local ACME/EST/SCEP proxy on this address for hosts and devices in this segment that have no route to the control plane (epic A4). The proxy is pass-through: it forwards protocol traffic unaltered, adds no credential of its own, and makes no trust decision — the control plane's validators and policy still decide. Empty disables it")
 	enrollProxyUpstream := flag.String("enroll-proxy-upstream", "", "comma-separated https control-plane endpoints the enrolment proxy forwards to. More than one gives automatic failover when an endpoint stops answering; a control-plane ERROR is passed back to the client rather than retried, because it is an answer")
@@ -222,6 +224,7 @@ func main() {
 		inventoryWindowsStores:            splitList(*inventoryWindowsStores),
 		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
+		selfUpgrade:                       *selfUpgrade,
 		workloadAPISocket:                 *workloadAPISocket,
 		enrollProxyListen:                 *enrollProxyListen,
 		enrollProxyUpstream:               *enrollProxyUpstream,
@@ -313,6 +316,11 @@ type agentOptions struct {
 	// wipe. Off by default because it moves live credential material onto this
 	// host, which is an operator's decision to make explicitly.
 	relayClaim bool
+	// selfUpgrade lets this agent claim its own agent.upgrade jobs (A5). Off
+	// by default for the same reason relayClaim is: replacing this binary is
+	// this machine's operator's decision, made here, not implied by a
+	// control-plane campaign alone.
+	selfUpgrade bool
 	// workloadAPISocket is the host-local SPIFFE Workload API socket (B3).
 	// Empty means the agent serves no Workload API, which is the default: the
 	// endpoint issues identities to every workload that can reach it.
@@ -484,6 +492,31 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if relayTimer != nil {
 		defer relayTimer.Stop()
 	}
+	// A5: this agent's own upgrade executor. Built once — the executable path
+	// and version do not change for the life of the process, and a nil selfUp
+	// means the claim loop never asks for the kind.
+	var selfUp *relay.SelfUpgrade
+	if o.selfUpgrade {
+		if exe, exeErr := os.Executable(); exeErr != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: --self-upgrade disabled: cannot locate own executable:", exeErr)
+		} else {
+			selfUp = &relay.SelfUpgrade{
+				ExecutablePath: exe,
+				CurrentVersion: buildinfo.Version(),
+				// Private ranges allowed, deliberately: this agent lives inside
+				// the customer network and an air-gapped estate's artifact
+				// mirror is RFC1918 by construction. --self-upgrade is the
+				// machine operator's consent to fetch what campaigns point at;
+				// the pinned sha256, not the network path, is the integrity
+				// control. Loopback, link-local and the other SSRF classes
+				// stay blocked.
+				Client: netsec.SafeClientWithOptions(5*time.Minute, netsec.SafeClientOptions{
+					AllowPrivateCIDRs: rfc1918AndULA(),
+				}),
+				Restart: restartSelf,
+			}
+		}
+	}
 
 	// A4: the enrolment proxy, so devices in this segment can reach the control
 	// plane through the one outbound pipe this relay already has.
@@ -537,10 +570,20 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			// Claim, redeem, deploy, wipe, report — one pass. Failures are the
 			// job's business, not the loop's: every path inside reports, so work
 			// returns to the queue rather than waiting out its lease.
-			if executed, rerr := relay.RunOnceWithPlugins(ctx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, relayClaimBatch, int(relayLeaseFor(o.relayPollEvery).Seconds())); rerr != nil {
+			lease := int(relayLeaseFor(o.relayPollEvery).Seconds())
+			var executed int
+			var rerr error
+			if o.relayClaim {
+				executed, rerr = relay.RunOnceWithSelfUpgrade(ctx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, selfUp, relayClaimBatch, lease)
+			} else {
+				// Self-upgrade only: ask for nothing but this agent's own
+				// upgrade jobs (A5).
+				executed, rerr = relay.RunOnceSelfUpgradeOnly(ctx, relayCh, selfUp, relayClaimBatch, lease)
+			}
+			if rerr != nil {
 				fmt.Fprintln(os.Stderr, "trstctl-agent: relay claim failed:", rerr)
 			} else if executed > 0 {
-				fmt.Printf("trstctl-agent: relay executed %d connector deploy(s)\n", executed)
+				fmt.Printf("trstctl-agent: relay executed %d job(s)\n", executed)
 			}
 			resetTimer(relayTimer, o.relayPollEvery)
 		case <-rotateTimer.C:

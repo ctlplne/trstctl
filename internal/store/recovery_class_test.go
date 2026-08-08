@@ -131,3 +131,28 @@ func TestEndpointVerificationsUseEventRecoveryAndSnapshots(t *testing.T) {
 			SnapshotFormatVersion)
 	}
 }
+
+// Every table in the truncate set must be in the reload set. The five I2/I3/I5/A5
+// projections shipped in ReadModelTables without entering snapshotTables or the
+// capture payload, so a snapshot restore TRUNCATED them and reloaded nothing —
+// ownership conflicts, CMDB schedules, issuance requests, MDM correlations and
+// upgrade campaigns all gone, while boot's covered offset skipped their events.
+// This test closes the CLASS, not the instances: any future ReadModelTables
+// entry missing from snapshotTables fails here by name.
+func TestEveryTruncatedReadModelTableIsRestoredBySnapshots(t *testing.T) {
+	for _, table := range ReadModelTables {
+		if table == "tenants" {
+			// The tail replay re-seeds tenants from tenant.registered events;
+			// RestoreSnapshotsTx documents this exclusion.
+			continue
+		}
+		if !containsRecoveryTable(snapshotTables, table) {
+			t.Errorf("%s is truncated by snapshot restore but never reloaded; every restore "+
+				"silently empties it while the covered offset skips its history", table)
+		}
+	}
+	if SnapshotFormatVersion < 13 {
+		t.Errorf("SnapshotFormatVersion = %d; adding the I2/I3/I5/A5 projections to snapshots "+
+			"must invalidate older payloads that do not carry them", SnapshotFormatVersion)
+	}
+}

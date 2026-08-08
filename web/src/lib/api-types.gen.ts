@@ -471,9 +471,12 @@ export interface AgentRingInput {
 export interface AgentUpgradeCampaign {
   active: boolean;
   current_ring?: string;
+  dispatch_round?: number;
+  dispatched_ring?: string;
   guidance: string;
   halted_at_ring?: string;
   id?: string;
+  observe_only?: boolean;
   reason?: string;
   rings: Record<string, unknown>;
   status?: "pending" | "running" | "halted" | "paused" | "complete";
@@ -482,6 +485,7 @@ export interface AgentUpgradeCampaign {
 }
 
 export interface AgentUpgradeCampaignInput {
+  artifacts?: UpgradeArtifact[];
   target_version: string;
 }
 
@@ -5234,6 +5238,13 @@ export interface UnvaultedSecretVaultProvider {
   name: string;
   sync_configured: boolean;
   sync_supported: boolean;
+}
+
+export interface UpgradeArtifact {
+  arch: string;
+  os: string;
+  sha256: string;
+  url: string;
 }
 
 export interface UsageMeterDefinition {

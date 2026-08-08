@@ -3281,6 +3281,10 @@ const esESCatalog = {
   "source.fleet.upgrade.halted.a5fl000002": "Detenida autom\u00e1ticamente en el anillo {value1}. Al reanudar se reinicia ah\u00ed, no despu\u00e9s.",
   "source.fleet.upgrade.paused.a5fl000003": "En pausa. El env\u00edo est\u00e1 detenido, no solo este bot\u00f3n.",
   "source.fleet.upgrade.rings.a5fl000004": "Anillos: {value1}. Los agentes sin anillo est\u00e1n sin asignar y nunca se unen al anillo amplio por defecto.",
+  "source.fleet.upgrade.observe.a5fl000005":
+    "Solo observaci\u00f3n: esta campa\u00f1a eval\u00faa las versiones que informan los agentes; no despacha nada. Inicie una campa\u00f1a con artefactos para que los anillos impulsen la actualizaci\u00f3n.",
+  "source.fleet.upgrade.dispatching.a5fl000006":
+    "Despachando: ronda {value1} enviada al anillo {value2}. Cada agente reclama su propio trabajo dirigido e informa un recibo firmado.",
   "source.mdm.devices.heading.i5mdm00001": "Correlaci\u00f3n de dispositivos MDM",
   "source.mdm.devices.counts.i5mdm00002": "{value1} dispositivos; {value2} informaron un fallo y {value3} no se han observado en absoluto.",
   "source.mdm.devices.unobserved.i5mdm00003": "no observado: el MDM no ha informado sobre este dispositivo",

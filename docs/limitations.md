@@ -410,11 +410,14 @@ never live in the API process. What you can do end to end against the running bi
   host with a badly wrong clock renews at the wrong time, which is a real limitation
   and is stated here rather than defended against with machinery that would need the
   network the agent does not have.
-  NOT done in A5: upgrade rings (canary to broad) as scheduled jobs, staged agent
-  self-update, and the `--demo` colocated single-box mode. Agent/control-plane
-  version skew IS already enforced — `agentProtocolInterceptor` refuses a handshake
-  outside `MinSupportedVersion..MaxSupportedVersion` — so that item of A5 was
-  already met before this change and is not claimed as new work here.
+  A5's other items have since landed and their honest scope lives with the
+  staged-upgrade entry below: rings run as dispatched, per-agent-targeted jobs
+  when a campaign publishes artifacts; the agent's `-self-upgrade` executor
+  verifies the pinned sha256, keeps the previous binary as `.old`, reports a
+  signed receipt and restarts; and `--demo` exists. Agent/control-plane version
+  skew IS enforced — `agentProtocolInterceptor` refuses a handshake outside
+  `MinSupportedVersion..MaxSupportedVersion` — and was met before this
+  programme, so it is not claimed as new work.
   Authority agreement (C4, PARTIAL — the surface is served, the PIPELINE HAS NO
   PRODUCER): reconciliation rounds are not scheduled and no witness is ever
   recorded, so this surface has nothing to report and says so rather than reporting
@@ -1949,15 +1952,36 @@ looking for a credential that was never there.
   they stopped it. `upgrade_ring` empty means UNASSIGNED and is never read as
   `broad`, and the console counts unassigned separately. Halted and paused are
   distinct states: one is the machine's finding, the other a person's decision.
-  Scope, stated exactly: VERIFICATION is "the agent came back and reported the
-  target version, and has been seen since dispatch" — a real post-upgrade health
-  signal, since an agent that took a bad build and cannot start never reports
-  it, but NOT a functional check of the agent's work and not a dedicated signed
-  upgrade receipt; the sweep does not itself DISPATCH upgrade jobs, so an
-  operator or an external mechanism still moves agents onto the target version
-  and this surface observes and gates rather than pushes; ring assignment is
-  manual with no automatic canary selection; and there is no per-ring soak
-  window beyond the 10-minute grace before silence counts against a ring.
+  A campaign started WITH per-platform artifacts (`artifacts: [{os, arch, url,
+  sha256}]`) DISPATCHES: the sweep hands every agent in the active ring its own
+  `agent.upgrade` job through the A1 ledger, each row narrowed to that one
+  agent by `required_agent_id` (the control-plane dispatcher structurally
+  refuses such rows — only the named agent's claim can reach them). The agent —
+  with the `-self-upgrade` opt-in, which is the MACHINE operator's consent and
+  is off by default — downloads its platform's artifact, verifies the pinned
+  sha256 (a mismatch is refused and reported; the artifact host is a mirror,
+  not a trusted party), swaps its binary keeping the previous one as `.old`,
+  reports a SIGNED receipt, and restarts (exec on Unix; on Windows the process
+  exits and relies on the service's recovery action — an agent that stays down
+  reads as silence and halts the ring, which is the correct verdict). The ring
+  is then scored against the DISPATCH LEDGER: a signed failed receipt halts
+  immediately with no grace; an agent observed running the target version
+  verifies (the executed receipt alone means "staged" — the reconnected
+  version report is the proof the new build runs); an agent that neither
+  failed nor arrived within the 10-minute grace is silent, and silence halts.
+  Resume re-dispatches the halted ring as a NEW round, so the failed round's
+  receipts stop counting against the retry.
+  Scope, stated exactly: a campaign with NO artifacts is OBSERVE-ONLY — the
+  pre-dispatch behaviour, kept for fleets an external mechanism upgrades, where
+  verification is "the agent reports the target version and has been seen
+  since" and nothing is pushed; the console says which mode a campaign is in.
+  The artifact sha256 is operator-supplied — the platform guarantees the fleet
+  installs exactly those bytes, not that those bytes are good, and there is no
+  publisher signature over artifacts beyond the digest pin. Ring assignment is
+  manual with no automatic canary selection; there is no per-ring soak window
+  beyond the 10-minute grace; and the verification remains a health signal
+  (running the target build, answering the control plane), not a functional
+  check of the agent's work.
 - XREC reconciliation rounds are configurable (AUD-1, C4): a `reconcile` block
   in the config file supplies the schedules the rounds worker needs. Before
   this, `roundSchedules` was declared and never assigned, so the worker —

@@ -57,6 +57,20 @@ export function UpgradeCampaignPanel() {
         <p className="text-sm">{translateNow("source.fleet.upgrade.paused.a5fl000003")}</p>
       ) : null}
       {data?.reason ? <p className="text-sm">{data.reason}</p> : null}
+      {data?.active ? (
+        data.observe_only ? (
+          <p className="text-caption text-muted-foreground">
+            {translateNow("source.fleet.upgrade.observe.a5fl000005")}
+          </p>
+        ) : data.dispatched_ring ? (
+          <p className="text-caption text-muted-foreground">
+            {translateNow("source.fleet.upgrade.dispatching.a5fl000006", {
+              value1: String(data.dispatch_round ?? 0),
+              value2: data.dispatched_ring,
+            })}
+          </p>
+        ) : null
+      ) : null}
       <p className="text-caption text-muted-foreground">
         {translateNow("source.fleet.upgrade.rings.a5fl000004", { value1: ringSummary })}
       </p>

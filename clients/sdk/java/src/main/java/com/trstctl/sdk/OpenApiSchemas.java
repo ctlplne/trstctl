@@ -555,6 +555,7 @@ public final class OpenApiSchemas {
       "UnvaultedSecretPosture",
       "UnvaultedSecretSummary",
       "UnvaultedSecretVaultProvider",
+      "UpgradeArtifact",
       "UsageMeterDefinition",
       "WorkloadAttesterTrustSource",
       "WorkloadAttesterTrustSourceList",

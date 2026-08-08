@@ -12,6 +12,10 @@ import (
 
 type upgradeCampaignBody struct {
 	TargetVersion string `json:"target_version"`
+	// Artifacts turns the campaign from observe-only into a rollout that
+	// DISPATCHES: one downloadable build per platform, each pinned by its
+	// sha256. Omitted = observe-only, the pre-dispatch behaviour.
+	Artifacts []fleet.Artifact `json:"artifacts,omitempty"`
 }
 
 type ringAssignBody struct {
@@ -35,7 +39,16 @@ type upgradeCampaignResponse struct {
 	// and is never folded into broad.
 	Rings    map[string]int `json:"rings"`
 	Versions map[string]int `json:"versions"`
-	Guidance string         `json:"guidance"`
+	// ObserveOnly says whether this campaign merely gates (no artifacts were
+	// published) or dispatches agent.upgrade jobs itself. Served so the
+	// console can say which one the operator actually started — a gating
+	// campaign that looks like a pushing one reads as a rollout that hangs.
+	ObserveOnly bool `json:"observe_only"`
+	// DispatchedRing and DispatchRound describe the live dispatch state:
+	// which ring currently holds jobs and how many rounds have been sent.
+	DispatchedRing string `json:"dispatched_ring,omitempty"`
+	DispatchRound  int    `json:"dispatch_round,omitempty"`
+	Guidance       string `json:"guidance"`
 }
 
 const upgradeGuidance = "A staged rollout halts AUTOMATICALLY when a ring fails: one unhealthy " +
@@ -69,6 +82,8 @@ func (a *API) getUpgradeCampaign(w http.ResponseWriter, r *http.Request) {
 		out.Active = true
 		out.ID, out.TargetVersion, out.Status = c.ID, c.TargetVersion, c.Status
 		out.CurrentRing, out.HaltedAtRing, out.Reason = c.CurrentRing, c.HaltedAtRing, c.Reason
+		out.ObserveOnly = len(c.ArtifactsJSON) == 0
+		out.DispatchedRing, out.DispatchRound = c.DispatchedRing, c.DispatchRound
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }
@@ -80,13 +95,17 @@ func (a *API) openUpgradeCampaign(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &body); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		c, err := a.orch.OpenAgentUpgradeCampaign(ctx, tenantID, body.TargetVersion, principalSubject(ctx))
+		if err := fleet.ValidateArtifacts(body.Artifacts); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		c, err := a.orch.OpenAgentUpgradeCampaign(ctx, tenantID, body.TargetVersion, principalSubject(ctx), body.Artifacts)
 		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusCreated, upgradeCampaignResponse{
 			ID: c.ID, TargetVersion: c.TargetVersion, Active: true, Status: c.Status,
-			Rings: map[string]int{}, Versions: map[string]int{}, Guidance: upgradeGuidance,
+			ObserveOnly: len(body.Artifacts) == 0,
+			Rings:       map[string]int{}, Versions: map[string]int{}, Guidance: upgradeGuidance,
 		}, nil
 	})
 }

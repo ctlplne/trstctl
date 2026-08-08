@@ -3271,9 +3271,32 @@ func componentSchemas() map[string]*Schema {
 		// next one.
 		"current_ring": str(), "halted_at_ring": str(), "reason": str(),
 		// rings carries an "unassigned" key; it is never folded into broad.
-		"rings": {Type: "object"}, "versions": {Type: "object"}, "guidance": str(),
+		"rings": {Type: "object"}, "versions": {Type: "object"},
+		// observe_only separates a campaign that merely gates from one that
+		// dispatches agent.upgrade jobs itself (artifacts were published).
+		"observe_only": {Type: "boolean"},
+		// dispatched_ring / dispatch_round are the live dispatch state.
+		"dispatched_ring": str(), "dispatch_round": {Type: "integer"},
+		"guidance": str(),
+		// observe_only is always serialized but NOT in the required list: the
+		// golden ratchet correctly refuses newly-required properties, and a
+		// pre-dispatch client that never saw the field must keep validating.
 	}, "active", "rings", "versions", "guidance")
-	agentUpgradeCampaignInput := object(map[string]*Schema{"target_version": str()}, "target_version")
+	upgradeArtifactSchema := object(map[string]*Schema{
+		"os": str(), "arch": str(), "url": str(),
+		// sha256 pins the exact bytes; the agent refuses anything else, which
+		// is what makes an artifact host a download mirror rather than a
+		// trusted party.
+		"sha256": str(),
+	}, "os", "arch", "url", "sha256")
+	agentUpgradeCampaignInput := object(map[string]*Schema{
+		"target_version": str(),
+		// artifacts turns the campaign from observe-only into one that
+		// dispatches: one build per platform. Omitted = observe-only. A named
+		// component ref, not an inline object: generated clients get a real
+		// type and the contract-drift parser reads a parseable field.
+		"artifacts": {Type: "array", Items: ref("UpgradeArtifact")},
+	}, "target_version")
 	agentRingInput := object(map[string]*Schema{
 		"agent_id": uuid(),
 		"ring":     {Type: "string", Enum: []string{"canary", "early", "broad", ""}},
@@ -4494,6 +4517,7 @@ func componentSchemas() map[string]*Schema {
 		"Brand":                                    brandSchema,
 		"AgentUpgradeCampaign":                     agentUpgradeCampaignSchema,
 		"AgentUpgradeCampaignInput":                agentUpgradeCampaignInput,
+		"UpgradeArtifact":                          upgradeArtifactSchema,
 		"AgentRingInput":                           agentRingInput,
 		"MDMDevice":                                mdmDeviceSchema,
 		"MDMDeviceList":                            mdmDeviceListSchema,

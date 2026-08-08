@@ -12462,6 +12462,14 @@ export const messages = {
     defaultMessage: "Rings: {value1}. Agents with no ring are unassigned and never join broad by default.",
     description: "A5: unassigned is shown separately; an agent nobody placed must not join the largest ring.",
   },
+  "source.fleet.upgrade.observe.a5fl000005": {
+    defaultMessage: "Observe-only: this campaign gates on the versions agents report; it dispatches nothing. Start a campaign with artifacts to have the rings push the upgrade.",
+    description: "A5: a gating campaign must not read as a pushing one — an operator watching it 'hang' needs to know nothing was ever going to be sent.",
+  },
+  "source.fleet.upgrade.dispatching.a5fl000006": {
+    defaultMessage: "Dispatching: round {value1} sent to the {value2} ring. Each agent claims its own targeted job and reports a signed receipt.",
+    description: "A5: the live dispatch state — which ring holds jobs and which round, so a halt can be read against what was actually sent.",
+  },
   "source.mdm.devices.heading.i5mdm00001": {
     defaultMessage: "MDM device correlation",
     description: "I5: heading for the read-only Intune/Jamf device correlation.",

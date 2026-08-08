@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/fleet"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -57,6 +58,7 @@ const (
 	EventAgentUpgradeCampaignOpened               = "agent.upgrade.campaign.opened"
 	EventAgentUpgradeCampaignAdvanced             = "agent.upgrade.campaign.advanced"
 	EventAgentUpgradeRingAssigned                 = "agent.upgrade.ring.assigned"
+	EventAgentUpgradeRingDispatched               = "agent.upgrade.ring.dispatched"
 	EventOwnerDeleted                             = "owner.deleted"
 	EventIssuerCreated                            = "issuer.created"
 	EventIdentityCreated                          = "identity.created"
@@ -228,10 +230,17 @@ type OwnerUpdated struct {
 }
 
 // AgentUpgradeCampaignOpened is the payload of agent.upgrade.campaign.opened (A5).
+//
+// Artifacts is the operator-published download set for the target version.
+// Empty means an OBSERVE-ONLY campaign: rings gate on the versions the fleet
+// reports, but nothing is dispatched — which is the only mode that existed
+// before dispatch was built, and remains valid for fleets upgraded by an
+// external mechanism.
 type AgentUpgradeCampaignOpened struct {
-	ID            string `json:"id"`
-	TargetVersion string `json:"target_version"`
-	CreatedBy     string `json:"created_by,omitempty"`
+	ID            string           `json:"id"`
+	TargetVersion string           `json:"target_version"`
+	CreatedBy     string           `json:"created_by,omitempty"`
+	Artifacts     []fleet.Artifact `json:"artifacts,omitempty"`
 }
 
 // AgentUpgradeCampaignAdvanced records every state change, including the halt.
@@ -251,6 +260,28 @@ type AgentUpgradeCampaignAdvanced struct {
 type AgentUpgradeRingAssigned struct {
 	AgentID string `json:"agent_id"`
 	Ring    string `json:"ring"`
+}
+
+// AgentUpgradeRingDispatched records one ring's dispatch: which agents were
+// handed an agent.upgrade job, under which round (A5).
+//
+// The job keys are IN the event because the outbox rows are enqueued in the
+// same transaction this event projects in (AN-6), keyed deterministically —
+// replaying the event re-derives exactly the same rows, so a crash between
+// append and enqueue heals without dispatching anything twice.
+type AgentUpgradeRingDispatched struct {
+	CampaignID    string           `json:"campaign_id"`
+	Ring          string           `json:"ring"`
+	Round         int              `json:"round"`
+	TargetVersion string           `json:"target_version"`
+	Artifacts     []fleet.Artifact `json:"artifacts,omitempty"`
+	Jobs          []UpgradeJobRef  `json:"jobs"`
+}
+
+// UpgradeJobRef names one dispatched agent and its outbox idempotency key.
+type UpgradeJobRef struct {
+	AgentID string `json:"agent_id"`
+	JobKey  string `json:"job_key"`
 }
 
 // OwnershipConflictResolved is the payload of ownership.conflict.resolved (I2).
@@ -1861,6 +1892,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAgentUpgradeCampaignOpened:               {1: true},
 	EventAgentUpgradeCampaignAdvanced:             {1: true},
 	EventAgentUpgradeRingAssigned:                 {1: true},
+	EventAgentUpgradeRingDispatched:               {1: true},
 	EventOwnerDeleted:                             {1: true},
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
@@ -2083,7 +2115,21 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, e.TenantID, pl.ID, pl.TargetVersion, pl.CreatedBy, e.Time)
+		artifacts, err := fleet.EncodeArtifacts(pl.Artifacts)
+		if err != nil {
+			return err
+		}
+		return p.store.ApplyAgentUpgradeCampaignOpenedTx(ctx, tx, e.TenantID, pl.ID, pl.TargetVersion, pl.CreatedBy, artifacts, e.Time)
+	case EventAgentUpgradeRingDispatched:
+		var pl AgentUpgradeRingDispatched
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		jobs := make([]store.UpgradeDispatchJob, 0, len(pl.Jobs))
+		for _, j := range pl.Jobs {
+			jobs = append(jobs, store.UpgradeDispatchJob{AgentID: j.AgentID, JobKey: j.JobKey})
+		}
+		return p.store.ApplyAgentUpgradeRingDispatchedTx(ctx, tx, e.TenantID, pl.CampaignID, pl.Ring, pl.Round, jobs, e.Time)
 	case EventAgentUpgradeCampaignAdvanced:
 		var pl AgentUpgradeCampaignAdvanced
 		if err := decode(e, &pl); err != nil {

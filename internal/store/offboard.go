@@ -87,8 +87,10 @@ var TenantScopedTables = []string{
 	"deployment_target_revisions",
 	"deployment_targets",
 	"agent_cert_revocations",
-	// A5: staged upgrade campaigns are the tenant's own rollout history.
+	// A5: staged upgrade campaigns and their dispatch ledger are the tenant's
+	// own rollout history.
 	"agent_upgrade_campaigns",
+	"agent_upgrade_dispatches",
 	"agents",
 	"agent_bootstrap_tokens",
 	// A3: the credential-redemption ledger. It holds no credential values, but
