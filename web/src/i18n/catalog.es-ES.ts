@@ -4382,6 +4382,19 @@ const esESCatalog = {
     "¿Dar de baja a este cliente? Esto comienza a eliminar su inquilino y no se puede deshacer.",
   "source.provider.offboard.l3prov0021":
     "Dar de baja",
+  // L3 provider quota — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "source.provider.quota.l3prov0022":
+    "Cuota",
+  "source.provider.quota.none.l3prov0023":
+    "No hay cuota establecida para este cliente; no tiene límite.",
+  "source.provider.quota.agents.l3prov0024":
+    "Máx. agentes",
+  "source.provider.quota.certs.l3prov0025":
+    "Máx. certificados",
+  "source.provider.quota.secrets.l3prov0026":
+    "Máx. secretos",
+  "source.provider.quota.unlimited.l3prov0027":
+    "ilimitado",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

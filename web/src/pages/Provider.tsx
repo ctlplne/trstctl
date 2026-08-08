@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { translateNow } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 import { formatDateTime } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import {
   clearProviderToken,
   ProviderAuthError,
   type ProviderTenant,
+  type ProviderQuota,
 } from "@/lib/providerApi";
 
 /**
@@ -72,12 +74,47 @@ function ProviderLogin({ onAuthed }: { onAuthed: () => void }) {
   );
 }
 
+function QuotaItem({ labelKey, value }: { labelKey: MessageKey; value?: number }) {
+  return (
+    <div>
+      <dt className="inline font-medium text-muted-foreground">{translateNow(labelKey)}: </dt>
+      <dd className="inline tabular-nums">
+        {value === undefined ? translateNow("source.provider.quota.unlimited.l3prov0027") : value}
+      </dd>
+    </div>
+  );
+}
+
 function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   const [tenants, setTenants] = useState<ProviderTenant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
+  // The customer whose quota is expanded, and its loaded value. undefined data
+  // means "loading"; a null value inside the record means the fetch failed.
+  const [quotaView, setQuotaView] = useState<{ id: string; data?: ProviderQuota | null } | null>(null);
+
+  const viewQuota = useCallback(
+    async (id: string) => {
+      if (quotaView?.id === id) {
+        setQuotaView(null); // toggle closed
+        return;
+      }
+      setQuotaView({ id });
+      try {
+        setQuotaView({ id, data: await providerApi.getQuota(id) });
+      } catch (err) {
+        if (err instanceof ProviderAuthError) {
+          clearProviderToken();
+          onSignOut();
+          return;
+        }
+        setQuotaView({ id, data: null });
+      }
+    },
+    [quotaView, onSignOut],
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -232,9 +269,43 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                           {translateNow("source.provider.offboard.l3prov0021")}
                         </Button>
                       ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="ml-2"
+                        onClick={() => void viewQuota(tenant.id)}
+                      >
+                        {translateNow("source.provider.quota.l3prov0022")}
+                      </Button>
                     </td>
                   </tr>
-                ))}
+                ))
+                  /* The quota panel renders as its own row beneath the
+                     customer, so the table layout is unaffected. An UNSET limit
+                     is shown as "unlimited", never zero — a missing cap is the
+                     absence of a limit, not a limit of nothing. */
+                  .flatMap((rowEl, i) => {
+                    const tenant = tenants[i];
+                    if (quotaView?.id !== tenant.id) return [rowEl];
+                    return [
+                      rowEl,
+                      <tr key={`${tenant.id}-quota`} className="bg-muted/30">
+                        <td colSpan={5} className="px-4 py-2 text-xs">
+                          {!("data" in quotaView) ? (
+                            translateNow("source.loading.4f9d1e0e3a")
+                          ) : quotaView.data === null ? (
+                            <span className="text-muted-foreground">{translateNow("source.provider.quota.none.l3prov0023")}</span>
+                          ) : (
+                            <dl className="flex flex-wrap gap-x-6 gap-y-1">
+                              <QuotaItem labelKey="source.provider.quota.agents.l3prov0024" value={quotaView.data?.max_agents} />
+                              <QuotaItem labelKey="source.provider.quota.certs.l3prov0025" value={quotaView.data?.max_certificates_stored} />
+                              <QuotaItem labelKey="source.provider.quota.secrets.l3prov0026" value={quotaView.data?.max_secrets_stored} />
+                            </dl>
+                          )}
+                        </td>
+                      </tr>,
+                    ];
+                  })}
               </tbody>
             </table>
           </div>

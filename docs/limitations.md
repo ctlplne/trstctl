@@ -2150,11 +2150,14 @@ looking for a credential that was never there.
   and holds it IN MEMORY ONLY — never web storage — per the SPA's XSS posture
   (SURFACE-I01): the token lives in the tab's JS heap, is lost on reload, and an
   auth refusal returns the operator to the sign-in gate rather than showing an
-  error. Scope, stated exactly: this is the tenant-lifecycle console. Per-
-  customer health and usage/quota display (the `/provider/v1/tenants/{id}/quota`
-  read exists in the client but has no UI yet), applying white-label brand and
-  custom domain FROM the console, and triggering the siloed-isolation drills
-  from the provider plane are not built. The auth is a memory-held bearer the
+  error. Each customer row expands to show its quota (max agents, certificates,
+  secrets), reading `/provider/v1/tenants/{id}/quota`; an UNSET limit renders as
+  "unlimited", never zero, because a missing cap is the absence of a limit, not
+  a limit of nothing. Scope, stated exactly: this is the tenant-lifecycle
+  console with per-customer quota VISIBILITY. Editing a quota from the console,
+  applying white-label brand and custom domain FROM the console, and triggering
+  the siloed-isolation drills from the provider plane are not built. The auth
+  is a memory-held bearer the
   operator supplies; the HttpOnly provider-session cookie flow (a proper OIDC
   redirect + server session, so the token never enters JS) is the follow-on
   hardening the posture calls for.

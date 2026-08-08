@@ -77,6 +77,23 @@ describe("provider console (L3)", () => {
     expect(await screen.findByText("suspended")).toBeInTheDocument();
   });
 
+  it("shows a customer's quota, rendering an unset limit as unlimited", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "t-1", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    // max_agents capped, the rest unset -> "unlimited", never zero.
+    providerMock.getQuota.mockResolvedValue({ tenant_id: "t-1", max_agents: 50 });
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    const row = (await screen.findByText("Acme Corp")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Quota" }));
+    await waitFor(() => expect(providerMock.getQuota).toHaveBeenCalledWith("t-1"));
+    expect(await screen.findByText("50")).toBeInTheDocument();
+    // The unset limits render as unlimited, not 0.
+    expect(screen.getAllByText("unlimited").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("drops the operator back to the gate when the plane refuses the token", async () => {
     const { ProviderAuthError } = await import("@/lib/providerApi");
     providerMock.listTenants.mockRejectedValue(new ProviderAuthError("expired"));

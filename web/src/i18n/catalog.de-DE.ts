@@ -4395,6 +4395,19 @@ const deDECatalog = {
     "Diesen Kunden abmelden? Dies beginnt mit der Löschung seines Mandanten und kann nicht rückgängig gemacht werden.",
   "source.provider.offboard.l3prov0021":
     "Abmelden",
+  // L3 provider quota — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "source.provider.quota.l3prov0022":
+    "Kontingent",
+  "source.provider.quota.none.l3prov0023":
+    "Für diesen Kunden ist kein Kontingent festgelegt — unbegrenzt.",
+  "source.provider.quota.agents.l3prov0024":
+    "Max. Agenten",
+  "source.provider.quota.certs.l3prov0025":
+    "Max. Zertifikate",
+  "source.provider.quota.secrets.l3prov0026":
+    "Max. Geheimnisse",
+  "source.provider.quota.unlimited.l3prov0027":
+    "unbegrenzt",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

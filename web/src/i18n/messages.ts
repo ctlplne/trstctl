@@ -5845,6 +5845,36 @@ export const messages = {
       "Offboard",
     description: "L3: offboard action.",
   },
+  "source.provider.quota.l3prov0022": {
+    defaultMessage:
+      "Quota",
+    description: "L3: per-customer quota action.",
+  },
+  "source.provider.quota.none.l3prov0023": {
+    defaultMessage:
+      "No quota is set for this customer \u2014 they are uncapped.",
+    description: "L3: quota fetch empty/failed.",
+  },
+  "source.provider.quota.agents.l3prov0024": {
+    defaultMessage:
+      "Max agents",
+    description: "L3: quota limit.",
+  },
+  "source.provider.quota.certs.l3prov0025": {
+    defaultMessage:
+      "Max certificates",
+    description: "L3: quota limit.",
+  },
+  "source.provider.quota.secrets.l3prov0026": {
+    defaultMessage:
+      "Max secrets",
+    description: "L3: quota limit.",
+  },
+  "source.provider.quota.unlimited.l3prov0027": {
+    defaultMessage:
+      "unlimited",
+    description: "L3: an unset quota limit is the absence of a cap, not a cap of zero.",
+  },
   "source.adcs.database.error.f4adcs0013": {
     defaultMessage:
       "Could not load the AD CS certificate-database summary.",
