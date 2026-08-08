@@ -1093,6 +1093,11 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// "changes reconcile on a schedule" would be true of the code and
 			// false of the running binary.
 			startRuntimeWorker(workCtx, srv.RunCMDBScheduler),
+			// I5: the MDM poll ticker — the correlation surface's only
+			// producer. Without this line the parsers, the event, the routes
+			// and the console panel all exist while the table they read is
+			// written by nothing, which is precisely the audit's defect class.
+			startRuntimeWorker(workCtx, srv.RunMDMPoller),
 			// I3: without this line a request that nobody decided would sit in
 			// the queue forever, and the queue's size would stop meaning
 			// anything — the exact reason the expired state exists.

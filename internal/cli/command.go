@@ -327,6 +327,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"issuance-requests", "cancel"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/cancel", Summary: "Withdraw your own request; only the requester may"},
 	{Name: []string{"mdm", "devices"}, Method: "GET", Path: "/api/v1/mdm/devices", Summary: "List MDM devices correlated to SCEP transactions (read-only)"},
 	{Name: []string{"mdm", "trace"}, Method: "GET", Path: "/api/v1/mdm/{mdm}/devices/{id}/trace", Summary: "Show which step a device's certificate enrollment broke at"},
+	{Name: []string{"mdm", "poll-schedule", "set"}, Method: "PUT", Path: "/api/v1/mdm/poll-schedule", Body: bodyFile, Summary: "Configure the per-MDM read schedule; relay execution requires a secret:// token reference"},
+	{Name: []string{"mdm", "poll-schedule", "show"}, Method: "GET", Path: "/api/v1/mdm/poll-schedule", Summary: "Show the configured MDM read schedules with their last outcome"},
 	{Name: []string{"agents", "upgrade-campaign", "show"}, Method: "GET", Path: "/api/v1/agents/upgrade-campaign", Summary: "Show the rollout's state, ring assignment, and fleet version histogram"},
 	{Name: []string{"agents", "upgrade-campaign", "start"}, Method: "POST", Path: "/api/v1/agents/upgrade-campaign", Body: bodyFile, Summary: "Start a staged rollout that halts automatically when a ring fails"},
 	{Name: []string{"agents", "upgrade-campaign", "pause"}, Method: "POST", Path: "/api/v1/agents/upgrade-campaign/pause", Summary: "Pause a rollout; this gates dispatch, not just the button"},

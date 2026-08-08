@@ -12502,6 +12502,10 @@ export const messages = {
     defaultMessage: "not observed — the MDM has not reported this device",
     description: "I5: an unobserved device is NOT a failed one; treating it as failed sends somebody to re-push a profile that is already installed.",
   },
+  "source.mdm.devices.renewalrisk.i5mdm00004": {
+    defaultMessage: "{value1} device(s) at risk of silently missing renewal: their certificates are inside the renewal window and the MDM has not seen them since it opened.",
+    description: "I5: the offline-renewal count. Nothing has failed yet — which is exactly the problem, because nothing will alert before the certificate expires in a drawer.",
+  },
   "source.issuance.requests.heading.i3req00001": {
     defaultMessage: "Issuance requests",
     description: "I3: heading for the request queue with its real lifecycle.",

@@ -2610,6 +2610,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mdm/poll-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The configured MDM read schedules with their last outcome */
+        get: operations["listMDMPollSchedules"];
+        /** Configure the per-MDM read schedule; relay execution requires a secret:// token reference */
+        put: operations["putMDMPollSchedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mdm/scep/policies": {
         parameters: {
             query?: never;
@@ -7540,6 +7558,9 @@ export interface components {
             mdm: "intune" | "jamf";
             mdm_device_id: string;
             observed_at?: string;
+            renewal_at_risk?: boolean;
+            renewal_detail?: string;
+            renewal_not_after?: string;
             serial_number?: string;
             transaction_id?: string;
         };
@@ -7547,6 +7568,7 @@ export interface components {
             failed: number;
             guidance: string;
             items: components["schemas"]["MDMDevice"][];
+            renewal_at_risk?: number;
             unobserved: number;
         };
         MDMDeviceTrace: {
@@ -7562,6 +7584,38 @@ export interface components {
                 summary: string;
                 transaction_id?: string;
             };
+        };
+        MDMPollSchedule: {
+            base_url?: string;
+            configured: boolean;
+            enabled: boolean;
+            /** @enum {string} */
+            execution?: "control_plane" | "relay" | "";
+            filter?: string;
+            guidance: string;
+            interval_seconds?: number;
+            last_error?: string;
+            last_run_at?: string;
+            /** @enum {string} */
+            mdm?: "intune" | "jamf";
+            renewal_window_days?: number;
+            token_ref?: string;
+        };
+        MDMPollScheduleInput: {
+            base_url: string;
+            enabled?: boolean;
+            /** @enum {string} */
+            execution?: "control_plane" | "relay" | "";
+            filter?: string;
+            interval_seconds: number;
+            /** @enum {string} */
+            mdm: "intune" | "jamf";
+            renewal_window_days?: number;
+            token_ref: string;
+        };
+        MDMPollScheduleList: {
+            guidance: string;
+            items: components["schemas"]["MDMPollSchedule"][];
         };
         MDMSCEPChallengeRotated: {
             policy: components["schemas"]["MDMSCEPPolicy"];
@@ -17784,6 +17838,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MDMDeviceList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMDMPollSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMPollScheduleList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    putMDMPollSchedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMPollScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMPollSchedule"];
                 };
             };
             /** @description client error */

@@ -164,8 +164,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `owners resolve-conflict` raised it to 343.
 	// L2's `usage evidence` raised it to 344, on the multi-tenant topology row
 	// with the rest of the managed-offering surface.
-	if len(out) != 344 {
-		t.Fatalf("CLI commands = %d, want 344", len(out))
+	// I5's two `mdm poll-schedule` commands raised it to 346, on the same
+	// certificates row as the rest of the MDM correlation surface.
+	if len(out) != 346 {
+		t.Fatalf("CLI commands = %d, want 346", len(out))
 	}
 	return out
 }

@@ -58,6 +58,9 @@ func ClaimableKinds() []string {
 		// I2: the CMDB read. Network-vantage work like the sweeps above; the
 		// server's role gate refuses it to host agents.
 		KindCMDBSync,
+		// I5: the MDM read, for the on-prem Jamf the control plane cannot
+		// reach. Same vantage rules as the CMDB read.
+		KindMDMSync,
 		// B2: host-generated renewal. Asked for by every agent and granted only
 		// to host-role ones — the vantage gate is the server's, not the agent's,
 		// which is why this list is not split by role. A network relay asking
@@ -224,6 +227,11 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// it routes before the deploy path's generic decode.
 	if job.Kind == KindCMDBSync {
 		return runCMDBSync(ctx, ch, client, job)
+	}
+	// I5: same custody shape as the CMDB read — its token reference is named
+	// in the intent, so it manages its own redemption.
+	if job.Kind == KindMDMSync {
+		return runMDMSync(ctx, ch, client, job)
 	}
 	// B2: a host-generated renewal redeems NOTHING. It is routed before the
 	// credential step because there is no credential to redeem — the key it

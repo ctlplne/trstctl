@@ -26,7 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/mdm"
+	mdmchallenge "trstctl.com/trstctl/internal/mdm/challenge"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/cmp"
 	"trstctl.com/trstctl/internal/protocols/est"
@@ -429,14 +429,14 @@ func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, ten
 		}
 		trust = append(trust, der)
 	}
-	validator := mdm.NewIntuneChallengeValidator(tenantID, trust,
-		mdm.WithIntuneAudience(cfg.ExpectedAudience),
-		mdm.WithIntuneClockSkewTolerance(time.Duration(cfg.ClockSkewSeconds)*time.Second),
-		mdm.WithIntuneEventLog(s.log),
-		mdm.WithIntuneTrustConfigResolver(s.mdmSCEPIntuneTrustConfigResolver(keyWrapper)),
+	validator := mdmchallenge.NewIntuneChallengeValidator(tenantID, trust,
+		mdmchallenge.WithIntuneAudience(cfg.ExpectedAudience),
+		mdmchallenge.WithIntuneClockSkewTolerance(time.Duration(cfg.ClockSkewSeconds)*time.Second),
+		mdmchallenge.WithIntuneEventLog(s.log),
+		mdmchallenge.WithIntuneTrustConfigResolver(s.mdmSCEPIntuneTrustConfigResolver(keyWrapper)),
 	)
 	return func(ctx context.Context, req scep.ChallengeRequest) error {
-		return validator.Validate(ctx, mdm.IntuneChallengeRequest{
+		return validator.Validate(ctx, mdmchallenge.IntuneChallengeRequest{
 			TenantID:      req.TenantID,
 			Challenge:     req.Challenge,
 			CSRDER:        req.CSRDER,
@@ -445,11 +445,11 @@ func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, ten
 	}, nil
 }
 
-func (s *Server) mdmSCEPIntuneTrustConfigResolver(keyWrapper sealKeyWrapper) mdm.IntuneTrustConfigResolver {
+func (s *Server) mdmSCEPIntuneTrustConfigResolver(keyWrapper sealKeyWrapper) mdmchallenge.IntuneTrustConfigResolver {
 	if s.store == nil || keyWrapper == nil {
 		return nil
 	}
-	return func(ctx context.Context, req mdm.IntuneChallengeRequest) ([]mdm.IntuneTrustConfig, error) {
+	return func(ctx context.Context, req mdmchallenge.IntuneChallengeRequest) ([]mdmchallenge.IntuneTrustConfig, error) {
 		tenantID := strings.TrimSpace(req.TenantID)
 		if tenantID == "" {
 			return nil, nil
@@ -458,7 +458,7 @@ func (s *Server) mdmSCEPIntuneTrustConfigResolver(keyWrapper sealKeyWrapper) mdm
 		if err != nil {
 			return nil, err
 		}
-		configs := make([]mdm.IntuneTrustConfig, 0, len(policies))
+		configs := make([]mdmchallenge.IntuneTrustConfig, 0, len(policies))
 		for _, policy := range policies {
 			if !policy.Enabled || policy.Provider != "intune" || policy.ChallengeMode != "intune-jws" {
 				continue
@@ -470,7 +470,7 @@ func (s *Server) mdmSCEPIntuneTrustConfigResolver(keyWrapper sealKeyWrapper) mdm
 			if len(anchors) == 0 {
 				continue
 			}
-			configs = append(configs, mdm.IntuneTrustConfig{
+			configs = append(configs, mdmchallenge.IntuneTrustConfig{
 				TrustAnchorsDER:  anchors,
 				ExpectedAudience: policy.ExpectedAudience,
 			})

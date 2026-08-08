@@ -30,6 +30,13 @@ export function MDMDevicesPanel() {
           value3: String(devices.data?.unobserved ?? 0),
         })}
       </p>
+      {(devices.data?.renewal_at_risk ?? 0) > 0 ? (
+        <p className="text-sm text-risk-critical">
+          {translateNow("source.mdm.devices.renewalrisk.i5mdm00004", {
+            value1: String(devices.data?.renewal_at_risk ?? 0),
+          })}
+        </p>
+      ) : null}
       <ul className="space-y-2 text-sm">
         {items.slice(0, 25).map((item) => (
           <li key={`${item.mdm}:${item.mdm_device_id}:${item.transaction_id ?? ""}`} className="border-b border-border pb-2 last:border-0">
@@ -41,6 +48,9 @@ export function MDMDevicesPanel() {
             </span>
             {item.install_detail ? (
               <span className="mt-1 block text-caption text-muted-foreground">{item.install_detail}</span>
+            ) : null}
+            {item.renewal_at_risk && item.renewal_detail ? (
+              <span className="mt-1 block text-caption text-risk-critical">{item.renewal_detail}</span>
             ) : null}
           </li>
         ))}

@@ -6,10 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 )
-
-var obsAt = time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC)
 
 // Read-only must be structural: nothing here may construct a URL that is not a
 // fixed read path, and a caller-supplied filter must never reach the path.
@@ -63,7 +60,7 @@ func TestAnUnrecognisedIntuneStateIsUnknownNotFailed(t *testing.T) {
 func TestJamfDoesNotClaimAnInstallItDidNotObserve(t *testing.T) {
 	t.Parallel()
 	got, err := ParseJamfDevices(strings.NewReader(
-		`{"results":[{"id":"7","general":{"name":"mac-1"},"hardware":{"serialNumber":"C02XYZ"}}]}`), obsAt)
+		`{"results":[{"id":"7","general":{"name":"mac-1"},"hardware":{"serialNumber":"C02XYZ"}}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +80,7 @@ func TestJamfDoesNotClaimAnInstallItDidNotObserve(t *testing.T) {
 func TestDevicesWithNoIDAreNotCorrelated(t *testing.T) {
 	t.Parallel()
 	got, err := ParseIntuneDevices(strings.NewReader(
-		`{"value":[{"id":"","deviceName":"ghost"},{"id":"d1","deviceName":"real","serialNumber":"S1"}]}`), obsAt)
+		`{"value":[{"id":"","deviceName":"ghost"},{"id":"d1","deviceName":"real","serialNumber":"S1"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +130,7 @@ func TestSerialMatchingIsCaseInsensitive(t *testing.T) {
 func TestAnOversizedMDMResponseIsBounded(t *testing.T) {
 	t.Parallel()
 	huge := `{"value":[{"id":"d1","deviceName":"` + strings.Repeat("a", responseLimit) + `"}]}`
-	if _, err := ParseIntuneDevices(strings.NewReader(huge), obsAt); err == nil {
+	if _, err := ParseIntuneDevices(strings.NewReader(huge)); err == nil {
 		t.Fatal("a response larger than the limit parsed successfully; an integration operators " +
 			"think of as read-only can still be a denial of service")
 	}

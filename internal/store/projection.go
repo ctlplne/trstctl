@@ -540,8 +540,10 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	"owner_ownership_conflicts", "cmdb_reconcile_schedules",
 	// I3: projected from issuance.request.opened / .decided.
 	"issuance_requests",
-	// I5: projected from mdm.device.correlated.
-	"mdm_device_correlations",
+	// I5: projected from mdm.device.correlated / mdm.poll.configured. A
+	// rebuild loses the poll's last_run_at/last_error (scheduler observations),
+	// costing one extra poll within a minute — same trade as the CMDB schedule.
+	"mdm_device_correlations", "mdm_poll_schedules",
 	// A5: projected from agent.upgrade.campaign.* / agent.upgrade.ring.dispatched.
 	"agent_upgrade_campaigns", "agent_upgrade_dispatches"}
 

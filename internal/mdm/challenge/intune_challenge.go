@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package mdm
+package challenge
 
 import (
 	"context"

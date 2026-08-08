@@ -103,7 +103,7 @@ func parseAbsolute(base string) (*url.URL, error) {
 }
 
 // ParseIntuneDevices maps a Graph managedDevices response.
-func ParseIntuneDevices(r io.Reader, observed time.Time) ([]Device, error) {
+func ParseIntuneDevices(r io.Reader) ([]Device, error) {
 	var resp struct {
 		Value []struct {
 			ID           string `json:"id"`
@@ -112,6 +112,12 @@ func ParseIntuneDevices(r io.Reader, observed time.Time) ([]Device, error) {
 			// Graph's own vocabulary for the compliance/profile state.
 			State  string `json:"deviceRegistrationState"`
 			Detail string `json:"managementAgent"`
+			// lastSyncDateTime is the DEVICE's last check-in, and it is what
+			// ObservedAt must carry: the renewal check asks when the MDM last
+			// heard from the device, and stamping the POLL time instead would
+			// make every device look fresh on every poll — defeating the one
+			// question the offline-renewal check exists to ask.
+			LastSync string `json:"lastSyncDateTime"`
 		} `json:"value"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r, responseLimit)).Decode(&resp); err != nil {
@@ -127,10 +133,30 @@ func ParseIntuneDevices(r io.Reader, observed time.Time) ([]Device, error) {
 		out = append(out, Device{
 			MDM: MDMIntune, MDMDeviceID: d.ID, Name: d.DeviceName,
 			SerialNumber: d.SerialNumber, InstallState: intuneState(d.State),
-			InstallDetail: strings.TrimSpace(d.Detail), ObservedAt: observed,
+			InstallDetail: strings.TrimSpace(d.Detail),
+			// The device's OWN last check-in, never the poll time. A record
+			// with no lastSyncDateTime carries a ZERO ObservedAt — "the MDM
+			// did not say" — which the renewal check treats as never observed
+			// rather than as fresh.
+			ObservedAt: parseMDMTime(d.LastSync),
 		})
 	}
 	return out, nil
+}
+
+// parseMDMTime reads an MDM timestamp, zero when absent or unparseable: "the
+// MDM did not say when" must never be recorded as "just now".
+func parseMDMTime(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"} {
+		if ts, err := time.Parse(layout, s); err == nil {
+			return ts.UTC()
+		}
+	}
+	return time.Time{}
 }
 
 // intuneState maps Graph's registration states onto our three-value vocabulary.
@@ -150,11 +176,17 @@ func intuneState(s string) Outcome {
 }
 
 // ParseJamfDevices maps a Jamf Pro computers-inventory response.
-func ParseJamfDevices(r io.Reader, observed time.Time) ([]Device, error) {
+func ParseJamfDevices(r io.Reader) ([]Device, error) {
 	var resp struct {
 		Results []struct {
-			ID       string                `json:"id"`
-			General  struct{ Name string } `json:"general"`
+			ID      string `json:"id"`
+			General struct {
+				Name string
+				// The device's last check-in, for the same reason Intune's
+				// lastSyncDateTime is read: the renewal check asks when the
+				// MDM last HEARD from the device.
+				LastContactTime string `json:"lastContactTime"`
+			} `json:"general"`
 			Hardware struct {
 				SerialNumber string `json:"serialNumber"`
 			} `json:"hardware"`
@@ -177,7 +209,7 @@ func ParseJamfDevices(r io.Reader, observed time.Time) ([]Device, error) {
 			InstallState: OutcomeUnknown,
 			InstallDetail: "Jamf computers-inventory does not report per-profile install state; " +
 				"the certificate's presence on this device has not been observed.",
-			ObservedAt: observed,
+			ObservedAt: parseMDMTime(d.General.LastContactTime),
 		})
 	}
 	return out, nil
@@ -215,4 +247,16 @@ func CorrelateBySerial(devices []Device, bySerial map[string]string) (matched []
 		}
 	}
 	return matched, unmatchedDevices, unmatchedSerials
+}
+
+// SyncIntent is the payload of one relay-executed mdm.sync job (I5). Shared
+// shape for the same reason the CMDB's is: the control plane enqueues it and
+// the relay decodes it, and a drift fails every sync while both halves pass
+// their own tests. TokenRef is a secret:// REFERENCE the relay redeems per
+// attempt.
+type SyncIntent struct {
+	MDM      string `json:"mdm"`
+	BaseURL  string `json:"base_url"`
+	Filter   string `json:"filter,omitempty"`
+	TokenRef string `json:"token_ref"`
 }

@@ -110,3 +110,190 @@ func (s *Store) ApplyMDMDeviceCorrelatedTx(ctx context.Context, tx pgx.Tx, c MDM
 		identity, c.InstallState, c.InstallDetail, c.ObservedAt)
 	return err
 }
+
+// MDMPollSchedule is a tenant's standing instruction to re-read one MDM (I5).
+type MDMPollSchedule struct {
+	TenantID string
+	MDM      string
+	BaseURL  string
+	TokenRef string
+	// Filter is Intune's $filter or Jamf's section selector, encoded as a
+	// query parameter by the endpoint builders — never a path segment.
+	Filter          string
+	IntervalSeconds int
+	Enabled         bool
+	// AllowPrivateEndpoint + PrivateEgressCIDRs gate a control-plane poll of a
+	// private MDM (an on-prem Jamf). The caller needs egress:private to set
+	// it, and the CIDRs bound exactly which private ranges the poll may dial —
+	// same rule as discovery's cloud sources. Relay execution needs neither:
+	// the relay is already inside.
+	AllowPrivateEndpoint bool
+	PrivateEgressCIDRs   []string
+	// Execution is "" / "control_plane" for the control plane's own read, or
+	// "relay" to dispatch an mdm.sync job a network relay claims (an on-prem
+	// Jamf behind a firewall is exactly the CMDB's reachability shape).
+	Execution string
+	// RenewalWindowDays overrides the standard renewal window the offline
+	// check uses. Zero means unset: the documented standard applies.
+	RenewalWindowDays int
+	LastRunAt         *time.Time
+	LastError         string
+}
+
+// GetMDMPollSchedule returns one (tenant, mdm) schedule.
+func (s *Store) GetMDMPollSchedule(ctx context.Context, tenantID, mdm string) (MDMPollSchedule, bool, error) {
+	var out MDMPollSchedule
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx,
+			`SELECT tenant_id::text, mdm, base_url, token_ref, filter, interval_seconds, enabled,
+			        allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
+			        coalesce(execution, ''), coalesce(renewal_window_days, 0), last_run_at, last_error
+			   FROM mdm_poll_schedules WHERE tenant_id = $1 AND mdm = $2`, tenantID, mdm)
+		switch err := row.Scan(&out.TenantID, &out.MDM, &out.BaseURL, &out.TokenRef, &out.Filter,
+			&out.IntervalSeconds, &out.Enabled, &out.AllowPrivateEndpoint, &out.PrivateEgressCIDRs,
+			&out.Execution, &out.RenewalWindowDays,
+			&out.LastRunAt, &out.LastError); {
+		case err == nil:
+			found = true
+			return nil
+		case err.Error() == pgx.ErrNoRows.Error():
+			return nil
+		default:
+			return err
+		}
+	})
+	return out, found, err
+}
+
+// ListMDMPollSchedules returns the tenant's schedules for both MDMs.
+func (s *Store) ListMDMPollSchedules(ctx context.Context, tenantID string) ([]MDMPollSchedule, error) {
+	var out []MDMPollSchedule
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, mdm, base_url, token_ref, filter, interval_seconds, enabled,
+			        allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
+			        coalesce(execution, ''), coalesce(renewal_window_days, 0), last_run_at, last_error
+			   FROM mdm_poll_schedules WHERE tenant_id = $1 ORDER BY mdm`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var sch MDMPollSchedule
+			if err := rows.Scan(&sch.TenantID, &sch.MDM, &sch.BaseURL, &sch.TokenRef, &sch.Filter,
+				&sch.IntervalSeconds, &sch.Enabled, &sch.AllowPrivateEndpoint, &sch.PrivateEgressCIDRs,
+				&sch.Execution, &sch.RenewalWindowDays,
+				&sch.LastRunAt, &sch.LastError); err != nil {
+				return err
+			}
+			out = append(out, sch)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// TenantsWithEnabledMDMPollSchedules enumerates tenants for the leader ticker.
+func (s *Store) TenantsWithEnabledMDMPollSchedules(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants have an enabled MDM poll schedule so the leader-only scheduler can sweep each tenant under its own RLS context (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM mdm_poll_schedules WHERE enabled ORDER BY tenant_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// MDMPollSchedulesDue returns the tenant's schedules due at now.
+func (s *Store) MDMPollSchedulesDue(ctx context.Context, tenantID string, now time.Time) ([]MDMPollSchedule, error) {
+	all, err := s.ListMDMPollSchedules(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var due []MDMPollSchedule
+	for _, sch := range all {
+		if !sch.Enabled || sch.IntervalSeconds <= 0 {
+			continue
+		}
+		if sch.LastRunAt != nil && now.Sub(*sch.LastRunAt) < time.Duration(sch.IntervalSeconds)*time.Second {
+			continue
+		}
+		due = append(due, sch)
+	}
+	return due, nil
+}
+
+// MarkMDMPollRun stamps the attempt, exactly like the CMDB scheduler: a failed
+// poll retries next interval rather than hot-looping, and the error is SERVED
+// so a poll failing for a week does not look like one with nothing to do.
+func (s *Store) MarkMDMPollRun(ctx context.Context, tenantID, mdm string, at time.Time, runErr string) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`UPDATE mdm_poll_schedules SET last_run_at = $3, last_error = $4, updated_at = now()
+			  WHERE tenant_id = $1 AND mdm = $2`, tenantID, mdm, at.UTC(), runErr)
+		return err
+	})
+}
+
+// ApplyMDMPollConfiguredTx projects mdm.poll.configured (I5). last_run_at and
+// last_error are the scheduler's observations and are deliberately untouched.
+func (s *Store) ApplyMDMPollConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in MDMPollSchedule) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO mdm_poll_schedules (tenant_id, mdm, base_url, token_ref, filter, interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs, execution, renewal_window_days)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, nullif($10, ''), nullif($11, 0))
+		 ON CONFLICT (tenant_id, mdm) DO UPDATE SET
+		   base_url = EXCLUDED.base_url, token_ref = EXCLUDED.token_ref,
+		   filter = EXCLUDED.filter, interval_seconds = EXCLUDED.interval_seconds,
+		   enabled = EXCLUDED.enabled,
+		   allow_private_endpoint = EXCLUDED.allow_private_endpoint,
+		   private_egress_cidrs = EXCLUDED.private_egress_cidrs,
+		   execution = EXCLUDED.execution,
+		   renewal_window_days = EXCLUDED.renewal_window_days, updated_at = now()`,
+		tenantID, in.MDM, in.BaseURL, in.TokenRef, in.Filter, in.IntervalSeconds,
+		in.Enabled, in.AllowPrivateEndpoint, in.PrivateEgressCIDRs, in.Execution, in.RenewalWindowDays)
+	return err
+}
+
+// IdentitySerialJoin maps an UPPERCASED device serial to the identity enrolled
+// under that name (I5). The join is EXACT equality on the identity name — the
+// Intune SCEP convention puts the device serial in the subject CN — because a
+// looser match would invent correlations, and an invented correlation sends an
+// operator to the wrong laptop.
+type IdentitySerialJoin struct {
+	IdentityID string
+	NotAfter   *time.Time
+}
+
+// IdentitiesBySerial returns the serial->identity join set for correlation.
+func (s *Store) IdentitiesBySerial(ctx context.Context, tenantID string) (map[string]IdentitySerialJoin, error) {
+	out := map[string]IdentitySerialJoin{}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT upper(trim(name)), id::text, not_after FROM identities
+			  WHERE tenant_id = $1 AND trim(name) <> ''`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var serial, id string
+			var notAfter *time.Time
+			if err := rows.Scan(&serial, &id, &notAfter); err != nil {
+				return err
+			}
+			out[serial] = IdentitySerialJoin{IdentityID: id, NotAfter: notAfter}
+		}
+		return rows.Err()
+	})
+	return out, err
+}

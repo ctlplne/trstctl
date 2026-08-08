@@ -503,8 +503,14 @@ describe("i18n boundary", () => {
       // against firewall logs needs to know the request never left the
       // segment.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "5068865851b5cc36ec6de1a626c7fc71e2ce0127517f621c744af8603d3f38a4",
-      "de-DE": "2ee39e8f230e473e2e4860dad42f99b934d68cd9bc8f5f62045c19d217cf05b2",
+      // I5 offline-renewal re-pin: one source.mdm.devices.renewalrisk key.
+      // The sentence has to say NOTHING HAS FAILED YET in every locale — the
+      // whole hazard is a green dashboard over a certificate expiring in a
+      // drawer, and a translation that reads as a failure alert would send
+      // operators hunting for an error that does not exist.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "529506c96ed3db1c8531d8f14814f857b751b0bd64d1a021b24453e18d7f0500",
+      "de-DE": "4dbca90fb688bff08dfdd56c4e151f4695f669676db965cedabbb5ef2e8d8ab1",
     });
   });
 

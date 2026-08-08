@@ -1633,6 +1633,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		recordRollback:             s.rollbackReceipt,
 		recordADCSPosture:          s.recordADCSPosture,
 		recordCMDBSync:             s.recordCMDBSync,
+		recordMDMSync:              s.recordMDMSync,
 		recordEndpointVerification: s.recordEndpointVerificationSweep,
 		recordDeployVerification:   s.recordDeployVerification,
 		// B2: the CSR that comes back UP from a host-generated renewal is signed

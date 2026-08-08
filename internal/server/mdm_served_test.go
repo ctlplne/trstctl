@@ -122,7 +122,11 @@ func TestServedCorrelationRefusesAnUnrenderableState(t *testing.T) {
 // Read-only is structural: no MDM code may construct a non-GET request.
 func TestNoMDMCodePathCanWrite(t *testing.T) {
 	t.Parallel()
-	for _, f := range []string{"../mdm/correlate.go", "../mdm/trace.go", "../api/mdm_devices.go"} {
+	// The poller and the relay executor joined the list when I5 gained its
+	// producer: both FETCH from an MDM, so both are exactly where a mutating
+	// verb would be a profile pushed to real laptops.
+	for _, f := range []string{"../mdm/correlate.go", "../mdm/trace.go", "../mdm/renewal.go",
+		"../api/mdm_devices.go", "mdm_poller.go", "../agent/relay/mdmsync.go"} {
 		src, err := readSourceFile(f)
 		if err != nil {
 			t.Fatal(err)

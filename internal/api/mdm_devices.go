@@ -34,6 +34,13 @@ type mdmDeviceResponse struct {
 	// long ago — an operator deciding whether to trust a stale answer needs to
 	// tell those apart.
 	ObservedAt string `json:"observed_at,omitempty"`
+	// RenewalNotAfter / RenewalAtRisk / RenewalDetail are the offline-renewal
+	// check (I5): a SCEP device renews by CHECKING IN, so a device the MDM has
+	// not seen since its certificate's renewal window opened will silently
+	// miss its renewal while every dashboard stays green.
+	RenewalNotAfter string `json:"renewal_not_after,omitempty"`
+	RenewalAtRisk   bool   `json:"renewal_at_risk,omitempty"`
+	RenewalDetail   string `json:"renewal_detail,omitempty"`
 }
 
 type mdmDeviceList struct {
@@ -41,9 +48,14 @@ type mdmDeviceList struct {
 	// Unobserved is counted separately from failed. They are different problems:
 	// one is a device that reported trouble, the other is a device nothing has
 	// heard from, and a single "unhealthy" number would merge them.
-	Failed     int    `json:"failed"`
-	Unobserved int    `json:"unobserved"`
-	Guidance   string `json:"guidance"`
+	Failed     int `json:"failed"`
+	Unobserved int `json:"unobserved"`
+	// RenewalAtRisk counts devices whose certificate is inside (or past) its
+	// renewal window while the MDM has not seen the device since the window
+	// opened. Counted apart from failed: nothing failed yet, and that is the
+	// problem.
+	RenewalAtRisk int    `json:"renewal_at_risk"`
+	Guidance      string `json:"guidance"`
 }
 
 const mdmGuidance = "This correlation is READ-ONLY: nothing here writes to Intune or Jamf, and no " +
@@ -86,6 +98,18 @@ func (a *API) listMDMDevices(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	// The serial->identity join carries not_after for the renewal check, and
+	// per-MDM window overrides come from the poll schedules. Both reads are
+	// best-effort: a failed join must degrade to "no verdict", never to a
+	// blank device list.
+	bySerial, _ := a.store.IdentitiesBySerial(r.Context(), tenantID)
+	windows := map[string]int{}
+	if schedules, err := a.store.ListMDMPollSchedules(r.Context(), tenantID); err == nil {
+		for _, sch := range schedules {
+			windows[sch.MDM] = sch.RenewalWindowDays
+		}
+	}
+	now := time.Now().UTC()
 	out := mdmDeviceList{Items: []mdmDeviceResponse{}, Guidance: mdmGuidance}
 	for _, row := range rows {
 		switch row.InstallState {
@@ -94,7 +118,16 @@ func (a *API) listMDMDevices(w http.ResponseWriter, r *http.Request) {
 		case string(mdm.OutcomeUnknown):
 			out.Unobserved++
 		}
-		out.Items = append(out.Items, toMDMDeviceResponse(row))
+		item := toMDMDeviceResponse(row)
+		if join, ok := bySerial[strings.ToUpper(strings.TrimSpace(row.SerialNumber))]; ok && join.NotAfter != nil {
+			item.RenewalNotAfter = join.NotAfter.UTC().Format(time.RFC3339)
+			atRisk, detail := mdm.RenewalRisk(join.NotAfter, row.ObservedAt, windows[row.MDM], now)
+			item.RenewalAtRisk, item.RenewalDetail = atRisk, detail
+			if atRisk {
+				out.RenewalAtRisk++
+			}
+		}
+		out.Items = append(out.Items, item)
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }

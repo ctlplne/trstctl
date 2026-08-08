@@ -91,6 +91,9 @@ var TenantScopedTables = []string{
 	// own rollout history.
 	"agent_upgrade_campaigns",
 	"agent_upgrade_dispatches",
+	// I5: the tenant's MDM poll instruction and device correlations leave
+	// with the tenant.
+	"mdm_poll_schedules",
 	"agents",
 	"agent_bootstrap_tokens",
 	// A3: the credential-redemption ledger. It holds no credential values, but

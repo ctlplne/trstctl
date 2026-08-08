@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package mdm_test
+package challenge_test
 
 import (
 	"strings"
 	"testing"
 	"time"
 
-	"trstctl.com/trstctl/internal/mdm"
+	mdmchallenge "trstctl.com/trstctl/internal/mdm/challenge"
 )
 
 var testKey = []byte("intune-challenge-hmac-key-0123456789")
 
 func TestChallengeRoundTrip(t *testing.T) {
-	ch := mdm.New(testKey, time.Minute)
+	ch := mdmchallenge.New(testKey, time.Minute)
 	tok, err := ch.Issue()
 	if err != nil {
 		t.Fatal(err)
@@ -24,7 +24,7 @@ func TestChallengeRoundTrip(t *testing.T) {
 }
 
 func TestChallengeTampered(t *testing.T) {
-	ch := mdm.New(testKey, time.Minute)
+	ch := mdmchallenge.New(testKey, time.Minute)
 	tok, _ := ch.Issue()
 	parts := strings.Split(tok, ".")
 	if len(parts) != 3 || parts[2] == "" {
@@ -38,15 +38,15 @@ func TestChallengeTampered(t *testing.T) {
 }
 
 func TestChallengeWrongKey(t *testing.T) {
-	tok, _ := mdm.New(testKey, time.Minute).Issue()
-	if err := mdm.New([]byte("a-totally-different-hmac-key-9876"), time.Minute).Validate(tok); err == nil {
+	tok, _ := mdmchallenge.New(testKey, time.Minute).Issue()
+	if err := mdmchallenge.New([]byte("a-totally-different-hmac-key-9876"), time.Minute).Validate(tok); err == nil {
 		t.Fatal("a challenge signed with another key must be rejected")
 	}
 }
 
 func TestChallengeExpired(t *testing.T) {
 	clk := time.Unix(1_000_000, 0)
-	ch := mdm.New(testKey, time.Minute, mdm.WithClock(func() time.Time { return clk }))
+	ch := mdmchallenge.New(testKey, time.Minute, mdmchallenge.WithClock(func() time.Time { return clk }))
 	tok, _ := ch.Issue() // valid until +60s
 	clk = clk.Add(2 * time.Minute)
 	if err := ch.Validate(tok); err == nil {
@@ -55,7 +55,7 @@ func TestChallengeExpired(t *testing.T) {
 }
 
 func TestChallengeMalformed(t *testing.T) {
-	ch := mdm.New(testKey, time.Minute)
+	ch := mdmchallenge.New(testKey, time.Minute)
 	for _, bad := range []string{"", "garbage", "a.b", "a.b.c.d"} {
 		if err := ch.Validate(bad); err == nil {
 			t.Errorf("malformed challenge %q must be rejected", bad)

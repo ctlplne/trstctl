@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package mdm_test
+package challenge_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/mdm"
+	mdmchallenge "trstctl.com/trstctl/internal/mdm/challenge"
 )
 
 func TestIntuneChallengeValidatesTenantAndCSRClaims(t *testing.T) {
@@ -39,11 +39,11 @@ func TestIntuneChallengeValidatesTenantAndCSRClaims(t *testing.T) {
 		"san_dns":     []string{"device-1.example.test"},
 	})
 
-	validator := mdm.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
-		mdm.WithIntuneAudience("https://ca.example.test/scep"),
-		mdm.WithIntuneClock(func() time.Time { return now }),
+	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
+		mdmchallenge.WithIntuneAudience("https://ca.example.test/scep"),
+		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
 	)
-	if err := validator.Validate(context.Background(), mdm.IntuneChallengeRequest{
+	if err := validator.Validate(context.Background(), mdmchallenge.IntuneChallengeRequest{
 		TenantID:  "tenant-a",
 		Challenge: challenge,
 		CSRDER:    csrDER,
@@ -51,7 +51,7 @@ func TestIntuneChallengeValidatesTenantAndCSRClaims(t *testing.T) {
 		t.Fatalf("valid Intune challenge rejected: %v", err)
 	}
 
-	if err := validator.Validate(context.Background(), mdm.IntuneChallengeRequest{
+	if err := validator.Validate(context.Background(), mdmchallenge.IntuneChallengeRequest{
 		TenantID:  "tenant-b",
 		Challenge: challenge,
 		CSRDER:    csrDER,
@@ -71,11 +71,11 @@ func TestIntuneChallengeRejectsMissingInvalidAndMismatchedClaims(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	validator := mdm.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
-		mdm.WithIntuneClock(func() time.Time { return now }),
+	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
+		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
 	)
 	csrDER := newIntuneCSR(t, "device-1", []string{"device-1.example.test"})
-	for _, req := range []mdm.IntuneChallengeRequest{
+	for _, req := range []mdmchallenge.IntuneChallengeRequest{
 		{TenantID: "tenant-a", CSRDER: csrDER},
 		{TenantID: "tenant-a", Challenge: "not.a.valid.jws", CSRDER: csrDER},
 		{
@@ -108,9 +108,9 @@ func TestIntuneChallengeReplayRejectedAndAudited(t *testing.T) {
 		t.Fatal(err)
 	}
 	csrDER := newIntuneCSR(t, "device-1", nil)
-	validator := mdm.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
-		mdm.WithIntuneClock(func() time.Time { return now }),
-		mdm.WithIntuneEventLog(log),
+	validator := mdmchallenge.NewIntuneChallengeValidator("tenant-a", [][]byte{trustDER},
+		mdmchallenge.WithIntuneClock(func() time.Time { return now }),
+		mdmchallenge.WithIntuneEventLog(log),
 	)
 	challenge := signedIntuneChallenge(t, signer, map[string]any{
 		"iat":         now.Add(-time.Minute).Unix(),
@@ -118,11 +118,11 @@ func TestIntuneChallengeReplayRejectedAndAudited(t *testing.T) {
 		"nonce":       "replay-nonce",
 		"device_name": "device-1",
 	})
-	req := mdm.IntuneChallengeRequest{TenantID: "tenant-a", Challenge: challenge, CSRDER: csrDER, TransactionID: "txn-replay"}
+	req := mdmchallenge.IntuneChallengeRequest{TenantID: "tenant-a", Challenge: challenge, CSRDER: csrDER, TransactionID: "txn-replay"}
 	if err := validator.Validate(context.Background(), req); err != nil {
 		t.Fatalf("first challenge use rejected: %v", err)
 	}
-	if err := validator.Validate(context.Background(), req); !errors.Is(err, mdm.ErrIntuneChallengeReplay) {
+	if err := validator.Validate(context.Background(), req); !errors.Is(err, mdmchallenge.ErrIntuneChallengeReplay) {
 		t.Fatalf("replayed challenge error = %v, want ErrIntuneChallengeReplay", err)
 	}
 	if !mdmEventExists(t, log, "mdm.intune_scep_challenge.replay_rejected", "tenant-a") {
@@ -135,7 +135,7 @@ func TestIntuneChallengeReplayRejectedAndAudited(t *testing.T) {
 		"nonce":       "fresh-nonce",
 		"device_name": "device-1",
 	})
-	if err := validator.Validate(context.Background(), mdm.IntuneChallengeRequest{TenantID: "tenant-a", Challenge: distinct, CSRDER: csrDER}); err != nil {
+	if err := validator.Validate(context.Background(), mdmchallenge.IntuneChallengeRequest{TenantID: "tenant-a", Challenge: distinct, CSRDER: csrDER}); err != nil {
 		t.Fatalf("distinct challenge rejected: %v", err)
 	}
 }

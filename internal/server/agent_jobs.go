@@ -83,6 +83,8 @@ var agentJobKindAllowlist = map[string]bool{
 	// I2: relay-executed CMDB read. The relay observes; the reconcile — and
 	// its never-overwrite-an-attestation rule — stays in the control plane.
 	agentJobKindCMDBSync: true,
+	// I5: relay-executed MDM read, same custody and vantage rules.
+	agentJobKindMDMSync: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -142,6 +144,8 @@ var agentJobKindVantage = map[string][]string{
 	// I2: a CMDB read is a vantage question — the instance worth relaying to
 	// is the one behind a firewall only the in-segment relay sits inside.
 	agentJobKindCMDBSync: {mtls.AgentRoleNetwork},
+	// I5: identical reasoning for an on-prem MDM.
+	agentJobKindMDMSync: {mtls.AgentRoleNetwork},
 }
 
 // agentRolePermitsKind reports whether an agent holding roles may execute kind.
@@ -434,6 +438,11 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// the attestation rule has one implementation whichever vantage fetched.
 	if destination == agentJobKindCMDBSync && a.recordCMDBSync != nil {
 		a.recordCMDBSync(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
+	}
+	// I5: a relay's MDM observation becomes device correlation, through the
+	// same core the control-plane poll uses.
+	if destination == agentJobKindMDMSync && a.recordMDMSync != nil {
+		a.recordMDMSync(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
 	}
 	// D2: a verification sweep becomes observed endpoint state. The report is
 	// the whole point of the job — a sweep whose findings stayed in the job row

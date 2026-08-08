@@ -3302,6 +3302,8 @@ const deDECatalog = {
   "source.mdm.devices.heading.i5mdm00001": "MDM-Ger\u00e4tezuordnung",
   "source.mdm.devices.counts.i5mdm00002": "{value1} Ger\u00e4te; {value2} meldeten einen Fehler und {value3} wurden \u00fcberhaupt nicht beobachtet.",
   "source.mdm.devices.unobserved.i5mdm00003": "nicht beobachtet \u2014 das MDM hat dieses Ger\u00e4t nicht gemeldet",
+  "source.mdm.devices.renewalrisk.i5mdm00004":
+    "{value1} Gerät(e) laufen Gefahr, ihre Erneuerung stillschweigend zu verpassen: Ihre Zertifikate liegen im Erneuerungsfenster und das MDM hat sie seit dessen Öffnung nicht gesehen.",
   "source.issuance.requests.heading.i3req00001": "Ausstellungsanfragen",
   "source.issuance.requests.counts.i3req00002": "{value1} warten auf eine Entscheidung, von {value2} insgesamt.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, entschieden von {value2}",

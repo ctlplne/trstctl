@@ -48,6 +48,8 @@ const (
 	EventIssuanceRequestDecided = "issuance.request.decided"
 	// I5: one MDM device record joined to one SCEP transaction.
 	EventMDMDeviceCorrelated = "mdm.device.correlated"
+	// I5: a tenant's standing instruction to re-read an MDM.
+	EventMDMPollConfigured = "mdm.poll.configured"
 	// I2: an operator closing an ownership disagreement. An event because the
 	// resolution is a JUDGEMENT — which side was right and why — and a
 	// judgement that lives only in a mutable column cannot be audited later.
@@ -311,6 +313,22 @@ type MDMDeviceCorrelated struct {
 	InstallState  string     `json:"install_state"`
 	InstallDetail string     `json:"install_detail,omitempty"`
 	ObservedAt    *time.Time `json:"observed_at,omitempty"`
+}
+
+// MDMPollConfigured is the payload of mdm.poll.configured (I5). TokenRef is a
+// REFERENCE such as secret://mdm/graph-token; a token value in an event is a
+// token value in every backup and replica of the log.
+type MDMPollConfigured struct {
+	MDM               string   `json:"mdm"`
+	BaseURL           string   `json:"base_url"`
+	TokenRef          string   `json:"token_ref"`
+	Filter            string   `json:"filter,omitempty"`
+	IntervalSeconds   int      `json:"interval_seconds"`
+	Enabled           bool     `json:"enabled"`
+	AllowPrivate      bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateCIDRs      []string `json:"private_egress_cidrs,omitempty"`
+	Execution         string   `json:"execution,omitempty"`
+	RenewalWindowDays int      `json:"renewal_window_days,omitempty"`
 }
 
 // IssuanceRequestOpened is the payload of an issuance.request.opened event (I3).
@@ -1892,6 +1910,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
+	EventMDMPollConfigured:                        {1: true},
 	EventOwnershipConflictResolved:                {1: true},
 	EventAgentUpgradeCampaignOpened:               {1: true},
 	EventAgentUpgradeCampaignAdvanced:             {1: true},
@@ -2152,6 +2171,17 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		return p.store.ApplyOwnershipConflictResolvedTx(ctx, tx, e.TenantID, pl.ID, pl.ResolvedBy, pl.Resolution, pl.ResolvedAt)
+	case EventMDMPollConfigured:
+		var pl MDMPollConfigured
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyMDMPollConfiguredTx(ctx, tx, e.TenantID, store.MDMPollSchedule{
+			MDM: pl.MDM, BaseURL: pl.BaseURL, TokenRef: pl.TokenRef, Filter: pl.Filter,
+			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
+			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
+			Execution: pl.Execution, RenewalWindowDays: pl.RenewalWindowDays,
+		})
 	case EventMDMDeviceCorrelated:
 		var pl MDMDeviceCorrelated
 		if err := decode(e, &pl); err != nil {

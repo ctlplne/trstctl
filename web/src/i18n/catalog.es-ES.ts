@@ -3288,6 +3288,8 @@ const esESCatalog = {
   "source.mdm.devices.heading.i5mdm00001": "Correlaci\u00f3n de dispositivos MDM",
   "source.mdm.devices.counts.i5mdm00002": "{value1} dispositivos; {value2} informaron un fallo y {value3} no se han observado en absoluto.",
   "source.mdm.devices.unobserved.i5mdm00003": "no observado: el MDM no ha informado sobre este dispositivo",
+  "source.mdm.devices.renewalrisk.i5mdm00004":
+    "{value1} dispositivo(s) en riesgo de perder silenciosamente su renovación: sus certificados están dentro de la ventana de renovación y el MDM no los ha visto desde que se abrió.",
   "source.issuance.requests.heading.i3req00001": "Solicitudes de emisi\u00f3n",
   "source.issuance.requests.counts.i3req00002": "{value1} esperando una decisi\u00f3n, de {value2} en total.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, decidido por {value2}",

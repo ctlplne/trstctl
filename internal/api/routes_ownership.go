@@ -62,6 +62,8 @@ func (a *API) mdmDeviceRoutes() []route {
 	}
 	return []route{
 		{method: "GET", path: "/api/v1/mdm/devices", opID: "listMDMDevices", summary: "List MDM devices correlated to SCEP transactions, with unobserved counted apart from failed", handler: a.listMDMDevices, resSchema: "MDMDeviceList", successCode: "200", perm: authz.CertsRead},
+		{method: "PUT", path: "/api/v1/mdm/poll-schedule", opID: "putMDMPollSchedule", summary: "Configure the per-MDM read schedule; relay execution requires a secret:// token reference", handler: a.putMDMPollSchedule, reqSchema: "MDMPollScheduleInput", resSchema: "MDMPollSchedule", successCode: "200", mutation: true, perm: authz.CertsWrite},
+		{method: "GET", path: "/api/v1/mdm/poll-schedule", opID: "listMDMPollSchedules", summary: "The configured MDM read schedules with their last outcome", handler: a.listMDMPollSchedules, resSchema: "MDMPollScheduleList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/mdm/{mdm}/devices/{id}/trace", opID: "getMDMDeviceTrace", summary: "Per-device enrollment trace showing which step an enrollment broke at", handler: a.getMDMDeviceTrace, pathParams: devicePath, resSchema: "MDMDeviceTrace", successCode: "200", perm: authz.CertsRead},
 	}
 }

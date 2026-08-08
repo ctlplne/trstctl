@@ -2639,6 +2639,9 @@ export interface MDMDevice {
   mdm: "intune" | "jamf";
   mdm_device_id: string;
   observed_at?: string;
+  renewal_at_risk?: boolean;
+  renewal_detail?: string;
+  renewal_not_after?: string;
   serial_number?: string;
   transaction_id?: string;
 }
@@ -2647,12 +2650,44 @@ export interface MDMDeviceList {
   failed: number;
   guidance: string;
   items: MDMDevice[];
+  renewal_at_risk?: number;
   unobserved: number;
 }
 
 export interface MDMDeviceTrace {
   guidance: string;
   trace: { broke_at?: string; device_id?: string; device_name?: string; mdm?: string; mdm_device_id?: string; serial_number?: string; steps: MDMTraceStep[]; summary: string; transaction_id?: string };
+}
+
+export interface MDMPollSchedule {
+  base_url?: string;
+  configured: boolean;
+  enabled: boolean;
+  execution?: "control_plane" | "relay" | "";
+  filter?: string;
+  guidance: string;
+  interval_seconds?: number;
+  last_error?: string;
+  last_run_at?: string;
+  mdm?: "intune" | "jamf";
+  renewal_window_days?: number;
+  token_ref?: string;
+}
+
+export interface MDMPollScheduleInput {
+  base_url: string;
+  enabled?: boolean;
+  execution?: "control_plane" | "relay" | "";
+  filter?: string;
+  interval_seconds: number;
+  mdm: "intune" | "jamf";
+  renewal_window_days?: number;
+  token_ref: string;
+}
+
+export interface MDMPollScheduleList {
+  guidance: string;
+  items: MDMPollSchedule[];
 }
 
 export interface MDMSCEPChallengeRotated {

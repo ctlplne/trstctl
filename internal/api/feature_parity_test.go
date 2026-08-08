@@ -122,8 +122,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// AUD-14's brand route raised it to 332, mapped onto the platform row: it is
 	// how a provider's white-label reaches a customer's screen at all.
 	// I2 conflict resolution raised it to 333: the queue was read-only until now.
-	if len(out) != 333 {
-		t.Fatalf("OpenAPI operationIds = %d, want 333", len(out))
+	// I5's two poll-schedule operations raised it to 335: the correlation
+	// surface gained its producer.
+	if len(out) != 335 {
+		t.Fatalf("OpenAPI operationIds = %d, want 335", len(out))
 	}
 	return out
 }

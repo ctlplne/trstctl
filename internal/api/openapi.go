@@ -3310,14 +3310,41 @@ func componentSchemas() map[string]*Schema {
 		// unknown is NOT failed — an MDM we could not reach tells us nothing.
 		"install_state":  {Type: "string", Enum: []string{"ok", "failed", "unknown"}},
 		"install_detail": str(), "observed_at": str(),
+		// The offline-renewal check (I5): a SCEP device renews by checking in,
+		// so a device the MDM has not seen since its certificate's renewal
+		// window opened will silently miss its renewal.
+		"renewal_not_after": str(), "renewal_at_risk": {Type: "boolean"}, "renewal_detail": str(),
 	}, "mdm", "mdm_device_id", "install_state")
 	mdmDeviceListSchema := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("MDMDevice")},
 		// failed and unobserved are separate counts: one device reported
 		// trouble, the other is one nothing has heard from, and a single
 		// "unhealthy" number would merge two different problems.
-		"failed": {Type: "integer"}, "unobserved": {Type: "integer"}, "guidance": str(),
+		"failed": {Type: "integer"}, "unobserved": {Type: "integer"},
+		// at-risk is counted apart from failed: nothing failed yet, and that
+		// is exactly the problem.
+		"renewal_at_risk": {Type: "integer"}, "guidance": str(),
 	}, "items", "failed", "unobserved", "guidance")
+	mdmPollScheduleSchema := object(map[string]*Schema{
+		"configured": {Type: "boolean"},
+		"mdm":        {Type: "string", Enum: []string{"intune", "jamf"}},
+		"base_url":   str(), "token_ref": str(), "filter": str(),
+		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
+		"execution":           {Type: "string", Enum: []string{"control_plane", "relay", ""}},
+		"renewal_window_days": {Type: "integer"},
+		"last_run_at":         str(), "last_error": str(), "guidance": str(),
+	}, "configured", "enabled", "guidance")
+	mdmPollScheduleInput := object(map[string]*Schema{
+		"mdm":      {Type: "string", Enum: []string{"intune", "jamf"}},
+		"base_url": str(), "token_ref": str(), "filter": str(),
+		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
+		"execution":           {Type: "string", Enum: []string{"control_plane", "relay", ""}},
+		"renewal_window_days": {Type: "integer"},
+	}, "mdm", "base_url", "token_ref", "interval_seconds")
+	mdmPollScheduleList := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("MDMPollSchedule")},
+		"guidance": str(),
+	}, "items", "guidance")
 	mdmTraceStepSchema := object(map[string]*Schema{
 		"stage":   {Type: "string", Enum: []string{"requested", "issued", "installed", "renewing"}},
 		"outcome": {Type: "string", Enum: []string{"ok", "failed", "pending", "unknown"}},
@@ -4525,6 +4552,9 @@ func componentSchemas() map[string]*Schema {
 		"AgentRingInput":                           agentRingInput,
 		"MDMDevice":                                mdmDeviceSchema,
 		"MDMDeviceList":                            mdmDeviceListSchema,
+		"MDMPollSchedule":                          mdmPollScheduleSchema,
+		"MDMPollScheduleInput":                     mdmPollScheduleInput,
+		"MDMPollScheduleList":                      mdmPollScheduleList,
 		"MDMTraceStep":                             mdmTraceStepSchema,
 		"MDMDeviceTrace":                           mdmDeviceTraceSchema,
 		"IssuanceRequestInput":                     issuanceRequestInput,

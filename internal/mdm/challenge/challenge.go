@@ -9,7 +9,7 @@
 // This is the integration *mechanism* Intune/JAMF SCEP connectors rely on; the deeper
 // Intune Graph / JAMF API provisioning flow (creating the device profile) is an
 // out-of-band, account-specific step and is out of scope here.
-package mdm
+package challenge
 
 import (
 	"encoding/base64"

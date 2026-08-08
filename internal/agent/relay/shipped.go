@@ -125,6 +125,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags: []string{"--relay-claim"},
 		},
 		{
+			// I5: the MDM read from inside the segment, for the on-prem Jamf
+			// the control plane cannot reach. Redeems the MDM token per
+			// attempt; reports parsed devices, never the raw response. The
+			// correlation stays in the control plane.
+			Kind:  KindMDMSync,
+			Flags: []string{"--relay-claim"},
+		},
+		{
 			// A5: this agent's own staged upgrade. It redeems nothing — the
 			// artifact URL travels in the payload and the pinned sha256 is the
 			// trust anchor — and it declares no connectors because the thing it

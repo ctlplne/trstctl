@@ -3755,6 +3755,9 @@ MDMDevice = TypedDict(
         'mdm': str,
         'mdm_device_id': str,
         'observed_at': str,
+        'renewal_at_risk': bool,
+        'renewal_detail': str,
+        'renewal_not_after': str,
         'serial_number': str,
         'transaction_id': str,
     },
@@ -3767,6 +3770,7 @@ MDMDeviceList = TypedDict(
         'failed': int,
         'guidance': str,
         'items': list[dict[str, Any]],
+        'renewal_at_risk': int,
         'unobserved': int,
     },
     total=False,
@@ -3777,6 +3781,49 @@ MDMDeviceTrace = TypedDict(
     {
         'guidance': str,
         'trace': dict[str, Any],
+    },
+    total=False,
+)
+
+MDMPollSchedule = TypedDict(
+    'MDMPollSchedule',
+    {
+        'base_url': str,
+        'configured': bool,
+        'enabled': bool,
+        'execution': str,
+        'filter': str,
+        'guidance': str,
+        'interval_seconds': int,
+        'last_error': str,
+        'last_run_at': str,
+        'mdm': str,
+        'renewal_window_days': int,
+        'token_ref': str,
+    },
+    total=False,
+)
+
+MDMPollScheduleInput = TypedDict(
+    'MDMPollScheduleInput',
+    {
+        'base_url': str,
+        'enabled': bool,
+        'execution': str,
+        'filter': str,
+        'interval_seconds': int,
+        'mdm': str,
+        'renewal_window_days': int,
+        'token_ref': str,
+    },
+    total=False,
+)
+
+MDMPollScheduleList = TypedDict(
+    'MDMPollScheduleList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
     },
     total=False,
 )

@@ -244,6 +244,9 @@ type agentService struct {
 	// recordCMDBSync turns a relay's CMDB observation into ownership
 	// reconciliation (I2), through the same core the control-plane fetch uses.
 	recordCMDBSync func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
+	// recordMDMSync turns a relay's MDM observation into device correlation
+	// (I5), through the same core the control-plane poll uses.
+	recordMDMSync func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
 	// recordADCSPosture turns a relay's AD CS observation into the Posture
 	// console's read model (epic F1).
 	recordADCSPosture func(ctx context.Context, tenantID, agent, idempotencyKey, report string)

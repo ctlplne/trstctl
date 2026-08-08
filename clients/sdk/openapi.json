@@ -10239,6 +10239,15 @@
           "observed_at": {
             "type": "string"
           },
+          "renewal_at_risk": {
+            "type": "boolean"
+          },
+          "renewal_detail": {
+            "type": "string"
+          },
+          "renewal_not_after": {
+            "type": "string"
+          },
           "serial_number": {
             "type": "string"
           },
@@ -10266,6 +10275,9 @@
               "$ref": "#/components/schemas/MDMDevice"
             },
             "type": "array"
+          },
+          "renewal_at_risk": {
+            "type": "integer"
           },
           "unobserved": {
             "type": "integer"
@@ -10326,6 +10338,123 @@
         },
         "required": [
           "trace",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "MDMPollSchedule": {
+        "properties": {
+          "base_url": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "execution": {
+            "enum": [
+              "control_plane",
+              "relay",
+              ""
+            ],
+            "type": "string"
+          },
+          "filter": {
+            "type": "string"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "last_run_at": {
+            "type": "string"
+          },
+          "mdm": {
+            "enum": [
+              "intune",
+              "jamf"
+            ],
+            "type": "string"
+          },
+          "renewal_window_days": {
+            "type": "integer"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured",
+          "enabled",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "MDMPollScheduleInput": {
+        "properties": {
+          "base_url": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "execution": {
+            "enum": [
+              "control_plane",
+              "relay",
+              ""
+            ],
+            "type": "string"
+          },
+          "filter": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "mdm": {
+            "enum": [
+              "intune",
+              "jamf"
+            ],
+            "type": "string"
+          },
+          "renewal_window_days": {
+            "type": "integer"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mdm",
+          "base_url",
+          "token_ref",
+          "interval_seconds"
+        ],
+        "type": "object"
+      },
+      "MDMPollScheduleList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MDMPollSchedule"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
           "guidance"
         ],
         "type": "object"
@@ -31723,6 +31852,119 @@
         ],
         "summary": "List MDM devices correlated to SCEP transactions, with unobserved counted apart from failed",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/mdm/poll-schedule": {
+      "get": {
+        "operationId": "listMDMPollSchedules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMPollScheduleList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "The configured MDM read schedules with their last outcome",
+        "x-trstctl-permission": "certs:read"
+      },
+      "put": {
+        "operationId": "putMDMPollSchedule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MDMPollScheduleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMPollSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Configure the per-MDM read schedule; relay execution requires a secret:// token reference",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/mdm/scep/policies": {

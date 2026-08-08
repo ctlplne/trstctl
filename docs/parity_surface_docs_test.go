@@ -18,7 +18,7 @@ func TestC11FeatureDocsReflectParitySurfaces(t *testing.T) {
 		{"../internal/protocols/est/dispatcher.go", []string{"/serverkeygen", "est-mtls", "PathID"}},
 		{"../internal/protocols/est/est.go", []string{"VerifyESTChannelBinding", "ChannelBindingRequired"}},
 		{"../internal/protocols/scep/scep.go", []string{"ChallengeValidator", "MaxEnrollmentsPerDevice"}},
-		{"../internal/mdm/intune_challenge.go", []string{"ErrIntuneChallengeReplay", "ValidateIntuneSCEPChallenge"}},
+		{"../internal/mdm/challenge/intune_challenge.go", []string{"ErrIntuneChallengeReplay", "ValidateIntuneSCEPChallenge"}},
 		{"../internal/api/api.go", []string{"/api/v1/certificates/bulk-revoke", "/api/v1/discovery/findings/{id}/claim", "/api/v1/notifications/{id}/requeue", "/api/v1/mcp/tools/{tool}"}},
 		{"../internal/crypto/revocation.go", []string{"ValidRevocationReasons", "SignDelegatedOCSPResponseWithNonce", "OCSP nonce"}},
 		{"../internal/server/revocation.go", []string{"ETag", "If-None-Match"}},

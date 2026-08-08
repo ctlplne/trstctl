@@ -1937,14 +1937,36 @@ looking for a credential that was never there.
   reported, because a correlation that showed only its successes would make an
   estate look covered by hiding the gaps; the join key is the hardware serial,
   matched case-insensitively, because device NAME would silently join two
-  laptops an admin happened to name the same. Scope, stated exactly: the
-  correlation runs in the CONTROL PLANE, not the relay, so an MDM reachable only
-  from a private segment is not yet supported; there is no scheduled poller —
-  correlations are recorded through `mdm.device.correlated` by a caller, so
-  nothing yet fetches Intune or Jamf on a timer; RENEWAL-WINDOW AWARENESS FOR
-  OFFLINE DEVICES is not built, so the `renewing` stage is present in the trace
-  vocabulary but no producer sets it; and credential JIT-resolution on the relay
-  is not built for this path, since the path does not yet run on the relay.
+  laptops an admin happened to name the same. THE SURFACE NOW HAS ITS PRODUCER:
+  `PUT/GET /api/v1/mdm/poll-schedule` (`trstctl mdm poll-schedule set|show`)
+  configures a per-tenant, per-MDM schedule and a leader-only ticker re-reads
+  Intune/Jamf on that interval, joining devices to SCEP-enrolled identities by
+  EXACT serial-to-name equality (the Intune SCEP `{{DeviceSerialNumber}}` CN
+  convention; a looser match would invent correlations). The sync's vantage is
+  the operator's choice, exactly as the CMDB's is: `control_plane` (default;
+  a PRIVATE on-prem Jamf then needs `allow_private_endpoint` plus
+  `private_egress_cidrs` and the caller holding `egress:private`), or `relay`,
+  which dispatches an `mdm.sync` job a network relay claims — token redeemed
+  per attempt (`secret://` required; `env:` refused with the custody reason),
+  the same endpoint builders, parsed in place, devices reported bounded, one
+  sync in flight per tenant with the waiting state stamped on the schedule.
+  The correlation always runs in the control plane through one shared core.
+  RENEWAL-WINDOW AWARENESS FOR OFFLINE DEVICES is served on the device list:
+  each correlated device with a certificate carries `renewal_at_risk` and a
+  detail naming the dates, computed from the identity's expiry against the
+  DEVICE'S OWN last check-in (Intune `lastSyncDateTime` / Jamf
+  `lastContactTime` — never the poll time, which would make every device look
+  fresh on every poll and defeat the check). A device inside its renewal
+  window that the MDM has not seen since the window opened is flagged: a SCEP
+  device renews by CHECKING IN, so nothing fails before the certificate
+  expires in a drawer — and the count is served apart from `failed` because
+  nothing has failed yet, which is the problem. The window is 30 days unless
+  the schedule sets `renewal_window_days`. Scope, stated exactly: no built-in
+  OAuth client-credential exchange — the token reference must resolve to a
+  bearer the MDM accepts, rotated by the operator's own pipeline; a device
+  with no certificate gets NO renewal verdict rather than a warning; and the
+  trace's `renewing` stage still has no per-step producer — the at-risk flag
+  is the list's, not the trace's.
 - AD CS coexistence, first increment (F4): the `/certsrv` transport now REFUSES
   to send a password over plaintext. Basic is base64, not encryption, and on a
   plaintext hop anyone on the path reads a credential that can issue from the

@@ -36,3 +36,14 @@ func (o *Orchestrator) CorrelateMDMDevice(ctx context.Context, tenantID string, 
 	_, err = o.emit(ctx, projections.EventMDMDeviceCorrelated, tenantID, payload)
 	return err
 }
+
+// ConfigureMDMPollSchedule records the standing instruction to re-read an MDM
+// (I5). TokenRef is a reference, never a token value.
+func (o *Orchestrator) ConfigureMDMPollSchedule(ctx context.Context, tenantID string, in projections.MDMPollConfigured) error {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventMDMPollConfigured, tenantID, payload)
+	return err
+}
