@@ -4413,6 +4413,17 @@ const esESCatalog = {
     "Mensaje de inicio de sesión",
   "source.provider.brand.save.l3prov0035":
     "Guardar marca",
+  // L3 isolation drill — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "source.provider.drill.title.l3prov0036":
+    "Aislamiento de inquilinos",
+  "source.provider.drill.intro.l3prov0037":
+    "Ejecute un simulacro bajo demanda que demuestre que un cliente no puede leer ni sobrescribir los datos de otro cliente. Solo para administradores.",
+  "source.provider.drill.run.l3prov0038":
+    "Ejecutar simulacro de aislamiento",
+  "source.provider.drill.pass.l3prov0039":
+    "El aislamiento se mantiene: todas las comprobaciones pasaron.",
+  "source.provider.drill.fail.l3prov0040":
+    "El simulacro de aislamiento FALLÓ: investigue de inmediato.",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

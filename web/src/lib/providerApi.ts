@@ -60,6 +60,18 @@ export interface ProviderBrand {
   custom_domain?: string;
 }
 
+export interface ProviderDrillCheck {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface ProviderDrillReport {
+  passed: boolean;
+  checks: ProviderDrillCheck[] | null;
+  ran_at: string;
+}
+
 /** ProviderAuthError is thrown when no operator token is present or the plane
  * refuses the credential — the console renders the login gate rather than an
  * error banner, because "not signed in" is not a failure. */
@@ -115,4 +127,6 @@ export const providerApi = {
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`, { method: "PUT", body: JSON.stringify(quota) }),
   setBrand: (id: string, brand: ProviderBrand): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/brand`, { method: "PUT", body: JSON.stringify(brand) }),
+  runIsolationDrill: (): Promise<ProviderDrillReport> =>
+    providerReq<ProviderDrillReport>("/provider/v1/isolation-drill", { method: "POST", body: JSON.stringify({}) }),
 };

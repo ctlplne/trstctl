@@ -13,6 +13,7 @@ const { providerMock } = vi.hoisted(() => ({
     getQuota: vi.fn(),
     setQuota: vi.fn(),
     setBrand: vi.fn(),
+    runIsolationDrill: vi.fn(),
   },
 }));
 
@@ -143,5 +144,23 @@ describe("provider console (L3)", () => {
     renderProvider();
     // An auth refusal is "not signed in", not an error banner: the gate returns.
     expect(await screen.findByLabelText("Operator bearer token")).toBeInTheDocument();
+  });
+
+  it("runs the isolation drill and surfaces a failing result with its checks", async () => {
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.runIsolationDrill.mockResolvedValue({
+      passed: false,
+      ran_at: "2026-06-27T12:00:00Z",
+      checks: [{ name: "cross_tenant_write_refused", passed: false, detail: "hijack accepted" }],
+    });
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Run isolation drill" }));
+    await waitFor(() => expect(providerMock.runIsolationDrill).toHaveBeenCalled());
+    // A failed drill reads as a danger result, and the failing check is shown so
+    // the operator sees what broke, not just that something did.
+    expect(await screen.findByText(/Isolation drill FAILED/)).toBeInTheDocument();
+    expect(screen.getByText(/hijack accepted/)).toBeInTheDocument();
   });
 });

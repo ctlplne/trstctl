@@ -526,8 +526,14 @@ describe("i18n boundary", () => {
       // honesty rule — an air-gapped host's silence is absence of evidence,
       // never evidence of inactivity.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "09c643aaf24ec6740c32a8f6ac8969518fcc05079f0f13065608b5ae7b27a7dc",
-      "de-DE": "ed4bb35e27df1ff08f5822ae7ae19d81d9812acb35da7a5b2dd2a17dce0c5ef8",
+      // L3 isolation-drill re-pin: five source.provider.drill.* keys add the
+      // provider console's on-demand tenant-isolation drill — its heading and
+      // admin-only description, the run action, and the pass/fail results. The
+      // fail line reads as the imperative it is ("investigate immediately")
+      // rather than a neutral status. Machine-authored es/de — FLAG FOR HUMAN
+      // TRANSLATION REVIEW.
+      "es-ES": "026f63e2a85af2c7f60a0bf0cba12072eaa706376df7c7929c9b82d58d54a08b",
+      "de-DE": "26037c5326307dde8fab6833838e33e43444f03e28f22c3945ea11aa616f52c2",
     });
   });
 

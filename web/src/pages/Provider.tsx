@@ -15,6 +15,7 @@ import {
   type ProviderTenant,
   type ProviderQuota,
   type ProviderBrand,
+  type ProviderDrillReport,
 } from "@/lib/providerApi";
 
 /**
@@ -241,6 +242,25 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   // so it opens to an empty form the operator fills — a write surface, not a
   // round-trip.
   const [brandFor, setBrandFor] = useState<string | null>(null);
+  // The last isolation-drill result, or "running" while one is in flight. The
+  // drill is deployment-wide, not per-customer, so it lives above the table.
+  const [drill, setDrill] = useState<ProviderDrillReport | "running" | null>(null);
+
+  const runDrill = useCallback(async () => {
+    setDrill("running");
+    setError(null);
+    try {
+      setDrill(await providerApi.runIsolationDrill());
+    } catch (err) {
+      if (err instanceof ProviderAuthError) {
+        clearProviderToken();
+        onSignOut();
+        return;
+      }
+      setDrill(null);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [onSignOut]);
 
   const viewQuota = useCallback(
     async (id: string) => {
@@ -359,6 +379,34 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
             {translateNow("source.provider.provision.action.l3prov0010")}
           </Button>
         </form>
+      </section>
+
+      <section className="mt-6">
+        <h2 className="text-title font-semibold">{translateNow("source.provider.drill.title.l3prov0036")}</h2>
+        <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.drill.intro.l3prov0037")}</p>
+        <div className="mt-2 flex items-center gap-3">
+          <Button type="button" variant="outline" disabled={drill === "running"} onClick={() => void runDrill()}>
+            {translateNow("source.provider.drill.run.l3prov0038")}
+          </Button>
+          {drill === "running" ? (
+            <span className="text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</span>
+          ) : drill ? (
+            <span className={`text-caption ${drill.passed ? "text-status-success" : "text-status-danger"}`}>
+              {translateNow(drill.passed ? "source.provider.drill.pass.l3prov0039" : "source.provider.drill.fail.l3prov0040")}
+            </span>
+          ) : null}
+        </div>
+        {drill && drill !== "running" && !drill.passed ? (
+          <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
+            {(drill.checks ?? [])
+              .filter((c) => !c.passed)
+              .map((c) => (
+                <li key={c.name}>
+                  <span className="font-mono">{c.name}</span>: {c.detail}
+                </li>
+              ))}
+          </ul>
+        ) : null}
       </section>
 
       <section className="mt-6">

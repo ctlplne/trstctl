@@ -5915,6 +5915,31 @@ export const messages = {
       "Save brand",
     description: "L3: brand save button.",
   },
+  "source.provider.drill.title.l3prov0036": {
+    defaultMessage:
+      "Tenant isolation",
+    description: "L3: isolation-drill section heading.",
+  },
+  "source.provider.drill.intro.l3prov0037": {
+    defaultMessage:
+      "Run an on-demand drill that proves one customer cannot read or overwrite another customer's data. Admin only.",
+    description: "L3: isolation-drill section description.",
+  },
+  "source.provider.drill.run.l3prov0038": {
+    defaultMessage:
+      "Run isolation drill",
+    description: "L3: isolation-drill run button.",
+  },
+  "source.provider.drill.pass.l3prov0039": {
+    defaultMessage:
+      "Isolation holds — every check passed.",
+    description: "L3: isolation-drill passed result.",
+  },
+  "source.provider.drill.fail.l3prov0040": {
+    defaultMessage:
+      "Isolation drill FAILED — investigate immediately.",
+    description: "L3: isolation-drill failed result.",
+  },
   "source.adcs.database.error.f4adcs0013": {
     defaultMessage:
       "Could not load the AD CS certificate-database summary.",

@@ -4426,6 +4426,17 @@ const deDECatalog = {
     "Anmeldenachricht",
   "source.provider.brand.save.l3prov0035":
     "Marke speichern",
+  // L3 isolation drill — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "source.provider.drill.title.l3prov0036":
+    "Mandantenisolierung",
+  "source.provider.drill.intro.l3prov0037":
+    "Führen Sie eine bedarfsgesteuerte Übung aus, die beweist, dass ein Kunde die Daten eines anderen Kunden weder lesen noch überschreiben kann. Nur für Administratoren.",
+  "source.provider.drill.run.l3prov0038":
+    "Isolationsübung ausführen",
+  "source.provider.drill.pass.l3prov0039":
+    "Die Isolierung hält — jede Prüfung wurde bestanden.",
+  "source.provider.drill.fail.l3prov0040":
+    "Isolationsübung FEHLGESCHLAGEN — sofort untersuchen.",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;
