@@ -4339,6 +4339,49 @@ const esESCatalog = {
     "No se pudo cargar el resumen de la base de datos de certificados de AD CS.",
   "source.adcs.never.f4adcs0014":
     "nunca",
+  // L3 provider console — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "source.provider.console.l3prov0001":
+    "Consola del proveedor",
+  "source.provider.login.intro.l3prov0002":
+    "Inicie sesión con el token de operador de su IdP de proveedor. Este plano gestiona los inquilinos de clientes, por lo que está separado de la consola de inquilino y guarda su propia credencial de operador de corta duración solo en esta pestaña.",
+  "source.provider.token.l3prov0003":
+    "Token de portador del operador",
+  "source.provider.signin.l3prov0004":
+    "Iniciar sesión",
+  "source.provider.customers.intro.l3prov0005":
+    "Sus inquilinos de clientes y su estado de ciclo de vida.",
+  "source.provider.signout.l3prov0006":
+    "Cerrar sesión",
+  "source.provider.provision.l3prov0007":
+    "Aprovisionar un cliente",
+  "source.provider.slug.l3prov0008":
+    "Identificador",
+  "source.provider.name.l3prov0009":
+    "Nombre",
+  "source.provider.provision.action.l3prov0010":
+    "Aprovisionar",
+  "source.provider.customers.l3prov0011":
+    "Clientes",
+  "source.provider.none.l3prov0012":
+    "Aún no hay inquilinos de clientes. Aprovisione uno arriba.",
+  "source.provider.col.name.l3prov0013":
+    "Cliente",
+  "source.provider.col.slug.l3prov0014":
+    "Identificador",
+  "source.provider.col.status.l3prov0015":
+    "Estado",
+  "source.provider.col.created.l3prov0016":
+    "Incorporado",
+  "source.provider.col.actions.l3prov0017":
+    "Acciones",
+  "source.provider.suspend.confirm.l3prov0018":
+    "¿Suspender a este cliente? Su inquilino deja de prestar servicio hasta que lo reactive.",
+  "source.provider.suspend.l3prov0019":
+    "Suspender",
+  "source.provider.offboard.confirm.l3prov0020":
+    "¿Dar de baja a este cliente? Esto comienza a eliminar su inquilino y no se puede deshacer.",
+  "source.provider.offboard.l3prov0021":
+    "Dar de baja",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

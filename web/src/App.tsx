@@ -46,6 +46,10 @@ const ApiExplorer = lazyPage(() => import("@/pages/ApiExplorer"), "ApiExplorer")
 const Discovery = lazyPage(() => import("@/pages/Discovery"), "Discovery");
 const Posture = lazyPage(() => import("@/pages/Posture"), "Posture");
 const CAHierarchy = lazyPage(() => import("@/pages/CAHierarchy"), "CAHierarchy");
+// L3: the provider console is a SEPARATE plane — its operator is authenticated
+// by the provider IdP (L1), not a tenant session — so it mounts outside the
+// tenant AppShell and RequireAuth, holding its own operator bearer.
+const Provider = lazyPage(() => import("@/pages/Provider"), "Provider");
 const Workloads = lazyPage(() => import("@/pages/Workloads"), "Workloads");
 const SSHTrust = lazyPage(() => import("@/pages/SSHTrust"), "SSHTrust");
 const Connectors = lazyPage(() => import("@/pages/Connectors"), "Connectors");
@@ -82,6 +86,8 @@ export function AppRoutes() {
       <ToastProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* L3: provider plane — its own auth, outside the tenant shell. */}
+          <Route path="/provider" element={<Provider />} />
           <Route
             element={
               <RequireAuth>

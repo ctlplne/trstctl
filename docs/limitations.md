@@ -2140,6 +2140,24 @@ looking for a credential that was never there.
   beyond the 10-minute grace; and the verification remains a health signal
   (running the target build, answering the control plane), not a functional
   check of the agent's work.
+- Provider console (L3, PARTIAL): the web app gains a `/provider` route — a
+  console for the provider's own staff, separate from the tenant plane. It lists
+  customer tenants with their lifecycle state and drives the `/provider/v1` API
+  the plane already served but no web client consumed: provision a customer,
+  suspend, offboard, each mutation confirmed because one click changes a whole
+  customer's world. The plane's operator is authenticated by the provider IdP
+  (L1), so the console carries an operator bearer rather than a tenant session,
+  and holds it IN MEMORY ONLY — never web storage — per the SPA's XSS posture
+  (SURFACE-I01): the token lives in the tab's JS heap, is lost on reload, and an
+  auth refusal returns the operator to the sign-in gate rather than showing an
+  error. Scope, stated exactly: this is the tenant-lifecycle console. Per-
+  customer health and usage/quota display (the `/provider/v1/tenants/{id}/quota`
+  read exists in the client but has no UI yet), applying white-label brand and
+  custom domain FROM the console, and triggering the siloed-isolation drills
+  from the provider plane are not built. The auth is a memory-held bearer the
+  operator supplies; the HttpOnly provider-session cookie flow (a proper OIDC
+  redirect + server session, so the token never enters JS) is the follow-on
+  hardening the posture calls for.
 - AD CS certificate-database lifecycle visibility (F4, PARTIAL): `POST
   /api/v1/adcs/ca-database/ingest` and `GET /api/v1/adcs/ca-database` (plus
   `trstctl adcs ca-database ingest|list` and a Posture console panel) turn

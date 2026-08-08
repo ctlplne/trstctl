@@ -5740,6 +5740,111 @@ export const messages = {
       "Attached, but no reconciliation schedule is configured — nothing is comparing authority state, so the counts below are the absence of collection rather than the absence of disagreement.",
     description: "C4: attached-but-not-collecting is indistinguishable from perfect agreement unless said out loud.",
   },
+  "source.provider.console.l3prov0001": {
+    defaultMessage:
+      "Provider console",
+    description: "L3: provider console heading.",
+  },
+  "source.provider.login.intro.l3prov0002": {
+    defaultMessage:
+      "Sign in with your provider IdP operator token. This plane manages customer tenants, so it is separate from the tenant console and holds its own short-lived operator credential in this tab only.",
+    description: "L3: provider login intro.",
+  },
+  "source.provider.token.l3prov0003": {
+    defaultMessage:
+      "Operator bearer token",
+    description: "L3: provider token field label.",
+  },
+  "source.provider.signin.l3prov0004": {
+    defaultMessage:
+      "Sign in",
+    description: "L3: provider sign-in button.",
+  },
+  "source.provider.customers.intro.l3prov0005": {
+    defaultMessage:
+      "Your customer tenants and their lifecycle state.",
+    description: "L3: provider console subtitle.",
+  },
+  "source.provider.signout.l3prov0006": {
+    defaultMessage:
+      "Sign out",
+    description: "L3: provider sign-out button.",
+  },
+  "source.provider.provision.l3prov0007": {
+    defaultMessage:
+      "Provision a customer",
+    description: "L3: provision section heading.",
+  },
+  "source.provider.slug.l3prov0008": {
+    defaultMessage:
+      "Slug",
+    description: "L3: tenant slug field.",
+  },
+  "source.provider.name.l3prov0009": {
+    defaultMessage:
+      "Name",
+    description: "L3: tenant name field.",
+  },
+  "source.provider.provision.action.l3prov0010": {
+    defaultMessage:
+      "Provision",
+    description: "L3: provision button.",
+  },
+  "source.provider.customers.l3prov0011": {
+    defaultMessage:
+      "Customers",
+    description: "L3: customer list heading.",
+  },
+  "source.provider.none.l3prov0012": {
+    defaultMessage:
+      "No customer tenants yet. Provision one above.",
+    description: "L3: empty customer list.",
+  },
+  "source.provider.col.name.l3prov0013": {
+    defaultMessage:
+      "Customer",
+    description: "L3: table column.",
+  },
+  "source.provider.col.slug.l3prov0014": {
+    defaultMessage:
+      "Slug",
+    description: "L3: table column.",
+  },
+  "source.provider.col.status.l3prov0015": {
+    defaultMessage:
+      "Status",
+    description: "L3: table column.",
+  },
+  "source.provider.col.created.l3prov0016": {
+    defaultMessage:
+      "Onboarded",
+    description: "L3: table column.",
+  },
+  "source.provider.col.actions.l3prov0017": {
+    defaultMessage:
+      "Actions",
+    description: "L3: table column.",
+  },
+  "source.provider.suspend.confirm.l3prov0018": {
+    defaultMessage:
+      "Suspend this customer? Their tenancy stops serving until you reactivate it.",
+    description: "L3: suspend confirmation.",
+  },
+  "source.provider.suspend.l3prov0019": {
+    defaultMessage:
+      "Suspend",
+    description: "L3: suspend action.",
+  },
+  "source.provider.offboard.confirm.l3prov0020": {
+    defaultMessage:
+      "Offboard this customer? This begins deleting their tenancy and cannot be undone.",
+    description: "L3: offboard confirmation.",
+  },
+  "source.provider.offboard.l3prov0021": {
+    defaultMessage:
+      "Offboard",
+    description: "L3: offboard action.",
+  },
   "source.adcs.database.error.f4adcs0013": {
     defaultMessage:
       "Could not load the AD CS certificate-database summary.",

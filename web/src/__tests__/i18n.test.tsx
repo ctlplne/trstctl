@@ -509,6 +509,11 @@ describe("i18n boundary", () => {
       // drawer, and a translation that reads as a failure alert would send
       // operators hunting for an error that does not exist.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      // L3 provider-console re-pin: twenty-one source.provider.* keys for the
+      // operator-authenticated provider console (customer list, provision, suspend,
+      // offboard). The suspend/offboard confirmations carry the safety story: one
+      // click changes a whole customer's world, so each is a confirmed action.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
       // F4 AD CS certificate-database re-pin: thirteen source.adcs.* keys for the
       // certificate-database panel. Two sentences carry the safety story: PENDING is
       // not FAILED (approval, not resubmission), and 'gaps' count rows the ingest could
@@ -521,8 +526,8 @@ describe("i18n boundary", () => {
       // honesty rule — an air-gapped host's silence is absence of evidence,
       // never evidence of inactivity.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "bf1b1800d5bde1e4eecb5309844c7296a752bbce06dbe8d2dd34507c104e7e12",
-      "de-DE": "6e2d27ccfc948f6d88f4f91686f360dc4c04a827adec68ca56dc862a2860e66e",
+      "es-ES": "3ef117d10dbdf99f16e5602e976742afcac2f346decea1c24198e2deedc29a24",
+      "de-DE": "7d97566efefb5be707001988411cf019db112ad1bb0261c89a219bf8881756df",
     });
   });
 

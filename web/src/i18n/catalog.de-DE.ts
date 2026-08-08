@@ -4352,6 +4352,49 @@ const deDECatalog = {
     "Die Zusammenfassung der AD-CS-Zertifikatdatenbank konnte nicht geladen werden.",
   "source.adcs.never.f4adcs0014":
     "nie",
+  // L3 provider console — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "source.provider.console.l3prov0001":
+    "Anbieterkonsole",
+  "source.provider.login.intro.l3prov0002":
+    "Melden Sie sich mit dem Bediener-Token Ihres Anbieter-IdP an. Diese Ebene verwaltet Kundenmandanten und ist daher von der Mandantenkonsole getrennt; sie hält ihre eigene kurzlebige Bediener-Anmeldeinformation nur in diesem Tab.",
+  "source.provider.token.l3prov0003":
+    "Bediener-Bearer-Token",
+  "source.provider.signin.l3prov0004":
+    "Anmelden",
+  "source.provider.customers.intro.l3prov0005":
+    "Ihre Kundenmandanten und ihr Lebenszyklusstatus.",
+  "source.provider.signout.l3prov0006":
+    "Abmelden",
+  "source.provider.provision.l3prov0007":
+    "Einen Kunden bereitstellen",
+  "source.provider.slug.l3prov0008":
+    "Kennung",
+  "source.provider.name.l3prov0009":
+    "Name",
+  "source.provider.provision.action.l3prov0010":
+    "Bereitstellen",
+  "source.provider.customers.l3prov0011":
+    "Kunden",
+  "source.provider.none.l3prov0012":
+    "Noch keine Kundenmandanten. Stellen Sie oben einen bereit.",
+  "source.provider.col.name.l3prov0013":
+    "Kunde",
+  "source.provider.col.slug.l3prov0014":
+    "Kennung",
+  "source.provider.col.status.l3prov0015":
+    "Status",
+  "source.provider.col.created.l3prov0016":
+    "Aufgenommen",
+  "source.provider.col.actions.l3prov0017":
+    "Aktionen",
+  "source.provider.suspend.confirm.l3prov0018":
+    "Diesen Kunden sperren? Sein Mandant stellt den Dienst ein, bis Sie ihn reaktivieren.",
+  "source.provider.suspend.l3prov0019":
+    "Sperren",
+  "source.provider.offboard.confirm.l3prov0020":
+    "Diesen Kunden abmelden? Dies beginnt mit der Löschung seines Mandanten und kann nicht rückgängig gemacht werden.",
+  "source.provider.offboard.l3prov0021":
+    "Abmelden",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;
