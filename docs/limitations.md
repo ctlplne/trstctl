@@ -2140,6 +2140,24 @@ looking for a credential that was never there.
   beyond the 10-minute grace; and the verification remains a health signal
   (running the target build, answering the control plane), not a functional
   check of the agent's work.
+- PQC readiness reports are signed and offline-verifiable (M1, PARTIAL): a
+  cohort's handshake evidence — every targeted client's outcome WITH its
+  handshake size and latency — is turned into a verdict by `Assess` and
+  exported as a readiness report signed inside the isolated signer under its
+  own `pqc-readiness-report` key, verifiable offline from the report alone. The
+  signer key refuses every other artifact kind, so being in the shared signer
+  chain grants it no authority over XREC or VDEC artifacts; the signature
+  covers the whole body, so an edited verdict cannot pass verification, and the
+  report carries the FULL evidence so a reader re-derives the verdict rather
+  than trusting the sentence. Cost travels in the signed body on purpose — a
+  cohort that negotiated but tripled handshake size is a different
+  recommendation, and a report omitting cost would recommend an outage. Scope,
+  stated exactly: this is the EXPORT and the verdict rule, not the lab. Nothing
+  yet issues parallel classical/PQ pilot hierarchies or drives a cohort's
+  probes as a wave, so the report still has no live evidence to sign unless a
+  caller supplies it; the relay records handshake cost (`HandshakeMillis`,
+  `ChainBytes`) but no wave orchestration, canary-halt execution, or PQC lab
+  console view is built. The acceptance's end-to-end pilot is not demonstrated.
 - XREC reconciliation rounds are configurable (AUD-1, C4): a `reconcile` block
   in the config file supplies the schedules the rounds worker needs. Before
   this, `roundSchedules` was declared and never assigned, so the worker —

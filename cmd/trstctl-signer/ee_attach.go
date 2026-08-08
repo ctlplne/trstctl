@@ -15,6 +15,7 @@ import (
 	vdecsigner "trstctl.com/trstctl/ee/decommission/signerwiring"
 	managedkeysigner "trstctl.com/trstctl/ee/managedkeys/signerwiring"
 	eepqc "trstctl.com/trstctl/ee/pqc"
+	eepqccompatlab "trstctl.com/trstctl/ee/pqc/compatlab"
 	xrecdigest "trstctl.com/trstctl/ee/reconcile/digest"
 	xrecplan "trstctl.com/trstctl/ee/reconcile/plan"
 	pcasdelegation "trstctl.com/trstctl/ee/succession/delegation"
@@ -118,7 +119,17 @@ func appendEEOptions(opts []signing.ServerOption, lic *license.Manager, floorDir
 		os.Exit(1)
 	}
 	opts = append(opts, signing.WithGatedDestruction(vdecRuntime))
-	opts = append(opts, signing.WithArtifactSigner(chainedArtifactSigners{xrecSigner, vdecRuntime}))
+
+	// M1: the PQC readiness-report signer. It refuses every kind but
+	// pqc-readiness-report, so adding it to the chain grants no authority over
+	// the XREC or VDEC artifacts — a readiness report is a signed
+	// recommendation about an irreversible migration and gets its own key.
+	compatlabSigner, err := eepqccompatlab.NewArtifactSigner("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: build PQC readiness signer: %v\n", err)
+		os.Exit(1)
+	}
+	opts = append(opts, signing.WithArtifactSigner(chainedArtifactSigners{xrecSigner, vdecRuntime, compatlabSigner}))
 
 	// The after-approval issuance KEY OP (AGID-INT-WIRE): the second half of the gated
 	// mint. On an APPROVED decision from the gate above, it generates the agent credential
