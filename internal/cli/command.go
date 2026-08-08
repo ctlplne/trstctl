@@ -338,6 +338,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"edge", "delegations", "show"}, Method: "GET", Path: "/api/v1/edge/delegations/{id}", Summary: "Show a delegated edge CA and its reconciled local issuances"},
 	{Name: []string{"edge", "delegations", "revoke"}, Method: "POST", Path: "/api/v1/edge/delegations/{id}/revoke", Body: bodyFile, Summary: "Revoke a delegated edge CA from the brain; OCSP and the CRL carry it"},
 	{Name: []string{"edge", "delegations", "reconcile"}, Method: "POST", Path: "/api/v1/edge/delegations/{id}/reconcile", Body: bodyFile, Summary: "Reconcile leaves an edge host issued while unreachable; violations are recorded, not hidden"},
+	{Name: []string{"adcs", "ca-database", "ingest"}, Method: "POST", Path: "/api/v1/adcs/ca-database/ingest", Body: bodyFile, Summary: "Ingest certutil rows a domain-joined relay collected from an AD CS CA database"},
+	{Name: []string{"adcs", "ca-database", "list"}, Method: "GET", Path: "/api/v1/adcs/ca-database", Summary: "Per-CA certificate-database lifecycle visibility: issued, pending approval, revoked, denied, failed"},
 	{Name: []string{"agents", "upgrade-campaign", "show"}, Method: "GET", Path: "/api/v1/agents/upgrade-campaign", Summary: "Show the rollout's state, ring assignment, and fleet version histogram"},
 	{Name: []string{"agents", "upgrade-campaign", "start"}, Method: "POST", Path: "/api/v1/agents/upgrade-campaign", Body: bodyFile, Summary: "Start a staged rollout that halts automatically when a ring fails"},
 	{Name: []string{"agents", "upgrade-campaign", "pause"}, Method: "POST", Path: "/api/v1/agents/upgrade-campaign/pause", Summary: "Pause a rollout; this gates dispatch, not just the button"},

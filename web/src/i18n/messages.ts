@@ -5740,6 +5740,68 @@ export const messages = {
       "Attached, but no reconciliation schedule is configured — nothing is comparing authority state, so the counts below are the absence of collection rather than the absence of disagreement.",
     description: "C4: attached-but-not-collecting is indistinguishable from perfect agreement unless said out loud.",
   },
+  "source.adcs.database.error.f4adcs0013": {
+    defaultMessage:
+      "Could not load the AD CS certificate-database summary.",
+    description: "F4: error state heading.",
+  },
+  "source.adcs.never.f4adcs0014": {
+    defaultMessage:
+      "never",
+    description: "F4: an ingested CA with no timestamp yet.",
+  },
+  "source.adcs.database.f4adcs0001": {
+    defaultMessage:
+      "AD CS certificate database",
+    description: "F4: panel heading — per-CA lifecycle visibility from an ingested certutil database.",
+  },
+  "source.adcs.database.intro.f4adcs0002": {
+    defaultMessage:
+      "A domain-joined relay collects certutil rows from each CA database; the control plane summarizes them by disposition. Pending is a request awaiting a CA manager's approval — distinct from failed and denied.",
+    description: "F4: panel intro — pending is not failed.",
+  },
+  "source.adcs.database.none.f4adcs0003": {
+    defaultMessage:
+      "No CA database has been ingested. A domain-joined relay runs certutil against a CA and posts the rows; until one does, there is nothing to summarize — which is not the same as a CA with no certificates.",
+    description: "F4: empty state — absence of ingestion is not an empty CA.",
+  },
+  "source.adcs.ca.f4adcs0004": {
+    defaultMessage: "CA",
+    description: "F4: table column — certsrv HOST\\CA-Name.",
+  },
+  "source.adcs.issued.f4adcs0005": {
+    defaultMessage: "Issued",
+    description: "F4: table column.",
+  },
+  "source.adcs.pending.f4adcs0006": {
+    defaultMessage: "Pending",
+    description: "F4: table column — awaiting a CA manager's approval, the actionable one.",
+  },
+  "source.adcs.revoked.f4adcs0007": {
+    defaultMessage: "Revoked",
+    description: "F4: table column.",
+  },
+  "source.adcs.denied.f4adcs0008": {
+    defaultMessage: "Denied",
+    description: "F4: table column — a CA manager refused it, distinct from pending.",
+  },
+  "source.adcs.failed.f4adcs0009": {
+    defaultMessage: "Failed",
+    description: "F4: table column — the CA could not process it.",
+  },
+  "source.adcs.gaps.f4adcs0010": {
+    defaultMessage: "Gaps",
+    description: "F4: unknown dispositions + unparsed expiries + rejected rows — visibility the ingest does not have.",
+  },
+  "source.adcs.ingested.f4adcs0011": {
+    defaultMessage: "Last ingested",
+    description: "F4: table column — when and by which relay.",
+  },
+  "source.adcs.database.note.f4adcs0012": {
+    defaultMessage:
+      "This is visibility, not control: trstctl reads the CA database, it does not approve or revoke through this surface. Gaps count rows the ingest could not fully read, so a collection problem does not read as an empty or healthy CA.",
+    description: "F4: footnote — read-only, and gaps guard against overclaiming coverage.",
+  },
   "source.edge.delegations.b6edge00001": {
     defaultMessage:
       "Delegated edge CAs (air-gap)",

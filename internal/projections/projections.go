@@ -62,6 +62,8 @@ const (
 	EventEdgeDelegationIssued   = "edge.delegation.issued"
 	EventEdgeDelegationRevoked  = "edge.delegation.revoked"
 	EventEdgeIssuanceReconciled = "edge.issuance.reconciled"
+	// F4: one sweep of an AD CS certificate database, summarized by disposition.
+	EventADCSDatabaseIngested = "adcs.ca_database.ingested"
 )
 
 // edgeIssuanceCertNamespace derives stable inventory row ids for reconciled
@@ -383,6 +385,27 @@ type TicketIntakeConfigured struct {
 	Enabled            bool     `json:"enabled"`
 	AllowPrivate       bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateCIDRs       []string `json:"private_egress_cidrs,omitempty"`
+}
+
+// ADCSDatabaseIngested is the payload of adcs.ca_database.ingested (F4): the
+// per-disposition summary of one CA-database sweep. The counts are the whole
+// point — a single "certificates found" number would hide that half are
+// pending approval, which is the one thing an operator ingesting the database
+// needs to see.
+type ADCSDatabaseIngested struct {
+	CAConfig     string `json:"ca_config"`
+	Issued       int    `json:"issued"`
+	Pending      int    `json:"pending"`
+	Revoked      int    `json:"revoked"`
+	Denied       int    `json:"denied"`
+	Failed       int    `json:"failed"`
+	Unknown      int    `json:"unknown"`
+	Unparsed     int    `json:"unparsed"`
+	Total        int    `json:"total"`
+	RowsRead     int    `json:"rows_read"`
+	RowsRejected int    `json:"rows_rejected"`
+	Source       string `json:"source,omitempty"`
+	LastError    string `json:"last_error,omitempty"`
 }
 
 // EdgeSegmentPolicySet is the payload of edge.segment.policy_set (B6).
@@ -2010,6 +2033,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventEdgeDelegationIssued:                     {1: true},
 	EventEdgeDelegationRevoked:                    {1: true},
 	EventEdgeIssuanceReconciled:                   {1: true},
+	EventADCSDatabaseIngested:                     {1: true},
 	EventOwnershipConflictResolved:                {1: true},
 	EventAgentUpgradeCampaignOpened:               {1: true},
 	EventAgentUpgradeCampaignAdvanced:             {1: true},
@@ -2283,6 +2307,19 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
 		})
+	case EventADCSDatabaseIngested:
+		var pl ADCSDatabaseIngested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyADCSDatabaseIngestedTx(ctx, tx, store.ADCSDatabaseSummary{
+			TenantID: e.TenantID, CAConfig: pl.CAConfig,
+			Issued: pl.Issued, Pending: pl.Pending, Revoked: pl.Revoked,
+			Denied: pl.Denied, Failed: pl.Failed, Unknown: pl.Unknown,
+			Unparsed: pl.Unparsed, Total: pl.Total,
+			RowsRead: pl.RowsRead, RowsRejected: pl.RowsRejected,
+			Source: pl.Source, LastError: pl.LastError, IngestedAt: e.Time,
+		}, e.Sequence)
 	case EventEdgeSegmentPolicySet:
 		var pl EdgeSegmentPolicySet
 		if err := decode(e, &pl); err != nil {

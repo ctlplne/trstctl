@@ -274,6 +274,8 @@
                 "getDiscoveryCoverage",
                 "getDiscoveryMonitoring",
                 "getDiscoveryRun",
+                "ingestADCSDatabase",
+                "listADCSDatabases",
                 "listCertificates",
                 "listDiscoveryFindings",
                 "listDiscoveryRuns",
@@ -295,7 +297,9 @@
                 "discovery findings list",
                 "certificates list",
                 "discovery findings claim",
-                "discovery findings dismiss"
+                "discovery findings dismiss",
+                "adcs ca-database ingest",
+                "adcs ca-database list"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -306,7 +310,8 @@
                         "GET /api/v1/discovery/monitoring rolls tenant sources, enabled schedules, last runs, findings, and certificate inventory counts into the served CAP-DISC-06 continuous monitoring repository view.",
                         "service_account discovery sources require AD/on-prem plus cloud service-account observations and record metadata-only CAP-NHI-03 findings.",
                         "served_state=served",
-                        "backend_status=served network source/run/finding control plane with outbox-executed TLS scan, certificate recording, continuous monitoring rollup, and CAP-NHI-03 service-account findings"
+                        "backend_status=served network source/run/finding control plane with outbox-executed TLS scan, certificate recording, continuous monitoring rollup, and CAP-NHI-03 service-account findings",
+                        "F4: /api/v1/adcs/ca-database ingests certutil rows a domain-joined relay collected from a CA database and serves the per-CA disposition breakdown (issued, pending approval, revoked, denied, failed, unknown, unparsed) — lifecycle visibility issuance alone cannot show, with pending kept distinct from failed and unparsable rows counted as rejected rather than dropped."
                     ],
                     "refs": [
                         "internal/api/discovery.go",

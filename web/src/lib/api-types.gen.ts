@@ -182,6 +182,35 @@ export interface ACMEUpstreamAuthorizationList {
   never_validated_count: number;
 }
 
+export interface ADCSDatabaseIngest {
+  ca_config: string;
+  last_error?: string;
+  rows: Record<string, unknown>[];
+  source?: string;
+}
+
+export interface ADCSDatabaseList {
+  guidance: string;
+  items: ADCSDatabaseSummary[];
+}
+
+export interface ADCSDatabaseSummary {
+  ca_config: string;
+  denied: number;
+  failed: number;
+  ingested_at?: string;
+  issued: number;
+  last_error?: string;
+  pending: number;
+  revoked: number;
+  rows_read: number;
+  rows_rejected: number;
+  source?: string;
+  total: number;
+  unknown: number;
+  unparsed: number;
+}
+
 export interface ADCSFindingEvidence {
   attribute: string;
   observed: string;

@@ -3412,6 +3412,23 @@ func componentSchemas() map[string]*Schema {
 		"items":    {Type: "array", Items: ref("EdgeDelegation")},
 		"guidance": str(),
 	}, "items", "guidance")
+	adcsDatabaseSummarySchema := object(map[string]*Schema{
+		"ca_config": str(),
+		"issued":    {Type: "integer"}, "pending": {Type: "integer"}, "revoked": {Type: "integer"},
+		"denied": {Type: "integer"}, "failed": {Type: "integer"}, "unknown": {Type: "integer"},
+		"unparsed": {Type: "integer"}, "total": {Type: "integer"},
+		"rows_read": {Type: "integer"}, "rows_rejected": {Type: "integer"},
+		"source": str(), "last_error": str(), "ingested_at": str(),
+	}, "ca_config", "issued", "pending", "revoked", "denied", "failed", "unknown", "unparsed", "total", "rows_read", "rows_rejected")
+	adcsDatabaseIngestSchema := object(map[string]*Schema{
+		"ca_config": str(),
+		"rows":      {Type: "array", Items: &Schema{Type: "object", AdditionalProperties: str()}},
+		"source":    str(), "last_error": str(),
+	}, "ca_config", "rows")
+	adcsDatabaseListSchema := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("ADCSDatabaseSummary")},
+		"guidance": str(),
+	}, "items", "guidance")
 	ticketIntakeSchema := object(map[string]*Schema{
 		"configured":   {Type: "boolean"},
 		"system":       {Type: "string", Enum: []string{"servicenow"}},
@@ -4646,6 +4663,9 @@ func componentSchemas() map[string]*Schema {
 		"MDMPollSchedule":                          mdmPollScheduleSchema,
 		"MDMPollScheduleInput":                     mdmPollScheduleInput,
 		"MDMPollScheduleList":                      mdmPollScheduleList,
+		"ADCSDatabaseSummary":                      adcsDatabaseSummarySchema,
+		"ADCSDatabaseIngest":                       adcsDatabaseIngestSchema,
+		"ADCSDatabaseList":                         adcsDatabaseListSchema,
 		"TicketIntakeSchedule":                     ticketIntakeSchema,
 		"TicketIntakeInput":                        ticketIntakeInput,
 		"EdgeSegmentPolicy":                        edgeSegmentPolicySchema,

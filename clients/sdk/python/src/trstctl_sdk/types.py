@@ -244,6 +244,47 @@ ACMEUpstreamAuthorizationList = TypedDict(
     total=False,
 )
 
+ADCSDatabaseIngest = TypedDict(
+    'ADCSDatabaseIngest',
+    {
+        'ca_config': str,
+        'last_error': str,
+        'rows': list[dict[str, Any]],
+        'source': str,
+    },
+    total=False,
+)
+
+ADCSDatabaseList = TypedDict(
+    'ADCSDatabaseList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ADCSDatabaseSummary = TypedDict(
+    'ADCSDatabaseSummary',
+    {
+        'ca_config': str,
+        'denied': int,
+        'failed': int,
+        'ingested_at': str,
+        'issued': int,
+        'last_error': str,
+        'pending': int,
+        'revoked': int,
+        'rows_read': int,
+        'rows_rejected': int,
+        'source': str,
+        'total': int,
+        'unknown': int,
+        'unparsed': int,
+    },
+    total=False,
+)
+
 ADCSFindingEvidence = TypedDict(
     'ADCSFindingEvidence',
     {

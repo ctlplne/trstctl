@@ -686,6 +686,111 @@
         ],
         "type": "object"
       },
+      "ADCSDatabaseIngest": {
+        "properties": {
+          "ca_config": {
+            "type": "string"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ca_config",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "ADCSDatabaseList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSDatabaseSummary"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "ADCSDatabaseSummary": {
+        "properties": {
+          "ca_config": {
+            "type": "string"
+          },
+          "denied": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "ingested_at": {
+            "type": "string"
+          },
+          "issued": {
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "pending": {
+            "type": "integer"
+          },
+          "revoked": {
+            "type": "integer"
+          },
+          "rows_read": {
+            "type": "integer"
+          },
+          "rows_rejected": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "unknown": {
+            "type": "integer"
+          },
+          "unparsed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ca_config",
+          "issued",
+          "pending",
+          "revoked",
+          "denied",
+          "failed",
+          "unknown",
+          "unparsed",
+          "total",
+          "rows_read",
+          "rows_rejected"
+        ],
+        "type": "object"
+      },
       "ADCSFindingEvidence": {
         "properties": {
           "attribute": {
@@ -23166,6 +23271,121 @@
         ],
         "summary": "Re-enable an operator-disabled ACME external account binding credential",
         "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/adcs/ca-database": {
+      "get": {
+        "operationId": "listADCSDatabases",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSDatabaseList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Per-CA certificate-database lifecycle visibility: issued, pending approval, revoked, denied, failed",
+        "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/adcs/ca-database/ingest": {
+      "post": {
+        "operationId": "ingestADCSDatabase",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADCSDatabaseIngest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSDatabaseSummary"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Ingest certutil rows a domain-joined relay collected from a CA database; summarize by disposition",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/agents": {

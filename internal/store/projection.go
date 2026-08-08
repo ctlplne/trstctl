@@ -550,7 +550,9 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	"agent_upgrade_campaigns", "agent_upgrade_dispatches",
 	// B6: projected from edge.segment.policy_set / edge.delegation.* /
 	// edge.issuance.reconciled.
-	"edge_segment_policies", "edge_delegations", "edge_issuances"}
+	"edge_segment_policies", "edge_delegations", "edge_issuances",
+	// F4: projected from adcs.ca_database.ingested.
+	"adcs_ca_databases"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

@@ -509,6 +509,11 @@ describe("i18n boundary", () => {
       // drawer, and a translation that reads as a failure alert would send
       // operators hunting for an error that does not exist.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      // F4 AD CS certificate-database re-pin: thirteen source.adcs.* keys for the
+      // certificate-database panel. Two sentences carry the safety story: PENDING is
+      // not FAILED (approval, not resubmission), and 'gaps' count rows the ingest could
+      // not fully read so a collection problem never reads as an empty or healthy CA.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
       // B6 edge-delegation re-pin: fifteen source.edge.* keys for the
       // delegated edge sub-CA panel. Two sentences carry the safety story and
       // must survive review intact in every locale: default-OFF as the healthy
@@ -516,8 +521,8 @@ describe("i18n boundary", () => {
       // honesty rule — an air-gapped host's silence is absence of evidence,
       // never evidence of inactivity.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "8bf161d32323390f25858657e67eb5fb598739de2543c6c545a783ac730c0f76",
-      "de-DE": "93a3195500d932caf26705c5f5225adb721c1edeeaac2030e67cf40927a8d7aa",
+      "es-ES": "bf1b1800d5bde1e4eecb5309844c7296a752bbce06dbe8d2dd34507c104e7e12",
+      "de-DE": "6e2d27ccfc948f6d88f4f91686f360dc4c04a827adec68ca56dc862a2860e66e",
     });
   });
 

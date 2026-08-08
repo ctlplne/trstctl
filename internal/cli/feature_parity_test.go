@@ -169,8 +169,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// I3's two `issuance-requests intake-schedule` commands raised it to 348.
 	// B6's seven `edge` commands raised it to 355, on the private-CA row: the
 	// delegated edge sub-CA is that CA's one bounded exception, not a product.
-	if len(out) != 355 {
-		t.Fatalf("CLI commands = %d, want 355", len(out))
+	// F4's two `adcs ca-database` commands raised it to 357, on the discovery
+	// row: ingesting an AD CS CA database is lifecycle visibility, not issuance.
+	if len(out) != 357 {
+		t.Fatalf("CLI commands = %d, want 357", len(out))
 	}
 	return out
 }

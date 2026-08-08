@@ -92,6 +92,8 @@ var TenantScopedTables = []string{
 	"edge_issuances",
 	"edge_delegations",
 	"edge_segment_policies",
+	// F4: the AD CS certificate-database summary, a per-CA projection.
+	"adcs_ca_databases",
 	"owners",
 	"issuers",
 	"deployment_target_revisions",

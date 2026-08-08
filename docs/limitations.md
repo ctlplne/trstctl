@@ -2140,6 +2140,29 @@ looking for a credential that was never there.
   beyond the 10-minute grace; and the verification remains a health signal
   (running the target build, answering the control plane), not a functional
   check of the agent's work.
+- AD CS certificate-database lifecycle visibility (F4, PARTIAL): `POST
+  /api/v1/adcs/ca-database/ingest` and `GET /api/v1/adcs/ca-database` (plus
+  `trstctl adcs ca-database ingest|list` and a Posture console panel) turn
+  certutil rows a domain-joined relay collected into a per-CA breakdown by
+  disposition — issued, PENDING a CA manager's approval, revoked, denied,
+  failed. Pending is kept distinct from failed and denied throughout, because
+  the fix for a pending request is approval, not resubmission; an unrecognised
+  disposition code is `unknown`, never folded into failed; an issued row whose
+  expiry could not be read is counted `unparsed`; and a row carrying no request
+  id is counted `rejected`, never dropped — so a collection problem cannot read
+  as an empty or healthy CA. This wires `adcs.ParseDBRow` and `adcs.Summarize`,
+  which existed with NO production caller — parsing that nothing ran and a
+  summary nobody saw. It is deliberately VISIBILITY, not control: trstctl reads
+  the CA database, it does not approve or revoke through this surface. Scope,
+  stated exactly: the control-plane ingestion, projection, serving and console
+  are built and proven end-to-end (a relay posts rows, the per-CA summary reads
+  back, a re-sweep replaces rather than accumulates); the relay-side COLLECTION
+  is not — the CA database is read by `certutil` on the domain-joined Windows
+  relay, which this repository does not yet drive, so the rows arrive over the
+  ingest endpoint but nothing yet runs certutil to produce them. The rest of F4
+  — in-domain Kerberos/NTLM authentication (an `Authenticator` interface, not a
+  Kerberos implementation) and fronting AD CS templates with trstctl ACME/EST —
+  remains unbuilt.
 - PQC readiness reports are signed and offline-verifiable (M1, PARTIAL): a
   cohort's handshake evidence — every targeted client's outcome WITH its
   handshake size and latency — is turned into a verdict by `Assess` and

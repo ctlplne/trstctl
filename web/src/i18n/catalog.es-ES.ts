@@ -4310,6 +4310,35 @@ const esESCatalog = {
     "Clave atestada",
   "source.edge.reconcile.note.b6edge00015":
     "Las emisiones realizadas mientras un host está inalcanzable solo se hacen visibles cuando su diario se reconcilia; una delegación sin ninguna listada puede seguir emitiendo. Las hojas reconciliadas fuera de las restricciones de la delegación se registran como violaciones, de forma visible.",
+  // F4 AD CS certificate-database panel — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "source.adcs.database.f4adcs0001":
+    "Base de datos de certificados de AD CS",
+  "source.adcs.database.intro.f4adcs0002":
+    "Un relé unido al dominio recopila filas de certutil de cada base de datos de CA; el plano de control las resume por disposición. Pendiente es una solicitud a la espera de la aprobación de un administrador de CA, distinta de fallida y denegada.",
+  "source.adcs.database.none.f4adcs0003":
+    "No se ha ingerido ninguna base de datos de CA. Un relé unido al dominio ejecuta certutil contra una CA y publica las filas; hasta que alguno lo haga, no hay nada que resumir, lo cual no es lo mismo que una CA sin certificados.",
+  "source.adcs.ca.f4adcs0004":
+    "CA",
+  "source.adcs.issued.f4adcs0005":
+    "Emitidos",
+  "source.adcs.pending.f4adcs0006":
+    "Pendientes",
+  "source.adcs.revoked.f4adcs0007":
+    "Revocados",
+  "source.adcs.denied.f4adcs0008":
+    "Denegados",
+  "source.adcs.failed.f4adcs0009":
+    "Fallidos",
+  "source.adcs.gaps.f4adcs0010":
+    "Lagunas",
+  "source.adcs.ingested.f4adcs0011":
+    "Última ingesta",
+  "source.adcs.database.note.f4adcs0012":
+    "Esto es visibilidad, no control: trstctl lee la base de datos de la CA, no aprueba ni revoca a través de esta superficie. Las lagunas cuentan las filas que la ingesta no pudo leer por completo, para que un problema de recopilación no se interprete como una CA vacía o sana.",
+  "source.adcs.database.error.f4adcs0013":
+    "No se pudo cargar el resumen de la base de datos de certificados de AD CS.",
+  "source.adcs.never.f4adcs0014":
+    "nunca",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

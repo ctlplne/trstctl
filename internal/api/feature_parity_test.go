@@ -129,7 +129,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// B6's seven edge-delegation operations raised it to 344: the constrained
 	// edge sub-CA became a served surface — opt-in, attested mint, revocation,
 	// and reconciliation of what the no-path host issued.
-	if len(out) != 344 {
+	// F4's two AD CS certificate-database operations raised it to 346: ingesting
+	// certutil rows a domain-joined relay collected, and serving the per-CA
+	// lifecycle breakdown issuance alone cannot show.
+	if len(out) != 346 {
 		t.Fatalf("OpenAPI operationIds = %d, want 344", len(out))
 	}
 	return out

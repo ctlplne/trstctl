@@ -4323,6 +4323,35 @@ const deDECatalog = {
     "Attestierter Schlüssel",
   "source.edge.reconcile.note.b6edge00015":
     "Ausstellungen, die erfolgen, während ein Host unerreichbar ist, werden erst sichtbar, wenn sein Journal abgeglichen wird; eine Delegation ohne Einträge kann weiterhin ausstellen. Abgeglichene Blattzertifikate außerhalb der Beschränkungen der Delegation werden sichtbar als Verstöße erfasst.",
+  // F4 AD CS certificate-database panel — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "source.adcs.database.f4adcs0001":
+    "AD-CS-Zertifikatdatenbank",
+  "source.adcs.database.intro.f4adcs0002":
+    "Ein domänengebundenes Relais sammelt certutil-Zeilen aus jeder CA-Datenbank; die Steuerungsebene fasst sie nach Disposition zusammen. Ausstehend ist eine Anfrage, die auf die Genehmigung eines CA-Managers wartet — verschieden von fehlgeschlagen und verweigert.",
+  "source.adcs.database.none.f4adcs0003":
+    "Es wurde keine CA-Datenbank aufgenommen. Ein domänengebundenes Relais führt certutil gegen eine CA aus und übermittelt die Zeilen; bis das geschieht, gibt es nichts zusammenzufassen — was nicht dasselbe ist wie eine CA ohne Zertifikate.",
+  "source.adcs.ca.f4adcs0004":
+    "CA",
+  "source.adcs.issued.f4adcs0005":
+    "Ausgestellt",
+  "source.adcs.pending.f4adcs0006":
+    "Ausstehend",
+  "source.adcs.revoked.f4adcs0007":
+    "Widerrufen",
+  "source.adcs.denied.f4adcs0008":
+    "Verweigert",
+  "source.adcs.failed.f4adcs0009":
+    "Fehlgeschlagen",
+  "source.adcs.gaps.f4adcs0010":
+    "Lücken",
+  "source.adcs.ingested.f4adcs0011":
+    "Zuletzt aufgenommen",
+  "source.adcs.database.note.f4adcs0012":
+    "Dies ist Sichtbarkeit, keine Steuerung: trstctl liest die CA-Datenbank, genehmigt oder widerruft nicht über diese Oberfläche. Lücken zählen Zeilen, die die Aufnahme nicht vollständig lesen konnte, damit ein Sammelproblem nicht als leere oder gesunde CA erscheint.",
+  "source.adcs.database.error.f4adcs0013":
+    "Die Zusammenfassung der AD-CS-Zertifikatdatenbank konnte nicht geladen werden.",
+  "source.adcs.never.f4adcs0014":
+    "nie",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

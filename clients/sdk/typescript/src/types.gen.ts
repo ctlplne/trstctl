@@ -419,6 +419,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/adcs/ca-database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per-CA certificate-database lifecycle visibility: issued, pending approval, revoked, denied, failed */
+        get: operations["listADCSDatabases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/adcs/ca-database/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest certutil rows a domain-joined relay collected from a CA database; summarize by disposition */
+        post: operations["ingestADCSDatabase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -5160,6 +5194,34 @@ export interface components {
             guidance: string;
             items: components["schemas"]["ACMEUpstreamAuthorization"][];
             never_validated_count: number;
+        };
+        ADCSDatabaseIngest: {
+            ca_config: string;
+            last_error?: string;
+            rows: {
+                [key: string]: string;
+            }[];
+            source?: string;
+        };
+        ADCSDatabaseList: {
+            guidance: string;
+            items: components["schemas"]["ADCSDatabaseSummary"][];
+        };
+        ADCSDatabaseSummary: {
+            ca_config: string;
+            denied: number;
+            failed: number;
+            ingested_at?: string;
+            issued: number;
+            last_error?: string;
+            pending: number;
+            revoked: number;
+            rows_read: number;
+            rows_rejected: number;
+            source?: string;
+            total: number;
+            unknown: number;
+            unparsed: number;
         };
         ADCSFindingEvidence: {
             attribute: string;
@@ -11910,6 +11972,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ACMEEABCredential"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listADCSDatabases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSDatabaseList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    ingestADCSDatabase: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ADCSDatabaseIngest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSDatabaseSummary"];
                 };
             };
             /** @description client error */

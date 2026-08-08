@@ -57,7 +57,7 @@ import (
 // the covered offset skipped their history. The class is now closed by
 // TestEveryTruncatedReadModelTableIsRestoredBySnapshots rather than by
 // remembering to update two lists.
-const SnapshotFormatVersion = 16
+const SnapshotFormatVersion = 17
 
 // snapshotTables are the read-model tables captured in a per-tenant snapshot, in
 // dependency order (parents before children) so a restore's inserts never trip a
@@ -90,7 +90,9 @@ var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme
 	// Format 15: the I3 ticket intake, same pairing.
 	"ticket_intake_schedules",
 	// Format 16: the B6 edge sub-CA read models, same pairing.
-	"edge_segment_policies", "edge_delegations", "edge_issuances"}
+	"edge_segment_policies", "edge_delegations", "edge_issuances",
+	// Format 17: the F4 AD CS certificate-database summary, same pairing.
+	"adcs_ca_databases"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -201,7 +203,8 @@ SELECT jsonb_build_object(
   'ticket_intake_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ticket_intake_schedules t),
   'edge_segment_policies', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM edge_segment_policies t),
   'edge_delegations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM edge_delegations t),
-  'edge_issuances', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM edge_issuances t)
+  'edge_issuances', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM edge_issuances t),
+  'adcs_ca_databases', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_databases t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL).Scan(&payload); err != nil {
