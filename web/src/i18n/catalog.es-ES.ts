@@ -4213,6 +4213,14 @@ const esESCatalog = {
   "platform.usageEvidence.noLines": "Sin uso medido en este periodo.",
   "platform.usageEvidence.digest": "Resumen criptogr\u00e1fico",
   "platform.usageEvidence.coverage": "La medici\u00f3n cubre",
+  "platform.usageEvidence.reconciled": "{meter}: coincide con el historial de eventos ({events} registrados).",
+  "platform.usageEvidence.diverged":
+    "{meter}: el contador indica {metered}, el historial de eventos indica {events} \u2014 este per\u00edodo no se firmar\u00e1 hasta que ambos coincidan.",
+  "platform.usageEvidence.unchecked": "{meter}: sin fuente de eventos independiente; el valor medido queda por s\u00ed solo.",
+  "platform.usageEvidence.signed":
+    "Firmado con la clave de exportaci\u00f3n de auditor\u00eda de esta instalaci\u00f3n ({keyId}). Verifique el JWS del documento JSON con su clave p\u00fablica.",
+  "platform.usageEvidence.unsigned":
+    "Sin firma: este documento no es evidencia facturable. El motivo de arriba indica qu\u00e9 ingrediente falta.",
   "platform.tenantSeal.heading": "Custodia criptográfica del tenant",
   "platform.tenantSeal.description":
     "Mueva este tenant detrás de su propia envoltura controlada por el operador y haga que sus datos protegidos no se puedan descifrar sin detener los tenants vecinos.",

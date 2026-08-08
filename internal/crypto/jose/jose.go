@@ -250,6 +250,10 @@ func GenerateRSASigningKey(kid string) (*SigningKey, error) {
 // Sign produces a compact JWS over payload (RS256).
 func (k *SigningKey) Sign(payload []byte) (string, error) { return SignRS256(k.key, k.kid, payload) }
 
+// KeyID reports the kid this key signs as, so a caller embedding the kid in a
+// signature envelope cannot drift from the kid inside the JWS header.
+func (k *SigningKey) KeyID() string { return k.kid }
+
 // MarshalPrivateKey returns the signing key as a PKCS#8 PEM document so a caller
 // can persist it (so a key — for example the audit export key — survives a
 // restart instead of rotating each boot). The kid is not part of the PEM; the

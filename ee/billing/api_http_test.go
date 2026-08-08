@@ -52,7 +52,7 @@ func (s *stubReader) CoverageFor(_ context.Context, tenantID string) (billing.Co
 // builder underneath it.
 func serveEvidenceRequest(t *testing.T, reader billing.EvidenceReader, callerTenant, query string) *httptest.ResponseRecorder {
 	t.Helper()
-	routes := billing.Routes(reader)
+	routes := billing.Routes(billing.EvidenceDeps{Reader: reader})
 	if len(routes) != 1 {
 		t.Fatalf("expected exactly one evidence route, got %d", len(routes))
 	}

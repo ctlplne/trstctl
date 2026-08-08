@@ -158,11 +158,72 @@ func (p *PGStore) Query(ctx context.Context, from, to time.Time, tenantID string
 	return out, err
 }
 
-// QuotaFor and SetQuota are not durable yet. They return the zero quota rather
-// than pretending: a quota this store cannot persist must not read as an
-// enforced limit.
-func (p *PGStore) QuotaFor(context.Context, string) (Quota, error) { return Quota{}, nil }
-func (p *PGStore) SetQuota(context.Context, Quota) error           { return nil }
+// QuotaFor reads the tenant's durable quota. No row means no limits — the
+// zero quota, in which every LimitFor returns nil and creation is unbounded,
+// which is the correct default for a customer nobody has capped.
+func (p *PGStore) QuotaFor(ctx context.Context, tenantID string) (Quota, error) {
+	out := Quota{TenantID: tenantID}
+	if p == nil || p.store == nil || tenantID == "" {
+		return out, nil
+	}
+	err := p.tx(ctx, tenantID, func(tx pgx.Tx) error {
+		scanErr := tx.QueryRow(ctx,
+			`SELECT max_agents, max_tenants, max_certificates_stored, max_secrets_stored, coalesce(updated_by, '')
+			   FROM provider_tenant_quotas WHERE tenant_id = $1`, tenantID).
+			Scan(&out.MaxAgents, &out.MaxTenants, &out.MaxCertificatesStored, &out.MaxSecretsStored, &out.UpdatedBy)
+		if scanErr != nil && scanErr.Error() == pgx.ErrNoRows.Error() {
+			return nil
+		}
+		return scanErr
+	})
+	return out, err
+}
+
+// SetQuota persists the tenant's limits, replacing any prior row. NULL columns
+// are honest: an unset limit is the ABSENCE of a cap, never a cap of zero.
+func (p *PGStore) SetQuota(ctx context.Context, q Quota) error {
+	if p == nil || p.store == nil || q.TenantID == "" {
+		return nil
+	}
+	return p.tx(ctx, q.TenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO provider_tenant_quotas
+			   (tenant_id, max_agents, max_tenants, max_certificates_stored, max_secrets_stored, updated_by, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, nullif($6, ''), now())
+			 ON CONFLICT (tenant_id) DO UPDATE SET
+			   max_agents = EXCLUDED.max_agents,
+			   max_tenants = EXCLUDED.max_tenants,
+			   max_certificates_stored = EXCLUDED.max_certificates_stored,
+			   max_secrets_stored = EXCLUDED.max_secrets_stored,
+			   updated_by = EXCLUDED.updated_by,
+			   updated_at = now()`,
+			q.TenantID, q.MaxAgents, q.MaxTenants, q.MaxCertificatesStored, q.MaxSecretsStored, q.UpdatedBy)
+		return err
+	})
+}
+
+// IssuedInPeriod recounts the period's issuances from the identity_transitions
+// projection of the event log — the independent record ReconcileEvidence
+// checks the meter against. ok is always true here: a durable deployment
+// always has the projection, and an empty count is a real zero, not an absent
+// source.
+func (p *PGStore) IssuedInPeriod(ctx context.Context, tenantID string, from, to time.Time) (int64, bool, error) {
+	if p == nil || p.store == nil || tenantID == "" {
+		return 0, false, nil
+	}
+	var n int64
+	err := p.tx(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT count(*) FROM identity_transitions
+			  WHERE tenant_id = $1 AND to_state = 'issued'
+			    AND occurred_at >= $2 AND occurred_at < $3`,
+			tenantID, from, to).Scan(&n)
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	return n, true, nil
+}
 
 // tx runs against the SYSTEM pool, not a tenant context. These meters are the
 // provider plane's record of what to bill a customer; a tenant must not be able

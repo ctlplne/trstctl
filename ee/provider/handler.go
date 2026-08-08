@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/ee/billing"
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/license"
 )
@@ -36,6 +37,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.updateTenant(w, r, TenantSuspended, "/suspend")
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/offboard"):
 		h.updateTenant(w, r, TenantOffboarded, "/offboard")
+	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/quota"):
+		h.setQuota(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/quota"):
+		h.getQuota(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/breakglass":
 		h.requestBreakGlass(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/breakglass/") && strings.HasSuffix(r.URL.Path, "/consent"):
@@ -101,6 +106,41 @@ func (h *handler) updateTenant(w http.ResponseWriter, r *http.Request, status Te
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handler) setQuota(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/quota")
+	var q billing.Quota
+	if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	if err := h.svc.SetTenantQuota(r.Context(), op, customerID, q); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *handler) getQuota(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/quota")
+	q, err := h.svc.GetTenantQuota(r.Context(), op, customerID)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(q)
 }
 
 func (h *handler) requestBreakGlass(w http.ResponseWriter, r *http.Request) {

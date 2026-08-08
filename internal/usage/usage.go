@@ -9,6 +9,7 @@ package usage
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
 
@@ -87,6 +88,12 @@ type Recorder interface {
 type QuotaChecker interface {
 	AllowCreate(ctx context.Context, tenantID, resource string) error
 }
+
+// ErrQuotaExhausted is the sentinel a checker's refusal matches via errors.Is.
+// It lives HERE, in core, so the serving handlers can classify the refusal
+// (429, structured problem) without importing the licensed checker that raised
+// it — the editions boundary cuts exactly between those two packages.
+var ErrQuotaExhausted = errors.New("usage: quota exhausted")
 
 type nopRecorder struct{}
 

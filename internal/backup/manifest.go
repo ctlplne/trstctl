@@ -104,6 +104,12 @@ var RecoveredFromPostgresBackup = []string{
 	// and the coverage row is what would have told them the figure was short.
 	"provider_usage_meters",
 	"provider_usage_coverage",
+	// L2: durable per-customer quotas. RecoveredFromPostgresBackup — a limit is
+	// a provider's decision written through the provider plane, no event
+	// replays it, and losing it fails OPEN: the customer's caps silently
+	// vanish and creation is unbounded again, which is the pre-durability
+	// defect reintroduced by a restore.
+	"provider_tenant_quotas",
 	// L1: provider operator delegations. RecoveredFromPostgresBackup, NOT a log
 	// projection — a grant is written directly by `trstctl provider-grant`, so
 	// there is no event to replay and a rebuild cannot reconstruct it.

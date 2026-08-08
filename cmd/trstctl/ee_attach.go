@@ -14,6 +14,8 @@ import (
 	"io/fs"
 	"log/slog"
 
+	"trstctl.com/trstctl/internal/audit"
+
 	_ "trstctl.com/trstctl/ee"
 	eeagentapi "trstctl.com/trstctl/ee/agentid/api"
 	eeagentdelegation "trstctl.com/trstctl/ee/agentid/delegation"
@@ -320,6 +322,11 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 			License:     lic,
 			Audit:       eeprovider.NewEventLogAuditSink(deps.Log),
 			Delegations: delegations,
+			// L2: quota administration writes through the same durable store
+			// the checker reads, behind the per-customer delegation gate. Nil
+			// would refuse every quota write — correct, but only for a
+			// deployment with no Postgres, which this branch has.
+			Quotas: eebilling.NewPGStore(deps.Store),
 		})
 		if log != nil {
 			// Says what an operator will actually observe. "Attached" alone
@@ -343,7 +350,11 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		// SILENTLY, so a provider invoiced from a figure that was quietly short.
 		// The durable path records what it observed, which is what lets invoice
 		// evidence be signed at all.
-		billingInst := eebilling.InstallDurable(ctx, log, nil, deps.Store)
+		// The counter makes quotas REAL: it answers "how many does this tenant
+		// have right now", which is what a stored-resource cap compares
+		// against. It was nil before, so AllowCreate compared every tenant
+		// against a permanent zero and no cap could ever bind.
+		billingInst := eebilling.InstallDurable(ctx, log, eebilling.StoreTenantCounter(deps.Store), deps.Store)
 		// L2: the served evidence route. Without this the document builder and
 		// the durable meters exist and no provider can ever pull an invoice —
 		// the defect class this backlog keeps finding.
@@ -354,11 +365,30 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		// it unmounted would answer 404 and read as "no such feature" on a
 		// deployment that is metering.
 		var evidenceReader eebilling.EvidenceReader = billingInst.Store
+		var reconciler eebilling.EvidenceReconciler
 		if billingInst.PG != nil {
 			evidenceReader = billingInst.PG
+			// The reconciler recounts the period from identity_transitions —
+			// the event log's projection — so the document can say the meter
+			// and the log agree before anything is signed.
+			reconciler = billingInst.PG
+		}
+		// The evidence signature uses the SAME audit-export key as every other
+		// auditor-facing export (J1, the doctor receipt), so a finance team
+		// verifies invoices and audit bundles against one public key.
+		var evidenceSigner eebilling.EvidenceSigner
+		if auditKey, keyErr := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export"); keyErr != nil {
+			if log != nil {
+				log.Warn("invoice evidence will be served UNSIGNABLE: the audit signing key could not be loaded",
+					slog.String("error", keyErr.Error()))
+			}
+		} else {
+			evidenceSigner = &eebilling.AuditKeySigner{Key: auditKey}
 		}
 		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory,
-			eebilling.NewAPIOptionsFactory(evidenceReader))
+			eebilling.NewAPIOptionsFactory(eebilling.EvidenceDeps{
+				Reader: evidenceReader, Reconciler: reconciler, Signer: evidenceSigner,
+			}))
 		if log != nil {
 			log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
 		}

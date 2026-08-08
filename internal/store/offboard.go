@@ -156,6 +156,7 @@ var TenantScopedTables = []string{
 	// but it is about this tenant and must leave when they do.
 	"provider_usage_meters",
 	"provider_usage_coverage",
+	"provider_tenant_quotas",
 	"tenants",
 }
 

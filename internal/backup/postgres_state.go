@@ -491,6 +491,12 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// invoiced anyway.
 		"provider_usage_meters",
 		"provider_usage_coverage",
+		// L2: per-customer quotas. No foreign keys; restored with the other
+		// provider billing state. Losing this table fails OPEN (an uncapped
+		// customer creates freely), so its restore must be as visible as the
+		// meters': an obviously absent cap gets re-set, a silently absent one
+		// gets discovered when the customer sails past it.
+		"provider_tenant_quotas",
 		// L1: provider operator delegations. No foreign keys either, and it
 		// restores after the meters for the same reason they restore last: this
 		// is authority data, and a half-restored grant table is worse than an

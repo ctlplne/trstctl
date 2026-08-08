@@ -4225,6 +4225,14 @@ const deDECatalog = {
   "platform.usageEvidence.noLines": "Keine gemessene Nutzung in diesem Zeitraum.",
   "platform.usageEvidence.digest": "Pr\u00fcfsumme",
   "platform.usageEvidence.coverage": "Messung deckt ab",
+  "platform.usageEvidence.reconciled": "{meter}: stimmt mit der Ereignishistorie überein ({events} verzeichnet).",
+  "platform.usageEvidence.diverged":
+    "{meter}: Zähler meldet {metered}, Ereignishistorie meldet {events} — dieser Zeitraum wird erst signiert, wenn beide übereinstimmen.",
+  "platform.usageEvidence.unchecked": "{meter}: keine unabhängige Ereignisquelle; der gemessene Wert steht für sich allein.",
+  "platform.usageEvidence.signed":
+    "Signiert mit dem Audit-Export-Schlüssel dieser Installation ({keyId}). Prüfen Sie das JWS im JSON-Dokument gegen dessen öffentlichen Schlüssel.",
+  "platform.usageEvidence.unsigned":
+    "Keine Signatur: Dieses Dokument ist kein abrechenbarer Nachweis. Der Grund oben nennt den fehlenden Bestandteil.",
   "platform.tenantSeal.heading": "Kryptografische Mandantenverwahrung",
   "platform.tenantSeal.description":
     "Verschieben Sie diesen Mandanten hinter einen eigenen, vom Betreiber kontrollierten Wrapper und machen Sie seine geschützten Daten kryptografisch unzugänglich, ohne benachbarte Mandanten anzuhalten.",

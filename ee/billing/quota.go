@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"trstctl.com/trstctl/internal/usage"
 )
 
 const CodeQuotaExhausted = "quota_exhausted"
@@ -29,7 +31,10 @@ func (e *QuotaError) Error() string {
 }
 
 func (e *QuotaError) Is(target error) bool {
-	return target == ErrQuotaExhausted
+	// Matches BOTH sentinels: this package's own, and core's usage sentinel —
+	// the handlers that turn a refusal into a 429 live in core and cannot
+	// import this package (AN-9), so the classification contract is core's.
+	return target == ErrQuotaExhausted || target == usage.ErrQuotaExhausted
 }
 
 type QuotaChecker struct {

@@ -689,6 +689,26 @@ export const messages = {
   "platform.usageEvidence.noLines": { defaultMessage: "No metered usage in this period.", description: "L2 evidence empty state." },
   "platform.usageEvidence.digest": { defaultMessage: "Digest", description: "L2 evidence digest label." },
   "platform.usageEvidence.coverage": { defaultMessage: "Metering covers", description: "L2 evidence coverage window label." },
+  "platform.usageEvidence.reconciled": {
+    defaultMessage: "{meter}: matches the event history ({events} recorded).",
+    description: "L2: the meter and the event log agree for this period — the check that lets the document be signed.",
+  },
+  "platform.usageEvidence.diverged": {
+    defaultMessage: "{meter}: meter says {metered}, event history says {events} — this period will not be signed until the two agree.",
+    description: "L2: the meter and the log disagree; the divergence is named with both numbers so an operator can chase it.",
+  },
+  "platform.usageEvidence.unchecked": {
+    defaultMessage: "{meter}: no independent event source; the metered value stands alone.",
+    description: "L2: some meters have nothing to cross-check against, and saying so beats implying every number was verified.",
+  },
+  "platform.usageEvidence.signed": {
+    defaultMessage: "Signed by the deployment's audit-export key ({keyId}). Verify the JWS in the JSON document against its public key.",
+    description: "L2: the document carries a detached signature — the attestation an invoice needs.",
+  },
+  "platform.usageEvidence.unsigned": {
+    defaultMessage: "No signature: this document is not billable evidence. The reason above says which ingredient is missing.",
+    description: "L2: an unsigned document must not read as attested; absence of the signature is itself information.",
+  },
   "platform.tenantSeal.heading": { defaultMessage: "Tenant cryptographic custody", description: "Tenant key-domain lifecycle panel heading." },
   "platform.tenantSeal.description": {
     defaultMessage:

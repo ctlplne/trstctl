@@ -55,7 +55,11 @@ type Config struct {
 	// operator is and answers nothing about which customers they may touch, and
 	// a plane that cannot express the partition hands every operator the union
 	// of every customer's risk.
-	Delegations      DelegationSource
+	Delegations DelegationSource
+	// Quotas is the durable per-customer limit store (L2). NIL MEANS QUOTA
+	// ADMINISTRATION REFUSES: accepting a cap that cannot survive a restart
+	// would tell a provider their customer is limited when nothing is.
+	Quotas           QuotaStore
 	Telemetry        TelemetryReader
 	Clock            func() time.Time
 	MaxBreakGlassTTL time.Duration
@@ -112,6 +116,7 @@ type Service struct {
 	authenticator    OperatorAuthenticator
 	delegations      DelegationSource
 	telemetry        TelemetryReader
+	quotas           QuotaStore
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
 }
@@ -149,7 +154,7 @@ func NewService(cfg Config) *Service {
 	// default answer to "which customers may this operator touch", and the only
 	// safe default answer is none.
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
-		delegations: cfg.Delegations, telemetry: telemetry, clock: clock, maxBreakGlassTTL: maxTTL}
+		delegations: cfg.Delegations, telemetry: telemetry, quotas: cfg.Quotas, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRequest) (Tenant, error) {

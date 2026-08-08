@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/ee/billing"
 )
 
 // Delegation ENFORCEMENT on the served provider plane (epic L1).
@@ -390,4 +392,109 @@ func TestTheDelegationCheckRunsBeforeTheStoreIsAsked(t *testing.T) {
 			"\"you are not delegated this customer\" and \"direct reads are never served\" need "+
 			"different people to fix them", err)
 	}
+}
+
+// Quota administration behind the same gate (epic L2).
+//
+// A cap is a provisioning-class act on a customer, so it obeys the delegation
+// partition exactly as provision/suspend do: an operator holding alpha must
+// not set — or even read — beta's caps.
+func TestQuotaAdministrationObeysTheDelegationPartition(t *testing.T) {
+	t.Parallel()
+	quotas := &memQuotaStore{}
+	h, _ := twoCustomerHandlerWithQuotas(t, fullyDelegated("op-1", "tenant-alpha"), quotas)
+
+	// The delegated customer: set then read back.
+	rec := providerRequest(t, h, http.MethodPut, "/provider/v1/tenants/tenant-alpha/quota",
+		`{"max_certificates_stored": 25}`)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("set quota on the delegated customer = %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := quotas.byTenant["tenant-alpha"]; got == nil || *got.MaxCertificatesStored != 25 {
+		t.Fatalf("the cap never reached the store: %+v", quotas.byTenant)
+	}
+	if quotas.byTenant["tenant-alpha"].TenantID != "tenant-alpha" {
+		t.Fatal("the stored row's tenant did not come from the authorized path")
+	}
+	rec = providerRequest(t, h, http.MethodGet, "/provider/v1/tenants/tenant-alpha/quota", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("read quota = %d", rec.Code)
+	}
+
+	// The OTHER customer: both verbs refused, and the store untouched.
+	rec = providerRequest(t, h, http.MethodPut, "/provider/v1/tenants/tenant-beta/quota",
+		`{"max_certificates_stored": 1}`)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("set quota on an undelegated customer = %d, want 403.\n\n"+
+			"A cap is a denial-of-service lever: an operator who can set another customer's "+
+			"certificate limit to 1 can stop their issuance cold with a valid credential.", rec.Code)
+	}
+	if _, ok := quotas.byTenant["tenant-beta"]; ok {
+		t.Fatal("the refused write reached the store anyway")
+	}
+	if rec := providerRequest(t, h, http.MethodGet, "/provider/v1/tenants/tenant-beta/quota", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("read of an undelegated customer's quota = %d, want 403 — a cap discloses "+
+			"commercial terms", rec.Code)
+	}
+
+	// A body naming another tenant must not redirect the write: the PATH the
+	// operator was authorized against wins.
+	rec = providerRequest(t, h, http.MethodPut, "/provider/v1/tenants/tenant-alpha/quota",
+		`{"tenant_id": "tenant-beta", "max_agents": 1}`)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("set with body tenant_id = %d", rec.Code)
+	}
+	if _, ok := quotas.byTenant["tenant-beta"]; ok {
+		t.Fatal("a body tenant_id redirected an authorized write onto an unauthorized customer.\n\n" +
+			"That turns an authorization on one tenancy into a write on another — the same shape " +
+			"as the evidence route's customer_id refusal, one plane up.")
+	}
+}
+
+// memQuotaStore records what the plane wrote, keyed by tenant.
+type memQuotaStore struct {
+	byTenant map[string]*billing.Quota
+}
+
+func (m *memQuotaStore) QuotaFor(_ context.Context, tenantID string) (billing.Quota, error) {
+	if m.byTenant == nil {
+		return billing.Quota{TenantID: tenantID}, nil
+	}
+	if q, ok := m.byTenant[tenantID]; ok {
+		return *q, nil
+	}
+	return billing.Quota{TenantID: tenantID}, nil
+}
+
+func (m *memQuotaStore) SetQuota(_ context.Context, q billing.Quota) error {
+	if m.byTenant == nil {
+		m.byTenant = map[string]*billing.Quota{}
+	}
+	copied := q
+	m.byTenant[q.TenantID] = &copied
+	return nil
+}
+
+func twoCustomerHandlerWithQuotas(t *testing.T, delegations DelegationSource, quotas QuotaStore) (http.Handler, *MemStore) {
+	t.Helper()
+	store := NewMemStore()
+	now := fixedClock()()
+	for _, id := range []string{"tenant-alpha", "tenant-beta"} {
+		if _, err := store.CreateTenant(context.Background(), Tenant{
+			ID: id, Slug: strings.TrimPrefix(id, "tenant-"), Name: id,
+			Status: TenantActive, CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("seed %s: %v", id, err)
+		}
+	}
+	h := NewHandler(Config{
+		License:       providerLicense(t, 10),
+		Store:         store,
+		Audit:         &captureAudit{},
+		Clock:         fixedClock(),
+		Authenticator: stubAuth{accept: "Bearer real-credential"},
+		Delegations:   delegations,
+		Quotas:        quotas,
+	})
+	return h, store
 }

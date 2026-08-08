@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 // ---- DTOs -----------------------------------------------------------------
@@ -484,6 +485,20 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := validateSubjectCSRPEM(csrPEM); err != nil {
 				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+			}
+		}
+		// L2: the quota gate, consulted BEFORE the transition is accepted so an
+		// over-cap tenant gets a structured 429 here rather than an opaque
+		// outbox failure later. Community builds install an allow-all checker,
+		// so this costs nothing where no cap can exist; a Provider deployment
+		// with a cap set refuses fast (AN-7's reject-at-the-edge, applied to
+		// capacity).
+		if state == orchestrator.StateIssued {
+			if err := usage.AllowCreate(ctx, tenantID, usage.MeterCertificatesStored); err != nil {
+				if errors.Is(err, usage.ErrQuotaExhausted) {
+					return 0, nil, errStatus(http.StatusTooManyRequests, err.Error())
+				}
+				return 0, nil, err
 			}
 		}
 		terr := a.orch.TransitionWithSubjectCSR(ctx, tenantID, id, state, req.Reason, idempotencyKey, csrPEM)

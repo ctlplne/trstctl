@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -111,46 +110,58 @@ func TestRecorderIsLosslessAndSnapshotsStayTenantScoped(t *testing.T) {
 	}
 }
 
-func TestExportRoundTripsDeterministically(t *testing.T) {
-	records := []UsageRecord{
-		{TenantID: "tenant-a", TenantSlug: "acme", Meter: usage.MeterCertificatesIssued, Kind: KindCounter, PeriodStart: billingT0.Truncate(time.Hour), PeriodEnd: billingT0.Truncate(time.Hour).Add(time.Hour), Value: 7, Unit: "count"},
-		{TenantID: "tenant-b", TenantSlug: "globex", Meter: usage.MeterAgents, Kind: KindGauge, PeriodStart: billingT0.Truncate(time.Hour), PeriodEnd: billingT0.Truncate(time.Hour).Add(time.Hour), Value: 3, Unit: "count"},
+func TestEvidenceCSVCarriesTheVerdictOnEveryRow(t *testing.T) {
+	doc := EvidenceDocument{
+		CustomerID: "tenant-a", PeriodStart: "2026-07-01T00:00:00Z", PeriodEnd: "2026-08-01T00:00:00Z",
+		Signable: false,
+		Reason:   "the period has a hole in it",
+		Lines: []EvidenceLine{
+			{Meter: usage.MeterCertificatesIssued, Kind: KindCounter, Value: 7},
+			{Meter: usage.MeterAgents, Kind: KindGauge, Value: 3},
+		},
+		Reconciliation: []ReconciliationLine{
+			{Meter: usage.MeterCertificatesIssued, Metered: 7, EventHistory: 7, Checked: true, Matches: true},
+		},
+		Digest: "abc123",
 	}
-
-	var csvBuf bytes.Buffer
-	if err := WriteCSV(&csvBuf, records); err != nil {
+	var buf bytes.Buffer
+	if err := WriteEvidenceCSV(&buf, doc); err != nil {
 		t.Fatal(err)
 	}
-	wantCSV := strings.Join([]string{
-		"tenant_id,tenant_slug,meter,kind,period_start,period_end,value,unit",
-		"tenant-a,acme,certificates_issued,counter,2026-06-27T14:00:00Z,2026-06-27T15:00:00Z,7,count",
-		"tenant-b,globex,agents,gauge,2026-06-27T14:00:00Z,2026-06-27T15:00:00Z,3,count",
-		"",
-	}, "\n")
-	if csvBuf.String() != wantCSV {
-		t.Fatalf("CSV export drifted:\n got %q\nwant %q", csvBuf.String(), wantCSV)
-	}
-	parsed, err := csv.NewReader(strings.NewReader(csvBuf.String())).ReadAll()
+	rows, err := csv.NewReader(strings.NewReader(buf.String())).ReadAll()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(parsed) != 3 || parsed[1][0] != "tenant-a" || parsed[2][2] != usage.MeterAgents {
-		t.Fatalf("CSV did not round-trip: %+v", parsed)
+	if len(rows) != 3 {
+		t.Fatalf("rows = %d, want header + 2 lines: %q", len(rows), buf.String())
+	}
+	for i, row := range rows[1:] {
+		if row[3] != "false" || row[4] != "the period has a hole in it" {
+			t.Fatalf("row %d lost the verdict: %v.\n\nA CSV gets sliced in a spreadsheet and pasted "+
+				"without its context; the verdict must survive on EVERY row or the first sort "+
+				"detaches the warning from the numbers", i, row)
+		}
+		if row[10] != "abc123" {
+			t.Fatalf("row %d lost the digest that ties it to the attested document: %v", i, row)
+		}
+	}
+	if rows[1][8] != "true" || rows[1][9] != "7" {
+		t.Fatalf("the reconciled line does not carry its cross-check: %v", rows[1])
+	}
+	if rows[2][8] != "" {
+		t.Fatalf("an unreconciled meter claims a check that never ran: %v", rows[2])
 	}
 
-	var jsonl bytes.Buffer
-	if err := WriteJSONL(&jsonl, records); err != nil {
+	// A period with no usage still exports its verdict.
+	var empty bytes.Buffer
+	if err := WriteEvidenceCSV(&empty, EvidenceDocument{
+		CustomerID: "tenant-a", PeriodStart: "2026-07-01T00:00:00Z", PeriodEnd: "2026-08-01T00:00:00Z",
+		Signable: true, Reason: "ok", Digest: "d"}); err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSpace(jsonl.String()), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("jsonl line count = %d; body=%q", len(lines), jsonl.String())
-	}
-	var second UsageRecord
-	if err := json.Unmarshal([]byte(lines[1]), &second); err != nil {
-		t.Fatal(err)
-	}
-	if second.TenantID != "tenant-b" || second.Meter != usage.MeterAgents || second.Value != 3 {
-		t.Fatalf("JSONL did not round-trip: %+v", second)
+	emptyRows, err := csv.NewReader(strings.NewReader(empty.String())).ReadAll()
+	if err != nil || len(emptyRows) != 2 {
+		t.Fatalf("an empty period exported %d rows (%v); the verdict must arrive even when no "+
+			"numbers do", len(emptyRows), err)
 	}
 }

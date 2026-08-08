@@ -416,6 +416,21 @@ export interface UsageEvidenceLine {
   value: number;
   unit?: string;
 }
+export interface UsageEvidenceReconciliation {
+  meter?: string;
+  metered?: number;
+  event_history?: number;
+  /** An independent source existed and was consulted; false means "nothing to check against", not "checked and failed". */
+  checked?: boolean;
+  matches?: boolean;
+  source?: string;
+  note?: string;
+}
+export interface UsageEvidenceSignature {
+  alg?: string;
+  key_id?: string;
+  jws?: string;
+}
 export interface UsageEvidence {
   customer_id: string;
   period_start: string;
@@ -427,7 +442,11 @@ export interface UsageEvidence {
   reason: string;
   observed_from?: string;
   observed_to?: string;
+  /** Per-meter cross-check against the event history; part of what the signature attests. */
+  reconciliation?: UsageEvidenceReconciliation[];
   digest: string;
+  /** Detached JWS over the canonical bytes. Present ONLY when signable; its absence is itself information. */
+  signature?: UsageEvidenceSignature;
   guidance?: string;
 }
 

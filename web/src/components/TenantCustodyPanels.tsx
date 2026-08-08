@@ -528,6 +528,31 @@ export function UsageEvidencePanel() {
           ) : (
             <p className="text-caption text-muted-foreground">{t("platform.usageEvidence.noLines")}</p>
           )}
+          {doc.reconciliation && doc.reconciliation.length > 0 && (
+            <ul className="grid gap-1">
+              {doc.reconciliation.map((r) => (
+                <li key={r.meter ?? ""} className="text-caption text-muted-foreground">
+                  {r.checked
+                    ? r.matches
+                      ? t("platform.usageEvidence.reconciled", {
+                          meter: r.meter ?? "",
+                          events: String(r.event_history ?? 0),
+                        })
+                      : t("platform.usageEvidence.diverged", {
+                          meter: r.meter ?? "",
+                          metered: String(r.metered ?? 0),
+                          events: String(r.event_history ?? 0),
+                        })
+                    : t("platform.usageEvidence.unchecked", { meter: r.meter ?? "" })}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-caption text-muted-foreground">
+            {doc.signature?.jws
+              ? t("platform.usageEvidence.signed", { keyId: doc.signature.key_id ?? "" })
+              : t("platform.usageEvidence.unsigned")}
+          </p>
           <p className="text-caption text-muted-foreground">
             {t("platform.usageEvidence.digest")}: <code className="font-mono">{doc.digest}</code>
           </p>

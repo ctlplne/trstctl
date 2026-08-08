@@ -27,8 +27,18 @@ type EvidenceReader interface {
 	CoverageFor(ctx context.Context, tenantID string) (Coverage, error)
 }
 
+// EvidenceDeps is everything the served evidence route consults. Reconciler
+// and Signer may be nil — the document then says, in its reason, exactly which
+// attestation ingredient is missing, rather than serving numbers that imply a
+// check or a signature that never happened.
+type EvidenceDeps struct {
+	Reader     EvidenceReader
+	Reconciler EvidenceReconciler
+	Signer     EvidenceSigner
+}
+
 // Routes is the served evidence surface.
-func Routes(reader EvidenceReader) []api.LicensedRoute {
+func Routes(deps EvidenceDeps) []api.LicensedRoute {
 	return []api.LicensedRoute{
 		{
 			Method:      http.MethodGet,
@@ -36,7 +46,7 @@ func Routes(reader EvidenceReader) []api.LicensedRoute {
 			OperationID: "getUsageEvidence",
 			Summary:     "Per-customer usage as invoice evidence; the document states whether it may be signed",
 			Handler: func(a *api.API) http.HandlerFunc {
-				return func(w http.ResponseWriter, r *http.Request) { serveEvidence(a, w, r, reader) }
+				return func(w http.ResponseWriter, r *http.Request) { serveEvidence(a, w, r, deps) }
 			},
 			ResponseSchema: "UsageEvidence",
 			SuccessCode:    "200",
@@ -49,10 +59,10 @@ func Routes(reader EvidenceReader) []api.LicensedRoute {
 }
 
 // NewAPIOptionsFactory mounts the evidence route behind the Enterprise seam.
-func NewAPIOptionsFactory(reader EvidenceReader) editionseam.LicensedAPIOptionsFactory {
+func NewAPIOptionsFactory(deps EvidenceDeps) editionseam.LicensedAPIOptionsFactory {
 	return func(editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
 		return []api.Option{
-			api.WithLicensedRoutes(Routes(reader)...),
+			api.WithLicensedRoutes(Routes(deps)...),
 			api.WithLicensedSchemas(evidenceSchemas()),
 		}, nil
 	}
@@ -76,8 +86,16 @@ func evidenceSchemas() map[string]*api.Schema {
 				"reason":        {Type: "string"},
 				"observed_from": {Type: "string"},
 				"observed_to":   {Type: "string"},
-				"digest":        {Type: "string"},
-				"guidance":      {Type: "string"},
+				"reconciliation": {Type: "array", Items: &api.Schema{Type: "object", Properties: map[string]*api.Schema{
+					"meter": {Type: "string"}, "metered": {Type: "integer"},
+					"event_history": {Type: "integer"}, "checked": {Type: "boolean"},
+					"matches": {Type: "boolean"}, "source": {Type: "string"}, "note": {Type: "string"},
+				}}},
+				"digest": {Type: "string"},
+				"signature": {Type: "object", Properties: map[string]*api.Schema{
+					"alg": {Type: "string"}, "key_id": {Type: "string"}, "jws": {Type: "string"},
+				}},
+				"guidance": {Type: "string"},
 			},
 			Required: []string{"customer_id", "period_start", "period_end", "signable", "reason", "digest"},
 		},
@@ -90,7 +108,8 @@ func evidenceSchemas() map[string]*api.Schema {
 // NOT an error. An error would tell a finance team "the system is broken" when
 // the truth is "your usage is incomplete and here is exactly how" — and the
 // second is actionable while the first gets escalated to engineering.
-func serveEvidence(a *api.API, w http.ResponseWriter, r *http.Request, reader EvidenceReader) {
+func serveEvidence(a *api.API, w http.ResponseWriter, r *http.Request, deps EvidenceDeps) {
+	reader := deps.Reader
 	// The customer is the CALLER'S TENANT, never a name in the query string.
 	//
 	// An evidence document is a full record of one tenant's activity, so a
@@ -151,8 +170,23 @@ func serveEvidence(a *api.API, w http.ResponseWriter, r *http.Request, reader Ev
 		writeEvidenceError(w, http.StatusInternalServerError, "could not read usage")
 		return
 	}
-	doc := BuildEvidence(EvidencePeriod{CustomerID: customer, Start: start, End: end},
-		coverage, records, time.Now().UTC())
+	doc, err := BuildSignedEvidence(ctx, EvidencePeriod{CustomerID: customer, Start: start, End: end},
+		coverage, records, deps.Reconciler, deps.Signer, time.Now().UTC())
+	if err != nil {
+		writeEvidenceError(w, http.StatusInternalServerError, "could not assemble the evidence document")
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(q.Get("format")), "csv") {
+		// The CSV is the document's TABLE, verdict on every row; the JSON
+		// document remains the attestation (the JWS does not ride a
+		// spreadsheet). The digest column ties each row back to it.
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition",
+			`attachment; filename="usage-evidence-`+customer+`-`+start.UTC().Format("20060102")+`-`+end.UTC().Format("20060102")+`.csv"`)
+		w.WriteHeader(http.StatusOK)
+		_ = WriteEvidenceCSV(w, doc)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(doc)

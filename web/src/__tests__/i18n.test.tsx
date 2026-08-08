@@ -492,8 +492,14 @@ describe("i18n boundary", () => {
       // rollout that hangs, and an operator would "fix" it by pushing builds
       // around the rings the campaign exists to run.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "46cf8c7574a374461eb9bbbf5d52b3e34fa54544d6e0493d21b1c234574e32e4",
-      "de-DE": "fb88ebcff456f64f086435f616d9226689b78022d84ff496fac1ea6975999933",
+      // L2 attestation re-pin: five platform.usageEvidence.* keys for the
+      // reconciliation lines and the signature state. The two that carry
+      // weight are `diverged` (both numbers named, so an operator can chase
+      // the gap) and `unsigned` (an unsigned document must not read as
+      // attested — the absence is itself information).
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "83a919bcf78adc8fb82fad60fced09364c2df17440efba619d30f2594a9fb65b",
+      "de-DE": "81f10b1a8ec66cd5acc1ca9e8b516f03cb1b612b32b68e8de13db8034527d3f9",
     });
   });
 

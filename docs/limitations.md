@@ -914,6 +914,36 @@ never live in the API process. What you can do end to end against the running bi
   exports successfully and says in the payload that it is unanchored; that is a
   weaker claim, not an invalid one, and the export states which it is. Translog
   inclusion proofs (`ee/translog`) are not wired into this path.
+- Signed invoice evidence (L2): `GET /api/v1/provider/usage-evidence` (`trstctl
+  usage evidence`, Platform console panel) serves a per-customer, per-period
+  document that states its own completeness and carries THREE attestation
+  layers, each of which can refuse: coverage (the durable metering store must
+  vouch for the whole closed period), reconciliation (the certificates_issued
+  meter is recounted from the identity_transitions projection of the event log,
+  and a divergence names BOTH numbers and blocks signing — a counter that
+  disagrees with the log must not be invoiced from), and the detached RS256
+  signature over the canonical bytes, made with the SAME audit-export key every
+  other auditor-facing export uses. An unsignable document still returns 200
+  with its reason — "your usage is incomplete and here is how" is actionable
+  where an error is not — and NEVER carries a signature; the absence is the
+  point. `?format=csv` exports the table with the verdict and digest on EVERY
+  ROW, because a spreadsheet slice detaches headers, and the JWS stays in the
+  JSON document where a verifier can use it. Per-customer quotas are durable
+  (`provider_tenant_quotas`), administered only through the provider plane
+  behind the per-customer delegation gate (`PUT/GET
+  /provider/v1/tenants/{id}/quota`), counted against the live read model, and
+  ENFORCED at the served issuance transition with a structured 429 before the
+  orchestrator accepts anything. Scope, stated exactly: only
+  certificates_issued has an independent event source today — other meters say
+  in the document that the metered value stands alone; only the
+  certificates_stored cap is enforced at a served create path (agents, tenants
+  and secrets caps are stored and reported but no create site consults them
+  yet); cross-customer evidence pulls still require the provider delegation
+  route that does not exist (the route serves the caller's own tenancy and
+  refuses a foreign customer_id); and reconciliation compares against the
+  transitions projection, so a rebuild-in-progress can transiently refuse to
+  sign — the refusal names the numbers, which is the correct behaviour while
+  the projection catches up.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served
