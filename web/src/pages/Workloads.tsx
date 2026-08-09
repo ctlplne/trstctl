@@ -445,7 +445,7 @@ export function Workloads() {
             <div>
               <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.signerNames")}</h3>
               <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(csrSupport?.signer_names ?? ["trstctl.com/trstctl"]).map((name) => (
+                {(csrSupport?.signer_names ?? []).map((name) => (
                   <li key={name} className="font-mono text-xs">
                     {name}
                   </li>
@@ -455,7 +455,7 @@ export function Workloads() {
             <div>
               <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.controllerControls")}</h3>
               <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(csrSupport?.architecture_controls ?? ["only approved CertificateSigningRequests are signed"]).slice(0, 4).map((control) => (
+                {(csrSupport?.architecture_controls ?? []).slice(0, 4).map((control) => (
                   <li key={control}>{control}</li>
                 ))}
               </ul>
@@ -515,7 +515,7 @@ export function Workloads() {
             <div>
               <h3 className="text-sm font-semibold">{t("workloads.trustBundles.targets")}</h3>
               <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(trustBundleSupport?.distribution_targets ?? ["ConfigMap ca-bundle.pem per target namespace"]).map((target) => (
+                {(trustBundleSupport?.distribution_targets ?? []).map((target) => (
                   <li key={target}>{target}</li>
                 ))}
               </ul>
@@ -523,7 +523,7 @@ export function Workloads() {
             <div>
               <h3 className="text-sm font-semibold">{t("workloads.trustBundles.controllerControls")}</h3>
               <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(trustBundleSupport?.architecture_controls ?? ["only public PEM CERTIFICATE blocks are accepted"]).slice(0, 4).map((control) => (
+                {(trustBundleSupport?.architecture_controls ?? []).slice(0, 4).map((control) => (
                   <li key={control}>{control}</li>
                 ))}
               </ul>

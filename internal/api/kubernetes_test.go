@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -121,5 +122,78 @@ func TestKubernetesPostureRoutesRequireAndUseExplicitProductionReaders(t *testin
 	}
 	if len(trust.calls) != 1 || !strings.HasSuffix(trust.calls[0], "/"+store.KubernetesPostureTrustBundles) {
 		t.Fatalf("TrustBundle reader calls=%v", trust.calls)
+	}
+}
+
+// TestKubernetesNarrativeFieldsArePopulatedAndDerived is the AUD-8 regression:
+// the six narrative arrays were hardcoded empty literals with no code path that
+// could populate them, so the console rendered "zero distribution targets, zero
+// architecture controls" as posture. The static sets must describe the shipped
+// controller (non-empty), and recommended_next_actions must DERIVE from the
+// posture rows: non-empty for a degraded estate, empty for a healthy one.
+func TestKubernetesNarrativeFieldsArePopulatedAndDerived(t *testing.T) {
+	now := time.Now().UTC()
+	healthy := store.KubernetesControllerPosture{
+		ControllerID: "11111111-1111-1111-1111-111111111111", ClusterID: "sha256:" + strings.Repeat("a", 64),
+		ReportID: "33333333-3333-3333-3333-333333333333", ReconcileComplete: true,
+		ReconcileIntervalSeconds: 30, ReportedAt: now,
+		Resources: []store.KubernetesPostureResource{{Name: "ok", UID: "u1", ResourceVersion: "1", State: "ready", Reason: "signed"}},
+	}
+	degraded := store.KubernetesControllerPosture{
+		ControllerID: "22222222-2222-2222-2222-222222222222", ClusterID: "sha256:" + strings.Repeat("d", 64),
+		ReportID: "44444444-4444-4444-4444-444444444444", ReconcileComplete: false, FailureCode: "reconcile_failed",
+		ReconcileIntervalSeconds: 30, ReportedAt: now.Add(-10 * time.Minute),
+		Resources: []store.KubernetesPostureResource{{Name: "broken", UID: "u2", ResourceVersion: "2", State: "failed", Reason: "controller_error"}},
+	}
+
+	serve := func(rows []store.KubernetesControllerPosture, path, capability string) map[string]any {
+		t.Helper()
+		reader := &fakeKubernetesPostureReader{rows: map[string][]store.KubernetesControllerPosture{capability: rows}}
+		handler := New(nil, nil, nil, WithInsecureHeaderResolver(),
+			WithKubernetesCSRPosture(reader), WithKubernetesTrustBundlePosture(reader))
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-Tenant-ID", "99999999-9999-4999-8999-999999999999")
+		req.Header.Set("X-Roles", "admin")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status=%d body=%s", path, rec.Code, rec.Body.String())
+		}
+		var out map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		return out
+	}
+	arrayLen := func(out map[string]any, field string) int {
+		v, ok := out[field].([]any)
+		if !ok {
+			t.Fatalf("field %q missing or not an array: %v", field, out[field])
+		}
+		return len(v)
+	}
+
+	// Trust bundles, degraded estate: every narrative field populated, actions derived.
+	tb := serve([]store.KubernetesControllerPosture{healthy, degraded},
+		"/api/v1/kubernetes/trust-bundles", store.KubernetesPostureTrustBundles)
+	for _, field := range []string{"distribution_targets", "controller_flow", "architecture_controls", "evidence_refs", "residuals"} {
+		if arrayLen(tb, field) == 0 {
+			t.Fatalf("trust-bundles %q is empty — the console reads that as \"this control plane does nothing\" (AUD-8)", field)
+		}
+	}
+	if arrayLen(tb, "recommended_next_actions") == 0 {
+		t.Fatal("degraded estate produced zero recommended_next_actions; the field must derive from posture")
+	}
+
+	// CSR support, healthy estate: static narrative populated, zero actions.
+	csr := serve([]store.KubernetesControllerPosture{healthy},
+		"/api/v1/kubernetes/certificate-signing-requests", store.KubernetesPostureCertificateSigningRequests)
+	for _, field := range []string{"controller_flow", "architecture_controls", "evidence_refs", "residuals"} {
+		if arrayLen(csr, field) == 0 {
+			t.Fatalf("certificate-signing-requests %q is empty (AUD-8)", field)
+		}
+	}
+	if got := arrayLen(csr, "recommended_next_actions"); got != 0 {
+		t.Fatalf("healthy estate produced %d recommended actions, want 0 (empty now truthfully means \"nothing to do\")", got)
 	}
 }

@@ -118,6 +118,86 @@ type KubernetesTrustBundleDistribution struct {
 	RecommendedNextActions []string                      `json:"recommended_next_actions"`
 }
 
+// The narrative arrays below were hardcoded to empty literals with no code path
+// that could ever populate them (AUD-8): the console rendered "zero distribution
+// targets, zero architecture controls" as posture rather than as unimplemented.
+// The static sets now state what the SHIPPED in-cluster controller actually does
+// (grounded in internal/agent/k8s), and the recommended actions are DERIVED from
+// the same posture rows the summary is built from.
+
+var kubernetesCSRControllerFlow = []string{
+	"the in-cluster agent controller lists and watches certificates.k8s.io/v1 CertificateSigningRequests",
+	"it selects unfinished, Approved CSRs whose spec.signerName maps to an installed trstctl Issuer or ClusterIssuer",
+	"spec.request travels OUTBOUND to the control plane's issuance URL; the certificate travels back (CSR up, certificate down)",
+	"the signed chain is patched into status.certificate and the CSR conditions are updated",
+	"after each reconcile the controller posts an idempotent, metadata-only posture report over the authenticated agent channel — that report is what this surface serves",
+}
+
+var kubernetesArchitectureControls = []string{
+	"execution lives in the cluster: the control plane never reaches into it; the agent controller performs every Kubernetes API call (D1)",
+	"one-way outbound: the controller initiates every connection; no inbound port is opened on the cluster (D2)",
+	"private keys never leave the cluster: only the CSR travels up, and signing happens inside the isolated signer process (D3, AN-4)",
+	"posture reports carry metadata only — names, UIDs, states, content hashes — never key material or bundle contents",
+	"report freshness is policed: a controller overdue against its reconcile interval is flagged stale on this surface",
+	"the controller's RBAC is scoped to exactly the listed rules",
+}
+
+var kubernetesCSREvidenceRefs = []string{
+	"kubernetes_controller_posture read model: authenticated, event-sequence-guarded controller reports (report_id on each controller row here)",
+	"per-object rows on this surface carry resource UID, resourceVersion, state, and failure reason",
+}
+
+var kubernetesCSRResiduals = []string{
+	"the controller signs Approved CSRs; approval itself remains a cluster RBAC decision this control plane does not make",
+	"CSRs for signer names outside the trstctl prefix are never touched",
+	"a CSR bridged while its Issuer/ClusterIssuer is not installed is left for the owning controller",
+}
+
+var kubernetesTrustBundleFlow = []string{
+	"the in-cluster agent controller lists trstctl.com/v1alpha1 TrustBundle resources",
+	"for each bundle it writes spec.caBundlePEM into a ConfigMap (spec.target.configMapName, default the bundle name; key spec.target.key, default ca-bundle.pem) in every namespace of spec.target.namespaces",
+	"writes are content-hash compared, so an unchanged bundle rewrites nothing",
+	"status.targets, status.bundleSHA256 and the Ready condition are updated on the TrustBundle",
+	"after each reconcile the controller posts an idempotent, metadata-only posture report over the authenticated agent channel — that report is what this surface serves",
+}
+
+var kubernetesTrustBundleEvidenceRefs = []string{
+	"kubernetes_controller_posture read model: authenticated, event-sequence-guarded controller reports (report_id on each controller row here)",
+	"per-object rows on this surface carry the distributed bundle's content hash (public_hash = bundleSHA256)",
+}
+
+var kubernetesTrustBundleResiduals = []string{
+	"distribution reaches only namespaces named in spec.target.namespaces and granted by the controller's RBAC",
+	"the TrustBundle CRD must be installed in the cluster; without it the controller reports failure rather than inventing targets",
+	"only public trust material (CA certificates) is distributed — never private keys",
+}
+
+// kubernetesRecommendedActions derives the operator to-do list from the same
+// posture rows the summary counts. A healthy estate returns an empty list, which
+// now truthfully means "nothing to do" rather than "field never wired".
+func kubernetesRecommendedActions(state kubernetesPostureState) []string {
+	actions := make([]string, 0, 4)
+	if state.summary.Failed > 0 {
+		actions = append(actions, "investigate the failed objects listed on this surface — each row carries the controller's failure reason")
+	}
+	if state.summary.Stale > 0 {
+		actions = append(actions, "check the stale controllers' connectivity and reconcile cadence; their last report is older than twice the reconcile interval")
+	}
+	if state.summary.Controllers > state.summary.Complete {
+		actions = append(actions, "at least one controller has not completed a full reconcile; consult its failure_code and the agent logs")
+	}
+	if state.summary.Pending > 0 {
+		actions = append(actions, "pending objects are awaiting issuance or distribution; re-check after the next reconcile")
+	}
+	return actions
+}
+
+// kubernetesDistributionTargets summarizes where the shipped controller
+// distributes trust, per the CRD contract it reconciles.
+var kubernetesDistributionTargets = []string{
+	"ConfigMap spec.target.configMapName (default: the TrustBundle's name), key spec.target.key (default: ca-bundle.pem), in every namespace of spec.target.namespaces",
+}
+
 func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
 	rows, ok := a.kubernetesPostureRows(w, r, a.kubernetesCSRPosture, store.KubernetesPostureCertificateSigningRequests)
 	if !ok {
@@ -136,8 +216,12 @@ func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
 			{APIGroup: "certificates.k8s.io", Resource: "certificatesigningrequests/status", Verbs: []string{"update", "patch"}},
 			{APIGroup: "certificates.k8s.io", Resource: "signers", Verbs: []string{"sign"}},
 		},
-		StatusFields:   []string{"status.certificate", "status.conditions[type=Approved|Denied|Failed]"},
-		ControllerFlow: []string{}, ArchitectureControls: []string{}, EvidenceRefs: []string{}, Residuals: []string{}, RecommendedNextActions: []string{},
+		StatusFields:           []string{"status.certificate", "status.conditions[type=Approved|Denied|Failed]"},
+		ControllerFlow:         kubernetesCSRControllerFlow,
+		ArchitectureControls:   kubernetesArchitectureControls,
+		EvidenceRefs:           kubernetesCSREvidenceRefs,
+		Residuals:              kubernetesCSRResiduals,
+		RecommendedNextActions: kubernetesRecommendedActions(state),
 	})
 }
 
@@ -158,8 +242,13 @@ func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *htt
 			{APIGroup: "trstctl.com", Resource: "trustbundles/status", Verbs: []string{"update", "patch"}},
 			{APIGroup: "", Resource: "configmaps", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
 		},
-		StatusFields:        []string{"status.targets", "status.bundleSHA256", "status.conditions[type=Ready]"},
-		DistributionTargets: []string{}, ControllerFlow: []string{}, ArchitectureControls: []string{}, EvidenceRefs: []string{}, Residuals: []string{}, RecommendedNextActions: []string{},
+		StatusFields:           []string{"status.targets", "status.bundleSHA256", "status.conditions[type=Ready]"},
+		DistributionTargets:    kubernetesDistributionTargets,
+		ControllerFlow:         kubernetesTrustBundleFlow,
+		ArchitectureControls:   kubernetesArchitectureControls,
+		EvidenceRefs:           kubernetesTrustBundleEvidenceRefs,
+		Residuals:              kubernetesTrustBundleResiduals,
+		RecommendedNextActions: kubernetesRecommendedActions(state),
 	})
 }
 
