@@ -184,6 +184,32 @@ func TestAttachEEProviderLicenseMountsEnterpriseAndProviderSurfaces(t *testing.T
 	}
 }
 
+// TestAttachVerifiableDecommissionMountsBothSeams is the AUD-2/AUD-3 attach
+// regression: the VDEC block must mount BOTH the re-protection outbox handler
+// AND the API options factory (retirement checklist source + the re-protection
+// start route, the handler's only production producer). Mounting just the
+// outbox factory is exactly the defect the unreachable-capability audit found:
+// a consumer with no producer and a served route with no source.
+func TestAttachVerifiableDecommissionMountsBothSeams(t *testing.T) {
+	deps := &server.Deps{}
+	if err := attachVerifiableDecommission(nil, deps); err != nil {
+		t.Fatalf("attachVerifiableDecommission: %v", err)
+	}
+	if deps.LicensedOutboxFactory == nil {
+		t.Fatal("VDEC attach did not mount the re-protection outbox handler factory")
+	}
+	if deps.LicensedAPIOptionsFactory == nil {
+		t.Fatal("VDEC attach did not mount the API options factory (checklist source + reprotect route)")
+	}
+	opts, err := deps.LicensedAPIOptionsFactory(server.LicensedAPIOptionsDeps{})
+	if err != nil {
+		t.Fatalf("VDEC API options factory: %v", err)
+	}
+	if len(opts) != 3 {
+		t.Fatalf("VDEC API options factory yielded %d options, want 3 (checklist source, routes, schemas)", len(opts))
+	}
+}
+
 func hasBackgroundWorker(deps *server.Deps, name string) bool {
 	for _, worker := range deps.LicensedBackgroundWorkers {
 		if worker != nil && worker.Name() == name {
