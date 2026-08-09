@@ -176,6 +176,10 @@ func (f *fakeService) PostureReport(_ context.Context, _, identityID string) (su
 	return succapi.PostureReportResponse{IdentityID: identityID, TenantID: tenantA, Algorithm: "ECDSA-P256", Epoch: 1, Signature: []byte("sig"), IssuedAt: time.Now()}, true, nil
 }
 
+func (f *fakeService) ListFederationBridges(context.Context, string) (succapi.FederationBridgeListResponse, error) {
+	return succapi.FederationBridgeListResponse{Bridges: []succapi.FederationBridgeResponse{}, Count: 0}, nil
+}
+
 func (f *fakeService) ListMisissuance(context.Context, string) (succapi.MisissuanceListResponse, error) {
 	return succapi.MisissuanceListResponse{Findings: []succapi.MisissuanceResponse{}, Count: 0}, nil
 }

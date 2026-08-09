@@ -401,6 +401,37 @@ func (r *Repo) UpsertFederationBridge(ctx context.Context, tenantID string, brid
 	})
 }
 
+// ListFederationBridges returns every imported federation bridge for the
+// tenant. It is the read path AUD-9 found missing: bridges were persisted under
+// RLS and then consulted by nothing — an operator could import a foreign trust
+// root and never see which bridges exist or what they trust.
+func (r *Repo) ListFederationBridges(ctx context.Context, tenantID string) ([]FederationBridge, error) {
+	var out []FederationBridge
+	err := r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT foreign_deployment_id, identity_id, foreign_trust_root_der, local_base_epoch, bridge_json, updated_at
+			   FROM pcas_federation_bridge
+			  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid
+			  ORDER BY foreign_deployment_id ASC, identity_id ASC`)
+		if err != nil {
+			return fmt.Errorf("succession store: list federation bridges: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var b FederationBridge
+			if err := rows.Scan(&b.ForeignDeploymentID, &b.IdentityID, &b.ForeignTrustRootDER, &b.LocalBaseEpoch, &b.BridgeJSON, &b.UpdatedAt); err != nil {
+				return fmt.Errorf("succession store: scan federation bridge: %w", err)
+			}
+			out = append(out, b)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (r *Repo) SaveFederationQuarantine(ctx context.Context, tenantID string, q FederationQuarantine) error {
 	proof := jsonPayload(q.ProofJSON, "{}")
 	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {

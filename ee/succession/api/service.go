@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -454,6 +455,35 @@ func (s *service) ListMisissuance(ctx context.Context, tenantID string) (Misissu
 		})
 	}
 	resp.Count = len(resp.Findings)
+	return resp, nil
+}
+
+// ListFederationBridges serves the imported bridges with trust-root digests
+// (AUD-9's missing read path). No repo means no bridges — an empty truthful
+// answer, not an error.
+func (s *service) ListFederationBridges(ctx context.Context, tenantID string) (FederationBridgeListResponse, error) {
+	resp := FederationBridgeListResponse{Bridges: []FederationBridgeResponse{}}
+	if s.repo == nil {
+		return resp, nil
+	}
+	bridges, err := s.repo.ListFederationBridges(ctx, tenantID)
+	if err != nil {
+		return FederationBridgeListResponse{}, err
+	}
+	for _, b := range bridges {
+		digest := ""
+		if len(b.ForeignTrustRootDER) > 0 {
+			digest = hex.EncodeToString(crypto.SHA256Sum(b.ForeignTrustRootDER))
+		}
+		resp.Bridges = append(resp.Bridges, FederationBridgeResponse{
+			ForeignDeploymentID: b.ForeignDeploymentID,
+			IdentityID:          b.IdentityID,
+			LocalBaseEpoch:      b.LocalBaseEpoch,
+			TrustRootSHA256:     digest,
+			UpdatedAt:           b.UpdatedAt,
+		})
+	}
+	resp.Count = len(resp.Bridges)
 	return resp, nil
 }
 

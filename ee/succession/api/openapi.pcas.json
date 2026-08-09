@@ -167,6 +167,51 @@
           "scope_id"
         ]
       },
+      "PCASFederationBridge": {
+        "type": "object",
+        "properties": {
+          "foreign_deployment_id": {
+            "type": "string"
+          },
+          "identity_id": {
+            "type": "string"
+          },
+          "local_base_epoch": {
+            "type": "integer"
+          },
+          "trust_root_sha256": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "foreign_deployment_id",
+          "identity_id",
+          "local_base_epoch",
+          "trust_root_sha256"
+        ]
+      },
+      "PCASFederationBridgeList": {
+        "type": "object",
+        "properties": {
+          "bridges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PCASFederationBridge"
+            }
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bridges",
+          "count"
+        ]
+      },
       "PCASFederationImportRequest": {
         "type": "object",
         "properties": {
@@ -897,6 +942,17 @@
           }
         },
         "summary": "Configure a signer-enforced PCAS delegation scope"
+      }
+    },
+    "/api/v1/pcas/federation/bridges": {
+      "get": {
+        "operationId": "listPCASFederationBridges",
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        },
+        "summary": "List imported PCAS federation bridges with their trust-root digests"
       }
     },
     "/api/v1/pcas/federation/imports": {

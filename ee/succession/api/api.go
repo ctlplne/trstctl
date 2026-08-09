@@ -251,6 +251,27 @@ type CheckpointResponse struct {
 	IssuedAt       time.Time       `json:"issued_at"`
 }
 
+// FederationBridgeResponse is one imported federation bridge: which foreign
+// deployment it trusts, for which identity, and the digest of the imported
+// trust root — the digest rather than the DER, so an operator can compare
+// against the foreign deployment's published root without this route becoming a
+// trust-material export.
+type FederationBridgeResponse struct {
+	ForeignDeploymentID string    `json:"foreign_deployment_id"`
+	IdentityID          string    `json:"identity_id"`
+	LocalBaseEpoch      uint64    `json:"local_base_epoch"`
+	TrustRootSHA256     string    `json:"trust_root_sha256"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+// FederationBridgeListResponse is the served answer to "which bridges have been
+// imported" (AUD-9: the table was write-only — POST recorded it and nothing
+// could ever read it back).
+type FederationBridgeListResponse struct {
+	Bridges []FederationBridgeResponse `json:"bridges"`
+	Count   int                        `json:"count"`
+}
+
 type MisissuanceListResponse struct {
 	Findings []MisissuanceResponse `json:"findings"`
 	Count    int                   `json:"count"`
@@ -288,6 +309,7 @@ type Service interface {
 	LatestCheckpoint(ctx context.Context, tenantID, identityID string) (CheckpointResponse, bool, error)
 	PostureReport(ctx context.Context, tenantID, identityID string) (PostureReportResponse, bool, error)
 	ListMisissuance(ctx context.Context, tenantID string) (MisissuanceListResponse, error)
+	ListFederationBridges(ctx context.Context, tenantID string) (FederationBridgeListResponse, error)
 }
 
 // NewAPIOptionsFactory returns the licensed-route factory that attaches the PCAS API
@@ -361,6 +383,12 @@ func Routes(svc Service) []api.LicensedRoute {
 			Handler:       func(a *api.API) http.HandlerFunc { return recoveryRequestHandler(a, svc) },
 			RequestSchema: "PCASRecoveryRequest", ResponseSchema: "PCASAsyncRequest",
 			SuccessCode: "202", Mutation: true, Permission: authz.CertsWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/pcas/federation/bridges", OperationID: "listPCASFederationBridges",
+			Summary:        "List imported PCAS federation bridges with their trust-root digests",
+			Handler:        func(a *api.API) http.HandlerFunc { return federationBridgesHandler(a, svc) },
+			ResponseSchema: "PCASFederationBridgeList", SuccessCode: "200", Permission: authz.CertsRead,
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/federation/imports", OperationID: "requestPCASFederationImport",
@@ -783,6 +811,24 @@ func postureHandler(a *api.API, svc Service) http.HandlerFunc {
 	}
 }
 
+func federationBridgesHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		start := time.Now()
+		resp, err := svc.ListFederationBridges(r.Context(), tenantID)
+		a.ObserveFeature("pcas_federation", "list_bridges", start, err)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "failed to list PCAS federation bridges")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
 func misissuanceHandler(a *api.API, svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tenantID, ok := a.Tenant(r)
@@ -1039,6 +1085,17 @@ func schemas() map[string]*api.Schema {
 			"reporter_public_der":       api.StringSchema(),
 			"issued_at":                 api.TimestampSchema(),
 		}, "identity_id", "tenant_id", "algorithm", "epoch", "signature"),
+		"PCASFederationBridge": api.ObjectSchema(map[string]*api.Schema{
+			"foreign_deployment_id": api.StringSchema(),
+			"identity_id":           api.StringSchema(),
+			"local_base_epoch":      api.IntegerSchema(),
+			"trust_root_sha256":     api.StringSchema(),
+			"updated_at":            api.TimestampSchema(),
+		}, "foreign_deployment_id", "identity_id", "local_base_epoch", "trust_root_sha256"),
+		"PCASFederationBridgeList": api.ObjectSchema(map[string]*api.Schema{
+			"bridges": api.ArraySchema(api.SchemaRef("PCASFederationBridge")),
+			"count":   api.IntegerSchema(),
+		}, "bridges", "count"),
 		"PCASMisissuanceList": api.ObjectSchema(map[string]*api.Schema{
 			"findings": api.ArraySchema(api.ObjectSchema(map[string]*api.Schema{
 				"identity_id":     api.StringSchema(),
