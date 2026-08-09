@@ -69,12 +69,60 @@ func perCallDeadline(ctx context.Context, method string, req, reply any, cc *grp
 	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
+// signerAdmission holds the process-wide admission hook bounding concurrent
+// signer round-trips (AN-7). The server assembly installs the bulkhead-backed
+// hook once at startup, mirroring SetSignerCallTimeout; nil admits directly.
+// The hook lives here as a plain function so this package never imports the
+// bulkhead package — the pool stays the server's dependency, not the client's.
+//
+// Before this hook existed the operator's bulkheads.signing.{workers,queue}
+// started a pool named "signing" that NO code path ever submitted work to
+// (AUD-6): --print-config and the support bundle echoed the limit back while
+// signer concurrency was governed only by whichever caller pool happened to
+// front it.
+var signerAdmission atomic.Value // of func(call func() error) error
+
+// SetSignerAdmission installs the admission hook every signer RPC passes
+// through. Passing nil restores direct admission.
+func SetSignerAdmission(admit func(call func() error) error) {
+	signerAdmission.Store(admissionHook{admit: admit})
+}
+
+// SignerAdmissionInstalled reports whether a non-nil admission hook is
+// installed. Assembly tests use it to prove the server actually routed signer
+// RPCs through the operator's bulkhead instead of leaving the configured pool
+// ornamental (AUD-6) — the exact wiring gap the unreachable-capability audit
+// found here.
+func SignerAdmissionInstalled() bool {
+	hook, _ := signerAdmission.Load().(admissionHook)
+	return hook.admit != nil
+}
+
+// admissionHook wraps the hook so atomic.Value tolerates a nil function (a bare
+// nil func cannot be Stored and a typed nil would not round-trip cleanly).
+type admissionHook struct {
+	admit func(call func() error) error
+}
+
+// admissionGate is a unary interceptor that routes every signer RPC through the
+// installed admission hook. A saturated pool rejects fast with a structured
+// error before the RPC is attempted — backpressure, not queue-and-hope.
+func admissionGate(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	hook, _ := signerAdmission.Load().(admissionHook)
+	if hook.admit == nil {
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+	return hook.admit(func() error {
+		return invoker(ctx, method, req, reply, cc, opts...)
+	})
+}
+
 // Dial connects to the signing service listening at socketPath.
 func Dial(socketPath string) (*Client, error) {
 	conn, err := grpc.NewClient(
 		"unix://"+socketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(perCallDeadline),
+		grpc.WithChainUnaryInterceptor(perCallDeadline, admissionGate),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("dial signer: %w", err)
@@ -95,7 +143,7 @@ func DialMTLS(addr string, tlsCfg mtls.SignerPeerConfig, serverName string) (*Cl
 	if err != nil {
 		return nil, fmt.Errorf("signer mTLS credentials: %w", err)
 	}
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithChainUnaryInterceptor(perCallDeadline))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithChainUnaryInterceptor(perCallDeadline, admissionGate))
 	if err != nil {
 		return nil, fmt.Errorf("dial signer over mTLS: %w", err)
 	}

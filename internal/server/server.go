@@ -1296,6 +1296,22 @@ func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
 	if s.bulk == nil {
 		s.bulk = bulkhead.Default()
 	}
+	// AN-7 for the signer round-trip itself: route every signer RPC through the
+	// operator's bulkheads.signing pool. Without this hook the pool started,
+	// --print-config and the support bundle echoed its limits back, and NOTHING
+	// ever submitted work to it (AUD-6) — the operator's cap on concurrent
+	// pressure against the isolated signer bound nothing. The submitted task is
+	// waited on synchronously: Submit either queues it (bounded) or rejects fast
+	// with the structured bulkhead error the caller can act on.
+	if pool := s.bulk.Pool(bulkhead.SubsystemSigning); pool != nil {
+		signing.SetSignerAdmission(func(call func() error) error {
+			done := make(chan error, 1)
+			if err := pool.Submit(func() { done <- call() }); err != nil {
+				return err
+			}
+			return <-done
+		})
+	}
 	s.mBulkheads = observ.NewBulkheadMetrics(s.registry)
 	gate, approvals, err := buildMutationGate(d, s.bulk, s.outbox)
 	if err != nil {
