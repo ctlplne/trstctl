@@ -176,15 +176,22 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		// Attach the PCAS external API (request-succession, chain fetch, RP acks)
 		// through the feature-neutral route seam, composing with any other licensed
 		// API routes (e.g. PQC migration) already registered.
-		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eesuccessionapi.NewAPIOptionsFactory())
+		// AUD-7: the pcas.{recovery,federation,kem}.outbox_topic keys were
+		// validated, printed, and never read — enqueue and dispatch both used
+		// hardcoded constants. Both sides now resolve the SAME operator
+		// configuration; blanks keep the canonical defaults.
+		pcasCfg := attachConfig(cfg).PCAS
+		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, eesuccessionapi.NewAPIOptionsFactory(
+			eesuccessionapi.WithOutboxTopics(pcasCfg.Recovery.OutboxTopic, pcasCfg.Federation.OutboxTopic, pcasCfg.KEM.OutboxTopic)))
 		// Register the PCAS succession worker on the server outbox dispatcher (INT-04),
 		// composing with any other licensed outbox handler: a pcas.succession-request
 		// message is drained here and minted over the signer transport, then recorded +
 		// published; pcas.rp-publish is acknowledged. This makes the succession worker a
 		// real production caller — a POST to request-succession now yields a record.
-		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eesuccessionorch.NewLicensedOutboxFactory())
+		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eesuccessionorch.NewLicensedOutboxFactory(
+			eesuccessionorch.WithBreadthTopics(pcasCfg.Recovery.OutboxTopic, pcasCfg.Federation.OutboxTopic, pcasCfg.KEM.OutboxTopic)))
 		deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, eesuccessionbackground.NewWorkers(eesuccessionbackground.Options{
-			Store: deps.Store, Log: deps.Log, Signer: deps.Signer, PCAS: attachConfig(cfg).PCAS,
+			Store: deps.Store, Log: deps.Log, Signer: deps.Signer, PCAS: pcasCfg,
 		})...)
 		if log != nil {
 			log.Info("Enterprise PCAS attached", slog.String("feature", string(license.FeaturePCAS)))

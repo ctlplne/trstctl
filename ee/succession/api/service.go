@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,14 @@ type service struct {
 	outbox         *orchestrator.Outbox
 	signerStoreDir string
 	kem            editionseam.KEMCustody
+	// Breadth outbox topics, resolved from pcas.{recovery,federation,kem}.
+	// outbox_topic (AUD-7: the config was validated and never read — an operator
+	// who re-pointed a topic still enqueued to the hardcoded constant). Empty
+	// falls back to the canonical constants; the dispatch side resolves the SAME
+	// configuration, so both ends of the outbox always agree.
+	recoveryTopic   string
+	federationTopic string
+	kemTopic        string
 }
 
 type ServiceOption func(*service)
@@ -56,6 +65,25 @@ func WithSignerStoreDir(dir string) ServiceOption {
 
 func WithKEMCustody(kem editionseam.KEMCustody) ServiceOption {
 	return func(s *service) { s.kem = kem }
+}
+
+// WithOutboxTopics resolves the breadth destinations from operator
+// configuration (pcas.recovery/federation/kem.outbox_topic). Blank values keep
+// the canonical defaults, so an unset config changes nothing.
+func WithOutboxTopics(recovery, federation, kem string) ServiceOption {
+	return func(s *service) {
+		s.recoveryTopic = strings.TrimSpace(recovery)
+		s.federationTopic = strings.TrimSpace(federation)
+		s.kemTopic = strings.TrimSpace(kem)
+	}
+}
+
+// topicOr returns configured when non-empty, else the canonical fallback.
+func topicOr(configured, fallback string) string {
+	if configured != "" {
+		return configured
+	}
+	return fallback
 }
 
 var (
@@ -170,7 +198,7 @@ func (s *service) ConfigureRecoveryPolicy(ctx context.Context, tenantID string, 
 }
 
 func (s *service) RequestRecovery(ctx context.Context, tenantID string, req RecoveryRequest) (AsyncRequestResponse, error) {
-	return s.enqueue(ctx, tenantID, RecoveryRequestDestination, req.IdentityID, req)
+	return s.enqueue(ctx, tenantID, topicOr(s.recoveryTopic, RecoveryRequestDestination), req.IdentityID, req)
 }
 
 func (s *service) RequestFederationImport(ctx context.Context, tenantID string, req FederationImportRequest) (AsyncRequestResponse, error) {
@@ -184,14 +212,14 @@ func (s *service) RequestFederationImport(ctx context.Context, tenantID string, 
 			return AsyncRequestResponse{}, err
 		}
 	}
-	return s.enqueue(ctx, tenantID, FederationImportDestination, req.ForeignDeploymentID, req)
+	return s.enqueue(ctx, tenantID, topicOr(s.federationTopic, FederationImportDestination), req.ForeignDeploymentID, req)
 }
 
 func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEMRewrapRequest) (AsyncRequestResponse, error) {
 	if len(req.Stages) == 0 {
 		req.Stages = []string{"default"}
 	}
-	resp, err := s.enqueue(ctx, tenantID, KEMRewrapDestination, req.IdentityID, req)
+	resp, err := s.enqueue(ctx, tenantID, topicOr(s.kemTopic, KEMRewrapDestination), req.IdentityID, req)
 	if err != nil {
 		return AsyncRequestResponse{}, err
 	}

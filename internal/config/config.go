@@ -198,22 +198,25 @@ type PCASDelegation struct {
 	SignerStoreDir  string `json:"signer_store_dir,omitempty"`
 }
 
+// PCASRecovery configures the threshold-recovery breadth surface. OutboxTopic is
+// the outbox destination recovery mints are enqueued under AND drained from —
+// both sides resolve it from here, defaulting to "pcas.recovery-request".
+// (A worker_concurrency knob existed here once, validated and never read by any
+// worker — AUD-7; per-family outbox concurrency is governed by the
+// bulkheads.outbox.* pools, so the fictional field is gone rather than kept.)
 type PCASRecovery struct {
-	Enabled           bool   `json:"enabled,omitempty"`
-	OutboxTopic       string `json:"outbox_topic,omitempty"`
-	WorkerConcurrency int    `json:"worker_concurrency,omitempty"`
+	Enabled     bool   `json:"enabled,omitempty"`
+	OutboxTopic string `json:"outbox_topic,omitempty"`
 }
 
 type PCASFederation struct {
-	Enabled           bool   `json:"enabled,omitempty"`
-	OutboxTopic       string `json:"outbox_topic,omitempty"`
-	WorkerConcurrency int    `json:"worker_concurrency,omitempty"`
+	Enabled     bool   `json:"enabled,omitempty"`
+	OutboxTopic string `json:"outbox_topic,omitempty"`
 }
 
 type PCASKEM struct {
-	Enabled           bool   `json:"enabled,omitempty"`
-	OutboxTopic       string `json:"outbox_topic,omitempty"`
-	WorkerConcurrency int    `json:"worker_concurrency,omitempty"`
+	Enabled     bool   `json:"enabled,omitempty"`
+	OutboxTopic string `json:"outbox_topic,omitempty"`
 }
 
 type PCASCheckpoints struct {
@@ -2021,9 +2024,9 @@ func Default() *Config {
 		},
 		PCAS: PCAS{
 			Delegation:  PCASDelegation{Enabled: false, RefreshInterval: "30s", SignerStoreDir: "data/signer/pcas"},
-			Recovery:    PCASRecovery{Enabled: false, OutboxTopic: "pcas.recovery-request", WorkerConcurrency: 1},
-			Federation:  PCASFederation{Enabled: false, OutboxTopic: "pcas.federation-import", WorkerConcurrency: 1},
-			KEM:         PCASKEM{Enabled: false, OutboxTopic: "pcas.kem-rewrap", WorkerConcurrency: 1},
+			Recovery:    PCASRecovery{Enabled: false, OutboxTopic: "pcas.recovery-request"},
+			Federation:  PCASFederation{Enabled: false, OutboxTopic: "pcas.federation-import"},
+			KEM:         PCASKEM{Enabled: false, OutboxTopic: "pcas.kem-rewrap"},
 			Checkpoints: PCASCheckpoints{Enabled: false, Interval: "1m", SigningKeyHandle: "pcas-checkpoint-signer", SigningAlgorithm: string(crypto.ECDSAP256)},
 			Monitors:    PCASMonitors{Enabled: false, Interval: "1m"},
 			Retirement:  PCASRetirement{Enabled: false, Interval: "1m", ValidityWindow: "24h"},
@@ -2295,13 +2298,10 @@ func applyPCASEnv(getenv func(string) string, p *PCAS) {
 	setString(getenv, "TRSTCTL_PCAS_DELEGATION_SIGNER_STORE_DIR", &p.Delegation.SignerStoreDir)
 	setBool(getenv, "TRSTCTL_PCAS_RECOVERY_ENABLED", &p.Recovery.Enabled)
 	setString(getenv, "TRSTCTL_PCAS_RECOVERY_OUTBOX_TOPIC", &p.Recovery.OutboxTopic)
-	setInt(getenv, "TRSTCTL_PCAS_RECOVERY_WORKER_CONCURRENCY", &p.Recovery.WorkerConcurrency)
 	setBool(getenv, "TRSTCTL_PCAS_FEDERATION_ENABLED", &p.Federation.Enabled)
 	setString(getenv, "TRSTCTL_PCAS_FEDERATION_OUTBOX_TOPIC", &p.Federation.OutboxTopic)
-	setInt(getenv, "TRSTCTL_PCAS_FEDERATION_WORKER_CONCURRENCY", &p.Federation.WorkerConcurrency)
 	setBool(getenv, "TRSTCTL_PCAS_KEM_ENABLED", &p.KEM.Enabled)
 	setString(getenv, "TRSTCTL_PCAS_KEM_OUTBOX_TOPIC", &p.KEM.OutboxTopic)
-	setInt(getenv, "TRSTCTL_PCAS_KEM_WORKER_CONCURRENCY", &p.KEM.WorkerConcurrency)
 	setBool(getenv, "TRSTCTL_PCAS_CHECKPOINTS_ENABLED", &p.Checkpoints.Enabled)
 	setString(getenv, "TRSTCTL_PCAS_CHECKPOINTS_INTERVAL", &p.Checkpoints.Interval)
 	setString(getenv, "TRSTCTL_PCAS_CHECKPOINTS_SIGNING_KEY_HANDLE", &p.Checkpoints.SigningKeyHandle)
@@ -3593,23 +3593,19 @@ func validatePCASConfig(c *Config) []error {
 		}
 	}
 	for _, worker := range []struct {
-		enabled     bool
-		topic       string
-		concurrency int
-		name        string
+		enabled bool
+		topic   string
+		name    string
 	}{
-		{c.PCAS.Recovery.Enabled, c.PCAS.Recovery.OutboxTopic, c.PCAS.Recovery.WorkerConcurrency, "pcas.recovery"},
-		{c.PCAS.Federation.Enabled, c.PCAS.Federation.OutboxTopic, c.PCAS.Federation.WorkerConcurrency, "pcas.federation"},
-		{c.PCAS.KEM.Enabled, c.PCAS.KEM.OutboxTopic, c.PCAS.KEM.WorkerConcurrency, "pcas.kem"},
+		{c.PCAS.Recovery.Enabled, c.PCAS.Recovery.OutboxTopic, "pcas.recovery"},
+		{c.PCAS.Federation.Enabled, c.PCAS.Federation.OutboxTopic, "pcas.federation"},
+		{c.PCAS.KEM.Enabled, c.PCAS.KEM.OutboxTopic, "pcas.kem"},
 	} {
 		if !worker.enabled {
 			continue
 		}
 		if strings.TrimSpace(worker.topic) == "" {
 			errs = append(errs, fmt.Errorf("%s.outbox_topic is required when enabled", worker.name))
-		}
-		if worker.concurrency <= 0 {
-			errs = append(errs, fmt.Errorf("%s.worker_concurrency must be positive when enabled", worker.name))
 		}
 	}
 	return errs

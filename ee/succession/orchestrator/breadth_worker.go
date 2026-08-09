@@ -53,6 +53,32 @@ func (w *BreadthWorker) Deliver(ctx context.Context, m coreorch.Message) error {
 	}
 }
 
+// breadthKind names one breadth family independent of the (configurable)
+// destination string, so an operator-repointed pcas.*.outbox_topic still routes
+// to the right handler (AUD-7).
+type breadthKind string
+
+const (
+	breadthKEM        breadthKind = "kem"
+	breadthRecovery   breadthKind = "recovery"
+	breadthFederation breadthKind = "federation"
+)
+
+// DeliverKind routes by resolved family rather than by destination literal; the
+// licensed handler resolves the family from the operator's configured topics.
+func (w *BreadthWorker) DeliverKind(ctx context.Context, kind breadthKind, m coreorch.Message) error {
+	switch kind {
+	case breadthKEM:
+		return w.handleKEMRewrap(ctx, m.TenantID, m.Payload)
+	case breadthRecovery:
+		return w.handleRecovery(ctx, m.TenantID, m.Payload)
+	case breadthFederation:
+		return w.handleFederationImport(ctx, m.TenantID, m.Payload)
+	default:
+		return fmt.Errorf("pcas breadth worker: unexpected kind %q (destination %q)", kind, m.Destination)
+	}
+}
+
 type requestEnvelope[T any] struct {
 	RequestID string `json:"request_id"`
 	Request   T      `json:"request"`

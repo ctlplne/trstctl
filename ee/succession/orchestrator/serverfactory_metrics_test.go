@@ -67,12 +67,20 @@ func TestPCASOutboxFeatureActionLabels(t *testing.T) {
 		{destination: FederationImportDestination, feature: "pcas_federation", action: "import", ok: true},
 		{destination: "foreign", ok: false},
 	}
+	h := &licensedOutboxHandler{}
 	for _, tt := range tests {
-		feature, action, ok := pcasOutboxFeatureAction(tt.destination)
+		feature, action, ok := h.featureAction(tt.destination)
 		if feature != tt.feature || action != tt.action || ok != tt.ok {
-			t.Errorf("pcasOutboxFeatureAction(%q)=(%q,%q,%v), want (%q,%q,%v)",
+			t.Errorf("featureAction(%q)=(%q,%q,%v), want (%q,%q,%v)",
 				tt.destination, feature, action, ok, tt.feature, tt.action, tt.ok)
 		}
+	}
+
+	// A configured topic maps to the same feature family as its canonical
+	// constant (AUD-7): observability follows the family, not the literal.
+	configured := &licensedOutboxHandler{topics: BreadthTopics{KEM: "acme.kem"}.resolved()}
+	if feature, action, ok := configured.featureAction("acme.kem"); feature != "pcas_kem" || action != "rewrap" || !ok {
+		t.Errorf("featureAction(configured topic)=(%q,%q,%v), want (pcas_kem, rewrap, true)", feature, action, ok)
 	}
 }
 

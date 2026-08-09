@@ -293,9 +293,10 @@ type Service interface {
 // NewAPIOptionsFactory returns the licensed-route factory that attaches the PCAS API
 // under the FeaturePCAS block (ee_attach). The concrete service is built from the
 // server-provided store, event log, and outbox.
-func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
+func NewAPIOptionsFactory(opts ...ServiceOption) editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
-		svc := NewService(d.Store, d.Log, d.Outbox, WithSignerStoreDir(d.SignerKeyStoreDir), WithKEMCustody(d.KEMCustody))
+		serviceOpts := append([]ServiceOption{WithSignerStoreDir(d.SignerKeyStoreDir), WithKEMCustody(d.KEMCustody)}, opts...)
+		svc := NewService(d.Store, d.Log, d.Outbox, serviceOpts...)
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),
 			api.WithLicensedSchemas(schemas()),
