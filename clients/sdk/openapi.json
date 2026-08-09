@@ -5546,6 +5546,9 @@
       },
       "ConnectorRelayParity": {
         "properties": {
+          "cp_retained": {
+            "type": "boolean"
+          },
           "detail": {
             "type": "string"
           },
@@ -5569,6 +5572,9 @@
           },
           "relay_migrated": {
             "type": "boolean"
+          },
+          "scope_note": {
+            "type": "string"
           }
         },
         "required": [

@@ -98,6 +98,46 @@ const (
 	ParityGateDeviceCSR ParityGate = "device_generated_csr"
 )
 
+// cpRetainedFamilies are the relay-vantage families whose control-plane
+// execution path is RETAINED BY DESIGN — the terminal state of the E1
+// migration for them, not a pending one.
+//
+// Owner scope decision, 2026-08-08: E1 closed at the gate-capable families.
+// These three cannot pass the rollback/readback gates because of a property of
+// the DEVICE APIs, not of this repository: each imports a certificate by name
+// with no separately addressable installed object, so a re-bind (rollback) and
+// an installed-state query (readback) are not expressible. Migrating them
+// anyway would remove the control plane's proven fallback without the recovery
+// path that justifies removing it, which D5 forbids. Their support-matrix rows
+// (KnownLimits) state the same constraint per family; this census is what lets
+// the parity surface say "retained by design" instead of "coming soon".
+//
+// A family leaves this list only if its vendor API grows an addressable
+// installed object (re-check on new PAN-OS / FortiOS / IOS-XE majors) — at
+// which point it must pass the same gates as everyone else, not skip them.
+var cpRetainedFamilies = []string{
+	"cisco",
+	"fortigate",
+	"paloalto",
+}
+
+// CPRetained reports whether a family's control-plane execution is retained by
+// the E1 scope decision rather than pending migration.
+func CPRetained(family string) bool {
+	for _, n := range cpRetainedFamilies {
+		if n == family {
+			return true
+		}
+	}
+	return false
+}
+
+// retainedScopeNote is the operator-facing sentence for a retained family.
+const retainedScopeNote = "control-plane execution retained by design (E1 scope decision): this " +
+	"device's management API imports a certificate by name with no separately addressable " +
+	"installed object, so relay rollback and readback are not expressible; see the family's " +
+	"support-matrix known limits"
+
 // haPairedFamilies are families whose HA deployment gives each peer its own
 // configuration store, so a deploy that reaches one peer leaves the other
 // serving the old certificate until failover — at which point it serves an
@@ -159,8 +199,9 @@ var deviceCSRCapableFamilies = []string{
 // ParityGateDeviceCSR is deliberately NOT required. It is an alternative
 // custody mode, and the existing mode — relay generates, relay installs — is
 // correct as it stands, just less good. Blocking migration on it would hold
-// four families in the control plane to avoid an improvement, and E1 stays
-// in_progress until it is built either way.
+// four families in the control plane to avoid an improvement. It is reported
+// as Outstanding on the parity surface: a post-E1 enhancement (E1 itself
+// closed 2026-08-08 at the gate-capable families), not a silent omission.
 func requiredParityGates(family string) []ParityGate {
 	gates := []ParityGate{
 		ParityGateDeviceProof,
@@ -271,6 +312,12 @@ type ParityStatus struct {
 	// RelayMigrated is true when every required gate is met. It is what decides
 	// whether the control plane refuses this family's deploys.
 	RelayMigrated bool `json:"relay_migrated"`
+	// CPRetained is true for families whose control-plane path is the terminal
+	// state by the E1 scope decision: their device APIs cannot express the
+	// rollback/readback gates, so "not migrated" here means "by design", never
+	// "coming soon". ScopeNote carries the operator-facing reason.
+	CPRetained bool   `json:"cp_retained"`
+	ScopeNote  string `json:"scope_note,omitempty"`
 }
 
 // ParityStatusFor reports a family's migration position.
@@ -291,6 +338,10 @@ func ParityStatusFor(family string) ParityStatus {
 	}
 	if deviceCSRCapable(family) && !gateMet(family, ParityGateDeviceCSR) {
 		status.Outstanding = append(status.Outstanding, ParityGateDeviceCSR)
+	}
+	if CPRetained(family) {
+		status.CPRetained = true
+		status.ScopeNote = retainedScopeNote
 	}
 	return status
 }

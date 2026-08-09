@@ -91,7 +91,13 @@ type connectorRelayParity struct {
 	// built. Reported so a migrated family cannot read as a finished one.
 	Outstanding   []string `json:"outstanding"`
 	RelayMigrated bool     `json:"relay_migrated"`
-	Detail        string   `json:"detail"`
+	// CPRetained marks a family whose control-plane path is the TERMINAL state
+	// by the E1 scope decision (device API cannot express rollback/readback).
+	// It distinguishes "not migrated by design" from "not migrated yet";
+	// ScopeNote carries the reason an operator reads.
+	CPRetained bool   `json:"cp_retained"`
+	ScopeNote  string `json:"scope_note,omitempty"`
+	Detail     string `json:"detail"`
 }
 
 // connectorSupportRow is what this repository can truthfully attest about a
@@ -931,6 +937,8 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 				Missing:       parityGateNames(status.Missing),
 				Outstanding:   parityGateNames(status.Outstanding),
 				RelayMigrated: status.RelayMigrated,
+				CPRetained:    status.CPRetained,
+				ScopeNote:     status.ScopeNote,
 				Detail: "E1 moves each appliance family's execution to the relay runtime and " +
 					"refuses the control-plane path once the family is through its gates. A " +
 					"family that is not migrated still deploys from the control plane, which " +

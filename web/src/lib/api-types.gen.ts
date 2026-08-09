@@ -1448,11 +1448,13 @@ export interface ConnectorDeliveryList {
 }
 
 export interface ConnectorRelayParity {
+  cp_retained?: boolean;
   detail: string;
   met: string[];
   missing: string[];
   outstanding: string[];
   relay_migrated: boolean;
+  scope_note?: string;
 }
 
 export interface ConnectorSupportRow {

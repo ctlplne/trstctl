@@ -1478,6 +1478,8 @@ const deDECatalog = {
   "source.relay.migrated.e1par00003": "\u00dcber Relay ausgef\u00fchrt",
   "source.not.migrated.e1par00004": "Weiterhin \u00fcber die Steuerungsebene ausgef\u00fchrt",
   "source.outstanding.gates.e1par00005": "Ausstehend (blockiert die Migration nicht):",
+  // E1 scope closure — Machine-authored translation, FLAG FOR HUMAN REVIEW.
+  "source.cp.retained.e1par00006": "Konstruktionsbedingt \u00fcber die Steuerungsebene ausgef\u00fchrt",
   "source.authority.agreement.c4xr000001": "Autorit\u00e4tsabgleich (XREC)",
   "source.agreement.unavailable.c4xr000002": "Der Abgleich zwischen Autorit\u00e4ten ist auf dieser Installation nicht verf\u00fcgbar. Es wurden keine Zust\u00e4nde erfasst und es konnte keine Abweichung erkannt werden. Dies ist keine Aussage dar\u00fcber, dass Ihre Autorit\u00e4ten \u00fcbereinstimmen.",
   "source.open.witnesses.c4xr000003": "Offene Zeugen",

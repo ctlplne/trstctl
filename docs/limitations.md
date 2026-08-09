@@ -507,7 +507,8 @@ never live in the API process. What you can do end to end against the running bi
   are ranked worst-first; an authority that has never been collected from does not
   appear in the table at all, which is why `configured` is a field rather than
   something a reader is left to infer from an empty list.
-  Relay migration parity (E1, PARTIAL — 4 of 7 families migrated): the connector
+  Relay migration parity (E1, CLOSED BY SCOPE DECISION 2026-08-08 — every
+  gate-capable family migrated; three families retained by design): the connector
   catalog and Connectors console publish a per-family gate table for the seven
   appliance families, and the control plane now REFUSES a migrated family's deploy
   when the tenant has a network relay enrolled. Before this, the A3 role stamp
@@ -535,16 +536,25 @@ never live in the API process. What you can do end to end against the running bi
   both peers when a peer endpoint is configured — a deploy must reach BOTH or it
   fails, a rollback re-binds both, and a readback reports the pair serving only
   when both peers are bound to the deployed certificate; the two-peer deploy is
-  proven end-to-end through `relay.Execute` against two device doubles. NOT
-  migrated, with the reason named per family in the console: cisco, fortigate and
-  paloalto have no rollback and no readback — their management APIs import a
-  certificate by name with no separately-addressable installed object to re-bind
-  or query — so migrating them would remove the control plane's fallback without
-  providing the recovery path that justifies removing it.
-  Device-generated CSR is reported as outstanding rather than blocking on the five
-  families whose APIs support it: the current mode — the relay generates the key
-  inside the segment and installs it — is correct as it stands, and holding four
-  families back to avoid an improvement is the worse trade.
+  proven end-to-end through `relay.Execute` against two device doubles.
+  Control-plane execution RETAINED BY DESIGN (the E1 scope decision, terminal
+  rather than pending) for cisco, fortigate and paloalto: their management APIs
+  import a certificate by name with no separately-addressable installed object to
+  re-bind or query, so the rollback and readback gates are not expressible and
+  migrating them would remove the control plane's proven fallback without the
+  recovery path that justifies removing it. The parity surface and console now
+  say this explicitly (`cp_retained` + a scope note) so "not migrated" cannot be
+  read as "coming soon"; each family's support-matrix known limits state the same
+  constraint, and the closure invariant is pinned by a test (every relay-vantage
+  family is exactly one of migrated or retained, and a family whose API CAN pass
+  the gates may never be parked as retained). Re-check on new PAN-OS / FortiOS /
+  IOS-XE majors: a vendor API that grows an addressable installed object re-opens
+  that family's migration through the same gates, not around them.
+  Device-generated CSR is reported as outstanding on the five families whose
+  device APIs support it — a post-E1 enhancement, not part of the closed scope:
+  the current mode — the relay generates the key inside the segment and installs
+  it — is correct as it stands, and holding families back to avoid an improvement
+  was the worse trade.
   Served DR posture (J2): `GET /api/v1/platform/dr-posture` and
   `trstctl platform dr-posture` report when this deployment's backup was last
   VERIFIED — meaning its artifacts were re-hashed and matched — rather than when one

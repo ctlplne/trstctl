@@ -6492,11 +6492,13 @@ export interface components {
             next_cursor?: string;
         };
         ConnectorRelayParity: {
+            cp_retained?: boolean;
             detail: string;
             met: string[];
             missing: string[];
             outstanding: string[];
             relay_migrated: boolean;
+            scope_note?: string;
         };
         ConnectorSupportRow: {
             api_contract: string;

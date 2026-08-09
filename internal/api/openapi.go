@@ -2030,7 +2030,12 @@ func componentSchemas() map[string]*Schema {
 		"missing":        {Type: "array", Items: str()},
 		"outstanding":    {Type: "array", Items: str()},
 		"relay_migrated": {Type: "boolean"},
-		"detail":         str(),
+		// cp_retained distinguishes "not migrated by design" (the device API
+		// cannot express rollback/readback — E1 scope decision) from "not
+		// migrated yet"; scope_note carries the operator-facing reason.
+		"cp_retained": {Type: "boolean"},
+		"scope_note":  str(),
+		"detail":      str(),
 	}, "met", "missing", "outstanding", "relay_migrated", "detail")
 	// E3: deliberately no firmware version field. A version range is a claim
 	// about hardware nothing here runs, and a schema field for one would invite

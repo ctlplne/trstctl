@@ -565,6 +565,22 @@ export function Connectors() {
                           <span className="font-medium text-status-success">
                             {translateNow("source.relay.migrated.e1par00003")}
                           </span>
+                        ) : connector.relay_parity.cp_retained ? (
+                          /* Terminal by the E1 scope decision, not pending: the
+                             device API cannot express rollback/readback, so the
+                             proven control-plane path stays. Rendered neutral,
+                             not warning — a warning says "act", and there is
+                             nothing to act on. */
+                          <>
+                            <span className="font-medium">
+                              {translateNow("source.cp.retained.e1par00006")}
+                            </span>
+                            {connector.relay_parity.scope_note ? (
+                              <span className="mt-1 block text-xs text-muted-foreground">
+                                {connector.relay_parity.scope_note}
+                              </span>
+                            ) : null}
+                          </>
                         ) : (
                           <>
                             <span className="text-status-warning">

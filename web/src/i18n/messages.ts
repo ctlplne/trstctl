@@ -5690,6 +5690,10 @@ export const messages = {
     defaultMessage: "Outstanding (does not block migration):",
     description: "E1: named E1 deliverables that are not built, so a migrated family cannot read as a finished one.",
   },
+  "source.cp.retained.e1par00006": {
+    defaultMessage: "Control-plane executed by design",
+    description: "E1: terminal state, not a pending one — the device API cannot express rollback/readback, so the proven control-plane path is retained (E1 scope decision).",
+  },
   "source.authority.agreement.c4xr000001": {
     defaultMessage:
       "Authority agreement (XREC)",

@@ -2076,11 +2076,13 @@ ConnectorDeliveryList = TypedDict(
 ConnectorRelayParity = TypedDict(
     'ConnectorRelayParity',
     {
+        'cp_retained': bool,
         'detail': str,
         'met': list[str],
         'missing': list[str],
         'outstanding': list[str],
         'relay_migrated': bool,
+        'scope_note': str,
     },
     total=False,
 )
