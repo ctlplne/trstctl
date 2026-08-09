@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/ee/agentid/delegation"
 	agidstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/broker"
+	"trstctl.com/trstctl/internal/eventspec"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -33,8 +34,9 @@ import (
 // replay + idempotency behavior is proven end-to-end.
 
 const (
-	pgTenantReplay = "11111111-1111-1111-1111-111111111111"
-	pgTenantIdem   = "22222222-2222-2222-2222-222222222222"
+	pgTenantReplay  = "11111111-1111-1111-1111-111111111111"
+	pgTenantIdem    = "22222222-2222-2222-2222-222222222222"
+	pgTenantRefusal = "33333333-3333-3333-3333-333333333333"
 )
 
 var (
@@ -286,4 +288,146 @@ func TestIssue_IdempotencyKeySingleEvent(t *testing.T) {
 	if got := countRows(t, cs, tenant, `SELECT count(*) FROM agent_issuances WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid`); got != 2 {
 		t.Fatalf("agent_issuances rows after a distinct key = %d, want 2 (idempotency is keyed)", got)
 	}
+}
+
+// ---- TestSignerRefusal_RecordedDurably (INV-A1 signed-refusal substrate / AUD-4) ----
+
+// capturingAppender is the recorder's eventAppender seam, capturing appended events and
+// assigning sequences, so the test can assert the agent.refusal.recorded fact without a
+// live JetStream.
+type capturingAppender struct {
+	mu     sync.Mutex
+	events []eventspec.Event
+}
+
+func (c *capturingAppender) Append(_ context.Context, e eventspec.Event) (eventspec.Event, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e.Sequence = uint64(len(c.events) + 1)
+	c.events = append(c.events, e)
+	return e, nil
+}
+
+func (c *capturingAppender) byType(typ string) []eventspec.Event {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []eventspec.Event
+	for _, e := range c.events {
+		if e.Type == typ {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// TestSignerRefusal_RecordedDurably is the AUD-4 regression, driven through the FULL
+// precondition with the PRODUCTION recorder: a chain-bound issuance whose attestation
+// evidence fails verification is refused with ErrSignerRefused AND the gate's signed
+// refusal artifact lands as one agent_refusal_records row naming the failed check, plus
+// one agent.refusal.recorded event. Asserting only ErrSignerRefused passes on the
+// pre-fix tree — the row and the event are what AUD-4 found missing.
+func TestSignerRefusal_RecordedDurably(t *testing.T) {
+	now := time.Unix(1_760_000_000, 0)
+	clock := func() time.Time { return now }
+	rec, cs := newRecorderPG(t, clock)
+	log := &capturingAppender{}
+	rec = rec.WithEventLog(log)
+	tenant := pgTenantRefusal
+
+	// A valid chain, but the presented attestation payload is NOT the seeded one:
+	// the in-signer gate refuses naming the attestation check.
+	gate, _, req := attestedRequest(t, tenant, "tpm", delegation.MinClassPolicy{"privileged": delegation.ClassHardwareTPM}, "privileged", clock)
+	req.Attestation = attBody(t, "tpm", []byte("tampered-evidence"))
+	pre := NewBrokerPrecondition(Config{Gate: gate, Policy: &fakePolicy{allow: true}, Resolver: staticResolver{req: req, found: true}, Recorder: rec, Clock: clock})
+
+	err := pre.CheckIssuancePrecondition(context.Background(), broker.IssuanceView{
+		TenantID: tenant, AgentID: "agent-refused", IdempotencyKey: "k-refusal-1", AttestationMethod: "tpm",
+	})
+	if !errors.Is(err, ErrSignerRefused) {
+		t.Fatalf("tampered-attestation issuance = %v, want ErrSignerRefused", err)
+	}
+
+	// The refusal is DURABLE: one row naming the failed check, with the signature.
+	if got := countRows(t, cs, tenant,
+		`SELECT count(*) FROM agent_refusal_records
+		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND failed_check = $1 AND subject_id = $2`,
+		delegation.CheckAttestation, "leaf"); got != 1 {
+		all := countRows(t, cs, tenant, `SELECT count(*) FROM agent_refusal_records WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid`)
+		t.Fatalf("refusal rows naming check %q = %d (total %d), want exactly 1 — the signed refusal was minted and thrown away (AUD-4)", delegation.CheckAttestation, got, all)
+	}
+	if got := countRows(t, cs, tenant,
+		`SELECT count(*) FROM agent_refusal_records
+		  WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid AND octet_length(signature) > 0`); got != 1 {
+		t.Fatalf("refusal rows carrying a signature = %d, want 1 (the artifact is SIGNED)", got)
+	}
+
+	// And the AN-2 fact exists: exactly one agent.refusal.recorded event.
+	refusalEvents := log.byType(delegation.TypeRefusalRecorded)
+	if len(refusalEvents) != 1 {
+		t.Fatalf("agent.refusal.recorded events = %d, want exactly 1", len(refusalEvents))
+	}
+
+	// A SECOND refused attempt mints a fresh signed artifact (ECDSA signatures are
+	// randomized) and records as its own refusal fact: two refused attempts are two
+	// refusals, and hiding the second would under-report exactly what this
+	// substrate exists to show.
+	err = pre.CheckIssuancePrecondition(context.Background(), broker.IssuanceView{
+		TenantID: tenant, AgentID: "agent-refused", IdempotencyKey: "k-refusal-2", AttestationMethod: "tpm",
+	})
+	if !errors.Is(err, ErrSignerRefused) {
+		t.Fatalf("retried tampered-attestation issuance = %v, want ErrSignerRefused", err)
+	}
+	if got := countRows(t, cs, tenant, `SELECT count(*) FROM agent_refusal_records WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid`); got != 2 {
+		t.Fatalf("refusal rows after a second refused attempt = %d, want 2 (each refusal is its own fact)", got)
+	}
+
+	// Re-recording the SAME artifact bytes (a crash-retry between insert and ack) is
+	// idempotent: the refusal id derives from the artifact digest.
+	art, err := delegation.DecodeRefusal(mustFirstRefusalRecord(t, log))
+	if err != nil {
+		t.Fatalf("decode captured refusal: %v", err)
+	}
+	raw, err := delegation.EncodeRefusal(art)
+	if err != nil {
+		t.Fatalf("re-encode refusal: %v", err)
+	}
+	if err := rec.RecordRefusal(context.Background(), tenant, raw); err != nil {
+		t.Fatalf("re-record same artifact: %v", err)
+	}
+	if err := rec.RecordRefusal(context.Background(), tenant, raw); err != nil {
+		t.Fatalf("re-record same artifact twice: %v", err)
+	}
+	after := countRows(t, cs, tenant, `SELECT count(*) FROM agent_refusal_records WHERE tenant_id = current_setting('trstctl.tenant_id')::uuid`)
+	if after != 3 {
+		t.Fatalf("refusal rows after re-recording one artifact twice = %d, want 3 (2 live refusals + 1 re-encoded, deduped on digest)", after)
+	}
+}
+
+// mustFirstRefusalRecord rebuilds the raw artifact bytes carried by the first captured
+// agent.refusal.recorded event so the same-bytes idempotency path can be exercised.
+// The event payload carries the artifact fields; re-encoding through the public codec
+// yields stable bytes for the digest-keyed insert.
+func mustFirstRefusalRecord(t *testing.T, log *capturingAppender) []byte {
+	t.Helper()
+	events := log.byType(delegation.TypeRefusalRecorded)
+	if len(events) == 0 {
+		t.Fatal("no captured agent.refusal.recorded event")
+	}
+	decoded, err := delegation.Decode(events[0])
+	if err != nil {
+		t.Fatalf("decode refusal event: %v", err)
+	}
+	p, ok := decoded.(delegation.RefusalRecordedV1)
+	if !ok {
+		t.Fatalf("decoded refusal event = %T, want RefusalRecordedV1", decoded)
+	}
+	raw, err := delegation.EncodeRefusal(delegation.RefusalArtifact{
+		TenantID:    p.TenantID,
+		SubjectID:   p.SubjectID,
+		FailedCheck: p.FailedCheck, RequestDigest: p.RequestDigest, Signature: p.Signature,
+	})
+	if err != nil {
+		t.Fatalf("encode artifact: %v", err)
+	}
+	return raw
 }

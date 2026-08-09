@@ -21,6 +21,7 @@ package brokerstore
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"trstctl.com/trstctl/ee/agentid/delegation"
+	agidstore "trstctl.com/trstctl/ee/agentid/delegation/store"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/eventspec"
 	corestore "trstctl.com/trstctl/internal/store"
@@ -174,6 +176,57 @@ func (r *Recorder) RecordIssuanceBinding(ctx context.Context, b delegation.Issua
 		}
 	}
 	return nil
+}
+
+// RecordRefusal persists a signed refusal artifact durably and appends the
+// agent.refusal.recorded fact (INV-A1's signed-refusal substrate). Before this
+// existed the gate minted the artifact and the only production consumer threw it
+// away (AUD-4): no event, no row, and a refused agent issuance was
+// indistinguishable from any other error.
+//
+// The refusal id is a digest of the artifact bytes, and the insert is idempotent
+// on it, so re-presenting the same refusal (a crash-retry) records once. The
+// ledger fact is appended first so the row carries the ledger sequence; a
+// deployment without an event log still keeps the durable row — a refusal
+// recorded in one place beats one recorded nowhere.
+func (r *Recorder) RecordRefusal(ctx context.Context, tenantID string, refusalRecord []byte) error {
+	if r == nil || r.core == nil {
+		return delegation.ErrNoBindingStore
+	}
+	if tenantID == "" {
+		return fmt.Errorf("brokerstore: RecordRefusal requires a tenant (AN-1)")
+	}
+	art, err := delegation.DecodeRefusal(refusalRecord)
+	if err != nil {
+		return fmt.Errorf("brokerstore: decode refusal artifact: %w", err)
+	}
+	var seq uint64
+	if r.log != nil {
+		ev, err := delegation.Encode(delegation.RefusalRecordedV1{
+			TenantID:      tenantID,
+			SubjectID:     art.SubjectID,
+			FailedCheck:   art.FailedCheck,
+			RequestDigest: art.RequestDigest,
+			Signature:     art.Signature,
+		})
+		if err != nil {
+			return fmt.Errorf("brokerstore: encode refusal event: %w", err)
+		}
+		appended, err := r.log.Append(ctx, ev)
+		if err != nil {
+			return fmt.Errorf("brokerstore: append refusal event: %w", err)
+		}
+		seq = appended.Sequence
+	}
+	repo := agidstore.New(r.core)
+	return repo.InsertRefusalRecord(ctx, tenantID, agidstore.RefusalRecord{
+		RefusalID:     "refusal-" + hex.EncodeToString(crypto.SHA256Sum(refusalRecord)),
+		SubjectID:     art.SubjectID,
+		FailedCheck:   art.FailedCheck,
+		RequestDigest: art.RequestDigest,
+		Signature:     art.Signature,
+		Seq:           seq,
+	})
 }
 
 type projectedChainRecord struct {

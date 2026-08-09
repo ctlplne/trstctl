@@ -448,9 +448,45 @@ func (p *BrokerPrecondition) verifyInSigner(ctx context.Context, tenantID string
 		return signing.IssuanceDecision{}, fmt.Errorf("%w: %v", ErrSignerRefused, err)
 	}
 	if !decision.Approved {
+		// The gate minted a SIGNED refusal naming the failed check (INV-A1's
+		// refusal substrate). Record it durably before surfacing the refusal —
+		// dropping it here was AUD-4: the artifact existed for milliseconds and
+		// the operator could never distinguish a refused issuance from any other
+		// error. A failed recording joins the refusal error rather than replacing
+		// it: the refusal stands either way, and losing the record must be loud.
+		if recErr := p.recordRefusal(ctx, tenantID, decision.RefusalRecord); recErr != nil {
+			return signing.IssuanceDecision{}, errors.Join(ErrSignerRefused, recErr)
+		}
 		return signing.IssuanceDecision{}, ErrSignerRefused
 	}
 	return decision, nil
+}
+
+// RefusalRecorder is the OPTIONAL refusal-persistence seam: a recorder that can
+// durably keep the gate's signed refusal artifact and append the
+// agent.refusal.recorded fact. The production *Recorder implements it; the
+// in-memory test recorders need not. The seam is optional (a type assertion, not
+// a Config field) so every existing IssuanceBindingRecorder keeps compiling and
+// the fail-closed default wiring is unchanged.
+type RefusalRecorder interface {
+	RecordRefusal(ctx context.Context, tenantID string, refusalRecord []byte) error
+}
+
+// recordRefusal hands the signed refusal artifact to the recorder when one is
+// held and offers the seam. An empty artifact or a recorder without the seam
+// records nothing — the refusal itself still stands with ErrSignerRefused.
+func (p *BrokerPrecondition) recordRefusal(ctx context.Context, tenantID string, raw []byte) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	rec, ok := p.cfg.Recorder.(RefusalRecorder)
+	if !ok {
+		return nil
+	}
+	if err := rec.RecordRefusal(ctx, tenantID, raw); err != nil {
+		return fmt.Errorf("brokerstore: record signed refusal: %w", err)
+	}
+	return nil
 }
 
 // recordBinding records the verified attestation bound to the issuance it justifies and

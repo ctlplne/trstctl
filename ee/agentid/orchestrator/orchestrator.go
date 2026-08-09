@@ -48,6 +48,7 @@ import (
 	"fmt"
 
 	agidapi "trstctl.com/trstctl/ee/agentid/api"
+	"trstctl.com/trstctl/ee/agentid/delegation"
 	"trstctl.com/trstctl/ee/agentid/revoke"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
@@ -71,6 +72,13 @@ const (
 	// DownstreamPlaneDestination is the downstream trust-plane revocation-entry
 	// publication (KRL/CRL). Acknowledged here (the downstream plane consumes it).
 	DownstreamPlaneDestination = revoke.DestinationDownstreamPlane // "agent.revocation.downstream-plane"
+	// AttestationBindingDestination is the attestation-binding publish intent the
+	// brokerstore recorder enqueues in the SAME transaction as every chain-bound
+	// issuance (AN-6). Before this worker owned it, the row was undeliverable
+	// (AUD-5): it burned all ten attempts against "unsupported first-party outbox
+	// destination" and dead-lettered — one permanent dead-letter row plus ten
+	// error-logged failures per issuance, forever.
+	AttestationBindingDestination = delegation.AttestationBindingDestination // "agid.attestation.bound"
 )
 
 // NewLicensedOutboxFactory returns the AGID licensed-outbox factory (INT-04). The
@@ -129,6 +137,15 @@ func (h *handler) DeliverLicensed(ctx context.Context, m coreorch.Message) (bool
 		// effect + signed evidence); downstream-plane KRL/CRL push is the downstream
 		// plane's concern. A successful no-op marks the outbox row delivered, mirroring
 		// PCAS's pcas.rp-publish ack.
+		return true, nil
+	case AttestationBindingDestination: // agid.attestation.bound
+		// The attestation binding and its ledger facts are ALREADY durable when this
+		// intent is drained: the recorder wrote the binding row in the same
+		// transaction as the enqueue and appended the issuance facts on commit.
+		// Acknowledging marks the publish intent delivered under its idempotency
+		// key, exactly like the downstream-plane ack above; a future downstream
+		// attestation-binding consumer hooks in here. Leaving the row unowned made
+		// every chain-bound issuance dead-letter (AUD-5).
 		return true, nil
 	default:
 		return false, nil

@@ -485,12 +485,15 @@ func (h *harness) issueAgent(t *testing.T, agentID, nonce string) issuedAgent {
 func (h *harness) drain(t *testing.T, max int) {
 	t.Helper()
 	handler := coreorch.HandlerFunc(func(ctx context.Context, m coreorch.Message) error {
+		// The REAL licensed handler owns every AGID destination now, including
+		// agid.attestation.bound (AUD-5) — this drain no longer stands in for a
+		// missing worker. An unowned destination is a wiring bug worth failing on.
 		handled, err := h.handler.DeliverLicensed(ctx, m)
-		if err != nil || handled {
+		if err != nil {
 			return err
 		}
-		if m.Destination == delegation.AttestationBindingDestination {
-			return nil
+		if !handled {
+			return fmt.Errorf("licensed handler did not own destination %q", m.Destination)
 		}
 		return nil
 	})

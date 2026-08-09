@@ -91,3 +91,25 @@ func TestRevocationHeadDigestUsesRecordDigest(t *testing.T) {
 		t.Fatal("revocation pre-check must use the final delegation record digest")
 	}
 }
+
+// TestDeliverLicensed_AttestationBindingAck asserts the attestation-binding publish
+// intent — enqueued by the brokerstore recorder in the SAME transaction as every
+// chain-bound issuance — is OWNED by this worker (handled=true, nil error) so the
+// outbox row marks delivered. Before this case existed the row was undeliverable:
+// it fell through internal/server's dispatcher to "unsupported first-party outbox
+// destination", burned all ten attempts, and dead-lettered on every issuance (AUD-5).
+func TestDeliverLicensed_AttestationBindingAck(t *testing.T) {
+	h := &handler{}
+	handled, err := h.DeliverLicensed(context.Background(), coreorch.Message{
+		Destination: delegation.AttestationBindingDestination,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !handled {
+		t.Fatal("handled = false for agid.attestation.bound — the recorder enqueues this destination on every chain-bound issuance and it MUST be owned (AUD-5)")
+	}
+	if AttestationBindingDestination != delegation.AttestationBindingDestination {
+		t.Errorf("AttestationBindingDestination %q != delegation %q", AttestationBindingDestination, delegation.AttestationBindingDestination)
+	}
+}

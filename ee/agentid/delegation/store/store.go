@@ -262,12 +262,16 @@ func (r *Repo) InsertAttestationBinding(ctx context.Context, tenantID string, ab
 }
 
 // InsertRefusalRecord inserts a signed refusal artifact for tenantID (INV-A1).
+// Idempotent on (tenant, refusal id): the brokerstore recorder derives the id
+// from the artifact bytes, so a crash-retry re-presenting the same refusal
+// records exactly once instead of erroring on the primary key.
 func (r *Repo) InsertRefusalRecord(ctx context.Context, tenantID string, rr RefusalRecord) error {
 	return r.core.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO agent_refusal_records
 			   (tenant_id, refusal_id, subject_id, failed_check, request_digest, signature, seq)
-			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)`,
+			 VALUES (current_setting('trstctl.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)
+			 ON CONFLICT (tenant_id, refusal_id) DO NOTHING`,
 			rr.RefusalID, rr.SubjectID, rr.FailedCheck, nilIfEmpty(rr.RequestDigest), rr.Signature, rr.Seq)
 		if err != nil {
 			return fmt.Errorf("agid store: insert refusal record: %w", err)
