@@ -79,6 +79,19 @@ func (p *PGRegistry) Place(ctx context.Context, tenantID, slug, model, zone, sta
 	})
 }
 
+// Remove deletes a tenant's placement row. The isolation drill uses it to
+// clean up its ephemeral probe tenants; the served API exposes no route to it,
+// and offboarding flows own real tenants' lifecycle.
+func (p *PGRegistry) Remove(ctx context.Context, tenantID string) error {
+	if p == nil || p.store == nil {
+		return nil
+	}
+	return p.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM tenant_silos WHERE tenant_id = $1`, tenantID)
+		return err
+	})
+}
+
 // ResidencyZone reports where a tenant's data is pinned.
 //
 // An empty zone means UNPINNED, and a caller must not read that as "compliant

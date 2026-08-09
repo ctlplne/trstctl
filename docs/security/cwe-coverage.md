@@ -40,7 +40,7 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE-798 | 247 | [cwe-register.md](cwe-register.md) |
 | CWE-276 | 150 | [cwe-register.md](cwe-register.md) |
 | CWE-78 | 145 | [cwe-register.md](cwe-register.md) |
-| CWE-190 | 130 | [cwe-register.md](cwe-register.md) |
+| CWE-190 | 131 | [cwe-register.md](cwe-register.md) |
 | CWE-1004 | 31 | [cwe-register.md](cwe-register.md) |
 | CWE-367 | 22 | [cwe-register.md](cwe-register.md) |
 | CWE-338 | 20 | [cwe-register.md](cwe-register.md) |

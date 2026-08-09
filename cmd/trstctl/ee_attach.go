@@ -50,6 +50,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/server"
@@ -282,6 +283,12 @@ func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.De
 // governance, and multi-tenant provider features. Same one-block-per-feature
 // shape as attachEE; split only to keep either function readable.
 func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
+	// siloInstall is captured so the provider isolation drill can drive the
+	// LIVE event-lane checks over the same registry and router the deployment
+	// routes with. Nil when siloed isolation is not licensed — the drill then
+	// runs the store dimensions only, claiming nothing about lanes that do not
+	// exist.
+	var siloInstall *eesilo.Installation
 	if lic != nil && lic.Has(license.FeatureBYOK) {
 		managedKeysConfig := attachConfig(cfg).ManagedKeys
 		if managedKeysConfig.Enabled {
@@ -307,7 +314,7 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 		// L4: durable silo placement. InstallInMemory reverted every tenant to
 		// the shared isolation default on restart, SILENTLY — a customer who
 		// bought hard isolation had it until the first deploy.
-		eesilo.InstallDurable(deps.Store)
+		siloInstall = eesilo.InstallDurable(deps.Store)
 		if log != nil {
 			log.Info("Provider siloed isolation attached", slog.String("feature", string(license.FeatureSiloedIsolation)))
 		}
@@ -386,10 +393,12 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 			// gate. Nil when white-label is not licensed, which refuses every
 			// brand write — a brand nobody can resolve is not white-label.
 			Brands: providerBrandStore(brandInstall),
-			// L3: the on-demand isolation drill runs the core store's real
-			// cross-tenant read/write proof so a provider operator can attest,
-			// at any moment, that tenant isolation holds.
-			Drills: isolationDrillerAdapter{store: deps.Store},
+			// L3/L4: the on-demand isolation drill runs the core store's real
+			// cross-tenant read/write proof, and — when siloed isolation is
+			// installed and the event log is up — the LIVE event-lane checks:
+			// probe tenants placed in the real registry, probe events appended
+			// through the real router, lane counts observed on the real stream.
+			Drills: isolationDrillerAdapter{store: deps.Store, lanes: laneDrillFor(siloInstall, deps.Log)},
 		})
 		if log != nil {
 			// Says what an operator will actually observe. "Attached" alone
@@ -683,12 +692,40 @@ func (a brandStoreAdapter) SetTenantBrand(ctx context.Context, b eeprovider.Tena
 // provider's so the plane holds no dependency on the store's internals. It lives
 // in the attach seam for the same reason the brand adapter does: only here may
 // both ee/provider and the core store be named without an edition cycle.
-type isolationDrillerAdapter struct{ store *corestore.Store }
+type isolationDrillerAdapter struct {
+	store *corestore.Store
+	// lanes is the L4 live event-lane dimension; nil when siloed isolation is
+	// not installed or no event log is up, in which case the drill truthfully
+	// reports only the dimensions the deployment has.
+	lanes *eesilo.LaneDrill
+}
+
+// laneDrillFor builds the event-lane drill only when its whole substrate
+// exists: a DURABLE silo installation (lanes are a siloed-isolation concept)
+// and the deployment's event log. Anything less returns nil rather than a
+// drill that would fail on absence and read as a broken deployment.
+func laneDrillFor(install *eesilo.Installation, log *events.Log) *eesilo.LaneDrill {
+	if install == nil || !install.Durable || install.PG == nil || install.Router == nil || log == nil {
+		return nil
+	}
+	return eesilo.NewLaneDrill(install.PG, install.Router, log)
+}
 
 func (a isolationDrillerAdapter) RunIsolationDrill(ctx context.Context) (eeprovider.IsolationDrillReport, error) {
 	r, err := a.store.RunIsolationDrill(ctx)
 	if err != nil {
 		return eeprovider.IsolationDrillReport{}, err
+	}
+	if a.lanes != nil {
+		// The lane checks join the same report: one drill, one attestation,
+		// every dimension the deployment actually has (L4).
+		laneChecks := a.lanes.Run(ctx)
+		r.Checks = append(r.Checks, laneChecks...)
+		for _, c := range laneChecks {
+			if !c.Passed {
+				r.Passed = false
+			}
+		}
 	}
 	out := eeprovider.IsolationDrillReport{Passed: r.Passed}
 	for _, c := range r.Checks {
