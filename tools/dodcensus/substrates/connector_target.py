@@ -15,6 +15,7 @@ import shutil
 import signal
 import socketserver
 import subprocess
+import sys
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -251,7 +252,6 @@ class State:
                 ("PUT", "/nitro/v1/config/sslcertkey"),
                 ("POST", "/nitro/v1/config/logout"),
             ],
-            "connector.kemp": [("PUT", "/access/certificates/dod-target-trstctl"), ("PATCH", "/access/virtual-services/dod-target/certificate")],
             "connector.cisco": [("POST", "/api/certificate/import")],
             "connector.fortigate": [("PUT", "/api/v2/cmdb/vpn.certificate/local/dod-target")],
             "connector.paloalto": [("POST", "/api/")],
@@ -259,6 +259,13 @@ class State:
             "connector.azurekv": [("PUT", "/certificates/dod-target/import")],
             "connector.gcpcm": [("PATCH", "/v1/projects/dod-project/locations/global/certificates/dod-target")],
         }
+        if entry == "connector.kemp":
+            upload = re.compile(r"^/access/certificates/dod-target-trstctl-[0-9a-f]{12}$")
+            return (
+                any(method == "PUT" and upload.fullmatch(path) for method, path in paths)
+                and ("PATCH", "/access/virtual-services/dod-target/certificate") in paths
+                and bool(self.readback)
+            )
         if entry in expected:
             required = expected[entry]
             if not all(item in paths for item in required) or not self.readback:
@@ -285,6 +292,18 @@ class State:
                 not self.signal_error and len(self.signals) == signal_contract_length(entry)
             )
         return bool(self.readback) and complete
+
+    def failure_diagnostic(self) -> dict:
+        """Return only bounded metadata that cannot carry connector secrets."""
+        paths = self.paths()[:64]
+        with self.lock:
+            return {
+                "entry_id": self.entry_id,
+                "paths": [{"method": method, "path": path} for method, path in paths],
+                "has_readback": bool(self.readback),
+                "signal_count": len(self.signals),
+                "signal_error": self.signal_error,
+            }
 
     def record_signal(self, payload: dict) -> bool:
         with self.lock:
@@ -542,6 +561,13 @@ def serve() -> int:
     server.server_close()
     thread.join(timeout=2)
     passed = state.passed()
+    if not passed:
+        print(
+            "DOD_SUBSTRATE_FAILURE "
+            + json.dumps(state.failure_diagnostic(), sort_keys=True, separators=(",", ":")),
+            file=sys.stderr,
+            flush=True,
+        )
     json_line({
         "schema_version": 1, "challenge": challenge, "entry_id": entry_id,
         "identity": identity, "contract_digest": contract, "pid": os.getpid(),

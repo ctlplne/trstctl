@@ -199,13 +199,19 @@ func dodConfigureRekorLogKey(t *testing.T, dir string) string {
 // AN-4/dual-control boundary instead of serving a signer goroutine in-process.
 func dodStartAuthorizedSoftwareSignerProcess(t *testing.T, dir string) runSigner {
 	t.Helper()
+	first, _ := dodStartRestartableAuthorizedSoftwareSignerProcess(t, dir)
+	return first
+}
+
+func dodStartRestartableAuthorizedSoftwareSignerProcess(t *testing.T, dir string) (runSigner, func() runSigner) {
+	t.Helper()
 	authFile := filepath.Join(dir, "signer-auth.bin")
 	parentAuthorizer, err := signing.LoadOrCreateAuthorizer(authFile)
 	if err != nil {
 		t.Fatalf("load parent sign-token provider: %v", err)
 	}
 	t.Cleanup(parentAuthorizer.Destroy)
-	return dodStartShippedSignerProcess(t, dir, "codesign", authFile, "", parentAuthorizer)
+	return dodStartRestartableShippedSignerProcess(t, dir, "codesign", authFile, "", parentAuthorizer)
 }
 
 func dodGitHubOIDCIdentity(t *testing.T) ([]byte, []byte) {

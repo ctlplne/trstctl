@@ -88,7 +88,7 @@ func NewReceiptSigner(key *jose.SigningKey) events.TenantDataContinuity {
 		if err != nil {
 			return events.Event{}, fmt.Errorf("history continuity: encode canonical claims: %w", err)
 		}
-		signed, err := key.Sign(canonical)
+		signed, err := key.SignArtifact(jose.ArtifactHistoryContinuity, canonical)
 		if err != nil {
 			return events.Event{}, fmt.Errorf("history continuity: sign canonical claims: %w", err)
 		}

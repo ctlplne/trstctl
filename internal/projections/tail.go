@@ -4,6 +4,7 @@ package projections
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -82,21 +83,47 @@ func (w *TailWorker) Run(ctx context.Context) error {
 	if w.sampler != nil {
 		go w.sampleLagLoop(runCtx)
 	}
-	return w.log.TailFrom(runCtx, w.proj.store.ProjectionCheckpoint, func(e events.Event) error {
+	tailErr := w.log.TailFrom(runCtx, w.proj.store.ProjectionCheckpoint, func(e events.Event) error {
 		if err := w.proj.Apply(runCtx, e); err != nil {
-			return err
+			return w.persistFailure(runCtx, e.Sequence, err)
 		}
 		// Advance the projection checkpoint as the tail applies out-of-band events
 		// (SPINE-007), so the boot catch-up watermark stays current and a restart
-		// resumes from the tail's position rather than re-replaying. A failure to
-		// advance is non-fatal: the watermark is an optimization, not a correctness
-		// boundary (Apply is an idempotent upsert), so we keep tailing.
+		// resumes from the tail's position rather than re-replaying. If the advance
+		// fails, this invocation stops and records the sequence: acknowledging a
+		// message whose durable PostgreSQL cursor did not move would let the stream
+		// cursor get ahead of the read model.
 		if err := w.proj.AdvanceCheckpoint(runCtx, e.Sequence); err != nil {
-			return err
+			return w.persistFailure(runCtx, e.Sequence, err)
 		}
 		w.applied.Store(e.Sequence)
 		return nil
 	})
+	// A malformed stored envelope fails before TailFrom can invoke the callback,
+	// so the callback path above has no Event.Sequence to persist. Only that typed
+	// pre-callback error is made durable here. Fetch and ACK transport failures do
+	// not mean the read model rejected an event and remain retry-only.
+	var decodeErr *events.EnvelopeDecodeError
+	if errors.As(tailErr, &decodeErr) {
+		return w.persistFailure(runCtx, decodeErr.Sequence, tailErr)
+	}
+	return tailErr
+}
+
+// persistFailure records a poison before this Run invocation returns. It uses a
+// short fresh deadline because the projection operation may have consumed its own
+// request deadline; a cancelled worker shutdown is not a poison and is left clean.
+func (w *TailWorker) persistFailure(ctx context.Context, seq uint64, projectionErr error) error {
+	if ctx.Err() != nil {
+		return projectionErr
+	}
+	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := w.proj.store.RecordProjectionTailFailure(recordCtx, seq, projectionErr); err != nil {
+		return errors.Join(projectionErr,
+			fmt.Errorf("projections: persist tail failure at seq %d: %w", seq, err))
+	}
+	return projectionErr
 }
 
 // syncAppliedCheckpoint folds the durable projection checkpoint into the

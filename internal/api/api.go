@@ -5,7 +5,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,8 +50,6 @@ type API struct {
 	idem     *orchestrator.Idempotency
 	orch     *orchestrator.Orchestrator
 	tenantFn func(*http.Request) (string, error)
-	// enrollmentDiagnostics holds recent enrolment refusals, classified (I4).
-	enrollmentDiagnostics *diagnosticRecorder
 	// drVerify re-hashes the configured backup directory (J2). Nil means no
 	// backup directory is configured, which the surface reports as such rather
 	// than as a failure — plenty of deployments back up through infrastructure
@@ -423,7 +420,6 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		idem:                      idem,
 		orch:                      orch,
 		tenantFn:                  tenantFromHeader,
-		enrollmentDiagnostics:     newDiagnosticRecorder(),
 		drVerify:                  backupVerifierFor(cfg.backupDir),
 		lastDrill:                 cfg.lastDrill,
 		roles:                     reg,
@@ -1961,52 +1957,4 @@ func decodeJSONWithLimit(r *http.Request, v any, limit int64) error {
 		return errStatus(http.StatusBadRequest, fmt.Sprintf("invalid JSON body: %v", err))
 	}
 	return nil
-}
-
-// pageParams parses cursor-pagination query parameters, returning the page size
-// and the keyset start id.
-func (a *API) pageParams(r *http.Request) (limit int, after string, err error) {
-	limit, err = pageLimit(r)
-	if err != nil {
-		return 0, "", err
-	}
-	after = store.ZeroUUID
-	if c := r.URL.Query().Get("cursor"); c != "" {
-		id, e := decodeCursor(c)
-		if e != nil {
-			return 0, "", errors.New("invalid cursor")
-		}
-		after = id
-	}
-	return limit, after, nil
-}
-
-// pageLimit parses just the page-size query parameter (1-100, default 20). It is
-// shared by handlers that decode their own keyset cursor (e.g. the certificate
-// inventory's composite expiry cursor, SPINE-006).
-func pageLimit(r *http.Request) (int, error) {
-	limit := 20
-	if s := r.URL.Query().Get("limit"); s != "" {
-		n, e := strconv.Atoi(s)
-		if e != nil || n < 1 || n > 100 {
-			return 0, errors.New("limit must be an integer between 1 and 100")
-		}
-		limit = n
-	}
-	return limit, nil
-}
-
-func encodeCursor(id string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(id))
-}
-
-func decodeCursor(c string) (string, error) {
-	b, err := base64.RawURLEncoding.DecodeString(c)
-	if err != nil {
-		return "", err
-	}
-	if len(b) != 36 { // a UUID in canonical text form
-		return "", errors.New("cursor is not a valid id")
-	}
-	return string(b), nil
 }

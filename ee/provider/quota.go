@@ -16,10 +16,16 @@ import (
 // route would let the capped party raise their own cap, and the whole point
 // of the row is that somebody else set it.
 
-// QuotaStore is the durable half the plane writes through.
+// QuotaStore is the read-side quota view. PostgreSQL deliberately exposes no
+// quota writer; production changes enter through MutationSink and project into
+// this view.
 type QuotaStore interface {
 	QuotaFor(ctx context.Context, tenantID string) (billing.Quota, error)
-	SetQuota(ctx context.Context, q billing.Quota) error
+}
+
+type legacyQuotaStore interface {
+	QuotaStore
+	SetQuota(context.Context, billing.Quota) error
 }
 
 // SetTenantQuota persists a customer's limits.
@@ -46,11 +52,22 @@ func (s *Service) SetTenantQuota(ctx context.Context, actor Operator, customerID
 	}
 	q.TenantID = customerID
 	q.UpdatedBy = actor.Email
-	if err := s.quotas.SetQuota(ctx, q); err != nil {
+	now := s.clock()
+	if s.mutations != nil {
+		_, err := s.emit(ctx, EventTenantQuotaSet, customerID, AuthorityEvent{Quota: &q,
+			Audit: AuditEvent{Type: EventTenantQuotaSet, TenantID: customerID,
+				OperatorID: actor.ID, OperatorEmail: actor.Email, At: now}})
 		return err
 	}
-	return s.record(ctx, AuditEvent{Type: "provider.tenant.quota.set", TenantID: customerID,
-		OperatorID: actor.ID, OperatorEmail: actor.Email, At: s.clock()})
+	legacy, ok := s.quotas.(legacyQuotaStore)
+	if !ok {
+		return fmt.Errorf("provider: production quota stores require the event mutation sink")
+	}
+	if err := legacy.SetQuota(ctx, q); err != nil {
+		return err
+	}
+	return s.record(ctx, AuditEvent{Type: EventTenantQuotaSet, TenantID: customerID,
+		OperatorID: actor.ID, OperatorEmail: actor.Email, At: now})
 }
 
 // GetTenantQuota reads a customer's limits under the same delegation gate as

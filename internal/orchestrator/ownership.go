@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 )
 
@@ -27,6 +30,20 @@ import (
 // leave an estate whose ownership had changed with no record of the
 // disagreements that were overruled to change it.
 func (o *Orchestrator) ReconcileOwnership(ctx context.Context, tenantID string, in projections.OwnershipReconciled) error {
+	return o.reconcileOwnership(ctx, tenantID, "", in)
+}
+
+// ReconcileOwnershipFromRelay binds one owner's reconciliation to the durable
+// sync intent. A result replay therefore reuses the same event identity; the
+// projector's source-event key also collapses conflict rows on replay.
+func (o *Orchestrator) ReconcileOwnershipFromRelay(ctx context.Context, tenantID, resultKey string, in projections.OwnershipReconciled) error {
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(
+		"cmdb-relay-result\x00"+tenantID+"\x00"+resultKey+"\x00"+in.OwnerID,
+	)).String()
+	return o.reconcileOwnership(ctx, tenantID, eventID, in)
+}
+
+func (o *Orchestrator) reconcileOwnership(ctx context.Context, tenantID, eventID string, in projections.OwnershipReconciled) error {
 	if len(in.Applied) == 0 && len(in.Conflicts) == 0 {
 		// Nothing happened. An event per no-op would fill the log with the
 		// answer "the CMDB still agrees", which is the common case on every
@@ -40,7 +57,13 @@ func (o *Orchestrator) ReconcileOwnership(ctx context.Context, tenantID string, 
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventOwnershipReconciled, tenantID, payload)
+	if eventID == "" {
+		_, err = o.emit(ctx, projections.EventOwnershipReconciled, tenantID, payload)
+	} else {
+		_, err = o.emitPrepared(ctx, events.Event{
+			ID: eventID, Type: projections.EventOwnershipReconciled, TenantID: tenantID, Data: payload,
+		})
+	}
 	return err
 }
 

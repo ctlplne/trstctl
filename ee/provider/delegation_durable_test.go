@@ -76,16 +76,6 @@ func TestANilDurableSourceRefusesRatherThanReturningAnEmptyAllowlist(t *testing.
 	}
 }
 
-// Granting refuses a half-named delegation rather than storing it.
-func TestAHalfNamedGrantIsRefusedRatherThanStored(t *testing.T) {
-	t.Parallel()
-	var src *PGDelegationSource
-	if err := src.Grant(t.Context(), Delegation{OperatorID: "op-1"}, "admin"); err == nil {
-		t.Fatal("a delegation with no customer was accepted; a row naming only an operator reads " +
-			"like access somebody has")
-	}
-}
-
 // The grant command's vocabulary is closed.
 //
 // A typo'd operation stored as-is would authorise nothing, and the person who

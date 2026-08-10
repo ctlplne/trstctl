@@ -33,6 +33,22 @@ The control plane only starts once Postgres and NATS report healthy
 - Inspect the control-plane logs: `docker compose -f deploy/docker/docker-compose.yml logs trstctl`.
 - A configuration error (see above) will show in those logs; the container's
   health check runs `trstctl -check-config`.
+- `discovery finding identity conflict` is a fail-closed event-history diagnostic,
+  not permission to delete PostgreSQL rows. The message names the tenant, run/natural
+  key, existing and incoming payload IDs, and every differing immutable field. Preserve
+  PostgreSQL and NATS, export the named events for support, and correct the producer;
+  an identical legacy duplicate is canonicalized automatically and does not block
+  startup.
+- An older container may log that it is `recovering missing agent CA certificate
+  from retained signer handle`. That is the safe AUD-100 upgrade path: the signer
+  still owns the exact `agent-ca` key, and trstctl writes only a new self-signed
+  public wrapper to `/data/ca/agent-ca.crt`. It does not rotate the key. Preserve
+  both the signer-key and `trstctldata` volumes.
+- `agent CA certificate ... is invalid`, `does not match signer handle`, or
+  `signer handle ... is missing` is deliberately fatal. Do not delete the key or
+  certificate to clear it. Restore the matching pair from backup, or perform an
+  explicit agent trust rotation and re-enrollment; the named file is left intact
+  for recovery inspection.
 
 ## The agent never registers in the wizard
 
@@ -44,6 +60,27 @@ The **Install an agent** step polls for the agent to appear. If it does not:
   fresh one (`trstctl-cli agents enroll-token`) and re-run enrollment.
 - Check the agent's own logs; an enrollment rejection (`403`) means the token is
   unknown or already used.
+
+## `/readyz` says the projection tail is degraded
+
+The event log is the source notebook; PostgreSQL read tables are its lookup
+index. A healthy database and NATS connection are not enough if that index stopped
+at one immutable event, so `/readyz` returns 503 while the persisted failed
+sequence is still ahead of the projection checkpoint.
+
+1. Read `/readyz` and note the safe failed sequence and lag. The endpoint does not
+   expose the stored SQL error or event payload.
+2. Inspect the control-plane log for that sequence. Fix the named database,
+   schema, or producer incompatibility; do not delete the event, truncate a read
+   table, or advance `projection_checkpoint` by hand.
+3. Watch `trstctl_projection_lag_events`. The leader retries the projection tail;
+   after the event applies, it advances the projection checkpoint and clears the
+   failure marker atomically. `/readyz` and the Platform dependency readout return
+   to green without restarting the process.
+
+If every retry reports the same immutable binding mismatch, preserve PostgreSQL
+and JetStream and collect a support bundle. That is a code or history-compatibility
+incident, not a transient health check to silence.
 
 ## CLI commands return 401 or 403
 

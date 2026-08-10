@@ -123,7 +123,10 @@ func BuildTrace(device DeviceTrace, observed []Observation) DeviceTrace {
 	out.Steps = nil
 	out.BrokeAt = ""
 	broken := false
-	prevOK := true
+	// Nothing before the first immutable observation is pending. A device row
+	// existing does not prove that a request was made; missing request evidence
+	// is UNKNOWN, and only an observed successful stage makes the next one due.
+	prevOK := false
 	for _, stage := range Stages {
 		obs, reported := byStage[stage]
 		switch {

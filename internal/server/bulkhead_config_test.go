@@ -22,8 +22,9 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 	cfg.Bulkheads.Outbox.Workers = 2
 	cfg.Bulkheads.Outbox.Queue = 19
 	cfg.Bulkheads.OutboxConnectors = &config.BulkheadLimit{Workers: 1, Queue: 7}
+	auditKey := testAuditSigningKey(t)
 
-	deps, err := buildRunDeps(context.Background(), cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	deps, err := buildRunDeps(context.Background(), cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, auditKey)
 	if err != nil {
 		t.Fatalf("buildRunDeps: %v", err)
 	}
@@ -49,6 +50,7 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 		bulkhead.SubsystemOutboxTransparency:  {workers: 2, queue: 19},
 		bulkhead.SubsystemOutboxNotifications: {workers: 2, queue: 19},
 		bulkhead.SubsystemOutboxTenantSeal:    {workers: 2, queue: 19},
+		bulkhead.SubsystemOutboxFleet:         {workers: 2, queue: 19},
 	} {
 		got := stats[name]
 		if got.Workers != want.workers || got.Capacity != want.queue {
@@ -66,6 +68,7 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 		bulkhead.SubsystemOutboxTransparency,
 		bulkhead.SubsystemOutboxNotifications,
 		bulkhead.SubsystemOutboxTenantSeal,
+		bulkhead.SubsystemOutboxFleet,
 	} {
 		pool := deps.Bulkhead.Pool(name)
 		if prior, exists := seen[pool]; exists {

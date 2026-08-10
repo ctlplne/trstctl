@@ -230,6 +230,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleRevoke(ctx, m)
 	case "connector.deploy":
 		return d.handleDeploy(ctx, m)
+	case orchestrator.DestinationFleetReissuanceBatch:
+		return d.handleFleetReissuanceBatch(ctx, m)
 	case orchestrator.DestinationConnectorRollback, "connector.test":
 		// Relay-executed kinds. This dispatcher sweeps every "connector." row
 		// (see outboxDispatchFamilies) and does not filter on

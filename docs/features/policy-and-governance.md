@@ -221,23 +221,26 @@ tests replay through `notification.test.queued` events.
 
 Compliance reporting turns the audit log and the [CBOM](observability-and-risk.md) into
 signed, reproducible evidence packs covering all 15 supported frameworks (full list
-under [Reference](#reference)). Each framework's controls are marked *evidenced* or
-*gap* from real audit records and crypto posture (e.g. CNSA 2.0's PQC control passes
-only when post-quantum assets exist and quantum-vulnerable ones don't), and the report
-separates what the product evidences from what the operator must still attest (physical
-security, personnel) — an honest boundary, not an over-claim. Reports are signed through
-the single crypto path.
+under [Reference](#reference)). A v2 pack binds its claims to one tenant and one
+inclusive 90-day evidence window. Every evidenced control names exact immutable event
+references (ID, tenant-local sequence, type, time, and audit-chain digest) or exact
+tenant graph objects. Every prerequisite must resolve inside that boundary; missing,
+stale, malformed, or wrong-tenant evidence is a visible *gap*. CNSA 2.0's PQC control,
+for example, passes only when post-quantum assets exist and quantum-vulnerable ones do
+not. Reports are signed through the single crypto path, but a valid signature proves
+authenticity of the bounded manifest, not certification or auditor sufficiency.
 
-Each pack states residuals honestly: `fips-140` evidences the
-FIPS-capable build gate, `--fips` fail-closed self-test, and crypto-boundary/CI proof
-(residual: NIST CMVP certificate, deployment configuration); `common-criteria` evidences
-API, signer, tenant-isolation, RBAC, audit, and crypto-boundary controls (residual: lab
-evaluation report, certificate, protection profile); `cabf-br` evidences profile
-lint/zlint, CA issuance/revocation audit, signer isolation, and HSM-capable key
-management (residual: CP/CPS publication, independent public-trust audit — WebTrust and
-ETSI add broader CA-audit posture on the same split); and `soc2` maps logical-access,
-security-event, and change-management evidence to CC6/CC7/CC8 criteria (residual: scope,
-management assertion, sampling, independent CPA report).
+Each pack states residuals honestly. `fips-140` marks POST evidenced only when the
+running module is active and its fail-closed self-test passes; build provenance,
+crypto-boundary artifacts, CMVP certificate, and deployment configuration stay gaps
+without exact evidence. `common-criteria` can evidence attributable policy/change and
+credential-lifecycle facts, while its security target and lab evaluation remain gaps.
+`cabf-br` requires exact profile, CA issuance/revocation, custody, and ceremony events;
+CP/CPS publication and independent public-trust audit remain external. `soc2` requires
+current inventory plus complete ownership and review for CC6, policy/lifecycle/
+monitoring events for CC7, and active-policy/approved-change/lifecycle evidence for
+CC8; scope, management assertion, sampling, and the independent CPA report remain
+residuals.
 
 **Status:** served — evidence-pack export, inventory/schedule surface, and NHI
 compliance mapping below are all live REST/CLI/console routes. `GET
@@ -294,8 +297,9 @@ for the row-level map and erasure/retention behavior.
 ### In the console
 
 The `/policy` screen is a compliance evidence-pack dashboard: pick any of the 15
-supported frameworks (list under [Reference](#reference)), render the signed pack, and
-export audit evidence, alongside the compliance inventory report, audit-export
+supported frameworks (list under [Reference](#reference)), inspect its signed tenant,
+coverage window, exact per-control references and missing prerequisites, and export the
+pack or audit evidence, alongside the compliance inventory report, audit-export
 schedule form, NHI compliance mapping, and an NHI access certification panel for
 campaigns and reviewer decisions. The policy authoring workbench calls `POST
 /api/v1/policy/dry-run` to compile a candidate lifecycle or ABAC Rego module against the

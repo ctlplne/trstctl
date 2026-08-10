@@ -5,10 +5,13 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ConnectorDeliveryReceipt is the projected evidence for one connector.deploy
@@ -51,6 +54,8 @@ type RotationRun struct {
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 	CompletedAt            *time.Time
+	FirstEventSequence     uint64
+	LatestEventSequence    uint64
 }
 
 // ApplyConnectorDeliveryRecordedTx projects a connector.delivery.recorded event.
@@ -115,29 +120,313 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 
 // ApplyRotationRunRecordedTx projects a lifecycle.rotation.recorded event.
 func (s *Store) ApplyRotationRunRecordedTx(ctx context.Context, tx pgx.Tx, r RotationRun) error {
-	_, err := tx.Exec(ctx,
+	if r.FirstEventSequence == 0 {
+		r.FirstEventSequence = r.LatestEventSequence
+	}
+	if r.LatestEventSequence == 0 {
+		r.LatestEventSequence = r.FirstEventSequence
+	}
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO lifecycle_rotation_runs
 		        (id, tenant_id, identity_id, outbox_id, status, trigger, reason,
 		         predecessor_fingerprint, successor_fingerprint, rollback_ref, error,
-		         idempotency_key, created_at, updated_at, completed_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-		 ON CONFLICT (id) DO UPDATE
-		    SET identity_id = EXCLUDED.identity_id,
-		        outbox_id = EXCLUDED.outbox_id,
-		        status = EXCLUDED.status,
-		        trigger = EXCLUDED.trigger,
-		        reason = EXCLUDED.reason,
-		        predecessor_fingerprint = EXCLUDED.predecessor_fingerprint,
-		        successor_fingerprint = EXCLUDED.successor_fingerprint,
-		        rollback_ref = EXCLUDED.rollback_ref,
-		        error = EXCLUDED.error,
-		        idempotency_key = EXCLUDED.idempotency_key,
-		        updated_at = EXCLUDED.updated_at,
-		        completed_at = EXCLUDED.completed_at`,
+		         idempotency_key, created_at, updated_at, completed_at,
+		         first_event_sequence, latest_event_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		 ON CONFLICT DO NOTHING`,
 		r.ID, r.TenantID, r.IdentityID, r.OutboxID, r.Status, r.Trigger, r.Reason,
 		r.PredecessorFingerprint, r.SuccessorFingerprint, r.RollbackRef, r.Error,
-		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt, r.CompletedAt)
-	return err
+		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt, r.CompletedAt,
+		nullableRotationEventSequence(r.FirstEventSequence), nullableRotationEventSequence(r.LatestEventSequence))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+
+	// A lifecycle observation has two legitimate identities. An exact tail
+	// replay finds the payload UUID; a separately-created observation for the
+	// same external operation finds (tenant_id, outbox_id). ON CONFLICT cannot
+	// safely name only one of those indexes: the inline projector and durable
+	// tail can race, and PostgreSQL is allowed to observe the other index first.
+	// Lock every tenant-local candidate, reject a split identity, then reconcile
+	// the one winner after validating the immutable command binding.
+	rows, err := tx.Query(ctx,
+		`SELECT id::text, tenant_id::text, identity_id::text, outbox_id, status, trigger, reason,
+		        predecessor_fingerprint, successor_fingerprint, rollback_ref, error,
+		        idempotency_key, created_at, updated_at, completed_at,
+		        first_event_sequence, latest_event_sequence
+		   FROM lifecycle_rotation_runs
+		  WHERE tenant_id = $1
+		    AND (id = $2 OR ($3::bigint IS NOT NULL AND outbox_id = $3))
+		  ORDER BY id
+		  FOR UPDATE`,
+		r.TenantID, r.ID, r.OutboxID)
+	if err != nil {
+		return err
+	}
+	var matches []RotationRun
+	for rows.Next() {
+		var existing RotationRun
+		if err := scanRotationRun(rows, &existing); err != nil {
+			rows.Close()
+			return err
+		}
+		matches = append(matches, existing)
+	}
+	rowsErr := rows.Err()
+	rows.Close()
+	if rowsErr != nil {
+		return rowsErr
+	}
+	if len(matches) != 1 {
+		return fmt.Errorf(
+			"%w: lifecycle rotation tenant=%s incoming_id=%s matched %d rows across id/outbox identities",
+			ErrIdempotencyConflict, r.TenantID, r.ID, len(matches),
+		)
+	}
+	existing := matches[0]
+	if differences := rotationRunBindingDifferences(existing, r); len(differences) > 0 {
+		return fmt.Errorf(
+			"%w: lifecycle rotation tenant=%s existing_id=%s incoming_id=%s differing_binding_fields=%s",
+			ErrIdempotencyConflict, r.TenantID, existing.ID, r.ID, strings.Join(differences, ","),
+		)
+	}
+
+	desired := existing
+	if desired.FirstEventSequence == 0 && r.FirstEventSequence > 0 {
+		// A pre-0143 row has no historical sequence columns. The first live
+		// post-upgrade observation starts its ordered epoch without rewriting
+		// the row's already-established canonical ID or created_at.
+		desired.FirstEventSequence = r.FirstEventSequence
+	}
+	if rotationRunPrecedes(r, existing) {
+		desired.ID = r.ID
+		desired.CreatedAt = r.CreatedAt
+		desired.FirstEventSequence = r.FirstEventSequence
+	}
+	observationOrder, sequenceOrdered := rotationRunObservationOrder(r, existing)
+	if observationOrder > 0 && r.UpdatedAt.After(desired.UpdatedAt) {
+		desired.UpdatedAt = r.UpdatedAt
+	}
+
+	switch {
+	case observationOrder < 0:
+		// An inline writer may already have committed a newer observation when
+		// the durable tail reaches this older stream sequence. Keep the newer
+		// state even when the older producer clock appears later.
+	case observationOrder > 0:
+		if err := applyLaterRotationRunObservation(&desired, r); err != nil {
+			return fmt.Errorf(
+				"%w: lifecycle rotation tenant=%s existing_id=%s incoming_id=%s %v",
+				ErrIdempotencyConflict, r.TenantID, existing.ID, r.ID, err,
+			)
+		}
+		desired.LatestEventSequence = r.LatestEventSequence
+	default:
+		differences := rotationRunObservationDifferences(existing, r)
+		if len(differences) == 0 {
+			break
+		}
+		if sequenceOrdered {
+			return fmt.Errorf(
+				"%w: lifecycle rotation tenant=%s existing_id=%s incoming_id=%s differing_same_sequence_fields=%s",
+				ErrIdempotencyConflict, r.TenantID, existing.ID, r.ID, strings.Join(differences, ","),
+			)
+		}
+		existingTerminal := rotationRunStatusTerminal(existing.Status)
+		incomingTerminal := rotationRunStatusTerminal(r.Status)
+		switch {
+		case !existingTerminal && incomingTerminal:
+			// PostgreSQL stores microseconds. Two successive event timestamps can
+			// therefore tie after encoding; in that tie only the terminal state
+			// may advance the row.
+			applyRotationRunObservation(&desired, r)
+		case existingTerminal && !incomingTerminal:
+			// The same precision tie cannot pull a terminal row backwards.
+		default:
+			return fmt.Errorf(
+				"%w: lifecycle rotation tenant=%s existing_id=%s incoming_id=%s differing_same_time_fields=%s",
+				ErrIdempotencyConflict, r.TenantID, existing.ID, r.ID, strings.Join(differences, ","),
+			)
+		}
+	}
+
+	tag, err = tx.Exec(ctx,
+		`UPDATE lifecycle_rotation_runs
+		    SET id = $3,
+		        status = $4,
+		        successor_fingerprint = $5,
+		        rollback_ref = $6,
+		        error = $7,
+		        created_at = $8,
+		        updated_at = $9,
+		        completed_at = $10,
+		        first_event_sequence = $11,
+		        latest_event_sequence = $12
+		  WHERE tenant_id = $1 AND id = $2`,
+		r.TenantID, existing.ID, desired.ID, desired.Status, desired.SuccessorFingerprint,
+		desired.RollbackRef, desired.Error, desired.CreatedAt, desired.UpdatedAt, desired.CompletedAt,
+		nullableRotationEventSequence(desired.FirstEventSequence), nullableRotationEventSequence(desired.LatestEventSequence))
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return fmt.Errorf("%w: lifecycle rotation canonical row identity is already bound", ErrIdempotencyConflict)
+		}
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("%w: lifecycle rotation row disappeared during reconciliation", ErrIdempotencyConflict)
+	}
+	return nil
+}
+
+func rotationRunBindingDifferences(existing, incoming RotationRun) []string {
+	differences := make([]string, 0, 6)
+	if existing.IdentityID != incoming.IdentityID {
+		differences = append(differences, "identity_id")
+	}
+	if !sameOptionalInt64(existing.OutboxID, incoming.OutboxID) {
+		differences = append(differences, "outbox_id")
+	}
+	if existing.Trigger != incoming.Trigger {
+		differences = append(differences, "trigger")
+	}
+	if existing.Reason != incoming.Reason {
+		differences = append(differences, "reason")
+	}
+	if existing.PredecessorFingerprint != incoming.PredecessorFingerprint {
+		differences = append(differences, "predecessor_fingerprint")
+	}
+	if existing.IdempotencyKey != incoming.IdempotencyKey {
+		differences = append(differences, "idempotency_key")
+	}
+	return differences
+}
+
+func rotationRunObservationDifferences(existing, incoming RotationRun) []string {
+	differences := make([]string, 0, 5)
+	if existing.Status != incoming.Status {
+		differences = append(differences, "status")
+	}
+	if existing.SuccessorFingerprint != incoming.SuccessorFingerprint {
+		differences = append(differences, "successor_fingerprint")
+	}
+	if existing.RollbackRef != incoming.RollbackRef {
+		differences = append(differences, "rollback_ref")
+	}
+	if existing.Error != incoming.Error {
+		differences = append(differences, "error")
+	}
+	if !sameOptionalTime(existing.CompletedAt, incoming.CompletedAt) {
+		differences = append(differences, "completed_at")
+	}
+	return differences
+}
+
+func sameOptionalInt64(left, right *int64) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
+}
+
+func sameOptionalTime(left, right *time.Time) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return left.Equal(*right)
+}
+
+func rotationRunStatusTerminal(status string) bool {
+	return status == "succeeded" || status == "failed"
+}
+
+func applyLaterRotationRunObservation(destination *RotationRun, source RotationRun) error {
+	differences := rotationRunObservationDifferences(*destination, source)
+	if len(differences) == 0 {
+		return nil
+	}
+	if destination.Status == "succeeded" {
+		return fmt.Errorf("succeeded evidence is final; differing_fields=%s", strings.Join(differences, ","))
+	}
+	if destination.Status == "running" && source.Status == "running" {
+		return fmt.Errorf("a later running observation changed outcome fields=%s", strings.Join(differences, ","))
+	}
+	applyRotationRunObservation(destination, source)
+	return nil
+}
+
+func applyRotationRunObservation(destination *RotationRun, source RotationRun) {
+	destination.Status = source.Status
+	destination.SuccessorFingerprint = source.SuccessorFingerprint
+	destination.RollbackRef = source.RollbackRef
+	destination.Error = source.Error
+	destination.CompletedAt = source.CompletedAt
+}
+
+func rotationRunPrecedes(candidate, existing RotationRun) bool {
+	if candidate.FirstEventSequence > 0 && existing.FirstEventSequence > 0 {
+		return candidate.FirstEventSequence < existing.FirstEventSequence
+	}
+	if candidate.FirstEventSequence == 0 && existing.FirstEventSequence > 0 {
+		return false
+	}
+	if candidate.CreatedAt.IsZero() {
+		return false
+	}
+	order := rotationRunTimeOrder(candidate.CreatedAt, existing.CreatedAt)
+	if existing.CreatedAt.IsZero() || order < 0 {
+		return true
+	}
+	return order == 0 && candidate.ID < existing.ID
+}
+
+// rotationRunObservationOrder compares the local immutable stream order when
+// both observations carry it. New events always do; the timestamp fallback is
+// only for pre-0143 rows and direct legacy callers that have no sequence.
+func rotationRunObservationOrder(candidate, existing RotationRun) (order int, sequenceOrdered bool) {
+	if candidate.LatestEventSequence > 0 && existing.LatestEventSequence > 0 {
+		switch {
+		case candidate.LatestEventSequence < existing.LatestEventSequence:
+			return -1, true
+		case candidate.LatestEventSequence > existing.LatestEventSequence:
+			return 1, true
+		default:
+			return 0, true
+		}
+	}
+	if candidate.LatestEventSequence > 0 && existing.LatestEventSequence == 0 {
+		// A live post-upgrade event follows a legacy row whose checkpoint had
+		// already covered its history. Adopt the real local order from here on.
+		return 1, false
+	}
+	if candidate.LatestEventSequence == 0 && existing.LatestEventSequence > 0 {
+		// A sequence-less legacy/direct caller cannot supersede a row that has
+		// entered the ordered epoch.
+		return -1, true
+	}
+	return rotationRunTimeOrder(candidate.UpdatedAt, existing.UpdatedAt), false
+}
+
+func nullableRotationEventSequence(sequence uint64) sql.NullInt64 {
+	return sql.NullInt64{
+		Int64: int64(sequence), // #nosec G115 -- JetStream sequence fits PostgreSQL bigint by construction (CWE-190)
+		Valid: sequence > 0,
+	}
+}
+
+func rotationRunTimeOrder(candidate, existing time.Time) int {
+	candidateMicros := candidate.UnixMicro()
+	existingMicros := existing.UnixMicro()
+	if candidateMicros < existingMicros {
+		return -1
+	}
+	if candidateMicros > existingMicros {
+		return 1
+	}
+	return 0
 }
 
 func scanConnectorDeliveryReceipt(row pgx.Row, r *ConnectorDeliveryReceipt) error {
@@ -161,15 +450,26 @@ func scanConnectorDeliveryReceipt(row pgx.Row, r *ConnectorDeliveryReceipt) erro
 }
 
 func scanRotationRun(row pgx.Row, r *RotationRun) error {
-	var outboxID sql.NullInt64
+	var (
+		outboxID            sql.NullInt64
+		firstEventSequence  sql.NullInt64
+		latestEventSequence sql.NullInt64
+	)
 	err := row.Scan(&r.ID, &r.TenantID, &r.IdentityID, &outboxID, &r.Status, &r.Trigger, &r.Reason,
 		&r.PredecessorFingerprint, &r.SuccessorFingerprint, &r.RollbackRef, &r.Error,
-		&r.IdempotencyKey, &r.CreatedAt, &r.UpdatedAt, &r.CompletedAt)
+		&r.IdempotencyKey, &r.CreatedAt, &r.UpdatedAt, &r.CompletedAt,
+		&firstEventSequence, &latestEventSequence)
 	if err != nil {
 		return err
 	}
 	if outboxID.Valid {
 		r.OutboxID = &outboxID.Int64
+	}
+	if firstEventSequence.Valid && firstEventSequence.Int64 > 0 {
+		r.FirstEventSequence = uint64(firstEventSequence.Int64) // #nosec G115 -- constrained positive PostgreSQL bigint (CWE-190)
+	}
+	if latestEventSequence.Valid && latestEventSequence.Int64 > 0 {
+		r.LatestEventSequence = uint64(latestEventSequence.Int64) // #nosec G115 -- constrained positive PostgreSQL bigint (CWE-190)
 	}
 	return nil
 }
@@ -224,7 +524,8 @@ func (s *Store) ListRotationRunsPage(ctx context.Context, tenantID, identityID, 
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, identity_id::text, outbox_id, status, trigger, reason,
 			        predecessor_fingerprint, successor_fingerprint, rollback_ref, error,
-			        idempotency_key, created_at, updated_at, completed_at
+			        idempotency_key, created_at, updated_at, completed_at,
+			        first_event_sequence, latest_event_sequence
 			   FROM lifecycle_rotation_runs
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3 = '' OR identity_id::text = $3)
@@ -253,7 +554,8 @@ func (s *Store) GetRotationRun(ctx context.Context, tenantID, id string) (Rotati
 		return scanRotationRun(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, identity_id::text, outbox_id, status, trigger, reason,
 			        predecessor_fingerprint, successor_fingerprint, rollback_ref, error,
-			        idempotency_key, created_at, updated_at, completed_at
+			        idempotency_key, created_at, updated_at, completed_at,
+			        first_event_sequence, latest_event_sequence
 			   FROM lifecycle_rotation_runs
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &r)
 	})
@@ -512,7 +814,10 @@ type FleetVerificationOutcome struct {
 }
 
 // SummarizeFleetVerification reports the verification outcome for a set of
-// identities.
+// identities. A connector receipt counts only when its deployment outbox row
+// has a matching agent_job_receipts row whose signature was accepted. A plain
+// delivery projection, an unsigned report, or a rejected signature is absence,
+// never authority to release another fleet batch.
 //
 // This is what turns a fleet health gate from a label into a verdict. Until
 // D2/D3 nothing re-read an endpoint, so every gate trstctl filled in itself was
@@ -531,13 +836,19 @@ func (s *Store) SummarizeFleetVerification(ctx context.Context, tenantID string,
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`WITH latest AS (
-			   SELECT DISTINCT ON (identity_id)
-			          identity_id, status
-			     FROM connector_delivery_receipts
-			    WHERE tenant_id = $1
-			      AND identity_id = ANY($2::uuid[])
-			      AND status IN ('verified', 'verify_failed')
-			    ORDER BY identity_id, updated_at DESC, id DESC
+			   SELECT DISTINCT ON (c.identity_id)
+			          c.identity_id, c.status
+			     FROM connector_delivery_receipts c
+			     JOIN outbox o
+			       ON o.tenant_id = c.tenant_id
+			      AND c.idempotency_key = o.idempotency_key || ':verified'
+			     JOIN agent_job_receipts a
+			       ON a.tenant_id = o.tenant_id AND a.job_id = o.id
+			      AND a.state = 'verified'
+			    WHERE c.tenant_id = $1
+			      AND c.identity_id = ANY($2::uuid[])
+			      AND c.status IN ('verified', 'verify_failed')
+			    ORDER BY c.identity_id, c.updated_at DESC, c.id DESC
 			 )
 			 SELECT
 			   (SELECT count(*) FROM latest WHERE status = 'verified'),

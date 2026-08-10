@@ -205,7 +205,13 @@ func (s *Server) recordVerificationReceipt(
 		reason = "endpoint_serving_" + string(tr.Mismatch) + "_mismatch"
 	}
 
+	identityID := strings.TrimSpace(intent.IdentityID)
+	var identityIDRef *string
+	if identityID != "" {
+		identityIDRef = &identityID
+	}
 	_, _ = s.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
+		IdentityID:  identityIDRef,
 		Destination: "connector.deploy",
 		Connector:   intent.Connector,
 		Target:      intent.Target,

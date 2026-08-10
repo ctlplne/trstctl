@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
-	"trstctl.com/trstctl/internal/audit"
 	authpkg "trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	secretvault "trstctl.com/trstctl/internal/secrets"
@@ -54,7 +54,7 @@ func TestServedTenantKeyDomainSealWaitsForCachedResultAndReplaysAfterSeal(t *tes
 	cfg.Secrets.TenantSealLocalWrappers = []config.TenantSealLocalWrapper{{
 		ID: "tenant-served-wrapper", File: wrapperPath,
 	}}
-	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	auditKey, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	cfg.Secrets.TenantSealLocalWrappers = []config.TenantSealLocalWrapper{{
 		ID: "tenant-served-wrapper", File: wrapperPath,
 	}}
-	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	auditKey, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}

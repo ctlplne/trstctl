@@ -260,7 +260,7 @@ func (s *Store) ApplyMDMPollConfiguredTx(ctx context.Context, tx pgx.Tx, tenantI
 		   execution = EXCLUDED.execution,
 		   renewal_window_days = EXCLUDED.renewal_window_days, updated_at = now()`,
 		tenantID, in.MDM, in.BaseURL, in.TokenRef, in.Filter, in.IntervalSeconds,
-		in.Enabled, in.AllowPrivateEndpoint, in.PrivateEgressCIDRs, in.Execution, in.RenewalWindowDays)
+		in.Enabled, false, nil, "relay", in.RenewalWindowDays)
 	return err
 }
 

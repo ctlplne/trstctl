@@ -282,7 +282,7 @@ func (s *Service) Export(ctx context.Context, q Query) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return s.signer.Sign(payload)
+	return s.signer.SignArtifact(jose.ArtifactAuditExport, payload)
 }
 
 // VerifyChain reports the head of the hash chain over records and an error if any

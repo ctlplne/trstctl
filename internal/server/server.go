@@ -253,7 +253,7 @@ type Deps struct {
 	// when RequireApproval is on. Zero defaults to 2 (dual control), matching
 	// internal/approval.
 	RequiredApprovals int
-	AuditSigningKey   *jose.SigningKey // persistent audit export key; required for signed export/retention (R2.1)
+	AuditSigningKey   *jose.SigningKey // public + signer-RPC capability only; private audit key stays in trstctl-signer (AUD-63)
 	// ComplianceSigner signs served framework evidence-pack exports (COMP-01).
 	// Nil generates a process-local locked ECDSA key when audit + store are wired.
 	ComplianceSigner crypto.DigestSigner
@@ -1234,7 +1234,8 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	*defaults = append(*defaults, api.WithConnectorTestEnqueuer(
 		s.connectorTestEnqueuer(AgentClaimableJobKinds(d.AgentClaimableJobKinds))))
 	// B-5: the console's system readout reuses the same probes as /readyz, so
-	// the two can never disagree about whether the spine is up.
+	// the two can never disagree about whether the spine can serve trustworthy
+	// projected state.
 	*defaults = append(*defaults, api.WithSystemReadout(func() api.SystemReadout {
 		return s.systemReadout(context.Background())
 	}))
@@ -1304,13 +1305,20 @@ func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
 	// waited on synchronously: Submit either queues it (bounded) or rejects fast
 	// with the structured bulkhead error the caller can act on.
 	if pool := s.bulk.Pool(bulkhead.SubsystemSigning); pool != nil {
-		signing.SetSignerAdmission(func(call func() error) error {
+		admit := func(call func() error) error {
 			done := make(chan error, 1)
 			if err := pool.Submit(func() { done <- call() }); err != nil {
 				return err
 			}
 			return <-done
-		})
+		}
+		if setter, ok := d.Signer.(interface {
+			SetAdmission(func(func() error) error)
+		}); ok {
+			setter.SetAdmission(admit)
+		} else if d.Signer != nil && d.Signer.Client() != nil {
+			d.Signer.Client().SetAdmission(admit)
+		}
 	}
 	s.mBulkheads = observ.NewBulkheadMetrics(s.registry)
 	gate, approvals, err := buildMutationGate(d, s.bulk, s.outbox)
@@ -1653,6 +1661,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		recordADCSPosture:          s.recordADCSPosture,
 		recordCMDBSync:             s.recordCMDBSync,
 		recordMDMSync:              s.recordMDMSync,
+		recordTicketSync:           s.recordTicketSync,
 		recordEndpointVerification: s.recordEndpointVerificationSweep,
 		recordDeployVerification:   s.recordDeployVerification,
 		// B2: the CSR that comes back UP from a host-generated renewal is signed
@@ -1779,6 +1788,7 @@ func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 	checks := []observ.Check{
 		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.SystemPool().Ping(ctx) }},
 		{Name: "nats", Probe: func(ctx context.Context) error { return s.probeEventLog(ctx) }},
+		{Name: "projection", Probe: s.probeProjectionTail},
 	}
 	if d.Signer == nil {
 		return checks
@@ -1895,14 +1905,37 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertF
 	return nil
 }
 
-// writeCertPEM writes a certificate (DER) PEM-encoded to path (0644 in a 0755
-// dir). The CA certificate is public, so it is not a secret.
+// writeCertPEM atomically writes a certificate (DER) PEM-encoded to path (0644 in
+// a 0755 dir). The CA certificate is public, so it is not a secret. Atomic rename
+// prevents a restart from observing a truncated trust anchor after a crash.
 func writeCertPEM(path string, der []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- served CA certificate directory; the PEM is public material (CWE-276)
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- served CA certificate directory; the PEM is public material (CWE-276)
 		return err
 	}
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	return os.WriteFile(path, pemBytes, 0o644) // #nosec G306 -- served CA certificate PEM is public material (CWE-276)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*") // #nosec G304 -- same operator-configured directory as the target certificate (CWE-22)
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if err := tmp.Chmod(0o644); err != nil { // #nosec G306 -- served CA certificate PEM is public material (CWE-276)
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(pemBytes); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 func (s *Server) signerForPrivilegedHandle(ctx context.Context, c *signing.Client, handle string, purpose signing.KeyPurpose) (*signing.RemoteSigner, error) {
@@ -2140,6 +2173,7 @@ var outboxDispatchFamilies = func() []outboxDispatchFamily {
 		{pool: bulkhead.SubsystemOutboxCodeSigning, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"codesign."}}},
 		{pool: bulkhead.SubsystemOutboxNotifications, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"notification."}}},
 		{pool: bulkhead.SubsystemOutboxTenantSeal, scope: orchestrator.DestinationScope{IncludePrefixes: []string{store.TenantKeyDomainSealDestination}}},
+		{pool: bulkhead.SubsystemOutboxFleet, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"incident.fleet_reissuance."}}},
 	}
 	excluded := make([]string, 0, 8)
 	for _, family := range named {

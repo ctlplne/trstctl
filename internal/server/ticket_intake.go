@@ -6,17 +6,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
-	"trstctl.com/trstctl/internal/crypto/secret"
+	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
-	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/ticketintake"
 )
 
 // Ticket-driven issuance-request intake (epic I3).
@@ -37,6 +37,8 @@ const (
 	// their own urgency; a stale unapproved request is the queue's problem to
 	// surface, not the intake's to guess about.
 	ticketIntakeRequestTTL = 7 * 24 * time.Hour
+	// agentJobKindTicketSync is the relay-executed ITSM observation.
+	agentJobKindTicketSync = "ticket.sync"
 )
 
 // TicketIntakeResult is what one sweep did, and what it refused to do.
@@ -47,6 +49,15 @@ type TicketIntakeResult struct {
 	// Skipped counts tickets missing the mapped subject or profile — reported,
 	// never guessed at.
 	Skipped int
+}
+
+func ticketSyncIntent(sched store.TicketIntakeSchedule) ticketintake.SyncIntent {
+	return ticketintake.SyncIntent{
+		InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef, SNTable: sched.SNTable, Query: sched.Query,
+		SubjectField: sched.SubjectField, ProfileField: sched.ProfileField,
+		RequesterField: sched.RequesterField, JustificationField: sched.JustificationField,
+		PageLimit: ticketIntakePageLimit,
+	}
 }
 
 // RunTicketIntake is the leader-only ticker.
@@ -65,22 +76,7 @@ func (s *Server) RunTicketIntake(ctx context.Context) {
 			if err != nil || !due {
 				continue
 			}
-			res, runErr := s.RunTicketIntakeOnce(ctx, tenantID, sched)
-			msg := ""
-			if runErr != nil {
-				msg = runErr.Error()
-				s.logger.Warn("ticket intake failed",
-					slog.String("tenant_id", tenantID), slog.String("error", msg))
-			} else {
-				s.logger.Info("ticket intake complete",
-					slog.String("tenant_id", tenantID),
-					slog.Int("read", res.Read), slog.Int("opened", res.Opened),
-					slog.Int("already", res.Already), slog.Int("skipped", res.Skipped))
-			}
-			if err := s.store.MarkTicketIntakeRun(ctx, tenantID, sched.System, time.Now().UTC(), msg); err != nil {
-				s.logger.Warn("ticket intake: stamp failed",
-					slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
-			}
+			s.dispatchTicketSyncJob(ctx, tenantID, sched)
 		}
 	}
 	sweep()
@@ -96,18 +92,16 @@ func (s *Server) RunTicketIntake(ctx context.Context) {
 	}
 }
 
-// RunTicketIntakeOnce reads one page of tickets and opens requests.
-func (s *Server) RunTicketIntakeOnce(ctx context.Context, tenantID string, sched store.TicketIntakeSchedule) (TicketIntakeResult, error) {
+// ingestTicketReport opens requests from a signed, typed relay observation. It
+// contains no network client and receives no credential material.
+func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey string, intent ticketintake.SyncIntent, report ticketintake.SyncReport) (TicketIntakeResult, error) {
 	var out TicketIntakeResult
-	rows, err := s.fetchTicketRows(ctx, sched)
-	if err != nil {
+	if err := ticketintake.ValidateReport(report); err != nil {
 		return out, err
 	}
-	out.Read = len(rows)
-	for _, row := range rows {
-		sysID := ticketField(row, "sys_id")
-		subject := ticketField(row, sched.SubjectField)
-		profile := ticketField(row, sched.ProfileField)
+	out.Read = len(report.Tickets)
+	for _, ticket := range report.Tickets {
+		sysID, subject, profile := strings.TrimSpace(ticket.SysID), strings.TrimSpace(ticket.Subject), strings.TrimSpace(ticket.Profile)
 		if sysID == "" {
 			out.Skipped++
 			continue
@@ -120,7 +114,7 @@ func (s *Server) RunTicketIntakeOnce(ctx context.Context, tenantID string, sched
 			out.Skipped++
 			continue
 		}
-		ticketRef := sched.SNTable + ":" + sysID
+		ticketRef := intent.SNTable + ":" + sysID
 		exists, err := s.store.IssuanceRequestExistsForTicket(ctx, tenantID, ticketRef)
 		if err != nil {
 			return out, err
@@ -132,21 +126,21 @@ func (s *Server) RunTicketIntakeOnce(ctx context.Context, tenantID string, sched
 			out.Already++
 			continue
 		}
-		requester := ticketField(row, sched.RequesterField)
+		requester := strings.TrimSpace(ticket.Requester)
 		if requester == "" {
 			// The lifecycle's separation-of-duties check needs a requester.
 			// The ticket system is the closest attributable actor when the
 			// ticket does not name one.
-			requester = "servicenow:" + sched.SNTable
+			requester = "servicenow:" + intent.SNTable
 		}
-		if _, err := s.orch.OpenIssuanceRequest(ctx, tenantID, projections.IssuanceRequestOpened{
+		if _, err := s.orch.OpenIssuanceRequestFromRelay(ctx, tenantID, resultKey, projections.IssuanceRequestOpened{
 			Subject:       subject,
 			Profile:       profile,
 			Requester:     requester,
-			Justification: ticketField(row, sched.JustificationField),
+			Justification: strings.TrimSpace(ticket.Justification),
 			Origin:        "servicenow",
 			TicketRef:     ticketRef,
-			ExpiresAt:     time.Now().UTC().Add(ticketIntakeRequestTTL),
+			ExpiresAt:     report.ObservedAt.UTC().Add(ticketIntakeRequestTTL),
 		}); err != nil {
 			return out, err
 		}
@@ -155,87 +149,61 @@ func (s *Server) RunTicketIntakeOnce(ctx context.Context, tenantID string, sched
 	return out, nil
 }
 
-// fetchTicketRows reads one page from the ITSM. GET only, against a table the
-// schema CHECK already bounded, through the same binding/egress rules the
-// other ServiceNow reads use.
-func (s *Server) fetchTicketRows(ctx context.Context, sched store.TicketIntakeSchedule) ([]map[string]json.RawMessage, error) {
-	base, err := url.Parse(strings.TrimSpace(sched.InstanceURL))
-	if err != nil || base.Scheme == "" || base.Host == "" {
-		return nil, fmt.Errorf("server: ticket intake instance URL must be absolute")
-	}
-	base.Path = strings.TrimRight(base.Path, "/") + "/api/now/table/" + sched.SNTable
-	q := url.Values{}
-	q.Set("sysparm_display_value", "all")
-	q.Set("sysparm_limit", fmt.Sprintf("%d", ticketIntakePageLimit))
-	if trimmed := strings.TrimSpace(sched.Query); trimmed != "" {
-		q.Set("sysparm_query", trimmed)
-	}
-	base.RawQuery = q.Encode()
-	base.Fragment = ""
-	endpoint := base.String()
-
-	client, err := cloudHTTPClient(endpoint, sched.AllowPrivateEndpoint, sched.PrivateEgressCIDRs)
+func (s *Server) dispatchTicketSyncJob(ctx context.Context, tenantID string, sched store.TicketIntakeSchedule) {
+	pending, err := s.store.HasPendingAgentJob(ctx, tenantID, agentJobKindTicketSync)
 	if err != nil {
-		return nil, fmt.Errorf("server: ticket intake endpoint rejected: %w", err)
+		s.logger.Warn("ticket relay dispatch: pending check failed", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
+		return
 	}
-	token, err := resolveDiscoveryCredentialRef(ctx, sched.TokenRef)
+	if pending {
+		_ = s.store.MarkTicketIntakeRun(ctx, tenantID, sched.System, time.Now().UTC(),
+			"a dispatched ticket.sync job is still waiting; if no network relay is enrolled and claiming, none will run it")
+		return
+	}
+	payload, err := json.Marshal(ticketSyncIntent(sched))
 	if err != nil {
-		return nil, fmt.Errorf("server: resolve ticket intake token ref: %w", err)
+		return
 	}
-	tokenBytes := []byte(token)
-	defer secret.Wipe(tokenBytes)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	key := "ticket-sync:" + tenantID + ":" + time.Now().UTC().Format(time.RFC3339)
+	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+			TenantID: tenantID, Destination: agentJobKindTicketSync, IdempotencyKey: key, Payload: payload,
+			RequiredAgentRole: mtls.AgentRoleNetwork,
+		})
+		return err
+	})
 	if err != nil {
-		return nil, err
+		s.logger.Warn("ticket relay dispatch failed", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
+		return
 	}
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", tokenBytes))
-	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("server: read tickets: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		limited, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("server: ticket read failed with status %d: %s",
-			resp.StatusCode, strings.TrimSpace(string(limited)))
-	}
-	var payload struct {
-		Result []map[string]json.RawMessage `json:"result"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("server: parse tickets: %w", err)
-	}
-	return payload.Result, nil
+	_ = s.store.MarkTicketIntakeRun(ctx, tenantID, sched.System, time.Now().UTC(), "")
 }
 
-// ticketField extracts one field, handling both ServiceNow shapes: a plain
-// string, and the {display_value, value} object display_value=all returns.
-// The DISPLAY value wins for reference fields — a sys_id in a requester column
-// is a value nobody can route an approval to.
-func ticketField(row map[string]json.RawMessage, name string) string {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return ""
+func (s *Server) recordTicketSync(ctx context.Context, tenantID, agentName, idempotencyKey string, jobPayload []byte, reportJSON string) error {
+	var intent ticketintake.SyncIntent
+	if err := json.Unmarshal(jobPayload, &intent); err != nil {
+		return fmt.Errorf("server: decode durable ticket sync intent: %w", err)
 	}
-	raw, ok := row[name]
-	if !ok {
-		return ""
+	if _, err := ticketintake.Endpoint(intent); err != nil {
+		return fmt.Errorf("server: validate durable ticket sync intent: %w", err)
 	}
-	var plain string
-	if err := json.Unmarshal(raw, &plain); err == nil {
-		return strings.TrimSpace(plain)
+	if len(reportJSON) > maxStructuredSyncReportBytes {
+		return fmt.Errorf("server: ticket relay report exceeds the %d-byte bound", maxStructuredSyncReportBytes)
 	}
-	var obj struct {
-		DisplayValue string `json:"display_value"`
-		Value        string `json:"value"`
+	var report ticketintake.SyncReport
+	if err := json.Unmarshal([]byte(reportJSON), &report); err != nil {
+		return fmt.Errorf("server: decode ticket relay report: %w", err)
 	}
-	if err := json.Unmarshal(raw, &obj); err == nil {
-		if v := strings.TrimSpace(obj.DisplayValue); v != "" {
-			return v
-		}
-		return strings.TrimSpace(obj.Value)
+	res, err := s.ingestTicketReport(ctx, tenantID, idempotencyKey, intent, report)
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	} else {
+		s.logger.Info("ticket relay intake complete", slog.String("tenant_id", tenantID), slog.String("agent", agentName),
+			slog.Int("read", res.Read), slog.Int("opened", res.Opened), slog.Int("already", res.Already), slog.Int("skipped", res.Skipped))
 	}
-	return ""
+	if stampErr := s.store.MarkTicketIntakeRun(ctx, tenantID, "servicenow", time.Now().UTC(), msg); stampErr != nil && err == nil {
+		err = stampErr
+	}
+	return err
 }

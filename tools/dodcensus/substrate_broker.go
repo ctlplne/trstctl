@@ -34,6 +34,7 @@ const (
 )
 
 var brokerSecretFileInputs = map[string]bool{
+	"TRSTCTL_ADCS_TLS_SERVER_KEY_FILE":        true,
 	"TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE":    true,
 	"TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE": true,
 }
@@ -332,6 +333,11 @@ func brokerDynamicInputNames(expected runtimeExpectation) []string {
 		return []string{"TRSTCTL_HSM_PROOF_IMAGE", "TRSTCTL_HSM_PROOF_NETWORK"}
 	}
 	switch expected.ID {
+	case "external_ca.adcs":
+		return []string{
+			"TRSTCTL_ADCS_TLS_SERVER_CERT_FILE",
+			"TRSTCTL_ADCS_TLS_SERVER_KEY_FILE",
+		}
 	case "external_ca.entrust":
 		return []string{
 			"TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE",

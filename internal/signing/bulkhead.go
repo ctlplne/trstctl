@@ -47,9 +47,10 @@ const (
 // authoritative dispatch paths the server matches at runtime (so this can never
 // silently drift from the registered service name).
 var expensiveMethods = map[string]bool{
-	signerpb.SignerService_Sign_FullMethodName:        true,
-	signerpb.SignerService_GenerateKey_FullMethodName: true,
-	signerpb.SignerService_GatedIssue_FullMethodName:  true,
+	signerpb.SignerService_Sign_FullMethodName:         true,
+	signerpb.SignerService_SignArtifact_FullMethodName: true,
+	signerpb.SignerService_GenerateKey_FullMethodName:  true,
+	signerpb.SignerService_GatedIssue_FullMethodName:   true,
 }
 
 // limiter is a fixed-capacity, non-blocking concurrency gate. A failed Acquire

@@ -132,6 +132,7 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	bootCfg.NATS = config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
 	bootCfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	bootCfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "credential-kek.bin")
+	configureExternalAuditTestSigner(t, bootCfg)
 
 	raw, err := RunTokenCreate(ctx, bootCfg, TokenCreateOptions{TenantID: tenantA, TenantName: "Acme", Subject: "ci-bot"})
 	if err != nil {

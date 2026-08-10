@@ -42,6 +42,11 @@ service SignerService {
   // routing metadata and opaque evidence/precondition bytes; the attached
   // edition implementation owns the semantics and may return an opaque signed
   // refusal record. No private key material crosses this RPC.
+  // These message names predate the Buf naming gate and are part of the
+  // control-plane/signer descriptor contract. Renaming either makes the FILE
+  // breaking gate fail; suppress only this legacy RPC, not the file or rule.
+  // buf:lint:ignore RPC_REQUEST_STANDARD_NAME
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc VerifyOperation(OperationRequest) returns (OperationResponse);
 
   // GatedDestroy asks an attached edition-neutral destruction gate to verify
@@ -162,6 +167,7 @@ enum KeyPurpose {
   KEY_PURPOSE_CODE_SIGN = 4;   // produce code-signing signatures
   KEY_PURPOSE_GENERIC = 5;     // unclassified signing (e.g. test/CSR self-sign)
   KEY_PURPOSE_ACME_ACCOUNT = 6; // sign ACME account JWS requests only
+  KEY_PURPOSE_AUDIT_EVIDENCE = 7; // sign audit, recovery, retention, tenant-control, and invoice evidence only
 }
 
 // KeyHandle is an opaque, unguessable reference to a private key held by the

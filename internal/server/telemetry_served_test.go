@@ -25,8 +25,9 @@ func TestRunDepsWireOptInTelemetryReporter(t *testing.T) {
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit.pem")
+	auditKey := testAuditSigningKey(t)
 
-	offDeps, err := buildRunDeps(context.Background(), cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	offDeps, err := buildRunDeps(context.Background(), cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, auditKey)
 	if err != nil {
 		t.Fatalf("build default deps: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestRunDepsWireOptInTelemetryReporter(t *testing.T) {
 	cfg.Telemetry.Endpoint = receiver.URL
 	cfg.Telemetry.Interval = "1h"
 	cfg.Telemetry.InstanceIDFile = filepath.Join(t.TempDir(), "telemetry-instance-id")
-	onDeps, err := buildRunDeps(context.Background(), cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	onDeps, err := buildRunDeps(context.Background(), cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, auditKey)
 	if err != nil {
 		t.Fatalf("build telemetry deps: %v", err)
 	}

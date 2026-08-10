@@ -494,7 +494,7 @@ func externalCAHTTPClient(endpoint string, network config.ExternalCANetworkConfi
 				return nil, nil, fmt.Errorf("build external CA mTLS transport: %w", err)
 			}
 		} else {
-			trusted, err = mtls.HTTPTransport(rootPEM)
+			trusted, err = mtls.HTTPTransportForServerName(rootPEM, network.ServerName)
 			if err != nil {
 				return nil, nil, fmt.Errorf("build external CA trusted transport: %w", err)
 			}

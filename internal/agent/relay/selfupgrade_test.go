@@ -14,9 +14,9 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/fleet"
 )
 
 func upgradeJob(t *testing.T, intent fleet.UpgradeIntent) relay.Job {

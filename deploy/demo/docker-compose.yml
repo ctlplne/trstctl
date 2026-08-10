@@ -102,6 +102,7 @@ services:
       - "--keystore=/data/signer/keys"
       - "--kek=/data/secrets/kek.bin"
       - "--auth-secret=/data/secrets/sign-auth.bin"
+      - "--legacy-audit-key=/data/audit/signing-key.pem"
       - "--license=/etc/trstctl/demo-provider-license.json"
       - "--managed-keys-config=/demo-managed-keys/provider.json"
     volumes:
@@ -109,6 +110,7 @@ services:
       - signerkeys:/data/signer
       - secrets:/data/secrets
       - managedkeys:/demo-managed-keys:ro
+      - trstctldata:/data
 
   trstctl:
     build:
@@ -139,6 +141,10 @@ services:
       # the advertised tokens mean something.
       TRSTCTL_AGENT_CHANNEL_ENABLED: "true"
       TRSTCTL_AGENT_CHANNEL_ADDR: ":9443"
+      # The signer key and its public trust anchor must cross the same container
+      # recreation boundary. The key is in signerkeys; this certificate is in the
+      # shared persistent /data volume (AUD-100).
+      TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE: /data/ca/agent-ca.crt
       # An empty claimable set serves the job ledger and hands nothing out, so an
       # enrolled agent idles while every surface looks healthy. Deliberately
       # excludes connector.deploy: a demo stack must not mutate an appliance

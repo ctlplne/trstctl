@@ -302,6 +302,17 @@ event-sourced. `triage_status` starts as `unmanaged`; the state model also inclu
 /api/v1/discovery/findings/{id}/dismiss` dismisses it with a reason. Both are
 tenant-scoped, idempotent mutations guarded by `discovery:write`.
 
+A finding produced without an explicit ID gets one deterministic ID from its exact
+tenant, run, kind, reference, and fingerprint. This matters when the outbox retries a
+partly completed scan: the retry records the same observation identity instead of a
+new UUID that collides only after restart replay. Older histories can contain both
+payload IDs for one natural observation. The projection keeps those IDs as aliases,
+chooses the earliest immutable observation (then lexical ID for an exact-time tie) as
+the canonical row, and resolves later triage events through either alias. A duplicate
+whose source, provenance, risk, or metadata differs is not merged: replay fails with
+the tenant, natural key, both IDs, and differing fields rather than silently changing
+the evidence.
+
 `GET /api/v1/nhi/posture/shadow` is the shadow posture view: it pages
 through tenant-scoped discovery findings, excludes anything already claimed as managed
 or dismissed, counts unmanaged and unregistered external NHIs by kind and surface, and

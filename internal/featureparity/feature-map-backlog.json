@@ -5323,10 +5323,10 @@
             "phase": "P2",
             "priority": 61,
             "served_state": "conditional",
-            "backend_status": "conditional: served API/CLI/UI policy management, challenge rotation evidence, profile guidance, telemetry, and live SCEP Intune validator trust-anchor resolution from policy trust_anchor_refs backed by served secret-store lifecycle",
-            "current_frontend_mapping": "Protocols at /protocols - MDM SCEP policy table, profile guidance, challenge-rotation state, reference names, and Intune challenge telemetry",
+            "backend_status": "conditional: served API/CLI/UI policy management, challenge rotation evidence, live policy-backed Intune validation, immutable per-attempt SCEP evidence, scheduled/relay Intune and Jamf certificate readback, exact device/certificate correlation, and requested-issued-installed-renewing traces",
+            "current_frontend_mapping": "Protocols at /protocols - MDM SCEP policy and telemetry plus an Intune/Jamf device list whose rows open the evidence-backed enrollment trace and failure remediation",
             "target_gui_mapping": "MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures.",
-            "acceptance_test": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
+            "acceptance_test": "UI makes MDM status conditional, tests challenge-required/missing/disabled states, and opens Intune/Jamf device traces showing immutable success, retained failure, and offline-renewal remediation.",
             "source_docs": [
                 "docs/features/enrollment-protocols.md"
             ],
@@ -5335,13 +5335,16 @@
                 "internal/store/mdm_scep.go",
                 "internal/projections",
                 "internal/mdm",
+                "internal/mdmevidence",
+                "internal/server/mdm_poller.go",
                 "internal/protocols/scep"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/components/MDMDevicesPanel.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by TRACE-010: served policy/status/rotation/telemetry surfaces exist across API, CLI, and Protocols UI; enabled MDM SCEP policies now resolve secret:// trust_anchor_refs from the served secret store at SCEP challenge-validation time, so live Intune trust anchors are policy-driven without rebuilding the protocol handler. Static protocols.scep.intune_challenge anchors remain a bootstrap/fallback path.",
+            "notes": "Closed by TRACE-010 plus AUD-50 remediation: served policy/status/rotation/telemetry surfaces exist across API, CLI, and Protocols UI; enabled policies resolve secret:// trust_anchor_refs at challenge-validation time. The production SCEP handler emits immutable request and terminal issuance facts. Control-plane and relay pollers read Intune CertificatesByRAPolicy or Jamf CERTIFICATES evidence, and the shared correlator requires the exact signer-minted certificate serial before claiming installation. The device console opens the requested-issued-installed-renewing trace with retained challenge failures and offline-renewal guidance. Static protocols.scep.intune_challenge anchors remain a bootstrap/fallback path.",
             "api_surface": [
                 "getMDMSCEPStatus",
                 "createMDMSCEPPolicy",
@@ -5349,7 +5352,11 @@
                 "getMDMSCEPPolicy",
                 "updateMDMSCEPPolicy",
                 "deleteMDMSCEPPolicy",
-                "rotateMDMSCEPChallenge"
+                "rotateMDMSCEPChallenge",
+                "listMDMDevices",
+                "getMDMDeviceTrace",
+                "putMDMPollSchedule",
+                "listMDMPollSchedules"
             ],
             "api_na": "",
             "cli_surface": [
@@ -5359,7 +5366,11 @@
                 "mdm scep policies get",
                 "mdm scep policies update",
                 "mdm scep policies delete",
-                "mdm scep policies rotate-challenge"
+                "mdm scep policies rotate-challenge",
+                "mdm devices",
+                "mdm trace",
+                "mdm poll-schedule set",
+                "mdm poll-schedule show"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -5367,8 +5378,9 @@
                     "evidence": [
                         "MDM SCEP policy CRUD and challenge rotation append mdm.scep_policy.* and mdm.scep_challenge.rotated events, project into mdm_scep_policies, and serve status telemetry without storing raw challenge secrets.",
                         "buildServedSCEP wires buildSCEPChallengeValidator into the served SCEP handler; TRACE-010 stores an Intune trust anchor through /api/v1/secrets/store, references it from MDM policy CRUD, and proves the already-running /scep endpoint accepts the policy-backed Intune challenge without static protocols.scep.intune_challenge anchors.",
+                        "The served SCEP writer appends exact device/transaction request and terminal issuance evidence; Intune and Jamf pollers consume certificate-specific provider evidence, and assembled journeys reject registration/correlation identifiers and wrong certificate serials as success.",
                         "served_state=conditional",
-                        "backend_status=conditional: served API/CLI/UI policy management, challenge rotation evidence, profile guidance, telemetry, and live SCEP Intune validator trust-anchor resolution from policy trust_anchor_refs backed by served secret-store lifecycle"
+                        "backend_status=conditional: served API/CLI/UI policy management, challenge rotation evidence, live policy-backed Intune validation, immutable per-attempt SCEP evidence, scheduled/relay Intune and Jamf certificate readback, exact device/certificate correlation, and requested-issued-installed-renewing traces"
                     ],
                     "refs": [
                         "internal/api/mdm_scep.go",
@@ -5377,7 +5389,10 @@
                         "internal/server/protocol_mounts.go",
                         "internal/server/protocols_served_enroll_test.go",
                         "internal/server/protocols_served_stock_clients_test.go",
-                        "internal/mdm/intune_challenge.go"
+                        "internal/server/mdm_poller_served_test.go",
+                        "internal/server/mdm_served_test.go",
+                        "internal/mdmevidence/evidence.go",
+                        "internal/mdm/challenge/intune_challenge.go"
                     ],
                     "commands": [
                         "make test"
@@ -5385,18 +5400,20 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Protocols at /protocols - MDM SCEP policy table, profile guidance, challenge-rotation state, reference names, and Intune challenge telemetry",
+                        "current_frontend_mapping: Protocols at /protocols - MDM SCEP policy and telemetry plus an Intune/Jamf device list whose rows open the evidence-backed enrollment trace and failure remediation",
                         "target_gui_mapping: MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/components/MDMDevicesPanel.tsx",
+                        "web/src/__tests__/mdm_devices_panel.test.tsx",
                         "web/src/__tests__/protocols.test.tsx",
                         "web/src/lib/api.ts"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl mdm scep status and trstctl mdm scep policies create/list/get/update/delete/rotate-challenge call the served MDM SCEP API."
+                        "trstctl mdm scep status and policy commands call the served MDM SCEP API; mdm devices, trace, and poll-schedule commands expose the evidence-backed correlation workflow."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -5405,7 +5422,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI exposes MDM SCEP status, policy CRUD, and rotate-challenge operations with mutation routes requiring idempotency."
+                        "OpenAPI exposes MDM SCEP status/policy operations plus MDM device list, per-device trace, and poll-schedule operations; mutation routes require idempotency."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -5416,16 +5433,21 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
+                        "acceptance_test: UI makes MDM status conditional, tests challenge-required/missing/disabled states, and opens Intune/Jamf device traces showing immutable success, retained failure, and offline-renewal remediation.",
                         "Served integration test creates an MDM SCEP policy, rotates its challenge version, rejects missing SCEP challenge material, accepts a valid Intune challenge, and reads challenge telemetry from the status API.",
                         "TRACE-010 served integration test creates a trust-anchor secret, references it from an enabled MDM SCEP policy, validates through the live /scep endpoint, and observes served_scep_intune_validator_policy_driven status.",
+                        "AUD-50 assembled tests drive Intune and Jamf pollers through certificate-specific readback, prove exact serial success and wrong/revoked failure, retain pre-issuance challenge failure, and expose offline renewal as unknown with remediation; browser tests open and render those traces.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
                         "internal/server/protocols_served_enroll_test.go",
-                        "internal/mdm/intune_challenge_test.go",
+                        "internal/mdm/challenge/intune_challenge_test.go",
                         "internal/protocols/scep/scep_test.go",
+                        "internal/server/mdm_poller_served_test.go",
+                        "internal/server/mdm_served_test.go",
+                        "internal/agent/relay/mdmsync_test.go",
+                        "web/src/__tests__/mdm_devices_panel.test.tsx",
                         "web/src/__tests__/protocols.test.tsx",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
@@ -5457,14 +5479,15 @@
                 },
                 "audit": {
                     "evidence": [
-                        "Served SCEP enrollment emits protocol.scep.enroll, Intune challenge validation emits mdm.intune_scep_challenge plus mdm.intune_scep_challenge.replay_rejected, and MDM SCEP policy management emits mdm.scep_policy.* plus mdm.scep_challenge.rotated without raw challenge material."
+                        "Served SCEP enrollment emits protocol.scep.request.observed and protocol.scep.issuance.observed with exact join/certificate facts plus the legacy protocol.scep.enroll audit; Intune challenge validation emits mdm.intune_scep_challenge/replay_rejected, MDM readback emits mdm.device.correlated, and policy management emits mdm.scep_policy.* plus mdm.scep_challenge.rotated without raw challenge material."
                     ],
                     "refs": [
                         "internal/eventledger/ledger.go",
                         "internal/api/mdm_scep.go",
                         "internal/protocols/scep/scep.go",
-                        "internal/mdm/intune_challenge.go",
-                        "internal/mdm/intune_challenge_test.go",
+                        "internal/server/mdm_poller.go",
+                        "internal/mdm/challenge/intune_challenge.go",
+                        "internal/mdm/challenge/intune_challenge_test.go",
                         "internal/server/protocols_served_enroll_test.go"
                     ]
                 },
@@ -8243,6 +8266,7 @@
                 "internal/api/remediation_playbooks.go",
                 "internal/api/owner_remediation.go",
                 "internal/api/response_integrations.go",
+                "internal/api/outbox_recovery.go",
                 "internal/api/discovery.go",
                 "internal/discovery/compromise/compromise.go",
                 "internal/discovery/oauthgrant/oauthgrant.go",
@@ -8256,10 +8280,11 @@
             ],
             "source_frontend": [
                 "web/src/pages/Incidents.tsx",
+                "web/src/pages/incidents/OutboxRecoveryPanel.tsx",
                 "web/src/pages/Discovery.tsx"
             ],
             "status": "closed",
-            "notes": "JOURNEY-004 update: served incident execution API, CLI, UI, event-sourced projection, connector receipt evidence, and signed audit bundle path replace the prior plan-only disclosure. CAP-REM-01 update: automated remediation playbook catalog/run/list/get is served for revoke, rotate, and NHI right-size; right-size requires CAP-POST-01 usage-backed posture evidence and queues connector.right_size through the outbox. CAP-REM-03 update: SIEM/SOAR/chat/ITSM response dispatch is served through POST /api/v1/incidents/response-integrations/dispatch, records response.integration.dispatched, and fans out Splunk HEC, Jira issue, Slack notification, and ServiceNow Table API outbox intents using token_ref-only credentials. CAP-DEP-04 update: ServiceNow ITSM tickets are served through POST /api/v1/itsm/servicenow/tickets as event-sourced, outbox-backed workflow intents with credential-reference-only token resolution. CAP-ITDR-02 update: credential_compromise Discovery sources normalize metadata-only stolen-token/compromised-credential signals into OWASP NHI2 compromised_credential findings. CAP-ITDR-03 update: oauth_grant Discovery sources emit CAP-ITDR-03 oauth_grant_abuse findings from metadata-only provider threat signals, dangerous scopes, unverified-publisher evidence, ownerless privileged admin consent, and suspicious redirect URI evidence. CAP-REM-02 update: owner-driven self-remediation is served through GET /api/v1/remediation/owner-actions and POST /api/v1/remediation/owner-actions/{id}/accept; the queue is derived from CAP-POST-01 least-privilege posture, enforces bound-owner or incident-operator authorization, and accepting records remediation.playbook_run.recorded plus connector.right_size outbox evidence.",
+            "notes": "JOURNEY-004 update: served incident execution API, CLI, UI, event-sourced projection, connector receipt evidence, and signed audit bundle path replace the prior plan-only disclosure. CAP-REM-01 update: automated remediation playbook catalog/run/list/get is served for revoke, rotate, and NHI right-size; right-size requires CAP-POST-01 usage-backed posture evidence and queues connector.right_size through the outbox. CAP-REM-03 update: SIEM/SOAR/chat/ITSM response dispatch is served through POST /api/v1/incidents/response-integrations/dispatch, records response.integration.dispatched, and fans out Splunk HEC, Jira issue, Slack notification, and ServiceNow Table API outbox intents using token_ref-only credentials. CAP-DEP-04 update: ServiceNow ITSM tickets are served through POST /api/v1/itsm/servicenow/tickets as event-sourced, outbox-backed workflow intents with credential-reference-only token resolution. CAP-ITDR-02 update: credential_compromise Discovery sources normalize metadata-only stolen-token/compromised-credential signals into OWASP NHI2 compromised_credential findings. CAP-ITDR-03 update: oauth_grant Discovery sources emit CAP-ITDR-03 oauth_grant_abuse findings from metadata-only provider threat signals, dangerous scopes, unverified-publisher evidence, ownerless privileged admin consent, and suspicious redirect URI evidence. CAP-REM-02 update: owner-driven self-remediation is served through GET /api/v1/remediation/owner-actions and POST /api/v1/remediation/owner-actions/{id}/accept; the queue is derived from CAP-POST-01 least-privilege posture, enforces bound-owner or incident-operator authorization, and accepting records remediation.playbook_run.recorded plus connector.right_size outbox evidence. AUD-97 adds the core listOutboxReconciliationConflicts operation and Incidents panel: an immutable receiver-key collision remains quarantined, historical command ownership remains unchanged, safe digests and source references are visible, and executable payloads are never returned. AUD-104 adds the matching read-only headless CLI command so terminal and automation operators can inspect the same safe evidence without mutation material.",
             "api_surface": [
                 "executeIncident",
                 "dispatchResponseIntegrations",
@@ -8272,6 +8297,7 @@
                 "runRemediationPlaybook",
                 "listRemediationPlaybookRuns",
                 "getRemediationPlaybookRun",
+                "listOutboxReconciliationConflicts",
                 "createDiscoverySource",
                 "startDiscoveryRun",
                 "getDiscoveryRun",
@@ -8284,6 +8310,7 @@
                 "itsm servicenow tickets create",
                 "incidents executions list",
                 "incidents executions get",
+                "incidents outbox-reconciliation-conflicts list",
                 "remediation owner-actions list",
                 "remediation owner-actions accept",
                 "remediation playbooks",
@@ -8307,6 +8334,7 @@
                         "oauth_grant Discovery sources/runs record oauth_grant_abuse findings tagged CAP-ITDR-03 from metadata-only threat signals, reason codes, evidence refs, and source event refs.",
                         "GET /api/v1/remediation/owner-actions lists CAP-REM-02 owner-bound right-size actions from CAP-POST-01 posture evidence; POST /api/v1/remediation/owner-actions/{id}/accept records remediation.playbook_run.recorded and queues connector.right_size through the outbox.",
                         "connector.right_size selects an operator-bound tenant/connector entitlement endpoint, applies the usage-backed removal with the stable outbox idempotency key, reads effective scopes back, and advances the API-created receipt to delivered or failed.",
+                        "GET /api/v1/incidents/outbox-reconciliation-conflicts exposes the tenant-scoped immutable AUD-97 quarantine with safe source/outbox/hash/lane/role evidence and no receiver command payload.",
                         "served_state=conditional",
                         "backend_status=conditional: the Enterprise remediation spine and connector.right_size external entitlement mutation are production-served when licensed and bound to an operator-configured tenant/connector endpoint"
                     ],
@@ -8329,6 +8357,8 @@
                         "internal/store/incidents.go",
                         "internal/store/remediation_playbooks.go",
                         "internal/api/owner_remediation.go",
+                        "internal/api/outbox_recovery.go",
+                        "web/src/pages/incidents/OutboxRecoveryPanel.tsx",
                         "internal/server/remediation_playbooks_served_test.go"
                     ],
                     "commands": [
@@ -8350,7 +8380,7 @@
                 },
                 "cli": {
                     "evidence": [
-                        "CLI commands incidents executions execute/list/get map to the served incident execution endpoints, incidents response-integrations dispatch maps to the served CAP-REM-03 SIEM/SOAR/chat/ITSM dispatch endpoint, remediation owner-actions list/accept map to CAP-REM-02 and remediation playbooks/run/list/get map to the served playbook catalog and run evidence endpoints, itsm servicenow tickets create maps to the served ServiceNow ITSM ticket endpoint, and discovery sources/create runs/start/findings/list map to the served CAP-ITDR-02 and CAP-ITDR-03 detection sources."
+                        "CLI commands incidents executions execute/list/get map to the served incident execution endpoints; incidents outbox-reconciliation-conflicts list reads the tenant-scoped AUD-97 quarantine without a body or Idempotency-Key; incidents response-integrations dispatch maps to the served CAP-REM-03 SIEM/SOAR/chat/ITSM dispatch endpoint; remediation owner-actions list/accept map to CAP-REM-02 and remediation playbooks/run/list/get map to the served playbook catalog and run evidence endpoints; itsm servicenow tickets create maps to the served ServiceNow ITSM ticket endpoint; and discovery sources/create runs/start/findings/list map to the served CAP-ITDR-02 and CAP-ITDR-03 detection sources."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -8359,7 +8389,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operations executeIncident, dispatchResponseIntegrations, createServiceNowTicket, listIncidentExecutions, getIncidentExecution, listOwnerRemediationActions, acceptOwnerRemediationAction, listRemediationPlaybooks, runRemediationPlaybook, listRemediationPlaybookRuns, and getRemediationPlaybookRun expose the served remediation, response-dispatch, and ITSM ticket workflow paths; createDiscoverySource, startDiscoveryRun, getDiscoveryRun, and listDiscoveryFindings expose the served CAP-ITDR-02 and CAP-ITDR-03 detection source/run/finding paths."
+                        "OpenAPI operations executeIncident, dispatchResponseIntegrations, createServiceNowTicket, listIncidentExecutions, getIncidentExecution, listOutboxReconciliationConflicts, listOwnerRemediationActions, acceptOwnerRemediationAction, listRemediationPlaybooks, runRemediationPlaybook, listRemediationPlaybookRuns, and getRemediationPlaybookRun expose the served remediation, recovery-conflict, response-dispatch, and ITSM ticket workflow paths; createDiscoverySource, startDiscoveryRun, getDiscoveryRun, and listDiscoveryFindings expose the served CAP-ITDR-02 and CAP-ITDR-03 detection source/run/finding paths."
                     ],
                     "refs": [
                         "internal/api/api.go",

@@ -12,7 +12,7 @@
     "connector.f5": "authenticated iControl uploads, crypto installs, Client SSL profile bind, readback",
     "connector.netscaler": "NITRO login, file uploads, sslcertkey update, logout, readback",
     "connector.a10": "AXAPI login, certificate/key uploads, client-SSL template bind, readback",
-    "connector.kemp": "authenticated certificate upload and virtual-service bind, readback",
+    "connector.kemp": "authenticated upload to an immutable dod-target-trstctl-<12 lowercase hex fingerprint> object, exact virtual-service bind, readback",
     "connector.cisco": "authenticated identity-certificate import and readback",
     "connector.fortigate": "authenticated FortiOS local-certificate upsert and readback",
     "connector.paloalto": "authenticated PAN-OS certificate and private-key imports and readback",
@@ -32,6 +32,7 @@
     "process": "out-of-process, nonce/entry/PID bound",
     "authentication": "native connector authentication is exact: Basic, bearer, A10/NITRO sessions, or PAN-OS keys must match the configured credential; ACM recomputes the credential-, region-, service-, header-, and payload-bound SigV4 signature",
     "user_path": "served target CRUD + identity bind + target deploy route; production issuance creates the sealed connector.deploy outbox command",
-    "completion": "passed is true only after the entry-specific mutation sequence, exact validation/reload argv in order, and readback from the connector-specific installed credential path"
+    "completion": "passed is true only after the entry-specific mutation sequence, exact validation/reload argv in order, and readback from the connector-specific installed credential path",
+    "failure_diagnostic": "a failed substrate emits only bounded entry ID, parsed method/path pairs, readback presence, signal count, and signal-error state; request headers, bodies, credentials, certificates, and raw signal arguments are excluded"
   }
 }

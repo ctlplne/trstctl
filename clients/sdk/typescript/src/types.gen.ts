@@ -2337,6 +2337,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/incidents/outbox-reconciliation-conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List quarantined historical receiver-command conflicts without exposing executable payloads */
+        get: operations["listOutboxReconciliationConflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/incidents/response-integrations/dispatch": {
         parameters: {
             query?: never;
@@ -6062,7 +6079,7 @@ export interface components {
             configured: boolean;
             enabled: boolean;
             /** @enum {string} */
-            execution?: "control_plane" | "relay" | "";
+            execution?: "relay" | "";
             guidance: string;
             instance_url?: string;
             interval_seconds?: number;
@@ -6603,15 +6620,25 @@ export interface components {
             required: boolean;
         };
         DRDrill: {
+            artifacts_restored: string[];
             detail: string;
+            event_log_healthy: boolean;
             events_restored: number;
+            full_set_restored: boolean;
             limitations: string[];
             /** @enum {string} */
             outcome: "restored" | "failed" | "skipped";
+            postgres_records_restored: number;
+            postgres_tables_restored: {
+                [key: string]: number;
+            };
             /** Format: date-time */
             ran_at: string;
             rpo_seconds: number;
             rto_seconds: number;
+            server_healthy: boolean;
+            signer_healthy: boolean;
+            store_healthy: boolean;
         };
         DRPosture: {
             artifacts_checked: number;
@@ -7387,7 +7414,7 @@ export interface components {
             index: number;
             replacement_identity_ids: string[];
             /** @enum {string} */
-            status: "halted" | "planned" | "executed" | "failed" | "completed";
+            status: "halted" | "planned" | "queued" | "waiting_verification" | "executed" | "failed" | "completed";
         };
         FleetReissuanceEvidence: {
             evidence_bundle: string;
@@ -7429,12 +7456,14 @@ export interface components {
             evidence_bundle_format?: string;
             failed_targets?: string[];
             graph_impact: components["schemas"]["GraphImpact"];
+            halted_reason?: string;
             health_gates: components["schemas"]["FleetReissuanceHealthGate"][];
             /** Format: uuid */
             id: string;
             idempotency_key?: string;
             /** Format: uuid */
             issuer_id: string;
+            next_batch_index: number;
             phase: string;
             reason?: string;
             replacement_identities?: components["schemas"]["Identity"][];
@@ -7865,7 +7894,7 @@ export interface components {
             configured: boolean;
             enabled: boolean;
             /** @enum {string} */
-            execution?: "control_plane" | "relay" | "";
+            execution?: "relay" | "";
             filter?: string;
             guidance: string;
             interval_seconds?: number;
@@ -7880,7 +7909,7 @@ export interface components {
             base_url: string;
             enabled?: boolean;
             /** @enum {string} */
-            execution?: "control_plane" | "relay" | "";
+            execution?: "relay" | "";
             filter?: string;
             interval_seconds: number;
             /** @enum {string} */
@@ -8837,6 +8866,35 @@ export interface components {
         OutboxCircuitList: {
             items: components["schemas"]["OutboxCircuit"][];
             next_cursor?: string;
+        };
+        OutboxReconciliationConflict: {
+            candidate_destination: string;
+            candidate_effect_lane: string;
+            candidate_payload_sha256: string;
+            candidate_required_agent_id?: string;
+            candidate_required_agent_role?: string;
+            /** Format: date-time */
+            detected_at: string;
+            existing_destination: string;
+            existing_effect_lane: string;
+            existing_outbox_id: number;
+            existing_payload_sha256: string;
+            existing_required_agent_id?: string;
+            existing_required_agent_role?: string;
+            id: string;
+            idempotency_key: string;
+            reason: string;
+            source_event_id: string;
+            source_event_sequence: number;
+            source_event_type: string;
+            /** @enum {string} */
+            status: "quarantined";
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        OutboxReconciliationConflictList: {
+            guidance: string;
+            items: components["schemas"]["OutboxReconciliationConflict"][];
         };
         Owner: {
             /** Format: date-time */
@@ -17429,6 +17487,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FleetReissuanceRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listOutboxReconciliationConflicts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxReconciliationConflictList"];
                 };
             };
             /** @description client error */

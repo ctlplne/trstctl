@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"trstctl.com/trstctl/internal/fleet"
+	fleet "trstctl.com/trstctl/internal/agentupgrade"
 )
 
 type upgradeCampaignBody struct {

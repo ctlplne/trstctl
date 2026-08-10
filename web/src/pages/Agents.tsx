@@ -327,11 +327,7 @@ export function Agents() {
               // Explicitly paired rather than relying on the wrapping label:
               // the control is a component, so neither a reader of this code nor
               // the a11y linter can see that a form control is inside it.
-              <label
-                key={choice.value}
-                htmlFor={`agent-role-${choice.value}`}
-                className="flex items-start gap-2 text-sm"
-              >
+              <label key={choice.value} htmlFor={`agent-role-${choice.value}`} className="flex items-start gap-2 text-sm">
                 <Checkbox
                   id={`agent-role-${choice.value}`}
                   className="mt-1"

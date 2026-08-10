@@ -1,0 +1,1 @@
+import{_ as e,h as t,t as n,y as r}from"./utils-CZ005taq.js";var i=r(e(),1),a=t(),o=(0,i.forwardRef)(function({className:e,...t},r){return(0,a.jsx)(`input`,{ref:r,className:n(`ui-input`,e),...t})});export{o as t};

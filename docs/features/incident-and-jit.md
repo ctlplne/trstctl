@@ -119,9 +119,14 @@ drop or duplicate it. For an SSH CA it re-establishes trust and publishes an upd
 at `POST /api/v1/incidents/fleet-reissuance-runs/{id}/{pause,resume,rollback}`, and a
 signed evidence export at
 `GET /api/v1/incidents/fleet-reissuance-runs/{id}/evidence`. The run enumerates the
-tenant's affected identities by issuer, batches the replacements, deploys replacements
-before revoking originals, records connector delivery receipts, and projects
-`incident.fleet_reissuance.recorded` evidence. CLI parity is
+tenant's affected identities by issuer and persists a canary-first cursor. Start
+publishes only batch one. The bounded fleet worker creates deterministic
+replacement identities for the cursor batch, waits for endpoint-verification
+receipts paired with accepted agent signatures, and only then revokes that
+batch's originals and transactionally publishes the next batch. A signed
+failure durably records the halt reason; pause/resume gates the same cursor, and
+restart replay cannot duplicate a replacement or later-batch command. Every
+state snapshot projects from `incident.fleet_reissuance.recorded` evidence. CLI parity is
 `trstctl-cli incidents fleet-reissuance start|list|get|pause|resume|rollback|evidence`.
 
 ### Just-in-time issuance with approval (F33)

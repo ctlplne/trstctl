@@ -103,5 +103,6 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.mdmDeviceRoutes()...)
 	out = append(out, a.agentUpgradeRoutes()...)
 	out = append(out, a.brandingRoutes()...)
+	out = append(out, a.outboxRecoveryRoutes()...)
 	return out
 }

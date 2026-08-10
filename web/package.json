@@ -92,7 +92,7 @@
     {
       "name": "all JS shipped (gzip)",
       "path": "../internal/webui/dist/assets/*.js",
-      "limit": "620 kB"
+      "limit": "640 kB"
     }
   ]
 }

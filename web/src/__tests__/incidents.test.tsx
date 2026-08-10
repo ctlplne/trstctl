@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     graphBlastRadius: vi.fn(),
     incidentExecutions: vi.fn(),
+    outboxReconciliationConflicts: vi.fn(),
     executeIncident: vi.fn(),
     dispatchResponseIntegrations: vi.fn(),
     createServiceNowTicket: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("@/lib/api", async (orig) => {
       ...actual.api,
       graphBlastRadius: apiMock.graphBlastRadius,
       incidentExecutions: apiMock.incidentExecutions,
+      outboxReconciliationConflicts: apiMock.outboxReconciliationConflicts,
       executeIncident: apiMock.executeIncident,
       dispatchResponseIntegrations: apiMock.dispatchResponseIntegrations,
       createServiceNowTicket: apiMock.createServiceNowTicket,
@@ -111,11 +113,13 @@ const fleetRun = {
   id: "66666666-6666-6666-6666-666666666666",
   tenant_id: "tenant-1",
   issuer_id: "77777777-7777-7777-7777-777777777777",
-  status: "executed",
-  phase: "fleet_reissued_and_compromised_revoked",
+  status: "halted",
+  phase: "batch_1_verification_failed",
   reason: "intermediate CA private key exposure",
   batch_size: 1,
   batch_count: 2,
+  next_batch_index: 1,
+  halted_reason: "batch 1 has one signature-verified endpoint failure; batch 2 remains unpublished",
   connector: "nginx",
   target: "edge/prod",
   graph_impact: {
@@ -130,14 +134,14 @@ const fleetRun = {
   batches: [
     {
       index: 1,
-      status: "completed",
+      status: "failed",
       identity_ids: ["11111111-1111-1111-1111-111111111111"],
       replacement_identity_ids: ["99999999-9999-9999-9999-999999999999"],
       health_gate: "replacement deployed:passed",
     },
     {
       index: 2,
-      status: "completed",
+      status: "halted",
       identity_ids: ["88888888-8888-8888-8888-888888888888"],
       replacement_identity_ids: ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
       health_gate: "revocation published:passed",
@@ -293,6 +297,30 @@ describe("incident response served execution surface", () => {
   beforeEach(() => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
     apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [execution] });
+    apiMock.outboxReconciliationConflicts.mockReset().mockResolvedValue({
+      guidance: "Keep the historical command and issue the intended command with a new unique idempotency key.",
+      items: [
+        {
+          id: "outbox-reconciliation-conflict:kzjS2DNXhPcrCgxJlvk7We",
+          tenant_id: "tenant-1",
+          source_event_id: "kzjS2DNXhPcrCgxJlvk7We",
+          source_event_sequence: 267,
+          source_event_type: "identity.deployed",
+          idempotency_key: "transition:demo-seed-v1:identity-warehouse-mtls-deploy",
+          existing_outbox_id: 15,
+          existing_destination: "connector.deploy",
+          existing_effect_lane: "connector.deploy:identity:5481474d-7a8b-440a-a7df-fca7c8311dd0",
+          existing_payload_sha256: "a".repeat(64),
+          candidate_destination: "connector.deploy",
+          candidate_effect_lane: "connector.deploy:identity:6ced6b6d-3777-44a8-a60f-40db05af7741",
+          candidate_payload_sha256: "b".repeat(64),
+          candidate_required_agent_role: "control_plane",
+          reason: "receiver idempotency key is already bound to a different immutable command",
+          status: "quarantined",
+          detected_at: "2026-08-09T13:51:41Z",
+        },
+      ],
+    });
     apiMock.executeIncident.mockReset().mockResolvedValue(execution);
     // DA-10 rosters (C-P1): pickers are fed from the same inventory the rest
     // of the console loads; defaults keep pre-picker tests behaviorally identical.
@@ -330,7 +358,7 @@ describe("incident response served execution surface", () => {
     apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
     apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
     apiMock.pauseFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "paused", phase: "operator_paused" });
-    apiMock.resumeFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, phase: "resume_recorded" });
+    apiMock.resumeFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "running", phase: "batch_resumed" });
     apiMock.rollbackFleetReissuance.mockReset().mockResolvedValue({
       ...fleetRun,
       status: "rollback_recorded",
@@ -371,6 +399,19 @@ describe("incident response served execution surface", () => {
     expect(screen.getByRole("tab", { name: "Integrations" })).toHaveAttribute("aria-selected", "true");
     expect(document.getElementById("incidents-panel-overview")).toHaveClass("hidden");
     expect(document.getElementById("incidents-panel-integrations")).not.toHaveClass("hidden");
+  });
+
+  it("shows fail-closed receiver-command recovery evidence without executable payloads", async () => {
+    renderIncidents();
+
+    expect(await screen.findByRole("heading", { name: "Recovery" })).toBeInTheDocument();
+    expect(screen.getByText("kzjS2DNXhPcrCgxJlvk7We")).toBeInTheDocument();
+    expect(screen.getByText("transition:demo-seed-v1:identity-warehouse-mtls-deploy")).toBeInTheDocument();
+    expect(screen.getByText("a".repeat(64))).toBeInTheDocument();
+    expect(screen.getByText("b".repeat(64))).toBeInTheDocument();
+    expect(screen.getByText(/new unique idempotency key/i)).toBeInTheDocument();
+    expect(screen.queryByText(/"identity_id"/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/"from":"issued"/)).not.toBeInTheDocument();
   });
 
   it("opens an explicit compromised-identity deep link on the execution workspace", async () => {
@@ -549,11 +590,13 @@ describe("incident response served execution surface", () => {
     await user.type(await screen.findByLabelText("Affected identity"), "11111111-1111-1111-1111-111111111111");
     await user.click(screen.getByRole("button", { name: "Preview blast radius" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("graph projection is rebuilding");
+    expect(await screen.findByText(/graph projection is rebuilding/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Fleet re-issuance" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Fleet reissuance runs" })).toBeInTheDocument();
     expect(screen.getByText("66666666-6666-6666-6666-666666666666")).toBeInTheDocument();
     expect(screen.getByText("2 affected")).toBeInTheDocument();
+    expect(screen.getByText("Batches 1/2")).toBeInTheDocument();
+    expect(screen.getByText(/signature-verified endpoint failure/)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Compromised issuer"), "77777777-7777-7777-7777-777777777777");
     await user.clear(screen.getByLabelText("Batch size"));
     await user.type(screen.getByLabelText("Batch size"), "1");

@@ -126,6 +126,25 @@ UI without storing raw MDM secrets. At runtime the validator resolves enabled po
 anchor changes take effect without restarting the handler; the static
 `protocols.scep.intune_challenge` anchors remain a bootstrap/fallback path.
 
+The device-correlation surface is evidence-backed end to end. The SCEP handler
+records an immutable request fact before challenge validation and a terminal
+issuance fact for every success or refusal, keyed by tenant, CSR common-name
+device serial, and transaction. A success includes the signer-minted certificate
+serial, fingerprint, and expiry. The leader commits a durable `mdm.sync` intent;
+a NETWORK relay redeems the `secret://` bearer for that attempt and reads
+Intune's fixed `CertificatesByRAPolicy` report or Jamf's `CERTIFICATES`
+inventory. Only its bounded typed, signed observation returns to the control
+plane, which binds it to the exact job payload before correlation and completes
+the claim plus outbox row atomically after projection. There is no control-plane
+MDM HTTP/token fallback. Installation is successful only when the exact device
+contains that exact serial with an active status. Device registration, a
+correlation ID, or an identity row is never treated as proof. `GET /api/v1/mdm/devices` and
+`GET /api/v1/mdm/{mdm}/devices/{id}/trace` expose requested, issued, installed,
+and renewing evidence; the console opens the same trace from each device row and
+keeps missing evidence `unknown`. A later SCEP transaction is renewal evidence;
+an offline device inside the renewal window with no later attempt gets actionable
+check-in guidance instead of a made-up failure or success.
+
 ## Use it
 
 A device using a standard EST client enrolls like this:

@@ -161,6 +161,97 @@ func TestFederationReplicatesTrustAndReadStateForFailover(t *testing.T) {
 	}
 }
 
+// TestFederationDoesNotLeapOrderedProjectionCheckpointPastPoison pins the
+// separation between two cursors. Federation owns the source peer checkpoint,
+// but only the ordered local tail can prove that every local sequence is applied.
+// Importing and projecting a later peer event must therefore leave an earlier
+// local poison marker and the global projection checkpoint untouched.
+func TestFederationDoesNotLeapOrderedProjectionCheckpointPastPoison(t *testing.T) {
+	ctx := context.Background()
+	targetStore := newIsolatedFederationTestStore(t, "fed_poison_dst")
+	sourceLog := openFederationTestLog(t)
+	targetLog := openFederationTestLog(t)
+
+	poison, err := targetLog.Append(ctx, events.Event{
+		Type:     "aud103.local.projection.poison",
+		TenantID: federationTenantA,
+		Data:     []byte(`{"cause":"earlier local event cannot project"}`),
+	})
+	if err != nil {
+		t.Fatalf("append earlier local poison: %v", err)
+	}
+	if err := targetStore.RecordProjectionTailFailure(ctx, poison.Sequence, errors.New("earlier local projection poison")); err != nil {
+		t.Fatalf("persist earlier local poison: %v", err)
+	}
+	before, err := targetStore.ProjectionTailHealth(ctx)
+	if err != nil {
+		t.Fatalf("read projection health before federation: %v", err)
+	}
+	if before.AppliedSequence != 0 || before.FailedSequence != poison.Sequence {
+		t.Fatalf("projection poison precondition = %+v, want applied=0 failed=%d", before, poison.Sequence)
+	}
+
+	sourceEvent, err := sourceLog.Append(ctx, events.Event{
+		Type:     projections.EventTenantRegistered,
+		TenantID: federationTenantA,
+		Data: mustJSON(t, struct {
+			Name string `json:"name"`
+		}{Name: "Federated Despite Local Poison"}),
+	})
+	if err != nil {
+		t.Fatalf("append source tenant event: %v", err)
+	}
+
+	const peerID = "us-east-poison-source"
+	worker, err := New(ctx, targetLog, projections.New(targetStore), targetStore, Config{
+		Enabled:   true,
+		ClusterID: "us-west-poison-target",
+		Peers: []Peer{{
+			ID:        peerID,
+			SourceLog: sourceLog,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("construct federation worker: %v", err)
+	}
+	if err := worker.RunOnce(ctx); err != nil {
+		t.Fatalf("import later peer event: %v", err)
+	}
+
+	targetHead, err := targetLog.LastSequence(ctx)
+	if err != nil {
+		t.Fatalf("read target log head: %v", err)
+	}
+	if targetHead <= poison.Sequence {
+		t.Fatalf("target log head = %d, want imported event after poison sequence %d", targetHead, poison.Sequence)
+	}
+	peerCheckpoint, err := targetStore.FederationCheckpoint(ctx, peerID)
+	if err != nil {
+		t.Fatalf("read peer checkpoint: %v", err)
+	}
+	if peerCheckpoint != sourceEvent.Sequence {
+		t.Fatalf("peer checkpoint = %d, want imported source sequence %d", peerCheckpoint, sourceEvent.Sequence)
+	}
+	tenant, err := targetStore.GetTenant(ctx, federationTenantA)
+	if err != nil {
+		t.Fatalf("read imported tenant projection: %v", err)
+	}
+	if tenant.Name != "Federated Despite Local Poison" {
+		t.Fatalf("imported tenant name = %q, want federated read state", tenant.Name)
+	}
+
+	after, err := targetStore.ProjectionTailHealth(ctx)
+	if err != nil {
+		t.Fatalf("read projection health after federation: %v", err)
+	}
+	if after.AppliedSequence != before.AppliedSequence ||
+		after.FailedSequence != before.FailedSequence ||
+		after.LastError != before.LastError ||
+		after.FailedAt == nil || before.FailedAt == nil || !after.FailedAt.Equal(*before.FailedAt) {
+		t.Fatalf("federation changed ordered-tail health: before=%+v after=%+v", before, after)
+	}
+}
+
 func waitForFederatedReadState(t *testing.T, st *store.Store, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)

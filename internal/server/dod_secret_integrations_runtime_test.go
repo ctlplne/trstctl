@@ -214,6 +214,7 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 	cfg.Secrets.EnableAPI = true
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
 	registryDB := dodSecretSubstrateConfig(t, dynamicRegistry)
 	postgresDB := dodSecretSubstrateConfig(t, dynamicPostgres)
 	mysqlDB := dodSecretSubstrateConfig(t, dynamicMySQL)
@@ -255,7 +256,8 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 		_ = log.Close()
 		t.Fatal(err)
 	}
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	signer := dodStartAuthorizedSoftwareSignerProcess(t, t.TempDir())
+	deps, err := buildRunDeps(ctx, cfg, st, log, signer, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("production buildRunDeps: %v", err)
@@ -292,6 +294,7 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 	cfg.Secrets.EnableAPI = true
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
 	var provider config.DynamicSecretProviderConfig
 	switch entryID {
 	case "dynamic_secret.registry", "dynamic_secret.postgresql":
@@ -377,7 +380,8 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 		_ = log.Close()
 		t.Fatal(err)
 	}
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	signer := dodStartAuthorizedSoftwareSignerProcess(t, t.TempDir())
+	deps, err := buildRunDeps(ctx, cfg, st, log, signer, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("production buildRunDeps: %v", err)
@@ -457,6 +461,7 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	cfg.Secrets.EnableAPI = true
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
 	cfg.SecretIntegrations.SyncTargets = []config.SecretSyncTargetConfig{
 		{TenantID: dodSecretIntegrationTenant, ID: "registry", Type: "generic-ci-json", Endpoint: syncRegistryEndpoint, Provider: "registry", TokenRef: fileRef("registry-sync-token", []byte("dod-registry-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 		{TenantID: dodSecretIntegrationTenant, ID: "aws-secrets-manager", Type: "aws-secrets-manager", Endpoint: syncAWSEndpoint, Region: "us-east-1", AccessKeyID: "AKIADODSYNC", SecretAccessRef: fileRef("aws-sync-secret", []byte("dod-aws-sync-secret")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
@@ -491,7 +496,8 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 		_ = log.Close()
 		t.Fatal(err)
 	}
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	signer := dodStartAuthorizedSoftwareSignerProcess(t, t.TempDir())
+	deps, err := buildRunDeps(ctx, cfg, st, log, signer, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("production buildRunDeps: %v", err)
@@ -534,6 +540,7 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 	cfg.Secrets.EnableAPI = true
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
+	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
 	base := config.SecretSyncTargetConfig{
 		TenantID: dodSecretIntegrationTenant, ID: target.id, Endpoint: endpoint,
 		AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs,
@@ -599,7 +606,8 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 		_ = log.Close()
 		t.Fatal(err)
 	}
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	signer := dodStartAuthorizedSoftwareSignerProcess(t, t.TempDir())
+	deps, err := buildRunDeps(ctx, cfg, st, log, signer, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("production buildRunDeps: %v", err)

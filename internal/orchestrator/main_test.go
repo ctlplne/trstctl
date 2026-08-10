@@ -110,7 +110,10 @@ func newStore(t *testing.T) *store.Store {
 		t.Fatalf("truncate: %v", err)
 	}
 	if _, err := s.SystemPool().Exec(ctx,
-		`UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
+		`UPDATE projection_checkpoint
+		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
+		        failed_at = NULL, updated_at = now()
+		  WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
 	}
 	if _, err := s.SystemPool().Exec(ctx,

@@ -102,11 +102,18 @@ every customer-scoped action:
   everything. Failing open on a read error would make the plane widest exactly
   when it is least healthy.
 
-Grants are minted with a local subcommand against the database:
+Grants are minted with a local subcommand against PostgreSQL **and the event
+log**. Every invocation needs a stable idempotency key; an identical retry
+returns the canonical authority event, while reusing the key for a changed
+grant is refused:
 
 ```
-trstctl provider-grant -operator op-1 -customer tenant-acme -operations read,suspend
-trstctl provider-grant -operator op-1 -customer tenant-acme -operations offboard -revoke
+trstctl provider-grant -operator op-1 -customer tenant-acme \
+  -operations read,suspend -granted-by platform-admin \
+  -idempotency-key tenant-acme-op-1-read-suspend-v1
+trstctl provider-grant -operator op-1 -customer tenant-acme \
+  -operations offboard -revoke -granted-by platform-admin \
+  -idempotency-key tenant-acme-op-1-offboard-revoke-v1
 ```
 
 Offboarding a customer clears every grant over it. Tenant ids are derived from
@@ -119,10 +126,46 @@ running process would put the file out of step with the system it describes.
 This is a local command rather than a served route because of the bootstrap
 problem: a route that hands out provider authority must itself be authorised by
 somebody holding provider authority, and at install time no such operator
-exists. Requiring direct database access states the real trust level.
+exists. The command opens the configured PostgreSQL and JetStream stores,
+bootstraps any pre-event delegation rows exactly once, appends one immutable
+`provider.delegation.granted` or `provider.delegation.revoked` event, and lets
+the provider authority projection update the delegation view. It never writes
+the table directly. When embedded NATS is configured, run the command while the
+control plane is offline so two processes do not open the same file-backed
+store.
 
-Not yet built: IdP federation for provider operators (OIDC/SAML with SCIM
-provisioning), and a provider access console for reviewing grants.
+Provider OIDC bearer verification is built with pinned JWKS, issuer, audience,
+role, and MFA claims. SAML/SCIM federation and a provider access console for
+reviewing or changing delegation grants are not built.
+
+### Provider authority event source and retries
+
+Customer lifecycle, delegation, quota, white-label branding, and break-glass
+grant/use state share one tenant-scoped immutable authority history. The
+`provider_tenants`, `provider_operator_delegations`,
+`provider_tenant_quotas`, `tenant_branding`, and
+`provider_breakglass_grants` tables are read models owned only by that
+projection; their PostgreSQL stores expose no direct mutators. An upgraded
+installation captures each uncovered pre-event row once before its first
+rebuild, including brand token overrides and both break-glass consents.
+
+Every state-changing `/provider/v1` request requires `Idempotency-Key`. The key
+is immutably bound to the authenticated operator, method, path, and body; exact
+retries return the original status, headers, and bytes, including concurrent
+retries, while a changed command returns `409`. Break-glass result access
+increments use count and is therefore `POST
+/provider/v1/breakglass/{grant}/results`, not a read-looking GET. The provider
+console generates a distinct key for every mutation it submits.
+
+`GET /provider/v1/activity?limit=100` derives a newest-first authority evidence
+view directly from that same immutable history. It returns event identity,
+sequence, type, time, customer, actor, grant, subject, and reason only: request
+bindings, authority state payloads, and break-glass tenant snapshots are never
+exposed through the history route. Current delegation is applied before any
+customer event is returned, so an operator cannot discover another customer's
+authority history; deployment-wide isolation-drill evidence is Provider-admin
+only. The Provider console renders this view beside the controls, making the
+evidence for a completed mutation visible without trusting a second audit store.
 
 ### Usage metering and invoice evidence
 

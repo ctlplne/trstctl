@@ -3298,6 +3298,38 @@ export const messages = {
     defaultMessage: "Evidence pack unavailable",
     description: "Error title when a compliance evidence pack cannot load.",
   },
+  "policy.compliance.tenant": {
+    defaultMessage: "Tenant",
+    description: "Tenant bound inside the signed compliance evidence manifest.",
+  },
+  "policy.compliance.generated": {
+    defaultMessage: "Generated",
+    description: "Signed compliance evidence manifest generation time.",
+  },
+  "policy.compliance.coverageWindow": {
+    defaultMessage: "Evidence window",
+    description: "Inclusive time window evaluated by the signed compliance control verdicts.",
+  },
+  "policy.compliance.evidenceRefs": {
+    defaultMessage: "Exact evidence refs",
+    description: "Immutable event or tenant-object references supporting a compliance control verdict.",
+  },
+  "policy.compliance.missingPrerequisites": {
+    defaultMessage: "Missing prerequisites",
+    description: "Required evidence that was absent, stale, or outside the tenant boundary.",
+  },
+  "policy.compliance.noneMissing": {
+    defaultMessage: "None",
+    description: "A compliance control has no missing evidence prerequisites.",
+  },
+  "policy.compliance.unknown": {
+    defaultMessage: "Unknown",
+    description: "A signed compliance manifest field was not provided.",
+  },
+  "policy.compliance.unbound": {
+    defaultMessage: "Unbound",
+    description: "A legacy compliance manifest does not bind its claims to a tenant.",
+  },
   "policy.versions.heading": {
     defaultMessage: "Policy versions",
     description: "Heading for lifecycle policy versions.",
@@ -5692,11 +5724,11 @@ export const messages = {
   },
   "source.cp.retained.e1par00006": {
     defaultMessage: "Control-plane executed by design",
-    description: "E1: terminal state, not a pending one — the device API cannot express rollback/readback, so the proven control-plane path is retained (E1 scope decision).",
+    description:
+      "E1: terminal state, not a pending one — the device API cannot express rollback/readback, so the proven control-plane path is retained (E1 scope decision).",
   },
   "source.authority.agreement.c4xr000001": {
-    defaultMessage:
-      "Authority agreement (XREC)",
+    defaultMessage: "Authority agreement (XREC)",
     description: "C4: panel heading \u2014 whether the configured authorities agree about what was issued.",
   },
   "source.agreement.unavailable.c4xr000002": {
@@ -5705,38 +5737,31 @@ export const messages = {
     description: "C4: unlicensed or unattached \u2014 must not render as a clean result.",
   },
   "source.open.witnesses.c4xr000003": {
-    defaultMessage:
-      "Open witnesses",
+    defaultMessage: "Open witnesses",
     description: "C4: unresolved divergences right now \u2014 the number that matters.",
   },
   "source.replay.watermark.c4xr000004": {
-    defaultMessage:
-      "Replay watermark",
+    defaultMessage: "Replay watermark",
     description: "C4: how far the projection has consumed the log; every count is only as current as this.",
   },
   "source.median.resolution.c4xr000005": {
-    defaultMessage:
-      "Median resolution",
+    defaultMessage: "Median resolution",
     description: "C4: median rather than mean \u2014 one witness left open over a weekend makes a mean meaningless.",
   },
   "source.over.n.resolved.c4xr000006": {
-    defaultMessage:
-      "over resolved witnesses:",
+    defaultMessage: "over resolved witnesses:",
     description: "C4: sample size, so a median over one witness cannot pass for a trend.",
   },
   "source.authority.c4xr000007": {
-    defaultMessage:
-      "Authority",
+    defaultMessage: "Authority",
     description: "C4: table column \u2014 the authority a divergence was raised against.",
   },
   "source.divergences.c4xr000008": {
-    defaultMessage:
-      "Divergences",
+    defaultMessage: "Divergences",
     description: "C4: total witnesses raised against this authority in the window.",
   },
   "source.by.class.c4xr000009": {
-    defaultMessage:
-      "By class",
+    defaultMessage: "By class",
     description: "C4: presence, attribute conflict, policy violation, staleness.",
   },
   "source.not.collecting.c4xr000010": {
@@ -5745,8 +5770,7 @@ export const messages = {
     description: "C4: attached-but-not-collecting is indistinguishable from perfect agreement unless said out loud.",
   },
   "source.provider.console.l3prov0001": {
-    defaultMessage:
-      "Provider console",
+    defaultMessage: "Provider console",
     description: "L3: provider console heading.",
   },
   "source.provider.login.intro.l3prov0002": {
@@ -5755,143 +5779,115 @@ export const messages = {
     description: "L3: provider login intro.",
   },
   "source.provider.token.l3prov0003": {
-    defaultMessage:
-      "Operator bearer token",
+    defaultMessage: "Operator bearer token",
     description: "L3: provider token field label.",
   },
   "source.provider.signin.l3prov0004": {
-    defaultMessage:
-      "Sign in",
+    defaultMessage: "Sign in",
     description: "L3: provider sign-in button.",
   },
   "source.provider.customers.intro.l3prov0005": {
-    defaultMessage:
-      "Your customer tenants and their lifecycle state.",
+    defaultMessage: "Your customer tenants and their lifecycle state.",
     description: "L3: provider console subtitle.",
   },
   "source.provider.signout.l3prov0006": {
-    defaultMessage:
-      "Sign out",
+    defaultMessage: "Sign out",
     description: "L3: provider sign-out button.",
   },
   "source.provider.provision.l3prov0007": {
-    defaultMessage:
-      "Provision a customer",
+    defaultMessage: "Provision a customer",
     description: "L3: provision section heading.",
   },
   "source.provider.slug.l3prov0008": {
-    defaultMessage:
-      "Slug",
+    defaultMessage: "Slug",
     description: "L3: tenant slug field.",
   },
   "source.provider.name.l3prov0009": {
-    defaultMessage:
-      "Name",
+    defaultMessage: "Name",
     description: "L3: tenant name field.",
   },
   "source.provider.provision.action.l3prov0010": {
-    defaultMessage:
-      "Provision",
+    defaultMessage: "Provision",
     description: "L3: provision button.",
   },
   "source.provider.customers.l3prov0011": {
-    defaultMessage:
-      "Customers",
+    defaultMessage: "Customers",
     description: "L3: customer list heading.",
   },
   "source.provider.none.l3prov0012": {
-    defaultMessage:
-      "No customer tenants yet. Provision one above.",
+    defaultMessage: "No customer tenants yet. Provision one above.",
     description: "L3: empty customer list.",
   },
   "source.provider.col.name.l3prov0013": {
-    defaultMessage:
-      "Customer",
+    defaultMessage: "Customer",
     description: "L3: table column.",
   },
   "source.provider.col.slug.l3prov0014": {
-    defaultMessage:
-      "Slug",
+    defaultMessage: "Slug",
     description: "L3: table column.",
   },
   "source.provider.col.status.l3prov0015": {
-    defaultMessage:
-      "Status",
+    defaultMessage: "Status",
     description: "L3: table column.",
   },
   "source.provider.col.created.l3prov0016": {
-    defaultMessage:
-      "Onboarded",
+    defaultMessage: "Onboarded",
     description: "L3: table column.",
   },
   "source.provider.col.actions.l3prov0017": {
-    defaultMessage:
-      "Actions",
+    defaultMessage: "Actions",
     description: "L3: table column.",
   },
   "source.provider.suspend.confirm.l3prov0018": {
-    defaultMessage:
-      "Suspend this customer? Their tenancy stops serving until you reactivate it.",
+    defaultMessage: "Suspend this customer? Their tenancy stops serving until you reactivate it.",
     description: "L3: suspend confirmation.",
   },
   "source.provider.suspend.l3prov0019": {
-    defaultMessage:
-      "Suspend",
+    defaultMessage: "Suspend",
     description: "L3: suspend action.",
   },
   "source.provider.offboard.confirm.l3prov0020": {
-    defaultMessage:
-      "Offboard this customer? This begins deleting their tenancy and cannot be undone.",
+    defaultMessage: "Offboard this customer? This begins deleting their tenancy and cannot be undone.",
     description: "L3: offboard confirmation.",
   },
   "source.provider.offboard.l3prov0021": {
-    defaultMessage:
-      "Offboard",
+    defaultMessage: "Offboard",
     description: "L3: offboard action.",
   },
   "source.provider.quota.l3prov0022": {
-    defaultMessage:
-      "Quota",
+    defaultMessage: "Quota",
     description: "L3: per-customer quota action.",
   },
   "source.provider.quota.none.l3prov0023": {
-    defaultMessage:
-      "No quota is set for this customer \u2014 they are uncapped.",
+    defaultMessage: "No quota is set for this customer \u2014 they are uncapped.",
     description: "L3: quota fetch empty/failed.",
   },
   "source.provider.quota.agents.l3prov0024": {
-    defaultMessage:
-      "Max agents",
+    defaultMessage: "Max agents",
     description: "L3: quota limit.",
   },
   "source.provider.quota.certs.l3prov0025": {
-    defaultMessage:
-      "Max certificates",
+    defaultMessage: "Max certificates",
     description: "L3: quota limit.",
   },
   "source.provider.quota.secrets.l3prov0026": {
-    defaultMessage:
-      "Max secrets",
+    defaultMessage: "Max secrets",
     description: "L3: quota limit.",
   },
   "source.provider.quota.unlimited.l3prov0027": {
-    defaultMessage:
-      "unlimited",
+    defaultMessage: "unlimited",
     description: "L3: an unset quota limit is the absence of a cap, not a cap of zero.",
   },
   "source.provider.quota.edit.hint.l3prov0028": {
-    defaultMessage:
-      "Leave a field blank for no limit. A limit of zero means the customer may create nothing \u2014 different from no cap.",
+    defaultMessage: "Leave a field blank for no limit. A limit of zero means the customer may create nothing \u2014 different from no cap.",
     description: "L3: quota editor hint \u2014 blank is unlimited, not zero.",
   },
   "source.provider.quota.save.l3prov0029": {
-    defaultMessage:
-      "Save quota",
+    defaultMessage: "Save quota",
     description: "L3: quota save button.",
   },
   "source.provider.brand.l3prov0030": {
-    defaultMessage:
-      "Brand",
+    defaultMessage: "Brand",
     description: "L3: per-customer brand action.",
   },
   "source.provider.brand.hint.l3prov0031": {
@@ -5900,63 +5896,51 @@ export const messages = {
     description: "L3: brand editor hint \u2014 custom domain uniqueness.",
   },
   "source.provider.brand.product.l3prov0032": {
-    defaultMessage:
-      "Product name",
+    defaultMessage: "Product name",
     description: "L3: brand product name.",
   },
   "source.provider.brand.domain.l3prov0033": {
-    defaultMessage:
-      "Custom domain",
+    defaultMessage: "Custom domain",
     description: "L3: brand custom domain.",
   },
   "source.provider.brand.message.l3prov0034": {
-    defaultMessage:
-      "Login message",
+    defaultMessage: "Login message",
     description: "L3: brand login message.",
   },
   "source.provider.brand.save.l3prov0035": {
-    defaultMessage:
-      "Save brand",
+    defaultMessage: "Save brand",
     description: "L3: brand save button.",
   },
   "source.provider.drill.title.l3prov0036": {
-    defaultMessage:
-      "Tenant isolation",
+    defaultMessage: "Tenant isolation",
     description: "L3: isolation-drill section heading.",
   },
   "source.provider.drill.intro.l3prov0037": {
-    defaultMessage:
-      "Run an on-demand drill that proves one customer cannot read or overwrite another customer's data. Admin only.",
+    defaultMessage: "Run an on-demand drill that proves one customer cannot read or overwrite another customer's data. Admin only.",
     description: "L3: isolation-drill section description.",
   },
   "source.provider.drill.run.l3prov0038": {
-    defaultMessage:
-      "Run isolation drill",
+    defaultMessage: "Run isolation drill",
     description: "L3: isolation-drill run button.",
   },
   "source.provider.drill.pass.l3prov0039": {
-    defaultMessage:
-      "Isolation holds — every check passed.",
+    defaultMessage: "Isolation holds — every check passed.",
     description: "L3: isolation-drill passed result.",
   },
   "source.provider.drill.fail.l3prov0040": {
-    defaultMessage:
-      "Isolation drill FAILED — investigate immediately.",
+    defaultMessage: "Isolation drill FAILED — investigate immediately.",
     description: "L3: isolation-drill failed result.",
   },
   "source.adcs.database.error.f4adcs0013": {
-    defaultMessage:
-      "Could not load the AD CS certificate-database summary.",
+    defaultMessage: "Could not load the AD CS certificate-database summary.",
     description: "F4: error state heading.",
   },
   "source.adcs.never.f4adcs0014": {
-    defaultMessage:
-      "never",
+    defaultMessage: "never",
     description: "F4: an ingested CA with no timestamp yet.",
   },
   "source.adcs.database.f4adcs0001": {
-    defaultMessage:
-      "AD CS certificate database",
+    defaultMessage: "AD CS certificate database",
     description: "F4: panel heading — per-CA lifecycle visibility from an ingested certutil database.",
   },
   "source.adcs.database.intro.f4adcs0002": {
@@ -6007,8 +5991,7 @@ export const messages = {
     description: "F4: footnote — read-only, and gaps guard against overclaiming coverage.",
   },
   "source.edge.delegations.b6edge00001": {
-    defaultMessage:
-      "Delegated edge CAs (air-gap)",
+    defaultMessage: "Delegated edge CAs (air-gap)",
     description: "B6: panel heading — the constrained edge sub-CA surface for hosts with no path to the brain.",
   },
   "source.edge.unavailable.b6edge00002": {
@@ -6022,68 +6005,55 @@ export const messages = {
     description: "B6: empty state — default-off is the design, so an empty list is the healthy baseline, not a gap.",
   },
   "source.edge.segments.b6edge00004": {
-    defaultMessage:
-      "Segment opt-ins",
+    defaultMessage: "Segment opt-ins",
     description: "B6: table heading for per-segment policies.",
   },
   "source.edge.live.b6edge00005": {
-    defaultMessage:
-      "Delegations",
+    defaultMessage: "Delegations",
     description: "B6: table heading for minted delegated CAs.",
   },
   "source.edge.host.b6edge00006": {
-    defaultMessage:
-      "Host",
+    defaultMessage: "Host",
     description: "B6: table column — the no-path host the delegation was minted for.",
   },
   "source.edge.constraints.b6edge00007": {
-    defaultMessage:
-      "Name constraints",
+    defaultMessage: "Name constraints",
     description: "B6: the DNS subtrees the delegation may issue within, read from the certificate itself.",
   },
   "source.edge.status.b6edge00008": {
-    defaultMessage:
-      "Status",
+    defaultMessage: "Status",
     description: "B6: active, expired (the certificate's own clock), or revoked from the brain.",
   },
   "source.edge.expires.b6edge00009": {
-    defaultMessage:
-      "Expires",
+    defaultMessage: "Expires",
     description: "B6: the auto-expiry that makes delegating a signing key defensible.",
   },
   "source.edge.segment.b6edge00010": {
-    defaultMessage:
-      "Segment",
+    defaultMessage: "Segment",
     description: "B6: table column — the declared segment the policy or delegation scopes to.",
   },
   "source.edge.enabled.b6edge00011": {
-    defaultMessage:
-      "Enabled",
+    defaultMessage: "Enabled",
     description: "B6: whether the segment has opted in.",
   },
   "source.edge.attestation.roots.b6edge00012": {
-    defaultMessage:
-      "Attestation roots",
+    defaultMessage: "Attestation roots",
     description: "B6: how many TPM roots may vouch for this segment's hosts.",
   },
   "source.edge.excluding.b6edge00013": {
-    defaultMessage:
-      "\u2014 excluding",
+    defaultMessage: "\u2014 excluding",
     description: "B6: joins the excluded subtrees onto the permitted list in the constraints column.",
   },
   "source.edge.on.b6edge00016": {
-    defaultMessage:
-      "on",
+    defaultMessage: "on",
     description: "B6: segment opt-in state.",
   },
   "source.edge.off.b6edge00017": {
-    defaultMessage:
-      "off",
+    defaultMessage: "off",
     description: "B6: segment opt-in state (the default).",
   },
   "source.edge.attested.key.b6edge00014": {
-    defaultMessage:
-      "Attested key",
+    defaultMessage: "Attested key",
     description: "B6: digest of the TPM-vouched key the delegation was minted over.",
   },
   "source.edge.reconcile.note.b6edge00015": {
@@ -6092,48 +6062,39 @@ export const messages = {
     description: "B6: the honesty rule — silence from an air-gapped host is absence of evidence, and the panel must not render it as inactivity.",
   },
   "source.crypto.readiness.m2seq00001": {
-    defaultMessage:
-      "Crypto migration sequencing",
+    defaultMessage: "Crypto migration sequencing",
     description: "M2: panel heading — crypto assets ordered by observed dependency, not severity alone.",
   },
   "source.crypto.assets.m2seq00002": {
-    defaultMessage:
-      "Crypto assets",
+    defaultMessage: "Crypto assets",
     description: "M2: how many observed cryptographic usages are on the graph.",
   },
   "source.urgent.m2seq00003": {
-    defaultMessage:
-      "Urgent (weak or quantum-vulnerable)",
+    defaultMessage: "Urgent (weak or quantum-vulnerable)",
     description: "M2: rows that must migrate first, before dependency count is considered.",
   },
   "source.unplaceable.m2seq00004": {
-    defaultMessage:
-      "Unplaceable (no blast radius)",
+    defaultMessage: "Unplaceable (no blast radius)",
     description: "M2: recorded with no location, so dependency cannot be computed — unmeasured, not low-risk.",
   },
   "source.crypto.asset.m2seq00005": {
-    defaultMessage:
-      "Asset / where it runs",
+    defaultMessage: "Asset / where it runs",
     description: "M2: table column.",
   },
   "source.dependents.m2seq00006": {
-    defaultMessage:
-      "Observed dependents",
+    defaultMessage: "Observed dependents",
     description: "M2: labelled OBSERVED because the graph is built from discovery; zero is not proof of none.",
   },
   "source.owners.m2seq00007": {
-    defaultMessage:
-      "Owners to coordinate with",
+    defaultMessage: "Owners to coordinate with",
     description: "M2: blockers are owner-attributed so a migration has names against it.",
   },
   "source.sequencing.m2seq00008": {
-    defaultMessage:
-      "Sequencing",
+    defaultMessage: "Sequencing",
     description: "M2: what to do with this row, and what its numbers do not prove.",
   },
   "source.no.location.m2seq00009": {
-    defaultMessage:
-      "no location recorded",
+    defaultMessage: "no location recorded",
     description: "M2: the CBOM could not place this usage, so it has no graph position.",
   },
   "source.deployment.truth.d3tri00001": {
@@ -12834,7 +12795,8 @@ export const messages = {
     description: "A5: unassigned is shown separately; an agent nobody placed must not join the largest ring.",
   },
   "source.fleet.upgrade.observe.a5fl000005": {
-    defaultMessage: "Observe-only: this campaign gates on the versions agents report; it dispatches nothing. Start a campaign with artifacts to have the rings push the upgrade.",
+    defaultMessage:
+      "Observe-only: this campaign gates on the versions agents report; it dispatches nothing. Start a campaign with artifacts to have the rings push the upgrade.",
     description: "A5: a gating campaign must not read as a pushing one — an operator watching it 'hang' needs to know nothing was ever going to be sent.",
   },
   "source.fleet.upgrade.dispatching.a5fl000006": {
@@ -12854,8 +12816,14 @@ export const messages = {
     description: "I5: an unobserved device is NOT a failed one; treating it as failed sends somebody to re-push a profile that is already installed.",
   },
   "source.mdm.devices.renewalrisk.i5mdm00004": {
-    defaultMessage: "{value1} device(s) at risk of silently missing renewal: their certificates are inside the renewal window and the MDM has not seen them since it opened.",
-    description: "I5: the offline-renewal count. Nothing has failed yet — which is exactly the problem, because nothing will alert before the certificate expires in a drawer.",
+    defaultMessage:
+      "{value1} device(s) at risk of silently missing renewal: their certificates are inside the renewal window and the MDM has not seen them since it opened.",
+    description:
+      "I5: the offline-renewal count. Nothing has failed yet — which is exactly the problem, because nothing will alert before the certificate expires in a drawer.",
+  },
+  "source.mdm.devices.stepdetail.i5mdm00005": {
+    defaultMessage: "— {value1}",
+    description: "I5: separates a durable MDM trace-step outcome from its operator-facing detail.",
   },
   "source.issuance.requests.heading.i3req00001": {
     defaultMessage: "Issuance requests",
@@ -12886,7 +12854,8 @@ export const messages = {
     description: "I2: heading for the queue of ownership an import refused to overwrite.",
   },
   "source.ownership.conflicts.blurb.i2own00002": {
-    defaultMessage: "An import found {value1} field(s) where an external source disagrees with what is recorded here. Attested ownership was never overwritten.",
+    defaultMessage:
+      "An import found {value1} field(s) where an external source disagrees with what is recorded here. Attested ownership was never overwritten.",
     description: "I2: says plainly that the import declined rather than applied, so the list is not read as completed work.",
   },
   "source.ownership.conflicts.attested.i2own00003": {
@@ -12939,7 +12908,7 @@ export const messages = {
   },
   "source.ownership.source.unrecorded.i2own00007": {
     defaultMessage: "not recorded",
-    description: "I2: shown when an owner predates provenance. Deliberately not \"manual\" — an unrecorded origin is not evidence a human said so.",
+    description: 'I2: shown when an owner predates provenance. Deliberately not "manual" — an unrecorded origin is not evidence a human said so.',
   },
   "source.owners.58f5df9b24": {
     defaultMessage: "Owners",

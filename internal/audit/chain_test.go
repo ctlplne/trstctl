@@ -4,10 +4,10 @@ package audit_test
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 )
 
@@ -92,12 +92,14 @@ func TestExportPersistentKeyVerifiesAcrossRestart(t *testing.T) {
 	appendActor(t, log, tenantA, "owner.created", "alice", "admin")
 	appendActor(t, log, tenantA, "identity.issued", "alice", "admin")
 
-	keyPath := filepath.Join(t.TempDir(), "signing-key.pem")
-
-	// First boot: create + persist the key, export a signed bundle.
-	sk1, err := audit.LoadOrCreateSigningKey(keyPath, "audit-export")
+	// First boot: create the key and capture its persisted encoding.
+	sk1, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
-		t.Fatalf("LoadOrCreateSigningKey (create): %v", err)
+		t.Fatalf("GenerateRSASigningKey: %v", err)
+	}
+	pemBytes, err := sk1.MarshalPrivateKey()
+	if err != nil {
+		t.Fatalf("MarshalPrivateKey: %v", err)
 	}
 	svc1 := audit.NewService(log, sk1)
 	signed, err := svc1.Export(context.Background(), audit.Query{TenantID: tenantA})
@@ -105,10 +107,10 @@ func TestExportPersistentKeyVerifiesAcrossRestart(t *testing.T) {
 		t.Fatalf("Export: %v", err)
 	}
 
-	// Restart: reload the SAME key from disk (no rotation).
-	sk2, err := audit.LoadOrCreateSigningKey(keyPath, "audit-export")
+	// Restart: reload the SAME persisted key bytes (no rotation).
+	sk2, err := jose.ParseRSASigningKey("audit-export", pemBytes)
 	if err != nil {
-		t.Fatalf("LoadOrCreateSigningKey (load): %v", err)
+		t.Fatalf("ParseRSASigningKey: %v", err)
 	}
 	svc2 := audit.NewService(log, sk2)
 

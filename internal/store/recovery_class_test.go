@@ -62,6 +62,25 @@ func TestTenantKeyDomainUsesEventRecoveryAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestDiscoveryFindingReplayAliasesInvalidateOlderSnapshotsAUD96(t *testing.T) {
+	if SnapshotFormatVersion < 19 {
+		t.Errorf("SnapshotFormatVersion = %d; discovery recorded-id aliases must invalidate older snapshots whose covered history cannot rebuild legacy triage lookup", SnapshotFormatVersion)
+	}
+}
+
+func TestOutboxReconciliationConflictsUseEventRecoveryAndSnapshotsAUD97(t *testing.T) {
+	const table = "outbox_reconciliation_conflicts"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is event-derived but missing from ReadModelTables", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is in the rebuild set but missing from snapshotTables; restore would hide quarantined commands", table)
+	}
+	if SnapshotFormatVersion < 20 {
+		t.Errorf("SnapshotFormatVersion = %d; adding the AUD-97 conflict projection must invalidate older snapshots that would skip its event", SnapshotFormatVersion)
+	}
+}
+
 func TestPrivacyErasureOperationUsesIndependentPostgresRecovery(t *testing.T) {
 	const table = "privacy_subject_erasure_operations"
 	if containsRecoveryTable(ReadModelTables, table) {

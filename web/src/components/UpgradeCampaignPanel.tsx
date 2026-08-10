@@ -5,7 +5,10 @@ import { translateNow } from "@/i18n/I18nProvider";
 
 function readCampaign(): Promise<AgentUpgradeCampaign> {
   return optionalApiCall<AgentUpgradeCampaign>("agentUpgradeCampaign", {
-    active: false, rings: {}, versions: {}, guidance: "",
+    active: false,
+    rings: {},
+    versions: {},
+    guidance: "",
   });
 }
 
@@ -59,9 +62,7 @@ export function UpgradeCampaignPanel() {
       {data?.reason ? <p className="text-sm">{data.reason}</p> : null}
       {data?.active ? (
         data.observe_only ? (
-          <p className="text-caption text-muted-foreground">
-            {translateNow("source.fleet.upgrade.observe.a5fl000005")}
-          </p>
+          <p className="text-caption text-muted-foreground">{translateNow("source.fleet.upgrade.observe.a5fl000005")}</p>
         ) : data.dispatched_ring ? (
           <p className="text-caption text-muted-foreground">
             {translateNow("source.fleet.upgrade.dispatching.a5fl000006", {
@@ -71,9 +72,7 @@ export function UpgradeCampaignPanel() {
           </p>
         ) : null
       ) : null}
-      <p className="text-caption text-muted-foreground">
-        {translateNow("source.fleet.upgrade.rings.a5fl000004", { value1: ringSummary })}
-      </p>
+      <p className="text-caption text-muted-foreground">{translateNow("source.fleet.upgrade.rings.a5fl000004", { value1: ringSummary })}</p>
       <ul className="space-y-1 text-sm">
         {Object.entries(data?.versions ?? {}).map(([version, n]) => (
           <li key={version} className="text-caption text-muted-foreground">

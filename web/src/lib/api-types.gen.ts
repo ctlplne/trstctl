@@ -1037,7 +1037,7 @@ export interface CMDBReconcileSchedule {
   ci_query?: string;
   configured: boolean;
   enabled: boolean;
-  execution?: "control_plane" | "relay" | "";
+  execution?: "relay" | "";
   guidance: string;
   instance_url?: string;
   interval_seconds?: number;
@@ -1564,13 +1564,21 @@ export interface DRArtifactFailure {
 }
 
 export interface DRDrill {
+  artifacts_restored: string[];
   detail: string;
+  event_log_healthy: boolean;
   events_restored: number;
+  full_set_restored: boolean;
   limitations: string[];
   outcome: "restored" | "failed" | "skipped";
+  postgres_records_restored: number;
+  postgres_tables_restored: Record<string, unknown>;
   ran_at: string;
   rpo_seconds: number;
   rto_seconds: number;
+  server_healthy: boolean;
+  signer_healthy: boolean;
+  store_healthy: boolean;
 }
 
 export interface DRPosture {
@@ -2326,7 +2334,7 @@ export interface FleetReissuanceBatch {
   identity_ids: string[];
   index: number;
   replacement_identity_ids: string[];
-  status: "halted" | "planned" | "executed" | "failed" | "completed";
+  status: "halted" | "planned" | "queued" | "waiting_verification" | "executed" | "failed" | "completed";
 }
 
 export interface FleetReissuanceEvidence {
@@ -2368,10 +2376,12 @@ export interface FleetReissuanceRun {
   evidence_bundle_format?: string;
   failed_targets?: string[];
   graph_impact: GraphImpact;
+  halted_reason?: string;
   health_gates: FleetReissuanceHealthGate[];
   id: string;
   idempotency_key?: string;
   issuer_id: string;
+  next_batch_index: number;
   phase: string;
   reason?: string;
   replacement_identities?: Identity[];
@@ -2784,7 +2794,7 @@ export interface MDMPollSchedule {
   base_url?: string;
   configured: boolean;
   enabled: boolean;
-  execution?: "control_plane" | "relay" | "";
+  execution?: "relay" | "";
   filter?: string;
   guidance: string;
   interval_seconds?: number;
@@ -2798,7 +2808,7 @@ export interface MDMPollSchedule {
 export interface MDMPollScheduleInput {
   base_url: string;
   enabled?: boolean;
-  execution?: "control_plane" | "relay" | "";
+  execution?: "relay" | "";
   filter?: string;
   interval_seconds: number;
   mdm: "intune" | "jamf";
@@ -3701,6 +3711,34 @@ export interface OutboxCircuit {
 export interface OutboxCircuitList {
   items: OutboxCircuit[];
   next_cursor?: string;
+}
+
+export interface OutboxReconciliationConflict {
+  candidate_destination: string;
+  candidate_effect_lane: string;
+  candidate_payload_sha256: string;
+  candidate_required_agent_id?: string;
+  candidate_required_agent_role?: string;
+  detected_at: string;
+  existing_destination: string;
+  existing_effect_lane: string;
+  existing_outbox_id: number;
+  existing_payload_sha256: string;
+  existing_required_agent_id?: string;
+  existing_required_agent_role?: string;
+  id: string;
+  idempotency_key: string;
+  reason: string;
+  source_event_id: string;
+  source_event_sequence: number;
+  source_event_type: string;
+  status: "quarantined";
+  tenant_id: string;
+}
+
+export interface OutboxReconciliationConflictList {
+  guidance: string;
+  items: OutboxReconciliationConflict[];
 }
 
 export interface Owner {

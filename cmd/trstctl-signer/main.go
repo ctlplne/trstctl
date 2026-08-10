@@ -39,6 +39,7 @@ func main() {
 	kmsTimeout := flag.Duration("kms-timeout", 10*time.Second, "deadline for each external KMS/HSM wrap/unwrap operation")
 	managedKeysConfig := flag.String("managed-keys-config", "", "path to signer-local managed-key provider JSON (credentials must be file references, never argv/env)")
 	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
+	legacyAuditKey := flag.String("legacy-audit-key", "", "signer-local path to a historical audit PKCS#8 PEM; migrated once into the sealed audit-export handle, then deleted")
 	allowInsecureDevNonLinux := flag.Bool("allow-insecure-dev-nonlinux", false, "development-only: allow signer startup on non-Linux where process hardening, UDS peer UID checks, and locked memory are unavailable")
 
 	// Cross-node mTLS transport (AN-4 multi-node mode, SIGNER-005 / design §3,§5.2).
@@ -140,6 +141,12 @@ func main() {
 		}
 	} else {
 		srv = signing.NewServer(opts...)
+	}
+	if *legacyAuditKey != "" {
+		if _, err := srv.MigrateLegacySigningKeyFile(*legacyAuditKey, "audit-export", []signing.KeyPurpose{signing.PurposeAuditEvidence}); err != nil {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: migrate legacy audit key: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	var serveErr error

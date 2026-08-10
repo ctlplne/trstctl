@@ -5,7 +5,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -14,7 +13,6 @@ import (
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/graph"
-	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -44,6 +42,8 @@ type fleetReissuanceRunResponse struct {
 	Reason                 string                            `json:"reason"`
 	BatchSize              int                               `json:"batch_size"`
 	BatchCount             int                               `json:"batch_count"`
+	NextBatchIndex         int                               `json:"next_batch_index"`
+	HaltedReason           string                            `json:"halted_reason,omitempty"`
 	Connector              string                            `json:"connector"`
 	Target                 string                            `json:"target"`
 	GraphImpact            json.RawMessage                   `json:"graph_impact"`
@@ -120,6 +120,7 @@ func toFleetReissuanceRunResponse(r store.IncidentFleetReissuanceRun) fleetReiss
 	return fleetReissuanceRunResponse{
 		ID: r.ID, TenantID: r.TenantID, IssuerID: r.IssuerID,
 		Status: r.Status, Phase: r.Phase, Reason: r.Reason, BatchSize: r.BatchSize,
+		NextBatchIndex: r.NextBatchIndex, HaltedReason: r.HaltedReason,
 		BatchCount: len(r.Batches), Connector: r.Connector, Target: r.Target,
 		GraphImpact: graphImpact, AffectedIdentityIDs: r.AffectedIdentityIDs,
 		ReplacementIdentityIDs: r.ReplacementIdentityIDs, RevokedIdentityIDs: r.RevokedIdentityIDs,
@@ -193,53 +194,27 @@ func (a *API) startFleetReissuance(w http.ResponseWriter, r *http.Request) {
 		healthGates := normalizeFleetHealthGates(req.HealthGates)
 
 		affectedIDs := make([]string, 0, len(affected))
-		replacementIDs := make([]string, 0, len(affected))
-		revokedIDs := make([]string, 0, len(affected))
-		deliveryIDs := make([]string, 0, len(affected))
-		failedTargets := make([]string, 0, len(affected))
+		plannedReplacementIDs := make([]string, 0, len(affected))
 		rollbackRefs := []string{"run:" + runID, "issuer:" + req.IssuerID, rollbackRef}
-		for i, compromised := range affected {
+		for _, compromised := range affected {
 			affectedIDs = append(affectedIDs, compromised.ID)
-			replacement, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
-				Kind: compromised.Kind, Name: fleetReplacementName(compromised.Name, i), OwnerID: compromised.OwnerID,
-				IssuerID: compromised.IssuerID, Attributes: fleetReplacementAttributes(runID, compromised.ID, compromised.Attributes),
-			})
-			if err != nil {
-				return 0, nil, err
-			}
-			if err := a.orch.Transition(ctx, tenantID, replacement.ID, orchestrator.StateIssued, "fleet replacement issued before compromised issuer revocation: "+reason); err != nil {
-				return 0, nil, err
-			}
-			if err := a.orch.Transition(ctx, tenantID, replacement.ID, orchestrator.StateDeployed, "fleet replacement deployed before compromised issuer revocation: "+reason); err != nil {
-				return 0, nil, err
-			}
-			if err := a.orch.Transition(ctx, tenantID, compromised.ID, orchestrator.StateRevoked, "fleet compromised issuer identity revoked after replacement: "+reason); err != nil {
-				return 0, nil, err
-			}
-			delivery, err := a.recordFleetReissuanceDelivery(ctx, tenantID, replacement.ID, connector, target, rollbackRef, reason, idempotencyKey)
-			if err != nil {
-				return 0, nil, err
-			}
-			replacementIDs = append(replacementIDs, replacement.ID)
-			revokedIDs = append(revokedIDs, compromised.ID)
-			deliveryIDs = append(deliveryIDs, delivery.ID)
-			failedTargets = append(failedTargets, incidentFailedTargets(delivery)...)
-			rollbackRefs = append(rollbackRefs, "identity:"+compromised.ID, "replacement:"+replacement.ID, "delivery:"+delivery.ID+":"+delivery.RollbackRef)
+			plannedReplacementIDs = append(plannedReplacementIDs, fleetReplacementID(runID, compromised.ID))
+			rollbackRefs = append(rollbackRefs, "identity:"+compromised.ID)
 		}
-		batches := buildFleetBatches(affectedIDs, replacementIDs, batchSize)
+		batches := buildFleetBatches(affectedIDs, plannedReplacementIDs, batchSize)
+		batches[0].Status = servedstatus.FleetBatchQueued
 		evidenceFormat, evidenceBundle, err := a.incidentEvidenceBundle(ctx, tenantID, req.IssuerID)
 		if err != nil {
 			return 0, nil, err
 		}
-		run, err := a.orch.RecordIncidentFleetReissuance(ctx, tenantID, store.IncidentFleetReissuanceRun{
-			ID: runID, IssuerID: req.IssuerID, Status: "executed", Phase: "fleet_reissued_and_compromised_revoked",
+		run, err := a.orch.RecordIncidentFleetReissuanceAndEnqueueBatch(ctx, tenantID, store.IncidentFleetReissuanceRun{
+			ID: runID, IssuerID: req.IssuerID, Status: "running", Phase: "canary_queued",
 			Reason: reason, BatchSize: batchSize, Connector: connector, Target: target, GraphImpact: impactJSON,
-			AffectedIdentityIDs: affectedIDs, ReplacementIdentityIDs: replacementIDs, RevokedIdentityIDs: revokedIDs,
-			ConnectorDeliveryIDs: deliveryIDs, Batches: batches, HealthGates: healthGates,
-			FailedTargets: failedTargets, RollbackRefs: rollbackRefs,
+			AffectedIdentityIDs: affectedIDs, Batches: batches, HealthGates: healthGates,
+			NextBatchIndex: 1, RollbackRefs: rollbackRefs,
 			EvidenceBundleFormat: evidenceFormat, EvidenceBundle: evidenceBundle,
 			IdempotencyKey: idempotencyKey, CreatedBy: principal.Subject,
-		})
+		}, 1)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -302,7 +277,7 @@ func (a *API) pauseFleetReissuance(w http.ResponseWriter, r *http.Request) {
 //trstctl:mutation
 func (a *API) resumeFleetReissuance(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, a.fleetReissuanceStateMutation(r, idempotencyKey, "executed", "resume_recorded"))
+	a.mutate(w, r, idempotencyKey, a.fleetReissuanceStateMutation(r, idempotencyKey, "running", "batch_resumed"))
 }
 
 //trstctl:mutation
@@ -324,6 +299,21 @@ func (a *API) fleetReissuanceStateMutation(r *http.Request, idempotencyKey, stat
 		}
 		run.Status = status
 		run.Phase = phase
+		if status == "running" {
+			if run.NextBatchIndex <= 0 || run.NextBatchIndex > len(run.Batches) {
+				return 0, nil, errStatus(http.StatusConflict, "fleet reissuance has no paused or halted batch to resume")
+			}
+			run.HaltedReason = ""
+			for i := range run.Batches {
+				switch {
+				case run.Batches[i].Index == run.NextBatchIndex:
+					run.Batches[i].Status = servedstatus.FleetBatchQueued
+					run.Batches[i].HealthGate = servedstatus.FleetGateNotEvaluated
+				case run.Batches[i].Index > run.NextBatchIndex && run.Batches[i].Status == servedstatus.FleetBatchHalted:
+					run.Batches[i].Status = servedstatus.FleetBatchPlanned
+				}
+			}
+		}
 		if reason := strings.TrimSpace(req.Reason); reason != "" {
 			run.Reason = run.Reason + "; " + phase + ": " + reason
 		}
@@ -331,7 +321,12 @@ func (a *API) fleetReissuanceStateMutation(r *http.Request, idempotencyKey, stat
 			run.RollbackRefs = append(run.RollbackRefs, rollbackRef)
 		}
 		run.IdempotencyKey = idempotencyKey
-		updated, err := a.orch.RecordIncidentFleetReissuance(ctx, tenantID, run)
+		var updated store.IncidentFleetReissuanceRun
+		if status == "running" {
+			updated, err = a.orch.RecordIncidentFleetReissuanceAndEnqueueBatch(ctx, tenantID, run, run.NextBatchIndex)
+		} else {
+			updated, err = a.orch.RecordIncidentFleetReissuance(ctx, tenantID, run)
+		}
 		if err != nil {
 			return 0, nil, err
 		}
@@ -371,17 +366,6 @@ func (a *API) issuerBlastRadius(ctx context.Context, tenantID, issuerID string) 
 	return g.BlastRadius(nodeID), nil
 }
 
-func (a *API) recordFleetReissuanceDelivery(ctx context.Context, tenantID, replacementIdentityID, connector, target, rollbackRef, reason, idempotencyKey string) (store.ConnectorDeliveryReceipt, error) {
-	identityID := replacementIdentityID
-	return a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
-		ID: guuid.NewString(), IdentityID: &identityID, Destination: "connector.deploy",
-		Connector: connector, Target: target, Status: servedstatus.ConnectorQueued, Attempts: 0,
-		Reason:      "fleet replacement deployment requires connector worker confirmation",
-		Detail:      "served compromised issuer fleet reissuance queued replacement deploy before revocation: " + reason,
-		RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,
-	})
-}
-
 func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID string, resp *fleetReissuanceRunResponse) {
 	for _, id := range resp.ReplacementIdentityIDs {
 		if ident, err := a.store.GetIdentity(ctx, tenantID, id); err == nil {
@@ -398,13 +382,16 @@ func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID strin
 	// because verification is a loop — an endpoint that was serving correctly
 	// when the run finished can stop, and a gate that never re-evaluated would
 	// go on showing a pass for a fleet that has since diverged.
-	if a.store != nil && len(resp.ReplacementIdentityIDs) > 0 {
-		outcome, err := a.store.SummarizeFleetVerification(ctx, tenantID, resp.ReplacementIdentityIDs)
-		if err == nil {
-			resp.HealthGates = evaluateFleetDeploymentGate(resp.HealthGates, operatorAssertedGates(resp.HealthGates), outcome)
-			resp.VerifiedReplacements = outcome.Verified
-			resp.FailedReplacements = outcome.Failed
-			resp.UnverifiedReplacements = outcome.Unverified
+	if a.store != nil {
+		plannedReplacementIDs := fleetPlannedReplacementIDs(resp.Batches)
+		if len(plannedReplacementIDs) > 0 {
+			outcome, err := a.store.SummarizeFleetVerification(ctx, tenantID, plannedReplacementIDs)
+			if err == nil {
+				resp.HealthGates = evaluateFleetDeploymentGate(resp.HealthGates, operatorAssertedGates(resp.HealthGates), outcome)
+				resp.VerifiedReplacements = outcome.Verified
+				resp.FailedReplacements = outcome.Failed
+				resp.UnverifiedReplacements = outcome.Unverified
+			}
 		}
 		// H3: each batch's gate is recomputed from ITS OWN replacements before
 		// anything is reported. Done here, on the read, so a gate reflects what
@@ -413,15 +400,16 @@ func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID strin
 		// stale one is the one that gets acted on.
 		resp.Batches = evaluateFleetBatchGates(ctx, a.store, tenantID, resp.Batches)
 
-		// D6: canary-first. If the first batch's replacements are not being
-		// served, the remainder is halted rather than allowed to propagate a
-		// bad certificate to the whole estate at the speed of the outbox.
-		switch evaluateCanary(ctx, a.store, tenantID, resp.Batches) {
-		case canaryFailed:
-			resp.Batches = applyCanaryHalt(resp.Batches)
+		// This read may explain the durable canary state, but it never rewrites
+		// batch labels. Halting is a worker-side event-sourced mutation.
+		switch {
+		case resp.HaltedReason != "":
 			resp.CanaryState = "failed"
-			resp.CanaryDetail = canaryHaltReason(len(resp.Batches) - 1)
-		case canaryHealthy:
+			resp.CanaryDetail = resp.HaltedReason
+		case evaluateCanary(ctx, a.store, tenantID, resp.Batches) == canaryFailed:
+			resp.CanaryState = "failed"
+			resp.CanaryDetail = "signed canary verification failed; the worker has not yet persisted the halt"
+		case evaluateCanary(ctx, a.store, tenantID, resp.Batches) == canaryHealthy:
 			resp.CanaryState = "healthy"
 		default:
 			// Pending. The rest waits rather than proceeding on silence: "we
@@ -432,6 +420,14 @@ func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID strin
 				"batches wait rather than proceeding on an unverified first batch"
 		}
 	}
+}
+
+func fleetPlannedReplacementIDs(batches []store.FleetReissuanceBatch) []string {
+	var ids []string
+	for _, batch := range batches {
+		ids = append(ids, batch.ReplacementIdentityIDs...)
+	}
+	return ids
 }
 
 // operatorAssertedGates records which gates an operator set explicitly at
@@ -494,12 +490,9 @@ func normalizeFleetHealthGates(in []store.FleetReissuanceHealthGate) []store.Fle
 	return out
 }
 
-// buildFleetBatches partitions the affected identities into batches. The run does
-// not execute batch by batch — it issues every replacement in one pass — so a
-// batch is a plan, and its status says planned rather than completed
-// (truth-integrity 2). The per-batch gate label likewise carries the gate's real
-// status, which is not_evaluated unless an operator asserted otherwise. Epic D6
-// makes batches actual execution units with pause/resume that gates publishing.
+// buildFleetBatches creates the durable execution plan. The request path changes
+// only batch one from planned to queued; the fleet worker is the sole publisher
+// of every later batch.
 // fleetDeploymentGateName is the gate D6 computes from verification receipts.
 const fleetDeploymentGateName = "replacement deployment"
 
@@ -603,6 +596,7 @@ func evaluateFleetBatchGates(
 	}
 	for i := range batches {
 		if batches[i].Status == servedstatus.FleetBatchPlanned ||
+			batches[i].Status == servedstatus.FleetBatchQueued ||
 			batches[i].Status == servedstatus.FleetBatchHalted {
 			continue
 		}
@@ -621,29 +615,6 @@ func evaluateFleetBatchGates(
 	return batches
 }
 
-func fleetReplacementName(name string, index int) string {
-	base := strings.TrimSpace(name)
-	if base == "" {
-		base = "identity"
-	}
-	return fmt.Sprintf("%s-fleet-reissue-%d", base, index+1)
-}
-
-func fleetReplacementAttributes(runID, replaces string, existing json.RawMessage) json.RawMessage {
-	attrs := map[string]any{
-		"fleet_reissuance_run_id":       runID,
-		"incident_replaces_identity_id": replaces,
-	}
-	if len(existing) > 0 {
-		var base map[string]any
-		if err := json.Unmarshal(existing, &base); err == nil {
-			for k, v := range base {
-				attrs[k] = v
-			}
-			attrs["fleet_reissuance_run_id"] = runID
-			attrs["incident_replaces_identity_id"] = replaces
-		}
-	}
-	b, _ := json.Marshal(attrs)
-	return b
+func fleetReplacementID(runID, replaces string) string {
+	return guuid.NewSHA1(guuid.NameSpaceOID, []byte("fleet-replacement\x00"+runID+"\x00"+replaces)).String()
 }

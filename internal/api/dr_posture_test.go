@@ -169,7 +169,11 @@ func TestAFailedDrillIsServedWithItsLimitations(t *testing.T) {
 	att := &backup.DrillAttestation{
 		Outcome: backup.DrillFailed, StartedAt: time.Now().UTC(),
 		RPOSeconds: 3600, Detail: "the restore did not complete",
-		Limitations: []string{"the measured RTO is a floor"},
+		PostgresRecordsRestored: 2,
+		PostgresTablesRestored:  map[string]int{"provider_tenants": 1, "provider_breakglass_grants": 1},
+		ArtifactsRestored:       []string{"event-log", "postgres-state"},
+		StoreHealthy:            true,
+		Limitations:             []string{"the measured RTO is a floor"},
 	}
 	out := drPostureFor(&API{lastDrill: func() *backup.DrillAttestation { return att }})
 	if out.LastDrill == nil {
@@ -181,5 +185,11 @@ func TestAFailedDrillIsServedWithItsLimitations(t *testing.T) {
 	if len(out.LastDrill.Limitations) == 0 {
 		t.Error("the drill's limitations were dropped on the way to the console; the RTO would " +
 			"then be read as a production recovery time")
+	}
+	if out.LastDrill.PostgresRecordsRestored != 2 || out.LastDrill.PostgresTablesRestored["provider_tenants"] != 1 {
+		t.Errorf("PostgreSQL restore evidence was dropped: %+v", out.LastDrill)
+	}
+	if len(out.LastDrill.ArtifactsRestored) != 2 || !out.LastDrill.StoreHealthy {
+		t.Errorf("artifact/health restore evidence was dropped: %+v", out.LastDrill)
 	}
 }

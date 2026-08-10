@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -309,7 +310,22 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 	if err != nil {
 		return 0, err
 	}
-	err = log.Replay(ctx, from+1, func(ev events.Event) error {
+	err = log.Replay(ctx, from+1, func(ev events.Event) (reconcileErr error) {
+		healedBefore := healed
+		defer func() {
+			if reconcileErr == nil {
+				return
+			}
+			var conflict *OutboxCommandConflictError
+			if !errors.As(reconcileErr, &conflict) {
+				return
+			}
+			// Any inserts attempted for a multi-command event shared the failed
+			// tenant transaction and rolled back. Keep the return count honest and
+			// quarantine the whole immutable event instead of partly executing it.
+			healed = healedBefore
+			reconcileErr = o.quarantineOutboxReconciliationConflict(ctx, log, ev, conflict)
+		}()
 		// Lifecycle transitions and queued discovery runs carry outbox side effects;
 		// skip everything else (domain CRUD events, tenant events, certificate events).
 		if ev.Type == EventITSMTicketRequested {
@@ -356,6 +372,38 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				return nil
 			}); err != nil {
 				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
+		if ev.Type == projections.EventIncidentFleetReissuanceRecorded {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var pl projections.IncidentFleetReissuanceRecorded
+			if err := json.Unmarshal(ev.Data, &pl); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			// Paused, halted, rolled-back, and completed snapshots deliberately
+			// publish nothing. A running snapshot names its one durable cursor.
+			if pl.Status == "running" && pl.NextBatchIndex > 0 && pl.NextBatchIndex <= len(pl.Batches) {
+				body, err := json.Marshal(FleetReissuanceBatchCommand{RunID: pl.ID, BatchIndex: pl.NextBatchIndex})
+				if err != nil {
+					return err
+				}
+				if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+						TenantID: ev.TenantID, Destination: DestinationFleetReissuanceBatch,
+						IdempotencyKey: FleetReissuanceBatchIdempotencyKey(pl.ID, pl.NextBatchIndex),
+						EffectLane:     DestinationFleetReissuanceBatch + ":" + pl.ID,
+						Payload:        body, RequiredAgentRole: "control_plane",
+					})
+					if inserted {
+						healed++
+					}
+					return err
+				}); err != nil {
+					return err
+				}
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
@@ -615,6 +663,49 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		return healed, fmt.Errorf("orchestrator: reconcile outbox: %w", err)
 	}
 	return healed, nil
+}
+
+func (o *Orchestrator) quarantineOutboxReconciliationConflict(ctx context.Context, log *events.Log, source events.Event, conflict *OutboxCommandConflictError) error {
+	if conflict == nil || conflict.TenantID != source.TenantID {
+		return fmt.Errorf("orchestrator: quarantine outbox conflict: tenant identity mismatch")
+	}
+	payload, err := json.Marshal(projections.OutboxReconciliationConflictRecorded{
+		SourceEventID: source.ID, SourceEventSequence: source.Sequence, SourceEventType: source.Type,
+		IdempotencyKey:             conflict.IdempotencyKey,
+		ExistingOutboxID:           conflict.ExistingOutboxID,
+		ExistingDestination:        conflict.ExistingDestination,
+		ExistingEffectLane:         conflict.ExistingEffectLane,
+		ExistingPayloadSHA256:      conflict.ExistingPayloadSHA256,
+		ExistingRequiredAgentRole:  conflict.ExistingRequiredAgentRole,
+		ExistingRequiredAgentID:    conflict.ExistingRequiredAgentID,
+		CandidateDestination:       conflict.CandidateDestination,
+		CandidateEffectLane:        conflict.CandidateEffectLane,
+		CandidatePayloadSHA256:     conflict.CandidatePayloadSHA256,
+		CandidateRequiredAgentRole: conflict.CandidateRequiredAgentRole,
+		CandidateRequiredAgentID:   conflict.CandidateRequiredAgentID,
+		Reason:                     "receiver idempotency key is already bound to a different immutable command",
+		Status:                     "quarantined",
+	})
+	if err != nil {
+		return fmt.Errorf("orchestrator: encode outbox reconciliation conflict: %w", err)
+	}
+	recorded, err := log.Append(ctx, events.Event{
+		ID:       "outbox-reconciliation-conflict:" + source.ID,
+		Type:     projections.EventOutboxReconciliationConflictRecorded,
+		TenantID: source.TenantID, Time: source.Time, Data: payload,
+	})
+	if err != nil {
+		return fmt.Errorf("orchestrator: append outbox reconciliation conflict: %w", err)
+	}
+	if err := o.store.WithTenant(ctx, source.TenantID, func(tx pgx.Tx) error {
+		return o.proj.ApplyTx(ctx, tx, recorded)
+	}); err != nil {
+		return fmt.Errorf("orchestrator: project outbox reconciliation conflict: %w", err)
+	}
+	if err := o.store.AdvanceOutboxReconciliationCheckpoint(ctx, source.Sequence); err != nil {
+		return fmt.Errorf("orchestrator: advance quarantined outbox reconciliation checkpoint: %w", err)
+	}
+	return nil
 }
 
 func lifecycleEffectLane(destination, identityID string) string {

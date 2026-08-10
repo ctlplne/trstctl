@@ -72,6 +72,36 @@ export interface ProviderDrillReport {
   ran_at: string;
 }
 
+export interface ProviderActivity {
+  sequence: number;
+  event_id: string;
+  type: string;
+  tenant_id?: string;
+  operator_id?: string;
+  operator_email?: string;
+  grant_id?: string;
+  subject?: string;
+  reason?: string;
+  at: string;
+}
+
+export interface ProviderBreakGlassGrant {
+  id: string;
+  tenant_id: string;
+  operator_id: string;
+  operator_email?: string;
+  reason: string;
+  requested_at: string;
+  expires_at: string;
+  use_count: number;
+}
+
+export interface ProviderTenantSnapshot {
+  tenant_id: string;
+  health: string;
+  active_certificates: number;
+}
+
 /** ProviderAuthError is thrown when no operator token is present or the plane
  * refuses the credential — the console renders the login gate rather than an
  * error banner, because "not signed in" is not a failure. */
@@ -86,17 +116,25 @@ export class ProviderApiError extends Error {
   }
 }
 
+function newProviderIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `provider-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 async function providerReq<T>(path: string, init?: RequestInit): Promise<T> {
   const token = providerToken();
   if (!token) {
     throw new ProviderAuthError("no provider operator token");
   }
+  const method = String(init?.method ?? "GET").toUpperCase();
+  const mutationHeaders: Record<string, string> = method === "GET" || method === "HEAD" ? {} : { "Idempotency-Key": newProviderIdempotencyKey() };
   const res = await fetch(path, {
     ...init,
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...mutationHeaders,
       ...(init?.headers ?? {}),
     },
   });
@@ -115,18 +153,33 @@ export const providerApi = {
     const out = await providerReq<{ tenants: ProviderTenant[] | null }>("/provider/v1/tenants");
     return out.tenants ?? [];
   },
+  listActivity: async (): Promise<ProviderActivity[]> => {
+    const out = await providerReq<{ items: ProviderActivity[] | null }>("/provider/v1/activity?limit=100");
+    return out.items ?? [];
+  },
   provisionTenant: (input: { slug: string; name: string }): Promise<ProviderTenant> =>
     providerReq<ProviderTenant>("/provider/v1/tenants", { method: "POST", body: JSON.stringify(input) }),
   suspendTenant: (id: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/suspend`, { method: "POST", body: JSON.stringify({}) }),
   offboardTenant: (id: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/offboard`, { method: "POST", body: JSON.stringify({}) }),
-  getQuota: (id: string): Promise<ProviderQuota> =>
-    providerReq<ProviderQuota>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`),
+  getQuota: (id: string): Promise<ProviderQuota> => providerReq<ProviderQuota>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`),
   setQuota: (id: string, quota: ProviderQuota): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`, { method: "PUT", body: JSON.stringify(quota) }),
   setBrand: (id: string, brand: ProviderBrand): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/brand`, { method: "PUT", body: JSON.stringify(brand) }),
   runIsolationDrill: (): Promise<ProviderDrillReport> =>
     providerReq<ProviderDrillReport>("/provider/v1/isolation-drill", { method: "POST", body: JSON.stringify({}) }),
+  requestBreakGlass: (input: { tenant_id: string; reason: string; ttl: string }): Promise<ProviderBreakGlassGrant> =>
+    providerReq<ProviderBreakGlassGrant>("/provider/v1/breakglass", { method: "POST", body: JSON.stringify(input) }),
+  consentBreakGlass: (grantId: string, tenantId: string, approve = true): Promise<ProviderBreakGlassGrant> =>
+    providerReq<ProviderBreakGlassGrant>(`/provider/v1/breakglass/${encodeURIComponent(grantId)}/consent`, {
+      method: "POST",
+      body: JSON.stringify({ tenant_id: tenantId, approve }),
+    }),
+  breakGlassResults: (grantId: string): Promise<ProviderTenantSnapshot> =>
+    providerReq<ProviderTenantSnapshot>(`/provider/v1/breakglass/${encodeURIComponent(grantId)}/results`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
 };

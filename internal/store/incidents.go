@@ -64,6 +64,8 @@ type IncidentFleetReissuanceRun struct {
 	Phase                  string
 	Reason                 string
 	BatchSize              int
+	NextBatchIndex         int
+	HaltedReason           string
 	Connector              string
 	Target                 string
 	GraphImpact            json.RawMessage
@@ -135,21 +137,24 @@ func (s *Store) ApplyIncidentFleetReissuanceRecordedTx(ctx context.Context, tx p
 	_, err = tx.Exec(ctx,
 		`INSERT INTO incident_fleet_reissuance_runs
 		        (id, tenant_id, issuer_id, status, phase, reason, batch_size,
+		         next_batch_index, halted_reason,
 		         connector, target, graph_impact, affected_identity_ids,
 		         replacement_identity_ids, revoked_identity_ids, connector_delivery_ids,
 		         batches, health_gates, failed_targets, rollback_refs,
 		         evidence_bundle_format, evidence_bundle, idempotency_key, created_by,
 		         created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7,
-		         $8, $9, $10::jsonb, $11, $12, $13, $14,
-		         $15::jsonb, $16::jsonb, $17, $18,
-		         $19, $20, $21, $22, $23, $24)
+		         $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16,
+		         $17::jsonb, $18::jsonb, $19, $20,
+		         $21, $22, $23, $24, $25, $26)
 		 ON CONFLICT (id) DO UPDATE
 		    SET issuer_id = EXCLUDED.issuer_id,
 		        status = EXCLUDED.status,
 		        phase = EXCLUDED.phase,
 		        reason = EXCLUDED.reason,
 		        batch_size = EXCLUDED.batch_size,
+		        next_batch_index = EXCLUDED.next_batch_index,
+		        halted_reason = EXCLUDED.halted_reason,
 		        connector = EXCLUDED.connector,
 		        target = EXCLUDED.target,
 		        graph_impact = EXCLUDED.graph_impact,
@@ -167,7 +172,7 @@ func (s *Store) ApplyIncidentFleetReissuanceRecordedTx(ctx context.Context, tx p
 		        created_by = EXCLUDED.created_by,
 		        updated_at = EXCLUDED.updated_at`,
 		r.ID, r.TenantID, r.IssuerID, r.Status, r.Phase, r.Reason, r.BatchSize,
-		r.Connector, r.Target, jsonbOrEmpty(r.GraphImpact),
+		r.NextBatchIndex, r.HaltedReason, r.Connector, r.Target, jsonbOrEmpty(r.GraphImpact),
 		stringSliceOrEmpty(r.AffectedIdentityIDs), stringSliceOrEmpty(r.ReplacementIdentityIDs),
 		stringSliceOrEmpty(r.RevokedIdentityIDs), stringSliceOrEmpty(r.ConnectorDeliveryIDs),
 		batches, healthGates, stringSliceOrEmpty(r.FailedTargets), stringSliceOrEmpty(r.RollbackRefs),
@@ -212,7 +217,7 @@ func scanIncidentFleetReissuanceRun(row pgx.Row, r *IncidentFleetReissuanceRun) 
 		healthGates []byte
 	)
 	err := row.Scan(&r.ID, &r.TenantID, &r.IssuerID, &r.Status, &r.Phase, &r.Reason,
-		&r.BatchSize, &r.Connector, &r.Target, &graphImpact, &r.AffectedIdentityIDs,
+		&r.BatchSize, &r.NextBatchIndex, &r.HaltedReason, &r.Connector, &r.Target, &graphImpact, &r.AffectedIdentityIDs,
 		&r.ReplacementIdentityIDs, &r.RevokedIdentityIDs, &r.ConnectorDeliveryIDs,
 		&batches, &healthGates, &r.FailedTargets, &r.RollbackRefs,
 		&r.EvidenceBundleFormat, &r.EvidenceBundle, &r.IdempotencyKey, &r.CreatedBy,
@@ -314,7 +319,7 @@ func (s *Store) ListIncidentFleetReissuanceRunsPage(ctx context.Context, tenantI
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, issuer_id::text, status, phase, reason,
-			        batch_size, connector, target, graph_impact, affected_identity_ids,
+			        batch_size, next_batch_index, halted_reason, connector, target, graph_impact, affected_identity_ids,
 			        replacement_identity_ids, revoked_identity_ids, connector_delivery_ids,
 			        batches, health_gates, failed_targets, rollback_refs,
 			        evidence_bundle_format, evidence_bundle, idempotency_key, created_by,
@@ -346,7 +351,7 @@ func (s *Store) GetIncidentFleetReissuanceRun(ctx context.Context, tenantID, id 
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanIncidentFleetReissuanceRun(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, issuer_id::text, status, phase, reason,
-			        batch_size, connector, target, graph_impact, affected_identity_ids,
+			        batch_size, next_batch_index, halted_reason, connector, target, graph_impact, affected_identity_ids,
 			        replacement_identity_ids, revoked_identity_ids, connector_delivery_ids,
 			        batches, health_gates, failed_targets, rollback_refs,
 			        evidence_bundle_format, evidence_bundle, idempotency_key, created_by,

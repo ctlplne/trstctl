@@ -79,6 +79,37 @@ outside = State("connector.iis", iis_root)
 bad_command = command.replace(str(import_dir), str(iis_root / "attacker"))
 assert not outside.record_signal({"entry_id": "connector.iis", "logical": "powershell", "args": ["-NoProfile", "-NonInteractive", "-Command", bad_command]})
 assert not outside.passed()
+
+kemp_root = pathlib.Path(tempfile.mkdtemp())
+kemp = State("connector.kemp", kemp_root)
+kemp.record(
+    "PUT", "/access/certificates/dod-target-trstctl-a1b2c3d4e5f6",
+    {"Authorization": "Bearer must-not-appear"}, b"certificate and private key must-not-appear",
+)
+kemp.record("PATCH", "/access/virtual-services/dod-target/certificate", {}, b"fingerprinted binding")
+kemp.readback = b"independent certificate readback"
+assert kemp.passed()
+
+for invalid in [
+    "/access/certificates/dod-target-trstctl",
+    "/access/certificates/dod-target-trstctl-a1b2c3d4e5",
+    "/access/certificates/dod-target-trstctl-a1b2c3d4e5f6-extra",
+    "/access/certificates/dod-target-trstctl-A1B2C3D4E5F6",
+    "/access/certificates/attacker-a1b2c3d4e5f6",
+]:
+    rejected = State("connector.kemp", kemp_root)
+    rejected.record("PUT", invalid, {"Authorization": "Bearer must-not-appear"}, b"private key must-not-appear")
+    rejected.record("PATCH", "/access/virtual-services/dod-target/certificate", {}, b"binding")
+    rejected.readback = b"independent certificate readback"
+    assert not rejected.passed(), invalid
+    diagnostic = rejected.failure_diagnostic()
+    assert set(diagnostic) == {"entry_id", "paths", "has_readback", "signal_count", "signal_error"}
+    rendered = repr(diagnostic)
+    assert "must-not-appear" not in rendered
+    assert diagnostic["paths"] == [
+        {"method": "PUT", "path": invalid},
+        {"method": "PATCH", "path": "/access/virtual-services/dod-target/certificate"},
+    ]
 `
 	command := exec.Command("python3", "-c", source, target) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	output, err := command.CombinedOutput()

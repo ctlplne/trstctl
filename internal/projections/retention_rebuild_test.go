@@ -4,12 +4,12 @@ package projections_test
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 )
@@ -50,10 +50,7 @@ func TestAuditRetentionPreservesProjectionRebuild(t *testing.T) {
 		t.Fatalf("owners before retention = %d, want 1", got)
 	}
 
-	key, err := audit.LoadOrCreateSigningKey(
-		filepath.Join(t.TempDir(), "audit-signing-key.pem"),
-		"audit-export",
-	)
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatalf("audit signing key: %v", err)
 	}
@@ -121,10 +118,7 @@ func TestAuditRetentionRebuildRejectsLostSourceBeforeReadModelMutation(t *testin
 	if err := projector.Project(ctx, log); err != nil {
 		t.Fatal(err)
 	}
-	key, err := audit.LoadOrCreateSigningKey(
-		filepath.Join(t.TempDir(), "audit-signing-key.pem"),
-		"audit-export",
-	)
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}

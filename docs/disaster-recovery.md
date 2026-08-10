@@ -19,11 +19,11 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 | --- | --- | --- |
 | **Event log** (NATS JetStream) | The **source of truth**. Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
 | **PostgreSQL independent state and restore receivers** | The read model is rebuildable from the log, but **independently retained operational state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, outstanding one-time secret-share rows, policy bindings, federation peer import cursors, queued outbox work, and durable privacy-erasure idempotency evidence. The paired artifact also carries logical audit checkpoints so restore can prove every hidden tenant prefix still exists in the event artifact before mutation; `audit.archived` v2 can reconstruct those checkpoint rows during an event-only projection rebuild. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
-| **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The full backup captures `TRSTCTL_AUDIT_SIGNING_KEY_FILE` as an AES-256-GCM encrypted artifact when `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` is set, and records both ciphertext and plaintext hashes in `manifest.json`. |
+| **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The key is a purpose-constrained `audit-export` handle inside the signer's sealed key store, captured with that store below. `TRSTCTL_AUDIT_SIGNING_KEY_FILE` names only the one-time legacy PEM migration path; new backups do not copy a separate plaintext key artifact. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
 | **Tenant-domain wrapper files** | Independently custodied roots that can unseal opted-in tenant domains without granting authority over neighboring domains. They are intentionally not captured inside the application backup they protect. | Back up every file named by `secrets.tenant_seal_local_wrappers` under separate operator custody. Restore the exact wrapper ID-to-file mapping before starting a tenant-domain restore; missing or wrong material fails only that tenant closed and never falls back to the deployment KEK. |
 | **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles. Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE` as an encrypted artifact; keep the backup encryption key outside the backup directory. |
-| **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | The full backup encrypts the signer's key-store directory (`--keystore`) file-by-file and hashes the encrypted tree in `manifest.json`; the KEK is still restored separately. |
+| **Signer key store** | The issuing CA and audit-evidence private keys, **sealed at rest** (R3.2/AUD-63). Restoring it preserves both identities. | The full backup encrypts the signer's key-store directory (`--keystore`) file-by-file and hashes the encrypted tree in `manifest.json`; the KEK is still restored separately. |
 | **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | The full backup captures `TRSTCTL_CA_CERT_FILE`. |
 
 The signer's CA key is now **persisted, sealed at rest** (R3.2) — it survives a
@@ -53,8 +53,8 @@ The artifact directory contains:
 - `postgres-state.jsonl`: all tables classified as
   `RecoveredFromPostgresBackup`, written as JSONL with its own SHA-256 trailer.
 - `files/`: the CA certificate in plaintext, plus `.enc` AES-256-GCM envelopes
-  for the audit signing key, signer authorization secret, and sealed signer key
-  store files.
+  for the signer authorization secret and sealed signer key-store files. The
+  audit-evidence key is one sealed handle inside that store.
 - `manifest.json`: artifact hashes, byte counts, sensitivity flags, source paths,
   encryption metadata, plaintext hashes for encrypted artifacts, and recovery
   classes for every persistent table.
@@ -106,13 +106,13 @@ captures the complete envelope so the recovered audit trail is intact.
 **Integrity.** The trailer carries a **SHA-256** over the entire stream
 (header + every record), so a bit-flip, a truncation, or a removed record is
 detected — `--restore` recomputes the hash and **refuses a tampered or corrupt
-backup, fail-closed**, before appending a single event. When the deployment has a
-persisted audit signing key (`TRSTCTL_AUDIT_SIGNING_KEY_FILE`), the trailer also
-carries an **HMAC-SHA256** derived from that key, binding the backup to this
+backup, fail-closed**, before appending a single event. When the deployment KEK
+exists (`TRSTCTL_SECRETS_KEK_FILE`), the trailer also carries an
+**HMAC-SHA256** domain-derived from that key, binding the backup to this
 deployment so an attacker who can rewrite the file cannot forge a matching
 trailer. All hashing/MAC routes through the single crypto boundary; the
-signer is not involved. Keep the audit key with your backups so a keyed
-backup verifies on the recovery host.
+signer is not involved and no signing private key enters the control-plane
+process. Restore the same KEK before verifying a keyed backup.
 
 Restore verification is streaming: `--restore` rolls the SHA-256/HMAC over each
 line, writes validated event records to a temporary spool file, verifies the
@@ -189,6 +189,27 @@ alongside the log-rebuilt read model. OCSP/CRL responder rows are not imported
 from this PostgreSQL artifact; they are replayed from `certificate.*` /
 `ca.certificate.*` / `ca.crl.published` / `ca.ocsp_responder.rotated` events.
 
+The scheduled runtime drill uses the same `RunFullRestore` implementation, not
+the narrower event-only command. It redirects all mutable destinations into an
+isolated PostgreSQL database, private file-backed JetStream, and temporary signer
+tree; restores the complete manifest; re-exports and compares every independent
+table; starts the recovered signer and control-plane assembly; and requires the
+real readiness probes to pass. Its attestation exposes those artifact, table, and
+health receipts. A missing required artifact, an event-only replay, or any failed
+recovered-runtime probe produces `failed`, never `restored`.
+
+Licensed provider projections participate in all four recovery paths: normal
+startup catch-up, `--restore`, `--full-restore-dir`/the scheduled isolated
+drill, and `--rebuild`. The tagged composition root supplies a feature-neutral
+projection factory after the recovery PostgreSQL and JetStream stores exist;
+core still imports no `ee/` package. Before rebuilding, it captures uncovered
+pre-event provider rows exactly once for rolling upgrades. The final rebuild
+then treats the authority events as canonical for customer lifecycle,
+delegation, quota, branding, and break-glass views. Those provider tables are
+still carried in the PostgreSQL artifact for compatibility with backups made by
+pre-event releases, but a licensed final rebuild overwrites their restored
+snapshots from the event history; they are not a second source of truth.
+
 ## Recovery objectives (RPO / RTO)
 
 These are **defaults to validate against your own infrastructure**, not promises —
@@ -262,7 +283,20 @@ control-plane replica **safe**:
   rehydrated from the latest snapshot and only the **tail** after it is replayed, so
   startup is `O(events-since-snapshot)`, not a full-log replay. The event log remains
   the source of truth: a snapshot is reproducible by a full rebuild, and a
-  corrupt or missing snapshot falls back to a full replay automatically.
+  corrupt or missing snapshot falls back to a full replay automatically. Snapshot
+  format 20 carries discovery finding payload-ID aliases and tenant-scoped outbox
+  reconciliation conflicts, so a rebuilt canonical
+  finding still accepts a historical triage event that named the other ID from an
+  older at-least-once scan attempt, and an operator never loses visibility of a
+  receiver command that startup quarantined after detecting semantic-key reuse.
+  Older snapshot formats are ignored and rebuilt; they are never restored past a
+  checkpoint that would skip those aliases or quarantine evidence.
+
+  If startup finds one idempotency key bound to two different receiver commands,
+  it preserves the historical command, records a tenant-scoped quarantine, and
+  continues unrelated recovery. Follow the
+  [quarantined outbox reconciliation conflict runbook](runbooks/outbox-reconciliation-conflicts.md);
+  never repair this condition with a direct outbox or checkpoint edit.
 
 Durability still lives in the **datastores** (external PostgreSQL + replicated NATS):
 the event log is the source of truth and a rebuilt pod re-derives state from it, so a

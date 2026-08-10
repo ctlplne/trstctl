@@ -61,6 +61,21 @@ type storedEvent struct {
 	Actor         *Actor    `json:"actor,omitempty"`
 }
 
+// EnvelopeDecodeError identifies a malformed event-log record before it can
+// become an Event. The projection callback therefore never sees this failure;
+// carrying the JetStream sequence here lets the tail persist the exact poisoned
+// global cursor position instead of returning an unlocatable decode error.
+type EnvelopeDecodeError struct {
+	Sequence uint64
+	Err      error
+}
+
+func (e *EnvelopeDecodeError) Error() string {
+	return fmt.Sprintf("events: decode stored envelope at seq %d: %v", e.Sequence, e.Err)
+}
+
+func (e *EnvelopeDecodeError) Unwrap() error { return e.Err }
+
 // Log is the append-only event log on NATS JetStream (AN-2). In embedded mode it
 // runs an in-process, file-backed JetStream server needing no external services;
 // in external mode it connects to a NATS cluster by URL. Switching between them
@@ -744,7 +759,7 @@ func (l *Log) LastSequence(ctx context.Context) (uint64, error) {
 func decodeStored(data []byte, seq uint64) (Event, error) {
 	var s storedEvent
 	if err := json.Unmarshal(data, &s); err != nil {
-		return Event{}, fmt.Errorf("events: decode seq %d: %w", seq, err)
+		return Event{}, &EnvelopeDecodeError{Sequence: seq, Err: err}
 	}
 	ver := s.SchemaVersion
 	if ver == 0 {

@@ -11,8 +11,11 @@ import (
 	"log/slog"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/server"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func extraMigrationSources() []fs.FS { return nil }
@@ -26,4 +29,14 @@ func eeLocalCommand(context.Context, []string, func(string) string, io.Writer, i
 // instead of ee_attach.go, proving core stands alone with zero ee/ packages.
 func attachEE(context.Context, *config.Config, *slog.Logger, *license.Manager, *server.Deps) error {
 	return nil
+}
+
+func attachEEProjectionOptions(
+	context.Context,
+	*config.Config,
+	*license.Manager,
+	*store.Store,
+	*events.Log,
+) ([]projections.Option, error) {
+	return nil, nil
 }

@@ -504,6 +504,17 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// a partial restore reads as a working plane that refuses some
 		// operators rather than as an incomplete restore.
 		"provider_operator_delegations",
+		// L3: the provider tenant registry. No foreign key requires it, but the
+		// registry restores before the break-glass ledger that scopes to its
+		// tenants, and with the other provider authority data: a missing
+		// customer list is obvious, a partial one is a provider quietly serving
+		// fewer customers than they have.
+		"provider_tenants",
+		// L4: the break-glass grant ledger. Restores last among the provider
+		// tables: it is consent history, and like the delegations above the
+		// plane fails closed on whatever is missing — an absent grant reads as
+		// "request again with two approvers", never as silent emergency access.
+		"provider_breakglass_grants",
 	}
 	if err := validatePostgresStateRestoreOrder(parentFirst); err != nil {
 		return nil, err

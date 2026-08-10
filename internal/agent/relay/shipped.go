@@ -133,6 +133,12 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags: []string{"--relay-claim"},
 		},
 		{
+			// I3: ServiceNow ticket intake. Only mapped request fields return;
+			// the bearer token is redeemed for this one attempt.
+			Kind:  KindTicketSync,
+			Flags: []string{"--relay-claim"},
+		},
+		{
 			// A5: this agent's own staged upgrade. It redeems nothing — the
 			// artifact URL travels in the payload and the pinned sha256 is the
 			// trust anchor — and it declares no connectors because the thing it

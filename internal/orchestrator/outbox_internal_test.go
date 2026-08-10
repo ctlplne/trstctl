@@ -121,9 +121,19 @@ func TestOutboxEnqueueIfAbsentRejectsCrossSubsystemAndPayloadCollisions(t *testi
 	for label, changed := range map[string]orchestrator.Entry{
 		"destination": {TenantID: tenantA, Destination: "notification.test", IdempotencyKey: first.IdempotencyKey, Payload: first.Payload},
 		"payload":     {TenantID: tenantA, Destination: first.Destination, IdempotencyKey: first.IdempotencyKey, Payload: []byte(`{"authority_id":"ca-two"}`)},
+		"effect lane": {TenantID: tenantA, Destination: first.Destination, IdempotencyKey: first.IdempotencyKey, Payload: first.Payload, EffectLane: "external-ca.issue:other"},
+		"agent role":  {TenantID: tenantA, Destination: first.Destination, IdempotencyKey: first.IdempotencyKey, Payload: first.Payload, RequiredAgentRole: "control_plane"},
+		"agent id":    {TenantID: tenantA, Destination: first.Destination, IdempotencyKey: first.IdempotencyKey, Payload: first.Payload, RequiredAgentID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"},
 	} {
-		if inserted, err := apply(changed); inserted || !errors.Is(err, store.ErrIdempotencyConflict) {
+		inserted, err := apply(changed)
+		if inserted || !errors.Is(err, store.ErrIdempotencyConflict) {
 			t.Fatalf("changed %s = (%v, %v), want durable idempotency conflict", label, inserted, err)
+		}
+		var commandConflict *orchestrator.OutboxCommandConflictError
+		if !errors.As(err, &commandConflict) || commandConflict.ExistingOutboxID <= 0 ||
+			commandConflict.ExistingPayloadSHA256 == "" || commandConflict.CandidatePayloadSHA256 == "" ||
+			strings.Contains(err.Error(), "ca-one") || strings.Contains(err.Error(), "ca-two") {
+			t.Fatalf("changed %s conflict lacks safe command identity: %#v", label, commandConflict)
 		}
 	}
 }
@@ -573,6 +583,65 @@ func TestOutboxDeliversAndMarksDelivered(t *testing.T) {
 	// A second sweep delivers nothing more.
 	if n, err := ob.Dispatch(ctx, h); err != nil || n != 0 {
 		t.Fatalf("re-dispatch n=%d err=%v, want 0, nil", n, err)
+	}
+}
+
+// A relay reports after the external effect already happened. Closing its claim
+// and retiring the outbox intent therefore has one commit boundary: a crash may
+// leave both open for retry, but must never leave a closed claim on a pending
+// row that future attempts can execute but can no longer complete.
+func TestAgentJobCompletionAtomicallyClosesClaimAndDelivery(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	const agentID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	id := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "cmdb.sync", IdempotencyKey: "cmdb:atomic-1", Payload: []byte(`{"page_limit":500}`),
+	})
+	now := time.Now().UTC()
+	jobs, err := s.ClaimAgentJobs(ctx, tenantA, agentID, []string{"cmdb.sync"}, nil, 1, time.Minute, now)
+	if err != nil || len(jobs) != 1 || jobs[0].ID != id {
+		t.Fatalf("claim jobs=%+v err=%v", jobs, err)
+	}
+	job := jobs[0]
+
+	if completed, err := ob.CompleteAgentJobClaim(ctx, tenantA, agentID, id, job.ClaimAttempts+1, now); err != nil || completed {
+		t.Fatalf("wrong attempt completion=(%v, %v), want refused", completed, err)
+	}
+	assertState := func(wantStatus string, wantClaimComplete bool) {
+		t.Helper()
+		var status string
+		var claimComplete bool
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx,
+				`SELECT status, claim_completed_at IS NOT NULL FROM outbox WHERE tenant_id = $1 AND id = $2`,
+				tenantA, id).Scan(&status, &claimComplete)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if status != wantStatus || claimComplete != wantClaimComplete {
+			t.Fatalf("row=(status %q, completed %v), want (%q, %v)", status, claimComplete, wantStatus, wantClaimComplete)
+		}
+	}
+	assertState("pending", false)
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if completed, err := ob.CompleteAgentJobClaim(canceled, tenantA, agentID, id, job.ClaimAttempts, now); err == nil || completed {
+		t.Fatalf("interrupted completion=(%v, %v), want error with no partial close", completed, err)
+	}
+	assertState("pending", false)
+
+	if completed, err := ob.CompleteAgentJobClaim(ctx, tenantA, agentID, id, job.ClaimAttempts, now); err != nil || !completed {
+		t.Fatalf("exact completion=(%v, %v), want one atomic completion", completed, err)
+	}
+	assertState("delivered", true)
+	if completed, err := ob.CompleteAgentJobClaim(ctx, tenantA, agentID, id, job.ClaimAttempts, now); err != nil || completed {
+		t.Fatalf("replay completion=(%v, %v), want no-op", completed, err)
+	}
+
+	reclaimed, err := s.ClaimAgentJobs(ctx, tenantA, agentID, []string{"cmdb.sync"}, nil, 1, time.Minute, now.Add(2*time.Minute))
+	if err != nil || len(reclaimed) != 0 {
+		t.Fatalf("completed outbox job was reclaimable: jobs=%+v err=%v", reclaimed, err)
 	}
 }
 

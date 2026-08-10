@@ -47,9 +47,6 @@ import (
 // resuming would leave the estate showing no verification state at all while
 // boot considered itself caught up — and "no divergences recorded" reads as
 // "nothing is wrong".
-// Bumped to 14 when the I5 MDM poll schedule joined the read model and the
-// snapshot set together — the pairing the class-closing test now enforces.
-// Bumped to 15 when the I3 ticket intake schedule did the same.
 // Bumped to 13 when EIGHT tables that were truncated by restore but never
 // reloaded joined the snapshot set: tenant_members, ca_authorities,
 // agent_cert_revocations, and the I2/I3/I5/A5 projections. A v12 snapshot's
@@ -57,7 +54,22 @@ import (
 // the covered offset skipped their history. The class is now closed by
 // TestEveryTruncatedReadModelTableIsRestoredBySnapshots rather than by
 // remembering to update two lists.
-const SnapshotFormatVersion = 17
+// Bumped to 14 when the I5 MDM poll schedule joined the read model and the
+// snapshot set together — the pairing the class-closing test now enforces.
+// Bumped to 15 when the I3 ticket intake schedule did the same, 16 for the B6
+// edge delegation projections, and 17 for the F4 AD CS database summary.
+// Bumped to 18 when I4 enrollment diagnostics and their bounded event-id
+// deduplication window became tenant-scoped read-model projections. A v17
+// snapshot has neither table, so resuming after its covered sequence would
+// otherwise turn "not restored" into the reassuring-looking empty state.
+// Bumped to 19 when discovery findings gained recorded_ids. A v18 snapshot has
+// no legacy-ID aliases; restoring it and skipping its covered history would make
+// a later discovery.finding.triage_changed event unable to resolve the historical
+// payload ID after AUD-96 canonicalized a duplicated natural key.
+// Bumped to 20 when AUD-97 added tenant-visible outbox reconciliation conflict
+// incidents. A v19 snapshot predates that projection, so resuming after its
+// covered sequence would hide a quarantined receiver command from operators.
+const SnapshotFormatVersion = 20
 
 // snapshotTables are the read-model tables captured in a per-tenant snapshot, in
 // dependency order (parents before children) so a restore's inserts never trip a
@@ -67,7 +79,7 @@ const SnapshotFormatVersion = 17
 // identity_transitions (which references identities) comes last. The revocation
 // responder tables have no foreign keys, but they are pure projections too, so
 // snapshots carry them with the rest of the tenant read model.
-var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
+var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
 	// Format 13. EIGHT tables sat in ReadModelTables without entering this
 	// list or the capture payload — and the restore truncates the WHOLE read
 	// model, then reloads only what snapshots carry, so any restore erased
@@ -92,7 +104,9 @@ var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme
 	// Format 16: the B6 edge sub-CA read models, same pairing.
 	"edge_segment_policies", "edge_delegations", "edge_issuances",
 	// Format 17: the F4 AD CS certificate-database summary, same pairing.
-	"adcs_ca_databases"}
+	"adcs_ca_databases",
+	// Format 18: I4's tenant-scoped diagnostic projection.
+	"enrollment_diagnostic_observations", "enrollment_diagnostics"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -204,7 +218,10 @@ SELECT jsonb_build_object(
   'edge_segment_policies', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM edge_segment_policies t),
   'edge_delegations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM edge_delegations t),
   'edge_issuances', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM edge_issuances t),
-  'adcs_ca_databases', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_databases t)
+  'adcs_ca_databases', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_databases t),
+  'enrollment_diagnostic_observations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM enrollment_diagnostic_observations t),
+  'enrollment_diagnostics', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM enrollment_diagnostics t),
+  'outbox_reconciliation_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM outbox_reconciliation_conflicts t)
 )`
 		var payload []byte
 		if err := tx.QueryRow(ctx, payloadSQL).Scan(&payload); err != nil {

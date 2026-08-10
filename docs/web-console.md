@@ -198,7 +198,8 @@ workload and resource that depends on it — backed by
 
 Policy renders the policy gate, a compliance evidence-pack dashboard (pick a
 framework — PCI-DSS, HIPAA, SOC 2, FedRAMP, FIPS 140, CA/B Forum BR, and more — and
-export the signed pack as audit evidence), the
+inspect the signed tenant/window, exact event/object references, and missing
+prerequisites before exporting the pack), the
 CAP-OBS-02 inventory report, report schedules, and the dry-run workbench. The audit
 explorer filters the tamper-evident event stream and exports a signed evidence
 bundle. See [Policy & governance](features/policy-and-governance.md)
@@ -223,7 +224,11 @@ runs, and browse the personal-data catalog. See
   replacement-before-revoke → automated revoke/rotate/right-size playbooks →
   Splunk/Jira/Slack/ServiceNow dispatch → evidence, plus break-glass online m-of-n
   issue (`/api/v1/breakglass/issue`) and offline-quorum reconcile
-  (`/api/v1/breakglass/reconcile`).
+  (`/api/v1/breakglass/reconcile`). Its Overview also lists tenant-scoped
+  receiver-command quarantines from
+  `/api/v1/incidents/outbox-reconciliation-conflicts`: source sequence, old outbox
+  row, lanes, agent demands, and SHA-256 command identities are visible, while the
+  executable payloads are never returned to the browser.
 - **Code signing** — a real signing console (key-backed and keyless/Fulcio),
   submitting only the artifact digest and rendering the signature receipt; private
   keys and artifact bytes never enter the browser (`/api/v1/code-signing/sign`,

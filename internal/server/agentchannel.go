@@ -90,34 +90,58 @@ type agentChannelService interface {
 }
 
 // provisionAgentCA establishes the AGENT CA whose key lives inside the signer (AN-4),
-// stable across restarts (WIRE-004). Like the issuing CA: if a persisted agent-CA cert
-// exists AND the signer still holds the key, both are reused; otherwise it generates
-// the key under the fixed handle (bound to PurposeCASign so the signer refuses to use
-// it for anything else), self-signs, and persists the cert. It is a no-op returning
-// (nil, nil) when no signer is available — the agent channel then simply does not serve.
+// stable across restarts (WIRE-004). A persisted certificate is paired only with
+// the exact signer-held key. An old container that lost only its public certificate
+// is recovered by self-signing the retained key; the key is never silently rotated.
 func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFile string) error {
 	if c == nil {
 		return nil
 	}
-	// Reuse path: persisted cert + a signer that still holds the agent CA key.
+	// A present but malformed public trust anchor is never overwritten. It may be
+	// recoverable operator state; replacing it would hide damage and could strand
+	// already-enrolled agents.
+	var persistedDER []byte
 	if certFile != "" {
-		if pemBytes, err := os.ReadFile(certFile); err == nil { // #nosec G304 -- operator-configured agent CA certificate path from this server's own config (CWE-22)
-			if blk, _ := pem.Decode(pemBytes); blk != nil && blk.Type == "CERTIFICATE" {
-				if remote, herr := s.signerForPrivilegedHandle(ctx, c, agentCAHandle, signing.PurposeCASign); herr == nil {
-					s.agentCASigner = remote
-					s.agentCACertDER = blk.Bytes
-					return nil
-				}
+		pemBytes, err := os.ReadFile(certFile) // #nosec G304 -- operator-configured agent CA certificate path from this server's own config (CWE-22)
+		if err == nil {
+			blk, rest := pem.Decode(pemBytes)
+			if blk == nil || blk.Type != "CERTIFICATE" || len(rest) != 0 {
+				return fmt.Errorf("agent CA certificate %q is invalid; refusing to overwrite it: restore the certificate that matches signer handle %q", certFile, agentCAHandle)
 			}
+			persistedDER = blk.Bytes
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read agent CA certificate %q: %w", certFile, err)
 		}
 	}
-	// Fresh path: generate the agent CA key under the fixed handle (CA-signing only),
-	// self-sign, and persist.
-	remote, err := s.generatePrivilegedKeyHandle(ctx, c, crypto.ECDSAP256, agentCAHandle,
-		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign)
-	if err != nil {
-		return err
+
+	// Inspect before generating. This recovers the AUD-100 state where the signer
+	// volume retained agent-ca.key but the old container layer lost its certificate.
+	remote, handleErr := s.signerForPrivilegedHandle(ctx, c, agentCAHandle, signing.PurposeCASign)
+	if handleErr == nil && len(persistedDER) > 0 {
+		if err := crypto.VerifyCertificateSigner(persistedDER, remote.Public()); err != nil {
+			return fmt.Errorf("agent CA certificate %q does not match signer handle %q; refusing trust rotation: %w", certFile, agentCAHandle, err)
+		}
+		s.agentCASigner = remote
+		s.agentCACertDER = persistedDER
+		return nil
 	}
+	if handleErr != nil && status.Code(handleErr) != codes.NotFound {
+		return fmt.Errorf("inspect signer-held agent CA handle %q: %w", agentCAHandle, handleErr)
+	}
+	if handleErr != nil && len(persistedDER) > 0 {
+		return fmt.Errorf("agent CA certificate %q exists but signer handle %q is missing; refusing to generate a replacement key: restore signer custody or perform an explicit trust rotation", certFile, agentCAHandle)
+	}
+	if handleErr != nil {
+		remote, handleErr = s.generatePrivilegedKeyHandle(ctx, c, crypto.ECDSAP256, agentCAHandle,
+			[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign)
+		if handleErr != nil {
+			return handleErr
+		}
+	} else if s.logger != nil {
+		s.logger.Warn("recovering missing agent CA certificate from retained signer handle",
+			"certificate_file", certFile, "signer_handle", agentCAHandle)
+	}
+
 	caDER, err := crypto.SelfSignedCACert(remote, "trstctl Agent CA", 90*24*time.Hour)
 	if err != nil {
 		return err
@@ -242,11 +266,14 @@ type agentService struct {
 	// in the event log.
 	recordDryRun func(ctx context.Context, tenantID, agent, idempotencyKey, plan string)
 	// recordCMDBSync turns a relay's CMDB observation into ownership
-	// reconciliation (I2), through the same core the control-plane fetch uses.
-	recordCMDBSync func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
+	// reconciliation (I2). The control plane has no CMDB fetch path.
+	recordCMDBSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
 	// recordMDMSync turns a relay's MDM observation into device correlation
-	// (I5), through the same core the control-plane poll uses.
-	recordMDMSync func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
+	// (I5). The control plane has no MDM poll path.
+	recordMDMSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
+	// recordTicketSync turns mapped ServiceNow fields into issuance requests;
+	// it runs before the job is closed so a projection failure remains retryable.
+	recordTicketSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
 	// recordADCSPosture turns a relay's AD CS observation into the Posture
 	// console's read model (epic F1).
 	recordADCSPosture func(ctx context.Context, tenantID, agent, idempotencyKey, report string)

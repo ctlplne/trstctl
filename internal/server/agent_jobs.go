@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -85,6 +86,9 @@ var agentJobKindAllowlist = map[string]bool{
 	agentJobKindCMDBSync: true,
 	// I5: relay-executed MDM read, same custody and vantage rules.
 	agentJobKindMDMSync: true,
+	// I3: relay-executed ServiceNow ticket observation. Request creation stays
+	// in the control plane; the bearer token and network call do not.
+	agentJobKindTicketSync: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -145,7 +149,8 @@ var agentJobKindVantage = map[string][]string{
 	// is the one behind a firewall only the in-segment relay sits inside.
 	agentJobKindCMDBSync: {mtls.AgentRoleNetwork},
 	// I5: identical reasoning for an on-prem MDM.
-	agentJobKindMDMSync: {mtls.AgentRoleNetwork},
+	agentJobKindMDMSync:    {mtls.AgentRoleNetwork},
+	agentJobKindTicketSync: {mtls.AgentRoleNetwork},
 }
 
 // agentRolePermitsKind reports whether an agent holding roles may execute kind.
@@ -179,6 +184,9 @@ const (
 	agentJobMaxLease = 10 * time.Minute
 	// agentJobPollSeconds is the hint an agent gets for when to ask again.
 	agentJobPollSeconds = 15
+	// Structured observation reports are bounded again at the trust boundary,
+	// after the relay's own bounded upstream read and typed parser.
+	maxStructuredSyncReportBytes = 1 << 20
 )
 
 // ClaimJobs leases estate-touching work to the calling agent.
@@ -387,24 +395,56 @@ func AgentClaimableJobKinds(configured []string) map[string]bool {
 // belongs beside itself.
 func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerCertInfo,
 	agentID string, req *transport.ReportJobResultRequest, now time.Time) (*transport.ReportJobResultResponse, error) {
-
-	// Two leases have to agree: the agent still holds its claim, and no
-	// dispatch worker holds the entry. Closing the claim proves the first;
-	// the orchestrator's CompleteByKey proves the second and records the
-	// destination's circuit success, which a hand-rolled status flip here
-	// would skip (AN-6).
-	destination, idemKey, ok, err := a.store.MarkAgentJobCompleted(ctx, info.TenantID, agentID, req.JobID, now)
+	claim, held, err := a.store.AgentJobClaimForResult(ctx, info.TenantID, agentID, req.JobID, req.Attempt, now)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "close agent job claim: %v", err)
+		return nil, status.Errorf(codes.Internal, "load agent job claim: %v", err)
+	}
+	if !held {
+		return &transport.ReportJobResultResponse{Accepted: false}, nil
+	}
+	if a.outbox == nil {
+		return nil, status.Error(codes.Internal, "agent job outbox completion is not configured")
+	}
+
+	// Apply structured observations before closing the lease. A failed or
+	// interrupted projection leaves the durable job claim retryable. Receivers
+	// derive stable event IDs from the outbox key, so partial retries converge.
+	var ingestErr error
+	switch claim.Destination {
+	case agentJobKindCMDBSync:
+		if a.recordCMDBSync == nil {
+			ingestErr = errors.New("CMDB result receiver is not configured")
+		} else {
+			ingestErr = a.recordCMDBSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+		}
+	case agentJobKindMDMSync:
+		if a.recordMDMSync == nil {
+			ingestErr = errors.New("MDM result receiver is not configured")
+		} else {
+			ingestErr = a.recordMDMSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+		}
+	case agentJobKindTicketSync:
+		if a.recordTicketSync == nil {
+			ingestErr = errors.New("ticket result receiver is not configured")
+		} else {
+			ingestErr = a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+		}
+	}
+	if ingestErr != nil {
+		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
+	}
+
+	// Closing the exact claim and retiring its outbox intent is ONE durable
+	// transition. A crash before it leaves the claim retryable; after it, both
+	// claim and delivery are terminal. The outbox also records circuit success.
+	ok, err := a.outbox.CompleteAgentJobClaim(ctx, info.TenantID, agentID, req.JobID, req.Attempt, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "complete agent job claim: %v", err)
 	}
 	if !ok {
 		return &transport.ReportJobResultResponse{Accepted: false}, nil
 	}
-	if a.outbox != nil {
-		if _, err := a.outbox.CompleteByKey(ctx, info.TenantID, destination, idemKey); err != nil {
-			return nil, status.Errorf(codes.Internal, "complete outbox entry: %v", err)
-		}
-	}
+	destination, idemKey := claim.Destination, claim.IdempotencyKey
 	// The receipt travels WITH the event, not beside it. An event that says
 	// an agent executed a deploy, with the agent's own signature over that
 	// exact claim in the same row, is checkable by anyone later. Store the
@@ -432,17 +472,6 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// in the report from the run that found it.
 	if destination == "adcs.inventory" && a.recordADCSPosture != nil {
 		a.recordADCSPosture(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
-	}
-	// I2: a relay's CMDB observation becomes ownership reconciliation. The
-	// reconcile runs HERE — the relay reads, the control plane decides — so
-	// the attestation rule has one implementation whichever vantage fetched.
-	if destination == agentJobKindCMDBSync && a.recordCMDBSync != nil {
-		a.recordCMDBSync(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
-	}
-	// I5: a relay's MDM observation becomes device correlation, through the
-	// same core the control-plane poll uses.
-	if destination == agentJobKindMDMSync && a.recordMDMSync != nil {
-		a.recordMDMSync(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
 	}
 	// D2: a verification sweep becomes observed endpoint state. The report is
 	// the whole point of the job — a sweep whose findings stayed in the job row

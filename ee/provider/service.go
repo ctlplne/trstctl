@@ -11,8 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 const (
@@ -34,6 +37,18 @@ type Config struct {
 	License *license.Manager
 	Store   Store
 	Audit   AuditSink
+	// Mutations is the AN-2 command boundary. Production supplies one immutable
+	// event sink whose projection owns provider read tables. Nil retains the
+	// in-memory unit-test adapter only; the assembled binary never leaves it nil.
+	Mutations MutationSink
+	// Activity derives operator-visible evidence from the same immutable
+	// Provider event history. Production wires the event log; nil fails the
+	// activity read closed rather than inventing an empty history.
+	Activity ActivitySource
+	// Idempotency caches the exact HTTP result around the independently durable
+	// event receiver. Production supplies the shared PostgreSQL ledger and
+	// tenant-bound result protector; nil is limited to in-memory unit adapters.
+	Idempotency *orchestrator.Idempotency
 	// Authenticator verifies a provider operator credential. NIL MEANS THE
 	// PROVIDER PLANE REFUSES EVERY REQUEST, which is the only safe default.
 	//
@@ -115,6 +130,13 @@ type TelemetryReader interface {
 	TenantSnapshot(context.Context, string) (TenantSnapshot, error)
 }
 
+// legacyCustomerRevoker is an in-memory/config-file test seam only. The
+// PostgreSQL delegation reader deliberately does not implement it; production
+// offboarding removes delegation rows inside the authority projection.
+type legacyCustomerRevoker interface {
+	RevokeAllForCustomer(context.Context, string) error
+}
+
 // IsolationDriller runs an on-demand tenant-isolation drill and reports the
 // outcome. The provider plane holds only this narrow interface so it does not
 // depend on the core store's drill implementation; the attach seam adapts the
@@ -143,6 +165,8 @@ type Service struct {
 	license          *license.Manager
 	store            Store
 	audit            AuditSink
+	mutations        MutationSink
+	activity         ActivitySource
 	authenticator    OperatorAuthenticator
 	delegations      DelegationSource
 	telemetry        TelemetryReader
@@ -186,8 +210,53 @@ func NewService(cfg Config) *Service {
 	// default answer to "which customers may this operator touch", and the only
 	// safe default answer is none.
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
+		mutations: cfg.Mutations, activity: cfg.Activity,
 		delegations: cfg.Delegations, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
 		drills: cfg.Drills, clock: clock, maxBreakGlassTTL: maxTTL}
+}
+
+// ListActivity returns newest-first immutable Provider authority evidence,
+// limited to the customers currently delegated to actor. Deployment-wide
+// isolation-drill evidence is visible only to a Provider administrator.
+func (s *Service) ListActivity(ctx context.Context, actor Operator, limit int) ([]ProviderActivity, error) {
+	if s.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
+		return nil, ErrUnlicensed
+	}
+	if err := s.requireOperator(actor); err != nil {
+		return nil, err
+	}
+	if s.activity == nil {
+		return nil, errors.New("provider: immutable activity source is not configured")
+	}
+	if s.delegations == nil {
+		return nil, fmt.Errorf("%w: no delegation source is configured", ErrForbidden)
+	}
+	set, err := s.delegations.Delegations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: delegations could not be read", ErrForbidden)
+	}
+	visible := map[string]bool{}
+	for _, customer := range set.CustomersFor(actor.ID) {
+		visible[customer] = true
+	}
+	all, err := s.activity.ProviderActivity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = defaultProviderActivityLimit
+	}
+	if limit > maxProviderActivityLimit {
+		limit = maxProviderActivityLimit
+	}
+	out := make([]ProviderActivity, 0, min(limit, len(all)))
+	for index := len(all) - 1; index >= 0 && len(out) < limit; index-- {
+		item := all[index]
+		if visible[item.TenantID] || (item.TenantID == providerAuditTenant && actor.Role == OperatorAdmin) {
+			out = append(out, item)
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRequest) (Tenant, error) {
@@ -224,12 +293,32 @@ func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRe
 		}
 	}
 	now := s.clock()
-	tenant, err := s.store.CreateTenant(ctx, Tenant{ID: id, Slug: slug, Name: name, Status: TenantActive, CreatedAt: now, UpdatedAt: now})
-	if err != nil {
-		return Tenant{}, err
-	}
-	if err := s.record(ctx, AuditEvent{Type: AuditTenantProvisioned, TenantID: tenant.ID, OperatorID: actor.ID, OperatorEmail: actor.Email, At: now}); err != nil {
-		return Tenant{}, err
+	tenant := Tenant{ID: id, Slug: slug, Name: name, Status: TenantActive, CreatedAt: now, UpdatedAt: now}
+	if s.mutations != nil {
+		canonical, err := s.emit(ctx, AuditTenantProvisioned, tenant.ID, AuthorityEvent{Tenant: &tenant,
+			Audit: AuditEvent{Type: AuditTenantProvisioned, TenantID: tenant.ID,
+				OperatorID: actor.ID, OperatorEmail: actor.Email, At: now}})
+		if err != nil {
+			return Tenant{}, err
+		}
+		if canonical.Tenant == nil {
+			return Tenant{}, errors.New("provider: canonical provision event has no tenant result")
+		}
+		tenant = *canonical.Tenant
+	} else {
+		legacy, ok := s.store.(legacyMutableStore)
+		if !ok {
+			return Tenant{}, errors.New("provider: production stores require the event mutation sink")
+		}
+		var err error
+		tenant, err = legacy.CreateTenant(ctx, tenant)
+		if err != nil {
+			return Tenant{}, err
+		}
+		if err := s.record(ctx, AuditEvent{Type: AuditTenantProvisioned, TenantID: tenant.ID,
+			OperatorID: actor.ID, OperatorEmail: actor.Email, At: now}); err != nil {
+			return Tenant{}, err
+		}
 	}
 	return tenant, nil
 }
@@ -305,8 +394,18 @@ func (s *Service) RunIsolationDrill(ctx context.Context, actor Operator) (Isolat
 	if !report.Passed {
 		outcome = "failed"
 	}
-	if err := s.record(ctx, AuditEvent{Type: "provider.isolation.drill", OperatorID: actor.ID,
-		OperatorEmail: actor.Email, Reason: outcome, At: report.RanAt}); err != nil {
+	audit := AuditEvent{Type: "provider.isolation.drill", OperatorID: actor.ID,
+		OperatorEmail: actor.Email, Reason: outcome, At: report.RanAt}
+	if s.mutations != nil {
+		canonical, err := s.emit(ctx, audit.Type, providerAuditTenant, AuthorityEvent{Audit: audit, Drill: &report})
+		if err != nil {
+			return IsolationDrillReport{}, err
+		}
+		if canonical.Drill == nil {
+			return IsolationDrillReport{}, errors.New("provider: canonical isolation-drill event has no report")
+		}
+		report = *canonical.Drill
+	} else if err := s.record(ctx, audit); err != nil {
 		return IsolationDrillReport{}, err
 	}
 	return report, nil
@@ -357,19 +456,41 @@ func (s *Service) RequestBreakGlass(ctx context.Context, actor Operator, req Bre
 		return BreakGlassGrant{}, err
 	}
 	now := s.clock()
-	grant, err := s.store.CreateBreakGlassGrant(ctx, BreakGlassGrant{
+	grant := BreakGlassGrant{
 		TenantID:      req.TenantID,
 		OperatorID:    actor.ID,
 		OperatorEmail: actor.Email,
 		Reason:        strings.TrimSpace(req.Reason),
 		RequestedAt:   now,
 		ExpiresAt:     now.Add(req.TTL),
-	})
-	if err != nil {
-		return BreakGlassGrant{}, err
 	}
-	if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassRequested, TenantID: grant.TenantID, OperatorID: actor.ID, OperatorEmail: actor.Email, GrantID: grant.ID, Reason: grant.Reason, At: now}); err != nil {
-		return BreakGlassGrant{}, err
+	if s.mutations != nil {
+		grant.ID = stableGrantID(req.TenantID, mutationKeyFromContext(ctx))
+		canonical, err := s.emit(ctx, AuditBreakGlassRequested, grant.TenantID, AuthorityEvent{Grant: &grant,
+			Audit: AuditEvent{Type: AuditBreakGlassRequested, TenantID: grant.TenantID,
+				OperatorID: actor.ID, OperatorEmail: actor.Email, GrantID: grant.ID, Reason: grant.Reason, At: now}})
+		if err != nil {
+			return BreakGlassGrant{}, err
+		}
+		if canonical.Grant == nil {
+			return BreakGlassGrant{}, errors.New("provider: canonical break-glass request has no grant")
+		}
+		grant = *canonical.Grant
+	} else {
+		legacy, ok := s.store.(legacyMutableStore)
+		if !ok {
+			return BreakGlassGrant{}, errors.New("provider: production stores require the event mutation sink")
+		}
+		var err error
+		grant, err = legacy.CreateBreakGlassGrant(ctx, grant)
+		if err != nil {
+			return BreakGlassGrant{}, err
+		}
+		if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassRequested, TenantID: grant.TenantID,
+			OperatorID: actor.ID, OperatorEmail: actor.Email, GrantID: grant.ID,
+			Reason: grant.Reason, At: now}); err != nil {
+			return BreakGlassGrant{}, err
+		}
 	}
 	return grant, nil
 }
@@ -402,12 +523,30 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, tenantID, grantID, subj
 	if !approve {
 		grant.DeniedAt = now
 		grant.DeniedBy = subject
-		grant, err = s.store.UpdateBreakGlassGrant(ctx, grant)
-		if err != nil {
-			return BreakGlassGrant{}, err
-		}
-		if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassDenied, TenantID: grant.TenantID, GrantID: grant.ID, Subject: subject, At: now}); err != nil {
-			return BreakGlassGrant{}, err
+		if s.mutations != nil {
+			canonical, emitErr := s.emit(ctx, AuditBreakGlassDenied, grant.TenantID, AuthorityEvent{Grant: &grant,
+				Audit: AuditEvent{Type: AuditBreakGlassDenied, TenantID: grant.TenantID,
+					GrantID: grant.ID, Subject: subject, At: now}})
+			if emitErr != nil {
+				return BreakGlassGrant{}, emitErr
+			}
+			if canonical.Grant == nil {
+				return BreakGlassGrant{}, errors.New("provider: canonical break-glass denial has no grant")
+			}
+			grant = *canonical.Grant
+		} else {
+			legacy, ok := s.store.(legacyMutableStore)
+			if !ok {
+				return BreakGlassGrant{}, errors.New("provider: production stores require the event mutation sink")
+			}
+			grant, err = legacy.UpdateBreakGlassGrant(ctx, grant)
+			if err != nil {
+				return BreakGlassGrant{}, err
+			}
+			if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassDenied, TenantID: grant.TenantID,
+				GrantID: grant.ID, Subject: subject, At: now}); err != nil {
+				return BreakGlassGrant{}, err
+			}
 		}
 		return grant, nil
 	}
@@ -430,12 +569,30 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, tenantID, grantID, subj
 		grant.SecondConsentedAt = now
 		grant.SecondConsentedBy = subject
 	}
-	grant, err = s.store.UpdateBreakGlassGrant(ctx, grant)
-	if err != nil {
-		return BreakGlassGrant{}, err
-	}
-	if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassConsented, TenantID: grant.TenantID, GrantID: grant.ID, Subject: subject, At: now}); err != nil {
-		return BreakGlassGrant{}, err
+	if s.mutations != nil {
+		canonical, emitErr := s.emit(ctx, AuditBreakGlassConsented, grant.TenantID, AuthorityEvent{Grant: &grant,
+			Audit: AuditEvent{Type: AuditBreakGlassConsented, TenantID: grant.TenantID,
+				GrantID: grant.ID, Subject: subject, At: now}})
+		if emitErr != nil {
+			return BreakGlassGrant{}, emitErr
+		}
+		if canonical.Grant == nil {
+			return BreakGlassGrant{}, errors.New("provider: canonical break-glass consent has no grant")
+		}
+		grant = *canonical.Grant
+	} else {
+		legacy, ok := s.store.(legacyMutableStore)
+		if !ok {
+			return BreakGlassGrant{}, errors.New("provider: production stores require the event mutation sink")
+		}
+		grant, err = legacy.UpdateBreakGlassGrant(ctx, grant)
+		if err != nil {
+			return BreakGlassGrant{}, err
+		}
+		if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassConsented, TenantID: grant.TenantID,
+			GrantID: grant.ID, Subject: subject, At: now}); err != nil {
+			return BreakGlassGrant{}, err
+		}
 	}
 	return grant, nil
 }
@@ -469,14 +626,36 @@ func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID
 	default:
 		return TenantSnapshot{}, ErrBreakGlassNotConsented
 	}
-	if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassAccessed, TenantID: grant.TenantID, OperatorID: actor.ID, OperatorEmail: actor.Email, GrantID: grant.ID, At: now}); err != nil {
+	if s.mutations != nil {
+		snapshot, err := s.telemetry.TenantSnapshot(ctx, grant.TenantID)
+		if err != nil {
+			return TenantSnapshot{}, err
+		}
+		grant.UseCount++
+		canonical, emitErr := s.emit(ctx, AuditBreakGlassAccessed, grant.TenantID, AuthorityEvent{Grant: &grant, Snapshot: &snapshot,
+			Audit: AuditEvent{Type: AuditBreakGlassAccessed, TenantID: grant.TenantID,
+				OperatorID: actor.ID, OperatorEmail: actor.Email, GrantID: grant.ID, At: now}})
+		if emitErr != nil {
+			return TenantSnapshot{}, emitErr
+		}
+		if canonical.Snapshot == nil {
+			return TenantSnapshot{}, errors.New("provider: canonical break-glass access event has no snapshot")
+		}
+		return *canonical.Snapshot, nil
+	}
+	if err := s.record(ctx, AuditEvent{Type: AuditBreakGlassAccessed, TenantID: grant.TenantID,
+		OperatorID: actor.ID, OperatorEmail: actor.Email, GrantID: grant.ID, At: now}); err != nil {
 		return TenantSnapshot{}, err
 	}
 	snapshot, err := s.telemetry.TenantSnapshot(ctx, grant.TenantID)
 	if err != nil {
 		return TenantSnapshot{}, err
 	}
-	if err := s.store.IncrementBreakGlassUse(ctx, grant.ID, now); err != nil {
+	legacy, ok := s.store.(legacyMutableStore)
+	if !ok {
+		return TenantSnapshot{}, errors.New("provider: production stores require the event mutation sink")
+	}
+	if err := legacy.IncrementBreakGlassUse(ctx, grant.ID, now); err != nil {
 		return TenantSnapshot{}, err
 	}
 	return snapshot, nil
@@ -512,31 +691,61 @@ func (s *Service) setTenantStatus(ctx context.Context, actor Operator, tenantID 
 	if err := s.authorize(ctx, actor, tenantID, op); err != nil {
 		return err
 	}
-	tenant, err := s.store.UpdateTenantStatus(ctx, tenantID, status, s.clock())
+	tenant, err := s.store.Tenant(ctx, tenantID)
 	if err != nil {
 		return err
 	}
-	if err := s.record(ctx, AuditEvent{Type: auditType, TenantID: tenant.ID, OperatorID: actor.ID, OperatorEmail: actor.Email, At: s.clock()}); err != nil {
-		return err
+	now := s.clock()
+	tenant.Status, tenant.UpdatedAt = status, now
+	if s.mutations != nil {
+		_, emitErr := s.emit(ctx, auditType, tenant.ID, AuthorityEvent{Tenant: &tenant,
+			Audit: AuditEvent{Type: auditType, TenantID: tenant.ID,
+				OperatorID: actor.ID, OperatorEmail: actor.Email, At: now}})
+		if emitErr != nil {
+			return emitErr
+		}
+	} else {
+		legacy, ok := s.store.(legacyMutableStore)
+		if !ok {
+			return errors.New("provider: production stores require the event mutation sink")
+		}
+		tenant, err = legacy.UpdateTenantStatus(ctx, tenantID, status, now)
+		if err != nil {
+			return err
+		}
+		if err := s.record(ctx, AuditEvent{Type: auditType, TenantID: tenant.ID,
+			OperatorID: actor.ID, OperatorEmail: actor.Email, At: now}); err != nil {
+			return err
+		}
 	}
-	if status == TenantOffboarded {
-		// Grants over a destroyed tenancy are dangling authority. Tenant ids
-		// here are derived from the slug, so reusing an offboarded customer's
-		// slug would hand the new tenancy to whoever held grants on the old
-		// one — with nothing in the system saying so.
-		//
-		// Reported rather than swallowed: the offboard DID happen and the audit
-		// record above is correct, but the caller must learn that the grant rows
-		// survived so somebody clears them.
-		if revoker, ok := s.delegations.(customerRevoker); ok {
+	if status == TenantOffboarded && s.mutations == nil {
+		if revoker, ok := s.delegations.(legacyCustomerRevoker); ok {
 			if err := revoker.RevokeAllForCustomer(ctx, tenant.ID); err != nil {
-				return fmt.Errorf("provider: customer %s was offboarded but its operator "+
-					"delegations could not be cleared, so reusing the slug would restore that "+
-					"access: %w", tenant.ID, err)
+				return fmt.Errorf("provider: customer %s was offboarded but its legacy operator delegations could not be cleared: %w", tenant.ID, err)
 			}
 		}
 	}
 	return nil
+}
+
+func (s *Service) emit(ctx context.Context, typ, tenantID string, payload AuthorityEvent) (AuthorityEvent, error) {
+	key := mutationKeyFromContext(ctx)
+	if key == "" {
+		return AuthorityEvent{}, errors.New("provider: Idempotency-Key is required for mutations")
+	}
+	event, err := s.mutations.Append(ctx, key, typ, tenantID, payload)
+	if err != nil {
+		return AuthorityEvent{}, err
+	}
+	var canonical AuthorityEvent
+	if err := json.Unmarshal(event.Data, &canonical); err != nil {
+		return AuthorityEvent{}, fmt.Errorf("provider: decode canonical %s result: %w", typ, err)
+	}
+	return canonical, nil
+}
+
+func stableGrantID(tenantID, key string) string {
+	return "grant-" + uuid.NewSHA1(providerMutationNamespace, []byte(tenantID+"\x00"+strings.TrimSpace(key))).String()
 }
 
 func (s *Service) requireMutation(actor Operator, adminOnly bool) error {

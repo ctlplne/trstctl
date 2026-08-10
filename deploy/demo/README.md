@@ -43,6 +43,11 @@ To stop the demo and keep its pre-populated data:
 docker compose -f deploy/demo/docker-compose.yml down
 ```
 
+This also preserves the isolated signer's `agent-ca` key and its public trust
+anchor at `/data/ca/agent-ca.crt`. Ordinary image rebuilds and container
+recreation reuse the exact key and certificate; do not remove only one of those
+volumes/files.
+
 To reset the demo to a fresh seed:
 
 ```bash

@@ -5,52 +5,34 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	"trstctl.com/trstctl/internal/authz"
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/ticketintake"
 )
 
 // I3's intake, end to end: a ServiceNow ticket becomes an issuance request
 // with the existing lifecycle deciding it — idempotently by ticket reference,
 // with unmappable tickets counted rather than guessed at.
 
-// servedIntakeTokenRef is a credential REFERENCE resolved at run time.
-const servedIntakeTokenRef = "env:TRSTCTL_TEST_SN_INTAKE_TOKEN" // #nosec G101 -- credential reference (env: pointer), no credential value present (CWE-798)
+// servedIntakeTokenRef is a secret-store pointer redeemed by the relay.
+const servedIntakeTokenRef = "secret://itsm/intake-token" // #nosec G101 -- credential reference (secret store pointer), no credential value present (CWE-798)
 
 func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
-	sn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("intake saw %s; it may only ever GET", r.Method)
-		}
-		if !strings.HasSuffix(r.URL.Path, "/api/now/table/sc_req_item") {
-			t.Errorf("intake read %s, not the configured table", r.URL.Path)
-		}
-		_, _ = w.Write([]byte(`{"result":[
-			{"sys_id":"tick-1","u_subject":"payments.example.test","u_profile":"tls-server",
-			 "opened_by":{"display_value":"Dana Ops"},"short_description":"cert for payments"},
-			{"sys_id":"tick-2","u_subject":"","u_profile":"tls-server",
-			 "short_description":"no subject mapped"}
-		]}`))
-	}))
-	defer sn.Close()
-	t.Setenv("TRSTCTL_TEST_SN_INTAKE_TOKEN", "sn-intake-token")
-
 	h := newServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write",
-		string(authz.PrivateEgress))
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
 
 	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok,
 		"intake-1", map[string]any{
-			"system": "servicenow", "instance_url": sn.URL, "token_ref": servedIntakeTokenRef,
+			"system": "servicenow", "instance_url": "https://servicenow.internal.example", "token_ref": servedIntakeTokenRef,
 			"sn_table": "sc_req_item", "query": "state=1",
 			"subject_field": "u_subject", "profile_field": "u_profile",
 			"requester_field": "opened_by", "justification_field": "short_description",
 			"interval_seconds": 3600, "enabled": true,
-			"allow_private_endpoint": true,
-			"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, sn.URL)},
 		})
 	if status != http.StatusOK {
 		t.Fatalf("configure intake: %d %s", status, out)
@@ -58,7 +40,7 @@ func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 	// A table outside the closed set is refused by name.
 	status, out = secretsReqKey(t, h, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok,
 		"intake-bad", map[string]any{
-			"system": "servicenow", "instance_url": sn.URL, "token_ref": servedIntakeTokenRef,
+			"system": "servicenow", "instance_url": "https://servicenow.internal.example", "token_ref": servedIntakeTokenRef,
 			"sn_table": "sys_user_password", "subject_field": "a", "profile_field": "b",
 			"interval_seconds": 3600, "enabled": true,
 		})
@@ -71,7 +53,23 @@ func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("schedule not persisted: %v %v", found, err)
 	}
-	res, err := h.srv.RunTicketIntakeOnce(t.Context(), h.tenant, sched)
+	intent := ticketSyncIntent(sched)
+	h.srv.dispatchTicketSyncJob(t.Context(), h.tenant, sched)
+	var jobs int
+	var role string
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT count(*), max(required_agent_role) FROM outbox WHERE tenant_id = $1 AND destination = 'ticket.sync'`, h.tenant).Scan(&jobs, &role)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if jobs != 1 || role != "network" {
+		t.Fatalf("ticket intake dispatched %d jobs with role %q, want one durable network-relay job", jobs, role)
+	}
+	report := ticketintake.SyncReport{ObservedAt: time.Now().UTC(), Tickets: []ticketintake.Ticket{
+		{SysID: "tick-1", Subject: "payments.example.test", Profile: "tls-server", Requester: "Dana Ops", Justification: "cert for payments"},
+		{SysID: "tick-2", Profile: "tls-server", Justification: "no subject mapped"},
+	}}
+	res, err := h.srv.ingestTicketReport(t.Context(), h.tenant, "ticket-sync-1", intent, report)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +110,7 @@ func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 	}
 
 	// A second sweep sees the same ticket: one ticket, one request.
-	res, err = h.srv.RunTicketIntakeOnce(t.Context(), h.tenant, sched)
+	res, err = h.srv.ingestTicketReport(t.Context(), h.tenant, "ticket-sync-1", intent, report)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +142,7 @@ func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 		map[string]any{"reason": "wrong profile for this subject"}); status != http.StatusOK {
 		t.Fatalf("deny: %d %s", status, body)
 	}
-	res, err = h.srv.RunTicketIntakeOnce(t.Context(), h.tenant, sched)
+	res, err = h.srv.ingestTicketReport(t.Context(), h.tenant, "ticket-sync-1", intent, report)
 	if err != nil {
 		t.Fatal(err)
 	}

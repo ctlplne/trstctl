@@ -89,6 +89,7 @@ const fleetRun = {
   reason: "CA compromise",
   batch_size: 25,
   batch_count: 1,
+  next_batch_index: 2,
   connector: "nginx",
   target: "edge/prod",
   graph_impact: { node: { id: "iss:issuer-1", kind: "issuer", name: "issuer" }, affected: [], by_kind: {} },

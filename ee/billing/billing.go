@@ -98,7 +98,6 @@ type Store interface {
 	SetGauge(ctx context.Context, tenantID, meter string, period time.Time, value int64) error
 	Query(ctx context.Context, from, to time.Time, tenantID string) ([]UsageRecord, error)
 	QuotaFor(ctx context.Context, tenantID string) (Quota, error)
-	SetQuota(ctx context.Context, quota Quota) error
 }
 
 func Rollup(records []UsageRecord, granularity string) []UsageRecord {

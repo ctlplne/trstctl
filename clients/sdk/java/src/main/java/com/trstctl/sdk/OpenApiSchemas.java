@@ -394,6 +394,8 @@ public final class OpenApiSchemas {
       "OffboardMemberResponse",
       "OutboxCircuit",
       "OutboxCircuitList",
+      "OutboxReconciliationConflict",
+      "OutboxReconciliationConflictList",
       "Owner",
       "OwnerList",
       "OwnerRemediationAcceptRequest",

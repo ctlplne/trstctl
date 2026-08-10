@@ -14,17 +14,23 @@ import (
 
 // B-5: the server owns the facts the console's system readout needs — the
 // build stamp, when this process started, which signer topology is live, and
-// the readiness probes — so it builds the readout and hands the API a closure
-// rather than its internals.
+// the readiness probes (including whether the ordered projection is poisoned) —
+// so it builds the readout and hands the API a closure rather than its internals.
 //
 // The probes here are the SAME ones /readyz runs. Reusing them means the
 // console can never disagree with the load balancer about whether the spine
-// is up, which is the failure mode that makes an operator distrust both.
+// can serve trustworthy read state, which is the failure mode that makes an
+// operator distrust both.
 
 // systemReadoutTimeout bounds one readout so a hung dependency degrades this
 // endpoint instead of hanging the caller. It is deliberately shorter than a
 // typical HTTP client timeout.
 const systemReadoutTimeout = 3 * time.Second
+
+// systemDependencyOrder makes the operator readout deterministic. Keep the
+// source-of-truth path together (database -> event log -> projection), then the
+// isolated signer. Missing optional dependencies are skipped in place.
+var systemDependencyOrder = [...]string{"db", "nats", "projection", "signer"}
 
 func (s *Server) systemReadout(ctx context.Context) api.SystemReadout {
 	readout := api.SystemReadout{
@@ -48,7 +54,7 @@ func (s *Server) systemReadout(ctx context.Context) api.SystemReadout {
 	_, results := s.readiness.Evaluate(probeCtx)
 	// Stable order: the readiness map is unordered, and a console table that
 	// reshuffles on every poll is unreadable.
-	for _, name := range []string{"db", "nats", "signer"} {
+	for _, name := range systemDependencyOrder {
 		status, ok := results[name]
 		if !ok {
 			continue

@@ -170,7 +170,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **`connector.deploy` (A3), `connector.test` (D5), `connector.rollback` (D4), `revocation.probe` (R1), `discovery.run` (C2) and `adcs.inventory` (F1) have relay-side executors**; the rest become claimable when theirs ship. Nothing is claimable until an operator names a kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which an operator must enable separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
-| Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance health gates are now **computed from verification receipts** rather than left unevaluated — any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`, so a run cannot display all-green while something in it is broken or unlooked-at. Canary-first: the first batch gates the rest, and a canary that is not being served halts the remainder as `halted` (distinct from `failed` — nothing in a halted batch was attempted). Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
+| Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the listener it just changed — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
 | Connector rollback | Served as EXECUTED re-bind for **f5, kemp, netscaler, a10** — the families whose API addresses an installed object separately from uploading one. Deploys now install under a fingerprint-derived object name so the predecessor survives; a rollback re-points the listener at it and uploads nothing, which is the only form available once the control plane holds no subject key. Other families keep the attested-intent receipt and the census says which is which. A missing predecessor object **fails** rather than reporting success. **On an existing install nothing is rollable immediately** — certificates deployed before this change sit under the old target-derived name, so a target becomes rollable only after two deploys under the new scheme. Automatic rollback on failed verification is not served — it needs the verification engine | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Relays redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
@@ -573,14 +573,23 @@ never live in the API process. What you can do end to end against the running bi
   the same claim as over all eleven. An artifact with no checksum is reported
   unverifiable rather than verified, and an EMPTY backup is never verified — green on
   an empty set is the most misleading answer available.
-  Restore drills (J2): a drill restores the backup into an EPHEMERAL PostgreSQL
-  database created for the run and dropped afterwards, through the same restore path
-  production recovery uses — a drill with its own simplified restore would prove the
-  simplified one works, which is the one nobody runs at 3am. The target must be real
-  and separate: a double cannot have the failures worth catching (a migration the
-  artifacts predate, a column the restore expects, a constraint the replayed events
-  violate), and a drill that restored into the live database would be a recovery
-  exercise that caused an outage.
+  Restore drills (J2): a drill restores the COMPLETE manifest into an isolated
+  target through the same full-restore function production recovery uses. It creates
+  and later drops a real ephemeral PostgreSQL database, starts a private file-backed
+  JetStream beneath a temporary directory, copies the separately-custodied KEK and
+  backup-decryption key into that directory, and redirects every restored signer,
+  certificate, audit, socket, and archive path there. The production deployment is
+  read only. A drill with its own simplified restore would prove the simplified one
+  works, which is the one nobody runs at 3am; a drill aimed at live targets could
+  cause the outage it is meant to rehearse.
+  After event replay and both projection rebuilds, the drill imports and re-exports
+  every `RecoveredFromPostgresBackup` table and compares exact table counts. It then
+  starts the shipped signer over the recovered sealed key store, assembles a recovered
+  control plane, and requires its real `/readyz` PostgreSQL, JetStream, and signer
+  probes to pass. The attestation carries event count, independent-row/table counts,
+  restored artifact names, and each health result. `restored` is impossible unless
+  the full set and every runtime predicate pass; a missing required artifact or an
+  event-only replay is `failed`.
   The attestation records FAILURES as readily as successes, because without one "no
   attestation" is ambiguous between "nobody ran a drill" and "the drill failed". A
   restore that completes having replayed ZERO events is recorded as a failed drill,
@@ -614,10 +623,6 @@ never live in the API process. What you can do end to end against the running bi
   database in — records a skipped attestation saying so, rather than reporting that
   it has never drilled. Those are different facts, and the second is the one an
   operator would read as an oversight worth chasing.
-  Scope: the drill restores the EVENT LOG. Configuration and key material are not
-  restored, because copying an operator's signer keystore into a throwaway database
-  to prove a point is not a proof worth having; so a green drill establishes that the
-  event log reproduces state, not that a full deployment would come back.
   Enrolment diagnostics (I4): a refused ACME enrolment now produces a diagnosis
   naming the protocol, the step that failed, a cause from a CLOSED set, and a
   remediation. The hook sits at the single point every ACME refusal passes through,
@@ -641,14 +646,20 @@ never live in the API process. What you can do end to end against the running bi
   a real one. Identical diagnoses are collapsed with a count: a broken challenge
   fails on every retry, and a hundred identical rows would bury the second, different
   failure that explains the first.
-  SCOPE, twice over. First: the classifier is wired into the served ACME path only.
+  Each observation is an immutable `enrollment.diagnostic.observed` event whose
+  envelope carries the request tenant. PostgreSQL projects those events into a
+  FORCE-RLS table, collapses repeats only within that tenant, and retains the newest
+  200 distinct diagnosis keys per tenant. Restart, snapshot restore, and full replay
+  therefore reproduce counts and timestamps instead of clearing a process-global
+  map; an authenticated read always binds the caller's tenant.
+  SCOPE. The classifier is wired into the served ACME path only.
   EST, SCEP and AD CS classifiers exist and are tested but are not yet emitted from
   their served paths — those protocols surface far less structure about why they
-  refused, and wiring them is a separate change. Second: diagnoses are held IN MEMORY
-  and are lost on restart. Persisting them would mean a schema, a projection and a
-  retention policy for data whose whole value is being minutes old; an operator
-  debugging an enrolment that failed last week is helped by running it again, not by
-  a row.
+  refused, and wiring them is a separate change. The offline support bundle remains
+  deliberately tenant-data-free and therefore includes no enrollment-diagnostic
+  addendum; the console also has no prove-fixed action or durable verification link
+  yet. Those are capability gaps, not reasons to weaken the tenant boundary of the
+  rows that are served today.
   Relay revocation cache (R3): a relay started with `--crl-cache-listen` serves the
   control plane's CRL to relying parties in its segment. Revocation checking is the
   part of PKI that fails quietly — a client that cannot reach a distribution point
@@ -953,8 +964,12 @@ never live in the API process. What you can do end to end against the running bi
   `trstctl-cli compliance evidence-pack` serve signed CAP-CMP-04 framework packs
   for eIDAS, NIST SP 800-53/CSF, CMMC 2.0, FedRAMP, NIS2, and the existing
   PCI/HIPAA/CNSA/FIPS/Common Criteria/CA-audit frameworks. The `soc2` pack serves
-  CAP-CMP-05 (CC6/CC7/CC8-style access, monitoring, and change evidence), keeping
-  CPA examination and trust-services scope as residuals. `GET
+  CAP-CMP-05 only when each CC6/CC7/CC8 prerequisite has exact tenant-scoped
+  event/object evidence in the signed 90-day window; absent, stale, malformed, or
+  wrong-tenant prerequisites are explicit gaps. The signed v2 manifest includes
+  the tenant, window, event IDs/sequences/audit-chain digests, object refs, and
+  missing prerequisites. CPA examination and trust-services scope remain
+  residuals, and signature validity is not certification. `GET
   /api/v1/compliance/nhi-report` and `trstctl-cli compliance nhi-report` return
   CAP-CMP-06 NHI compliance mappings for NIST SP 800-53, NIST CSF 2.0, PCI DSS
   4.0, DORA, ISO/IEC 27001:2022 Annex A, FedRAMP, CMMC 2.0, eIDAS, and NIS2. These
@@ -1614,13 +1629,19 @@ code did and nothing more. Three statuses on the deployment surface used to read
 stronger than the work behind them. They are corrected below, and the correction
 is enforced rather than remembered.
 
-The mechanism is a registry. `internal/servedstatus` records, for every status
-the API can write, whether that attempt contacted the target, changed it,
-independently re-read it, or computed a verdict from evidence. The API builds
-receipts from those constants, the OpenAPI enum is generated from the same
-registry, and `docs/status_vocabulary_test.go` fails the build if a status is
-spelled stronger than its own flags allow, or if a receipt is built from a bare
-string that bypassed the registry.
+The enforcement has two closed layers. `internal/servedstatus` records, for the
+action-bearing deployment and fleet surfaces, whether an attempt contacted the
+target, changed it, independently re-read it, or computed a verdict from
+evidence. The API builds those receipts from registry constants and CI rejects a
+spelling stronger than its flags or a bare string that bypasses the registry.
+Separately, `docs/status_vocabulary_test.go` derives an exhaustive census of
+every `status`, `outcome`, `verdict`, `health_gate`, and `canary_state` field in
+the generated OpenAPI contract. Each field must bind a closed evidence class to
+an exact, AST-resolved production Go symbol; a planted future DTO proves the
+census fails closed. The same gate declaration-checks the assembled negative
+proofs and console renderers for fleet re-issuance, full-set restore drills, and
+MDM lifecycle traces. Shared console labels cannot add a green status until its
+evidence predicate is reviewed.
 
 | Status | Surface | What it means | What it does **not** mean |
 |---|---|---|---|
@@ -1643,8 +1664,12 @@ string that bypassed the registry.
 | `rollback_refused` | connector delivery | A relay declined the rollback **before contacting the target** — it cannot execute that connector, the connector cannot re-bind, no predecessor was named, the credential was not granted, or the sandbox blocked the operation. | That the appliance rejected anything. It was never reached and is unchanged. |
 | `rollback_failed` | connector delivery | A relay **reached** the target and the re-bind did not succeed. The reason distinguishes "the predecessor object is no longer installed" — which no retry fixes — from a failure at the appliance. | That the target is broken in every respect, or that the predecessor is gone unless the reason says so. |
 | `not_evaluated` | fleet re-issuance health gate | No evidence exists from which a verdict could be computed, so trstctl asserts none. | It is **not** a pass. |
-| `passed` / `failed` | fleet re-issuance health gate | An operator attested this verdict on the request. | That trstctl computed it. trstctl never fills in `passed` itself. |
-| `planned` | fleet re-issuance batch | A partition of the affected identity set. | That the run executes batch by batch. It issues every replacement in one pass. |
+| `passed` / `failed` | fleet re-issuance health gate | Either an operator attested the verdict, or the replacement-deployment gate was computed from signature-verified agent receipts. | That a plain delivery row or an unsigned report proved endpoint health. |
+| `planned` | fleet re-issuance batch | A partition of the affected identity set that has not been published. | That anything in the batch was attempted. |
+| `queued` | fleet re-issuance batch | Exactly one durable outbox command exists for the cursor batch. | That the worker or a target has run. |
+| `waiting_verification` | fleet re-issuance batch | Replacement work was published and the cursor is waiting for accepted signed endpoint receipts. | That silence is success or that a later batch was published. |
+| `executed` / `failed` | fleet re-issuance batch | The batch ran as a mutation unit and its signed verification gate passed or failed. | That a later batch necessarily ran. |
+| `halted` | fleet re-issuance batch | The batch was never published because an earlier signed verification failed. | That this batch or its targets failed. |
 
 Two spellings are retired and are no longer written: `test_succeeded` (now
 `config_validated`) claimed a successful test on a route that opens no
@@ -1666,19 +1691,15 @@ right up until the deploy that mattered. Without a relay enabled the route keeps
 the honest local answer, `config_validated`, rather than queueing work nothing
 will claim.
 
-Restoring a predecessor is still not served, and the reason is worth stating
-because it constrains the design rather than merely postponing it. A rollback
-cannot be a re-upload: after CSR-first issuance (B1) the control plane never
-holds the subject key, so it has nothing to push back. The executable form is a
-re-**bind** — pointing the target at the predecessor object that is still
-installed on it — which needs a rollback operation on the connector interface
-that does not exist yet. What did improve is the instruction: the `rollback_ref`
-now resolves the certificate's replacement chain and names the predecessor by
-serial and fingerprint, so the manual restore it still requires is a task an
-operator can actually perform. On a target renewed several times, "restore the
-previous credential" was a question, not an instruction. Where no predecessor
-exists — a first deployment — it says that instead, rather than sending someone
-looking for a credential that was never there.
+Restoring a predecessor is served as a relay-executed re-**bind**, not a
+re-upload. After CSR-first issuance (B1) the control plane never holds the
+subject key, so the rollback command names the predecessor already installed on
+the target by serial and fingerprint. A connector that supports re-binding can
+switch to that object and report `rolled_back`; missing capability, credential,
+predecessor, or sandbox permission reports `rollback_refused` before contact,
+while a reached target that cannot re-bind reports `rollback_failed`. Where no
+predecessor exists — a first deployment — the durable evidence says so rather
+than sending an operator looking for a credential that was never there.
 
 - Remaining private CA hierarchy operator flows beyond root/intermediate/leaf
   issuance. Root/intermediate CA creation, existing signer-backed CA chain
@@ -1885,36 +1906,31 @@ looking for a credential that was never there.
   "Ownership disagreements" panel on the Owners console. A change to a value
   nobody attested IS applied and is still listed, because a change nobody was
   told about is how ownership data quietly stops matching reality. A blank cell
-  is silence, not a deletion. Read-only is structural, not a flag: the reconcile
-  path builds only GETs against a fixed `/api/now/table/cmdb_ci`, and
+  is silence, not a deletion. Read-only is structural, not a flag: the network
+  relay builds only GETs against a fixed `/api/now/table/cmdb_ci`, and
   `orchestrator.NormalizeServiceNowTable` — the only writer — rejects `cmdb_ci`,
   so there is no configuration that turns this into a CMDB write. A CI naming an
   owner this estate has never heard of does NOT create one; it is reported as
   unattributed, because a CMDB assignment group is not evidence that a trstctl
   owner should exist and auto-creating would build a parallel estate out of the
-  CMDB's typos. The sync's VANTAGE is now the operator's choice (`execution` on
-  the schedule): `control_plane` — the default — fetches from the brain against
-  the operator-approved ServiceNow binding allow-list, and an instance inside a
-  private network then needs the SAME two grants the ticket writer needs (an
-  operator binding with `allow_private_endpoint` and `private_egress_cidrs`,
-  plus the caller holding `egress:private`), with the CIDR grant resolved at
-  RUN time so narrowing it takes effect on the next sync. `relay` inverts the
-  reach: the scheduler dispatches a `cmdb.sync` job that a NETWORK relay inside
-  the segment claims over its own outbound channel — no hole through the
-  firewall at all. The relay redeems the ServiceNow token per attempt through
-  the job-credential path (which is why relay execution REQUIRES a `secret://`
-  token_ref: an `env:` reference names a variable in the control plane's
-  environment, which the relay is not), reads the one permitted table through
-  the SAME endpoint builder the control plane uses, parses in place, and
+  CMDB's typos. The sync is RELAY-ONLY: the leader commits a tenant-scoped
+  `cmdb.sync` outbox job, and a NETWORK relay inside the segment claims it over
+  its outbound channel. There is no control-plane HTTP fallback and therefore
+  no private-egress hole into the estate. The relay redeems the ServiceNow token
+  per attempt through the job-credential path (`secret://` is required; an
+  `env:` reference belongs to the brain process and is refused), reads the one
+  permitted table through the shared endpoint builder, parses in place, and
   reports records — never the raw response, bounded at 8MB. The RECONCILE
   stays in the control plane on the reported records, so the
-  never-overwrite-an-attestation rule has exactly one implementation whichever
-  vantage read the CMDB. One sync in flight per tenant: a second due tick
+  never-overwrite-an-attestation rule has exactly one implementation. The signed
+  result is bounded before ingest and projected before the job closes; stable
+  event identities make a crash/retry converge. One sync in flight per tenant:
+  a second due tick
   behind an unclaimed job stamps the schedule with the waiting state ("if no
   network relay is enrolled and claiming, none will run it") instead of
   stacking identical reads for the eventual relay to replay. Scope, stated
-  exactly: relay mode is per-schedule opt-in, the dispatched read is one page
-  (500 CIs) like the control-plane path; there is no run-now
+  exactly: relay execution is mandatory, the dispatched read is one page (500
+  CIs); there is no run-now
   endpoint (a newly enabled schedule is due
   immediately and fires within one scheduler tick, and its outcome is served as
   `last_run_at`/`last_error`); resolving a conflict is a read surface only —
@@ -1962,7 +1978,14 @@ looking for a credential that was never there.
   approval queue with noise. Requests opened here carry `origin=servicenow`
   and the exact ticket reference, and the existing lifecycle — separation of
   duties, denial with a reason, expiry (7 days for intake-opened requests) —
-  decides them unchanged. The GITHUB ACTION is published in-repo at
+  decides them unchanged. Each sweep first commits a tenant-scoped
+  `ticket.sync` outbox job. A NETWORK relay redeems the `secret://` ServiceNow
+  token for one attempt, issues the fixed bounded GET, and reports only the
+  mapped typed fields — never the raw upstream body. The signed report is
+  bounded and projected before claim completion; a failed projection remains
+  retryable, and stable request/event identities collapse replay to one request.
+  The control plane has no ServiceNow HTTP/token fallback. The GITHUB ACTION is
+  published in-repo at
   `clients/github-action` (composite, `action.yml` + README with the sample
   workflow): the workflow's ambient OIDC token is fetched with the requested
   audience, an EC key is generated INSIDE the runner (only the public half
@@ -2022,17 +2045,24 @@ looking for a credential that was never there.
   to the symptom rather than the cause. An MDM that could not be reached yields
   `unknown`, never "not installed", and the list counts `unobserved` separately
   from `failed` — merging them sends somebody to re-push a profile that is
-  already there. An unrecognised Intune registration state maps to `unknown`
-  rather than `failed`, so a value Microsoft ships that we have not seen does
-  not raise alerts on healthy devices. Jamf's computers-inventory endpoint does
-  not report per-profile install state, so Jamf rows are `unknown` by
-  construction: claiming `ok` because a device is enrolled would assert
-  something never observed. READ-ONLY IS STRUCTURAL — no code under
-  `internal/mdm` or `internal/api/mdm_devices.go` constructs a non-GET request,
-  both endpoint helpers use fixed paths (`/v1.0/deviceManagement/managedDevices`,
-  `/api/v1/computers-inventory`), a caller-supplied filter travels only as an
-  encoded query parameter, and there is no write route; `TestNoMDMCodePathCanWrite`
-  fails if any of those files references a mutating verb. Devices with no
+  already there. Intune's `deviceRegistrationState` is ALWAYS `unknown` for
+  certificate installation: it says that the device is registered, not that a
+  SCEP profile or certificate installed. Intune installation evidence comes
+  from a completed `CertificatesByRAPolicy` export filtered to the exact enabled
+  SCEP profile IDs. Jamf reads the fixed `GENERAL`, `HARDWARE`, and
+  `CERTIFICATES` inventory sections. Neither provider can produce `installed=ok`
+  until its exact device record contains the signer-minted certificate serial
+  with an active/valid status; a completed read with a different serial is an
+  actionable failure, while no certificate-specific read remains `unknown`.
+  READ-ONLY IS STRUCTURAL — inventory uses fixed GET paths
+  (`/v1.0/deviceManagement/managedDevices` and
+  `/api/v1/computers-inventory`). The one non-GET provider operation is
+  Microsoft's fixed `POST /beta/deviceManagement/reports/exportJobs` for the
+  `CertificatesByRAPolicy` READ artifact; it cannot name a policy, assignment,
+  or device mutation path, and the Graph bearer is never forwarded to the
+  signed report-download authority. There is no MDM write route;
+  `TestNoMDMCodePathCanWrite` rejects PUT/PATCH/DELETE and any mutation-capable
+  resource fragment. Devices with no
   matching certificate and certificates with no matching device are BOTH
   reported, because a correlation that showed only its successes would make an
   estate look covered by hiding the gaps; the join key is the hardware serial,
@@ -2040,17 +2070,26 @@ looking for a credential that was never there.
   laptops an admin happened to name the same. THE SURFACE NOW HAS ITS PRODUCER:
   `PUT/GET /api/v1/mdm/poll-schedule` (`trstctl mdm poll-schedule set|show`)
   configures a per-tenant, per-MDM schedule and a leader-only ticker re-reads
-  Intune/Jamf on that interval, joining devices to SCEP-enrolled identities by
-  EXACT serial-to-name equality (the Intune SCEP `{{DeviceSerialNumber}}` CN
-  convention; a looser match would invent correlations). The sync's vantage is
-  the operator's choice, exactly as the CMDB's is: `control_plane` (default;
-  a PRIVATE on-prem Jamf then needs `allow_private_endpoint` plus
-  `private_egress_cidrs` and the caller holding `egress:private`), or `relay`,
-  which dispatches an `mdm.sync` job a network relay claims — token redeemed
-  per attempt (`secret://` required; `env:` refused with the custody reason),
-  the same endpoint builders, parsed in place, devices reported bounded, one
-  sync in flight per tenant with the waiting state stamped on the schedule.
-  The correlation always runs in the control plane through one shared core.
+  Intune/Jamf on that interval. An identity inventory join remains metadata only;
+  the lifecycle trace joins the MDM hardware serial to immutable
+  `protocol.scep.request.observed` and `protocol.scep.issuance.observed` facts
+  emitted by the actual SCEP handler, keyed by the exact CSR common name and
+  transaction. A successful issuance fact carries the inspected signer-minted
+  certificate serial, fingerprint, and expiry; every terminal refusal carries
+  its failed stage and remediation. Correlation IDs and identity lifecycle rows
+  never manufacture success. The sync is RELAY-ONLY: the leader first commits
+  a tenant-scoped `mdm.sync` outbox intent, a NETWORK relay claims it over the
+  outbound agent channel, and that relay redeems the `secret://` token for one
+  attempt. `env:` references, `control_plane` execution, and the old
+  `allow_private_endpoint`/`private_egress_cidrs` brain-egress grant are
+  refused. The fixed endpoint is parsed in place and only a bounded typed,
+  signed observation returns. The control plane binds that report to the exact
+  durable job payload, projects it before atomically completing the claim and
+  outbox row, and performs correlation through one shared core; it has no MDM
+  HTTP/token fallback. The in-flight pending check reads the provider from the
+  durable `mdm.sync` intent: a pending Intune read stops duplicate Intune work
+  but does not suppress Jamf (and vice versa). Each provider's schedule stamps
+  its own waiting or completed outcome instead of reporting invented health.
   RENEWAL-WINDOW AWARENESS FOR OFFLINE DEVICES is served on the device list:
   each correlated device with a certificate carries `renewal_at_risk` and a
   detail naming the dates, computed from the identity's expiry against the
@@ -2064,9 +2103,15 @@ looking for a credential that was never there.
   the schedule sets `renewal_window_days`. Scope, stated exactly: no built-in
   OAuth client-credential exchange — the token reference must resolve to a
   bearer the MDM accepts, rotated by the operator's own pipeline; a device
-  with no certificate gets NO renewal verdict rather than a warning; and the
-  trace's `renewing` stage still has no per-step producer — the at-risk flag
-  is the list's, not the trace's.
+  with no certificate gets NO renewal verdict rather than a warning. The trace's
+  `renewing` stage is now evidence-backed: a later distinct SCEP transaction
+  supplies its request/result, while a certificate inside its renewal window
+  with no later attempt and a stale device check-in is `unknown` with instructions
+  to bring the device online and trigger an MDM check-in. The console device row
+  opens this complete trace and shows the first failed stage plus its remediation.
+  Intune report export currently uses Microsoft Graph's beta report endpoint;
+  the operator-supplied bearer must already authorize both managed-device reads
+  and report export because trstctl does not perform an OAuth credential exchange.
 - AD CS coexistence, first increment (F4): the `/certsrv` transport now REFUSES
   to send a password over plaintext. Basic is base64, not encryption, and on a
   plaintext hop anyone on the path reads a credential that can issue from the
@@ -2168,13 +2213,28 @@ looking for a credential that was never there.
   view and EDIT its limits (max agents, certificates, secrets), a blank field
   saved as unlimited never zero — and per-customer WHITE-LABEL BRANDING: a brand
   editor (product name, custom domain, login message) that writes through
-  `/provider/v1/tenants/{id}/brand`, a route this change added and wired to the
-  durable white-label store, behind the same per-customer delegation gate (an
+  `/provider/v1/tenants/{id}/brand`, a route wired to the tenant-scoped provider
+  authority event receiver and its white-label read projection, behind the same
+  per-customer delegation gate (an
   operator can brand only a customer they are delegated, because a custom domain
   is a claim on a host and branding another's customer could seize it). A
-  duplicate custom domain is refused by the store's uniqueness constraint and
-  the refusal is surfaced. Triggering the siloed-isolation drills from the
-  provider plane is not built. The auth
+  duplicate custom domain is refused by the projection's uniqueness constraint
+  and the refusal is surfaced. Customer lifecycle, quota, brand, delegation,
+  and break-glass state now rebuild exactly from one immutable provider
+  authority history; the five PostgreSQL views expose no production mutator.
+  Every provider mutation requires a key bound to operator + method + path +
+  body, and the console sends one; identical sequential or concurrent retries
+  return the original HTTP bytes, while changed commands return 409. The
+  console also triggers the served siloed-isolation drill and shows its checks.
+  Its Authority activity panel reads `GET /provider/v1/activity` and renders
+  newest-first event id/sequence/type/time/customer/actor evidence derived from
+  the same immutable authority history. Current delegation filters customer
+  events before serving, global drill evidence is admin-only, and the response
+  deliberately omits command bindings, authority payloads, and break-glass
+  snapshots.
+  Scope, stated exactly: delegation administration remains an offline
+  event-backed `trstctl provider-grant` command, and break-glass request,
+  consent, and result-use APIs are not yet exposed in this console. The auth
   is a memory-held bearer the
   operator supplies; the HttpOnly provider-session cookie flow (a proper OIDC
   redirect + server session, so the token never enters JS) is the follow-on
@@ -2297,8 +2357,9 @@ looking for a credential that was never there.
   continue is exactly who would act on it. The verdict rules are unchanged and
   deliberately refuse to round up: any failed replacement fails the gate, and a
   single UNVERIFIED replacement keeps it `not_evaluated` rather than passed — a
-  run that is 99% verified is a run with an endpoint nobody looked at. Batches
-  that are planned or halted keep `not_evaluated`, because a batch that never ran
+  run that is 99% verified is a run with an endpoint nobody looked at. Only
+  receipts paired with an accepted signed agent-job receipt count. Batches that
+  are planned, queued, or halted keep `not_evaluated`, because a batch that never ran
   has nothing to verify and a halted one changed nothing; a read failure leaves
   the gate as it stands rather than inventing a verdict in either direction.
 - Migration waves (H2): `internal/migration` is the generic ordered-cohort engine
@@ -3666,14 +3727,15 @@ enumeration has no completeness oracle, and revocation publication is R1's
 freshness signal, which is not wired to a run. Saying so beats deriving them
 from something adjacent and calling it proof.
 
-**Canary-first halts propagation.** A fleet re-issuance touches every certificate
-an issuer signed; without a gate a bad replacement reaches the whole estate at
-the speed of the outbox. The first batch is the canary. `halted` is a distinct
-status from `failed` because a halted batch was never attempted — nothing in it
-changed and nothing in it is broken, and sending an operator to investigate it
-during an incident wastes the attention they have least of. A batch that already
-executed is never relabelled halted: it is deployed and needs attention, and
-hiding that is worse than the halt.
+**Canary-first halts propagation.** Starting a run persists its cursor and
+publishes exactly one internal outbox command for batch one. The bounded worker
+publishes replacement work only for that cursor, waits without spending its
+retry budget, and accepts a verdict only when the connector verification row is
+paired with an agent-job receipt whose signature was accepted. A failure stores
+the explicit halt reason and leaves later batches absent from the outbox.
+`halted` is distinct from `failed`: a halted batch was never attempted. Resume
+reuses the same cursor and deterministic replacement ids, so crash recovery and
+redelivery converge instead of reissuing or publishing a later batch twice.
 
 **The SLO counts terminal runs only.** A renewal still executing is neither a
 success nor a failure, and forcing it into either would move the number for
@@ -3683,12 +3745,10 @@ absence of work is how a team learns to ignore an SLO. Error-budget burn is
 clamped at zero, because a figure like -340% is not more actionable than
 none-remaining and the raw counts sit beside it.
 
-**What is not served.** Batches are still planning partitions rather than
-independently executed units: a run issues every replacement in one pass, so
-pause/resume records operator intent and gates what the console shows, but does
-not interrupt an in-flight pass. Canary evaluation therefore gates what a run
-DISPLAYS and what an operator should do next, not what the outbox has already
-sent.
+**What is not served.** The fleet state machine does not treat an unsigned
+control-plane assertion as endpoint proof. A deployment executed only by a
+control-plane connector therefore cannot advance this signed-receipt gate; it
+remains `waiting_verification` until a bound agent reports the endpoint result.
 
 ## Endpoint verification
 

@@ -37,6 +37,7 @@ var TenantScopedTables = []string{
 	"discovery_schedules",
 	"discovery_sources",
 	"remediation_playbook_runs",
+	"outbox_reconciliation_conflicts",
 	"incident_fleet_reissuance_runs",
 	"incident_executions",
 	"pam_sessions",
@@ -71,6 +72,10 @@ var TenantScopedTables = []string{
 	// I3: the first-class request object. Tenant history — who asked for what,
 	// who denied it and why — and it leaves with the tenant.
 	"issuance_requests",
+	// I4: both the collapsed diagnosis and its bounded event-id deduplication
+	// window are tenant operational telemetry and leave with the tenant.
+	"enrollment_diagnostic_observations",
+	"enrollment_diagnostics",
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
 	// I2: ownership disagreements reference an owner_id. Listed BEFORE owners so
 	// the order stays correct if that reference ever becomes a real foreign key —

@@ -3,6 +3,7 @@
 package acme
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,7 +26,7 @@ func TestARefusalOnTheServedPathProducesADiagnosis(t *testing.T) {
 	t.Parallel()
 	s := &Server{}
 	var got []enrollmentdiag.Diagnosis
-	s.SetFailureDiagnosis(func(d enrollmentdiag.Diagnosis) { got = append(got, d) })
+	s.SetFailureDiagnosis(func(_ context.Context, d enrollmentdiag.Diagnosis) { got = append(got, d) })
 
 	// A challenge the authority could not see — the classic broken enrolment.
 	req := httptest.NewRequest(http.MethodPost, "/acme/challenge/abc", nil)
@@ -85,7 +86,7 @@ func TestEveryRefusalEmitsBecauseTheHookIsAtTheChokePoint(t *testing.T) {
 	t.Parallel()
 	s := &Server{}
 	count := 0
-	s.SetFailureDiagnosis(func(enrollmentdiag.Diagnosis) { count++ })
+	s.SetFailureDiagnosis(func(context.Context, enrollmentdiag.Diagnosis) { count++ })
 
 	for _, typ := range []string{"dns", "rateLimited", "unauthorized", "serverInternal", "malformed"} {
 		s.problem(httptest.NewRecorder(),

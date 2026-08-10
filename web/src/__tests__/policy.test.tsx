@@ -342,14 +342,49 @@ describe("policy governance surface", () => {
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.complianceEvidencePack.mockImplementation((framework: ComplianceEvidencePack["framework"]) =>
       Promise.resolve({
-        format: "trstctl.compliance.evidence-pack.v1",
+        format: "trstctl.compliance.evidence-pack.v2",
         framework,
         public_key_der: "BASE64PUBLICKEY",
         signed_export: {
           manifest: {
+            tenant_id: "tenant-policy-audit",
+            generated_at: "2026-07-01T12:00:00Z",
+            evidence_window: { from: "2026-04-02T12:00:00Z", through: "2026-07-01T12:00:00Z" },
             controls: [
-              { id: `${framework}-crypto-inventory`, title: "Cryptographic inventory maintained", status: "evidenced", evidence: ["CBOM"] },
-              { id: `${framework}-audit-trail`, title: "Tamper-evident audit trail", status: "evidenced", evidence: ["signed audit evidence log"] },
+              {
+                id: `${framework}-crypto-inventory`,
+                title: "Cryptographic inventory maintained",
+                status: "evidenced",
+                evidence: ["current tenant CBOM cryptographic inventory"],
+                evidence_refs: [
+                  {
+                    ref: "object:crypto-asset-001",
+                    source: "tenant_graph_snapshot",
+                    type: "crypto-asset",
+                    observed_at: "2026-07-01T12:00:00Z",
+                  },
+                ],
+                missing: [],
+                coverage_window: { from: "2026-04-02T12:00:00Z", through: "2026-07-01T12:00:00Z" },
+              },
+              {
+                id: `${framework}-audit-trail`,
+                title: "Tamper-evident audit trail",
+                status: "evidenced",
+                evidence: ["credential lifecycle audit events"],
+                evidence_refs: [
+                  {
+                    ref: "event:evt-certificate-recorded",
+                    source: "audit_event",
+                    type: "certificate.recorded",
+                    observed_at: "2026-06-30T12:00:00Z",
+                    sequence: 41,
+                    digest: "sha256:certificate-recorded",
+                  },
+                ],
+                missing: [],
+                coverage_window: { from: "2026-04-02T12:00:00Z", through: "2026-07-01T12:00:00Z" },
+              },
               ...(framework === "cabf-br"
                 ? [
                     {
@@ -372,13 +407,34 @@ describe("policy governance surface", () => {
                       id: "soc2-cc6-access-control",
                       title: "Logical access controls for NHI credentials are evidenced",
                       status: "evidenced",
-                      evidence: ["tenant RBAC", "NHI inventory and posture evidence mappings"],
+                      evidence: ["complete credential ownership attribution", "completed NHI access-review campaign and item decisions"],
+                      evidence_refs: [
+                        {
+                          ref: "event:evt-soc2-review",
+                          source: "audit_event",
+                          type: "nhi.access_review.campaign.started",
+                          observed_at: "2026-06-15T12:00:00Z",
+                          sequence: 42,
+                          digest: "sha256:soc2-review",
+                        },
+                        {
+                          ref: "object:credential-payments-api",
+                          source: "tenant_graph_snapshot",
+                          type: "credential",
+                          observed_at: "2026-07-01T12:00:00Z",
+                        },
+                      ],
+                      missing: [],
+                      coverage_window: { from: "2026-04-02T12:00:00Z", through: "2026-07-01T12:00:00Z" },
                     },
                     {
                       id: "soc2-attestation-residual",
                       title: "CPA examination and trust-service scope remain operator responsibilities",
                       status: "gap",
-                      evidence: ["independent CPA SOC 2 examination report"],
+                      evidence: [],
+                      evidence_refs: [],
+                      missing: ["independent CPA SOC 2 examination report"],
+                      coverage_window: { from: "2026-04-02T12:00:00Z", through: "2026-07-01T12:00:00Z" },
                     },
                   ]
                 : []),
@@ -434,14 +490,22 @@ describe("policy governance surface", () => {
                     },
                   ]
                 : []),
-              { id: `${framework}-operator-attest`, title: "Operator attestation needed", status: "gap", evidence: ["operator attestation"] },
+              {
+                id: `${framework}-operator-attest`,
+                title: "Operator attestation needed",
+                status: "gap",
+                evidence: [],
+                evidence_refs: [],
+                missing: ["operator attestation"],
+                coverage_window: { from: "2026-04-02T12:00:00Z", through: "2026-07-01T12:00:00Z" },
+              },
             ],
             posture: { total_crypto_assets: 4, quantum_vulnerable: framework === "cnsa-2.0" ? 1 : 0, post_quantum: 2 },
             product_evidences:
               framework === "cabf-br"
                 ? ["CA/Browser Forum profile lint evidence", "external zlint corpus gate", "served CA issuance and revocation audit evidence"]
                 : framework === "soc2"
-                  ? ["SOC 2 security-event and change-control evidence mapping", "tenant RBAC and NHI access-review evidence"]
+                  ? ["event:evt-certificate-recorded", "event:evt-soc2-review", "object:credential-payments-api"]
                   : framework === "fips-140"
                     ? ["FIPS-capable build and fail-closed POST evidence"]
                     : framework === "common-criteria"
@@ -576,11 +640,14 @@ describe("policy governance surface", () => {
     expect(screen.getByText(/CAP-OBS-02/i)).toBeInTheDocument();
     expect(screen.getByText("Quarterly SOC 2 inventory")).toBeInTheDocument();
     expect(screen.getByText("GET /api/v1/compliance/inventory-report")).toBeInTheDocument();
-    expect(screen.getByText("trstctl.compliance.evidence-pack.v1")).toBeInTheDocument();
+    expect(screen.getByText("trstctl.compliance.evidence-pack.v2")).toBeInTheDocument();
     expect(screen.getByText("5 controls")).toBeInTheDocument();
     expect(screen.getByText("3 evidenced")).toBeInTheDocument();
     expect(screen.getByText("2 gaps")).toBeInTheDocument();
-    expect(screen.getByText("SOC 2 security-event and change-control evidence mapping")).toBeInTheDocument();
+    expect(screen.getByText("tenant-policy-audit")).toBeInTheDocument();
+    expect(screen.getAllByText("event:evt-soc2-review").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("sha256:soc2-review").length).toBeGreaterThan(0);
+    expect(screen.getByText("Missing prerequisites")).toBeInTheDocument();
     expect(screen.getAllByText("independent CPA SOC 2 examination report").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/evidence, not certification/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "soc2-evidence-pack.json");

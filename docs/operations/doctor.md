@@ -40,9 +40,8 @@ The database connection comes from `--postgres-dsn`, defaulting to
 | `--prove-isolation` | off | Runs the tenant-isolation probe group. All read-only groups run regardless; this flag is accepted for the documented surface. |
 | `--write-probe` | off | Permits the two ephemeral probe tenants and the cross-tenant write attempts. **Required for a full proof.** Without it, ISO-3, ISO-4, and ISO-5 report `skip`. |
 | `--json PATH` | none | Writes the machine-readable receipt (mode `0600`). |
-| `--sign` | off | Signs the receipt with the deployment's existing audit-export key. |
-| `--audit-key PATH` | `$TRSTCTL_AUDIT_SIGNING_KEY_FILE`, else `data/audit/signing-key.pem` | The audit key PEM. **Doctor never creates a key** — a missing file is a configuration error, not a reason to mint one. |
-| `--signer-socket PATH` | none | Enables the SIG-2 socket posture probe. |
+| `--sign` | off | Signs the receipt through the isolated signer's existing, purpose-constrained `audit-export` handle. Requires the signer socket; doctor never reads private-key bytes. |
+| `--signer-socket PATH` | `$TRSTCTL_SIGNER_SOCKET` | Required by `--sign`; also enables the SIG-2 socket posture probe. |
 | `--fail-on fail\|warn` | `fail` | The exit-code threshold. |
 
 Exit codes: **0** every probe passed · **1** at least one probe FAILED (or WARNed
@@ -162,8 +161,10 @@ abridged to four probes. Values are as emitted; nothing here is illustrative.
 With `--sign`, a `signature` object is appended carrying `alg` `RS256`, `key_id`
 `audit-export`, and a compact JWS over the receipt's canonical JSON — the receipt
 serialized with the signature field absent. This is the **same key and the same
-signing path the audit bundle export already uses**. Doctor introduces no new key
-type and no second signing path.
+signer-side artifact path the audit bundle export already uses**. The protected
+JWS header binds `trstctl.audit-evidence/doctor-receipt/v1`; the signer rejects an
+unknown kind, wrong authority, or wrong handle. Doctor introduces no private-key
+parser, key file, or second signing path.
 
 ## How this page stays honest
 

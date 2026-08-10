@@ -87,6 +87,7 @@ func newStore(t *testing.T) *store.Store {
 		          agents, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, credentials, certificate_profiles,
+		          discovery_findings, discovery_runs, discovery_schedules, discovery_sources,
 		          notification_test_operations, notification_delivery_receipts,
 		          connector_delivery_receipts, lifecycle_rotation_runs, compliance_report_schedules, read_model_snapshots
 		 RESTART IDENTITY CASCADE`); err != nil {
@@ -97,7 +98,10 @@ func newStore(t *testing.T) *store.Store {
 	// starts from a clean catch-up position (TRUNCATE would drop the seeded row, so
 	// reset the value instead).
 	if _, err := s.SystemPool().Exec(ctx,
-		`UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
+		`UPDATE projection_checkpoint
+		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
+		        failed_at = NULL, updated_at = now()
+		  WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })

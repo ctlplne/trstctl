@@ -43,22 +43,16 @@ export function EdgeDelegationsPanel() {
         {translateNow("source.edge.delegations.b6edge00001")}
       </h2>
       {unavailable ? (
-        <p className="mt-2 max-w-3xl text-caption text-muted-foreground">
-          {translateNow("source.edge.unavailable.b6edge00002")}
-        </p>
+        <p className="mt-2 max-w-3xl text-caption text-muted-foreground">{translateNow("source.edge.unavailable.b6edge00002")}</p>
       ) : !policies || !delegations ? (
         <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</p>
       ) : (policies.items ?? []).length === 0 && (delegations.items ?? []).length === 0 ? (
-        <p className="mt-2 max-w-3xl text-caption text-muted-foreground">
-          {translateNow("source.edge.none.b6edge00003")}
-        </p>
+        <p className="mt-2 max-w-3xl text-caption text-muted-foreground">{translateNow("source.edge.none.b6edge00003")}</p>
       ) : (
         <>
           {(policies.items ?? []).length > 0 ? (
             <div className="mt-4 overflow-x-auto">
-              <h3 className="text-caption font-medium text-muted-foreground">
-                {translateNow("source.edge.segments.b6edge00004")}
-              </h3>
+              <h3 className="text-caption font-medium text-muted-foreground">{translateNow("source.edge.segments.b6edge00004")}</h3>
               <table className="mt-2 w-full text-caption">
                 <thead>
                   <tr className="text-left text-muted-foreground">
@@ -91,9 +85,7 @@ export function EdgeDelegationsPanel() {
           ) : null}
           {(delegations.items ?? []).length > 0 ? (
             <div className="mt-4 overflow-x-auto">
-              <h3 className="text-caption font-medium text-muted-foreground">
-                {translateNow("source.edge.live.b6edge00005")}
-              </h3>
+              <h3 className="text-caption font-medium text-muted-foreground">{translateNow("source.edge.live.b6edge00005")}</h3>
               <table className="mt-2 w-full text-caption">
                 <thead>
                   <tr className="text-left text-muted-foreground">
@@ -112,29 +104,21 @@ export function EdgeDelegationsPanel() {
                       <td className="py-1 pr-4">{d.segment_id}</td>
                       <td
                         className={
-                          d.status === "active"
-                            ? "py-1 pr-4"
-                            : d.status === "revoked"
-                              ? "py-1 pr-4 text-status-danger"
-                              : "py-1 pr-4 text-status-warning"
+                          d.status === "active" ? "py-1 pr-4" : d.status === "revoked" ? "py-1 pr-4 text-status-danger" : "py-1 pr-4 text-status-warning"
                         }
                       >
                         {d.status}
                       </td>
                       <td className="py-1 pr-4 font-mono text-xs">{(d.permitted_dns_domains ?? []).join(", ")}</td>
                       <td className="py-1 pr-4 tabular-nums">{new Date(d.not_after).toISOString().slice(0, 10)}</td>
-                      <td className="py-1 pr-4 font-mono text-xs">
-                        {d.attested_key_sha256 ? d.attested_key_sha256.slice(0, 16) : "—"}
-                      </td>
+                      <td className="py-1 pr-4 font-mono text-xs">{d.attested_key_sha256 ? d.attested_key_sha256.slice(0, 16) : "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : null}
-          <p className="mt-3 max-w-3xl text-xs text-muted-foreground">
-            {translateNow("source.edge.reconcile.note.b6edge00015")}
-          </p>
+          <p className="mt-3 max-w-3xl text-xs text-muted-foreground">{translateNow("source.edge.reconcile.note.b6edge00015")}</p>
         </>
       )}
     </section>

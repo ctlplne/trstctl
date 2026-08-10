@@ -23,8 +23,9 @@ import (
 // filesystem permissions plus SO_PEERCRED peer authentication (see peer.go),
 // not TLS.
 type Client struct {
-	conn *grpc.ClientConn
-	svc  signerpb.SignerServiceClient
+	conn      *grpc.ClientConn
+	svc       signerpb.SignerServiceClient
+	admission atomic.Value // admissionHook; scoped to this signer connection
 }
 
 // signerCallTimeoutNanos bounds every signer RPC that arrives without a
@@ -69,32 +70,24 @@ func perCallDeadline(ctx context.Context, method string, req, reply any, cc *grp
 	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
-// signerAdmission holds the process-wide admission hook bounding concurrent
-// signer round-trips (AN-7). The server assembly installs the bulkhead-backed
-// hook once at startup, mirroring SetSignerCallTimeout; nil admits directly.
-// The hook lives here as a plain function so this package never imports the
-// bulkhead package — the pool stays the server's dependency, not the client's.
-//
-// Before this hook existed the operator's bulkheads.signing.{workers,queue}
-// started a pool named "signing" that NO code path ever submitted work to
-// (AUD-6): --print-config and the support bundle echoed the limit back while
-// signer concurrency was governed only by whichever caller pool happened to
-// front it.
-var signerAdmission atomic.Value // of func(call func() error) error
-
-// SetSignerAdmission installs the admission hook every signer RPC passes
-// through. Passing nil restores direct admission.
-func SetSignerAdmission(admit func(call func() error) error) {
-	signerAdmission.Store(admissionHook{admit: admit})
+// SetAdmission installs the admission hook every RPC on this signer connection
+// passes through. It is deliberately per-client: a process-global hook lets one
+// assembled server overwrite another and leaves unrelated clients bound to a
+// closed pool after shutdown. Passing nil restores direct admission.
+func (c *Client) SetAdmission(admit func(call func() error) error) {
+	if c != nil {
+		c.admission.Store(admissionHook{admit: admit})
+	}
 }
 
-// SignerAdmissionInstalled reports whether a non-nil admission hook is
-// installed. Assembly tests use it to prove the server actually routed signer
-// RPCs through the operator's bulkhead instead of leaving the configured pool
-// ornamental (AUD-6) — the exact wiring gap the unreachable-capability audit
-// found here.
-func SignerAdmissionInstalled() bool {
-	hook, _ := signerAdmission.Load().(admissionHook)
+// AdmissionInstalled reports whether this connection is bound to an admission
+// hook. Assembly tests use it to prove bulkheads.signing binds real RPC work
+// without relying on process-global state (AUD-6).
+func (c *Client) AdmissionInstalled() bool {
+	if c == nil {
+		return false
+	}
+	hook, _ := c.admission.Load().(admissionHook)
 	return hook.admit != nil
 }
 
@@ -104,11 +97,11 @@ type admissionHook struct {
 	admit func(call func() error) error
 }
 
-// admissionGate is a unary interceptor that routes every signer RPC through the
-// installed admission hook. A saturated pool rejects fast with a structured
-// error before the RPC is attempted — backpressure, not queue-and-hope.
-func admissionGate(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	hook, _ := signerAdmission.Load().(admissionHook)
+// admissionGate is a unary interceptor that routes this client's signer RPCs
+// through its installed admission hook. A saturated pool rejects fast with a
+// structured error before the RPC is attempted — backpressure, not queue-and-hope.
+func (c *Client) admissionGate(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	hook, _ := c.admission.Load().(admissionHook)
 	if hook.admit == nil {
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
@@ -119,15 +112,18 @@ func admissionGate(ctx context.Context, method string, req, reply any, cc *grpc.
 
 // Dial connects to the signing service listening at socketPath.
 func Dial(socketPath string) (*Client, error) {
+	client := &Client{}
 	conn, err := grpc.NewClient(
 		"unix://"+socketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(perCallDeadline, admissionGate),
+		grpc.WithChainUnaryInterceptor(perCallDeadline, client.admissionGate),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("dial signer: %w", err)
 	}
-	return &Client{conn: conn, svc: signerpb.NewSignerServiceClient(conn)}, nil
+	client.conn = conn
+	client.svc = signerpb.NewSignerServiceClient(conn)
+	return client, nil
 }
 
 // DialMTLS connects to an isolated signer over the cross-node mTLS channel
@@ -143,11 +139,14 @@ func DialMTLS(addr string, tlsCfg mtls.SignerPeerConfig, serverName string) (*Cl
 	if err != nil {
 		return nil, fmt.Errorf("signer mTLS credentials: %w", err)
 	}
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithChainUnaryInterceptor(perCallDeadline, admissionGate))
+	client := &Client{}
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithChainUnaryInterceptor(perCallDeadline, client.admissionGate))
 	if err != nil {
 		return nil, fmt.Errorf("dial signer over mTLS: %w", err)
 	}
-	return &Client{conn: conn, svc: signerpb.NewSignerServiceClient(conn)}, nil
+	client.conn = conn
+	client.svc = signerpb.NewSignerServiceClient(conn)
+	return client, nil
 }
 
 // Close closes the underlying connection.
@@ -249,6 +248,14 @@ type StaticProvider struct{ C *Client }
 // Client returns the wrapped client.
 func (p StaticProvider) Client() *Client { return p.C }
 
+// SetAdmission binds this provider's fixed connection to one control-plane
+// bulkhead. It mirrors Supervisor.SetAdmission for external-signer mode.
+func (p StaticProvider) SetAdmission(admit func(call func() error) error) {
+	if p.C != nil {
+		p.C.SetAdmission(admit)
+	}
+}
+
 // Healthy reports whether the signer answers Health with SERVING.
 func (c *Client) Healthy(ctx context.Context) bool {
 	resp, err := c.svc.Health(ctx, &signerpb.HealthRequest{})
@@ -262,13 +269,14 @@ type KeyPurpose = signerpb.KeyPurpose
 
 // Re-exported KeyPurpose values.
 const (
-	PurposeUnspecified = signerpb.KeyPurpose_KEY_PURPOSE_UNSPECIFIED
-	PurposeCASign      = signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN
-	PurposeLeafTLS     = signerpb.KeyPurpose_KEY_PURPOSE_LEAF_TLS
-	PurposeSSHCert     = signerpb.KeyPurpose_KEY_PURPOSE_SSH_CERT
-	PurposeCodeSign    = signerpb.KeyPurpose_KEY_PURPOSE_CODE_SIGN
-	PurposeGeneric     = signerpb.KeyPurpose_KEY_PURPOSE_GENERIC
-	PurposeACMEAccount = signerpb.KeyPurpose_KEY_PURPOSE_ACME_ACCOUNT
+	PurposeUnspecified   = signerpb.KeyPurpose_KEY_PURPOSE_UNSPECIFIED
+	PurposeCASign        = signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN
+	PurposeLeafTLS       = signerpb.KeyPurpose_KEY_PURPOSE_LEAF_TLS
+	PurposeSSHCert       = signerpb.KeyPurpose_KEY_PURPOSE_SSH_CERT
+	PurposeCodeSign      = signerpb.KeyPurpose_KEY_PURPOSE_CODE_SIGN
+	PurposeGeneric       = signerpb.KeyPurpose_KEY_PURPOSE_GENERIC
+	PurposeACMEAccount   = signerpb.KeyPurpose_KEY_PURPOSE_ACME_ACCOUNT
+	PurposeAuditEvidence = signerpb.KeyPurpose_KEY_PURPOSE_AUDIT_EVIDENCE
 )
 
 // SignTokenProvider mints the per-request authorization token for a

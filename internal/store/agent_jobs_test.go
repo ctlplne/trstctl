@@ -150,7 +150,7 @@ func TestAgentJobLeaseExpiryReturnsWorkFromADeadAgent(t *testing.T) {
 	}
 }
 
-func TestAgentJobExtendCompleteAndReleaseOnlyWorkForTheHolder(t *testing.T) {
+func TestAgentJobExtendAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 	if testing.Short() {
 		t.Skip("starts an embedded PostgreSQL; skipped in -short")
 	}
@@ -167,7 +167,12 @@ func TestAgentJobExtendCompleteAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 		t.Fatalf("claim = %d (err %v)", len(claimed), err)
 	}
 	first, second := claimed[0], claimed[1]
-
+	if _, found, err := st.AgentJobClaimForResult(ctx, tenantID, holder, first.ID, first.ClaimAttempts+1, now); err != nil || found {
+		t.Fatalf("a stale/future claim generation authorized result projection: found=%v err=%v", found, err)
+	}
+	if binding, found, err := st.AgentJobClaimForResult(ctx, tenantID, holder, first.ID, first.ClaimAttempts, now); err != nil || !found || binding.Destination != jobDeploy {
+		t.Fatalf("current result claim binding=%+v found=%v err=%v", binding, found, err)
+	}
 	// Only the holder may extend. Otherwise "the lease is alive" stops meaning
 	// "the agent doing the work is alive", which is the only thing it is for.
 	if ok, err := st.ExtendAgentJobClaim(ctx, tenantID, impostor, first.ID, now.Add(time.Hour)); err != nil || ok {
@@ -175,25 +180,6 @@ func TestAgentJobExtendCompleteAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 	}
 	if ok, err := st.ExtendAgentJobClaim(ctx, tenantID, holder, first.ID, now.Add(time.Hour)); err != nil || !ok {
 		t.Fatalf("the holder could not extend its own lease: ok=%v err=%v", ok, err)
-	}
-
-	// Same for closing the claim: a report from a non-holder changes nothing.
-	if _, _, ok, err := st.MarkAgentJobCompleted(ctx, tenantID, impostor, first.ID, now); err != nil || ok {
-		t.Fatalf("an agent closed a claim it does not hold: ok=%v err=%v", ok, err)
-	}
-	dest, idem, ok, err := st.MarkAgentJobCompleted(ctx, tenantID, holder, first.ID, now)
-	if err != nil || !ok {
-		t.Fatalf("the holder could not close its own claim: ok=%v err=%v", ok, err)
-	}
-	// The caller needs both to finish the delivery through the orchestrator,
-	// which is where the dispatch lease and circuit accounting live.
-	if dest != jobDeploy || idem == "" {
-		t.Fatalf("closing a claim did not return the delivery key: %q/%q", dest, idem)
-	}
-	// A replayed report is a no-op rather than a second delivery — which is what
-	// makes an at-least-once report safe to send twice.
-	if _, _, ok, err := st.MarkAgentJobCompleted(ctx, tenantID, holder, first.ID, now); err != nil || ok {
-		t.Fatalf("a replayed completion was applied again: ok=%v err=%v", ok, err)
 	}
 
 	// Releasing hands the work back immediately: a failure on one host is not
@@ -220,6 +206,35 @@ func TestAgentJobExtendCompleteAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 	}
 	if requeued[0].Attempts == 0 {
 		t.Error("a failed attempt did not count; a job failing forever must be visible")
+	}
+}
+
+func TestCompletedPendingAgentJobIsNeverReclaimed(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	ctx := context.Background()
+	st, tenantID := newStore(t), tenantA
+	seedAgentJobTenant(t, ctx, st, tenantID)
+	const agentID = "77777777-7777-7777-7777-777777777777"
+	seedJobs(t, ctx, st, tenantID, 1, jobDeploy)
+	now := time.Now().UTC()
+	claimed, err := st.ClaimAgentJobs(ctx, tenantID, agentID, []string{jobDeploy}, nil, 1, time.Minute, now)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim jobs=%+v err=%v", claimed, err)
+	}
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`UPDATE outbox SET claim_completed_at = $3 WHERE tenant_id = $1 AND id = $2`,
+			tenantID, claimed[0].ID, now)
+		return err
+	}); err != nil {
+		t.Fatalf("seed pre-AUD-94 split row: %v", err)
+	}
+
+	reclaimed, err := st.ClaimAgentJobs(ctx, tenantID, agentID, []string{jobDeploy}, nil, 1, time.Minute, now.Add(2*time.Minute))
+	if err != nil || len(reclaimed) != 0 {
+		t.Fatalf("a completed pending row was reclaimed: jobs=%+v err=%v", reclaimed, err)
 	}
 }
 

@@ -6,14 +6,11 @@ import (
 	"encoding/json"
 	"github.com/jackc/pgx/v5"
 	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
-	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/store"
@@ -28,67 +25,22 @@ import (
 // have the scheduler read a real (fake) ServiceNow instance, and read the
 // results back off the served surfaces.
 
-// servedCMDBTokenRef is a credential REFERENCE (an env: pointer the server
-// resolves at request time), never a credential value. Named once so gosec's
-// hardcoded-credential heuristic does not fire on every map literal carrying it.
+// servedCMDBTokenRef is the legacy env: reference rejected by relay-only APIs.
 const servedCMDBTokenRef = "env:TRSTCTL_SERVICENOW_TOKEN" // #nosec G101 -- credential reference (env: pointer), no credential value present (CWE-798)
 
 // servedCMDBSecretRef is the secret-store REFERENCE relay-mode schedules carry;
 // the relay redeems the value per attempt. No credential value present.
 const servedCMDBSecretRef = "secret://itsm/servicenow-token" // #nosec G101 -- credential reference (secret store pointer), no credential value present (CWE-798)
 
-type cmdbSink struct {
-	mu       sync.Mutex
-	methods  []string
-	paths    []string
-	queries  []string
-	auth     []string
-	response string
-	srv      *httptest.Server
-}
-
-func newCMDBSink(t *testing.T, response string) *cmdbSink {
-	t.Helper()
-	s := &cmdbSink{response: response}
-	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.mu.Lock()
-		s.methods = append(s.methods, r.Method)
-		s.paths = append(s.paths, r.URL.Path)
-		s.queries = append(s.queries, r.URL.RawQuery)
-		s.auth = append(s.auth, r.Header.Get("Authorization"))
-		s.mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(s.response))
-	}))
-	t.Cleanup(s.srv.Close)
-	return s
-}
-
-func (s *cmdbSink) seen() (methods, paths, queries, auth []string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]string(nil), s.methods...), append([]string(nil), s.paths...),
-		append([]string(nil), s.queries...), append([]string(nil), s.auth...)
-}
-
 // The full loop: an owner whose application nobody recorded gets filled in from
 // the CMDB, and an owner a human attested is left alone and raised as a
 // conflict — both reachable over HTTP.
 func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
-	body := `{"result":[
-		{"sys_id":"ci-1","name":"api","owned_by":{"display_value":"payments"},
-		 "u_application":{"display_value":"APP-CMDB"},"used_for":"production"},
-		{"sys_id":"ci-2","name":"web","owned_by":{"display_value":"platform"},
-		 "u_application":{"display_value":"APP-CMDB-2"}}
-	]}`
-	sink := newCMDBSink(t, body)
-	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
+	const instanceURL = "https://cmdb.internal.example"
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-			InstanceURL:          sink.srv.URL,
-			TokenRef:             servedCMDBTokenRef,
-			AllowPrivateEndpoint: true,
-			PrivateEgressCIDRs:   []string{serviceNowSinkCIDR(t, sink.srv.URL)},
+			InstanceURL: instanceURL,
+			TokenRef:    servedCMDBSecretRef,
 		}}
 	})
 
@@ -111,13 +63,10 @@ func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "owners:read", string(authz.PrivateEgress))
+	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "owners:read")
 	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-1", map[string]any{
-		"instance_url":           sink.srv.URL,
-		"token_ref":              servedCMDBTokenRef,
-		"interval_seconds":       3600,
-		"enabled":                true,
-		"allow_private_endpoint": true,
+		"instance_url": instanceURL, "token_ref": servedCMDBSecretRef,
+		"interval_seconds": 3600, "enabled": true, "execution": "relay",
 	})
 	if status != http.StatusOK {
 		t.Fatalf("configure schedule: status %d body %s", status, out)
@@ -127,23 +76,14 @@ func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("schedule not persisted: found=%v err=%v", found, err)
 	}
-	if _, err := h.srv.RunCMDBReconcileOnce(t.Context(), h.tenant, sched); err != nil {
-		t.Fatalf("reconcile: %v", err)
-	}
-
-	methods, paths, queries, auth := sink.seen()
-	if len(methods) != 1 || methods[0] != http.MethodGet {
-		t.Fatalf("methods = %v, want one GET. Any other verb is a write into a customer's system "+
-			"of record", methods)
-	}
-	if !strings.HasSuffix(paths[0], "/api/now/table/cmdb_ci") {
-		t.Fatalf("path = %v, want the fixed cmdb_ci table", paths)
-	}
-	if !strings.Contains(queries[0], "sysparm_display_value=all") {
-		t.Fatalf("query = %q, want display values; a sys_id in an owner column is unusable", queries[0])
-	}
-	if auth[0] != "Bearer servicenow-test-token" {
-		t.Fatalf("Authorization = %q; the token_ref was not resolved", auth[0])
+	h.srv.dispatchCMDBSyncJob(t.Context(), h.tenant, sched)
+	if err := h.srv.recordCMDBSync(t.Context(), h.tenant, "relay-1", "cmdb-schedule-1", []byte(mustJSON(t, cmdbSyncIntent(sched))), mustJSON(t, CMDBSyncReport{
+		ObservedAt: time.Now().UTC(), Records: []ownership.Record{
+			{SourceRef: "ci-1", OwnerName: "payments", ApplicationID: "APP-CMDB", Environment: "production"},
+			{SourceRef: "ci-2", OwnerName: "platform", ApplicationID: "APP-CMDB-2"},
+		},
+	})); err != nil {
+		t.Fatalf("ingest relay observation: %v", err)
 	}
 
 	owners, err := h.store.ListOwnersPage(t.Context(), h.tenant, store.ZeroUUID, 50)
@@ -394,14 +334,16 @@ func TestRelayModeCMDBScheduleDispatchesAndIngestsTheReport(t *testing.T) {
 	if err := h.store.UpdateOwner(t.Context(), attested); err != nil {
 		t.Fatal(err)
 	}
-	report, err := json.Marshal(CMDBSyncReport{Records: []ownership.Record{
+	report, err := json.Marshal(CMDBSyncReport{ObservedAt: time.Now().UTC(), Records: []ownership.Record{
 		{OwnerName: "payments", ApplicationID: "APP-RELAY", SourceRef: "ci-1"},
 		{OwnerName: "platform", ApplicationID: "APP-RELAY-2", SourceRef: "ci-2"},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.srv.recordCMDBSync(t.Context(), h.tenant, "relay-1", "idem-1", string(report))
+	if err := h.srv.recordCMDBSync(t.Context(), h.tenant, "relay-1", "idem-1", []byte(mustJSON(t, cmdbSyncIntent(sched))), string(report)); err != nil {
+		t.Fatal(err)
+	}
 
 	owners, err := h.store.ListOwnersPage(t.Context(), h.tenant, store.ZeroUUID, 50)
 	if err != nil {

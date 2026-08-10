@@ -539,14 +539,15 @@ you must operate.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRSTCTL_AUDIT_SIGNING_KEY_FILE` | `data/audit/signing-key.pem` | PEM path for the evidence-export signing key. It is **persisted** (created `0600` on first boot) so signed bundles verify across restarts; the key no longer rotates each restart. |
+| `TRSTCTL_AUDIT_SIGNING_KEY_FILE` | `data/audit/signing-key.pem` | **Upgrade migration path only.** If this historical PEM exists, the isolated `trstctl-signer` imports it into the sealed, purpose-constrained `audit-export` handle and deletes the plaintext after durable persistence. Fresh deployments never create this file. In external-signer mode, mount the legacy path into the signer and pass `--legacy-audit-key`; the control plane refuses to rotate around a leftover PEM. |
 | `TRSTCTL_AUDIT_RETENTION` | — (indefinite) | Served audit-view window, a Go duration (e.g. `8760h`). Empty means **indefinite** (the default). When set **and** `TRSTCTL_AUDIT_ARCHIVE_DIR` is given, a background worker archives older records to signed bundles, verifies the bundle, and advances a replayable tenant checkpoint so those records leave the live query view. Their underlying AN-2 event envelopes remain retained for projection rebuild, disaster recovery, and authorized privacy rewrite. |
 | `TRSTCTL_AUDIT_ARCHIVE_DIR` | — | Cold-storage directory for the signed archive bundles (`<dir>/<tenant>/audit-<seq>.jws`, `0600`). **Required to advance the served-view retention floor**; without it the view remains indefinite. Point it at WORM-backed storage you protect. See [Audit retention and archive lifecycle](compliance.md#audit-retention-and-archive-lifecycle). |
 
 The audit query (`/api/v1/audit/events`) and signed export (`/api/v1/audit/export`)
 endpoints are wired into the serving binary, so they return real data — not an
-error — out of the box. Protect the signing key file and back it up; distribute
-its public half to auditors out of band.
+error — out of the box. The evidence private key lives only in the signer's
+sealed key store; back up that store and the KEK, and distribute the public JWKS
+to auditors out of band.
 
 ## Privacy Retention
 
@@ -974,8 +975,9 @@ file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,
 `tenant_id` and `allowed_accounts` or `allowed_arns` because STS does not carry a
 trstctl tenant claim.
 
-Treat the credential-store KEK like the audit signing key: **protect it and back it
-up** (a lost KEK means sealed credentials cannot be opened) with the same care
+Treat the credential-store KEK as the root that also protects the signer's sealed
+audit-evidence handle: **protect it and back it up** (a lost KEK means sealed
+credentials and software-backed signer keys cannot be opened) with the same care
 described in the [disaster-recovery runbook](disaster-recovery.md). This
 credential-store KEK is still a local key file. Do not confuse it with Helm
 `externalKMS`, which applies to the signer's CA key-store DEK wrapping described in
@@ -990,13 +992,14 @@ custody.
 ## Backup
 
 Event-log backups (`trstctl --backup`) are always integrity-protected (a SHA-256
-trailer, plus an HMAC derived from `TRSTCTL_AUDIT_SIGNING_KEY_FILE` when one is
-configured). They require the live deployment's external PostgreSQL DSN as well
+trailer, plus an HMAC domain-derived from `TRSTCTL_SECRETS_KEK_FILE` when the
+deployment KEK exists). They require the live deployment's external PostgreSQL DSN as well
 as external NATS: PostgreSQL holds a shared history-generation barrier for the
 complete export, preventing a concurrent privacy rewrite from changing which
 JetStream generation is authoritative mid-backup. A **full** backup
-(`trstctl --full-backup-dir`) additionally captures operational secrets — the audit
-signing key, the signer authorization secret, and the sealed signer key store — so
+(`trstctl --full-backup-dir`) additionally captures operational secrets — the
+signer authorization secret and the sealed signer key store (including the
+audit-evidence key) — so
 production full backups require an operator-held encryption key.
 
 | Variable | Default | Meaning |
@@ -1396,7 +1399,7 @@ custodied there) is a startup error.
 | `TRSTCTL_AGENT_CHANNEL_ADDR` | `:9443` | The agent channel's mTLS gRPC listen address. |
 | `TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR` | `:9444` | Dedicated embedded-client HTTPS renewal listener. Served only when the channel is enabled, uses the same signer-custodied agent CA, and requires a verified agent client certificate. |
 | `TRSTCTL_AGENT_CHANNEL_SERVER_NAME` | empty (loopback SANs only) | DNS SAN the channel's server certificate carries — the name agents pin/verify as their `--server-name`. Loopback SANs are always added so a co-located agent can verify a `localhost` connection. |
-| `TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE` | `data/ca/agent-ca.crt` | Where the agent CA certificate is persisted, so the agent CA is stable across restarts (an agent's pinned CA does not change on restart). |
+| `TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE` | `data/ca/agent-ca.crt` | Where the agent CA certificate is persisted, so an agent's pinned signer key does not change on restart. The shipped container sets `WORKDIR /`, so this default resolves to the persistent `/data/ca/agent-ca.crt`; Compose and Helm also set that absolute path explicitly. |
 | `TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL` | `30s` | Next-beat hint returned to agents. |
 
 **Which work agents may claim.** `agent_channel.claimable_job_kinds` (structured
@@ -1513,6 +1516,7 @@ that is actually saturating.
 | `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_QUEUE` | inherits outbox | Override transparency publication (`transparency.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_QUEUE` | inherits outbox | Override code-signing commands (`codesign.*`) without sharing transparency workers. |
 | `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_QUEUE` | inherits outbox | Override operator notifications (`notification.*`). |
+| `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_QUEUE` | inherits outbox | Override the durable fleet-reissuance cursor worker (`incident.fleet_reissuance.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_QUEUE` | inherits outbox | Override the zero-egress tenant seal commit worker (`tenantseal.seal`). It proves the accepted result is durable before acquiring the cross-replica seal fence. |
 | `TRSTCTL_BULKHEAD_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_SIGNING_QUEUE` | `4` / `64` | Control-plane work waiting on signer RPC. Do not set this above signer capacity. |
 | `TRSTCTL_BULKHEAD_QUERY_WORKERS` / `TRSTCTL_BULKHEAD_QUERY_QUEUE` | `4` / `64` | Heavy graph/risk/read queries that scale with inventory size. |
@@ -1540,7 +1544,7 @@ through an upstream CA, synchronize a secret, publish code-signing evidence, or 
 an operator. JSON config may override a family with `outbox_external_ca`,
 `outbox_connectors`, `outbox_secrets`, `outbox_secret_sync`,
 `outbox_managed_keys`, `outbox_transparency`, `outbox_code_signing`, or
-`outbox_notifications`, or `outbox_tenant_seal` inside `bulkheads`.
+`outbox_notifications`, `outbox_tenant_seal`, or `outbox_fleet_reissuance` inside `bulkheads`.
 
 ## Config file
 

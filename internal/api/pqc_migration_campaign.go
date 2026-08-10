@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -24,7 +25,7 @@ const (
 // PQCCampaignClosureSigner is the crypto-free API-side view of the persistent
 // audit signing key. The implementation remains inside internal/crypto.
 type PQCCampaignClosureSigner interface {
-	Sign([]byte) (string, error)
+	SignArtifact(string, []byte) (string, error)
 	PublicJWKS() ([]byte, error)
 }
 
@@ -255,7 +256,7 @@ func (a *API) closePQCMigrationCampaign(w http.ResponseWriter, r *http.Request) 
 			if err != nil {
 				return projections.PQCMigrationCampaignClosed{}, err
 			}
-			signed, err := a.pqcCampaignSigner.Sign(payload)
+			signed, err := a.pqcCampaignSigner.SignArtifact(jose.ArtifactPQCCampaignClosure, payload)
 			if err != nil {
 				return projections.PQCMigrationCampaignClosed{}, errStatus(http.StatusServiceUnavailable, "sign PQC campaign closure: "+err.Error())
 			}

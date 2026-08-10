@@ -15,15 +15,7 @@ import type { StatusTone } from "@/lib/statusVocab";
 // The panel leads with when the backup was last VERIFIED rather than when one
 // was last taken, because a nightly job that writes a corrupt artifact runs
 // perfectly and reports success every morning.
-export function DRPosturePanel({
-  posture,
-  error,
-  formatPolicy,
-}: {
-  posture: DRPosture | null;
-  error: string | null;
-  formatPolicy: FormatPolicy;
-}) {
+export function DRPosturePanel({ posture, error, formatPolicy }: { posture: DRPosture | null; error: string | null; formatPolicy: FormatPolicy }) {
   const drPosture = posture;
   const drError = error;
   return (
@@ -90,7 +82,7 @@ export function DRPosturePanel({
               <p className="mt-1 max-w-3xl text-caption text-muted-foreground">{translateNow("source.no.drill.yet.j2dr000010")}</p>
             ) : (
               <>
-                <dl className="mt-3 grid gap-4 sm:grid-cols-4">
+                <dl className="mt-3 grid gap-4 sm:grid-cols-5">
                   <div>
                     <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.outcome.j2dr000011")}</dt>
                     <dd>
@@ -123,10 +115,21 @@ export function DRPosturePanel({
                         the one an operator would otherwise quote. */}
                     <dd className="text-title font-semibold tabular-nums">{drPosture.last_drill.rto_seconds}s</dd>
                   </div>
+                  <div>
+                    <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.postgresql.cc52d03280")}</dt>
+                    <dd className="text-title font-semibold tabular-nums">{drPosture.last_drill.postgres_records_restored}</dd>
+                  </div>
                 </dl>
-                {drPosture.last_drill.limitations.length > 0 ? (
+                {/* The signed detail names the exact full-set and recovered
+                    health predicate. Rendering it matters: a green badge by
+                    itself cannot tell an operator whether only events replayed. */}
+                <p className="mt-3 max-w-4xl text-caption text-muted-foreground">{drPosture.last_drill.detail}</p>
+                {(drPosture.last_drill.artifacts_restored ?? []).length > 0 ? (
+                  <p className="mt-2 break-words font-mono text-xs text-muted-foreground">{(drPosture.last_drill.artifacts_restored ?? []).join(" · ")}</p>
+                ) : null}
+                {(drPosture.last_drill.limitations ?? []).length > 0 ? (
                   <ul className="mt-3 list-disc pl-5 text-xs text-muted-foreground">
-                    {drPosture.last_drill.limitations.map((limitation) => (
+                    {(drPosture.last_drill.limitations ?? []).map((limitation) => (
                       <li key={limitation}>{limitation}</li>
                     ))}
                   </ul>

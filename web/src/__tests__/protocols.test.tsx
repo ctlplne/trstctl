@@ -22,6 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     deleteACMEDNS01ProviderConfig: vi.fn(),
     acmeDNS01Preflight: vi.fn(),
     acmeUpstreamAuthorizations: vi.fn(),
+    enrollmentDiagnostics: vi.fn(),
   },
 }));
 
@@ -84,7 +85,9 @@ describe("protocol surface", () => {
     apiMock.deleteACMEDNS01ProviderConfig.mockReset();
     apiMock.acmeDNS01Preflight.mockReset();
     apiMock.acmeUpstreamAuthorizations.mockReset();
+    apiMock.enrollmentDiagnostics.mockReset();
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
+    apiMock.enrollmentDiagnostics.mockResolvedValue({ items: [], unknown_count: 0, guidance: "" });
     apiMock.acmeARIPosture.mockResolvedValue(ariPosture());
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
@@ -293,6 +296,33 @@ describe("protocol surface", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--server https://trstctl.example.test/directory")));
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/Bearer|token|password/i));
     expect(screen.getByText("Copied command without token material.")).toBeInTheDocument();
+  });
+
+  it("renders the authenticated tenant's durable diagnosis, count, timestamp, and remediation", async () => {
+    apiMock.enrollmentDiagnostics.mockResolvedValue({
+      items: [
+        {
+          protocol: "acme",
+          step: "validation",
+          cause: "challenge_not_visible",
+          summary: "The authority could not see the challenge this system published.",
+          remediation: "Check propagation from an external resolver.",
+          actionable: true,
+          observed_at: "2026-08-10T05:10:00Z",
+          count: 3,
+        },
+      ],
+      unknown_count: 0,
+      guidance: "These are durable tenant-scoped events, collapsed into the 200 most recent distinct diagnoses for this tenant.",
+    });
+
+    await renderProtocols();
+
+    expect(await screen.findByRole("heading", { name: "Enrolment failures" })).toBeInTheDocument();
+    expect(screen.getByText(/durable tenant-scoped events/)).toBeInTheDocument();
+    expect(screen.getByText("The authority could not see the challenge this system published.")).toBeInTheDocument();
+    expect(screen.getByText("Check propagation from an external resolver.")).toBeInTheDocument();
+    expect(screen.getByText(/3×, last at/)).toBeInTheDocument();
   });
 
   it("renders ARI publication and scheduler-consumption truth without mutation controls", async () => {

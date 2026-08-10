@@ -3,6 +3,7 @@
 package docs
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -14,6 +15,24 @@ import (
 
 	"trstctl.com/trstctl/internal/servedstatus"
 )
+
+var servedVerdictFields = map[string]bool{
+	"status":       true,
+	"outcome":      true,
+	"verdict":      true,
+	"health_gate":  true,
+	"canary_state": true,
+}
+
+type openAPIVerdictDocument struct {
+	Components struct {
+		Schemas map[string]openAPIVerdictSchema `json:"schemas"`
+	} `json:"components"`
+}
+
+type openAPIVerdictSchema struct {
+	Properties map[string]json.RawMessage `json:"properties"`
+}
 
 // The served-status vocabulary contract (truth-integrity sweep, K2).
 //
@@ -73,6 +92,162 @@ func TestServedStatusVocabularyDoesNotOverstateItself(t *testing.T) {
 		t.Errorf("served status vocabulary overstates itself: %s\n"+
 			"either the code now performs the action (set the flag on the Claim) or the status needs a weaker, honest name",
 			v.Error())
+	}
+}
+
+// TestEveryServedVerdictHasAnEvidenceBinding closes the registration escape
+// hatch in the original K2 guard. The old test named three Go structs by hand;
+// a fourth status-bearing DTO therefore entered the generated API without the
+// guard even seeing it. The generated OpenAPI document is the exhaustive served
+// contract, so every operator-readable verdict field in it must resolve to one
+// closed evidence predicate and one exact production writer declaration.
+func TestEveryServedVerdictHasAnEvidenceBinding(t *testing.T) {
+	t.Parallel()
+	var doc openAPIVerdictDocument
+	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &doc); err != nil {
+		t.Fatalf("decode generated OpenAPI status census: %v", err)
+	}
+	for _, failure := range validateServedEvidenceBindings(doc, servedEvidenceBindings) {
+		t.Error(failure)
+	}
+}
+
+// TestANewServedVerdictFailsClosedUntilBound is the meta-negative proof. It
+// plants a status-bearing DTO in a copy of the generated contract and proves
+// the census rejects it. This test prevents a future refactor from accidentally
+// turning the exhaustive registry back into a best-effort list.
+func TestANewServedVerdictFailsClosedUntilBound(t *testing.T) {
+	t.Parallel()
+	var doc openAPIVerdictDocument
+	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &doc); err != nil {
+		t.Fatalf("decode generated OpenAPI status census: %v", err)
+	}
+	doc.Components.Schemas["FutureUnreviewedVerdict"] = openAPIVerdictSchema{
+		Properties: map[string]json.RawMessage{"status": json.RawMessage(`{"type":"string"}`)},
+	}
+	failures := validateServedEvidenceBindings(doc, servedEvidenceBindings)
+	for _, failure := range failures {
+		if strings.Contains(failure, "FutureUnreviewedVerdict.status has no evidence binding") {
+			return
+		}
+	}
+	t.Fatalf("planted generated verdict escaped the fail-closed evidence census; failures=%v", failures)
+}
+
+func validateServedEvidenceBindings(doc openAPIVerdictDocument, bindings []EvidenceBinding) []string {
+	var failures []string
+	want := map[string]bool{}
+	for schema, shape := range doc.Components.Schemas {
+		for field := range shape.Properties {
+			if servedVerdictFields[field] {
+				want[schema+"."+field] = true
+			}
+		}
+	}
+	if len(want) == 0 {
+		return []string{"generated OpenAPI status census found no verdict fields"}
+	}
+	got := map[string]bool{}
+	for _, binding := range bindings {
+		key := binding.Schema + "." + binding.Field
+		if got[key] {
+			failures = append(failures, "duplicate served-status evidence binding for "+key)
+		}
+		got[key] = true
+		if !want[key] {
+			failures = append(failures, "served-status evidence binding "+key+" is not present in generated OpenAPI")
+		}
+		if !validEvidenceClass(binding.Predicate.Class) {
+			failures = append(failures, "served-status evidence binding "+key+" has unknown evidence class "+strconv.Quote(string(binding.Predicate.Class)))
+		}
+		if strings.TrimSpace(binding.Predicate.Requirement) == "" {
+			failures = append(failures, "served-status evidence binding "+key+" has no required evidence predicate")
+		}
+		if failure := validateProductionWriter(binding.Writer); failure != "" {
+			failures = append(failures, "served-status evidence binding "+key+" "+failure)
+		}
+	}
+	for key := range want {
+		if !got[key] {
+			failures = append(failures, "generated OpenAPI verdict "+key+" has no evidence binding; register its required predicate and production writer before serving it")
+		}
+	}
+	return failures
+}
+
+func validEvidenceClass(class EvidenceClass) bool {
+	switch class {
+	case evidenceEventProjection, evidenceWorkflow, evidenceObservation, evidenceConfiguration, evidenceProtocol, evidenceAttestation:
+		return true
+	default:
+		return false
+	}
+}
+
+// validateProductionWriter requires an exact production Go declaration, not a
+// path that merely exists. The symbol grammar is function, Type.Method, type,
+// var, or const; methods include their receiver so same-named methods cannot be
+// confused.
+func validateProductionWriter(writer string) string {
+	parts := strings.SplitN(writer, ":", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
+		return "must name an exact production symbol as file.go:Type.Method or file.go:function, got " + strconv.Quote(writer)
+	}
+	writerPath, symbol := parts[0], strings.TrimSpace(parts[1])
+	if !strings.HasSuffix(writerPath, ".go") || strings.HasSuffix(writerPath, "_test.go") {
+		return "must point at a non-test Go source file, got " + strconv.Quote(writerPath)
+	}
+	body, err := os.ReadFile(filepath.Join("..", filepath.FromSlash(writerPath)))
+	if err != nil {
+		return "names missing production writer " + strconv.Quote(writerPath) + ": " + err.Error()
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, writerPath, body, 0)
+	if err != nil {
+		return "names unparsable production writer " + strconv.Quote(writerPath) + ": " + err.Error()
+	}
+	for _, decl := range file.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			name := d.Name.Name
+			if d.Recv != nil && len(d.Recv.List) == 1 {
+				name = receiverTypeName(d.Recv.List[0].Type) + "." + name
+			}
+			if name == symbol {
+				return ""
+			}
+		case *ast.GenDecl:
+			for _, spec := range d.Specs {
+				switch s := spec.(type) {
+				case *ast.TypeSpec:
+					if s.Name.Name == symbol {
+						return ""
+					}
+				case *ast.ValueSpec:
+					for _, name := range s.Names {
+						if name.Name == symbol {
+							return ""
+						}
+					}
+				}
+			}
+		}
+	}
+	return "names no declaration " + strconv.Quote(symbol) + " in " + strconv.Quote(writerPath)
+}
+
+func receiverTypeName(expr ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.StarExpr:
+		return receiverTypeName(e.X)
+	case *ast.IndexExpr:
+		return receiverTypeName(e.X)
+	case *ast.IndexListExpr:
+		return receiverTypeName(e.X)
+	default:
+		return ""
 	}
 }
 

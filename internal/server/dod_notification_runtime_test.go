@@ -53,6 +53,7 @@ func dodRunNativeNotification(t *testing.T, entryID, channelName string, externa
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
+	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
 	switch channelName {
 	case "pagerduty":
 		cfg.Notifications.PagerDuty = config.NotificationPagerDuty{
@@ -87,7 +88,8 @@ func dodRunNativeNotification(t *testing.T, entryID, channelName string, externa
 		_ = log.Close()
 		t.Fatal(err)
 	}
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner{}, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
+	signer := dodStartAuthorizedSoftwareSignerProcess(t, t.TempDir())
+	deps, err := buildRunDeps(ctx, cfg, st, log, signer, runSecrets, slog.New(slog.NewTextHandler(io.Discard, nil)), guard)
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("production buildRunDeps: %v", err)

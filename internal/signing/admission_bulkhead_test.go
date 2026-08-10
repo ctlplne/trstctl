@@ -64,15 +64,14 @@ func TestSignerAdmission_BulkheadBoundsConcurrentRPCs(t *testing.T) {
 	// queued, everything else rejected fast.
 	pool := bulkhead.New(bulkhead.Config{Name: bulkhead.SubsystemSigning, Workers: 1, Queue: 0})
 	t.Cleanup(pool.Close)
-	signing.SetSignerAdmission(func(call func() error) error {
+	client.SetAdmission(func(call func() error) error {
 		done := make(chan error, 1)
 		if err := pool.Submit(func() { done <- call() }); err != nil {
 			return err
 		}
 		return <-done
 	})
-	t.Cleanup(func() { signing.SetSignerAdmission(nil) })
-	if !signing.SignerAdmissionInstalled() {
+	if !client.AdmissionInstalled() {
 		t.Fatal("admission hook not installed")
 	}
 
@@ -123,5 +122,47 @@ func TestSignerAdmission_BulkheadBoundsConcurrentRPCs(t *testing.T) {
 			t.Fatalf("serve: %v", err)
 		}
 	default:
+	}
+}
+
+// TestSignerAdmission_IsScopedPerClient reproduces the broad-suite failure that
+// a process-global admission hook caused: one assembled server closed its pool,
+// then an unrelated client's Health calls were rejected by that closed pool.
+// Each connection must own its hook so shutdown and parallel assemblies cannot
+// poison one another.
+func TestSignerAdmission_IsScopedPerClient(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sg-isolation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "s.sock")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	served := make(chan error, 1)
+	go func() {
+		served <- signing.ServeServerWithOptions(ctx, socket, signing.NewServer(), devServeOptions())
+	}()
+
+	clientA := waitReady(t, socket)
+	t.Cleanup(func() { _ = clientA.Close() })
+	clientB := waitReady(t, socket)
+	t.Cleanup(func() { _ = clientB.Close() })
+	pool := bulkhead.New(bulkhead.Config{Name: "closed-client-a", Workers: 1, Queue: 0})
+	pool.Close()
+	clientA.SetAdmission(func(call func() error) error {
+		return pool.Submit(func() { _ = call() })
+	})
+
+	if clientA.Healthy(context.Background()) {
+		t.Fatal("client A unexpectedly bypassed its closed admission pool")
+	}
+	if !clientB.Healthy(context.Background()) {
+		t.Fatal("client B was poisoned by client A's closed admission pool")
+	}
+
+	cancel()
+	if err := <-served; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("serve: %v", err)
 	}
 }

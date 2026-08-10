@@ -25,15 +25,11 @@ type mdmPollScheduleBody struct {
 	Filter          string `json:"filter,omitempty"`
 	IntervalSeconds int    `json:"interval_seconds"`
 	Enabled         bool   `json:"enabled"`
-	// Execution picks the vantage: "" / "control_plane" reads from the brain;
-	// "relay" dispatches an mdm.sync job a network relay claims — the shape
-	// for an on-prem Jamf the control plane cannot reach.
+	// Execution is relay-only. Empty means the safe relay default.
 	Execution string `json:"execution,omitempty"`
 	// RenewalWindowDays overrides the offline-renewal check's standard window.
 	RenewalWindowDays int `json:"renewal_window_days,omitempty"`
-	// AllowPrivateEndpoint + PrivateEgressCIDRs gate a control-plane poll of a
-	// private MDM. The caller needs egress:private, and the CIDRs bound which
-	// ranges the poll may dial. Relay execution needs neither.
+	// Legacy control-plane egress fields remain only for clear rejection.
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
@@ -64,8 +60,8 @@ type mdmPollScheduleList struct {
 
 const mdmPollGuidance = "The poll re-reads the MDM on the tenant's own interval and correlates " +
 	"devices to SCEP-enrolled identities by EXACT serial match. It is read-only by construction. " +
-	"token_ref is a reference (env: or secret://), never the token itself; relay execution requires " +
-	"a secret:// reference because the relay redeems it per attempt from the secret store. No " +
+	"token_ref is a secret:// reference, never the token itself; a network relay redeems it per " +
+	"attempt and the control plane never dials Microsoft Graph or Jamf. No " +
 	"built-in OAuth exchange is performed: the reference must resolve to a bearer the MDM accepts, " +
 	"rotated by the operator's own pipeline."
 
@@ -88,46 +84,25 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 		if err := requireAbsoluteURL(body.BaseURL, "base_url"); err != nil {
 			return 0, nil, err
 		}
-		if strings.TrimSpace(body.TokenRef) == "" {
+		if !strings.HasPrefix(strings.TrimSpace(body.TokenRef), "secret://") {
 			return 0, nil, errStatus(http.StatusBadRequest,
-				"token_ref is required; it is a reference such as secret://mdm/graph-token, never the token itself")
+				"token_ref must be a secret:// reference redeemed by the network relay per attempt")
 		}
 		if body.IntervalSeconds < minMDMPollInterval {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"interval_seconds must be at least 300; device check-in state changes on the order of hours")
 		}
 		execution := strings.TrimSpace(body.Execution)
-		switch execution {
-		case "", "control_plane", "relay":
-		default:
-			return 0, nil, errStatus(http.StatusBadRequest, "execution must be control_plane or relay")
+		if execution != "" && execution != "relay" {
+			return 0, nil, errStatus(http.StatusBadRequest, "execution must be relay; control-plane external polling was removed")
 		}
-		if execution == "relay" && !strings.HasPrefix(strings.TrimSpace(body.TokenRef), "secret://") {
-			// Same custody rule as the CMDB's relay mode, for the same reason.
-			return 0, nil, errStatus(http.StatusBadRequest,
-				"relay execution requires a secret:// token_ref: the relay redeems the token from the "+
-					"secret store per attempt, and an env: reference lives in the control plane's "+
-					"environment, which the relay does not share")
-		}
+		execution = "relay"
 		if body.RenewalWindowDays < 0 || body.RenewalWindowDays > 365 {
 			return 0, nil, errStatus(http.StatusBadRequest, "renewal_window_days must be between 0 (use the standard) and 365")
 		}
 		if body.AllowPrivateEndpoint {
-			if execution == "relay" {
-				return 0, nil, errStatus(http.StatusBadRequest,
-					"allow_private_endpoint is a control-plane egress grant; relay execution reads from "+
-						"inside the segment and needs no hole through the firewall — configure one or the other")
-			}
-			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
-				return 0, nil, err
-			}
-			if len(body.PrivateEgressCIDRs) == 0 {
-				return 0, nil, errStatus(http.StatusBadRequest,
-					"allow_private_endpoint requires private_egress_cidrs naming exactly which ranges the poll may dial")
-			}
-			if err := validatePrivateEgressCIDRs(body.PrivateEgressCIDRs); err != nil {
-				return 0, nil, errWithStatus(http.StatusBadRequest, err)
-			}
+			return 0, nil, errStatus(http.StatusBadRequest,
+				"allow_private_endpoint is a control-plane egress grant and is not valid for relay-only MDM reads")
 		}
 		saved := store.MDMPollSchedule{
 			TenantID: tenantID, MDM: which,
@@ -135,8 +110,8 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			TokenRef:        strings.TrimSpace(body.TokenRef),
 			Filter:          strings.TrimSpace(body.Filter),
 			IntervalSeconds: body.IntervalSeconds, Enabled: body.Enabled,
-			AllowPrivateEndpoint: body.AllowPrivateEndpoint,
-			PrivateEgressCIDRs:   cleanAPIStringList(body.PrivateEgressCIDRs),
+			AllowPrivateEndpoint: false,
+			PrivateEgressCIDRs:   nil,
 			Execution:            execution, RenewalWindowDays: body.RenewalWindowDays,
 		}
 		if err := a.orch.ConfigureMDMPollSchedule(ctx, tenantID, projections.MDMPollConfigured{

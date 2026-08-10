@@ -107,6 +107,7 @@ nav:
       - CA key ceremony: runbooks/key-ceremony.md
       - Incident response: runbooks/incident-response.md
       - Outbox dead letters: runbooks/outbox-dead-letters.md
+      - Outbox reconciliation conflicts: runbooks/outbox-reconciliation-conflicts.md
       - Fleet rollout: runbooks/fleet-rollout.md
       - Fleet rollback: runbooks/fleet-rollback.md
       - Signer recovery: runbooks/signer-recovery.md

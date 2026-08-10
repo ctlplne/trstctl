@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -14,7 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/protocols/scep"
 )
 
@@ -114,6 +117,108 @@ func TestSCEPEnrollRoundTrip(t *testing.T) {
 	}
 	if err := crypto.VerifyLeafSignedByCA(issued, ca.certDER); err != nil {
 		t.Errorf("issued certificate is not signed by the CA: %v", err)
+	}
+}
+
+// AUD-50: a device trace is evidence, not a reconstruction from whichever
+// mutable inventory row happens to have the same serial. The served SCEP path
+// therefore has to emit the join keys and the separate request/issuance facts
+// itself. This is deliberately a real PKIOperation: a helper appending a fixture
+// would prove the consumer while leaving the production writer unreachable.
+func TestSCEPEmitsCorrelatableImmutableAttemptEvidence(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	ca := newRSACA(t)
+	srv := scep.New(scep.Config{
+		Enroller: realEnroller{ca: ca}, CAChainDER: [][]byte{ca.certDER},
+		RACertDER: ca.certDER, RAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		Log: log,
+	})
+	clientCert, clientKey, csrDER := newClientWithTemplate(t, crypto.CertificateRequestTemplate{CommonName: "SERIAL-007"})
+	reqDER, err := crypto.BuildSCEPRequest(csrDER, clientCert, clientKey, ca.certDER, "txn-evidence-7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/scep?operation=PKIOperation", bytes.NewReader(reqDER))
+	srv.ServeHTTP(rec, req.WithContext(scep.WithTenant(req.Context(), "tenant-a")))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PKIOperation status = %d, want 200", rec.Code)
+	}
+
+	seen := map[string]scep.AttemptEvidence{}
+	if err := log.Replay(t.Context(), 0, func(ev events.Event) error {
+		if ev.TenantID != "tenant-a" || (ev.Type != scep.EventRequestObserved && ev.Type != scep.EventIssuanceObserved) {
+			return nil
+		}
+		var evidence scep.AttemptEvidence
+		if err := json.Unmarshal(ev.Data, &evidence); err != nil {
+			return err
+		}
+		seen[ev.Type] = evidence
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	request, ok := seen[scep.EventRequestObserved]
+	if !ok || request.TransactionID != "txn-evidence-7" || request.DeviceSerial != "SERIAL-007" || request.Outcome != "ok" {
+		t.Fatalf("request evidence = %+v, present=%v; want exact transaction/device request fact", request, ok)
+	}
+	issued, ok := seen[scep.EventIssuanceObserved]
+	if !ok || issued.TransactionID != request.TransactionID || issued.DeviceSerial != request.DeviceSerial ||
+		issued.Outcome != "ok" || issued.CertificateSerial == "" || issued.CertificateFingerprint == "" || issued.CertificateNotAfter.IsZero() {
+		t.Fatalf("issuance evidence = %+v, present=%v; want minted-certificate identity and expiry", issued, ok)
+	}
+}
+
+func TestSCEPChallengeFailureRetainsPreIssuanceAttemptEvidence(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	ca := newRSACA(t)
+	srv := scep.New(scep.Config{
+		Enroller: realEnroller{ca: ca}, CAChainDER: [][]byte{ca.certDER},
+		RACertDER: ca.certDER, RAKeyPKCS8: ca.keyPKCS8, ProfileName: "device", Log: log,
+		ChallengeValidator: func(context.Context, scep.ChallengeRequest) error { return errors.New("challenge signature rejected") },
+	})
+	clientCert, clientKey, csrDER := newClientWithTemplate(t, crypto.CertificateRequestTemplate{CommonName: "SERIAL-FAILED"})
+	reqDER, err := crypto.BuildSCEPRequest(csrDER, clientCert, clientKey, ca.certDER, "txn-failed-before-issue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/scep?operation=PKIOperation", bytes.NewReader(reqDER))
+	srv.ServeHTTP(rec, req.WithContext(scep.WithTenant(req.Context(), "tenant-a")))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("PKIOperation status = %d, want 403", rec.Code)
+	}
+
+	var request, issued scep.AttemptEvidence
+	if err := log.Replay(t.Context(), 0, func(ev events.Event) error {
+		if ev.TenantID != "tenant-a" {
+			return nil
+		}
+		switch ev.Type {
+		case scep.EventRequestObserved:
+			return json.Unmarshal(ev.Data, &request)
+		case scep.EventIssuanceObserved:
+			return json.Unmarshal(ev.Data, &issued)
+		default:
+			return nil
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if request.TransactionID == "" || request.DeviceSerial != "SERIAL-FAILED" {
+		t.Fatalf("request evidence lost before challenge failure: %+v", request)
+	}
+	if issued.TransactionID != request.TransactionID || issued.Outcome != "failed" || !strings.Contains(issued.Detail, "challenge") {
+		t.Fatalf("pre-issuance failure evidence = %+v; want failed issuance stage with remediation detail", issued)
 	}
 }
 

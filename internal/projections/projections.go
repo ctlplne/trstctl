@@ -15,11 +15,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
-	"trstctl.com/trstctl/internal/fleet"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -49,6 +49,9 @@ const (
 	// I3: a tenant's standing instruction to read its ITSM for
 	// certificate-request tickets.
 	EventTicketIntakeConfigured = "ticket.intake.configured"
+	// I4: one typed enrollment refusal. The envelope carries tenant_id and time;
+	// PostgreSQL collapses repeats into a tenant-local bounded projection.
+	EventEnrollmentDiagnosticObserved = "enrollment.diagnostic.observed"
 	// I5: one MDM device record joined to one SCEP transaction.
 	EventMDMDeviceCorrelated = "mdm.device.correlated"
 	// I5: a tenant's standing instruction to re-read an MDM.
@@ -159,6 +162,7 @@ const (
 	EventIdentityConnectorTargetBound             = "identity.connector_target_bound"
 	EventConnectorDeliveryRecorded                = "connector.delivery.recorded"
 	EventLifecycleRotationRecorded                = "lifecycle.rotation.recorded"
+	EventOutboxReconciliationConflictRecorded     = "outbox.reconciliation_conflict.recorded"
 	EventIncidentExecutionRecorded                = "incident.execution.recorded"
 	EventIncidentFleetReissuanceRecorded          = "incident.fleet_reissuance.recorded"
 	EventRemediationPlaybookRunRecorded           = "remediation.playbook_run.recorded"
@@ -477,6 +481,17 @@ type IssuanceRequestDecided struct {
 	Reason     string    `json:"reason,omitempty"`
 	IdentityID string    `json:"identity_id,omitempty"`
 	DecidedAt  time.Time `json:"decided_at"`
+}
+
+// EnrollmentDiagnosticObserved is the immutable, secret-free diagnosis emitted
+// at a protocol refusal boundary (I4). Tenant and observation time live in the
+// event envelope so a producer cannot smuggle a different tenant into payload.
+type EnrollmentDiagnosticObserved struct {
+	Protocol    string `json:"protocol"`
+	Step        string `json:"step"`
+	Cause       string `json:"cause"`
+	Summary     string `json:"summary"`
+	Remediation string `json:"remediation,omitempty"`
 }
 
 // OwnershipReconciled is the payload of an ownership.reconciled event (I2).
@@ -1617,6 +1632,30 @@ type LifecycleRotationRecorded struct {
 	CompletedAt            *time.Time `json:"completed_at,omitempty"`
 }
 
+// OutboxReconciliationConflictRecorded is fail-closed recovery evidence. The
+// original command remains in outbox and the refused candidate remains in its
+// source event; this event binds their identities and digests without creating a
+// second executable command.
+type OutboxReconciliationConflictRecorded struct {
+	SourceEventID              string `json:"source_event_id"`
+	SourceEventSequence        uint64 `json:"source_event_sequence"`
+	SourceEventType            string `json:"source_event_type"`
+	IdempotencyKey             string `json:"idempotency_key"`
+	ExistingOutboxID           int64  `json:"existing_outbox_id"`
+	ExistingDestination        string `json:"existing_destination"`
+	ExistingEffectLane         string `json:"existing_effect_lane"`
+	ExistingPayloadSHA256      string `json:"existing_payload_sha256"`
+	ExistingRequiredAgentRole  string `json:"existing_required_agent_role,omitempty"`
+	ExistingRequiredAgentID    string `json:"existing_required_agent_id,omitempty"`
+	CandidateDestination       string `json:"candidate_destination"`
+	CandidateEffectLane        string `json:"candidate_effect_lane"`
+	CandidatePayloadSHA256     string `json:"candidate_payload_sha256"`
+	CandidateRequiredAgentRole string `json:"candidate_required_agent_role,omitempty"`
+	CandidateRequiredAgentID   string `json:"candidate_required_agent_id,omitempty"`
+	Reason                     string `json:"reason"`
+	Status                     string `json:"status"`
+}
+
 // IncidentExecutionRecorded is the payload of incident.execution.recorded. It is
 // operational evidence only: identities, graph impact, delivery receipt ids,
 // rollback references, failed targets, and a signed audit bundle reference.
@@ -1665,6 +1704,8 @@ type IncidentFleetReissuanceRecorded struct {
 	Phase                  string                      `json:"phase"`
 	Reason                 string                      `json:"reason,omitempty"`
 	BatchSize              int                         `json:"batch_size,omitempty"`
+	NextBatchIndex         int                         `json:"next_batch_index,omitempty"`
+	HaltedReason           string                      `json:"halted_reason,omitempty"`
 	Connector              string                      `json:"connector,omitempty"`
 	Target                 string                      `json:"target,omitempty"`
 	GraphImpact            json.RawMessage             `json:"graph_impact"`
@@ -1778,6 +1819,18 @@ type EventProjection interface {
 // duplicates that were already covered by a full replay during boot.
 type WatermarkedEventProjection interface {
 	ReplayWatermark() uint64
+}
+
+// TransactionalEventProjection lets a persistent edition projection join the
+// SAME PostgreSQL transaction as an explicit full read-model rebuild. Without
+// this seam an extension's Reset/Apply would commit on another connection; a
+// later malformed event could roll core back while leaving the edition view
+// truncated or partially replayed. Core knows only this feature-neutral
+// interface and never imports an edition package (AN-9).
+type TransactionalEventProjection interface {
+	EventProjection
+	ResetTx(context.Context, pgx.Tx) error
+	ApplyTx(context.Context, pgx.Tx, eventspec.Event) error
 }
 
 // WithEventProjection registers an additional event-stream projection. Nil
@@ -1986,6 +2039,42 @@ func (p *Projector) resetEventProjections(ctx context.Context) error {
 	return nil
 }
 
+func (p *Projector) resetEventProjectionsTx(ctx context.Context, tx pgx.Tx) error {
+	for _, proj := range p.eventProjections {
+		if proj == nil {
+			continue
+		}
+		if transactional, ok := proj.(TransactionalEventProjection); ok {
+			if err := transactional.ResetTx(ctx, tx); err != nil {
+				return fmt.Errorf("projections: transactionally reset extension %s: %w", proj.Name(), err)
+			}
+			continue
+		}
+		if err := proj.Reset(ctx); err != nil {
+			return fmt.Errorf("projections: reset extension %s: %w", proj.Name(), err)
+		}
+	}
+	return nil
+}
+
+func (p *Projector) applyEventProjectionsTx(ctx context.Context, tx pgx.Tx, event events.Event) error {
+	for _, proj := range p.eventProjections {
+		if proj == nil {
+			continue
+		}
+		if transactional, ok := proj.(TransactionalEventProjection); ok {
+			if err := transactional.ApplyTx(ctx, tx, event); err != nil {
+				return fmt.Errorf("projections: transactionally apply extension %s seq %d: %w", proj.Name(), event.Sequence, err)
+			}
+			continue
+		}
+		if err := proj.Apply(ctx, event); err != nil {
+			return fmt.Errorf("projections: apply extension %s seq %d: %w", proj.Name(), event.Sequence, err)
+		}
+	}
+	return nil
+}
+
 func (p *Projector) rebuildEventProjections(ctx context.Context, log *events.Log) error {
 	if len(p.eventProjections) == 0 {
 		return nil
@@ -2027,6 +2116,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
 	EventTicketIntakeConfigured:                   {1: true},
+	EventEnrollmentDiagnosticObserved:             {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
 	EventMDMPollConfigured:                        {1: true},
 	EventEdgeSegmentPolicySet:                     {1: true},
@@ -2112,6 +2202,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIdentityConnectorTargetBound:             {1: true},
 	EventConnectorDeliveryRecorded:                {1: true},
 	EventLifecycleRotationRecorded:                {1: true},
+	EventOutboxReconciliationConflictRecorded:     {1: true},
 	EventIncidentExecutionRecorded:                {1: true},
 	EventIncidentFleetReissuanceRecorded:          {1: true},
 	EventRemediationPlaybookRunRecorded:           {1: true},
@@ -2307,6 +2398,20 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
 		})
+	case EventEnrollmentDiagnosticObserved:
+		var pl EnrollmentDiagnosticObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if err := validateEnrollmentDiagnosticObserved(pl); err != nil {
+			return err
+		}
+		return p.store.ApplyEnrollmentDiagnosticObservedTx(ctx, tx, store.EnrollmentDiagnostic{
+			TenantID: e.TenantID, Protocol: pl.Protocol, Step: pl.Step, Cause: pl.Cause,
+			Summary: pl.Summary, Remediation: pl.Remediation,
+			Actionable: pl.Cause != "unknown" && strings.TrimSpace(pl.Remediation) != "",
+			ObservedAt: e.Time, SourceEventID: e.ID, EventSequence: e.Sequence,
+		})
 	case EventADCSDatabaseIngested:
 		var pl ADCSDatabaseIngested
 		if err := decode(e, &pl); err != nil {
@@ -2453,7 +2558,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 				IncomingRef: c.IncomingRef, CurrentAttested: c.CurrentAttested,
 			})
 		}
-		return p.store.ApplyOwnershipReconciledTx(ctx, tx, e.TenantID, pl.OwnerID,
+		return p.store.ApplyOwnershipReconciledTx(ctx, tx, e.TenantID, e.ID, pl.OwnerID,
 			fields, pl.Source, pl.SourceRef, pl.ObservedAt, conflicts)
 	case EventCMDBScheduleConfigured:
 		var pl CMDBScheduleConfigured
@@ -3373,6 +3478,33 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			PredecessorFingerprint: pl.PredecessorFingerprint, SuccessorFingerprint: pl.SuccessorFingerprint,
 			RollbackRef: pl.RollbackRef, Error: pl.Error, IdempotencyKey: pl.IdempotencyKey,
 			CreatedAt: e.Time, UpdatedAt: e.Time, CompletedAt: pl.CompletedAt,
+			FirstEventSequence: e.Sequence, LatestEventSequence: e.Sequence,
+		})
+	case EventOutboxReconciliationConflictRecorded:
+		var pl OutboxReconciliationConflictRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.SourceEventID == "" || pl.SourceEventSequence == 0 || pl.SourceEventType == "" ||
+			pl.IdempotencyKey == "" || pl.ExistingOutboxID <= 0 || pl.ExistingDestination == "" ||
+			pl.ExistingEffectLane == "" || len(pl.ExistingPayloadSHA256) != 64 ||
+			pl.CandidateDestination == "" || pl.CandidateEffectLane == "" ||
+			len(pl.CandidatePayloadSHA256) != 64 || pl.Reason == "" || pl.Status != "quarantined" {
+			return fmt.Errorf("projections: %s requires complete immutable old/new command evidence", e.Type)
+		}
+		return p.store.ApplyOutboxReconciliationConflictRecordedTx(ctx, tx, store.OutboxReconciliationConflict{
+			ID: e.ID, TenantID: e.TenantID, SourceEventID: pl.SourceEventID,
+			SourceEventSequence: pl.SourceEventSequence, SourceEventType: pl.SourceEventType,
+			IdempotencyKey: pl.IdempotencyKey, ExistingOutboxID: pl.ExistingOutboxID,
+			ExistingDestination: pl.ExistingDestination, ExistingEffectLane: pl.ExistingEffectLane,
+			ExistingPayloadSHA256:     pl.ExistingPayloadSHA256,
+			ExistingRequiredAgentRole: pl.ExistingRequiredAgentRole,
+			ExistingRequiredAgentID:   pl.ExistingRequiredAgentID,
+			CandidateDestination:      pl.CandidateDestination, CandidateEffectLane: pl.CandidateEffectLane,
+			CandidatePayloadSHA256:     pl.CandidatePayloadSHA256,
+			CandidateRequiredAgentRole: pl.CandidateRequiredAgentRole,
+			CandidateRequiredAgentID:   pl.CandidateRequiredAgentID,
+			Reason:                     pl.Reason, Status: pl.Status, DetectedAt: e.Time,
 		})
 	case EventIncidentExecutionRecorded:
 		var pl IncidentExecutionRecorded
@@ -3412,6 +3544,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.ApplyIncidentFleetReissuanceRecordedTx(ctx, tx, store.IncidentFleetReissuanceRun{
 			ID: pl.ID, TenantID: e.TenantID, IssuerID: pl.IssuerID,
 			Status: pl.Status, Phase: pl.Phase, Reason: pl.Reason, BatchSize: pl.BatchSize,
+			NextBatchIndex: pl.NextBatchIndex, HaltedReason: pl.HaltedReason,
 			Connector: pl.Connector, Target: pl.Target, GraphImpact: pl.GraphImpact,
 			AffectedIdentityIDs: pl.AffectedIdentityIDs, ReplacementIdentityIDs: pl.ReplacementIdentityIDs,
 			RevokedIdentityIDs: pl.RevokedIdentityIDs, ConnectorDeliveryIDs: pl.ConnectorDeliveryIDs,
@@ -4332,7 +4465,7 @@ func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
 			}
 		}
 		return p.store.RebuildReadModelTx(readCtx, func(tx pgx.Tx) error {
-			if err := p.resetEventProjections(readCtx); err != nil {
+			if err := p.resetEventProjectionsTx(readCtx, tx); err != nil {
 				return err
 			}
 			// A full rebuild re-derives from sequence 0, so the projection checkpoint
@@ -4346,7 +4479,7 @@ func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
 				if err := p.applyForRebuild(readCtx, tx, e); err != nil {
 					return err
 				}
-				return p.applyEventProjections(readCtx, e)
+				return p.applyEventProjectionsTx(readCtx, tx, e)
 			}); err != nil {
 				return err
 			}

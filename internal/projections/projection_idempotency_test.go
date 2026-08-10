@@ -5,6 +5,7 @@ package projections_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,421 @@ func TestConnectorReceiptProjectionConvergesByOutbox(t *testing.T) {
 	}
 	if len(receipts) != 1 || receipts[0].Status != "delivered" || receipts[0].Attempts != 2 {
 		t.Fatalf("connector receipts = %+v, want one converged delivered receipt", receipts)
+	}
+}
+
+// TestRotationRunProjectionConvergesWithInlineTailRace reproduces AUD-103's
+// double-writer order. The inline projector has already inserted terminal
+// evidence with one payload ID but has not committed; the durable tail then
+// reaches the older running event, whose different payload ID names the same
+// tenant/outbox operation. PostgreSQL must serialize the writers and the sink
+// must converge on one terminal row instead of surfacing the outbox uniqueness
+// constraint or letting the stale running event win.
+func TestRotationRunProjectionConvergesWithInlineTailRace(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+
+	const (
+		runningID  = "10000000-0000-4000-8000-000000000090"
+		terminalID = "10000000-0000-4000-8000-000000000091"
+		identityID = "10000000-0000-4000-8000-000000000092"
+	)
+	outboxID := int64(84)
+	runningAt := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+	completedAt := runningAt.Add(time.Second)
+	runningEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, projections.LifecycleRotationRecorded{
+		ID: runningID, IdentityID: identityID, OutboxID: &outboxID, Status: "running",
+		Trigger: "scheduled", Reason: "renewal window", PredecessorFingerprint: "sha256:old",
+		IdempotencyKey: "lifecycle.renew:race",
+	})
+	runningEvent.Sequence = 329
+	runningEvent.Time = runningAt
+	terminal := store.RotationRun{
+		ID: terminalID, TenantID: tenantA, IdentityID: identityID, OutboxID: &outboxID,
+		Status: "succeeded", Trigger: "scheduled", Reason: "renewal window",
+		PredecessorFingerprint: "sha256:old", SuccessorFingerprint: "sha256:new",
+		RollbackRef: "restore sha256:old", IdempotencyKey: "lifecycle.renew:race",
+		CreatedAt: completedAt, UpdatedAt: completedAt, CompletedAt: &completedAt,
+		FirstEventSequence: 333, LatestEventSequence: 333,
+	}
+
+	rowInserted := make(chan struct{})
+	releaseCommit := make(chan struct{})
+	inlineDone := make(chan error, 1)
+	go func() {
+		inlineDone <- s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			if err := s.ApplyRotationRunRecordedTx(ctx, tx, terminal); err != nil {
+				return err
+			}
+			close(rowInserted)
+			<-releaseCommit
+			return nil
+		})
+	}()
+	select {
+	case <-rowInserted:
+	case err := <-inlineDone:
+		t.Fatalf("inline terminal projection insert: %v", err)
+	}
+
+	tailDone := make(chan error, 1)
+	go func() { tailDone <- projections.New(s).Apply(ctx, runningEvent) }()
+	select {
+	case err := <-tailDone:
+		close(releaseCommit)
+		t.Fatalf("tail projection returned before the inline uniqueness lock committed: %v", err)
+	case <-time.After(100 * time.Millisecond):
+		// The older tail transaction is waiting on the inline outbox identity.
+	}
+	close(releaseCommit)
+	if err := <-inlineDone; err != nil {
+		t.Fatalf("inline terminal projection commit: %v", err)
+	}
+	if err := <-tailDone; err != nil {
+		t.Fatalf("tail running projection after inline commit: %v", err)
+	}
+
+	runs, err := s.ListRotationRunsPage(ctx, tenantA, "", store.ZeroUUID, 10)
+	if err != nil {
+		t.Fatalf("list rotation runs: %v", err)
+	}
+	if len(runs) != 1 || runs[0].ID != runningID || runs[0].Status != "succeeded" || runs[0].OutboxID == nil ||
+		*runs[0].OutboxID != outboxID || runs[0].SuccessorFingerprint != "sha256:new" ||
+		!runs[0].CreatedAt.Equal(runningAt) || !runs[0].UpdatedAt.Equal(completedAt) ||
+		runs[0].CompletedAt == nil || !runs[0].CompletedAt.Equal(completedAt) ||
+		runs[0].FirstEventSequence != runningEvent.Sequence || runs[0].LatestEventSequence != terminal.LatestEventSequence {
+		t.Fatalf("racing rotation projections = %+v, want one converged terminal run", runs)
+	}
+}
+
+// TestRotationRunProjectionConvergesByOutbox pins the tenant/outbox natural
+// identity independently of the payload row ID. A worker may emit a fresh UUID
+// for the terminal observation, but it still describes one tenant-local outbox
+// operation. The same numeric outbox ID in another tenant remains a separate
+// run under RLS.
+func TestRotationRunProjectionConvergesByOutbox(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	for _, tenant := range []struct{ id, name string }{{tenantA, "Acme"}, {tenantB, "Beta"}} {
+		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenant.id, Name: tenant.name}); err != nil {
+			t.Fatalf("seed tenant %s: %v", tenant.id, err)
+		}
+	}
+	proj := projections.New(s)
+	outboxID := int64(85)
+	baseTime := time.Date(2026, 8, 10, 12, 5, 0, 0, time.UTC)
+	completedAt := baseTime.Add(time.Second)
+	running := projections.LifecycleRotationRecorded{
+		ID:         "10000000-0000-4000-8000-000000000093",
+		IdentityID: "10000000-0000-4000-8000-000000000094", OutboxID: &outboxID,
+		Status: "running", Trigger: "scheduled", Reason: "renewal window",
+		PredecessorFingerprint: "sha256:a-old", IdempotencyKey: "lifecycle.renew:a",
+	}
+	runningEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, running)
+	runningEvent.Sequence = 1
+	runningEvent.Time = baseTime
+	if err := proj.Apply(ctx, runningEvent); err != nil {
+		t.Fatalf("apply tenant A running event: %v", err)
+	}
+	if err := proj.Apply(ctx, runningEvent); err != nil {
+		t.Fatalf("replay exact tenant A running event: %v", err)
+	}
+
+	succeeded := running
+	succeeded.ID = "10000000-0000-4000-8000-000000000095"
+	succeeded.Status = "succeeded"
+	succeeded.SuccessorFingerprint = "sha256:a-new"
+	succeeded.RollbackRef = "restore sha256:a-old"
+	succeeded.CompletedAt = &completedAt
+	succeededEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, succeeded)
+	succeededEvent.Sequence = 2
+	succeededEvent.Time = completedAt
+	if err := proj.Apply(ctx, succeededEvent); err != nil {
+		t.Fatalf("apply tenant A terminal event through outbox identity: %v", err)
+	}
+	if err := proj.Apply(ctx, succeededEvent); err != nil {
+		t.Fatalf("replay exact tenant A terminal event: %v", err)
+	}
+
+	tenantBEvent := projectorEventForTenant(t, tenantB, projections.EventLifecycleRotationRecorded, projections.LifecycleRotationRecorded{
+		ID:         "20000000-0000-4000-8000-000000000093",
+		IdentityID: "20000000-0000-4000-8000-000000000094", OutboxID: &outboxID,
+		Status: "running", Trigger: "manual", Reason: "operator request",
+		PredecessorFingerprint: "sha256:b-old", IdempotencyKey: "lifecycle.renew:b",
+	})
+	tenantBEvent.Sequence = 3
+	tenantBEvent.Time = baseTime
+	if err := proj.Apply(ctx, tenantBEvent); err != nil {
+		t.Fatalf("apply tenant B event sharing numeric outbox id: %v", err)
+	}
+
+	runsA, err := s.ListRotationRunsPage(ctx, tenantA, "", store.ZeroUUID, 10)
+	if err != nil {
+		t.Fatalf("list tenant A rotation runs: %v", err)
+	}
+	runsB, err := s.ListRotationRunsPage(ctx, tenantB, "", store.ZeroUUID, 10)
+	if err != nil {
+		t.Fatalf("list tenant B rotation runs: %v", err)
+	}
+	if len(runsA) != 1 || runsA[0].Status != "succeeded" || runsA[0].ID != running.ID ||
+		runsA[0].SuccessorFingerprint != succeeded.SuccessorFingerprint {
+		t.Fatalf("tenant A rotation runs = %+v, want one outbox-converged terminal row", runsA)
+	}
+	if len(runsB) != 1 || runsB[0].Status != "running" || runsB[0].IdentityID == runsA[0].IdentityID {
+		t.Fatalf("tenant B rotation runs = %+v, want its independent running row", runsB)
+	}
+}
+
+// TestRotationRunProjectionRejectsBindingDrift proves that convergence is not
+// a last-writer-wins rewrite. Either uniqueness boundary may locate the row,
+// but a changed command binding or a changed same-state observation must fail
+// with the repository's stable idempotency-domain error.
+func TestRotationRunProjectionRejectsBindingDrift(t *testing.T) {
+	outboxID := int64(86)
+	otherOutboxID := int64(87)
+	completedAt := time.Date(2026, 8, 10, 12, 10, 1, 0, time.UTC)
+	base := projections.LifecycleRotationRecorded{
+		ID:         "10000000-0000-4000-8000-000000000096",
+		IdentityID: "10000000-0000-4000-8000-000000000097", OutboxID: &outboxID,
+		Status: "running", Trigger: "scheduled", Reason: "renewal window",
+		PredecessorFingerprint: "sha256:binding-old", IdempotencyKey: "lifecycle.renew:binding",
+	}
+	tests := []struct {
+		name   string
+		mutate func(*projections.LifecycleRotationRecorded)
+	}{
+		{name: "same row id changes outbox", mutate: func(candidate *projections.LifecycleRotationRecorded) {
+			candidate.OutboxID = &otherOutboxID
+		}},
+		{name: "same outbox changes identity", mutate: func(candidate *projections.LifecycleRotationRecorded) {
+			candidate.ID = "10000000-0000-4000-8000-000000000098"
+			candidate.IdentityID = "10000000-0000-4000-8000-000000000099"
+		}},
+		{name: "same outbox changes trigger", mutate: func(candidate *projections.LifecycleRotationRecorded) {
+			candidate.ID = "10000000-0000-4000-8000-000000000098"
+			candidate.Trigger = "manual"
+		}},
+		{name: "same outbox changes reason", mutate: func(candidate *projections.LifecycleRotationRecorded) {
+			candidate.ID = "10000000-0000-4000-8000-000000000098"
+			candidate.Reason = "changed reason"
+		}},
+		{name: "same outbox changes predecessor", mutate: func(candidate *projections.LifecycleRotationRecorded) {
+			candidate.ID = "10000000-0000-4000-8000-000000000098"
+			candidate.PredecessorFingerprint = "sha256:different-old"
+		}},
+		{name: "same outbox changes idempotency key", mutate: func(candidate *projections.LifecycleRotationRecorded) {
+			candidate.ID = "10000000-0000-4000-8000-000000000098"
+			candidate.IdempotencyKey = "lifecycle.renew:different"
+		}},
+		{name: "same running state changes outcome fields", mutate: func(candidate *projections.LifecycleRotationRecorded) {
+			candidate.ID = "10000000-0000-4000-8000-000000000098"
+			candidate.SuccessorFingerprint = "sha256:impossible-running-successor"
+			candidate.CompletedAt = &completedAt
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s := newStore(t)
+			ctx := context.Background()
+			if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+				t.Fatalf("seed tenant: %v", err)
+			}
+			proj := projections.New(s)
+			first := projectorEvent(t, projections.EventLifecycleRotationRecorded, base)
+			first.Sequence = 10
+			first.Time = time.Date(2026, 8, 10, 12, 10, 0, 0, time.UTC)
+			if err := proj.Apply(ctx, first); err != nil {
+				t.Fatalf("apply original rotation run: %v", err)
+			}
+
+			candidate := base
+			test.mutate(&candidate)
+			candidateEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, candidate)
+			candidateEvent.Sequence = first.Sequence
+			candidateEvent.Time = first.Time
+			err := proj.Apply(ctx, candidateEvent)
+			if !errors.Is(err, store.ErrIdempotencyConflict) {
+				t.Fatalf("binding drift error = %v, want ErrIdempotencyConflict", err)
+			}
+		})
+	}
+}
+
+// TestRotationRunProjectionDoesNotRegressTerminalState proves that a delayed
+// tail replay cannot erase either successful or failed terminal evidence. The
+// binding is still validated, but an older running snapshot becomes a no-op.
+func TestRotationRunProjectionDoesNotRegressTerminalState(t *testing.T) {
+	for _, terminalStatus := range []string{"succeeded", "failed"} {
+		t.Run(terminalStatus, func(t *testing.T) {
+			s := newStore(t)
+			ctx := context.Background()
+			if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+				t.Fatalf("seed tenant: %v", err)
+			}
+			proj := projections.New(s)
+			outboxID := int64(88)
+			runningAt := time.Date(2026, 8, 10, 12, 15, 0, 0, time.UTC)
+			completedAt := runningAt.Add(time.Second)
+			terminal := projections.LifecycleRotationRecorded{
+				ID:         "10000000-0000-4000-8000-000000000100",
+				IdentityID: "10000000-0000-4000-8000-000000000101", OutboxID: &outboxID,
+				Status: terminalStatus, Trigger: "scheduled", Reason: "renewal window",
+				PredecessorFingerprint: "sha256:terminal-old", IdempotencyKey: "lifecycle.renew:terminal",
+				CompletedAt: &completedAt,
+			}
+			if terminalStatus == "succeeded" {
+				terminal.SuccessorFingerprint = "sha256:terminal-new"
+				terminal.RollbackRef = "restore sha256:terminal-old"
+			} else {
+				terminal.Error = "connector exhausted retries"
+			}
+			terminalEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, terminal)
+			terminalEvent.Sequence = 20
+			terminalEvent.Time = completedAt
+			if err := proj.Apply(ctx, terminalEvent); err != nil {
+				t.Fatalf("apply terminal rotation event: %v", err)
+			}
+
+			stale := terminal
+			stale.Status = "running"
+			stale.SuccessorFingerprint = ""
+			stale.RollbackRef = ""
+			stale.Error = ""
+			stale.CompletedAt = nil
+			staleEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, stale)
+			staleEvent.Sequence = 19
+			staleEvent.Time = runningAt
+			if err := proj.Apply(ctx, staleEvent); err != nil {
+				t.Fatalf("apply stale running replay: %v", err)
+			}
+
+			got, err := s.GetRotationRun(ctx, tenantA, terminal.ID)
+			if err != nil {
+				t.Fatalf("get terminal rotation run: %v", err)
+			}
+			if got.Status != terminalStatus || got.SuccessorFingerprint != terminal.SuccessorFingerprint ||
+				got.RollbackRef != terminal.RollbackRef || got.Error != terminal.Error ||
+				got.CompletedAt == nil || !got.CompletedAt.Equal(completedAt) || !got.UpdatedAt.Equal(completedAt) {
+				t.Fatalf("terminal rotation after stale replay = %+v, want unchanged %s evidence", got, terminalStatus)
+			}
+
+			// A failed delivery is recorded on every attempt, while the outbox is
+			// allowed to retry. Only an older running event is stale: a newer retry
+			// must reopen failed evidence so a later success can replace it.
+			if terminalStatus == "failed" {
+				retryAt := completedAt.Add(time.Second)
+				retryEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, stale)
+				retryEvent.Sequence = 21
+				retryEvent.Time = retryAt
+				if err := proj.Apply(ctx, retryEvent); err != nil {
+					t.Fatalf("apply newer running retry: %v", err)
+				}
+				retrying, err := s.GetRotationRun(ctx, tenantA, terminal.ID)
+				if err != nil {
+					t.Fatalf("get retried rotation run: %v", err)
+				}
+				if retrying.Status != "running" || retrying.Error != "" || retrying.CompletedAt != nil ||
+					!retrying.UpdatedAt.Equal(retryAt) {
+					t.Fatalf("newer retry did not reopen failed run: %+v", retrying)
+				}
+			}
+		})
+	}
+}
+
+// TestRotationRunProjectionOrdersByLocalStreamSequence proves the immutable
+// local JetStream order, not a producer/import wall clock, decides which
+// lifecycle observation is current. Federation preserves source timestamps and
+// clocks can step backwards, while the local sequence is always monotonic.
+func TestRotationRunProjectionOrdersByLocalStreamSequence(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	proj := projections.New(s)
+	outboxID := int64(89)
+	identityID := "10000000-0000-4000-8000-000000000102"
+	runID := "10000000-0000-4000-8000-000000000103"
+	lateClock := time.Date(2026, 8, 10, 14, 0, 0, 0, time.UTC)
+	earlyClock := lateClock.Add(-time.Hour)
+
+	running := projections.LifecycleRotationRecorded{
+		ID: runID, IdentityID: identityID, OutboxID: &outboxID, Status: "running",
+		Trigger: "scheduled", Reason: "renewal window",
+		PredecessorFingerprint: "sha256:sequence-old", IdempotencyKey: "lifecycle.renew:sequence",
+	}
+	runningEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, running)
+	runningEvent.Sequence = 100
+	runningEvent.Time = lateClock
+	if err := proj.Apply(ctx, runningEvent); err != nil {
+		t.Fatalf("apply running event: %v", err)
+	}
+
+	completedAt := earlyClock
+	succeeded := running
+	succeeded.Status = "succeeded"
+	succeeded.SuccessorFingerprint = "sha256:sequence-new"
+	succeeded.RollbackRef = "restore sha256:sequence-old"
+	succeeded.CompletedAt = &completedAt
+	succeededEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, succeeded)
+	succeededEvent.Sequence = 101
+	succeededEvent.Time = earlyClock // later stream event, deliberately older wall clock
+	if err := proj.Apply(ctx, succeededEvent); err != nil {
+		t.Fatalf("apply later-sequence success with older clock: %v", err)
+	}
+
+	got, err := s.GetRotationRun(ctx, tenantA, runID)
+	if err != nil {
+		t.Fatalf("get sequence-ordered run: %v", err)
+	}
+	if got.Status != "succeeded" || got.SuccessorFingerprint != succeeded.SuccessorFingerprint ||
+		got.CompletedAt == nil || !got.CompletedAt.Equal(completedAt) {
+		t.Fatalf("sequence-ordered rotation = %+v, want later-sequence success", got)
+	}
+}
+
+// TestRotationRunProjectionSucceededCannotReopen proves a later event cannot
+// turn a completed external effect back into running authority. Failed attempts
+// may retry; succeeded evidence is final for its immutable outbox binding.
+func TestRotationRunProjectionSucceededCannotReopen(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	proj := projections.New(s)
+	outboxID := int64(90)
+	completedAt := time.Date(2026, 8, 10, 15, 0, 0, 0, time.UTC)
+	terminal := projections.LifecycleRotationRecorded{
+		ID:         "10000000-0000-4000-8000-000000000104",
+		IdentityID: "10000000-0000-4000-8000-000000000105", OutboxID: &outboxID,
+		Status: "succeeded", Trigger: "scheduled", Reason: "renewal window",
+		PredecessorFingerprint: "sha256:final-old", SuccessorFingerprint: "sha256:final-new",
+		RollbackRef: "restore sha256:final-old", IdempotencyKey: "lifecycle.renew:final",
+		CompletedAt: &completedAt,
+	}
+	terminalEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, terminal)
+	terminalEvent.Sequence = 200
+	terminalEvent.Time = completedAt
+	if err := proj.Apply(ctx, terminalEvent); err != nil {
+		t.Fatalf("apply succeeded event: %v", err)
+	}
+
+	reopened := terminal
+	reopened.Status = "running"
+	reopened.SuccessorFingerprint = ""
+	reopened.RollbackRef = ""
+	reopened.CompletedAt = nil
+	reopenedEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, reopened)
+	reopenedEvent.Sequence = 201
+	reopenedEvent.Time = completedAt.Add(time.Second)
+	if err := proj.Apply(ctx, reopenedEvent); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("later running after success error = %v, want ErrIdempotencyConflict", err)
 	}
 }
 

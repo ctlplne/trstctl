@@ -42,9 +42,13 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxExternalCA, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxConnectors, Workers: 2, Queue: 0},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxSecrets, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxSecretSync, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxManagedKeys, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxTransparency, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxCodeSigning, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxNotifications, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxTenantSeal, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxFleet, Workers: 1, Queue: 4},
 	)
 
 	connectorStarted := make(chan string, 2)
@@ -108,17 +112,23 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 		t.Fatalf("enqueue family rows: %v", err)
 	}
 
-	// Submit until both connector workers are physically inside external calls.
-	// A zero-length connector queue makes any later tick reject immediately.
+	// One dispatcher tick must fan out to both configured connector workers. The
+	// old test called dispatchOnce every 10ms while waiting, which also submitted
+	// empty sweeps to every OTHER family on every iteration. Under race/coverage
+	// that test-generated database storm could delay the second connector claim
+	// or keep unrelated pools non-quiescent, measuring the polling loop instead
+	// of the production dispatcher (whose wake channel coalesces bursts).
+	//
+	// Requiring one tick is stronger: if worker-count fan-out or SKIP LOCKED claim
+	// concurrency breaks, right_size never starts and this fails directly.
+	srv.dispatchOnce(ctx)
 	started := map[string]bool{}
 	deadline := time.NewTimer(5 * time.Second)
 	defer deadline.Stop()
 	for len(started) < 2 {
-		srv.dispatchOnce(ctx)
 		select {
 		case destination := <-connectorStarted:
 			started[destination] = true
-		case <-time.After(10 * time.Millisecond):
 		case <-deadline.C:
 			t.Fatalf("only connector calls %v started; want deploy and right_size occupying both workers", started)
 		}
@@ -211,6 +221,7 @@ func waitForNonConnectorOutboxPools(t *testing.T, set *bulkhead.Set) {
 			bulkhead.SubsystemOutboxManagedKeys,
 			bulkhead.SubsystemOutboxTransparency,
 			bulkhead.SubsystemOutboxNotifications,
+			bulkhead.SubsystemOutboxFleet,
 		} {
 			stats := set.Pool(name).Stats()
 			if stats.Completed != stats.Submitted || stats.Queued != 0 {
@@ -248,19 +259,20 @@ func waitForOutboxStatus(t *testing.T, outbox *orchestrator.Outbox, tenantID str
 
 func TestOutboxDispatchFamiliesAreDisjointAndComplete(t *testing.T) {
 	cases := map[string]string{
-		"external-ca.issue":       bulkhead.SubsystemOutboxExternalCA,
-		"connector.deploy":        bulkhead.SubsystemOutboxConnectors,
-		"connector.right_size":    bulkhead.SubsystemOutboxConnectors,
-		"dynsecret.issue":         bulkhead.SubsystemOutboxSecrets,
-		"secret.sync.vault":       bulkhead.SubsystemOutboxSecretSync,
-		"managedkey.command":      bulkhead.SubsystemOutboxManagedKeys,
-		"transparency.rekor":      bulkhead.SubsystemOutboxTransparency,
-		"codesign.command":        bulkhead.SubsystemOutboxCodeSigning,
-		"notification.expiry":     bulkhead.SubsystemOutboxNotifications,
-		"tenantseal.seal":         bulkhead.SubsystemOutboxTenantSeal,
-		"revocation.publish":      bulkhead.SubsystemOutbox,
-		"acme.dns01.present":      bulkhead.SubsystemOutbox,
-		"third-party.destination": bulkhead.SubsystemOutbox,
+		"external-ca.issue":               bulkhead.SubsystemOutboxExternalCA,
+		"connector.deploy":                bulkhead.SubsystemOutboxConnectors,
+		"connector.right_size":            bulkhead.SubsystemOutboxConnectors,
+		"dynsecret.issue":                 bulkhead.SubsystemOutboxSecrets,
+		"secret.sync.vault":               bulkhead.SubsystemOutboxSecretSync,
+		"managedkey.command":              bulkhead.SubsystemOutboxManagedKeys,
+		"transparency.rekor":              bulkhead.SubsystemOutboxTransparency,
+		"codesign.command":                bulkhead.SubsystemOutboxCodeSigning,
+		"notification.expiry":             bulkhead.SubsystemOutboxNotifications,
+		"tenantseal.seal":                 bulkhead.SubsystemOutboxTenantSeal,
+		"incident.fleet_reissuance.batch": bulkhead.SubsystemOutboxFleet,
+		"revocation.publish":              bulkhead.SubsystemOutbox,
+		"acme.dns01.present":              bulkhead.SubsystemOutbox,
+		"third-party.destination":         bulkhead.SubsystemOutbox,
 	}
 	for destination, wantPool := range cases {
 		matches := make([]string, 0, 1)

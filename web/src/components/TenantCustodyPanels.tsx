@@ -334,11 +334,11 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
             <span className="font-semibold text-foreground">{t("platform.tenantSeal.recovery")}: </span>
             {status.recovery}
           </div>
-          {status.last_transition_evidence_refs.length > 0 ? (
+          {(status.last_transition_evidence_refs ?? []).length > 0 ? (
             <div>
               <h3 className="text-sm font-semibold">{t("platform.tenantSeal.evidence")}</h3>
               <ul className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                {status.last_transition_evidence_refs.map((ref) => (
+                {(status.last_transition_evidence_refs ?? []).map((ref) => (
                   <li key={ref} className="break-all font-mono">
                     {ref}
                   </li>
@@ -549,9 +549,7 @@ export function UsageEvidencePanel() {
             </ul>
           )}
           <p className="text-caption text-muted-foreground">
-            {doc.signature?.jws
-              ? t("platform.usageEvidence.signed", { keyId: doc.signature.key_id ?? "" })
-              : t("platform.usageEvidence.unsigned")}
+            {doc.signature?.jws ? t("platform.usageEvidence.signed", { keyId: doc.signature.key_id ?? "" }) : t("platform.usageEvidence.unsigned")}
           </p>
           <p className="text-caption text-muted-foreground">
             {t("platform.usageEvidence.digest")}: <code className="font-mono">{doc.digest}</code>

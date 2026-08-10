@@ -86,6 +86,9 @@ type Supervisor struct {
 	lastExit ExitSummary
 
 	restarts atomic.Uint64 // cumulative relaunches after the first healthy start (SF.3 telemetry)
+	// admission is copied to each replacement Client so a signer restart cannot
+	// silently bypass the control plane's configured signing bulkhead.
+	admission atomic.Value // admissionHook
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -150,6 +153,10 @@ func (s *Supervisor) Close() {
 }
 
 func (s *Supervisor) set(c *Client, pid int) {
+	if c != nil {
+		hook, _ := s.admission.Load().(admissionHook)
+		c.SetAdmission(hook.admit)
+	}
 	s.mu.Lock()
 	old := s.client
 	s.client = c
@@ -157,6 +164,18 @@ func (s *Supervisor) set(c *Client, pid int) {
 	s.mu.Unlock()
 	if old != nil && old != c {
 		_ = old.Close()
+	}
+}
+
+// SetAdmission binds both the current connection and every post-restart
+// replacement to the same control-plane admission hook.
+func (s *Supervisor) SetAdmission(admit func(call func() error) error) {
+	s.admission.Store(admissionHook{admit: admit})
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+	if client != nil {
+		client.SetAdmission(admit)
 	}
 }
 

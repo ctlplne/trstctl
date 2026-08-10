@@ -155,7 +155,8 @@ startup, still under the advisory lock.
     ```
 
 3. **Back up** before applying anything (the gate). Use the full DR artifact so
-   the event log, independent PostgreSQL state, signer key store, audit key,
+   the event log, independent PostgreSQL state, signer key store (including the
+   sealed audit-evidence key),
    signer authorization secret, CA certificate, and manifest hashes move together:
 
     ```bash

@@ -39,6 +39,9 @@ export default defineConfig({
     // measured compressed — this raw-size warning threshold sits just above
     // the entry so a NEW oversized chunk still trips it. Follow-up tracked in
     // CHANGELOG: per-locale catalog splitting would shrink the entry further.
+    // The all-JS ratchet was re-pinned at 640 kB after the 2026-08-09 audit
+    // added operator evidence surfaces and complete es/de copy; the measured
+    // 631.59 kB build retains an 8 kB regression margin.
     chunkSizeWarningLimit: 1300,
   },
   server: {

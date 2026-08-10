@@ -101,6 +101,17 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 
 	// Unprivileged runtime + an entrypoint.
 	mustContainAny(t, "Dockerfile non-root user", df, "nonroot", "USER 65532")
+	runtimeStart := strings.Index(df, "FROM ${BASE_IMAGE} AS runtime")
+	runtimeBlock := ""
+	if runtimeStart >= 0 {
+		remainder := df[runtimeStart:]
+		if runtimeEnd := strings.Index(remainder[1:], "\nFROM "); runtimeEnd >= 0 {
+			runtimeBlock = remainder[:runtimeEnd+1]
+		}
+	}
+	if !strings.Contains(runtimeBlock, "\nWORKDIR /\n") {
+		t.Error("Dockerfile runtime must set WORKDIR / so relative data/* defaults resolve inside the persistent /data mount")
+	}
 	mustContainAll(t, "Dockerfile entrypoint", df, "ENTRYPOINT")
 	mustContainAll(t, "Dockerfile builds the web console before Go embeds it", df,
 		"FROM ${WEB_BUILD_IMAGE} AS web-build",

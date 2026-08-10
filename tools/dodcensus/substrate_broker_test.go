@@ -19,6 +19,7 @@ func TestBrokerDynamicInputAllowlistsAreExact(t *testing.T) {
 		expected runtimeExpectation
 		want     string
 	}{
+		{runtimeExpectation{ID: "external_ca.adcs"}, "TRSTCTL_ADCS_TLS_SERVER_CERT_FILE,TRSTCTL_ADCS_TLS_SERVER_KEY_FILE"},
 		{runtimeExpectation{ID: "external_ca.entrust"}, "TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE,TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE,TRSTCTL_ENTRUST_MTLS_CLIENT_CA_FILE"},
 		{runtimeExpectation{ID: "code_signing.default"}, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE"},
 		{runtimeExpectation{ID: "hsm_kms.tpm2", SubstrateID: "managed_key_custody"}, "TRSTCTL_HSM_PROOF_IMAGE,TRSTCTL_HSM_PROOF_NETWORK"},
@@ -40,6 +41,9 @@ func TestBrokerDynamicFilesStayInsideReceiptBoundary(t *testing.T) {
 	}
 	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE", publicFile); err != nil {
 		t.Fatalf("valid public input rejected: %v", err)
+	}
+	if err := validateBrokerDynamicFile(receiptDir, "TRSTCTL_ADCS_TLS_SERVER_CERT_FILE", publicFile); err != nil {
+		t.Fatalf("valid AD CS public input rejected: %v", err)
 	}
 
 	outside := writeBrokerTestFile(t, t.TempDir(), "outside.pem", 0o600, []byte("outside"))
@@ -169,12 +173,24 @@ func TestBrokerDynamicFileRejectsSymlinkedAndWritablePathComponents(t *testing.T
 
 func TestBrokerValidatesEntrustAndRekorInputsBeforeLaunch(t *testing.T) {
 	receiptDir := privateBrokerTestDir(t)
+	adcsInputs := map[string]string{
+		"TRSTCTL_ADCS_TLS_SERVER_CERT_FILE": writeBrokerTestFile(t, receiptDir, "adcs-server.pem", 0o644, []byte("cert")),
+		"TRSTCTL_ADCS_TLS_SERVER_KEY_FILE":  writeBrokerTestFile(t, receiptDir, "adcs-server-key.pem", 0o600, []byte("key")),
+	}
+	broker := newInMemorySubstrateBroker(t.TempDir(), receiptDir)
+	if err := broker.validateDynamicInputs(context.Background(), runtimeExpectation{ID: "external_ca.adcs"}, adcsInputs); err != nil {
+		t.Fatalf("valid AD CS inputs rejected: %v", err)
+	}
+	delete(adcsInputs, "TRSTCTL_ADCS_TLS_SERVER_KEY_FILE")
+	if err := broker.validateDynamicInputs(context.Background(), runtimeExpectation{ID: "external_ca.adcs"}, adcsInputs); err == nil {
+		t.Fatal("incomplete AD CS input set passed")
+	}
+
 	inputs := map[string]string{
 		"TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE": writeBrokerTestFile(t, receiptDir, "server.pem", 0o644, []byte("cert")),
 		"TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE":  writeBrokerTestFile(t, receiptDir, "server-key.pem", 0o600, []byte("key")),
 		"TRSTCTL_ENTRUST_MTLS_CLIENT_CA_FILE":   writeBrokerTestFile(t, receiptDir, "client-ca.pem", 0o644, []byte("ca")),
 	}
-	broker := newInMemorySubstrateBroker(t.TempDir(), receiptDir)
 	expected := runtimeExpectation{ID: "external_ca.entrust"}
 	if err := broker.validateDynamicInputs(context.Background(), expected, inputs); err != nil {
 		t.Fatalf("valid Entrust inputs rejected: %v", err)

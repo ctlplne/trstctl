@@ -6,18 +6,22 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -269,25 +273,48 @@ func TestDoctorFailsOnLeakedProbeTenant(t *testing.T) {
 	}
 }
 
-// TestDoctorSignsReceiptWithAuditKey: --sign uses the deployment's existing
-// audit-export key file (parse-only — a missing key is a config error, never
-// silently minted) and the JWS verifies against that same key. No new key
-// type, no second signing path.
+// TestDoctorSignsReceiptWithAuditKey: --sign binds the deployment's existing,
+// purpose-constrained audit-export handle through the signer socket. Doctor
+// never reads or parses a private key (AUD-63 / AN-4).
 func TestDoctorSignsReceiptWithAuditKey(t *testing.T) {
-	key, err := jose.GenerateRSASigningKey("audit-export")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	socketDir, err := os.MkdirTemp("", "doctor-signer")
 	if err != nil {
-		t.Fatalf("generate key: %v", err)
+		t.Fatalf("MkdirTemp signer: %v", err)
 	}
-	pem, err := key.MarshalPrivateKey()
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socket := filepath.Join(socketDir, "s.sock")
+	signerServer := signing.NewServer()
+	served := make(chan error, 1)
+	go func() {
+		served <- signing.ServeServerWithOptions(ctx, socket, signerServer, signing.ServeOptions{
+			AllowInsecureDevNonLinux: runtime.GOOS != "linux",
+		})
+	}()
+	client, err := signing.DialReady(ctx, socket, 10*time.Second)
 	if err != nil {
-		t.Fatalf("marshal key: %v", err)
+		t.Fatalf("DialReady: %v", err)
 	}
-	keyPath := filepath.Join(t.TempDir(), "signing-key.pem")
-	if err := os.WriteFile(keyPath, pem, 0o600); err != nil {
-		t.Fatal(err)
+	remote, err := client.GenerateConstrainedKeyHandle(
+		ctx,
+		boundarycrypto.RSA2048,
+		"audit-export",
+		[]signing.KeyPurpose{signing.PurposeAuditEvidence},
+		signing.PurposeAuditEvidence,
+	)
+	if err != nil {
+		t.Fatalf("GenerateConstrainedKeyHandle: %v", err)
+	}
+	key, err := jose.NewDigestSigningKey("audit-export", remote)
+	if err != nil {
+		t.Fatalf("NewDigestSigningKey: %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("close setup client: %v", err)
 	}
 
-	r, _, code := runDoctor(t, "--prove-isolation", "--sign", "--audit-key", keyPath)
+	r, _, code := runDoctor(t, "--prove-isolation", "--sign", "--signer-socket", socket)
 	if code != 0 {
 		t.Fatalf("signed doctor exit = %d, want 0", code)
 	}
@@ -314,11 +341,15 @@ func TestDoctorSignsReceiptWithAuditKey(t *testing.T) {
 		t.Fatalf("signed payload differs from the canonical receipt body")
 	}
 
-	// Parse-only: a missing key file is a config error (exit 2), never minted.
+	// Fail closed: an unavailable signer is an error; no local-key fallback exists.
 	var stdout, stderr bytes.Buffer
-	err = Run(context.Background(), []string{"--postgres-dsn", testDSN, "--sign", "--audit-key", filepath.Join(t.TempDir(), "absent.pem")}, getenvNone, &stdout, &stderr)
+	err = Run(context.Background(), []string{"--postgres-dsn", testDSN, "--sign", "--signer-socket", filepath.Join(t.TempDir(), "absent.sock")}, getenvNone, &stdout, &stderr)
 	exit, ok := err.(ExitError)
 	if !ok || exit.Code != 2 {
-		t.Fatalf("doctor with a missing audit key = %v, want ExitError{2}", err)
+		t.Fatalf("doctor with an unavailable signer = %v, want ExitError{2}", err)
+	}
+	cancel()
+	if err := <-served; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("serve signer: %v", err)
 	}
 }

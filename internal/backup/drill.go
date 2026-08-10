@@ -73,6 +73,23 @@ type DrillAttestation struct {
 	// successful drill is itself a finding: a backup that restores nothing has
 	// verified and proved nothing.
 	EventsRestored int `json:"events_restored"`
+	// PostgresRecordsRestored is the independent state imported from the paired
+	// PostgreSQL artifact. PostgresTablesRestored carries the table-by-table
+	// evidence, including explicit zeroes, so a newly added durable table cannot
+	// disappear behind a plausible aggregate.
+	PostgresRecordsRestored int            `json:"postgres_records_restored"`
+	PostgresTablesRestored  map[string]int `json:"postgres_tables_restored"`
+	// ArtifactsRestored names the manifest artifacts that were actually copied,
+	// decrypted, or replayed into the isolated target. FullSetRestored is true
+	// only after every required artifact and both datastore artifacts complete.
+	ArtifactsRestored []string `json:"artifacts_restored"`
+	FullSetRestored   bool     `json:"full_set_restored"`
+	// Health is evidence collected from the recovered target, not the source
+	// deployment. A restored verdict requires every check to be true.
+	StoreHealthy    bool `json:"store_healthy"`
+	EventLogHealthy bool `json:"event_log_healthy"`
+	SignerHealthy   bool `json:"signer_healthy"`
+	ServerHealthy   bool `json:"server_healthy"`
 	// Detail explains the outcome in the terms an operator acts on.
 	Detail string `json:"detail"`
 	// Limitations states what this drill did NOT prove, carried in the
@@ -90,7 +107,26 @@ var ErrNoEphemeralTarget = errors.New("backup: a restore drill needs an ephemera
 // A function rather than a concrete restorer so the drill exercises the SAME
 // restore path production recovery uses. A drill with its own simplified restore
 // would prove that the simplified one works.
-type RestoreFunc func(ctx context.Context) (events int, err error)
+type RestoreResult struct {
+	EventsRestored          int
+	PostgresRecordsRestored int
+	PostgresTablesRestored  map[string]int
+	ArtifactsRestored       []string
+	FullSetRestored         bool
+	StoreHealthy            bool
+	EventLogHealthy         bool
+	SignerHealthy           bool
+	ServerHealthy           bool
+}
+
+// Healthy reports whether the isolated recovery target proved all four runtime
+// boundaries needed to serve: PostgreSQL, the AN-2 log, the signer process, and
+// the recovered control-plane assembly.
+func (r RestoreResult) Healthy() bool {
+	return r.StoreHealthy && r.EventLogHealthy && r.SignerHealthy && r.ServerHealthy
+}
+
+type RestoreFunc func(ctx context.Context) (RestoreResult, error)
 
 // RunDrill restores a backup into an ephemeral target and attests what happened.
 //
@@ -137,10 +173,18 @@ func RunDrill(ctx context.Context, backupDir string, restore RestoreFunc, now fu
 		att.RPOSeconds = int64(att.StartedAt.Sub(report.CreatedAt).Seconds())
 	}
 
-	events, err := restore(ctx)
+	result, err := restore(ctx)
 	att.CompletedAt = now().UTC()
 	att.RTOSeconds = int64(att.CompletedAt.Sub(att.StartedAt).Seconds())
-	att.EventsRestored = events
+	att.EventsRestored = result.EventsRestored
+	att.PostgresRecordsRestored = result.PostgresRecordsRestored
+	att.PostgresTablesRestored = result.PostgresTablesRestored
+	att.ArtifactsRestored = append([]string(nil), result.ArtifactsRestored...)
+	att.FullSetRestored = result.FullSetRestored
+	att.StoreHealthy = result.StoreHealthy
+	att.EventLogHealthy = result.EventLogHealthy
+	att.SignerHealthy = result.SignerHealthy
+	att.ServerHealthy = result.ServerHealthy
 
 	switch {
 	case err != nil:
@@ -151,17 +195,29 @@ func RunDrill(ctx context.Context, backupDir string, restore RestoreFunc, now fu
 		att.Detail = "The backup verified and the restore did not complete. The artifacts are " +
 			"intact and something about restoring them into a fresh deployment fails — which is " +
 			"exactly the failure a drill exists to find before an incident does."
-	case events == 0:
+	case result.EventsRestored == 0:
 		// A restore that replayed nothing "succeeded" and proved nothing. Left
 		// as a pass, this is the drill most likely to give false confidence.
 		att.Outcome = DrillFailed
 		att.Detail = "The restore completed and replayed no events. A backup that restores " +
 			"nothing has verified and proved nothing; treat this as a failed drill rather than " +
 			"a fast one."
+	case !result.FullSetRestored:
+		att.Outcome = DrillFailed
+		att.Detail = "The event log restored, but the delivered full backup set did not. " +
+			"A disaster-recovery verdict requires the paired PostgreSQL state and every required " +
+			"key and configuration artifact, so this drill failed closed."
+	case !result.Healthy():
+		att.Outcome = DrillFailed
+		att.Detail = "The full backup set restored, but the isolated target did not pass every " +
+			"PostgreSQL, event-log, signer, and recovered-server health check. Restored bytes are " +
+			"not a working recovery, so this drill failed closed."
 	default:
 		att.Outcome = DrillRestored
-		att.Detail = fmt.Sprintf("The backup restored into an ephemeral target, replaying %d "+
-			"events. The state it holds is %s old.", events, humaniseAge(att.RPOSeconds))
+		att.Detail = fmt.Sprintf("The complete backup set restored into an isolated ephemeral target, replaying %d "+
+			"events and importing %d independent PostgreSQL records. PostgreSQL, the event log, "+
+			"the signer, and the recovered server all passed health checks. The state it holds is %s old.",
+			result.EventsRestored, result.PostgresRecordsRestored, humaniseAge(att.RPOSeconds))
 	}
 	return att, nil
 }

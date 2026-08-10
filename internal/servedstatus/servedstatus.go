@@ -381,12 +381,17 @@ var FleetHealthGate = Registry{
 	},
 }
 
-// Fleet re-issuance batch statuses. A batch is an execution unit under epic D6;
-// today it is a planning partition of the affected set.
+// Fleet re-issuance batch statuses. A batch is a durable execution unit.
 const (
 	// FleetBatchPlanned means the batch exists as a partition of the affected
-	// identities. It is not an execution unit and nothing ran per batch.
+	// identities but has not been published to the worker.
 	FleetBatchPlanned = "planned"
+	// FleetBatchQueued means the batch has one durable outbox command. The
+	// command may not have started and no target mutation is claimed yet.
+	FleetBatchQueued = "queued"
+	// FleetBatchWaitingVerification means replacement issuance/deployment work
+	// for this batch was published, but no signed endpoint verdict exists yet.
+	FleetBatchWaitingVerification = "waiting_verification"
 	// FleetBatchExecuted means the batch ran as its own unit.
 	FleetBatchExecuted = "executed"
 	// FleetBatchFailed means the batch ran as its own unit and failed.
@@ -412,7 +417,15 @@ var FleetBatch = Registry{
 		},
 		{
 			Value:   FleetBatchPlanned,
-			Meaning: "A partition of the affected identities. The run does not execute batch by batch yet, so this is a plan, not a result.",
+			Meaning: "A partition of the affected identities that has not been published to the worker. Nothing in it has been attempted.",
+		},
+		{
+			Value:   FleetBatchQueued,
+			Meaning: "One durable outbox command exists for this batch. No target mutation is claimed until the worker records it.",
+		},
+		{
+			Value:   FleetBatchWaitingVerification,
+			Meaning: "Replacement work for this batch was published, but a signature-verified agent receipt has not yet proved what endpoints serve. Later batches remain unpublished.",
 		},
 		{
 			Value:         FleetBatchExecuted,

@@ -9,7 +9,7 @@
 package jose
 
 import (
-	"crypto"
+	stdcrypto "crypto"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -23,15 +23,17 @@ import (
 	"math/big"
 	"strings"
 
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 var b64 = base64.RawURLEncoding
 
 type jwsHeader struct {
-	Alg string `json:"alg"`
-	Typ string `json:"typ,omitempty"`
-	Kid string `json:"kid,omitempty"`
+	Alg            string `json:"alg"`
+	Typ            string `json:"typ,omitempty"`
+	Kid            string `json:"kid,omitempty"`
+	ArtifactDomain string `json:"trstctl_artifact,omitempty"`
 }
 
 func encodeSegment(b []byte) string { return b64.EncodeToString(b) }
@@ -46,7 +48,7 @@ func SignRS256(key *rsa.PrivateKey, kid string, payload []byte) (string, error) 
 	}
 	signingInput := encodeSegment(hdr) + "." + encodeSegment(payload)
 	sum := sha256.Sum256([]byte(signingInput))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, stdcrypto.SHA256, sum[:])
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +61,7 @@ func verifyRS256(pub *rsa.PublicKey, signingInput, sig string) error {
 		return fmt.Errorf("jose: bad signature encoding: %w", err)
 	}
 	sum := sha256.Sum256([]byte(signingInput))
-	return rsa.VerifyPKCS1v15(pub, crypto.SHA256, sum[:], raw)
+	return rsa.VerifyPKCS1v15(pub, stdcrypto.SHA256, sum[:], raw)
 }
 
 // ---- JWK Set --------------------------------------------------------------
@@ -160,7 +162,7 @@ func ParseJWKSet(doc []byte) (*JWKSet, error) {
 
 // NewJWKSet builds a JWK Set from a single public key. The key must be an RSA
 // public key.
-func NewJWKSet(kid string, pub crypto.PublicKey) (*JWKSet, error) {
+func NewJWKSet(kid string, pub stdcrypto.PublicKey) (*JWKSet, error) {
 	rp, ok := pub.(*rsa.PublicKey)
 	if !ok {
 		return nil, errors.New("jose: only RSA public keys are supported")
@@ -169,7 +171,7 @@ func NewJWKSet(kid string, pub crypto.PublicKey) (*JWKSet, error) {
 }
 
 // MarshalPublicJWKS renders a single RSA public key as a JWK Set document.
-func MarshalPublicJWKS(kid string, pub crypto.PublicKey) ([]byte, error) {
+func MarshalPublicJWKS(kid string, pub stdcrypto.PublicKey) ([]byte, error) {
 	rp, ok := pub.(*rsa.PublicKey)
 	if !ok {
 		return nil, errors.New("jose: only RSA public keys are supported")
@@ -231,12 +233,34 @@ func (s *JWKSet) selectKey(kid string) (*rsa.PublicKey, error) {
 
 // ---- crypto-free signing wrapper (for IdP simulation / token signing) ------
 
-// SigningKey is an opaque RSA signing key plus its kid, so callers outside the
-// crypto boundary can sign and publish a JWK Set without naming crypto/* types.
+// SigningKey is an opaque RSA signing capability plus its kid, so callers outside
+// the crypto boundary can sign and publish a JWK Set without naming crypto/*
+// types. Production audit/evidence code supplies a remote DigestSigner: the
+// control plane therefore retains only the public key and opaque signer handle,
+// while the private operation runs in trstctl-signer (AUD-63 / AN-4).
 type SigningKey struct {
-	key *rsa.PrivateKey
-	kid string
+	key      *rsa.PrivateKey
+	signer   boundarycrypto.DigestSigner
+	artifact ArtifactSigner
+	public   *rsa.PublicKey
+	kid      string
 }
+
+// ArtifactSigner is the crypto-free client side of the signer's narrow evidence
+// RPC. It returns a complete compact JWS whose protected header binds kind.
+type ArtifactSigner interface {
+	SignArtifact(kind string, payload []byte) (string, error)
+}
+
+// Stable artifact-kind domains admitted by the core audit-evidence signer.
+const (
+	ArtifactAuditExport        = "trstctl.audit-evidence/audit-export/v1"
+	ArtifactAuditRetention     = "trstctl.audit-evidence/audit-retention/v1"
+	ArtifactHistoryContinuity  = "trstctl.audit-evidence/history-continuity/v1"
+	ArtifactBillingInvoice     = "trstctl.audit-evidence/billing-invoice/v1"
+	ArtifactDoctorReceipt      = "trstctl.audit-evidence/doctor-receipt/v1"
+	ArtifactPQCCampaignClosure = "trstctl.audit-evidence/pqc-campaign-closure/v1"
+)
 
 // GenerateRSASigningKey generates a 2048-bit RSA signing key tagged with kid.
 func GenerateRSASigningKey(kid string) (*SigningKey, error) {
@@ -244,11 +268,125 @@ func GenerateRSASigningKey(kid string) (*SigningKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SigningKey{key: key, kid: kid}, nil
+	return &SigningKey{key: key, public: &key.PublicKey, kid: kid}, nil
+}
+
+// NewDigestSigningKey wraps an RSA DigestSigner without importing or exporting
+// its private key. A RemoteSigner is the production implementation; LockedSigner
+// remains useful to exercise the exact boundary-neutral contract in tests.
+func NewDigestSigningKey(kid string, signer boundarycrypto.DigestSigner) (*SigningKey, error) {
+	if signer == nil {
+		return nil, errors.New("jose: digest signer is required")
+	}
+	switch signer.Algorithm() {
+	case boundarycrypto.RSA2048, boundarycrypto.RSA3072, boundarycrypto.RSA4096:
+	default:
+		return nil, fmt.Errorf("jose: RS256 requires an RSA signer, got %s", signer.Algorithm())
+	}
+	parsed, err := x509.ParsePKIXPublicKey(signer.Public().DER)
+	if err != nil {
+		return nil, fmt.Errorf("jose: parse signer public key: %w", err)
+	}
+	public, ok := parsed.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("jose: RS256 signer published %T, want RSA", parsed)
+	}
+	return &SigningKey{signer: signer, public: public, kid: kid}, nil
+}
+
+// NewArtifactSigningKey returns a public-key wrapper whose signatures can be
+// produced only through the narrow artifact RPC. Sign without an explicit kind
+// fails closed, preventing a production caller from falling back to the generic
+// digest-signing surface (AUD-63).
+func NewArtifactSigningKey(kid string, publicKey boundarycrypto.PublicKey, signer ArtifactSigner) (*SigningKey, error) {
+	if signer == nil {
+		return nil, errors.New("jose: artifact signer is required")
+	}
+	switch publicKey.Algorithm {
+	case boundarycrypto.RSA2048, boundarycrypto.RSA3072, boundarycrypto.RSA4096:
+	default:
+		return nil, fmt.Errorf("jose: RS256 requires an RSA signer, got %s", publicKey.Algorithm)
+	}
+	parsed, err := x509.ParsePKIXPublicKey(publicKey.DER)
+	if err != nil {
+		return nil, fmt.Errorf("jose: parse artifact signer public key: %w", err)
+	}
+	public, ok := parsed.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("jose: RS256 artifact signer published %T, want RSA", parsed)
+	}
+	return &SigningKey{artifact: signer, public: public, kid: kid}, nil
 }
 
 // Sign produces a compact JWS over payload (RS256).
-func (k *SigningKey) Sign(payload []byte) (string, error) { return SignRS256(k.key, k.kid, payload) }
+func (k *SigningKey) Sign(payload []byte) (string, error) {
+	if k == nil {
+		return "", errors.New("jose: signing key is nil")
+	}
+	if k.signer == nil {
+		if k.artifact != nil {
+			return "", errors.New("jose: artifact signing key requires an explicit artifact kind")
+		}
+		if k.key == nil {
+			return "", errors.New("jose: signing key has no signer")
+		}
+		return SignRS256(k.key, k.kid, payload)
+	}
+	return k.signDigestJWS("", payload)
+}
+
+// SignArtifact produces a compact RS256 JWS whose protected header binds the
+// admitted artifact kind. Production wrappers dispatch this into trstctl-signer;
+// local keys retain the same semantic helper for focused tests and offline tools.
+func (k *SigningKey) SignArtifact(kind string, payload []byte) (string, error) {
+	if k == nil {
+		return "", errors.New("jose: signing key is nil")
+	}
+	if kind == "" {
+		return "", errors.New("jose: artifact kind is required")
+	}
+	if k.artifact != nil {
+		return k.artifact.SignArtifact(kind, payload)
+	}
+	if k.signer == nil && k.key != nil {
+		return k.signLocalJWS(kind, payload)
+	}
+	return k.signDigestJWS(kind, payload)
+}
+
+func (k *SigningKey) signLocalJWS(kind string, payload []byte) (string, error) {
+	hdr, err := json.Marshal(jwsHeader{Alg: "RS256", Typ: "JWT", Kid: k.kid, ArtifactDomain: kind})
+	if err != nil {
+		return "", err
+	}
+	signingInput := encodeSegment(hdr) + "." + encodeSegment(payload)
+	sum := sha256.Sum256([]byte(signingInput))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, k.key, stdcrypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	return signingInput + "." + encodeSegment(sig), nil
+}
+
+func (k *SigningKey) signDigestJWS(kind string, payload []byte) (string, error) {
+	if k.signer == nil {
+		return "", errors.New("jose: signing key has no digest signer")
+	}
+	hdr, err := json.Marshal(jwsHeader{Alg: "RS256", Typ: "JWT", Kid: k.kid, ArtifactDomain: kind})
+	if err != nil {
+		return "", err
+	}
+	signingInput := encodeSegment(hdr) + "." + encodeSegment(payload)
+	sum := sha256.Sum256([]byte(signingInput))
+	sig, err := k.signer.SignDigest(sum[:], boundarycrypto.SignOptions{
+		Hash:       boundarycrypto.SHA256,
+		RSAPadding: boundarycrypto.RSAPKCS1v15,
+	})
+	if err != nil {
+		return "", fmt.Errorf("jose: remote RS256 sign: %w", err)
+	}
+	return signingInput + "." + encodeSegment(sig), nil
+}
 
 // KeyID reports the kid this key signs as, so a caller embedding the kid in a
 // signature envelope cannot drift from the kid inside the JWS header.
@@ -259,6 +397,9 @@ func (k *SigningKey) KeyID() string { return k.kid }
 // restart instead of rotating each boot). The kid is not part of the PEM; the
 // caller supplies it again to ParseRSASigningKey.
 func (k *SigningKey) MarshalPrivateKey() ([]byte, error) {
+	if k == nil || k.key == nil {
+		return nil, errors.New("jose: opaque signing key has no exportable private material")
+	}
 	der, err := x509.MarshalPKCS8PrivateKey(k.key)
 	if err != nil {
 		return nil, fmt.Errorf("jose: marshal private key: %w", err)
@@ -282,12 +423,12 @@ func ParseRSASigningKey(kid string, pemBytes []byte) (*SigningKey, error) {
 	if !ok {
 		return nil, errors.New("jose: PEM is not an RSA private key")
 	}
-	return &SigningKey{key: key, kid: kid}, nil
+	return &SigningKey{key: key, public: &key.PublicKey, kid: kid}, nil
 }
 
 // JWKS returns the public JWK Set that verifies tokens from this key.
 func (k *SigningKey) JWKS() *JWKSet {
-	return &JWKSet{keys: map[string]*rsa.PublicKey{k.kid: &k.key.PublicKey}}
+	return &JWKSet{keys: map[string]*rsa.PublicKey{k.kid: k.public}}
 }
 
 // PublicJWKS renders this key's public half as a JWK Set document (the bytes an
@@ -295,7 +436,7 @@ func (k *SigningKey) JWKS() *JWKSet {
 // can publish the verification keys — e.g. to configure trstctl's OIDC verifier or
 // to stand up an IdP simulation — without naming crypto/* types (AN-3).
 func (k *SigningKey) PublicJWKS() ([]byte, error) {
-	return MarshalPublicJWKS(k.kid, &k.key.PublicKey)
+	return MarshalPublicJWKS(k.kid, k.public)
 }
 
 // ---- HS256 (symmetric, for session tokens) --------------------------------

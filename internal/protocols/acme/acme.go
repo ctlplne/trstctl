@@ -268,7 +268,7 @@ type Server struct {
 	// the single place every ACME failure passes through — the diagnosis
 	// therefore cannot miss a path, and a new refusal added later is diagnosed
 	// without anybody remembering to wire it.
-	onFailure func(enrollmentdiag.Diagnosis)
+	onFailure func(context.Context, enrollmentdiag.Diagnosis)
 
 	mu         sync.Mutex
 	quota      QuotaConfig
@@ -1637,7 +1637,7 @@ func (s *Server) problem(w http.ResponseWriter, r *http.Request, status int, typ
 	if notify != nil {
 		// The step comes from the path the client was on, which is the only
 		// evidence available here about where in the flow this happened.
-		notify(enrollmentdiag.ClassifyACME(acmeStepForPath(r), typ, nil))
+		notify(r.Context(), enrollmentdiag.ClassifyACME(acmeStepForPath(r), typ, nil))
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
@@ -1658,7 +1658,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // A setter rather than a constructor option, because New has a fixed two-argument
 // signature that a dozen call sites use and widening it would touch all of them
 // to express something only one caller wants.
-func (s *Server) SetFailureDiagnosis(fn func(enrollmentdiag.Diagnosis)) {
+func (s *Server) SetFailureDiagnosis(fn func(context.Context, enrollmentdiag.Diagnosis)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onFailure = fn

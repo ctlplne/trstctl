@@ -306,6 +306,12 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 		require(c.CAConfig, "ca_config")
 		require(c.Template, "template")
 		credential(c.PasswordRef, "password_ref", true)
+		if strings.TrimSpace(c.PasswordRef) != "" {
+			endpoint, _ := url.Parse(strings.TrimSpace(c.Endpoint))
+			if endpoint == nil || !strings.EqualFold(endpoint.Scheme, "https") {
+				errs = append(errs, fmt.Errorf("%s.password_ref requires an https endpoint because AD CS Basic authentication exposes the password over plaintext HTTP", where))
+			}
+		}
 	case "awspca":
 		require(c.Region, "region")
 		require(c.CertificateAuthorityARN, "certificate_authority_arn")

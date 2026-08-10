@@ -40,17 +40,13 @@ export function ADCSDatabasePanel() {
       <h2 id="adcs-database-heading" className="text-title font-semibold">
         {translateNow("source.adcs.database.f4adcs0001")}
       </h2>
-      <p className="mt-1 max-w-3xl text-caption text-muted-foreground">
-        {translateNow("source.adcs.database.intro.f4adcs0002")}
-      </p>
+      <p className="mt-1 max-w-3xl text-caption text-muted-foreground">{translateNow("source.adcs.database.intro.f4adcs0002")}</p>
       {loading ? (
         <LoadingState>{translateNow("source.loading.4f9d1e0e3a")}</LoadingState>
       ) : error ? (
         <ErrorState title={translateNow("source.adcs.database.error.f4adcs0013")}>{error}</ErrorState>
       ) : !data || (data.items ?? []).length === 0 ? (
-        <p className="mt-3 max-w-3xl text-caption text-muted-foreground">
-          {translateNow("source.adcs.database.none.f4adcs0003")}
-        </p>
+        <p className="mt-3 max-w-3xl text-caption text-muted-foreground">{translateNow("source.adcs.database.none.f4adcs0003")}</p>
       ) : (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-caption">
@@ -73,18 +69,14 @@ export function ADCSDatabasePanel() {
                   <td className="py-1 pr-4 tabular-nums">{row.issued}</td>
                   {/* Pending is highlighted because it is the actionable column:
                       a request nobody has approved yet, distinct from a failure. */}
-                  <td className={row.pending > 0 ? "py-1 pr-4 tabular-nums text-status-warning" : "py-1 pr-4 tabular-nums"}>
-                    {row.pending}
-                  </td>
+                  <td className={row.pending > 0 ? "py-1 pr-4 tabular-nums text-status-warning" : "py-1 pr-4 tabular-nums"}>{row.pending}</td>
                   <td className="py-1 pr-4 tabular-nums">{row.revoked}</td>
                   <td className="py-1 pr-4 tabular-nums">{row.denied}</td>
                   <td className="py-1 pr-4 tabular-nums">{row.failed}</td>
                   {/* Gaps: unknown dispositions + unparsed expiries + rejected
                       rows. Surfaced so the ingest cannot read as complete
                       coverage it does not have. */}
-                  <td className="py-1 pr-4 tabular-nums text-muted-foreground">
-                    {row.unknown + row.unparsed + row.rows_rejected}
-                  </td>
+                  <td className="py-1 pr-4 tabular-nums text-muted-foreground">{row.unknown + row.unparsed + row.rows_rejected}</td>
                   <td className="py-1 pr-4 text-xs text-muted-foreground">
                     <span>{row.ingested_at ? formatDateTime(row.ingested_at) : translateNow("source.adcs.never.f4adcs0014")}</span>
                     {row.source ? <span className="ml-2 opacity-70">{row.source}</span> : null}
@@ -93,9 +85,7 @@ export function ADCSDatabasePanel() {
               ))}
             </tbody>
           </table>
-          <p className="mt-3 max-w-3xl text-xs text-muted-foreground">
-            {translateNow("source.adcs.database.note.f4adcs0012")}
-          </p>
+          <p className="mt-3 max-w-3xl text-xs text-muted-foreground">{translateNow("source.adcs.database.note.f4adcs0012")}</p>
         </div>
       )}
     </section>

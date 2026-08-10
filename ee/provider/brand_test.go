@@ -13,6 +13,8 @@ type memBrandStore struct {
 	byTenant map[string]TenantBrand
 }
 
+func (m *memBrandStore) Invalidate() {}
+
 func (m *memBrandStore) SetTenantBrand(_ context.Context, b TenantBrand) error {
 	if m.byTenant == nil {
 		m.byTenant = map[string]TenantBrand{}

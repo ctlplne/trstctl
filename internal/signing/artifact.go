@@ -5,8 +5,12 @@ package signing
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // ArtifactSigner is a generic signer-side extension for opaque artifacts whose
@@ -51,6 +55,9 @@ func WithArtifactSigner(signer ArtifactSigner) ServerOption {
 }
 
 func (s *Server) signArtifact(ctx context.Context, req ArtifactSignRequest) (ArtifactSignature, error) {
+	if strings.HasPrefix(req.Kind, "trstctl.audit-evidence/") {
+		return s.signAuditEvidenceArtifact(req)
+	}
 	s.mu.Lock()
 	signer := s.artifactSigner
 	s.mu.Unlock()
@@ -58,4 +65,50 @@ func (s *Server) signArtifact(ctx context.Context, req ArtifactSignRequest) (Art
 		return ArtifactSignature{}, ErrNoArtifactSigner
 	}
 	return signer.SignArtifact(ctx, req)
+}
+
+var auditEvidenceKinds = map[string]bool{
+	jose.ArtifactAuditExport:        true,
+	jose.ArtifactAuditRetention:     true,
+	jose.ArtifactHistoryContinuity:  true,
+	jose.ArtifactBillingInvoice:     true,
+	jose.ArtifactDoctorReceipt:      true,
+	jose.ArtifactPQCCampaignClosure: true,
+}
+
+// signAuditEvidenceArtifact is the core, signer-owned evidence admission path.
+// It accepts only the fixed audit authority/handle and a versioned kind allowlist,
+// then builds the complete domain-bound JWS inside this isolated process.
+func (s *Server) signAuditEvidenceArtifact(req ArtifactSignRequest) (ArtifactSignature, error) {
+	if !auditEvidenceKinds[req.Kind] {
+		return ArtifactSignature{}, fmt.Errorf("unsupported audit evidence kind %q", req.Kind)
+	}
+	if req.TenantID != "deployment" || req.AuthorityID != "audit-evidence" || req.KeyID != "audit-export" {
+		return ArtifactSignature{}, errors.New("audit evidence requires deployment/audit-evidence authority and audit-export key")
+	}
+	held, err := s.lookup(&signerpb.KeyHandle{Id: "audit-export"})
+	if err != nil {
+		return ArtifactSignature{}, err
+	}
+	if err := held.constraints.check(&signerpb.SignRequest{
+		Handle:  &signerpb.KeyHandle{Id: "audit-export"},
+		Hash:    signerpb.Hash_HASH_SHA256,
+		Purpose: signerpb.KeyPurpose_KEY_PURPOSE_AUDIT_EVIDENCE,
+	}); err != nil {
+		return ArtifactSignature{}, err
+	}
+	key, err := jose.NewDigestSigningKey("audit-export", held.signer)
+	if err != nil {
+		return ArtifactSignature{}, err
+	}
+	compact, err := key.SignArtifact(req.Kind, req.Payload)
+	if err != nil {
+		return ArtifactSignature{}, err
+	}
+	return ArtifactSignature{
+		KeyID:        "audit-export",
+		Algorithm:    held.signer.Algorithm(),
+		PublicKeyDER: append([]byte(nil), held.signer.Public().DER...),
+		Signature:    []byte(compact),
+	}, nil
 }

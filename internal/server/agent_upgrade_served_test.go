@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/fleet"
 	"trstctl.com/trstctl/internal/store"
 )
 

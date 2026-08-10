@@ -48,7 +48,11 @@ func truncateReadModelAndCheckpoint(t *testing.T, s *store.Store) {
 		`TRUNCATE `+strings.Join(store.ReadModelTables, ", ")+` RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate read model: %v", err)
 	}
-	if _, err := s.SystemPool().Exec(ctx, `UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
+	if _, err := s.SystemPool().Exec(ctx,
+		`UPDATE projection_checkpoint
+		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
+		        failed_at = NULL, updated_at = now()
+		  WHERE id = 1`); err != nil {
 		t.Fatalf("reset checkpoint: %v", err)
 	}
 }

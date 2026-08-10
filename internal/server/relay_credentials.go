@@ -73,6 +73,9 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	case "mdm.sync":
 		// I5: identical custody for the MDM token.
 		return r.resolveJobReferences(ctx, tenantID, job)
+	case "ticket.sync":
+		// I3: the ServiceNow ticket token is redeemed for one relay attempt.
+		return r.resolveJobReferences(ctx, tenantID, job)
 	case "connector.deploy", "connector.rollback", "connector.test":
 		// connector.test redeems too (D5). A dry-run exists to find out whether
 		// the credential works; one that skipped redemption would pass right up

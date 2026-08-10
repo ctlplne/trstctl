@@ -262,7 +262,7 @@ func (s *Store) ApplyTicketIntakeConfiguredTx(ctx context.Context, tx pgx.Tx, te
 		   private_egress_cidrs = EXCLUDED.private_egress_cidrs, updated_at = now()`,
 		tenantID, in.System, in.InstanceURL, in.TokenRef, in.SNTable, in.Query,
 		in.SubjectField, in.ProfileField, in.RequesterField, in.JustificationField,
-		in.IntervalSeconds, in.Enabled, in.AllowPrivateEndpoint, in.PrivateEgressCIDRs)
+		in.IntervalSeconds, in.Enabled, false, nil)
 	return err
 }
 

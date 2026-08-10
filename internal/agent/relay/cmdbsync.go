@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"trstctl.com/trstctl/internal/ownership"
 )
@@ -100,9 +101,10 @@ func runCMDBSync(ctx context.Context, ch Channel, client *http.Client, job Job) 
 		return false
 	}
 	detail, err := json.Marshal(struct {
+		ObservedAt   time.Time          `json:"observed_at"`
 		Records      []ownership.Record `json:"records"`
 		Unattributed []string           `json:"unattributed,omitempty"`
-	}{Records: records, Unattributed: unattributed})
+	}{ObservedAt: time.Now().UTC(), Records: records, Unattributed: unattributed})
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "cmdb records could not be encoded")
 		return false

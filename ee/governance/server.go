@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
-	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/privacy"
@@ -32,25 +32,37 @@ func NewFactory() server.GovernanceFactory {
 }
 
 type evidenceService struct {
-	audit  *audit.Service
-	store  *store.Store
-	signer crypto.DigestSigner
+	audit      *audit.Service
+	store      *store.Store
+	signer     crypto.DigestSigner
+	now        func() time.Time
+	buildGraph func(context.Context, *store.Store, string) (*graph.Graph, error)
 }
 
 func (s *evidenceService) ExportEvidencePack(ctx context.Context, tenantID string, framework api.ComplianceFramework) (api.ComplianceEvidencePack, error) {
 	if tenantID == "" {
 		return api.ComplianceEvidencePack{}, errors.New("governance: compliance evidence requires a tenant")
 	}
-	records, err := s.audit.Search(ctx, audit.Query{TenantID: tenantID})
+	now := time.Now
+	if s.now != nil {
+		now = s.now
+	}
+	through := now().UTC()
+	window := EvidenceWindow{From: through.Add(-DefaultEvidenceWindow), Through: through}
+	records, err := s.audit.Search(ctx, audit.Query{TenantID: tenantID, Since: window.From, Until: window.Through})
 	if err != nil {
 		return api.ComplianceEvidencePack{}, fmt.Errorf("governance: read audit evidence: %w", err)
 	}
-	g, err := graph.Build(ctx, s.store, tenantID)
+	buildGraph := graph.Build
+	if s.buildGraph != nil {
+		buildGraph = s.buildGraph
+	}
+	g, err := buildGraph(ctx, s.store, tenantID)
 	if err != nil {
 		return api.ComplianceEvidencePack{}, fmt.Errorf("governance: build compliance graph: %w", err)
 	}
 	reporter := New(tenantID, s.signer)
-	report, err := reporter.Generate(framework, complianceAuditRecords(records), g)
+	report, err := reporter.Generate(framework, records, g, window)
 	if err != nil {
 		return api.ComplianceEvidencePack{}, fmt.Errorf("governance: generate compliance report: %w", err)
 	}
@@ -64,18 +76,6 @@ func (s *evidenceService) ExportEvidencePack(ctx context.Context, tenantID strin
 		SignedExport: json.RawMessage(append([]byte(nil), signed...)),
 		PublicKeyDER: append([]byte(nil), s.signer.Public().DER...),
 	}, nil
-}
-
-func complianceAuditRecords(records []audit.Record) []auditsink.Record {
-	out := make([]auditsink.Record, 0, len(records))
-	for _, r := range records {
-		out = append(out, auditsink.Record{
-			Type:     r.Type,
-			TenantID: r.TenantID,
-			Data:     append([]byte(nil), r.Data...),
-		})
-	}
-	return out
 }
 
 // PolicySource is the Enterprise governance policy source consulted by core

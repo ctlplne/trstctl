@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -53,6 +54,32 @@ type Entry struct {
 	// agent B. Empty means no per-agent demand.
 	RequiredAgentID string
 }
+
+// OutboxCommandConflictError identifies both sides of a receiver-key collision
+// without copying executable payloads into logs or error strings. Callers that
+// are explicitly recovery-aware may turn it into durable quarantine evidence;
+// ordinary mutation paths still see store.ErrIdempotencyConflict and fail closed.
+type OutboxCommandConflictError struct {
+	TenantID                   string
+	IdempotencyKey             string
+	ExistingOutboxID           int64
+	ExistingDestination        string
+	ExistingEffectLane         string
+	ExistingPayloadSHA256      string
+	ExistingRequiredAgentRole  string
+	ExistingRequiredAgentID    string
+	CandidateDestination       string
+	CandidateEffectLane        string
+	CandidatePayloadSHA256     string
+	CandidateRequiredAgentRole string
+	CandidateRequiredAgentID   string
+}
+
+func (e *OutboxCommandConflictError) Error() string {
+	return store.ErrIdempotencyConflict.Error() + ": outbox key belongs to a different receiver command"
+}
+
+func (e *OutboxCommandConflictError) Unwrap() error { return store.ErrIdempotencyConflict }
 
 // Record is the observable state of an outbox row, including its retry bookkeeping.
 type Record struct {
@@ -466,19 +493,30 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 	// different subsystem, destination, or payload will actually execute. Compare
 	// the durable command before reporting a replay; callers may then safely use
 	// the outbox itself as the post-response-cache idempotency authority.
-	var destination, existingLane string
+	var destination, existingLane, existingRole, existingAgentID string
+	var existingID int64
 	var payload []byte
 	if err := tx.QueryRow(ctx,
-		`SELECT destination, payload, COALESCE(NULLIF(effect_lane, ''), destination)
+		`SELECT id, destination, payload, COALESCE(NULLIF(effect_lane, ''), destination),
+		        COALESCE(required_agent_role, ''), COALESCE(required_agent_id::text, '')
 		   FROM outbox
 		  WHERE tenant_id = $1 AND idempotency_key = $2
 		  ORDER BY id
 		  LIMIT 1`,
-		e.TenantID, e.IdempotencyKey).Scan(&destination, &payload, &existingLane); err != nil {
+		e.TenantID, e.IdempotencyKey).Scan(&existingID, &destination, &payload, &existingLane, &existingRole, &existingAgentID); err != nil {
 		return false, fmt.Errorf("orchestrator: load enqueue-if-absent outbox replay: %w", err)
 	}
-	if destination != e.Destination || existingLane != lane || !bytes.Equal(payload, e.Payload) {
-		return false, fmt.Errorf("%w: outbox key belongs to a different receiver command", store.ErrIdempotencyConflict)
+	if destination != e.Destination || existingLane != lane || !bytes.Equal(payload, e.Payload) ||
+		existingRole != e.RequiredAgentRole || existingAgentID != e.RequiredAgentID {
+		return false, &OutboxCommandConflictError{
+			TenantID: e.TenantID, IdempotencyKey: e.IdempotencyKey,
+			ExistingOutboxID: existingID, ExistingDestination: destination,
+			ExistingEffectLane: existingLane, ExistingPayloadSHA256: trstcrypto.SHA256Hex(payload),
+			ExistingRequiredAgentRole: existingRole, ExistingRequiredAgentID: existingAgentID,
+			CandidateDestination: e.Destination, CandidateEffectLane: lane,
+			CandidatePayloadSHA256:     trstcrypto.SHA256Hex(e.Payload),
+			CandidateRequiredAgentRole: e.RequiredAgentRole, CandidateRequiredAgentID: e.RequiredAgentID,
+		}
 	}
 	return false, nil
 }
@@ -792,10 +830,63 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 // would retire an item whose effect another worker is still performing.
 var ErrOutboxLeaseHeld = errors.New("orchestrator: outbox entry is leased by a dispatch worker")
 
+// CompleteAgentJobClaim retires an agent-held external effect in the same
+// PostgreSQL commit that closes its exact claim generation. Splitting those
+// writes creates an impossible row: pending (so it can be executed again) but
+// claim-completed (so no later attempt can ever finish it).
+//
+// The structured result is projected before this call. If this transaction is
+// refused or interrupted, the claim remains open and the agent may retry; the
+// result projector must therefore derive stable identities from the job's
+// idempotency key.
+func (o *Outbox) CompleteAgentJobClaim(ctx context.Context, tenantID, agentID string,
+	jobID int64, attempt int, at time.Time) (completed bool, err error) {
+	if tenantID == "" || agentID == "" || jobID <= 0 || attempt <= 0 {
+		return false, errors.New("orchestrator: complete agent job requires tenant, agent, job and attempt")
+	}
+	msg := Message{ID: jobID, TenantID: tenantID}
+	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		scanErr := tx.QueryRow(ctx,
+			`UPDATE outbox
+			    SET claim_completed_at = $5,
+			        status = 'delivered',
+			        delivered_at = $5,
+			        last_error = NULL,
+			        worker_id = NULL,
+			        lease_until = NULL
+			  WHERE tenant_id = $1
+			    AND id = $3
+			    AND claimed_by_agent_id = $2::uuid
+			    AND claim_attempts = $4
+			    AND claim_expires_at >= $5
+			    AND claim_completed_at IS NULL
+			    AND status = 'pending'
+			    AND delivered_at IS NULL
+			RETURNING destination, idempotency_key,
+			          COALESCE(NULLIF(effect_lane, ''), destination)`,
+			tenantID, agentID, jobID, attempt, at.UTC()).
+			Scan(&msg.Destination, &msg.IdempotencyKey, &msg.EffectLane)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return nil
+		}
+		if scanErr != nil {
+			return scanErr
+		}
+		completed = true
+		return nil
+	})
+	if err != nil || !completed {
+		return completed, err
+	}
+	o.recordCircuitSuccess(msg, at.UTC())
+	return true, nil
+}
+
 // CompleteByKey marks the tenant's (destination, idempotencyKey) entry delivered on
 // behalf of an in-request drainer that performed the external call itself instead of
-// going through DispatchScoped. It is the only sanctioned completion outside
-// finalizeClaim, and it carries the same two invariants:
+// going through DispatchScoped. It is the general non-claim completion outside
+// finalizeClaim; CompleteAgentJobClaim is the narrower signed agent-result path.
+// CompleteByKey carries the same two invariants:
 //
 //   - The lease predicate. finalizeClaim completes only a row this worker leased
 //     ("status = 'processing' AND worker_id = $3"), which is what stops two workers

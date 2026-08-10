@@ -16,6 +16,7 @@ import {
   type ProviderQuota,
   type ProviderBrand,
   type ProviderDrillReport,
+  type ProviderActivity,
 } from "@/lib/providerApi";
 
 /**
@@ -162,20 +163,9 @@ function QuotaEditor({
   );
 }
 
-type QuotaViewState =
-  | { id: string; state: "loading" }
-  | { id: string; state: "error" }
-  | { id: string; state: "ok"; data: ProviderQuota };
+type QuotaViewState = { id: string; state: "loading" } | { id: string; state: "error" } | { id: string; state: "ok"; data: ProviderQuota };
 
-function BrandEditor({
-  tenantId,
-  onSaved,
-  onAuthError,
-}: {
-  tenantId: string;
-  onSaved: () => void;
-  onAuthError: () => void;
-}) {
+function BrandEditor({ tenantId, onSaved, onAuthError }: { tenantId: string; onSaved: () => void; onAuthError: () => void }) {
   const [productName, setProductName] = useState("");
   const [customDomain, setCustomDomain] = useState("");
   const [loginMessage, setLoginMessage] = useState("");
@@ -231,6 +221,7 @@ function BrandEditor({
 
 function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   const [tenants, setTenants] = useState<ProviderTenant[] | null>(null);
+  const [activity, setActivity] = useState<ProviderActivity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [slug, setSlug] = useState("");
@@ -251,6 +242,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
     setError(null);
     try {
       setDrill(await providerApi.runIsolationDrill());
+      setActivity(await providerApi.listActivity());
     } catch (err) {
       if (err instanceof ProviderAuthError) {
         clearProviderToken();
@@ -286,7 +278,9 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setTenants(await providerApi.listTenants());
+      const [customerTenants, authorityActivity] = await Promise.all([providerApi.listTenants(), providerApi.listActivity()]);
+      setTenants(customerTenants);
+      setActivity(authorityActivity);
     } catch (err) {
       if (err instanceof ProviderAuthError) {
         // The token expired or was refused. Drop it and send the operator back
@@ -325,11 +319,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   );
 
   const statusClass = (status: ProviderTenant["status"]) =>
-    status === "active"
-      ? "text-status-success"
-      : status === "suspended"
-        ? "text-status-warning"
-        : "text-status-danger";
+    status === "active" ? "text-status-success" : status === "suspended" ? "text-status-warning" : "text-status-danger";
 
   return (
     <main className="mx-auto max-w-5xl p-comfortable">
@@ -382,6 +372,32 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
       </section>
 
       <section className="mt-6">
+        <h2 className="text-title font-semibold">{translateNow("source.recent.activity.6cb44b5633")}</h2>
+        {activity === null ? (
+          <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</p>
+        ) : activity.length === 0 ? (
+          <p className="mt-2 text-caption text-muted-foreground">{translateNow("dashboard.recentActivity.empty")}</p>
+        ) : (
+          <ol className="mt-2 divide-y divide-border/60 rounded-md border border-border/60">
+            {activity.map((item) => (
+              <li key={item.event_id} className="grid gap-1 px-3 py-2 text-xs sm:grid-cols-[1fr_auto]">
+                <div>
+                  <span className="font-mono font-medium">{item.type}</span>
+                  <span className="ml-2 text-muted-foreground">{item.operator_email || item.subject || item.operator_id}</span>
+                  {item.tenant_id ? <span className="ml-2 font-mono text-muted-foreground">{item.tenant_id}</span> : null}
+                  {item.reason ? <span className="ml-2 text-muted-foreground">{item.reason}</span> : null}
+                </div>
+                <div className="flex gap-2 text-muted-foreground">
+                  <time dateTime={item.at}>{formatDateTime(item.at)}</time>
+                  <span className="font-mono">#{item.sequence}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <section className="mt-6">
         <h2 className="text-title font-semibold">{translateNow("source.provider.drill.title.l3prov0036")}</h2>
         <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.drill.intro.l3prov0037")}</p>
         <div className="mt-2 flex items-center gap-3">
@@ -428,63 +444,54 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {tenants.map((tenant) => (
-                  <tr key={tenant.id} className="border-t border-border/60">
-                    <td className="py-1 pr-4">{tenant.name}</td>
-                    <td className="py-1 pr-4 font-mono text-xs">{tenant.slug}</td>
-                    <td className={`py-1 pr-4 ${statusClass(tenant.status)}`}>{tenant.status}</td>
-                    <td className="py-1 pr-4 text-xs text-muted-foreground">{formatDateTime(tenant.created_at)}</td>
-                    <td className="py-1 pr-4">
-                      {tenant.status === "active" ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => {
-                            if (window.confirm(translateNow("source.provider.suspend.confirm.l3prov0018"))) {
-                              void act(() => providerApi.suspendTenant(tenant.id));
-                            }
-                          }}
-                        >
-                          {translateNow("source.provider.suspend.l3prov0019")}
+                {tenants
+                  .map((tenant) => (
+                    <tr key={tenant.id} className="border-t border-border/60">
+                      <td className="py-1 pr-4">{tenant.name}</td>
+                      <td className="py-1 pr-4 font-mono text-xs">{tenant.slug}</td>
+                      <td className={`py-1 pr-4 ${statusClass(tenant.status)}`}>{tenant.status}</td>
+                      <td className="py-1 pr-4 text-xs text-muted-foreground">{formatDateTime(tenant.created_at)}</td>
+                      <td className="py-1 pr-4">
+                        {tenant.status === "active" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => {
+                              if (window.confirm(translateNow("source.provider.suspend.confirm.l3prov0018"))) {
+                                void act(() => providerApi.suspendTenant(tenant.id));
+                              }
+                            }}
+                          >
+                            {translateNow("source.provider.suspend.l3prov0019")}
+                          </Button>
+                        ) : null}
+                        {tenant.status !== "offboarded" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="ml-2"
+                            disabled={busy}
+                            onClick={() => {
+                              if (window.confirm(translateNow("source.provider.offboard.confirm.l3prov0020"))) {
+                                void act(() => providerApi.offboardTenant(tenant.id));
+                              }
+                            }}
+                          >
+                            {translateNow("source.provider.offboard.l3prov0021")}
+                          </Button>
+                        ) : null}
+                        <Button type="button" variant="ghost" className="ml-2" onClick={() => void viewQuota(tenant.id)}>
+                          {translateNow("source.provider.quota.l3prov0022")}
                         </Button>
-                      ) : null}
-                      {tenant.status !== "offboarded" ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="ml-2"
-                          disabled={busy}
-                          onClick={() => {
-                            if (window.confirm(translateNow("source.provider.offboard.confirm.l3prov0020"))) {
-                              void act(() => providerApi.offboardTenant(tenant.id));
-                            }
-                          }}
-                        >
-                          {translateNow("source.provider.offboard.l3prov0021")}
-                        </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="ml-2"
-                        onClick={() => void viewQuota(tenant.id)}
-                      >
-                        {translateNow("source.provider.quota.l3prov0022")}
-                      </Button>
-                      {tenant.status !== "offboarded" ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="ml-2"
-                          onClick={() => setBrandFor((cur) => (cur === tenant.id ? null : tenant.id))}
-                        >
-                          {translateNow("source.provider.brand.l3prov0030")}
-                        </Button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))
+                        {tenant.status !== "offboarded" ? (
+                          <Button type="button" variant="ghost" className="ml-2" onClick={() => setBrandFor((cur) => (cur === tenant.id ? null : tenant.id))}>
+                            {translateNow("source.provider.brand.l3prov0030")}
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))
                   /* The quota panel renders as its own row beneath the
                      customer, so the table layout is unaffected. An UNSET limit
                      is shown as "unlimited", never zero — a missing cap is the

@@ -3,12 +3,13 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"net/http"
-	"sort"
-	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/enrollmentdiag"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // What went wrong with an enrolment, in the operator's terms (epic I4).
@@ -18,12 +19,11 @@ import (
 // type, an EST status, a SCEP failInfo — and none of that reaches the person who
 // has to fix it, because the client logged it on a host they are not looking at.
 //
-// This is that, kept and served. It holds recent diagnoses in memory rather than
-// in the database, and that is a real limitation stated rather than hidden: a
-// restart loses them. Persisting would mean a schema, a projection and a
-// retention policy for data whose whole value is being minutes old, and an
-// operator debugging an enrolment that failed a week ago is not helped by a row
-// — they are helped by running it again.
+// This is that, kept and served. Each refusal is an immutable tenant-attributed
+// event, while PostgreSQL projects the newest 200 distinct failure classes under
+// FORCE RLS. The projection survives restart and can be rebuilt from the log;
+// the bound keeps a live troubleshooting surface from pretending to be an
+// unbounded historical archive.
 
 // EnrollmentDiagnostic is one recorded failure.
 type EnrollmentDiagnostic struct {
@@ -45,7 +45,7 @@ type EnrollmentDiagnostic struct {
 	// Collapsed rather than listed: a broken challenge fails on every retry, and
 	// a hundred identical rows would bury the second, different failure that
 	// explains the first.
-	Count int `json:"count"`
+	Count int64 `json:"count"`
 }
 
 // EnrollmentDiagnosticList is the served response.
@@ -57,96 +57,49 @@ type EnrollmentDiagnosticList struct {
 	// of the estate: a rising number means the classifier is meeting failures it
 	// has no vocabulary for, and that is a gap to close here rather than
 	// something for the operator to act on.
-	UnknownCount int    `json:"unknown_count"`
+	UnknownCount int64  `json:"unknown_count"`
 	Guidance     string `json:"guidance"`
 }
 
 const enrollmentDiagnosticGuidance = "Each row is a refusal this control plane issued, classified " +
 	"from what the protocol actually said. A row with no remediation is one the classifier could " +
 	"not place: that is reported as unknown rather than guessed at, because a diagnosis that sends " +
-	"you to the wrong system costs more than no diagnosis. These are held in memory and are lost on " +
-	"restart — they describe what is failing now, not a history."
+	"you to the wrong system costs more than no diagnosis. These are durable tenant-scoped events, " +
+	"collapsed into the 200 most recent distinct diagnoses for this tenant."
 
-// diagnosticRecorder keeps recent enrolment diagnoses.
-//
-// Bounded by distinct diagnosis rather than by count. The interesting failures
-// are the DIFFERENT ones, and a ring buffer of the last N would be filled by
-// whichever client retries fastest — which is usually the one already
-// diagnosed.
-type diagnosticRecorder struct {
-	mu    sync.Mutex
-	seen  map[string]*EnrollmentDiagnostic
-	now   func() time.Time
-	limit int
-}
-
-func newDiagnosticRecorder() *diagnosticRecorder {
-	return &diagnosticRecorder{seen: map[string]*EnrollmentDiagnostic{}, now: time.Now, limit: 200}
-}
-
-// Record adds a diagnosis, collapsing repeats.
-func (d *diagnosticRecorder) Record(diag enrollmentdiag.Diagnosis) {
-	if d == nil {
-		return
+// RecordEnrollmentDiagnosis is the tenant-carrying seam protocol servers emit
+// into. It returns persistence errors so the composition root can log a closed
+// diagnostic without changing the protocol response already being written.
+func (a *API) RecordEnrollmentDiagnosis(ctx context.Context, tenantID string, diagnostic enrollmentdiag.Diagnosis) error {
+	if a == nil || a.orch == nil {
+		return fmt.Errorf("api: enrollment diagnostics are not configured")
 	}
-	key := string(diag.Protocol) + "|" + string(diag.Step) + "|" + string(diag.Cause)
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if existing, ok := d.seen[key]; ok {
-		existing.Count++
-		existing.ObservedAt = d.now().UTC().Format(time.RFC3339)
-		return
-	}
-	if len(d.seen) >= d.limit {
-		// Full. Drop the oldest rather than refusing the new one: a recorder
-		// that stopped accepting would go quiet exactly when an estate started
-		// failing in new ways.
-		var oldestKey string
-		var oldest string
-		for k, v := range d.seen {
-			if oldest == "" || v.ObservedAt < oldest {
-				oldest, oldestKey = v.ObservedAt, k
-			}
-		}
-		delete(d.seen, oldestKey)
-	}
-	d.seen[key] = &EnrollmentDiagnostic{
-		Protocol: string(diag.Protocol), Step: string(diag.Step), Cause: string(diag.Cause),
-		Summary: diag.Summary, Remediation: diag.Remediation,
-		Actionable: diag.Actionable(),
-		ObservedAt: d.now().UTC().Format(time.RFC3339), Count: 1,
-	}
-}
-
-// snapshot returns the recorded diagnoses, most recent first.
-func (d *diagnosticRecorder) snapshot() []EnrollmentDiagnostic {
-	if d == nil {
-		return nil
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	out := make([]EnrollmentDiagnostic, 0, len(d.seen))
-	for _, v := range d.seen {
-		out = append(out, *v)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ObservedAt > out[j].ObservedAt })
-	return out
-}
-
-// RecordEnrollmentDiagnosis is the seam the protocol servers emit into.
-func (a *API) RecordEnrollmentDiagnosis(diag enrollmentdiag.Diagnosis) {
-	if a == nil || a.enrollmentDiagnostics == nil {
-		return
-	}
-	a.enrollmentDiagnostics.Record(diag)
+	return a.orch.RecordEnrollmentDiagnosis(ctx, tenantID, diagnostic)
 }
 
 func (a *API) listEnrollmentDiagnostics(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.tenant(r); !ok {
+	tenantID, ok := a.tenant(r)
+	if !ok {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	items := a.enrollmentDiagnostics.snapshot()
+	if a.store == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "enrollment diagnostics are not configured"))
+		return
+	}
+	rows, err := a.store.ListEnrollmentDiagnostics(r.Context(), tenantID, store.EnrollmentDiagnosticRetentionLimit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]EnrollmentDiagnostic, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, EnrollmentDiagnostic{
+			Protocol: row.Protocol, Step: row.Step, Cause: row.Cause,
+			Summary: row.Summary, Remediation: row.Remediation, Actionable: row.Actionable,
+			ObservedAt: row.ObservedAt.UTC().Format(time.RFC3339), Count: row.Count,
+		})
+	}
 	out := EnrollmentDiagnosticList{
 		Items: items, Guidance: enrollmentDiagnosticGuidance,
 	}

@@ -7,6 +7,7 @@ import { IntlProvider } from "@/i18n/I18nProvider";
 const { providerMock } = vi.hoisted(() => ({
   providerMock: {
     listTenants: vi.fn(),
+    listActivity: vi.fn(),
     provisionTenant: vi.fn(),
     suspendTenant: vi.fn(),
     offboardTenant: vi.fn(),
@@ -37,6 +38,7 @@ describe("provider console (L3)", () => {
   beforeEach(() => {
     clearProviderToken();
     for (const fn of Object.values(providerMock)) fn.mockReset();
+    providerMock.listActivity.mockResolvedValue([]);
   });
 
   it("gates on an operator token before touching the provider plane", () => {
@@ -131,10 +133,15 @@ describe("provider console (L3)", () => {
     fireEvent.change(await screen.findByLabelText("Product name"), { target: { value: "Acme PKI" } });
     fireEvent.change(screen.getByLabelText("Custom domain"), { target: { value: "certs.acme.example" } });
     fireEvent.click(screen.getByRole("button", { name: "Save brand" }));
-    await waitFor(() => expect(providerMock.setBrand).toHaveBeenCalledWith("t-1", expect.objectContaining({
-      product_name: "Acme PKI",
-      custom_domain: "certs.acme.example",
-    })));
+    await waitFor(() =>
+      expect(providerMock.setBrand).toHaveBeenCalledWith(
+        "t-1",
+        expect.objectContaining({
+          product_name: "Acme PKI",
+          custom_domain: "certs.acme.example",
+        }),
+      ),
+    );
   });
 
   it("drops the operator back to the gate when the plane refuses the token", async () => {
@@ -162,5 +169,28 @@ describe("provider console (L3)", () => {
     // the operator sees what broke, not just that something did.
     expect(await screen.findByText(/Isolation drill FAILED/)).toBeInTheDocument();
     expect(screen.getByText(/hijack accepted/)).toBeInTheDocument();
+  });
+
+  it("shows immutable provider authority evidence with actor, customer, and sequence", async () => {
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listActivity.mockResolvedValue([
+      {
+        sequence: 42,
+        event_id: "evt-42",
+        type: "provider.tenant.quota.set",
+        tenant_id: "tenant-acme",
+        operator_id: "op-1",
+        operator_email: "operator@example.test",
+        at: "2026-08-09T21:00:00Z",
+      },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    expect(await screen.findByRole("heading", { name: "Recent activity" })).toBeInTheDocument();
+    expect(screen.getByText("provider.tenant.quota.set")).toBeInTheDocument();
+    expect(screen.getByText("operator@example.test")).toBeInTheDocument();
+    expect(screen.getByText("tenant-acme")).toBeInTheDocument();
+    expect(screen.getByText("#42")).toBeInTheDocument();
   });
 });

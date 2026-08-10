@@ -179,29 +179,6 @@ func (p *PGStore) QuotaFor(ctx context.Context, tenantID string) (Quota, error) 
 	return out, err
 }
 
-// SetQuota persists the tenant's limits, replacing any prior row. NULL columns
-// are honest: an unset limit is the ABSENCE of a cap, never a cap of zero.
-func (p *PGStore) SetQuota(ctx context.Context, q Quota) error {
-	if p == nil || p.store == nil || q.TenantID == "" {
-		return nil
-	}
-	return p.tx(ctx, q.TenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO provider_tenant_quotas
-			   (tenant_id, max_agents, max_tenants, max_certificates_stored, max_secrets_stored, updated_by, updated_at)
-			 VALUES ($1, $2, $3, $4, $5, nullif($6, ''), now())
-			 ON CONFLICT (tenant_id) DO UPDATE SET
-			   max_agents = EXCLUDED.max_agents,
-			   max_tenants = EXCLUDED.max_tenants,
-			   max_certificates_stored = EXCLUDED.max_certificates_stored,
-			   max_secrets_stored = EXCLUDED.max_secrets_stored,
-			   updated_by = EXCLUDED.updated_by,
-			   updated_at = now()`,
-			q.TenantID, q.MaxAgents, q.MaxTenants, q.MaxCertificatesStored, q.MaxSecretsStored, q.UpdatedBy)
-		return err
-	})
-}
-
 // IssuedInPeriod recounts the period's issuances from the identity_transitions
 // projection of the event log — the independent record ReconcileEvidence
 // checks the meter against. ok is always true here: a durable deployment

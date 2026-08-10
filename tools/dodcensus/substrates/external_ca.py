@@ -737,17 +737,23 @@ def serve() -> int:
     server = LoopbackHTTPServer((host, 0), Handler)
     server.state = state  # type: ignore[attr-defined]
     scheme = "http"
-    if entry_id == "external_ca.entrust":
+    if entry_id in ("external_ca.adcs", "external_ca.entrust"):
         tls_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls_context.minimum_version = ssl.TLSVersion.TLSv1_3
-        tls_context.verify_mode = ssl.CERT_REQUIRED
-        tls_context.load_cert_chain(
-            certfile=required_env("TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE"),
-            keyfile=required_env("TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE"),
-        )
-        tls_context.load_verify_locations(
-            cafile=required_env("TRSTCTL_ENTRUST_MTLS_CLIENT_CA_FILE"),
-        )
+        if entry_id == "external_ca.adcs":
+            tls_context.load_cert_chain(
+                certfile=required_env("TRSTCTL_ADCS_TLS_SERVER_CERT_FILE"),
+                keyfile=required_env("TRSTCTL_ADCS_TLS_SERVER_KEY_FILE"),
+            )
+        else:
+            tls_context.verify_mode = ssl.CERT_REQUIRED
+            tls_context.load_cert_chain(
+                certfile=required_env("TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE"),
+                keyfile=required_env("TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE"),
+            )
+            tls_context.load_verify_locations(
+                cafile=required_env("TRSTCTL_ENTRUST_MTLS_CLIENT_CA_FILE"),
+            )
         server.socket = tls_context.wrap_socket(server.socket, server_side=True)
         scheme = "https"
     state.base_url = f"{scheme}://{host}:{server.server_port}"

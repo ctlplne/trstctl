@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 )
 
@@ -382,5 +383,5 @@ func (w *RetentionWorker) signSegment(tenantID, prevHash, head string, segment [
 	if err != nil {
 		return "", err
 	}
-	return w.svc.signer.Sign(payload)
+	return w.svc.signer.SignArtifact(jose.ArtifactAuditRetention, payload)
 }

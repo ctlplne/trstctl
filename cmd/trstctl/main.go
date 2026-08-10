@@ -195,7 +195,7 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 		return true, nil
 	}
 	if flags.restorePath != "" {
-		n, err := server.RunRestore(ctx, cfg, flags.restorePath)
+		n, err := server.RunRestore(ctx, cfg, flags.restorePath, attachEEProjectionOptions)
 		if err != nil {
 			return true, fmt.Errorf("restore: %w", err)
 		}
@@ -203,7 +203,7 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 		return true, nil
 	}
 	if flags.fullRestoreDir != "" {
-		summary, err := server.RunFullRestore(ctx, cfg, flags.fullRestoreDir)
+		summary, err := server.RunFullRestore(ctx, cfg, flags.fullRestoreDir, attachEEProjectionOptions)
 		if err != nil {
 			return true, fmt.Errorf("full restore: %w", err)
 		}
@@ -216,7 +216,7 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 		// rebuild rolls back to the prior read model rather than leaving a partial
 		// inventory. This is the failed-restore / divergence recovery — it does not
 		// require an empty event store the way --restore does.
-		n, err := server.RunRebuild(ctx, cfg)
+		n, err := server.RunRebuild(ctx, cfg, attachEEProjectionOptions)
 		if err != nil {
 			return true, fmt.Errorf("rebuild: %w", err)
 		}

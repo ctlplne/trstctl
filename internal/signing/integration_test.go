@@ -13,9 +13,93 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/signing"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
+
+// TestAuditEvidenceOverRealSignerBinary is the assembled AUD-63 proof. The real
+// trstctl-signer process imports the historical PEM, deletes it only after
+// sealing, admits a versioned evidence kind over UDS, and preserves the exact
+// public key across a process restart. The test process receives only JWS/public
+// material after startup.
+func TestAuditEvidenceOverRealSignerBinary(t *testing.T) {
+	bin := buildSigner(t)
+	dir, err := os.MkdirTemp("", "ae")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	socket := filepath.Join(dir, "s.sock")
+	keystore := filepath.Join(dir, "keys")
+	kekPath := filepath.Join(dir, "kek.bin")
+	legacyPath := filepath.Join(dir, "audit.pem")
+
+	legacy, err := jose.GenerateRSASigningKey("audit-export")
+	if err != nil {
+		t.Fatalf("generate legacy key: %v", err)
+	}
+	pemBytes, err := legacy.MarshalPrivateKey()
+	if err != nil {
+		t.Fatalf("marshal legacy key: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, pemBytes, 0o600); err != nil {
+		t.Fatalf("write legacy key: %v", err)
+	}
+
+	ctx := context.Background()
+	args := devSignerArgs(
+		"--keystore", keystore,
+		"--kek", kekPath,
+		"--legacy-audit-key", legacyPath,
+	)
+	client, stop, err := signing.StartChild(ctx, bin, socket, args...)
+	if err != nil {
+		t.Fatalf("StartChild migration boot: %v", err)
+	}
+	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		stop()
+		t.Fatalf("legacy PEM remains after signer readiness: %v", err)
+	}
+
+	payload := []byte(`{"format":"trstctl.audit-export.v1","tenant":"tenant-a"}`)
+	res, err := client.SignArtifact(ctx, signing.ArtifactSignRequest{
+		Kind: jose.ArtifactAuditExport, TenantID: "deployment", AuthorityID: "audit-evidence",
+		KeyID: "audit-export", Payload: payload,
+	})
+	if err != nil {
+		stop()
+		t.Fatalf("SignArtifact boot 1: %v", err)
+	}
+	if got, err := legacy.JWKS().Verify(string(res.Signature)); err != nil || !bytes.Equal(got, payload) {
+		stop()
+		t.Fatalf("verify boot-1 evidence: payload=%q err=%v", got, err)
+	}
+	stop()
+
+	client, stop, err = signing.StartChild(ctx, bin, socket, args...)
+	if err != nil {
+		t.Fatalf("StartChild restart: %v", err)
+	}
+	defer stop()
+	res, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
+		Kind: jose.ArtifactAuditExport, TenantID: "deployment", AuthorityID: "audit-evidence",
+		KeyID: "audit-export", Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("SignArtifact boot 2: %v", err)
+	}
+	if got, err := legacy.JWKS().Verify(string(res.Signature)); err != nil || !bytes.Equal(got, payload) {
+		t.Fatalf("verify restart evidence: payload=%q err=%v", got, err)
+	}
+	_, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
+		Kind: "trstctl.audit-evidence/forged-kind/v1", TenantID: "deployment", AuthorityID: "audit-evidence",
+		KeyID: "audit-export", Payload: payload,
+	})
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("unknown evidence kind status = %v, want FailedPrecondition", status.Code(err))
+	}
+}
 
 // TestSignCSROverUDS is the S1.4 acceptance test: the control plane launches the
 // signer as its own process, then signs a CSR through it over a Unix domain

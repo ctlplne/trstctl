@@ -1346,10 +1346,11 @@ func (o OTLP) TimeoutDuration() (time.Duration, error) {
 // bundles under ArchiveDir, then a replayable checkpoint advances the query
 // floor. The underlying AN-2 event envelopes remain in the event log because
 // projection rebuild, disaster recovery, and authorized privacy rewrites require
-// the complete source history. SigningKeyFile persists the export signing key so
-// bundles verify across restarts.
+// the complete source history. SigningKeyFile is now migration-only: on upgrade,
+// trstctl-signer imports that historical PEM into its sealed audit-export handle
+// and deletes the plaintext. Fresh deployments never create it (AUD-63 / AN-4).
 type Audit struct {
-	SigningKeyFile string `json:"signing_key_file"` // PEM path; persisted so the export key does not rotate
+	SigningKeyFile string `json:"signing_key_file"` // legacy PEM migration path; private custody lives in trstctl-signer
 	Retention      string `json:"retention"`        // Go duration; empty means an indefinite served audit view
 	ArchiveDir     string `json:"archive_dir"`      // signed cold-storage bundles; required to advance the served-view retention floor
 }
@@ -1491,6 +1492,7 @@ type Bulkheads struct {
 	OutboxCodeSigning   *BulkheadLimit `json:"outbox_code_signing,omitempty"`
 	OutboxNotifications *BulkheadLimit `json:"outbox_notifications,omitempty"`
 	OutboxTenantSeal    *BulkheadLimit `json:"outbox_tenant_seal,omitempty"`
+	OutboxFleet         *BulkheadLimit `json:"outbox_fleet_reissuance,omitempty"`
 	Signing             BulkheadLimit  `json:"signing"`
 	Query               BulkheadLimit  `json:"query"`
 	Policy              BulkheadLimit  `json:"policy"`
@@ -1552,6 +1554,7 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemOutboxCodeSigning, limit: familyLimit(b.OutboxCodeSigning)},
 		{name: bulkhead.SubsystemOutboxNotifications, limit: familyLimit(b.OutboxNotifications)},
 		{name: bulkhead.SubsystemOutboxTenantSeal, limit: familyLimit(b.OutboxTenantSeal)},
+		{name: bulkhead.SubsystemOutboxFleet, limit: familyLimit(b.OutboxFleet)},
 		{name: bulkhead.SubsystemSigning, limit: b.Signing},
 		{name: bulkhead.SubsystemQuery, limit: b.Query},
 		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
@@ -1977,8 +1980,8 @@ func Default() *Config {
 		// OTLP export is OFF by default. When enabled, it sends traces and audit
 		// event metadata only to the operator's collector endpoint.
 		OTLP: OTLP{Enabled: false, Timeout: "5s", QueueSize: 1024, ServiceName: "trstctl"},
-		// The audit export key persists under the data directory so signed evidence
-		// bundles verify across restarts; retention is indefinite by default.
+		// Legacy audit PEM migration path. Fresh evidence keys live only in the
+		// signer's sealed keystore; retention is indefinite by default.
 		Audit: Audit{SigningKeyFile: "data/audit/signing-key.pem"},
 		Privacy: Privacy{Retention: PrivacyRetention{
 			Enabled:      true,
@@ -2526,6 +2529,7 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING", b.Outbox, &b.OutboxCodeSigning)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS", b.Outbox, &b.OutboxNotifications)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL", b.Outbox, &b.OutboxTenantSeal)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE", b.Outbox, &b.OutboxFleet)
 	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_WORKERS", &b.Signing.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_QUEUE", &b.Signing.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_QUERY_WORKERS", &b.Query.Workers)

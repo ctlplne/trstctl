@@ -89,6 +89,36 @@ func TestListSendsAuthAndPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestOutboxReconciliationConflictsListIsReadOnlyAndTenantAuthenticated(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, http.StatusOK, `{"items":[],"guidance":"keep the historical command"}`, &cap)
+	env := cli.Env{Server: srv.URL, Token: "tok-incidents", Tenant: "tenant-a", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"incidents", "outbox-reconciliation-conflicts", "list"}, env, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0; stderr=%s", code, stderr)
+	}
+	if cap.Method != http.MethodGet || cap.Path != "/api/v1/incidents/outbox-reconciliation-conflicts" || cap.Query != "" {
+		t.Fatalf("request = %s %s?%s, want exact read-only quarantine route", cap.Method, cap.Path, cap.Query)
+	}
+	if cap.Header.Get("Authorization") != "Bearer tok-incidents" {
+		t.Fatalf("Authorization = %q, want Bearer tok-incidents", cap.Header.Get("Authorization"))
+	}
+	if cap.Header.Get("X-Tenant-ID") != "tenant-a" {
+		t.Fatalf("X-Tenant-ID = %q, want tenant-a", cap.Header.Get("X-Tenant-ID"))
+	}
+	if len(cap.Body) != 0 || cap.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("read-only quarantine command sent mutation material: body=%q idempotency=%q", cap.Body, cap.Header.Get("Idempotency-Key"))
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+	if decoded["guidance"] != "keep the historical command" {
+		t.Fatalf("stdout lost recovery guidance: %s", stdout)
+	}
+}
+
 func TestNHIInventoryCommandSendsAuthAndPrintsJSON(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"items":[],"summary":{"total":0},"coverage":[]}`, &cap)

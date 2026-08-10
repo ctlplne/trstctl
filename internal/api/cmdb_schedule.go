@@ -14,29 +14,21 @@ import (
 
 // The served half of scheduled CMDB reconciliation (I2).
 //
-// Three operations, and deliberately no fourth: there is no endpoint that
-// writes to the CMDB. "No CMDB write unless explicitly configured" is held here
-// as an absence — the read path builds GET requests against a fixed cmdb_ci
-// path, and the ticket writer's table allow-list rejects cmdb_ci — rather than
-// as a flag somebody could flip.
+// The control plane configures and ingests; a network relay performs the read.
+// There is no CMDB writer and no control-plane HTTP fallback.
 
 type cmdbScheduleBody struct {
 	InstanceURL string `json:"instance_url"`
 	TokenRef    string `json:"token_ref"`
 	CIQuery     string `json:"ci_query"`
-	// AllowPrivateEndpoint mirrors the ticket writer's field exactly, and is
-	// checked against the same operator binding and the same egress:private
-	// permission. A second rule for the same risk is a second rule to get wrong.
+	// Kept in the wire shape for an actionable migration error. Relay execution
+	// needs no control-plane private-egress grant and true is refused.
 	AllowPrivateEndpoint bool `json:"allow_private_endpoint"`
 	// IntervalSeconds is how often to re-read. A CMDB is not a real-time
 	// system and a tight poll buys nothing but rate limiting.
 	IntervalSeconds int  `json:"interval_seconds"`
 	Enabled         bool `json:"enabled"`
-	// Execution picks the sync vantage (I2): "" / "control_plane" runs the
-	// read from the control plane under the private-egress rules above;
-	// "relay" dispatches a cmdb.sync job that a network relay inside the
-	// segment claims — the model for a ServiceNow instance the control plane
-	// cannot reach at all.
+	// Execution is relay-only. Empty is accepted as the safe default.
 	Execution string `json:"execution,omitempty"`
 }
 
@@ -62,7 +54,9 @@ const cmdbScheduleGuidance = "This reads cmdb_ci and never writes to it. A CMDB 
 	"ownership nobody recorded and may not overwrite ownership a human attested — that becomes a " +
 	"conflict for someone to resolve. A CI naming an owner this estate has never heard of does NOT " +
 	"create one: a CMDB's assignment group is not evidence that a trstctl owner should exist, and " +
-	"auto-creating would build a parallel estate out of the CMDB's typos."
+	"auto-creating would build a parallel estate out of the CMDB's typos. The read always runs as " +
+	"a durable network-relay job with a per-attempt secret:// token redemption; the control plane " +
+	"does not dial the CMDB."
 
 // minCMDBInterval floors the poll. Below this an operator is generating rate
 // limiting, not freshness — a CMDB's ownership columns change on the order of
@@ -79,46 +73,31 @@ func (a *API) putCMDBSchedule(w http.ResponseWriter, r *http.Request) {
 		if err := requireAbsoluteURL(body.InstanceURL, "instance_url"); err != nil {
 			return 0, nil, err
 		}
-		if strings.TrimSpace(body.TokenRef) == "" {
+		if !strings.HasPrefix(strings.TrimSpace(body.TokenRef), "secret://") {
 			return 0, nil, errStatus(http.StatusBadRequest,
-				"token_ref is required; it is a reference such as env:TRSTCTL_SERVICENOW_TOKEN, never the token itself")
+				"token_ref must be a secret:// reference; the network relay redeems it per attempt and the control plane never holds the token")
 		}
 		if body.IntervalSeconds < minCMDBInterval {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"interval_seconds must be at least 300; a CMDB's ownership columns change on the order of days, and a tighter poll buys rate limiting rather than freshness")
 		}
 		execution := strings.TrimSpace(body.Execution)
-		switch execution {
-		case "", "control_plane", "relay":
-		default:
+		if execution != "" && execution != "relay" {
 			return 0, nil, errStatus(http.StatusBadRequest,
-				"execution must be control_plane or relay")
+				"execution must be relay; control-plane external polling was removed because it bypasses the durable outbox and returns private-estate credentials to the brain")
 		}
-		if execution == "relay" && !strings.HasPrefix(strings.TrimSpace(body.TokenRef), "secret://") {
-			// The relay redeems the token through the job-credential path, which
-			// resolves secret:// references. An env: reference names a variable
-			// in the CONTROL PLANE's environment — a process the relay is not —
-			// so accepting it would configure a sync that fails on its first
-			// claim with an error three hops from the mistake.
+		execution = "relay"
+		if body.AllowPrivateEndpoint {
 			return 0, nil, errStatus(http.StatusBadRequest,
-				"relay execution requires a secret:// token_ref: the relay redeems the token from the "+
-					"secret store per attempt, and an env: reference lives in the control plane's "+
-					"environment, which the relay does not share")
+				"allow_private_endpoint is a control-plane egress grant and is not valid for relay-only CMDB reads; enroll a network relay in the segment instead")
 		}
 		// The instance must already be an operator-approved ServiceNow
 		// destination. Without this a tenant could aim the control plane's
 		// credentials at any host it liked and call it a CMDB.
-		if body.AllowPrivateEndpoint {
-			// Same gate as the ticket path: reaching inside a private network is
-			// an operator grant plus a caller permission, never one alone.
-			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
-				return 0, nil, err
-			}
-		}
 		if _, err := a.approvedServiceNowBinding(serviceNowTicketRequest{
 			InstanceURL:          body.InstanceURL,
 			TokenRef:             body.TokenRef,
-			AllowPrivateEndpoint: body.AllowPrivateEndpoint,
+			AllowPrivateEndpoint: false,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -126,7 +105,7 @@ func (a *API) putCMDBSchedule(w http.ResponseWriter, r *http.Request) {
 			InstanceURL:          strings.TrimSpace(body.InstanceURL),
 			TokenRef:             strings.TrimSpace(body.TokenRef),
 			CIQuery:              strings.TrimSpace(body.CIQuery),
-			AllowPrivateEndpoint: body.AllowPrivateEndpoint,
+			AllowPrivateEndpoint: false,
 			IntervalSeconds:      body.IntervalSeconds,
 			Enabled:              body.Enabled,
 			Execution:            execution,

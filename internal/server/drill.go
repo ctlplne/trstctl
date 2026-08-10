@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -146,7 +147,12 @@ func (s *Server) LastRestoreDrill() *backup.DrillAttestation {
 // The restore goes through the SAME path production recovery uses. A drill with
 // its own simplified restore would prove the simplified one works, which is the
 // one nobody will be running at 3am.
-func RunRestoreDrill(ctx context.Context, cfg *config.Config, backupDir string) (backup.DrillAttestation, error) {
+func RunRestoreDrill(
+	ctx context.Context,
+	cfg *config.Config,
+	backupDir string,
+	factories ...EditionProjectionOptionsFactory,
+) (backup.DrillAttestation, error) {
 	if cfg == nil || cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
 		// Without an external Postgres there is nowhere to make a throwaway
 		// database. Reported as skipped rather than failed: nothing is broken,
@@ -154,20 +160,91 @@ func RunRestoreDrill(ctx context.Context, cfg *config.Config, backupDir string) 
 		return backup.RunDrill(ctx, backupDir, nil, nil)
 	}
 
-	return backup.RunDrill(ctx, backupDir, func(ctx context.Context) (int, error) {
+	return backup.RunDrill(ctx, backupDir, func(ctx context.Context) (backup.RestoreResult, error) {
 		target, drop, err := createEphemeralDatabase(ctx, cfg.Postgres.DSN)
 		if err != nil {
-			return 0, err
+			return backup.RestoreResult{}, err
 		}
 		// Dropped on every path out, including a panic inside the restore. A
 		// drill that left its database behind would fill the server with them,
 		// one per night, until somebody noticed the disk.
 		defer drop()
 
-		drillCfg := *cfg
-		drillCfg.Postgres.DSN = target
-		return restoreEventLog(ctx, &drillCfg, latestBackupArtifact(backupDir), false)
+		root, err := os.MkdirTemp("", "trstctl-full-restore-drill-")
+		if err != nil {
+			return backup.RestoreResult{}, fmt.Errorf("server: create isolated drill target: %w", err)
+		}
+		defer func() { _ = os.RemoveAll(root) }()
+
+		drillCfg, err := isolatedRestoreConfig(cfg, target, root)
+		if err != nil {
+			return backup.RestoreResult{}, err
+		}
+		restored, err := runFullRestore(ctx, &drillCfg, backupDir, true, true, factories...)
+		if err != nil {
+			return backup.RestoreResult{
+				EventsRestored:          restored.EventsRestored,
+				PostgresRecordsRestored: restored.Postgres.Records,
+				PostgresTablesRestored:  restored.Postgres.Tables,
+				ArtifactsRestored:       restored.ArtifactsRestored,
+				StoreHealthy:            restored.StoreHealthy,
+				EventLogHealthy:         restored.EventLogHealthy,
+				SignerHealthy:           restored.SignerHealthy,
+				ServerHealthy:           restored.ServerHealthy,
+			}, err
+		}
+		return backup.RestoreResult{
+			EventsRestored:          restored.EventsRestored,
+			PostgresRecordsRestored: restored.Postgres.Records,
+			PostgresTablesRestored:  restored.Postgres.Tables,
+			ArtifactsRestored:       restored.ArtifactsRestored,
+			FullSetRestored:         true,
+			StoreHealthy:            restored.StoreHealthy,
+			EventLogHealthy:         restored.EventLogHealthy,
+			SignerHealthy:           restored.SignerHealthy,
+			ServerHealthy:           restored.ServerHealthy,
+		}, nil
 	}, nil)
+}
+
+// isolatedRestoreConfig redirects every mutable restore destination away from
+// the running deployment. The deployment KEK and optional backup-decryption key
+// are copied in as read-only inputs because neither belongs in the backup set;
+// all restored key, certificate, signer, event, archive, and socket state lands
+// beneath root and is destroyed with the drill target.
+func isolatedRestoreConfig(source *config.Config, postgresDSN, root string) (config.Config, error) {
+	cfg := *source
+	if err := os.MkdirAll(filepath.Join(root, "run"), 0o700); err != nil {
+		return config.Config{}, fmt.Errorf("server: create isolated signer runtime directory: %w", err)
+	}
+	cfg.Postgres.Mode = config.PostgresExternal
+	cfg.Postgres.DSN = postgresDSN
+	cfg.NATS = config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: filepath.Join(root, "nats"),
+		Replicas: 1,
+	}
+	cfg.Signer.Mode = config.SignerChild
+	cfg.Signer.Socket = filepath.Join(root, "run", "signer.sock")
+	cfg.Signer.KeyStoreDir = filepath.Join(root, "files", "signer-keystore")
+	cfg.Signer.AuthSecretFile = filepath.Join(root, "files", "signer-auth-secret.bin")
+	cfg.Audit.SigningKeyFile = filepath.Join(root, "files", "legacy-audit-signing-key.pem")
+	cfg.Audit.ArchiveDir = filepath.Join(root, "audit-archive")
+	cfg.CA.CertFile = filepath.Join(root, "files", "issuing-ca.crt")
+
+	if source.Secrets.KEKFile == "" {
+		return config.Config{}, errors.New("server: restore drill requires the separately-custodied deployment KEK")
+	}
+	cfg.Secrets.KEKFile = filepath.Join(root, "references", "deployment-kek.bin")
+	if err := backup.CopyFile(source.Secrets.KEKFile, cfg.Secrets.KEKFile, 0o400); err != nil {
+		return config.Config{}, fmt.Errorf("server: copy deployment KEK into isolated drill target: %w", err)
+	}
+	if source.Backup.EncryptionKeyFile != "" {
+		cfg.Backup.EncryptionKeyFile = filepath.Join(root, "references", "backup-encryption-key.bin")
+		if err := backup.CopyFile(source.Backup.EncryptionKeyFile, cfg.Backup.EncryptionKeyFile, 0o400); err != nil {
+			return config.Config{}, fmt.Errorf("server: copy backup decryption key into isolated drill target: %w", err)
+		}
+	}
+	return cfg, nil
 }
 
 // restoreDrillRunner builds the drill closure for a configuration, or nil when
@@ -178,7 +255,10 @@ func RunRestoreDrill(ctx context.Context, cfg *config.Config, backupDir string) 
 // configured, which is a true statement about a deployment that backs up
 // elsewhere and not a fault. A closure that ran nightly and failed nightly
 // would manufacture an alert out of a choice somebody made deliberately.
-func restoreDrillRunner(cfg *config.Config) func(context.Context) (backup.DrillAttestation, error) {
+func restoreDrillRunner(
+	cfg *config.Config,
+	factories ...EditionProjectionOptionsFactory,
+) func(context.Context) (backup.DrillAttestation, error) {
 	if cfg == nil || strings.TrimSpace(cfg.Backup.Directory) == "" {
 		return nil
 	}
@@ -187,8 +267,17 @@ func restoreDrillRunner(cfg *config.Config) func(context.Context) (backup.DrillA
 	// caller's struct cannot redirect a drill at a different database.
 	snapshot := *cfg
 	return func(ctx context.Context) (backup.DrillAttestation, error) {
-		return RunRestoreDrill(ctx, &snapshot, dir)
+		return RunRestoreDrill(ctx, &snapshot, dir, factories...)
 	}
+}
+
+// RestoreDrillRunner exposes the same scheduler closure to the tagged edition
+// attach seam so licensed projections participate in the isolated drill.
+func RestoreDrillRunner(
+	cfg *config.Config,
+	factories ...EditionProjectionOptionsFactory,
+) func(context.Context) (backup.DrillAttestation, error) {
+	return restoreDrillRunner(cfg, factories...)
 }
 
 // createEphemeralDatabase makes a throwaway database and returns its DSN plus a
@@ -234,23 +323,4 @@ func replaceDatabaseInDSN(dsn, database string) string {
 	}
 	u.Path = "/" + database
 	return u.String()
-}
-
-// latestBackupArtifact names the event-log artifact a drill restores.
-//
-// The event log is what a restore replays; the other artifacts are configuration
-// and key material that a drill deliberately does not touch. Restoring an
-// operator's signer keystore into a throwaway database would be copying key
-// material somewhere new to prove a point.
-func latestBackupArtifact(dir string) string {
-	m, err := backup.ReadFullManifest(filepath.Join(dir, backup.FullManifestName))
-	if err != nil {
-		return ""
-	}
-	for _, artifact := range m.Artifacts {
-		if artifact.Role == "event-log" && artifact.Captured {
-			return filepath.Join(dir, artifact.Path)
-		}
-	}
-	return ""
 }

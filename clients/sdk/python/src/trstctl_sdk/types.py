@@ -2240,13 +2240,21 @@ DRArtifactFailure = TypedDict(
 DRDrill = TypedDict(
     'DRDrill',
     {
+        'artifacts_restored': list[str],
         'detail': str,
+        'event_log_healthy': bool,
         'events_restored': int,
+        'full_set_restored': bool,
         'limitations': list[str],
         'outcome': str,
+        'postgres_records_restored': int,
+        'postgres_tables_restored': dict[str, Any],
         'ran_at': str,
         'rpo_seconds': int,
         'rto_seconds': int,
+        'server_healthy': bool,
+        'signer_healthy': bool,
+        'store_healthy': bool,
     },
     total=False,
 )
@@ -3384,10 +3392,12 @@ FleetReissuanceRun = TypedDict(
         'evidence_bundle_format': str,
         'failed_targets': list[str],
         'graph_impact': dict[str, Any],
+        'halted_reason': str,
         'health_gates': list[dict[str, Any]],
         'id': str,
         'idempotency_key': str,
         'issuer_id': str,
+        'next_batch_index': int,
         'phase': str,
         'reason': str,
         'replacement_identities': list[dict[str, Any]],
@@ -5225,6 +5235,42 @@ OutboxCircuitList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+OutboxReconciliationConflict = TypedDict(
+    'OutboxReconciliationConflict',
+    {
+        'candidate_destination': str,
+        'candidate_effect_lane': str,
+        'candidate_payload_sha256': str,
+        'candidate_required_agent_id': str,
+        'candidate_required_agent_role': str,
+        'detected_at': str,
+        'existing_destination': str,
+        'existing_effect_lane': str,
+        'existing_outbox_id': int,
+        'existing_payload_sha256': str,
+        'existing_required_agent_id': str,
+        'existing_required_agent_role': str,
+        'id': str,
+        'idempotency_key': str,
+        'reason': str,
+        'source_event_id': str,
+        'source_event_sequence': int,
+        'source_event_type': str,
+        'status': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+OutboxReconciliationConflictList = TypedDict(
+    'OutboxReconciliationConflictList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
     },
     total=False,
 )

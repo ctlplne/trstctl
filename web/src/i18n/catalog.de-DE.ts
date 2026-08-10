@@ -869,6 +869,14 @@ const deDECatalog = {
   "policy.compliance.frameworkGroup": "Compliance-Rahmenwerk",
   "policy.compliance.loadingEvidencePack": "Evidenzpaket wird geladen.",
   "policy.compliance.evidencePackUnavailable": "Evidenzpaket nicht verfügbar",
+  "policy.compliance.tenant": "Mandant",
+  "policy.compliance.generated": "Erstellt",
+  "policy.compliance.coverageWindow": "Evidenzzeitraum",
+  "policy.compliance.evidenceRefs": "Genaue Evidenzreferenzen",
+  "policy.compliance.missingPrerequisites": "Fehlende Voraussetzungen",
+  "policy.compliance.noneMissing": "Keine",
+  "policy.compliance.unknown": "Unbekannt",
+  "policy.compliance.unbound": "Nicht gebunden",
   "policy.versions.heading": "Richtlinienversionen",
   "policy.versions.description":
     "Aktive Lifecycle-Richtlinienversionen werden vor der Aktivierung geprüft, als policy.version-Ereignisse aufgezeichnet und vor Lifecycle-Änderungen durchgesetzt.",
@@ -1481,7 +1489,8 @@ const deDECatalog = {
   // E1 scope closure — Machine-authored translation, FLAG FOR HUMAN REVIEW.
   "source.cp.retained.e1par00006": "Konstruktionsbedingt \u00fcber die Steuerungsebene ausgef\u00fchrt",
   "source.authority.agreement.c4xr000001": "Autorit\u00e4tsabgleich (XREC)",
-  "source.agreement.unavailable.c4xr000002": "Der Abgleich zwischen Autorit\u00e4ten ist auf dieser Installation nicht verf\u00fcgbar. Es wurden keine Zust\u00e4nde erfasst und es konnte keine Abweichung erkannt werden. Dies ist keine Aussage dar\u00fcber, dass Ihre Autorit\u00e4ten \u00fcbereinstimmen.",
+  "source.agreement.unavailable.c4xr000002":
+    "Der Abgleich zwischen Autorit\u00e4ten ist auf dieser Installation nicht verf\u00fcgbar. Es wurden keine Zust\u00e4nde erfasst und es konnte keine Abweichung erkannt werden. Dies ist keine Aussage dar\u00fcber, dass Ihre Autorit\u00e4ten \u00fcbereinstimmen.",
   "source.open.witnesses.c4xr000003": "Offene Zeugen",
   "source.replay.watermark.c4xr000004": "Replay-Wasserzeichen",
   "source.median.resolution.c4xr000005": "Mittlere Aufl\u00f6sungsdauer",
@@ -1489,7 +1498,8 @@ const deDECatalog = {
   "source.authority.c4xr000007": "Autorit\u00e4t",
   "source.divergences.c4xr000008": "Abweichungen",
   "source.by.class.c4xr000009": "Nach Klasse",
-  "source.not.collecting.c4xr000010": "Angebunden, aber es ist kein Abgleichsplan konfiguriert \u2014 es werden keine Autorit\u00e4tszust\u00e4nde verglichen. Die Werte unten bedeuten fehlende Erfassung, nicht fehlende Abweichung.",
+  "source.not.collecting.c4xr000010":
+    "Angebunden, aber es ist kein Abgleichsplan konfiguriert \u2014 es werden keine Autorit\u00e4tszust\u00e4nde verglichen. Die Werte unten bedeuten fehlende Erfassung, nicht fehlende Abweichung.",
   "source.crypto.readiness.m2seq00001": "Reihenfolge der Krypto-Migration",
   "source.crypto.assets.m2seq00002": "Krypto-Assets",
   "source.urgent.m2seq00003": "Dringend (schwach oder quantenanf\u00e4llig)",
@@ -3306,6 +3316,7 @@ const deDECatalog = {
   "source.mdm.devices.unobserved.i5mdm00003": "nicht beobachtet \u2014 das MDM hat dieses Ger\u00e4t nicht gemeldet",
   "source.mdm.devices.renewalrisk.i5mdm00004":
     "{value1} Gerät(e) laufen Gefahr, ihre Erneuerung stillschweigend zu verpassen: Ihre Zertifikate liegen im Erneuerungsfenster und das MDM hat sie seit dessen Öffnung nicht gesehen.",
+  "source.mdm.devices.stepdetail.i5mdm00005": "— {value1}",
   "source.issuance.requests.heading.i3req00001": "Ausstellungsanfragen",
   "source.issuance.requests.counts.i3req00002": "{value1} warten auf eine Entscheidung, von {value2} insgesamt.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, entschieden von {value2}",
@@ -4218,7 +4229,8 @@ const deDECatalog = {
   "platform.idempotency.notInstalled": "Nicht installiert",
   "platform.idempotency.recoveryHeading": "Wiederherstellung",
   "platform.usageEvidence.heading": "Nutzung und Rechnungsnachweis",
-  "platform.usageEvidence.description": "Gemessene Nutzung dieses Mandanten als das Dokument, auf dessen Grundlage ein Anbieter abrechnet. Lesen Sie den Abrechnungsstatus vor den Zahlen: Ein Zeitraum, den der Messspeicher nicht durchgehend abdecken konnte, ist eine Teilansicht und keine Rechnung.",
+  "platform.usageEvidence.description":
+    "Gemessene Nutzung dieses Mandanten als das Dokument, auf dessen Grundlage ein Anbieter abrechnet. Lesen Sie den Abrechnungsstatus vor den Zahlen: Ein Zeitraum, den der Messspeicher nicht durchgehend abdecken konnte, ist eine Teilansicht und keine Rechnung.",
   "platform.usageEvidence.loading": "Nutzungsnachweis wird geladen.",
   "platform.usageEvidence.periodStart": "Beginn des Zeitraums",
   "platform.usageEvidence.periodEnd": "Ende des Zeitraums",
@@ -4237,8 +4249,7 @@ const deDECatalog = {
   "platform.usageEvidence.unchecked": "{meter}: keine unabhängige Ereignisquelle; der gemessene Wert steht für sich allein.",
   "platform.usageEvidence.signed":
     "Signiert mit dem Audit-Export-Schlüssel dieser Installation ({keyId}). Prüfen Sie das JWS im JSON-Dokument gegen dessen öffentlichen Schlüssel.",
-  "platform.usageEvidence.unsigned":
-    "Keine Signatur: Dieses Dokument ist kein abrechenbarer Nachweis. Der Grund oben nennt den fehlenden Bestandteil.",
+  "platform.usageEvidence.unsigned": "Keine Signatur: Dieses Dokument ist kein abrechenbarer Nachweis. Der Grund oben nennt den fehlenden Bestandteil.",
   "platform.tenantSeal.heading": "Kryptografische Mandantenverwahrung",
   "platform.tenantSeal.description":
     "Verschieben Sie diesen Mandanten hinter einen eigenen, vom Betreiber kontrollierten Wrapper und machen Sie seine geschützten Daten kryptografisch unzugänglich, ohne benachbarte Mandanten anzuhalten.",
@@ -4291,154 +4302,94 @@ const deDECatalog = {
     "Unverschlüsselte lokale Vorschau. In dieser Browseransicht werden keine Bytes privater Zertifikate oder Schlüssel offengelegt.",
   // B6 edge delegation panel — Machine-authored translations, FLAG FOR HUMAN REVIEW
   // (added with the EdgeDelegationsPanel; same convention as previous machine-authored additions).
-  "source.edge.delegations.b6edge00001":
-    "Delegierte Edge-Sub-CAs (Air-Gap)",
+  "source.edge.delegations.b6edge00001": "Delegierte Edge-Sub-CAs (Air-Gap)",
   "source.edge.unavailable.b6edge00002":
     "Die Edge-Delegationsoberfläche ist in dieser Installation nicht aktiviert. Delegierte Edge-CAs sind die einzige begrenzte Ausnahme davon, dass Signieren nur im isolierten Signierer stattfindet; die Ablehnung des Ablaufs ist die Standardhaltung.",
   "source.edge.none.b6edge00003":
     "Kein Segment hat sich angemeldet. Delegierte Edge-CAs sind standardmäßig deaktiviert; die Anmeldung eines deklarierten Segments legt die TPM-Attestierungswurzeln fest, die für seine Hosts bürgen dürfen, sowie die Bezeichner, auf die jede Delegation beschränkt ist.",
-  "source.edge.segments.b6edge00004":
-    "Segment-Anmeldungen",
-  "source.edge.live.b6edge00005":
-    "Delegationen",
-  "source.edge.host.b6edge00006":
-    "Host",
-  "source.edge.constraints.b6edge00007":
-    "Namensbeschränkungen",
-  "source.edge.status.b6edge00008":
-    "Status",
-  "source.edge.expires.b6edge00009":
-    "Läuft ab",
-  "source.edge.segment.b6edge00010":
-    "Segment",
-  "source.edge.enabled.b6edge00011":
-    "Aktiviert",
-  "source.edge.attestation.roots.b6edge00012":
-    "Attestierungswurzeln",
-  "source.edge.excluding.b6edge00013":
-    "— ausgenommen",
-  "source.edge.on.b6edge00016":
-    "an",
-  "source.edge.off.b6edge00017":
-    "aus",
-  "source.edge.attested.key.b6edge00014":
-    "Attestierter Schlüssel",
+  "source.edge.segments.b6edge00004": "Segment-Anmeldungen",
+  "source.edge.live.b6edge00005": "Delegationen",
+  "source.edge.host.b6edge00006": "Host",
+  "source.edge.constraints.b6edge00007": "Namensbeschränkungen",
+  "source.edge.status.b6edge00008": "Status",
+  "source.edge.expires.b6edge00009": "Läuft ab",
+  "source.edge.segment.b6edge00010": "Segment",
+  "source.edge.enabled.b6edge00011": "Aktiviert",
+  "source.edge.attestation.roots.b6edge00012": "Attestierungswurzeln",
+  "source.edge.excluding.b6edge00013": "— ausgenommen",
+  "source.edge.on.b6edge00016": "an",
+  "source.edge.off.b6edge00017": "aus",
+  "source.edge.attested.key.b6edge00014": "Attestierter Schlüssel",
   "source.edge.reconcile.note.b6edge00015":
     "Ausstellungen, die erfolgen, während ein Host unerreichbar ist, werden erst sichtbar, wenn sein Journal abgeglichen wird; eine Delegation ohne Einträge kann weiterhin ausstellen. Abgeglichene Blattzertifikate außerhalb der Beschränkungen der Delegation werden sichtbar als Verstöße erfasst.",
   // F4 AD CS certificate-database panel — Machine-authored translations, FLAG FOR HUMAN REVIEW.
-  "source.adcs.database.f4adcs0001":
-    "AD-CS-Zertifikatdatenbank",
+  "source.adcs.database.f4adcs0001": "AD-CS-Zertifikatdatenbank",
   "source.adcs.database.intro.f4adcs0002":
     "Ein domänengebundenes Relais sammelt certutil-Zeilen aus jeder CA-Datenbank; die Steuerungsebene fasst sie nach Disposition zusammen. Ausstehend ist eine Anfrage, die auf die Genehmigung eines CA-Managers wartet — verschieden von fehlgeschlagen und verweigert.",
   "source.adcs.database.none.f4adcs0003":
     "Es wurde keine CA-Datenbank aufgenommen. Ein domänengebundenes Relais führt certutil gegen eine CA aus und übermittelt die Zeilen; bis das geschieht, gibt es nichts zusammenzufassen — was nicht dasselbe ist wie eine CA ohne Zertifikate.",
-  "source.adcs.ca.f4adcs0004":
-    "CA",
-  "source.adcs.issued.f4adcs0005":
-    "Ausgestellt",
-  "source.adcs.pending.f4adcs0006":
-    "Ausstehend",
-  "source.adcs.revoked.f4adcs0007":
-    "Widerrufen",
-  "source.adcs.denied.f4adcs0008":
-    "Verweigert",
-  "source.adcs.failed.f4adcs0009":
-    "Fehlgeschlagen",
-  "source.adcs.gaps.f4adcs0010":
-    "Lücken",
-  "source.adcs.ingested.f4adcs0011":
-    "Zuletzt aufgenommen",
+  "source.adcs.ca.f4adcs0004": "CA",
+  "source.adcs.issued.f4adcs0005": "Ausgestellt",
+  "source.adcs.pending.f4adcs0006": "Ausstehend",
+  "source.adcs.revoked.f4adcs0007": "Widerrufen",
+  "source.adcs.denied.f4adcs0008": "Verweigert",
+  "source.adcs.failed.f4adcs0009": "Fehlgeschlagen",
+  "source.adcs.gaps.f4adcs0010": "Lücken",
+  "source.adcs.ingested.f4adcs0011": "Zuletzt aufgenommen",
   "source.adcs.database.note.f4adcs0012":
     "Dies ist Sichtbarkeit, keine Steuerung: trstctl liest die CA-Datenbank, genehmigt oder widerruft nicht über diese Oberfläche. Lücken zählen Zeilen, die die Aufnahme nicht vollständig lesen konnte, damit ein Sammelproblem nicht als leere oder gesunde CA erscheint.",
-  "source.adcs.database.error.f4adcs0013":
-    "Die Zusammenfassung der AD-CS-Zertifikatdatenbank konnte nicht geladen werden.",
-  "source.adcs.never.f4adcs0014":
-    "nie",
+  "source.adcs.database.error.f4adcs0013": "Die Zusammenfassung der AD-CS-Zertifikatdatenbank konnte nicht geladen werden.",
+  "source.adcs.never.f4adcs0014": "nie",
   // L3 provider console — Machine-authored translations, FLAG FOR HUMAN REVIEW.
-  "source.provider.console.l3prov0001":
-    "Anbieterkonsole",
+  "source.provider.console.l3prov0001": "Anbieterkonsole",
   "source.provider.login.intro.l3prov0002":
     "Melden Sie sich mit dem Bediener-Token Ihres Anbieter-IdP an. Diese Ebene verwaltet Kundenmandanten und ist daher von der Mandantenkonsole getrennt; sie hält ihre eigene kurzlebige Bediener-Anmeldeinformation nur in diesem Tab.",
-  "source.provider.token.l3prov0003":
-    "Bediener-Bearer-Token",
-  "source.provider.signin.l3prov0004":
-    "Anmelden",
-  "source.provider.customers.intro.l3prov0005":
-    "Ihre Kundenmandanten und ihr Lebenszyklusstatus.",
-  "source.provider.signout.l3prov0006":
-    "Abmelden",
-  "source.provider.provision.l3prov0007":
-    "Einen Kunden bereitstellen",
-  "source.provider.slug.l3prov0008":
-    "Kennung",
-  "source.provider.name.l3prov0009":
-    "Name",
-  "source.provider.provision.action.l3prov0010":
-    "Bereitstellen",
-  "source.provider.customers.l3prov0011":
-    "Kunden",
-  "source.provider.none.l3prov0012":
-    "Noch keine Kundenmandanten. Stellen Sie oben einen bereit.",
-  "source.provider.col.name.l3prov0013":
-    "Kunde",
-  "source.provider.col.slug.l3prov0014":
-    "Kennung",
-  "source.provider.col.status.l3prov0015":
-    "Status",
-  "source.provider.col.created.l3prov0016":
-    "Aufgenommen",
-  "source.provider.col.actions.l3prov0017":
-    "Aktionen",
-  "source.provider.suspend.confirm.l3prov0018":
-    "Diesen Kunden sperren? Sein Mandant stellt den Dienst ein, bis Sie ihn reaktivieren.",
-  "source.provider.suspend.l3prov0019":
-    "Sperren",
+  "source.provider.token.l3prov0003": "Bediener-Bearer-Token",
+  "source.provider.signin.l3prov0004": "Anmelden",
+  "source.provider.customers.intro.l3prov0005": "Ihre Kundenmandanten und ihr Lebenszyklusstatus.",
+  "source.provider.signout.l3prov0006": "Abmelden",
+  "source.provider.provision.l3prov0007": "Einen Kunden bereitstellen",
+  "source.provider.slug.l3prov0008": "Kennung",
+  "source.provider.name.l3prov0009": "Name",
+  "source.provider.provision.action.l3prov0010": "Bereitstellen",
+  "source.provider.customers.l3prov0011": "Kunden",
+  "source.provider.none.l3prov0012": "Noch keine Kundenmandanten. Stellen Sie oben einen bereit.",
+  "source.provider.col.name.l3prov0013": "Kunde",
+  "source.provider.col.slug.l3prov0014": "Kennung",
+  "source.provider.col.status.l3prov0015": "Status",
+  "source.provider.col.created.l3prov0016": "Aufgenommen",
+  "source.provider.col.actions.l3prov0017": "Aktionen",
+  "source.provider.suspend.confirm.l3prov0018": "Diesen Kunden sperren? Sein Mandant stellt den Dienst ein, bis Sie ihn reaktivieren.",
+  "source.provider.suspend.l3prov0019": "Sperren",
   "source.provider.offboard.confirm.l3prov0020":
     "Diesen Kunden abmelden? Dies beginnt mit der Löschung seines Mandanten und kann nicht rückgängig gemacht werden.",
-  "source.provider.offboard.l3prov0021":
-    "Abmelden",
+  "source.provider.offboard.l3prov0021": "Abmelden",
   // L3 provider quota — Machine-authored translations, FLAG FOR HUMAN REVIEW.
-  "source.provider.quota.l3prov0022":
-    "Kontingent",
-  "source.provider.quota.none.l3prov0023":
-    "Für diesen Kunden ist kein Kontingent festgelegt — unbegrenzt.",
-  "source.provider.quota.agents.l3prov0024":
-    "Max. Agenten",
-  "source.provider.quota.certs.l3prov0025":
-    "Max. Zertifikate",
-  "source.provider.quota.secrets.l3prov0026":
-    "Max. Geheimnisse",
-  "source.provider.quota.unlimited.l3prov0027":
-    "unbegrenzt",
+  "source.provider.quota.l3prov0022": "Kontingent",
+  "source.provider.quota.none.l3prov0023": "Für diesen Kunden ist kein Kontingent festgelegt — unbegrenzt.",
+  "source.provider.quota.agents.l3prov0024": "Max. Agenten",
+  "source.provider.quota.certs.l3prov0025": "Max. Zertifikate",
+  "source.provider.quota.secrets.l3prov0026": "Max. Geheimnisse",
+  "source.provider.quota.unlimited.l3prov0027": "unbegrenzt",
   // L3 quota editor — Machine-authored, FLAG FOR HUMAN REVIEW.
   "source.provider.quota.edit.hint.l3prov0028":
     "Lassen Sie ein Feld leer für keine Begrenzung. Ein Limit von null bedeutet, dass der Kunde nichts erstellen darf — anders als keine Obergrenze.",
-  "source.provider.quota.save.l3prov0029":
-    "Kontingent speichern",
+  "source.provider.quota.save.l3prov0029": "Kontingent speichern",
   // L3 brand editor — Machine-authored, FLAG FOR HUMAN REVIEW.
-  "source.provider.brand.l3prov0030":
-    "Marke",
+  "source.provider.brand.l3prov0030": "Marke",
   "source.provider.brand.hint.l3prov0031":
     "Legen Sie die White-Label-Marke dieses Kunden fest. Eine benutzerdefinierte Domain muss eindeutig sein — zwei Kunden können nicht einen Host beanspruchen, und die Ebene lehnt ein Duplikat ab.",
-  "source.provider.brand.product.l3prov0032":
-    "Produktname",
-  "source.provider.brand.domain.l3prov0033":
-    "Benutzerdefinierte Domain",
-  "source.provider.brand.message.l3prov0034":
-    "Anmeldenachricht",
-  "source.provider.brand.save.l3prov0035":
-    "Marke speichern",
+  "source.provider.brand.product.l3prov0032": "Produktname",
+  "source.provider.brand.domain.l3prov0033": "Benutzerdefinierte Domain",
+  "source.provider.brand.message.l3prov0034": "Anmeldenachricht",
+  "source.provider.brand.save.l3prov0035": "Marke speichern",
   // L3 isolation drill — Machine-authored, FLAG FOR HUMAN REVIEW.
-  "source.provider.drill.title.l3prov0036":
-    "Mandantenisolierung",
+  "source.provider.drill.title.l3prov0036": "Mandantenisolierung",
   "source.provider.drill.intro.l3prov0037":
     "Führen Sie eine bedarfsgesteuerte Übung aus, die beweist, dass ein Kunde die Daten eines anderen Kunden weder lesen noch überschreiben kann. Nur für Administratoren.",
-  "source.provider.drill.run.l3prov0038":
-    "Isolationsübung ausführen",
-  "source.provider.drill.pass.l3prov0039":
-    "Die Isolierung hält — jede Prüfung wurde bestanden.",
-  "source.provider.drill.fail.l3prov0040":
-    "Isolationsübung FEHLGESCHLAGEN — sofort untersuchen.",
+  "source.provider.drill.run.l3prov0038": "Isolationsübung ausführen",
+  "source.provider.drill.pass.l3prov0039": "Die Isolierung hält — jede Prüfung wurde bestanden.",
+  "source.provider.drill.fail.l3prov0040": "Isolationsübung FEHLGESCHLAGEN — sofort untersuchen.",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

@@ -8,13 +8,12 @@ import (
 	"trstctl.com/trstctl/internal/config"
 )
 
-// TestAuditDefaults: the audit export key has a default on-disk location (so it
-// persists across restarts) and retention is unbounded by default (the event log
-// is the immutable source of truth).
+// TestAuditDefaults: upgrades have a stable legacy-PEM migration location while
+// live key custody stays in the signer, and retention is unbounded by default.
 func TestAuditDefaults(t *testing.T) {
 	c := config.Default()
 	if c.Audit.SigningKeyFile == "" {
-		t.Error("audit.signing_key_file must default to a path so the export key persists")
+		t.Error("audit.signing_key_file must default to the legacy migration path")
 	}
 	if c.Audit.Retention != "" {
 		t.Errorf("audit.retention default = %q, want empty (indefinite)", c.Audit.Retention)

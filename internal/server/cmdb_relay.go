@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -18,21 +19,30 @@ import (
 
 // Relay-executed CMDB sync (epic I2).
 //
-// The control-plane fetch needs a private-egress grant INTO the segment the
-// ServiceNow instance lives in. The relay model inverts that: the domain-joined
-// relay already sits inside, claims a cmdb.sync job over its outbound channel,
-// reads the one permitted table, and reports the parsed records. The RECONCILE
-// still happens here — the relay observes, the control plane decides — so the
-// rule that a source never overwrites a human's attestation has exactly one
-// implementation whichever vantage read the CMDB.
+// The domain-joined relay sits inside the estate, claims a cmdb.sync job over
+// its outbound channel, reads the one permitted table, and reports parsed
+// records. The RECONCILE still happens here — the relay observes, the control
+// plane decides — so the rule that a source never overwrites a human's
+// attestation has exactly one implementation without giving the brain an
+// estate HTTP or token path.
 
 // agentJobKindCMDBSync is the relay-executed CMDB read (I2).
 const agentJobKindCMDBSync = "cmdb.sync"
+
+func cmdbSyncIntent(sched store.CMDBReconcileSchedule) ownership.CMDBSyncIntent {
+	return ownership.CMDBSyncIntent{
+		InstanceURL: sched.InstanceURL,
+		CIQuery:     sched.CIQuery,
+		TokenRef:    sched.TokenRef,
+		PageLimit:   cmdbPageLimit,
+	}
+}
 
 // CMDBSyncReport is what a relay reports back from one sync: the parsed
 // records, never the raw response. Parsing on the relay bounds what travels
 // and keeps a misbehaving instance's 50MB error page out of the report path.
 type CMDBSyncReport struct {
+	ObservedAt   time.Time          `json:"observed_at"`
 	Records      []ownership.Record `json:"records"`
 	Unattributed []string           `json:"unattributed,omitempty"`
 }
@@ -61,12 +71,7 @@ func (s *Server) dispatchCMDBSyncJob(ctx context.Context, tenantID string, sched
 		}
 		return
 	}
-	intent := ownership.CMDBSyncIntent{
-		InstanceURL: sched.InstanceURL,
-		CIQuery:     sched.CIQuery,
-		TokenRef:    sched.TokenRef,
-		PageLimit:   cmdbPageLimit,
-	}
+	intent := cmdbSyncIntent(sched)
 	payload, err := json.Marshal(intent)
 	if err != nil {
 		s.logger.Warn("cmdb relay dispatch: encode intent failed", slog.String("error", err.Error()))
@@ -102,18 +107,34 @@ func (s *Server) dispatchCMDBSyncJob(ctx context.Context, tenantID string, sched
 }
 
 // recordCMDBSync ingests a relay's reported observation: the reconcile core
-// runs here, exactly as it does for a control-plane fetch, and the schedule is
-// stamped with the real outcome.
-func (s *Server) recordCMDBSync(ctx context.Context, tenantID, agentName, _ string, reportJSON string) {
+// runs here after the relay observation, and the schedule is stamped with the
+// real outcome.
+func (s *Server) recordCMDBSync(ctx context.Context, tenantID, agentName, idempotencyKey string, jobPayload []byte, reportJSON string) error {
+	var intent ownership.CMDBSyncIntent
+	if err := json.Unmarshal(jobPayload, &intent); err != nil {
+		return fmt.Errorf("server: decode durable CMDB sync intent: %w", err)
+	}
+	if intent.PageLimit <= 0 || intent.PageLimit > cmdbPageLimit {
+		return fmt.Errorf("server: durable CMDB sync intent is outside its page bound")
+	}
+	if _, err := ownership.CMDBEndpoint(intent.InstanceURL, intent.CIQuery, intent.PageLimit); err != nil {
+		return fmt.Errorf("server: validate durable CMDB sync intent: %w", err)
+	}
+	if len(reportJSON) > maxStructuredSyncReportBytes {
+		return fmt.Errorf("server: CMDB relay report exceeds the %d-byte bound", maxStructuredSyncReportBytes)
+	}
 	var report CMDBSyncReport
 	if err := json.Unmarshal([]byte(reportJSON), &report); err != nil {
 		s.logger.Warn("cmdb relay report: undecodable",
 			slog.String("tenant_id", tenantID), slog.String("agent", agentName), slog.String("error", err.Error()))
 		_ = s.store.MarkCMDBScheduleRun(ctx, tenantID, time.Now().UTC(),
 			"a relay reported a cmdb.sync result this control plane could not decode")
-		return
+		return fmt.Errorf("server: decode CMDB relay report: %w", err)
 	}
-	res, err := s.reconcileCMDBRecords(ctx, tenantID, report.Records, report.Unattributed)
+	if report.ObservedAt.IsZero() || len(report.Records) > cmdbPageLimit || len(report.Unattributed) > cmdbPageLimit {
+		return fmt.Errorf("server: CMDB relay report is outside its observation or record bound")
+	}
+	res, err := s.reconcileCMDBRecords(ctx, tenantID, idempotencyKey, report.ObservedAt, report.Records, report.Unattributed)
 	msg := ""
 	if err != nil {
 		msg = err.Error()
@@ -129,4 +150,5 @@ func (s *Server) recordCMDBSync(ctx context.Context, tenantID, agentName, _ stri
 		s.logger.Warn("cmdb relay report: stamp failed",
 			slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
 	}
+	return err
 }

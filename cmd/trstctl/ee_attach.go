@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -14,8 +15,6 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-
-	"trstctl.com/trstctl/internal/audit"
 
 	_ "trstctl.com/trstctl/ee"
 	eeagentapi "trstctl.com/trstctl/ee/agentid/api"
@@ -53,6 +52,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/server"
 	corestore "trstctl.com/trstctl/internal/store"
 )
@@ -161,7 +161,30 @@ func eeLocalCommand(ctx context.Context, args []string, getenv func(string) stri
 	if err != nil {
 		return true, fmt.Errorf("configuration: %w", err)
 	}
-	return true, eeprovider.RunGrantCommand(ctx, cfg.Postgres.DSN, args[1:], stdout, stderr)
+	return true, eeprovider.RunGrantCommand(ctx, cfg.Postgres.DSN, cfg.NATS, args[1:], stdout, stderr)
+}
+
+// attachEEProjectionOptions is the one-shot recovery twin of attachEE's
+// projection wiring. It is passed only from the tagged composition root; core
+// remains feature-neutral and the trstctl_core twin returns no options.
+func attachEEProjectionOptions(
+	ctx context.Context,
+	_ *config.Config,
+	lic *license.Manager,
+	st *corestore.Store,
+	log *events.Log,
+) ([]projections.Option, error) {
+	if lic == nil || !lic.Has(license.FeatureProviderPlane) {
+		return nil, nil
+	}
+	if st == nil || log == nil {
+		return nil, errors.New("provider recovery projection requires PostgreSQL and the event log")
+	}
+	runtime := eeprovider.NewAuthorityRuntime(st, log)
+	if err := runtime.Bootstrap(ctx); err != nil {
+		return nil, fmt.Errorf("bootstrap provider authority before recovery rebuild: %w", err)
+	}
+	return runtime.ProjectionOptions, nil
 }
 
 func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
@@ -283,195 +306,206 @@ func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.De
 // governance, and multi-tenant provider features. Same one-block-per-feature
 // shape as attachEE; split only to keep either function readable.
 func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
+	attachEEProviderBYOK(cfg, log, lic, deps)
+	attachEEProviderGovernance(log, lic, deps)
+	siloInstall := attachEEProviderSilo(log, lic, deps)
+	brandInstall := attachEEProviderBrand(log, lic, deps)
+	if err := attachEEProviderAPI(ctx, cfg, log, lic, deps, siloInstall, brandInstall); err != nil {
+		return err
+	}
+	attachEEProviderMetering(ctx, log, lic, deps)
+	return nil
+}
+
+// Each helper below owns one license block. Keeping the blocks separate makes
+// the edition boundary easy to audit while preserving attachEEProviderPlane's
+// order: foundations first, provider API second, metering last.
+func attachEEProviderBYOK(cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) {
+	if lic == nil || !lic.Has(license.FeatureBYOK) {
+		return
+	}
+	managedKeysConfig := attachConfig(cfg).ManagedKeys
+	if managedKeysConfig.Enabled {
+		// Provider constructors and credentials live in trstctl-signer; the
+		// licensed outbox handler is the sole ManageKey RPC caller (AN-4/AN-6).
+		deps.ManagedKeyFactory = eemanagedkeys.NewDurableFactory(managedKeysConfig.Provider)
+		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eemanagedkeys.NewDurableOutboxFactory())
+	}
+	deps.KMIPFactory = eekmip.NewFactory()
+	if log != nil {
+		log.Info("Enterprise BYOK support attached", slog.String("feature", string(license.FeatureBYOK)))
+	}
+}
+
+func attachEEProviderGovernance(log *slog.Logger, lic *license.Manager, deps *server.Deps) {
+	if lic == nil || !lic.Has(license.FeatureGovernance) {
+		return
+	}
+	deps.GovernanceFactory = eegovernance.NewFactory()
+	deps.GovernancePolicySource = eegovernance.NewPolicySource(nil)
+	if log != nil {
+		log.Info("Enterprise governance support attached", slog.String("feature", string(license.FeatureGovernance)))
+	}
+}
+
+func attachEEProviderSilo(log *slog.Logger, lic *license.Manager, deps *server.Deps) *eesilo.Installation {
 	// siloInstall is captured so the provider isolation drill can drive the
 	// LIVE event-lane checks over the same registry and router the deployment
 	// routes with. Nil when siloed isolation is not licensed — the drill then
 	// runs the store dimensions only, claiming nothing about lanes that do not
 	// exist.
-	var siloInstall *eesilo.Installation
-	if lic != nil && lic.Has(license.FeatureBYOK) {
-		managedKeysConfig := attachConfig(cfg).ManagedKeys
-		if managedKeysConfig.Enabled {
-			// The factory receives only provider identity + the event/store spine.
-			// Provider constructors and credentials live in trstctl-signer; the
-			// licensed outbox handler is the sole ManageKey RPC caller (AN-4/AN-6).
-			deps.ManagedKeyFactory = eemanagedkeys.NewDurableFactory(managedKeysConfig.Provider)
-			deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eemanagedkeys.NewDurableOutboxFactory())
-		}
-		deps.KMIPFactory = eekmip.NewFactory()
-		if log != nil {
-			log.Info("Enterprise BYOK support attached", slog.String("feature", string(license.FeatureBYOK)))
-		}
+	if lic == nil || !lic.Has(license.FeatureSiloedIsolation) {
+		return nil
 	}
-	if lic != nil && lic.Has(license.FeatureGovernance) {
-		deps.GovernanceFactory = eegovernance.NewFactory()
-		deps.GovernancePolicySource = eegovernance.NewPolicySource(nil)
-		if log != nil {
-			log.Info("Enterprise governance support attached", slog.String("feature", string(license.FeatureGovernance)))
-		}
+	// InstallInMemory reverted every tenant to the shared isolation default on
+	// restart. The durable installation keeps the operator's L4 placement.
+	siloInstall := eesilo.InstallDurable(deps.Store)
+	if log != nil {
+		log.Info("Provider siloed isolation attached", slog.String("feature", string(license.FeatureSiloedIsolation)))
 	}
-	if lic != nil && lic.Has(license.FeatureSiloedIsolation) {
-		// L4: durable silo placement. InstallInMemory reverted every tenant to
-		// the shared isolation default on restart, SILENTLY — a customer who
-		// bought hard isolation had it until the first deploy.
-		siloInstall = eesilo.InstallDurable(deps.Store)
-		if log != nil {
-			log.Info("Provider siloed isolation attached", slog.String("feature", string(license.FeatureSiloedIsolation)))
-		}
-	}
+	return siloInstall
+}
+
+func attachEEProviderBrand(log *slog.Logger, lic *license.Manager, deps *server.Deps) *eewhitelabel.Installation {
 	// L3/AUD-14: durable branding, installed BEFORE the provider block so the
 	// provider console's brand-set route can write through the same store and
 	// invalidate the same resolver. InstallDurable lost a provider's brand on
 	// every deploy SILENTLY — their customers went back to seeing our product
 	// name with nothing saying why.
-	var brandInstall *eewhitelabel.Installation
-	if lic != nil && lic.Has(license.FeatureWhiteLabel) {
-		brandInstall = eewhitelabel.InstallDurable(deps.Store)
-		if log != nil {
-			log.Info("Provider white-label branding attached", slog.String("feature", string(license.FeatureWhiteLabel)))
-		}
+	if lic == nil || !lic.Has(license.FeatureWhiteLabel) {
+		return nil
 	}
-	if lic != nil && lic.Has(license.FeatureProviderPlane) {
-		// L1: the operator authenticator, federated to the provider's own IdP.
-		// Unconfigured means NIL, and a nil authenticator REFUSES EVERY
-		// REQUEST — closed-until-wired is the only safe state, and shipping a
-		// placeholder verifier here is exactly how the original
-		// accept-anything bypass came to exist. The JWKS is pinned OFFLINE:
-		// this plane must not fetch keys from a URL the token's minter might
-		// also control.
-		var operatorAuth eeprovider.OperatorAuthenticator
-		if cfg.Provider.OIDC.Configured() {
-			jwksJSON := cfg.Provider.OIDC.JWKSJSON
-			if path := strings.TrimSpace(cfg.Provider.OIDC.JWKSFile); path != "" {
-				raw, readErr := os.ReadFile(path) // #nosec G304 -- operator-supplied path to their own IdP's JWKS (CWE-22)
-				if readErr != nil {
-					return fmt.Errorf("provider.oidc.jwks_file: %w", readErr)
-				}
-				jwksJSON = string(raw)
+	brandInstall := eewhitelabel.InstallDurable(deps.Store)
+	if log != nil {
+		log.Info("Provider white-label branding attached", slog.String("feature", string(license.FeatureWhiteLabel)))
+	}
+	return brandInstall
+}
+
+func attachEEProviderAPI(
+	ctx context.Context,
+	cfg *config.Config,
+	log *slog.Logger,
+	lic *license.Manager,
+	deps *server.Deps,
+	siloInstall *eesilo.Installation,
+	brandInstall *eewhitelabel.Installation,
+) error {
+	if lic == nil || !lic.Has(license.FeatureProviderPlane) {
+		return nil
+	}
+	// L1 operator authentication is closed until an offline-pinned JWKS is
+	// configured. The token minter never gets to choose a verification URL.
+	var operatorAuth eeprovider.OperatorAuthenticator
+	if cfg.Provider.OIDC.Configured() {
+		jwksJSON := cfg.Provider.OIDC.JWKSJSON
+		if path := strings.TrimSpace(cfg.Provider.OIDC.JWKSFile); path != "" {
+			raw, readErr := os.ReadFile(path) // #nosec G304 -- operator-supplied path to their own IdP's JWKS (CWE-22)
+			if readErr != nil {
+				return fmt.Errorf("provider.oidc.jwks_file: %w", readErr)
 			}
-			jwks, parseErr := crypto.ParseJWKS([]byte(jwksJSON))
-			if parseErr != nil {
-				return fmt.Errorf("provider.oidc jwks: %w", parseErr)
-			}
-			auth := eeprovider.NewOIDCAuthenticator(eeprovider.OIDCAuthenticatorConfig{
-				Issuer:         cfg.Provider.OIDC.Issuer,
-				Audience:       cfg.Provider.OIDC.Audience,
-				JWKS:           jwks,
-				RoleClaim:      cfg.Provider.OIDC.RoleClaim,
-				AdminValues:    cfg.Provider.OIDC.AdminValues,
-				OperatorValues: cfg.Provider.OIDC.OperatorValues,
-				MFAClaim:       cfg.Provider.OIDC.MFAClaim,
-				MFAValues:      cfg.Provider.OIDC.MFAValues,
-			})
-			if auth != nil {
-				operatorAuth = auth
-			}
+			jwksJSON = string(raw)
 		}
-		// L1: the delegation source. Without it the rule in
-		// ee/provider/delegation.go was a library nothing called, and every
-		// served provider route still authorised any authenticated operator
-		// against any customer. The constructor returns nil with no database,
-		// and a nil source refuses every customer-scoped action — the same
-		// closed-until-wired stance as the authenticator.
-		delegations := eeprovider.NewPGDelegationSource(deps.Store)
-		deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
-			License: lic,
-			// L3: durable tenant registry. Nil defaulted to MemStore, so the
-			// provider's whole customer list vanished on every deploy — the
-			// registry they run their business from, lost silently.
-			Store:         eeprovider.NewPGStore(deps.Store),
-			Audit:         eeprovider.NewEventLogAuditSink(deps.Log),
-			Authenticator: operatorAuth,
-			Delegations:   delegations,
-			// L2: quota administration writes through the same durable store
-			// the checker reads, behind the per-customer delegation gate. Nil
-			// would refuse every quota write — correct, but only for a
-			// deployment with no Postgres, which this branch has.
-			Quotas: eebilling.NewPGStore(deps.Store),
-			// L3: brand administration writes through the durable white-label
-			// store and invalidates its resolver, behind the same delegation
-			// gate. Nil when white-label is not licensed, which refuses every
-			// brand write — a brand nobody can resolve is not white-label.
-			Brands: providerBrandStore(brandInstall),
-			// L3/L4: the on-demand isolation drill runs the core store's real
-			// cross-tenant read/write proof, and — when siloed isolation is
-			// installed and the event log is up — the LIVE event-lane checks:
-			// probe tenants placed in the real registry, probe events appended
-			// through the real router, lane counts observed on the real stream.
-			Drills: isolationDrillerAdapter{store: deps.Store, lanes: laneDrillFor(siloInstall, deps.Log)},
+		jwks, parseErr := crypto.ParseJWKS([]byte(jwksJSON))
+		if parseErr != nil {
+			return fmt.Errorf("provider.oidc jwks: %w", parseErr)
+		}
+		operatorAuth = eeprovider.NewOIDCAuthenticator(eeprovider.OIDCAuthenticatorConfig{
+			Issuer:         cfg.Provider.OIDC.Issuer,
+			Audience:       cfg.Provider.OIDC.Audience,
+			JWKS:           jwks,
+			RoleClaim:      cfg.Provider.OIDC.RoleClaim,
+			AdminValues:    cfg.Provider.OIDC.AdminValues,
+			OperatorValues: cfg.Provider.OIDC.OperatorValues,
+			MFAClaim:       cfg.Provider.OIDC.MFAClaim,
+			MFAValues:      cfg.Provider.OIDC.MFAValues,
 		})
-		if log != nil {
-			// Says what an operator will actually observe. "Attached" alone
-			// would read as working, and the first symptom would be 401s with
-			// no explanation anywhere.
-			if operatorAuth == nil {
-				log.Warn("Provider plane attached but NO operator authenticator is configured; "+
-					"/provider/ will refuse every request until provider.oidc is wired",
-					slog.String("feature", string(license.FeatureProviderPlane)))
-			} else {
-				log.Info("Provider plane attached with OIDC operator federation",
-					slog.String("issuer", cfg.Provider.OIDC.Issuer),
-					slog.String("feature", string(license.FeatureProviderPlane)))
-			}
-			if delegations == nil {
-				// Two separate silences to break. An operator who wires
-				// authentication and still gets 403 needs to be told the second
-				// gate exists, or they read a working plane as broken.
-				log.Warn("Provider plane has NO delegation source; every customer-scoped action "+
-					"will be refused until operators are granted customers",
-					slog.String("feature", string(license.FeatureProviderPlane)))
-			}
-		}
 	}
-	if lic != nil && lic.Has(license.FeatureMetering) {
-		// L2: durable metering. InstallInMemory lost usage on every restart
-		// SILENTLY, so a provider invoiced from a figure that was quietly short.
-		// The durable path records what it observed, which is what lets invoice
-		// evidence be signed at all.
-		// The counter makes quotas REAL: it answers "how many does this tenant
-		// have right now", which is what a stored-resource cap compares
-		// against. It was nil before, so AllowCreate compared every tenant
-		// against a permanent zero and no cap could ever bind.
-		billingInst := eebilling.InstallDurable(ctx, log, eebilling.StoreTenantCounter(deps.Store), deps.Store)
-		// L2: the served evidence route. Without this the document builder and
-		// the durable meters exist and no provider can ever pull an invoice —
-		// the defect class this backlog keeps finding.
-		//
-		// Mounted unconditionally. On an in-memory fallback the MemStore reports
-		// coverage as not durable, so the route answers with an UNSIGNABLE
-		// document that says why — which is the fact an operator needs. Leaving
-		// it unmounted would answer 404 and read as "no such feature" on a
-		// deployment that is metering.
-		var evidenceReader eebilling.EvidenceReader = billingInst.Store
-		var reconciler eebilling.EvidenceReconciler
-		if billingInst.PG != nil {
-			evidenceReader = billingInst.PG
-			// The reconciler recounts the period from identity_transitions —
-			// the event log's projection — so the document can say the meter
-			// and the log agree before anything is signed.
-			reconciler = billingInst.PG
+	// Delegations and durable stores fail closed when PostgreSQL is unavailable.
+	delegations := eeprovider.NewPGDelegationSource(deps.Store)
+	var authorityRuntime *eeprovider.AuthorityRuntime
+	if deps.Store != nil && deps.Log != nil {
+		authorityRuntime = eeprovider.NewAuthorityRuntime(deps.Store, deps.Log)
+		if err := authorityRuntime.Bootstrap(ctx); err != nil {
+			return fmt.Errorf("bootstrap provider authority event history: %w", err)
 		}
-		// The evidence signature uses the SAME audit-export key as every other
-		// auditor-facing export (J1, the doctor receipt), so a finance team
-		// verifies invoices and audit bundles against one public key.
-		var evidenceSigner eebilling.EvidenceSigner
-		if auditKey, keyErr := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export"); keyErr != nil {
-			if log != nil {
-				log.Warn("invoice evidence will be served UNSIGNABLE: the audit signing key could not be loaded",
-					slog.String("error", keyErr.Error()))
-			}
-		} else {
-			evidenceSigner = &eebilling.AuditKeySigner{Key: auditKey}
-		}
-		deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory,
-			eebilling.NewAPIOptionsFactory(eebilling.EvidenceDeps{
-				Reader: evidenceReader, Reconciler: reconciler, Signer: evidenceSigner,
-			}))
-		if log != nil {
-			log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
-		}
+		deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, authorityRuntime.ProjectionOptions...)
+	}
+	var authorityMutations eeprovider.MutationSink
+	var providerIdempotency *orchestrator.Idempotency
+	if authorityRuntime != nil {
+		authorityMutations = authorityRuntime.Mutations
+		providerIdempotency = orchestrator.NewIdempotency(deps.Store,
+			orchestrator.WithResultProtector(deps.IdempotencyResultProtector))
+	}
+	if deps.RestoreDrill != nil {
+		deps.RestoreDrill = server.RestoreDrillRunner(cfg, attachEEProjectionOptions)
+	}
+	deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
+		License:       lic,
+		Store:         eeprovider.NewPGStore(deps.Store),
+		Audit:         eeprovider.NewEventLogAuditSink(deps.Log),
+		Mutations:     authorityMutations,
+		Activity:      eeprovider.NewEventLogActivitySource(deps.Log),
+		Idempotency:   providerIdempotency,
+		Authenticator: operatorAuth,
+		Delegations:   delegations,
+		Telemetry:     eeprovider.NewPGStore(deps.Store),
+		Quotas:        eebilling.NewPGStore(deps.Store),
+		Brands:        providerBrandStore(brandInstall),
+		Drills:        isolationDrillerAdapter{store: deps.Store, lanes: laneDrillFor(siloInstall, deps.Log)},
+	})
+	if log == nil {
+		return nil
+	}
+	if operatorAuth == nil {
+		log.Warn("Provider plane attached but NO operator authenticator is configured; "+
+			"/provider/ will refuse every request until provider.oidc is wired",
+			slog.String("feature", string(license.FeatureProviderPlane)))
+	} else {
+		log.Info("Provider plane attached with OIDC operator federation",
+			slog.String("issuer", cfg.Provider.OIDC.Issuer),
+			slog.String("feature", string(license.FeatureProviderPlane)))
+	}
+	if delegations == nil {
+		log.Warn("Provider plane has NO delegation source; every customer-scoped action "+
+			"will be refused until operators are granted customers",
+			slog.String("feature", string(license.FeatureProviderPlane)))
 	}
 	return nil
+}
+
+func attachEEProviderMetering(ctx context.Context, log *slog.Logger, lic *license.Manager, deps *server.Deps) {
+	if lic == nil || !lic.Has(license.FeatureMetering) {
+		return
+	}
+	// The durable meter compares quotas against current tenant resources and
+	// keeps invoice coverage through restarts.
+	billingInst := eebilling.InstallDurable(ctx, log, eebilling.StoreTenantCounter(deps.Store), deps.Store)
+	var evidenceReader eebilling.EvidenceReader = billingInst.Store
+	var reconciler eebilling.EvidenceReconciler
+	if billingInst.PG != nil {
+		evidenceReader = billingInst.PG
+		// Reconciliation recounts the period from the event-log projection, so
+		// signed evidence can state that the meter and the log agree.
+		reconciler = billingInst.PG
+	}
+	var evidenceSigner eebilling.EvidenceSigner
+	if deps.AuditSigningKey == nil {
+		if log != nil {
+			log.Warn("invoice evidence will be served UNSIGNABLE: the signer-bound audit evidence key is unavailable")
+		}
+	} else {
+		evidenceSigner = &eebilling.AuditKeySigner{Key: deps.AuditSigningKey}
+	}
+	// All auditor-facing exports share the signer-bound audit-evidence key.
+	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory,
+		eebilling.NewAPIOptionsFactory(eebilling.EvidenceDeps{
+			Reader: evidenceReader, Reconciler: reconciler, Signer: evidenceSigner,
+		}))
+	if log != nil {
+		log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
+	}
 }
 
 func attachPQC(log *slog.Logger, deps *server.Deps) {
@@ -652,11 +686,9 @@ func attachConfig(cfg *config.Config) config.Config {
 	return *cfg
 }
 
-// providerBrandStore adapts the durable white-label installation to the
-// provider plane's BrandStore (L3). It lives in the attach seam because only
-// here may both ee/provider and ee/whitelabel be imported without an edition
-// cycle. A nil installation (white-label unlicensed) yields a nil store, and a
-// nil BrandStore makes the provider's SetTenantBrand refuse — fail closed.
+// providerBrandStore adapts the durable white-label installation's cache to
+// the provider plane. The event projection owns PostgreSQL writes; this seam
+// only makes a committed brand visible immediately.
 func providerBrandStore(inst *eewhitelabel.Installation) eeprovider.BrandStore {
 	if inst == nil || inst.PG == nil {
 		return nil
@@ -666,25 +698,10 @@ func providerBrandStore(inst *eewhitelabel.Installation) eeprovider.BrandStore {
 
 type brandStoreAdapter struct{ inst *eewhitelabel.Installation }
 
-func (a brandStoreAdapter) SetTenantBrand(ctx context.Context, b eeprovider.TenantBrand) error {
-	if err := a.inst.PG.SetTenantBrand(ctx, eewhitelabel.Record{
-		TenantID:      b.TenantID,
-		ProductName:   b.ProductName,
-		LogoDataURI:   b.LogoDataURI,
-		LoginMessage:  b.LoginMessage,
-		EmailFromName: b.EmailFromName,
-		EmailFooter:   b.EmailFooter,
-		CustomDomain:  b.CustomDomain,
-	}); err != nil {
-		return err
-	}
-	// Invalidate the resolver cache so the new brand resolves immediately
-	// rather than after the cache TTL — a provider who just set a customer's
-	// brand expects to see it, not to wait a minute wondering if it took.
+func (a brandStoreAdapter) Invalidate() {
 	if a.inst.Resolver != nil {
 		a.inst.Resolver.Invalidate()
 	}
-	return nil
 }
 
 // isolationDrillerAdapter adapts the core store's isolation drill to the

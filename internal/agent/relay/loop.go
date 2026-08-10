@@ -61,6 +61,7 @@ func ClaimableKinds() []string {
 		// I5: the MDM read, for the on-prem Jamf the control plane cannot
 		// reach. Same vantage rules as the CMDB read.
 		KindMDMSync,
+		KindTicketSync,
 		// B2: host-generated renewal. Asked for by every agent and granted only
 		// to host-role ones — the vantage gate is the server's, not the agent's,
 		// which is why this list is not split by role. A network relay asking
@@ -232,6 +233,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// in the intent, so it manages its own redemption.
 	if job.Kind == KindMDMSync {
 		return runMDMSync(ctx, ch, client, job)
+	}
+	// I3: ServiceNow ticket intake is the same read-only, JIT-token custody
+	// shape as CMDB sync. The relay observes typed ticket fields; the control
+	// plane opens requests through its event-sourced lifecycle.
+	if job.Kind == KindTicketSync {
+		return runTicketSync(ctx, ch, client, job)
 	}
 	// B2: a host-generated renewal redeems NOTHING. It is routed before the
 	// credential step because there is no credential to redeem — the key it

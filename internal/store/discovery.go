@@ -5,6 +5,10 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -56,7 +60,11 @@ type DiscoveryRun struct {
 
 // DiscoveryFinding is a metadata-only credential reference produced by a run.
 type DiscoveryFinding struct {
-	ID                string
+	ID string
+	// RecordedID is the ID carried by this immutable recorded event. It normally
+	// equals ID. During replay of pre-AUD-96 history, ID is the row candidate and
+	// RecordedID preserves every legacy payload ID as a triage-resolvable alias.
+	RecordedID        string
 	TenantID          string
 	RunID             string
 	SourceID          string
@@ -73,6 +81,11 @@ type DiscoveryFinding struct {
 	TriageReason      string
 	TriagedAt         *time.Time
 }
+
+// ErrDiscoveryFindingConflict means two immutable recorded events claimed the
+// same row ID or natural observation key but disagreed on the observation payload.
+// Callers must stop replay: choosing either payload would silently rewrite history.
+var ErrDiscoveryFindingConflict = errors.New("store: discovery finding identity conflict")
 
 // DiscoveryFindingTriageChange is the projected result of a
 // discovery.finding.triage_changed event.
@@ -183,20 +196,95 @@ func (s *Store) ApplyDiscoveryRunStartedTx(ctx context.Context, tx pgx.Tx, tenan
 
 // ApplyDiscoveryFindingRecordedTx projects a discovery.finding.recorded event.
 func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, f DiscoveryFinding) error {
-	_, err := tx.Exec(ctx,
+	recordedID := f.RecordedID
+	if recordedID == "" {
+		recordedID = f.ID
+	}
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO discovery_findings
-		        (id, tenant_id, run_id, source_id, kind, ref, provenance, fingerprint, risk_score, metadata, discovered_at)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		 ON CONFLICT (tenant_id, id) DO UPDATE
-		      SET kind = EXCLUDED.kind,
-		          ref = EXCLUDED.ref,
-		          provenance = EXCLUDED.provenance,
-		          fingerprint = EXCLUDED.fingerprint,
-		          risk_score = EXCLUDED.risk_score,
-		          metadata = EXCLUDED.metadata,
-		          discovered_at = EXCLUDED.discovered_at`,
+		        (id, tenant_id, run_id, source_id, kind, ref, provenance, fingerprint,
+		         risk_score, metadata, discovered_at, recorded_ids)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ARRAY[$12::uuid])
+		 ON CONFLICT DO NOTHING`,
 		f.ID, f.TenantID, f.RunID, f.SourceID, f.Kind, f.Ref, f.Provenance, f.Fingerprint,
-		f.RiskScore, normalizeJSON(f.Metadata), f.DiscoveredAt)
+		f.RiskScore, normalizeJSON(f.Metadata), f.DiscoveredAt, recordedID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+
+	// The insert can conflict on either identity boundary: the payload ID or the
+	// tenant/run/kind/ref/fingerprint natural key. Lock the winner, compare every
+	// immutable observation field, and merge only a byte-for-byte semantic replay.
+	// PostgreSQL compares metadata as jsonb, so harmless JSON key ordering does not
+	// turn an identical observation into a false conflict.
+	var (
+		existingID                                              string
+		existingTime                                            time.Time
+		sameRun, sameSource, sameKind, sameRef                  bool
+		sameProvenance, sameFingerprint, sameRisk, sameMetadata bool
+	)
+	err = tx.QueryRow(ctx,
+		`SELECT id::text,
+		        discovered_at,
+		        run_id = $3::uuid,
+		        source_id = $4::uuid,
+		        kind = $5,
+		        ref = $6,
+		        provenance = $7,
+		        fingerprint = $8,
+		        risk_score = $9,
+		        metadata = $10::jsonb
+		   FROM discovery_findings
+		  WHERE tenant_id = $1::uuid
+		    AND (id = $2::uuid OR
+		         (run_id = $3::uuid AND kind = $5 AND ref = $6 AND fingerprint = $8))
+		  ORDER BY (id = $2::uuid) DESC
+		  LIMIT 1
+		  FOR UPDATE`,
+		f.TenantID, f.ID, f.RunID, f.SourceID, f.Kind, f.Ref, f.Provenance,
+		f.Fingerprint, f.RiskScore, normalizeJSON(f.Metadata)).Scan(
+		&existingID, &existingTime, &sameRun, &sameSource, &sameKind, &sameRef,
+		&sameProvenance, &sameFingerprint, &sameRisk, &sameMetadata)
+	if err != nil {
+		return fmt.Errorf("store: locate conflicted discovery finding: %w", err)
+	}
+	differences := make([]string, 0, 8)
+	for field, same := range map[string]bool{
+		"run_id": sameRun, "source_id": sameSource, "kind": sameKind, "ref": sameRef,
+		"provenance": sameProvenance, "fingerprint": sameFingerprint,
+		"risk_score": sameRisk, "metadata": sameMetadata,
+	} {
+		if !same {
+			differences = append(differences, field)
+		}
+	}
+	if len(differences) > 0 {
+		sort.Strings(differences)
+		return fmt.Errorf(
+			"%w: tenant=%s natural_key=(run_id=%s kind=%q ref=%q fingerprint=%q) existing_id=%s incoming_id=%s differing_fields=%s",
+			ErrDiscoveryFindingConflict, f.TenantID, f.RunID, f.Kind, f.Ref, f.Fingerprint,
+			existingID, f.ID, strings.Join(differences, ","),
+		)
+	}
+
+	canonicalID := existingID
+	if f.DiscoveredAt.Before(existingTime) || (f.DiscoveredAt.Equal(existingTime) && f.ID < existingID) {
+		canonicalID = f.ID
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE discovery_findings
+		    SET id = $3::uuid,
+		        discovered_at = LEAST(discovered_at, $4),
+		        recorded_ids = ARRAY(
+		            SELECT DISTINCT payload_id
+		              FROM unnest(recorded_ids || ARRAY[$5::uuid, $2::uuid, $3::uuid]) AS payload_id
+		             ORDER BY payload_id
+		        )
+		  WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+		f.TenantID, existingID, canonicalID, f.DiscoveredAt, recordedID)
 	return err
 }
 
@@ -213,7 +301,7 @@ func (s *Store) ApplyDiscoveryFindingTriageChangedTx(ctx context.Context, tx pgx
 		            WHEN $8::jsonb IS NULL THEN metadata
 		            ELSE metadata || $8::jsonb
 		        END
-		  WHERE tenant_id = $1 AND id = $2`,
+		  WHERE tenant_id = $1 AND (id = $2 OR $2::uuid = ANY(recorded_ids))`,
 		ch.TenantID, ch.FindingID, ch.Status, ch.ManagedIdentityID, ch.Actor, ch.Reason, ch.ChangedAt, ch.MetadataPatch)
 	if err != nil {
 		return err
@@ -475,7 +563,7 @@ func (s *Store) GetDiscoveryFinding(ctx context.Context, tenantID, id string) (D
 			        provenance, fingerprint, risk_score, metadata, discovered_at,
 			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at
 			   FROM discovery_findings
-			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
+			  WHERE tenant_id = $1 AND (id = $2 OR $2::uuid = ANY(recorded_ids))`, tenantID, id), &out)
 	})
 	return out, err
 }

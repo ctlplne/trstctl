@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/enrollmentdiag"
 	mdmchallenge "trstctl.com/trstctl/internal/mdm/challenge"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/cmp"
@@ -259,7 +261,11 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	// operator can read. Wired here rather than left as a library the served
 	// binary never calls — which is what it was.
 	if s.api != nil {
-		acmeSrv.SetFailureDiagnosis(s.api.RecordEnrollmentDiagnosis)
+		acmeSrv.SetFailureDiagnosis(func(requestCtx context.Context, diagnosis enrollmentdiag.Diagnosis) {
+			if err := s.api.RecordEnrollmentDiagnosis(requestCtx, acmeTenant, diagnosis); err != nil && s.logger != nil {
+				s.logger.Warn("enrollment diagnosis persistence failed", slog.String("protocol", string(diagnosis.Protocol)), slog.String("error", err.Error()))
+			}
+		})
 	}
 	eabKeys, err := acmeExternalAccountBindingKeys(cfg.ACMEEAB)
 	if err != nil {
@@ -340,6 +346,7 @@ func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, is
 	// signer via the Enroller and verifies against the issuing CA.
 	scepSrv := scep.New(scep.Config{
 		Enroller:           enrollerAdapter{tenantID: tenantID, issuer: issuer},
+		ProfileName:        s.defaultProfile,
 		CAChainDER:         [][]byte{raCertDER, s.caCertDER},
 		RACertDER:          raCertDER,
 		RAKeyPKCS8:         raKeyPKCS8,

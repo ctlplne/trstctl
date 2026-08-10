@@ -4,12 +4,34 @@ package events
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+// TestEnvelopeDecodeErrorCarriesStreamSequence pins the pre-callback failure
+// contract used by the projection tail. A malformed stored envelope never becomes
+// an Event, so the stream sequence must ride on the typed error or the tail cannot
+// persist which global cursor position poisoned readiness.
+func TestEnvelopeDecodeErrorCarriesStreamSequence(t *testing.T) {
+	_, err := decodeStored([]byte(`{"unterminated"`), 37)
+	if err == nil {
+		t.Fatal("decodeStored malformed envelope returned nil")
+	}
+	var decodeErr *EnvelopeDecodeError
+	if !errors.As(err, &decodeErr) {
+		t.Fatalf("decodeStored error type = %T, want *EnvelopeDecodeError: %v", err, err)
+	}
+	if decodeErr.Sequence != 37 {
+		t.Fatalf("EnvelopeDecodeError.Sequence = %d, want 37", decodeErr.Sequence)
+	}
+	if decodeErr.Unwrap() == nil {
+		t.Fatal("EnvelopeDecodeError lost the underlying JSON decoder error")
+	}
+}
 
 // SCHEMA-005 (16-SCHEMA) PROTECT regression guard.
 //

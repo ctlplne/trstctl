@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 )
 
@@ -161,8 +162,7 @@ func openTestLog(t *testing.T) *events.Log {
 func TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource(t *testing.T) {
 	ctx := context.Background()
 	log := openTestLog(t)
-	keyPath := filepath.Join(t.TempDir(), "audit-key.pem")
-	key, err := audit.LoadOrCreateSigningKey(keyPath, "audit-export")
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource(t *testing.T)
 func TestRetentionWorkerDoesNothingWithoutWindow(t *testing.T) {
 	ctx := context.Background()
 	log := openTestLog(t)
-	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "k.pem"), "audit-export")
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestRetentionWorkerDoesNothingWithoutWindow(t *testing.T) {
 func TestRetentionWorkerKeepsTenantQueryFloorsIndependent(t *testing.T) {
 	ctx := context.Background()
 	log := openTestLog(t)
-	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "k.pem"), "audit-export")
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +368,7 @@ func TestRetentionWorkerKeepsTenantQueryFloorsIndependent(t *testing.T) {
 func TestRetentionWorkerRetryHealsCheckpointWithoutDuplicatingArchivedEvent(t *testing.T) {
 	ctx := context.Background()
 	log := openTestLog(t)
-	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "k.pem"), "audit-export")
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +411,7 @@ func TestRetentionWorkerRetryHealsCheckpointWithoutDuplicatingArchivedEvent(t *t
 func TestRetentionWorkerRepairsMissingArchivedEventFromRetainedCheckpoint(t *testing.T) {
 	ctx := context.Background()
 	log := openTestLog(t)
-	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "k.pem"), "audit-export")
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +489,7 @@ func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing
 	}); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
-	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "audit.pem"), "audit-export")
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,7 +666,7 @@ func TestRewriteRealRetentionCheckpointRetainsReceiptAndReopens(t *testing.T) {
 	}
 	time.Sleep(2 * time.Millisecond)
 	checkpoints := &memCheckpoints{}
-	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "audit.pem"), "audit-export")
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -722,7 +722,7 @@ func TestPrivacyRewriteAfterLogicalRetentionKeepsCheckpointReplayable(t *testing
 		t.Fatal(err)
 	}
 	checkpoints := &memCheckpoints{}
-	key, err := audit.LoadOrCreateSigningKey(filepath.Join(t.TempDir(), "audit.pem"), "audit-export")
+	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatal(err)
 	}

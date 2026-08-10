@@ -164,7 +164,7 @@ func (o *Orchestrator) StartDiscoveryRun(ctx context.Context, tenantID, runID st
 func (o *Orchestrator) RecordDiscoveryFinding(ctx context.Context, tenantID string, in store.DiscoveryFinding) (store.DiscoveryFinding, error) {
 	id := in.ID
 	if id == "" {
-		id = uuid.NewString()
+		id = discovery.FindingID(tenantID, in.RunID, in.Kind, in.Ref, in.Fingerprint)
 	}
 	meta := in.Metadata
 	if len(meta) == 0 {

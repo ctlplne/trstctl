@@ -558,13 +558,9 @@ export function Connectors() {
                           /* Not an appliance. There is no relay migration for a
                              connector that writes files on a host, so silence
                              here is accurate rather than a gap. */
-                          <span className="text-muted-foreground">
-                            {translateNow("source.parity.not.applicable.e1par00002")}
-                          </span>
+                          <span className="text-muted-foreground">{translateNow("source.parity.not.applicable.e1par00002")}</span>
                         ) : connector.relay_parity.relay_migrated ? (
-                          <span className="font-medium text-status-success">
-                            {translateNow("source.relay.migrated.e1par00003")}
-                          </span>
+                          <span className="font-medium text-status-success">{translateNow("source.relay.migrated.e1par00003")}</span>
                         ) : connector.relay_parity.cp_retained ? (
                           /* Terminal by the E1 scope decision, not pending: the
                              device API cannot express rollback/readback, so the
@@ -572,20 +568,14 @@ export function Connectors() {
                              not warning — a warning says "act", and there is
                              nothing to act on. */
                           <>
-                            <span className="font-medium">
-                              {translateNow("source.cp.retained.e1par00006")}
-                            </span>
+                            <span className="font-medium">{translateNow("source.cp.retained.e1par00006")}</span>
                             {connector.relay_parity.scope_note ? (
-                              <span className="mt-1 block text-xs text-muted-foreground">
-                                {connector.relay_parity.scope_note}
-                              </span>
+                              <span className="mt-1 block text-xs text-muted-foreground">{connector.relay_parity.scope_note}</span>
                             ) : null}
                           </>
                         ) : (
                           <>
-                            <span className="text-status-warning">
-                              {translateNow("source.not.migrated.e1par00004")}
-                            </span>
+                            <span className="text-status-warning">{translateNow("source.not.migrated.e1par00004")}</span>
                             <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
                               {connector.relay_parity.missing.map((gate) => (
                                 <li key={gate}>{gate}</li>
@@ -595,8 +585,7 @@ export function Connectors() {
                         )}
                         {connector.relay_parity && connector.relay_parity.outstanding.length > 0 ? (
                           <span className="mt-1 block text-xs text-muted-foreground">
-                            {translateNow("source.outstanding.gates.e1par00005")}{" "}
-                            {connector.relay_parity.outstanding.join(", ")}
+                            {translateNow("source.outstanding.gates.e1par00005")} {connector.relay_parity.outstanding.join(", ")}
                           </span>
                         ) : null}
                       </td>

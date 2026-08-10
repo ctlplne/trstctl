@@ -28,6 +28,16 @@ The drill proves:
 - a restored control plane can pass a smoke test without contacting production
   clients.
 
+The built-in scheduled drill performs this same full-set predicate automatically.
+It creates an isolated PostgreSQL database and private file-backed JetStream,
+redirects every mutable signer/key/certificate path to a temporary directory,
+restores `manifest.json` through the production full-restore function, compares a
+re-export of every independent PostgreSQL table, starts the recovered signer and
+control-plane assembly, and calls the real `/readyz` handler. Its signed
+attestation cannot say `restored` unless all of those checks pass. The separate
+event-log-only restore remains useful for projection recovery, but it is never a
+full DR verdict.
+
 ## Prerequisites
 
 - A healthy source environment: `/readyz` returns `200`, NATS durability is not

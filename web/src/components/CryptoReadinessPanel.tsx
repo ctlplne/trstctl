@@ -64,39 +64,21 @@ export function CryptoReadinessPanel() {
         <>
           <dl className="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
-              <dt className="text-caption font-medium text-muted-foreground">
-                {translateNow("source.crypto.assets.m2seq00002")}
-              </dt>
+              <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.crypto.assets.m2seq00002")}</dt>
               <dd className="text-title font-semibold tabular-nums">{items.length}</dd>
             </div>
             <div>
-              <dt className="text-caption font-medium text-muted-foreground">
-                {translateNow("source.urgent.m2seq00003")}
-              </dt>
-              <dd
-                className={
-                  (data.urgent ?? 0) > 0
-                    ? "text-title font-semibold tabular-nums text-status-danger"
-                    : "text-title font-semibold tabular-nums"
-                }
-              >
+              <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.urgent.m2seq00003")}</dt>
+              <dd className={(data.urgent ?? 0) > 0 ? "text-title font-semibold tabular-nums text-status-danger" : "text-title font-semibold tabular-nums"}>
                 {data.urgent ?? 0}
               </dd>
             </div>
             <div>
-              <dt className="text-caption font-medium text-muted-foreground">
-                {translateNow("source.unplaceable.m2seq00004")}
-              </dt>
+              <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.unplaceable.m2seq00004")}</dt>
               {/* Its own number, never folded into a total. A usage the CBOM
                   could not place has no computable blast radius; absorbing it
                   would read as coverage the table does not have. */}
-              <dd
-                className={
-                  (data.unlocated ?? 0) > 0
-                    ? "text-title font-semibold tabular-nums text-status-warning"
-                    : "text-title font-semibold tabular-nums"
-                }
-              >
+              <dd className={(data.unlocated ?? 0) > 0 ? "text-title font-semibold tabular-nums text-status-warning" : "text-title font-semibold tabular-nums"}>
                 {data.unlocated ?? 0}
               </dd>
             </div>
@@ -117,23 +99,11 @@ export function CryptoReadinessPanel() {
                   {items.map((row) => (
                     <tr key={row.asset.id}>
                       <td className="max-w-[14rem]">
-                        <span
-                          className={
-                            row.quantum_vulnerable || row.out_of_policy
-                              ? "font-medium text-status-danger"
-                              : "font-medium"
-                          }
-                        >
-                          {row.asset.name}
-                        </span>
+                        <span className={row.quantum_vulnerable || row.out_of_policy ? "font-medium text-status-danger" : "font-medium"}>{row.asset.name}</span>
                         {row.unlocated ? (
-                          <span className="mt-1 block text-xs text-status-warning">
-                            {translateNow("source.no.location.m2seq00009")}
-                          </span>
+                          <span className="mt-1 block text-xs text-status-warning">{translateNow("source.no.location.m2seq00009")}</span>
                         ) : (
-                          <span className="mt-1 block text-xs text-muted-foreground">
-                            {(row.exhibitors ?? []).map((e) => e.name).join(", ")}
-                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">{(row.exhibitors ?? []).map((e) => e.name).join(", ")}</span>
                         )}
                       </td>
                       <td className="tabular-nums align-top">
@@ -145,18 +115,15 @@ export function CryptoReadinessPanel() {
                           <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
                             {(row.dependents ?? []).slice(0, 4).map((d) => (
                               <li key={d.node.id}>
-                                {d.node.name} <span className="opacity-70">{translateNow("source.crypto.readiness.via.m2crp00001", { value1: d.via.name })}</span>
+                                {d.node.name}{" "}
+                                <span className="opacity-70">{translateNow("source.crypto.readiness.via.m2crp00001", { value1: d.via.name })}</span>
                               </li>
                             ))}
                           </ul>
                         ) : null}
                       </td>
-                      <td className="align-top text-xs text-muted-foreground">
-                        {(row.owners ?? []).join(", ") || "—"}
-                      </td>
-                      <td className="max-w-[26rem] align-top text-xs text-muted-foreground">
-                        {row.recommendation}
-                      </td>
+                      <td className="align-top text-xs text-muted-foreground">{(row.owners ?? []).join(", ") || "—"}</td>
+                      <td className="max-w-[26rem] align-top text-xs text-muted-foreground">{row.recommendation}</td>
                     </tr>
                   ))}
                 </tbody>

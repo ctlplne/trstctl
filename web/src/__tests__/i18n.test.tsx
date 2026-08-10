@@ -532,8 +532,23 @@ describe("i18n boundary", () => {
       // fail line reads as the imperative it is ("investigate immediately")
       // rather than a neutral status. Machine-authored es/de — FLAG FOR HUMAN
       // TRANSLATION REVIEW.
-      "es-ES": "026f63e2a85af2c7f60a0bf0cba12072eaa706376df7c7929c9b82d58d54a08b",
-      "de-DE": "26037c5326307dde8fab6833838e33e43444f03e28f22c3945ea11aa616f52c2",
+      // E1 scope-closure re-pin: one source.cp.retained.* key labels the three
+      // families that retain control-plane execution by design (owner scope
+      // decision) — rendered neutral on the Connectors console, not a warning,
+      // because there is nothing to act on. The E1 closing commit shipped the
+      // catalog keys without this re-pin, so the suite was red at that commit;
+      // caught by the 2026-08-09 delivery audit. Machine-authored es/de —
+      // FLAG FOR HUMAN TRANSLATION REVIEW.
+      // I5 trace-detail re-pin: one punctuation-format key keeps the durable
+      // step detail inside the typed catalog. The em dash and placeholder are
+      // intentionally byte-identical in every locale; no prose was translated.
+      // AUD-76 compliance-evidence re-pin: eight policy.compliance.* keys name
+      // the tenant/window binding, exact immutable refs, and missing evidence.
+      // “Unbound” and “Unknown” must retain their absence semantics so a legacy
+      // pack cannot render as tenant-bound or complete. Machine-authored es/de
+      // translations — FLAG FOR HUMAN TRANSLATION REVIEW.
+      "es-ES": "46190f61a94bab1b7440c428ee6ea607c029ff30922a8ebb9d65000ba4ab2ee1",
+      "de-DE": "792a6e0becd9e7754893fcadb3d9e81ef963ab62c65aa58d4d2d3a1eadba75b7",
     });
   });
 

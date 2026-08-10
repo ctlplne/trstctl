@@ -132,8 +132,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F4's two AD CS certificate-database operations raised it to 346: ingesting
 	// certutil rows a domain-joined relay collected, and serving the per-CA
 	// lifecycle breakdown issuance alone cannot show.
-	if len(out) != 346 {
-		t.Fatalf("OpenAPI operationIds = %d, want 344", len(out))
+	// AUD-97's outbox reconciliation recovery read raised it to 347: the
+	// Incidents workspace now exposes the tenant-scoped, payload-free evidence
+	// for a startup command collision without rebinding the historical key.
+	if len(out) != 347 {
+		t.Fatalf("OpenAPI operationIds = %d, want 347", len(out))
 	}
 	return out
 }

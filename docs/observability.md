@@ -10,7 +10,7 @@ readiness-probed.
 | Path | Purpose | Auth |
 | --- | --- | --- |
 | `/healthz` | **Liveness** — the process is up and the signer (if configured) is reachable. | none |
-| `/readyz` | **Readiness** — probes the real dependencies (PostgreSQL, NATS JetStream, the signer); returns `200` when all are up, `503` with a per-dependency body otherwise. | none |
+| `/readyz` | **Readiness** — probes PostgreSQL, NATS JetStream, the durable projection tail, and the signer; returns `200` when all are trustworthy, `503` with a per-dependency body otherwise. | none |
 | `/metrics` | **Prometheus** metrics in the text exposition format. | none |
 
 `/readyz` is the Kubernetes readiness-probe target: a dropped dependency flips it
@@ -18,12 +18,25 @@ to 503 and removes the pod from rotation, while `/healthz` (liveness) stays gree
 so a transient blip does not get the pod killed. For external NATS, readiness also
 checks the event stream's durability: fewer JetStream replicas than
 `TRSTCTL_NATS_REPLICAS` degrades `/readyz` rather than serve with a weaker RPO than
-configured.
+configured. Projection readiness reads the persisted projection checkpoint. If
+the tail cannot apply a sequence, it records that failed sequence before it
+retries and `/readyz` returns 503. A normal short-lived positive lag does not flap
+readiness; only a recorded failure that still lies ahead of the applied
+checkpoint degrades it. The response contains safe sequence and lag numbers, not
+the stored database error or event payload.
 
 ```bash
-curl -fksS https://localhost:8443/readyz   # {"status":"ok","checks":{"db":"ok","nats":"ok","signer":"ok"}}
+curl -fksS https://localhost:8443/readyz   # {"status":"ok","checks":{"db":"ok","nats":"ok","projection":"ok","signer":"ok"}}
 curl -fksS https://localhost:8443/metrics  # # TYPE trstctl_http_requests_total counter ...
 ```
+
+The leader retries a failed projection tail. Once it applies the failed sequence,
+the same checkpoint update advances the cursor and clears the durable failure
+marker atomically, so readiness recovers without restarting the control plane.
+The event projection itself commits before that checkpoint update. Do not edit
+the checkpoint by hand: preserve PostgreSQL and JetStream, inspect the named
+sequence in the logs, and fix the database, schema, or producer fault that made
+the immutable event fail.
 
 ## Metrics
 
@@ -154,7 +167,7 @@ Baseline operator assets ship under
 | --- | --- | --- |
 | A committed hot-path p99 SLO is exceeded | `trstctl:slo_p99_latency_seconds` | `TrstctlPerfSLOLatencyPERFSLO###` |
 | A committed 0.10% hot-path error budget is burning too fast | `trstctl:slo_error_ratio:5m`, `trstctl:slo_error_ratio:1h` | `TrstctlPerfSLOBurnRatePERFSLO###` |
-| Read model is old even though `/readyz` is green | `trstctl_projection_lag_events` | `TrstctlProjectionLagHigh` |
+| Read model is lagging; a poisoned tail also makes `/readyz` fail | `trstctl_projection_lag_events` | `TrstctlProjectionLagHigh` |
 | Outbox boot reconciliation falls behind the event stream | `trstctl_outbox_reconciliation_lag_events` | `TrstctlOutboxReconciliationLagHigh` |
 | External delivery hangs inside a connector/webhook | `trstctl_outbox_delivery_timeouts_total` | `TrstctlOutboxDeliveryTimeouts` |
 | Snapshot worker fails or stops producing fresh boot accelerators | `trstctl_read_model_snapshot_failures_total`, `trstctl_read_model_snapshot_last_success_timestamp_seconds` | `TrstctlReadModelSnapshotFailures`, `TrstctlReadModelSnapshotStale` |

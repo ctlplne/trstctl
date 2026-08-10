@@ -5,7 +5,6 @@ package api
 import (
 	"context"
 
-	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -74,35 +73,4 @@ func evaluateCanary(ctx context.Context, st *store.Store, tenantID string, batch
 	default:
 		return canaryHealthy
 	}
-}
-
-// applyCanaryHalt marks the batches after a failed canary as halted.
-//
-// It never touches the canary itself — that batch ran, and its own status
-// records what happened to it. It also never downgrades a batch that already
-// executed: a run whose canary fails after later batches have gone out is a
-// worse situation than a clean halt, and rewriting their status to "halted"
-// would erase the fact that they were deployed and need attention.
-func applyCanaryHalt(batches []store.FleetReissuanceBatch) []store.FleetReissuanceBatch {
-	for i := range batches {
-		if i == 0 {
-			continue
-		}
-		if batches[i].Status == servedstatus.FleetBatchExecuted ||
-			batches[i].Status == servedstatus.FleetBatchFailed {
-			continue
-		}
-		batches[i].Status = servedstatus.FleetBatchHalted
-	}
-	return batches
-}
-
-// canaryHaltReason is the operator-facing sentence for a halted run.
-func canaryHaltReason(halted int) string {
-	if halted <= 0 {
-		return ""
-	}
-	return "canary batch verification failed: the first batch's replacements are not being " +
-		"served, so the remaining batches were halted before deployment. Nothing in them was " +
-		"changed. Resume continues from the halt point once the canary is serving correctly."
 }

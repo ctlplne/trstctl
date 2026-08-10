@@ -97,8 +97,25 @@ func newBillingStoreOn(t *testing.T, dbName string) (*billing.PGStore, *corestor
 	return billing.NewPGStore(cs), cs
 }
 
+// seedQuota writes a read-model fixture under the tenant's RLS context. Quota
+// command/projection behavior is proved in ee/provider/eventsource_test.go;
+// this package owns only durable quota reads and enforcement.
+func seedQuota(t *testing.T, st *corestore.Store, q billing.Quota) {
+	t.Helper()
+	err := st.WithTenant(t.Context(), q.TenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `INSERT INTO provider_tenant_quotas
+			(tenant_id, max_agents, max_tenants, max_certificates_stored, max_secrets_stored, updated_by, updated_at)
+			VALUES ($1, $2, $3, $4, $5, nullif($6, ''), now())`, q.TenantID, q.MaxAgents,
+			q.MaxTenants, q.MaxCertificatesStored, q.MaxSecretsStored, q.UpdatedBy)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("seed quota view: %v", err)
+	}
+}
+
 func TestQuotaSurvivesInPostgresAndNullMeansNoLimit(t *testing.T) {
-	pgStore, _ := newBillingStoreOn(t, "billing_quota_roundtrip")
+	pgStore, st := newBillingStoreOn(t, "billing_quota_roundtrip")
 	ctx := context.Background()
 
 	// No row: the zero quota, in which nothing is limited.
@@ -111,11 +128,9 @@ func TestQuotaSurvivesInPostgresAndNullMeansNoLimit(t *testing.T) {
 	}
 
 	limit := 5
-	if err := pgStore.SetQuota(ctx, billing.Quota{
+	seedQuota(t, st, billing.Quota{
 		TenantID: quotaTenant, MaxCertificatesStored: &limit, UpdatedBy: "ops@provider",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	q, err = pgStore.QuotaFor(ctx, quotaTenant)
 	if err != nil {
 		t.Fatal(err)
@@ -143,13 +158,11 @@ func TestQuotaSurvivesInPostgresAndNullMeansNoLimit(t *testing.T) {
 }
 
 func TestQuotaCheckerRefusesAtTheCapAgainstTheDurableStore(t *testing.T) {
-	pgStore, _ := newBillingStoreOn(t, "billing_quota_enforce")
+	pgStore, st := newBillingStoreOn(t, "billing_quota_enforce")
 	ctx := context.Background()
 
 	limit := 2
-	if err := pgStore.SetQuota(ctx, billing.Quota{TenantID: quotaTenant, MaxCertificatesStored: &limit}); err != nil {
-		t.Fatal(err)
-	}
+	seedQuota(t, st, billing.Quota{TenantID: quotaTenant, MaxCertificatesStored: &limit})
 	current := int64(0)
 	counter := func(context.Context, string) (billing.TenantCounts, error) {
 		return billing.TenantCounts{usage.MeterCertificatesStored: current}, nil

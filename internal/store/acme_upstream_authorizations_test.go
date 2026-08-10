@@ -452,10 +452,21 @@ func TestFleetVerificationSummaryDistinguishesFailedFromUnlooked(t *testing.T) {
 		id := fmt.Sprintf("d6000001-0000-0000-0000-%012d", n)
 		ident := identityID
 		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			var jobID int64
+			if err := tx.QueryRow(ctx, `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
+				VALUES ($1, 'connector.deploy', '{}'::bytea, $2) RETURNING id`, tenantID, id).Scan(&jobID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO agent_job_receipts
+				(tenant_id, job_id, attempt, agent, kind, outcome, state, signer_fingerprint, statement, signature, observed_at)
+				VALUES ($1, $2, 1, 'signed-agent', 'connector.deploy', $3, 'verified', 'sha256:test', 'canonical', 'signature', $4)`,
+				tenantID, jobID, status, at); err != nil {
+				return err
+			}
 			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
 				ID: id, TenantID: tenantID, IdentityID: &ident,
 				Destination: "connector.deploy", Connector: "nginx", Target: "edge",
-				Status: status, IdempotencyKey: id, CreatedAt: at, UpdatedAt: at,
+				Status: status, IdempotencyKey: id + ":verified", CreatedAt: at, UpdatedAt: at,
 			})
 		}); err != nil {
 			t.Fatalf("record receipt: %v", err)
@@ -500,10 +511,21 @@ func TestFleetVerificationTakesTheLatestOutcomePerIdentity(t *testing.T) {
 		rid := fmt.Sprintf("d6000002-0000-0000-0000-%012d", n)
 		ident := id
 		if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			var jobID int64
+			if err := tx.QueryRow(ctx, `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
+				VALUES ($1, 'connector.deploy', '{}'::bytea, $2) RETURNING id`, tenantID, rid).Scan(&jobID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO agent_job_receipts
+				(tenant_id, job_id, attempt, agent, kind, outcome, state, signer_fingerprint, statement, signature, observed_at)
+				VALUES ($1, $2, 1, 'signed-agent', 'connector.deploy', $3, 'verified', 'sha256:test', 'canonical', 'signature', $4)`,
+				tenantID, jobID, status, at); err != nil {
+				return err
+			}
 			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
 				ID: rid, TenantID: tenantID, IdentityID: &ident,
 				Destination: "connector.deploy", Connector: "nginx", Target: "edge",
-				Status: status, IdempotencyKey: rid, CreatedAt: at, UpdatedAt: at,
+				Status: status, IdempotencyKey: rid + ":verified", CreatedAt: at, UpdatedAt: at,
 			})
 		}); err != nil {
 			t.Fatalf("record receipt: %v", err)

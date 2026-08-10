@@ -146,7 +146,7 @@ func TestOutboxCompletionGateFlagsAHandRolledCompletion(t *testing.T) {
 	}
 }
 
-// TestOrchestratorOutboxCompletionKeepsLeaseAndCircuitInvariants pins the two
+// TestOrchestratorOutboxCompletionKeepsLeaseAndCircuitInvariants pins the three
 // properties the class gate above exists to protect, INSIDE the statements that
 // carry them. A whole-file Contains check is not enough: finalizeClaim's failure
 // branch also spells "AND status = 'processing'" and "AND worker_id = $3", so the
@@ -155,26 +155,34 @@ func TestOutboxCompletionGateFlagsAHandRolledCompletion(t *testing.T) {
 func TestOrchestratorOutboxCompletionKeepsLeaseAndCircuitInvariants(t *testing.T) {
 	body := read(t, "../internal/orchestrator/outbox.go")
 	statements := outboxDeliveredCompletions(body)
-	if len(statements) != 2 {
-		t.Fatalf("AN-6: internal/orchestrator/outbox.go holds %d delivered-completion statements, want exactly 2 (finalizeClaim's leaseholder path and CompleteByKey's non-leaseholder path)", len(statements))
+	if len(statements) != 3 {
+		t.Fatalf("AN-6: internal/orchestrator/outbox.go holds %d delivered-completion statements, want exactly 3 (finalizeClaim's dispatcher lease, CompleteAgentJobClaim's exact signed-result claim, and CompleteByKey's non-leaseholder path)", len(statements))
 	}
 	leaseholder := pickOutboxCompletion(t, statements, "WHERE id = $1")
+	agentClaim := pickOutboxCompletion(t, statements, "AND claimed_by_agent_id = $2::uuid")
 	nonLeaseholder := pickOutboxCompletion(t, statements, "AND idempotency_key = $3")
 
 	// Tokens are matched against the whitespace-normalized statement, so reflowing
 	// the SQL does not fail the guard but removing a predicate does.
 	requireOrderedTokens(t, "AN-6 leaseholder completion (finalizeClaim)", normalizeSQL(leaseholder),
 		"SET status = 'delivered'", "AND status = 'processing'", "AND worker_id = $3")
+	requireOrderedTokens(t, "AN-6 exact signed-result completion (CompleteAgentJobClaim)", normalizeSQL(agentClaim),
+		"SET claim_completed_at = $5", "status = 'delivered'", "WHERE tenant_id = $1", "AND id = $3",
+		"AND claimed_by_agent_id = $2::uuid", "AND claim_attempts = $4", "AND claim_expires_at >= $5",
+		"AND claim_completed_at IS NULL", "AND status = 'pending'", "AND delivered_at IS NULL")
 	requireOrderedTokens(t, "AN-6 non-leaseholder completion (Outbox.CompleteByKey)", normalizeSQL(nonLeaseholder),
 		"SET status = 'delivered'", "AND status <> 'delivered'",
 		"AND (status <> 'processing' OR lease_until IS NULL OR lease_until <= $4)")
 
-	// Both completions must record the destination's circuit success, each on its
+	// All three completions must record the destination's circuit success, each on its
 	// own path — otherwise a lane stays open against an endpoint that just answered.
-	requireOrderedTokens(t, "AN-6 outbox completion circuit success", body,
+	requireOrderedTokens(t, "AN-6 dispatcher completion circuit success", body,
 		"func (o *Outbox) finalizeClaim(",
-		"o.recordCircuitSuccess(claim.msg, o.clockNow())",
-		"var ErrOutboxLeaseHeld = errors.New(",
+		"o.recordCircuitSuccess(claim.msg, o.clockNow())")
+	requireOrderedTokens(t, "AN-6 exact agent-claim completion circuit success", body,
+		"func (o *Outbox) CompleteAgentJobClaim(",
+		"o.recordCircuitSuccess(msg, at.UTC())")
+	requireOrderedTokens(t, "AN-6 non-leaseholder completion circuit success", body,
 		"func (o *Outbox) CompleteByKey(",
 		"return false, ErrOutboxLeaseHeld",
 		"o.recordCircuitSuccess(msg, now)")

@@ -4,6 +4,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -15,6 +16,7 @@ import (
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/events"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -85,6 +87,43 @@ func openProviderStore(t *testing.T) *corestore.Store {
 	return s
 }
 
+// projectAuthorityFixture creates a derived provider row through the same
+// projection that owns production writes. These read-store tests do not get a
+// hidden PostgreSQL mutation API merely for fixture setup.
+func projectAuthorityFixture(t *testing.T, st *corestore.Store, typ, tenantID string, payload AuthorityEvent) {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal %s fixture: %v", typ, err)
+	}
+	if err := NewAuthorityProjection(st).Apply(t.Context(), events.Event{
+		ID:   "fixture-" + typ + "-" + tenantID,
+		Type: typ, TenantID: tenantID, Time: time.Now().UTC(), Data: data,
+	}); err != nil {
+		t.Fatalf("project %s fixture: %v", typ, err)
+	}
+}
+
+func projectTenantFixture(t *testing.T, st *corestore.Store, tenant Tenant) {
+	t.Helper()
+	if tenant.CreatedAt.IsZero() {
+		tenant.CreatedAt = time.Now().UTC()
+	}
+	if tenant.UpdatedAt.IsZero() {
+		tenant.UpdatedAt = tenant.CreatedAt
+	}
+	projectAuthorityFixture(t, st, AuditTenantProvisioned, tenant.ID, AuthorityEvent{
+		Tenant: &tenant, Audit: AuditEvent{Type: AuditTenantProvisioned, TenantID: tenant.ID, At: tenant.CreatedAt},
+	})
+}
+
+func projectGrantFixture(t *testing.T, st *corestore.Store, typ string, grant BreakGlassGrant) {
+	t.Helper()
+	projectAuthorityFixture(t, st, typ, grant.TenantID, AuthorityEvent{
+		Grant: &grant, Audit: AuditEvent{Type: typ, TenantID: grant.TenantID, GrantID: grant.ID, At: grant.RequestedAt},
+	})
+}
+
 // A provider provisions a customer, then the process restarts. The customer —
 // and the break-glass grant recorded against them — must still be there, read
 // through a brand-new store handle that shares nothing but the database.
@@ -93,19 +132,14 @@ func TestProviderRegistrySurvivesARestart(t *testing.T) {
 
 	// First "process": provision a customer and record a break-glass grant.
 	s1 := openProviderStore(t)
-	writer := NewPGStore(s1)
 	id := CustomerID("acme")
-	if _, err := writer.CreateTenant(ctx, Tenant{ID: id, Slug: "acme", Name: "Acme Corp", Status: TenantActive}); err != nil {
-		t.Fatalf("CreateTenant: %v", err)
-	}
+	projectTenantFixture(t, s1, Tenant{ID: id, Slug: "acme", Name: "Acme Corp", Status: TenantActive})
 	grant := BreakGlassGrant{
 		ID: "bg-1", TenantID: id, OperatorID: "op-1", OperatorEmail: "op@example.test",
 		Reason: "customer requested emergency diagnosis", RequestedAt: time.Unix(1700, 0).UTC(),
 		ExpiresAt: time.Unix(5000, 0).UTC(),
 	}
-	if _, err := writer.CreateBreakGlassGrant(ctx, grant); err != nil {
-		t.Fatalf("CreateBreakGlassGrant: %v", err)
-	}
+	projectGrantFixture(t, s1, AuditBreakGlassRequested, grant)
 	s1.Close()
 
 	// Second "process": a fresh store handle over the same database.
@@ -141,18 +175,13 @@ func TestProviderRegistrySurvivesARestart(t *testing.T) {
 func TestBreakGlassDualConsentIsDurable(t *testing.T) {
 	ctx := context.Background()
 	s1 := openProviderStore(t)
-	writer := NewPGStore(s1)
 	id := CustomerID("bgc")
-	if _, err := writer.CreateTenant(ctx, Tenant{ID: id, Slug: "bgc", Name: "BG Corp", Status: TenantActive}); err != nil {
-		t.Fatalf("CreateTenant: %v", err)
-	}
+	projectTenantFixture(t, s1, Tenant{ID: id, Slug: "bgc", Name: "BG Corp", Status: TenantActive})
 	base := time.Unix(1000, 0).UTC()
-	if _, err := writer.CreateBreakGlassGrant(ctx, BreakGlassGrant{
+	projectGrantFixture(t, s1, AuditBreakGlassRequested, BreakGlassGrant{
 		ID: "bg-dual", TenantID: id, OperatorID: "requester", Reason: "incident",
 		RequestedAt: base, ExpiresAt: base.Add(time.Hour),
-	}); err != nil {
-		t.Fatalf("CreateBreakGlassGrant: %v", err)
-	}
+	})
 	// Record both consents, from two distinct approvers, and persist them.
 	both := BreakGlassGrant{
 		ID: "bg-dual", TenantID: id, OperatorID: "requester", Reason: "incident",
@@ -160,9 +189,7 @@ func TestBreakGlassDualConsentIsDurable(t *testing.T) {
 		ConsentedAt: base.Add(time.Minute), ConsentedBy: "approver-a",
 		SecondConsentedAt: base.Add(2 * time.Minute), SecondConsentedBy: "approver-b",
 	}
-	if _, err := writer.UpdateBreakGlassGrant(ctx, both); err != nil {
-		t.Fatalf("UpdateBreakGlassGrant: %v", err)
-	}
+	projectGrantFixture(t, s1, AuditBreakGlassConsented, both)
 	s1.Close()
 
 	s2, err := corestore.Open(ctx, providerTestDSN)
@@ -194,9 +221,7 @@ func TestDirectTenantSnapshotCountsActiveCertificatesUnderRLS(t *testing.T) {
 	beta := CustomerID("beta")
 	other := CustomerID("other")
 	for _, id := range []string{beta, other} {
-		if _, err := store.CreateTenant(ctx, Tenant{ID: id, Slug: id, Name: id, Status: TenantActive}); err != nil {
-			t.Fatalf("CreateTenant %s: %v", id, err)
-		}
+		projectTenantFixture(t, s, Tenant{ID: id, Slug: id, Name: id, Status: TenantActive})
 	}
 	// beta: two active certificates and one revoked. other: one active cert
 	// that must NOT leak into beta's count.
@@ -219,9 +244,7 @@ func TestDirectTenantSnapshotCountsActiveCertificatesUnderRLS(t *testing.T) {
 	// A customer with a registry status of suspended reports degraded, whatever
 	// their certificate count.
 	gamma := CustomerID("gamma")
-	if _, err := store.CreateTenant(ctx, Tenant{ID: gamma, Slug: "gamma", Name: "gamma", Status: TenantSuspended}); err != nil {
-		t.Fatalf("CreateTenant gamma: %v", err)
-	}
+	projectTenantFixture(t, s, Tenant{ID: gamma, Slug: "gamma", Name: "gamma", Status: TenantSuspended})
 	if snap, err := store.DirectTenantSnapshot(ctx, gamma); err != nil || snap.Health != "suspended" {
 		t.Fatalf("gamma snapshot = %+v (err %v), want health suspended", snap, err)
 	}
@@ -229,9 +252,7 @@ func TestDirectTenantSnapshotCountsActiveCertificatesUnderRLS(t *testing.T) {
 	// An active customer with no certificates is reported as "no certificates",
 	// not silently healthy.
 	delta := CustomerID("delta")
-	if _, err := store.CreateTenant(ctx, Tenant{ID: delta, Slug: "delta", Name: "delta", Status: TenantActive}); err != nil {
-		t.Fatalf("CreateTenant delta: %v", err)
-	}
+	projectTenantFixture(t, s, Tenant{ID: delta, Slug: "delta", Name: "delta", Status: TenantActive})
 	if snap, err := store.DirectTenantSnapshot(ctx, delta); err != nil || snap.Health != "no_certificates" || snap.ActiveCertificates != 0 {
 		t.Fatalf("delta snapshot = %+v (err %v), want no_certificates/0", snap, err)
 	}

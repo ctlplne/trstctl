@@ -47,7 +47,10 @@ func (s *Store) UpsertSSHKey(ctx context.Context, k SSHKey) (SSHKey, error) {
 
 // ApplySSHKeyDiscoveredTx projects one immutable discovery finding into the
 // tenant SSH inventory. The caller owns the projection transaction; this
-// method never creates command-side state.
+// method never creates command-side state. The earliest immutable event owns
+// the row ID/time so an out-of-order inline projection and a clean rebuild name
+// the same key identically (AUD-101). The discovery projection validates an
+// identical natural-key payload before this secondary projection can run.
 func (s *Store) ApplySSHKeyDiscoveredTx(ctx context.Context, tx pgx.Tx, k SSHKey) error {
 	if k.CreatedAt.IsZero() {
 		k.CreatedAt = time.Now().UTC()
@@ -57,7 +60,14 @@ func (s *Store) ApplySSHKeyDiscoveredTx(ctx context.Context, tx pgx.Tx, k SSHKey
 		        (id, tenant_id, fingerprint, key_type, comment, source, location, standing_access, orphaned, created_at)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10)
 		 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
-		    SET key_type = EXCLUDED.key_type, comment = EXCLUDED.comment, source = EXCLUDED.source,
+		    SET id = CASE
+		                 WHEN EXCLUDED.created_at < ssh_keys.created_at
+		                   OR (EXCLUDED.created_at = ssh_keys.created_at AND EXCLUDED.id < ssh_keys.id)
+		                 THEN EXCLUDED.id
+		                 ELSE ssh_keys.id
+		             END,
+		        created_at = LEAST(ssh_keys.created_at, EXCLUDED.created_at),
+		        key_type = EXCLUDED.key_type, comment = EXCLUDED.comment, source = EXCLUDED.source,
 		        location = EXCLUDED.location, standing_access = EXCLUDED.standing_access,
 		        orphaned = EXCLUDED.orphaned`,
 		k.ID, k.TenantID, k.Fingerprint, k.KeyType, k.Comment, k.Source, k.Location,

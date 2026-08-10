@@ -4,7 +4,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -21,6 +26,24 @@ import (
 // DIFFERENT key from the migration lock so a catch-up and a migration do not block
 // each other.
 const ProjectionAdvisoryLockKey int64 = 0x63746C70726A // "ctlprj"
+
+// maxProjectionTailErrorBytes keeps one poison diagnostic small enough for
+// readiness and operator readout paths. The raw event payload is never stored;
+// this is only the bounded error returned by the projector.
+const maxProjectionTailErrorBytes = 2048
+
+// ProjectionTailHealth is the persisted, tenant-neutral state of the ordered
+// projection cursor. FailedSequence == 0 means there is no unresolved poison.
+// LastError is bounded operational metadata that can still contain tenant or
+// dependency detail. Callers must treat it as protected data and choose a safer
+// summary for unauthenticated probes.
+type ProjectionTailHealth struct {
+	AppliedSequence uint64
+	FailedSequence  uint64
+	LastError       string
+	FailedAt        *time.Time
+	UpdatedAt       time.Time
+}
 
 // WithProjectionLock runs fn while holding the projection advisory lock on a
 // dedicated session connection (RESIL-004), so concurrent boot catch-ups across
@@ -64,6 +87,84 @@ func (s *Store) ProjectionCheckpoint(ctx context.Context) (uint64, error) {
 	return uint64(seq), nil
 }
 
+// ProjectionTailHealth reads the global projection checkpoint together with its
+// unresolved failure marker. The event stream is globally ordered, so this is a
+// system read with no tenant_id, just like ProjectionCheckpoint.
+func (s *Store) ProjectionTailHealth(ctx context.Context) (ProjectionTailHealth, error) {
+	var (
+		health     ProjectionTailHealth
+		appliedSeq int64
+		failedSeq  *int64
+		lastError  *string
+		failedAt   *time.Time
+	)
+	err := s.pool.QueryRow(ctx,
+		`SELECT applied_seq, failed_seq, last_error, failed_at, updated_at
+		   FROM projection_checkpoint
+		  WHERE id = 1`).Scan(&appliedSeq, &failedSeq, &lastError, &failedAt, &health.UpdatedAt)
+	if err != nil {
+		return ProjectionTailHealth{}, fmt.Errorf("store: read projection tail health: %w", err)
+	}
+	if appliedSeq > 0 {
+		health.AppliedSequence = uint64(appliedSeq)
+	}
+	if failedSeq != nil && *failedSeq > 0 {
+		health.FailedSequence = uint64(*failedSeq)
+	}
+	if lastError != nil {
+		health.LastError = *lastError
+	}
+	health.FailedAt = failedAt
+	return health, nil
+}
+
+// RecordProjectionTailFailure persists the earliest unresolved event sequence
+// before TailWorker returns. A stale replica cannot paint a sequence at or below
+// the already-applied checkpoint as failed, and a later failure cannot hide an
+// earlier poison that still blocks the ordered stream.
+func (s *Store) RecordProjectionTailFailure(ctx context.Context, seq uint64, cause error) error {
+	if seq == 0 {
+		return errors.New("store: projection tail failure sequence must be positive")
+	}
+	detail := sanitizeProjectionTailError(cause)
+	_, err := s.pool.Exec(ctx,
+		`UPDATE projection_checkpoint
+		    SET failed_seq = $1, last_error = $2, failed_at = now(), updated_at = now()
+		  WHERE id = 1
+		    AND applied_seq < $1
+		    AND (failed_seq IS NULL OR failed_seq >= $1)`,
+		int64(seq), detail) // #nosec G115 -- event sequence fits the PostgreSQL bigint used by the event log (CWE-190)
+	if err != nil {
+		return fmt.Errorf("store: record projection tail failure at seq %d: %w", seq, err)
+	}
+	return nil
+}
+
+func sanitizeProjectionTailError(cause error) string {
+	detail := "projection failed"
+	if cause != nil {
+		detail = strings.ToValidUTF8(cause.Error(), "�")
+	}
+	detail = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, detail)
+	detail = strings.Join(strings.Fields(detail), " ")
+	if detail == "" {
+		detail = "projection failed"
+	}
+	if len(detail) <= maxProjectionTailErrorBytes {
+		return detail
+	}
+	detail = detail[:maxProjectionTailErrorBytes]
+	for !utf8.ValidString(detail) {
+		detail = detail[:len(detail)-1]
+	}
+	return detail
+}
+
 // AdvanceProjectionCheckpoint moves the read model's high-water mark forward to
 // seq (SPINE-007). It only ever advances — a concurrent or stale caller writing a
 // lower value is ignored (GREATEST), so two catch-up paths cannot rewind the
@@ -74,7 +175,20 @@ func (s *Store) AdvanceProjectionCheckpoint(ctx context.Context, seq uint64) err
 	// row on the pool. GREATEST makes the advance monotonic and idempotent.
 	_, err := s.pool.Exec(ctx,
 		`UPDATE projection_checkpoint
-		    SET applied_seq = GREATEST(applied_seq, $1), updated_at = now()
+		    SET applied_seq = GREATEST(applied_seq, $1),
+		        failed_seq = CASE
+		            WHEN failed_seq <= GREATEST(applied_seq, $1) THEN NULL
+		            ELSE failed_seq
+		        END,
+		        last_error = CASE
+		            WHEN failed_seq <= GREATEST(applied_seq, $1) THEN NULL
+		            ELSE last_error
+		        END,
+		        failed_at = CASE
+		            WHEN failed_seq <= GREATEST(applied_seq, $1) THEN NULL
+		            ELSE failed_at
+		        END,
+		        updated_at = now()
 		  WHERE id = 1`, int64(seq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	if err != nil {
 		return fmt.Errorf("store: advance projection checkpoint: %w", err)
@@ -90,7 +204,13 @@ func (s *Store) AdvanceProjectionCheckpoint(ctx context.Context, seq uint64) err
 // table.
 func (s *Store) SetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx, seq uint64) error {
 	_, err := tx.Exec(ctx,
-		`UPDATE projection_checkpoint SET applied_seq = $1, updated_at = now() WHERE id = 1`, int64(seq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		`UPDATE projection_checkpoint
+		    SET applied_seq = $1,
+		        failed_seq = CASE WHEN failed_seq <= $1 THEN NULL ELSE failed_seq END,
+		        last_error = CASE WHEN failed_seq <= $1 THEN NULL ELSE last_error END,
+		        failed_at = CASE WHEN failed_seq <= $1 THEN NULL ELSE failed_at END,
+		        updated_at = now()
+		  WHERE id = 1`, int64(seq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	if err != nil {
 		return fmt.Errorf("store: set projection checkpoint: %w", err)
 	}
@@ -100,13 +220,17 @@ func (s *Store) SetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx, seq ui
 // ResetProjectionCheckpointTx sets the read model's high-water mark back to 0 on
 // the caller's transaction (SPINE-007). A full Rebuild (disaster recovery /
 // migration) re-derives the entire read model from sequence 0, so it must clear
-// the watermark in the SAME transaction as the truncate+replay — otherwise a
-// crash could leave a non-zero watermark over an emptied read model and skip a
-// re-replay. It runs on the rebuild's transaction (the owner role); it is a
-// system write of the single-row table.
+// the watermark and old failure marker in the SAME transaction as the
+// truncate+replay — otherwise a crash could leave a non-zero watermark over an
+// emptied read model and skip a re-replay. A failed rebuild rolls this reset back,
+// so its poison remains visible. It runs on the rebuild's transaction (the owner
+// role); it is a system write of the single-row table.
 func (s *Store) ResetProjectionCheckpointTx(ctx context.Context, tx pgx.Tx) error {
 	_, err := tx.Exec(ctx,
-		`UPDATE projection_checkpoint SET applied_seq = 0, updated_at = now() WHERE id = 1`)
+		`UPDATE projection_checkpoint
+		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
+		        failed_at = NULL, updated_at = now()
+		  WHERE id = 1`)
 	if err != nil {
 		return fmt.Errorf("store: reset projection checkpoint: %w", err)
 	}

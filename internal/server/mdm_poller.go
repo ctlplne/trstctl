@@ -6,20 +6,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
-	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/mdm"
+	"trstctl.com/trstctl/internal/mdmevidence"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
-	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -28,9 +25,8 @@ import (
 // Every ingredient — parsers, endpoint builders, the correlated event, the
 // served routes, the console panel — existed with nothing calling it, so the
 // table the console reads was written only by tests. This leader-only ticker
-// is the missing caller. Like the CMDB scheduler beside it, the fetch can run
-// from the control plane or be dispatched to a network relay (mdm.sync); the
-// CORRELATION always happens here.
+// is the missing caller. The control plane commits an mdm.sync intent; a
+// network relay performs the read, and the CORRELATION always happens here.
 
 const (
 	// mdmPollerInterval is detection latency for due schedules, matching the
@@ -43,8 +39,9 @@ const (
 // MDMSyncReport is what a relay reports from one mdm.sync: parsed devices,
 // never the raw response.
 type MDMSyncReport struct {
-	MDM     string       `json:"mdm"`
-	Devices []mdm.Device `json:"devices"`
+	ObservedAt time.Time    `json:"observed_at"`
+	MDM        string       `json:"mdm"`
+	Devices    []mdm.Device `json:"devices"`
 }
 
 // RunMDMPoller is the leader-only ticker.
@@ -64,11 +61,9 @@ func (s *Server) RunMDMPoller(ctx context.Context) {
 				continue
 			}
 			for _, sched := range due {
-				if sched.Execution == "relay" {
-					s.dispatchMDMSyncJob(ctx, tenantID, sched)
-					continue
-				}
-				s.runMDMPollOnce(ctx, tenantID, sched)
+				// MDM reads are estate work. The brain commits an intent; a
+				// network relay redeems the token and performs the call.
+				s.dispatchMDMSyncJob(ctx, tenantID, sched)
 			}
 		}
 	}
@@ -85,86 +80,32 @@ func (s *Server) RunMDMPoller(ctx context.Context) {
 	}
 }
 
-// runMDMPollOnce fetches one MDM from the control plane and correlates.
-func (s *Server) runMDMPollOnce(ctx context.Context, tenantID string, sched store.MDMPollSchedule) {
-	devices, err := s.fetchMDMDevices(ctx, sched)
-	msg := ""
+func (s *Server) enabledMDMSCEPProfileIDs(ctx context.Context, tenantID, provider string) ([]string, error) {
+	policies, err := s.store.ListMDMSCEPPolicies(ctx, tenantID)
 	if err != nil {
-		msg = err.Error()
-		s.logger.Warn("mdm poll failed", slog.String("tenant_id", tenantID),
-			slog.String("mdm", sched.MDM), slog.String("error", msg))
-	} else if err := s.correlateMDMDevices(ctx, tenantID, devices); err != nil {
-		msg = err.Error()
-		s.logger.Warn("mdm correlate failed", slog.String("tenant_id", tenantID),
-			slog.String("mdm", sched.MDM), slog.String("error", msg))
-	} else {
-		s.logger.Info("mdm poll complete", slog.String("tenant_id", tenantID),
-			slog.String("mdm", sched.MDM), slog.Int("devices", len(devices)))
+		return nil, fmt.Errorf("server: list MDM SCEP policies for certificate evidence: %w", err)
 	}
-	if err := s.store.MarkMDMPollRun(ctx, tenantID, sched.MDM, time.Now().UTC(), msg); err != nil {
-		s.logger.Warn("mdm poller: stamp failed", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
+	var profileIDs []string
+	for _, policy := range policies {
+		if policy.Enabled && policy.Provider == provider && strings.TrimSpace(policy.SCEPProfile) != "" {
+			profileIDs = append(profileIDs, strings.TrimSpace(policy.SCEPProfile))
+		}
 	}
+	return profileIDs, nil
 }
 
-// fetchMDMDevices performs the read. GET only, against the fixed endpoint the
-// builders in internal/mdm construct — the same builders the relay uses.
-func (s *Server) fetchMDMDevices(ctx context.Context, sched store.MDMPollSchedule) ([]mdm.Device, error) {
-	var endpoint string
-	var err error
-	switch sched.MDM {
-	case mdm.MDMIntune:
-		endpoint, err = mdm.IntuneDevicesEndpoint(sched.BaseURL, sched.Filter)
-	case mdm.MDMJamf:
-		endpoint, err = mdm.JamfDevicesEndpoint(sched.BaseURL, sched.Filter)
-	default:
-		return nil, fmt.Errorf("server: unknown mdm %q", sched.MDM)
-	}
-	if err != nil {
-		return nil, err
-	}
-	client, err := cloudHTTPClient(endpoint, sched.AllowPrivateEndpoint, sched.PrivateEgressCIDRs)
-	if err != nil {
-		return nil, fmt.Errorf("server: MDM endpoint rejected: %w", err)
-	}
-	token, err := resolveDiscoveryCredentialRef(ctx, sched.TokenRef)
-	if err != nil {
-		return nil, fmt.Errorf("server: resolve MDM token ref: %w", err)
-	}
-	tokenBytes := []byte(token)
-	defer secret.Wipe(tokenBytes)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", tokenBytes))
-	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("server: read MDM: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		limited, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("server: MDM read failed with status %d: %s",
-			resp.StatusCode, strings.TrimSpace(string(limited)))
-	}
-	switch sched.MDM {
-	case mdm.MDMIntune:
-		return mdm.ParseIntuneDevices(resp.Body)
-	default:
-		return mdm.ParseJamfDevices(resp.Body)
-	}
-}
-
-// correlateMDMDevices is the correlation core, shared by BOTH vantages: the
-// control-plane poll above and a relay's reported observation. The join is
-// EXACT serial-to-identity-name equality — a looser match would invent
+// correlateMDMDevices is the correlation core. Production observations arrive
+// from a relay; direct callers use this wrapper only to exercise the pure join.
+// The join is EXACT serial-to-identity-name equality — a looser match would invent
 // correlations, and an invented correlation sends an operator to the wrong
 // laptop. Devices with no identity are still recorded: "a device the MDM
 // manages that has no certificate" is one of the two gaps this surface exists
 // to show.
 func (s *Server) correlateMDMDevices(ctx context.Context, tenantID string, devices []mdm.Device) error {
+	return s.correlateMDMRelayDevices(ctx, tenantID, "", devices)
+}
+
+func (s *Server) correlateMDMRelayDevices(ctx context.Context, tenantID, resultKey string, devices []mdm.Device) error {
 	bySerial, err := s.store.IdentitiesBySerial(ctx, tenantID)
 	if err != nil {
 		return err
@@ -174,17 +115,37 @@ func (s *Server) correlateMDMDevices(ctx context.Context, tenantID string, devic
 		if join, ok := bySerial[strings.ToUpper(strings.TrimSpace(d.SerialNumber))]; ok {
 			identityID = join.IdentityID
 		}
+		transactionID := ""
+		installState := mdm.OutcomeUnknown
+		installDetail := d.InstallDetail
+		attempts, loadErr := mdmevidence.Load(ctx, s.log, tenantID, d.SerialNumber, "")
+		if loadErr != nil {
+			return loadErr
+		}
+		if len(attempts) > 0 {
+			attempt := attempts[len(attempts)-1]
+			transactionID = attempt.TransactionID
+			installState, installDetail = mdm.EvaluateCertificateInstallation(d, attempt.CertificateSerial)
+		} else if d.InstallObserved {
+			installDetail = "The MDM returned certificate evidence for this device, but no immutable SCEP attempt with the exact device serial exists; verify the SCEP profile subject before correlating installation."
+		}
 		observed := d.ObservedAt
 		ev := projections.MDMDeviceCorrelated{
 			MDM: d.MDM, MDMDeviceID: d.MDMDeviceID, DeviceName: d.Name,
-			SerialNumber: d.SerialNumber, IdentityID: identityID,
-			InstallState: string(d.InstallState), InstallDetail: d.InstallDetail,
+			SerialNumber: d.SerialNumber, TransactionID: transactionID, IdentityID: identityID,
+			InstallState: string(installState), InstallDetail: installDetail,
 		}
 		if !observed.IsZero() {
 			ev.ObservedAt = &observed
 		}
-		if err := s.orch.CorrelateMDMDevice(ctx, tenantID, ev); err != nil {
-			return err
+		var correlateErr error
+		if resultKey == "" {
+			correlateErr = s.orch.CorrelateMDMDevice(ctx, tenantID, ev)
+		} else {
+			correlateErr = s.orch.CorrelateMDMDeviceFromRelay(ctx, tenantID, resultKey, ev)
+		}
+		if correlateErr != nil {
+			return correlateErr
 		}
 	}
 	return nil
@@ -195,7 +156,7 @@ func (s *Server) correlateMDMDevices(ctx context.Context, tenantID string, devic
 // reason: stacking identical reads behind an unclaimed job has the eventual
 // relay replay a backlog.
 func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched store.MDMPollSchedule) {
-	pending, err := s.store.HasPendingAgentJob(ctx, tenantID, agentJobKindMDMSync)
+	pending, err := s.store.HasPendingMDMSyncJob(ctx, tenantID, sched.MDM)
 	if err != nil {
 		s.logger.Warn("mdm relay dispatch: pending check failed",
 			slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
@@ -208,8 +169,15 @@ func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched 
 		}
 		return
 	}
+	profileIDs, err := s.enabledMDMSCEPProfileIDs(ctx, tenantID, sched.MDM)
+	if err != nil {
+		s.logger.Warn("mdm relay dispatch: profile evidence lookup failed",
+			slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
+		return
+	}
 	payload, err := json.Marshal(mdm.SyncIntent{
 		MDM: sched.MDM, BaseURL: sched.BaseURL, Filter: sched.Filter, TokenRef: sched.TokenRef,
+		SCEPProfileIDs: profileIDs,
 	})
 	if err != nil {
 		return
@@ -239,26 +207,47 @@ func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched 
 
 // recordMDMSync ingests a relay's reported devices through the shared
 // correlation core and stamps the schedule with the real outcome.
-func (s *Server) recordMDMSync(ctx context.Context, tenantID, agentName, _ string, reportJSON string) {
+func (s *Server) recordMDMSync(ctx context.Context, tenantID, agentName, idempotencyKey string, jobPayload []byte, reportJSON string) error {
+	var intent mdm.SyncIntent
+	if err := json.Unmarshal(jobPayload, &intent); err != nil {
+		return fmt.Errorf("server: decode durable MDM sync intent: %w", err)
+	}
+	if len(reportJSON) > maxStructuredSyncReportBytes {
+		return fmt.Errorf("server: MDM relay report exceeds the %d-byte bound", maxStructuredSyncReportBytes)
+	}
 	var report MDMSyncReport
 	if err := json.Unmarshal([]byte(reportJSON), &report); err != nil {
 		s.logger.Warn("mdm relay report: undecodable",
 			slog.String("tenant_id", tenantID), slog.String("agent", agentName), slog.String("error", err.Error()))
-		return
+		return fmt.Errorf("server: decode MDM relay report: %w", err)
 	}
 	if report.MDM != mdm.MDMIntune && report.MDM != mdm.MDMJamf {
 		s.logger.Warn("mdm relay report: unknown mdm", slog.String("tenant_id", tenantID), slog.String("mdm", report.MDM))
-		return
+		return fmt.Errorf("server: MDM relay report names unknown mdm %q", report.MDM)
+	}
+	if report.ObservedAt.IsZero() {
+		return fmt.Errorf("server: MDM relay report has no observation time")
+	}
+	if report.MDM != intent.MDM {
+		return fmt.Errorf("server: MDM relay report provider %q does not match durable intent %q", report.MDM, intent.MDM)
+	}
+	if len(report.Devices) > cmdbPageLimit {
+		return fmt.Errorf("server: MDM relay report exceeds the %d-device bound", cmdbPageLimit)
 	}
 	msg := ""
-	if err := s.correlateMDMDevices(ctx, tenantID, report.Devices); err != nil {
-		msg = err.Error()
+	correlateErr := s.correlateMDMRelayDevices(ctx, tenantID, idempotencyKey, report.Devices)
+	if correlateErr != nil {
+		msg = correlateErr.Error()
 		s.logger.Warn("mdm relay correlate failed", slog.String("tenant_id", tenantID), slog.String("error", msg))
 	} else {
 		s.logger.Info("mdm relay correlate complete", slog.String("tenant_id", tenantID),
 			slog.String("agent", agentName), slog.Int("devices", len(report.Devices)))
 	}
-	if err := s.store.MarkMDMPollRun(ctx, tenantID, report.MDM, time.Now().UTC(), msg); err != nil {
-		s.logger.Warn("mdm relay report: stamp failed", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
+	if stampErr := s.store.MarkMDMPollRun(ctx, tenantID, report.MDM, time.Now().UTC(), msg); stampErr != nil {
+		s.logger.Warn("mdm relay report: stamp failed", slog.String("tenant_id", tenantID), slog.String("error", stampErr.Error()))
+		if correlateErr == nil {
+			correlateErr = stampErr
+		}
 	}
+	return correlateErr
 }

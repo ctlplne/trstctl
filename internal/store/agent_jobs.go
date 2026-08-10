@@ -41,6 +41,41 @@ type AgentJob struct {
 	CreatedAt      time.Time
 }
 
+// AgentJobResultClaim is the server-authoritative binding for one reported
+// result. Destination and key come from the durable job, not agent input.
+type AgentJobResultClaim struct {
+	Destination    string
+	IdempotencyKey string
+	Payload        []byte
+}
+
+// AgentJobClaimForResult proves that this exact claim generation is still held
+// and unexpired before any reported observation is projected.
+func (s *Store) AgentJobClaimForResult(ctx context.Context, tenantID, agentID string, jobID int64, attempt int, now time.Time) (AgentJobResultClaim, bool, error) {
+	var out AgentJobResultClaim
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`SELECT destination, idempotency_key, payload
+			   FROM outbox
+			  WHERE tenant_id = $1 AND id = $3
+			    AND claimed_by_agent_id = $2::uuid
+			    AND claim_attempts = $4
+			    AND claim_completed_at IS NULL
+			    AND claim_expires_at >= $5`,
+			tenantID, agentID, jobID, attempt, now.UTC()).Scan(&out.Destination, &out.IdempotencyKey, &out.Payload)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		found = true
+		return nil
+	})
+	return out, found, err
+}
+
 // ClaimAgentJobs leases up to limit pending entries on the given destinations to
 // one agent, returning what it took.
 //
@@ -79,6 +114,7 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			           AND c.destination = ANY($3::text[])
 			           AND c.status = 'pending'
 			           AND c.delivered_at IS NULL
+			           AND c.claim_completed_at IS NULL
 			           AND (c.claimed_by_agent_id IS NULL OR c.claim_expires_at < $5)
 			           AND (c.required_agent_role = '' OR c.required_agent_role = ANY($7::text[]))
 			           AND (c.required_agent_id IS NULL OR c.required_agent_id = $2::uuid)
@@ -133,42 +169,6 @@ func (s *Store) ExtendAgentJobClaim(ctx context.Context, tenantID, agentID strin
 		return nil
 	})
 	return extended, err
-}
-
-// MarkAgentJobCompleted closes the agent's claim and returns the entry's
-// destination and idempotency key so the caller can finish the delivery through
-// orchestrator.Outbox.CompleteByKey.
-//
-// It deliberately does NOT flip the outbox status itself. Completion is the
-// orchestrator's job: it holds the dispatch lease predicate that stops two
-// drainers finishing the same entry, and it records the destination's circuit
-// success. A hand-rolled `status = 'delivered'` here would skip both, so the
-// agent claim closes here and the delivery completes there.
-//
-// Closing the claim is idempotent: a replayed report from the same agent finds
-// the claim already closed and changes nothing, which is what makes an
-// at-least-once report safe to send twice.
-func (s *Store) MarkAgentJobCompleted(ctx context.Context, tenantID, agentID string, jobID int64, at time.Time) (destination, idempotencyKey string, ok bool, err error) {
-	err = s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		scanErr := tx.QueryRow(ctx,
-			`UPDATE outbox
-			    SET claim_completed_at = $4
-			  WHERE tenant_id = $1
-			    AND id = $3
-			    AND claimed_by_agent_id = $2::uuid
-			    AND claim_completed_at IS NULL
-			RETURNING destination, idempotency_key`,
-			tenantID, agentID, jobID, at.UTC()).Scan(&destination, &idempotencyKey)
-		if errors.Is(scanErr, pgx.ErrNoRows) {
-			return nil
-		}
-		if scanErr != nil {
-			return scanErr
-		}
-		ok = true
-		return nil
-	})
-	return destination, idempotencyKey, ok, err
 }
 
 // ReleaseAgentJob hands a job back after a failed attempt, recording why. The
@@ -539,6 +539,34 @@ func (s *Store) HasPendingAgentJob(ctx context.Context, tenantID, destination st
 			       AND status IN ('pending', 'processing')
 			       AND claim_completed_at IS NULL
 			)`, tenantID, destination).Scan(&pending)
+	})
+	return pending, err
+}
+
+// HasPendingMDMSyncJob reports whether this provider already has unfinished
+// estate-read work. Intune and Jamf share the mdm.sync destination so network
+// relays can advertise one closed capability, but they are separate bulkhead
+// lanes: an unavailable Intune tenant must not stop a healthy Jamf read.
+//
+// The provider comes from the durable outbox intent, not a mutable schedule or
+// an agent report. The producer controls this JSON, so a row that cannot decode
+// is a broken mdm.sync intent and fails the scheduler closed instead of silently
+// stacking more work behind it.
+func (s *Store) HasPendingMDMSyncJob(ctx context.Context, tenantID, provider string) (bool, error) {
+	if tenantID == "" || provider == "" {
+		return false, errors.New("store: pending MDM sync lookup requires tenant and provider")
+	}
+	var pending bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM outbox
+			     WHERE tenant_id = $1
+			       AND destination = 'mdm.sync'
+			       AND status IN ('pending', 'processing')
+			       AND claim_completed_at IS NULL
+			       AND convert_from(payload, 'UTF8')::jsonb ->> 'mdm' = $2
+			)`, tenantID, provider).Scan(&pending)
 	})
 	return pending, err
 }

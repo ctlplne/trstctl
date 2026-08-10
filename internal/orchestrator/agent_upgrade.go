@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/fleet"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )

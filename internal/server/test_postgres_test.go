@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,17 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/store"
 )
+
+var sourceTreeSignerAuthSecret = filepath.Join("data", "signer", "sign-auth.bin")
+
+func assertNoSourceTreeSignerAuthSecret(t *testing.T, phase string) {
+	t.Helper()
+	if _, err := os.Stat(sourceTreeSignerAuthSecret); err == nil {
+		t.Fatalf("%s wrote signer authentication material into the source tree: %s", phase, sourceTreeSignerAuthSecret)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("inspect source-tree signer authentication path after %s: %v", phase, err)
+	}
+}
 
 var serverTestPG struct {
 	once sync.Once
@@ -23,12 +35,26 @@ var serverTestPG struct {
 }
 
 func TestMain(m *testing.M) {
-	code := m.Run()
+	code := 1
+	if _, err := os.Stat(sourceTreeSignerAuthSecret); os.IsNotExist(err) {
+		code = m.Run()
+	} else if err == nil {
+		fmt.Fprintf(os.Stderr, "server tests refuse source-tree signer authentication material: %s\n", sourceTreeSignerAuthSecret)
+	} else {
+		fmt.Fprintf(os.Stderr, "server tests could not inspect source-tree signer authentication path %s: %v\n", sourceTreeSignerAuthSecret, err)
+	}
 	if serverTestPG.stop != nil {
 		_ = serverTestPG.stop()
 	}
 	if serverTestPG.dir != "" {
 		_ = os.RemoveAll(serverTestPG.dir)
+	}
+	if _, err := os.Stat(sourceTreeSignerAuthSecret); err == nil {
+		fmt.Fprintf(os.Stderr, "server tests wrote signer authentication material into the source tree: %s\n", sourceTreeSignerAuthSecret)
+		code = 1
+	} else if !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "server tests could not inspect source-tree signer authentication path %s: %v\n", sourceTreeSignerAuthSecret, err)
+		code = 1
 	}
 	os.Exit(code)
 }
@@ -97,7 +123,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          notification_channels, notification_reads, notification_threshold_deliveries, notification_test_operations,
 		          notification_delivery_receipts, notification_routing_policies,
 		          connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs,
-		          incident_executions, incident_fleet_reissuance_runs,
+		          outbox_reconciliation_conflicts, incident_executions, incident_fleet_reissuance_runs,
 		          pam_sessions, nhi_access_review_campaigns, nhi_access_review_items,
 		          access_change_requests, access_change_request_decisions, compliance_report_schedules,
 		          privacy_subject_erasures, privacy_retention_runs, privacy_archive_erasure_attestations,
@@ -105,11 +131,19 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          code_signing_operations,
 		          issuance_approval_requests, issuance_approvals,
 		          agent_job_credential_redemptions, agent_job_receipts, adcs_template_posture,
-		          cmdb_reconcile_schedules, owner_ownership_conflicts, issuance_requests, mdm_device_correlations, agent_upgrade_campaigns
+		          cmdb_reconcile_schedules, owner_ownership_conflicts, issuance_requests,
+		          enrollment_diagnostic_observations, enrollment_diagnostics,
+		          mdm_scep_policies, mdm_poll_schedules, mdm_device_correlations, agent_upgrade_campaigns,
+		          provider_breakglass_grants, provider_tenants, provider_operator_delegations,
+		          provider_tenant_quotas, provider_usage_coverage, provider_usage_meters
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("reset shared server postgres: %v", err)
 	}
-	if _, err := st.SystemPool().Exec(ctx, `UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
+	if _, err := st.SystemPool().Exec(ctx,
+		`UPDATE projection_checkpoint
+		    SET applied_seq = 0, failed_seq = NULL, last_error = NULL,
+		        failed_at = NULL, updated_at = now()
+		  WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
 	}
 	if _, err := st.SystemPool().Exec(ctx, `UPDATE outbox_reconciliation_checkpoint SET reconciled_seq = 0, updated_at = now() WHERE id = 1`); err != nil {

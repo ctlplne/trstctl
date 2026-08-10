@@ -19,6 +19,32 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+type replayableTransitionSideEffect struct {
+	Destination       string `json:"destination"`
+	IdempotencyKey    string `json:"idempotency_key"`
+	Payload           []byte `json:"payload"`
+	RequiredAgentRole string `json:"required_agent_role,omitempty"`
+}
+
+func replayableTransitionEvent(t *testing.T, identityID string, from, to orchestrator.State, requestKey string, sideEffect replayableTransitionSideEffect) []byte {
+	t.Helper()
+	payload, err := json.Marshal(struct {
+		IdentityID     string                         `json:"identity_id"`
+		From           string                         `json:"from"`
+		To             string                         `json:"to"`
+		Reason         string                         `json:"reason,omitempty"`
+		IdempotencyKey string                         `json:"idempotency_key"`
+		SideEffect     replayableTransitionSideEffect `json:"side_effect"`
+	}{
+		IdentityID: identityID, From: string(from), To: string(to),
+		Reason: "pre-upgrade fixture", IdempotencyKey: requestKey, SideEffect: sideEffect,
+	})
+	if err != nil {
+		t.Fatalf("encode replayable transition: %v", err)
+	}
+	return payload
+}
+
 // transitionEvent builds the JSON body of a lifecycle transition event the way
 // Orchestrator.Transition does, so the reconciler decodes it identically.
 func transitionEvent(t *testing.T, identityID string, from, to orchestrator.State) []byte {
@@ -156,6 +182,191 @@ func TestReconcileOutboxHealsCrashGapExactlyOnce(t *testing.T) {
 	}
 	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 1 {
 		t.Fatalf("after second reconcile outbox rows = %d, want still exactly 1 (no duplicate)", got)
+	}
+}
+
+// AUD-97 is the preserved upgrade failure, reduced to its exact contract. A
+// semantic request key was retained in the outbox after the first randomly-ID'd
+// demo identity, then reused seventeen days later for a different identity. The
+// receiver-key guard must keep the old command immutable, while boot recovery
+// quarantines the NEW event as tenant-scoped evidence and continues far enough to
+// heal another tenant's unrelated command.
+func TestReconcileOutboxQuarantinesHistoricalCommandConflictAndContinues(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	orch := orchestrator.NewOrchestrator(log, s, ob)
+	mustRegisterTenant(t, s, tenantA)
+	mustRegisterTenant(t, s, tenantB)
+
+	const (
+		requestKey = "demo-seed-v1:identity-warehouse-mtls-deploy"
+		outboxKey  = "transition:" + requestKey
+		oldID      = "5481474d-7a8b-440a-a7df-fca7c8311dd0"
+		newID      = "6ced6b6d-3777-44a8-a60f-40db05af7741"
+	)
+	oldPayload := transitionEventWithIdempotency(t, oldID, orchestrator.StateIssued, orchestrator.StateDeployed, requestKey)
+	oldLane := "connector.deploy:identity:" + oldID
+	if err := enqueueIfAbsent(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "connector.deploy", IdempotencyKey: outboxKey,
+		EffectLane: oldLane, Payload: oldPayload,
+	}); err != nil {
+		t.Fatalf("seed retained pre-upgrade outbox command: %v", err)
+	}
+
+	// Event 73 in the preserved history is the immutable source for row 15. Its
+	// checkpoint has already advanced, exactly like the upgrade reproduction.
+	oldEvent, err := log.Append(ctx, events.Event{
+		Type: "identity.deployed", TenantID: tenantA,
+		SchemaVersion: projections.LifecycleSideEffectEventSchemaVersion,
+		Data: replayableTransitionEvent(t, oldID, orchestrator.StateIssued, orchestrator.StateDeployed, requestKey,
+			replayableTransitionSideEffect{Destination: "connector.deploy", IdempotencyKey: outboxKey, Payload: oldPayload}),
+	})
+	if err != nil {
+		t.Fatalf("append historical source event: %v", err)
+	}
+	if err := s.AdvanceOutboxReconciliationCheckpoint(ctx, oldEvent.Sequence); err != nil {
+		t.Fatalf("advance pre-upgrade reconciliation checkpoint: %v", err)
+	}
+
+	newPayload := transitionEventWithIdempotency(t, newID, orchestrator.StateIssued, orchestrator.StateDeployed, requestKey)
+	conflictingEvent, err := log.Append(ctx, events.Event{
+		Type: "identity.deployed", TenantID: tenantA,
+		SchemaVersion: projections.LifecycleSideEffectEventSchemaVersion,
+		Data: replayableTransitionEvent(t, newID, orchestrator.StateIssued, orchestrator.StateDeployed, requestKey,
+			replayableTransitionSideEffect{
+				Destination: "connector.deploy", IdempotencyKey: outboxKey,
+				Payload: newPayload, RequiredAgentRole: "control_plane",
+			}),
+	})
+	if err != nil {
+		t.Fatalf("append conflicting current event: %v", err)
+	}
+
+	unrelated, err := log.Append(ctx, events.Event{
+		Type: "identity.issued", TenantID: tenantB,
+		Data: transitionEvent(t, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", orchestrator.StateRequested, orchestrator.StateIssued),
+	})
+	if err != nil {
+		t.Fatalf("append unrelated tenant event: %v", err)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("reconcile historical conflict: %v", err)
+	}
+	if healed != 1 {
+		t.Fatalf("healed effects = %d, want the one unrelated tenant-B effect", healed)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantB, unrelated.ID); got != 1 {
+		t.Fatalf("tenant-B command rows = %d, want 1 despite tenant-A conflict", got)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 1 {
+		t.Fatalf("conflicting key rows = %d, want immutable original only", got)
+	}
+	if got := outboxPayload(t, ctx, s.SystemPool(), tenantA, outboxKey); !bytes.Equal(got, oldPayload) {
+		t.Fatalf("retained command changed from %s to %s", oldPayload, got)
+	}
+
+	conflicts, err := s.ListOutboxReconciliationConflicts(ctx, tenantA, 10)
+	if err != nil {
+		t.Fatalf("list tenant-A recovery incidents: %v", err)
+	}
+	if len(conflicts) != 1 {
+		t.Fatalf("tenant-A recovery incidents = %d, want 1", len(conflicts))
+	}
+	conflict := conflicts[0]
+	if conflict.SourceEventID != conflictingEvent.ID || conflict.SourceEventSequence != conflictingEvent.Sequence ||
+		conflict.IdempotencyKey != outboxKey || conflict.ExistingEffectLane != oldLane ||
+		conflict.CandidateEffectLane != "connector.deploy:identity:"+newID || conflict.CandidateRequiredAgentRole != "control_plane" ||
+		conflict.Status != "quarantined" || conflict.ExistingPayloadSHA256 == conflict.CandidatePayloadSHA256 {
+		t.Fatalf("recovery incident does not bind both immutable commands: %+v", conflict)
+	}
+	otherTenant, err := s.ListOutboxReconciliationConflicts(ctx, tenantB, 10)
+	if err != nil || len(otherTenant) != 0 {
+		t.Fatalf("tenant-B recovery incidents = %v err=%v, want none", otherTenant, err)
+	}
+
+	// The first pass appends one immutable quarantine event after its pinned replay
+	// head. A second pass consumes that event and must neither duplicate the
+	// incident nor enqueue either receiver command again.
+	healed, err = orch.ReconcileOutbox(ctx, log)
+	if err != nil || healed != 0 {
+		t.Fatalf("second reconcile = (%d, %v), want (0, nil)", healed, err)
+	}
+	conflicts, err = s.ListOutboxReconciliationConflicts(ctx, tenantA, 10)
+	if err != nil || len(conflicts) != 1 {
+		t.Fatalf("repeated reconcile incidents = %d err=%v, want exactly 1", len(conflicts), err)
+	}
+	var conflictEvents int
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type == projections.EventOutboxReconciliationConflictRecorded {
+			conflictEvents++
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay recovery incidents: %v", err)
+	}
+	if conflictEvents != 1 {
+		t.Fatalf("immutable recovery incident events = %d, want 1", conflictEvents)
+	}
+}
+
+// AUD-31: the fleet cursor event is also the recovery source for its one
+// unpublished command. This simulates a crash after the event append but before
+// the PostgreSQL projection/outbox transaction committed, then proves restart
+// recreates exactly the current cursor and never duplicates it.
+func TestReconcileOutboxHealsFleetCursorCrashGapExactlyOnce(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
+
+	const runID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	const batchIndex = 2
+	outboxKey := orchestrator.FleetReissuanceBatchIdempotencyKey(runID, batchIndex)
+	payload, err := json.Marshal(projections.IncidentFleetReissuanceRecorded{
+		ID: runID, Status: "running", Phase: "batch_2_queued", NextBatchIndex: batchIndex,
+		Batches: []projections.FleetReissuanceBatch{
+			{Index: 1, Status: "executed"},
+			{Index: batchIndex, Status: "queued"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("encode fleet cursor event: %v", err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type: projections.EventIncidentFleetReissuanceRecorded, TenantID: tenantA, Data: payload,
+	}); err != nil {
+		t.Fatalf("append orphaned fleet cursor event: %v", err)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 0 {
+		t.Fatalf("pre-reconcile fleet cursor rows = %d, want 0", got)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("ReconcileOutbox fleet cursor: %v", err)
+	}
+	if healed != 1 || countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey) != 1 {
+		t.Fatalf("fleet cursor reconcile healed=%d rows=%d, want 1/1",
+			healed, countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey))
+	}
+	var command orchestrator.FleetReissuanceBatchCommand
+	if err := json.Unmarshal(outboxPayload(t, ctx, s.SystemPool(), tenantA, outboxKey), &command); err != nil {
+		t.Fatalf("decode healed fleet command: %v", err)
+	}
+	if command.RunID != runID || command.BatchIndex != batchIndex {
+		t.Fatalf("healed fleet command = %+v, want run=%s batch=%d", command, runID, batchIndex)
+	}
+	healed, err = orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("second ReconcileOutbox fleet cursor: %v", err)
+	}
+	if healed != 0 || countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey) != 1 {
+		t.Fatalf("second fleet reconcile healed=%d rows=%d, want 0/1",
+			healed, countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey))
 	}
 }
 

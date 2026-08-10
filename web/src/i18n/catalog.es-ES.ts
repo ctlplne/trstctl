@@ -860,6 +860,14 @@ const esESCatalog = {
   "policy.compliance.frameworkGroup": "Marco de cumplimiento",
   "policy.compliance.loadingEvidencePack": "Cargando paquete de evidencia.",
   "policy.compliance.evidencePackUnavailable": "Paquete de evidencia no disponible",
+  "policy.compliance.tenant": "Inquilino",
+  "policy.compliance.generated": "Generado",
+  "policy.compliance.coverageWindow": "Ventana de evidencia",
+  "policy.compliance.evidenceRefs": "Referencias exactas de evidencia",
+  "policy.compliance.missingPrerequisites": "Requisitos previos faltantes",
+  "policy.compliance.noneMissing": "Ninguno",
+  "policy.compliance.unknown": "Desconocido",
+  "policy.compliance.unbound": "Sin vincular",
   "policy.versions.heading": "Versiones de politica",
   "policy.versions.description":
     "Las versiones activas de politica de ciclo de vida se comprueban antes de la activacion, se registran como eventos policy.version y se aplican antes de ejecutar cambios de ciclo de vida.",
@@ -1473,7 +1481,8 @@ const esESCatalog = {
   // E1 scope closure — Machine-authored translation, FLAG FOR HUMAN REVIEW.
   "source.cp.retained.e1par00006": "Ejecutado por el plano de control por dise\u00f1o",
   "source.authority.agreement.c4xr000001": "Acuerdo entre autoridades (XREC)",
-  "source.agreement.unavailable.c4xr000002": "La reconciliaci\u00f3n entre autoridades no est\u00e1 disponible en esta instalaci\u00f3n. No se ha recopilado ning\u00fan estado ni se ha podido detectar ninguna divergencia. Esto no indica que sus autoridades coincidan.",
+  "source.agreement.unavailable.c4xr000002":
+    "La reconciliaci\u00f3n entre autoridades no est\u00e1 disponible en esta instalaci\u00f3n. No se ha recopilado ning\u00fan estado ni se ha podido detectar ninguna divergencia. Esto no indica que sus autoridades coincidan.",
   "source.open.witnesses.c4xr000003": "Testigos abiertos",
   "source.replay.watermark.c4xr000004": "Marca de reproducci\u00f3n",
   "source.median.resolution.c4xr000005": "Resoluci\u00f3n mediana",
@@ -1481,7 +1490,8 @@ const esESCatalog = {
   "source.authority.c4xr000007": "Autoridad",
   "source.divergences.c4xr000008": "Divergencias",
   "source.by.class.c4xr000009": "Por clase",
-  "source.not.collecting.c4xr000010": "Conectado, pero no hay ninguna programaci\u00f3n de reconciliaci\u00f3n configurada: no se comparan estados de autoridad, por lo que los valores siguientes reflejan ausencia de recopilaci\u00f3n, no ausencia de divergencia.",
+  "source.not.collecting.c4xr000010":
+    "Conectado, pero no hay ninguna programaci\u00f3n de reconciliaci\u00f3n configurada: no se comparan estados de autoridad, por lo que los valores siguientes reflejan ausencia de recopilaci\u00f3n, no ausencia de divergencia.",
   "source.crypto.readiness.m2seq00001": "Secuenciaci\u00f3n de la migraci\u00f3n criptogr\u00e1fica",
   "source.crypto.assets.m2seq00002": "Activos criptogr\u00e1ficos",
   "source.urgent.m2seq00003": "Urgente (d\u00e9bil o vulnerable a la computaci\u00f3n cu\u00e1ntica)",
@@ -3292,6 +3302,7 @@ const esESCatalog = {
   "source.mdm.devices.unobserved.i5mdm00003": "no observado: el MDM no ha informado sobre este dispositivo",
   "source.mdm.devices.renewalrisk.i5mdm00004":
     "{value1} dispositivo(s) en riesgo de perder silenciosamente su renovación: sus certificados están dentro de la ventana de renovación y el MDM no los ha visto desde que se abrió.",
+  "source.mdm.devices.stepdetail.i5mdm00005": "— {value1}",
   "source.issuance.requests.heading.i3req00001": "Solicitudes de emisi\u00f3n",
   "source.issuance.requests.counts.i3req00002": "{value1} esperando una decisi\u00f3n, de {value2} en total.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, decidido por {value2}",
@@ -4206,7 +4217,8 @@ const esESCatalog = {
   "platform.idempotency.notInstalled": "No instalada",
   "platform.idempotency.recoveryHeading": "Recuperación",
   "platform.usageEvidence.heading": "Uso y evidencia de facturaci\u00f3n",
-  "platform.usageEvidence.description": "Uso medido de esta cuenta, como el documento a partir del cual factura un proveedor. Lea el estado de facturaci\u00f3n antes que las cifras: un periodo que el almac\u00e9n de medici\u00f3n no pudo cubrir de principio a fin es una vista parcial, no una factura.",
+  "platform.usageEvidence.description":
+    "Uso medido de esta cuenta, como el documento a partir del cual factura un proveedor. Lea el estado de facturaci\u00f3n antes que las cifras: un periodo que el almac\u00e9n de medici\u00f3n no pudo cubrir de principio a fin es una vista parcial, no una factura.",
   "platform.usageEvidence.loading": "Cargando la evidencia de uso.",
   "platform.usageEvidence.periodStart": "Inicio del periodo",
   "platform.usageEvidence.periodEnd": "Fin del periodo",
@@ -4225,8 +4237,7 @@ const esESCatalog = {
   "platform.usageEvidence.unchecked": "{meter}: sin fuente de eventos independiente; el valor medido queda por s\u00ed solo.",
   "platform.usageEvidence.signed":
     "Firmado con la clave de exportaci\u00f3n de auditor\u00eda de esta instalaci\u00f3n ({keyId}). Verifique el JWS del documento JSON con su clave p\u00fablica.",
-  "platform.usageEvidence.unsigned":
-    "Sin firma: este documento no es evidencia facturable. El motivo de arriba indica qu\u00e9 ingrediente falta.",
+  "platform.usageEvidence.unsigned": "Sin firma: este documento no es evidencia facturable. El motivo de arriba indica qu\u00e9 ingrediente falta.",
   "platform.tenantSeal.heading": "Custodia criptográfica del tenant",
   "platform.tenantSeal.description":
     "Mueva este tenant detrás de su propia envoltura controlada por el operador y haga que sus datos protegidos no se puedan descifrar sin detener los tenants vecinos.",
@@ -4278,154 +4289,93 @@ const esESCatalog = {
     "Vista previa local en texto plano. En esta vista del navegador no se expone ningún byte de certificados o claves privadas.",
   // B6 edge delegation panel — Machine-authored translations, FLAG FOR HUMAN REVIEW
   // (added with the EdgeDelegationsPanel; same convention as previous machine-authored additions).
-  "source.edge.delegations.b6edge00001":
-    "CA subordinadas de borde delegadas (aislamiento)",
+  "source.edge.delegations.b6edge00001": "CA subordinadas de borde delegadas (aislamiento)",
   "source.edge.unavailable.b6edge00002":
     "La superficie de delegación de borde no está habilitada en este despliegue. Las CA de borde delegadas son la única excepción acotada a que la firma viva solo en el firmador aislado; rechazar el flujo es la postura por omisión.",
   "source.edge.none.b6edge00003":
     "Ningún segmento ha optado por participar. Las CA de borde delegadas están desactivadas por omisión; al optar un segmento declarado se fijan las raíces de atestación TPM que pueden avalar a sus hosts y los identificadores a los que se restringe cada delegación.",
-  "source.edge.segments.b6edge00004":
-    "Segmentos participantes",
-  "source.edge.live.b6edge00005":
-    "Delegaciones",
-  "source.edge.host.b6edge00006":
-    "Host",
-  "source.edge.constraints.b6edge00007":
-    "Restricciones de nombre",
-  "source.edge.status.b6edge00008":
-    "Estado",
-  "source.edge.expires.b6edge00009":
-    "Caduca",
-  "source.edge.segment.b6edge00010":
-    "Segmento",
-  "source.edge.enabled.b6edge00011":
-    "Habilitado",
-  "source.edge.attestation.roots.b6edge00012":
-    "Raíces de atestación",
-  "source.edge.excluding.b6edge00013":
-    "— excluyendo",
-  "source.edge.on.b6edge00016":
-    "activado",
-  "source.edge.off.b6edge00017":
-    "desactivado",
-  "source.edge.attested.key.b6edge00014":
-    "Clave atestada",
+  "source.edge.segments.b6edge00004": "Segmentos participantes",
+  "source.edge.live.b6edge00005": "Delegaciones",
+  "source.edge.host.b6edge00006": "Host",
+  "source.edge.constraints.b6edge00007": "Restricciones de nombre",
+  "source.edge.status.b6edge00008": "Estado",
+  "source.edge.expires.b6edge00009": "Caduca",
+  "source.edge.segment.b6edge00010": "Segmento",
+  "source.edge.enabled.b6edge00011": "Habilitado",
+  "source.edge.attestation.roots.b6edge00012": "Raíces de atestación",
+  "source.edge.excluding.b6edge00013": "— excluyendo",
+  "source.edge.on.b6edge00016": "activado",
+  "source.edge.off.b6edge00017": "desactivado",
+  "source.edge.attested.key.b6edge00014": "Clave atestada",
   "source.edge.reconcile.note.b6edge00015":
     "Las emisiones realizadas mientras un host está inalcanzable solo se hacen visibles cuando su diario se reconcilia; una delegación sin ninguna listada puede seguir emitiendo. Las hojas reconciliadas fuera de las restricciones de la delegación se registran como violaciones, de forma visible.",
   // F4 AD CS certificate-database panel — Machine-authored translations, FLAG FOR HUMAN REVIEW.
-  "source.adcs.database.f4adcs0001":
-    "Base de datos de certificados de AD CS",
+  "source.adcs.database.f4adcs0001": "Base de datos de certificados de AD CS",
   "source.adcs.database.intro.f4adcs0002":
     "Un relé unido al dominio recopila filas de certutil de cada base de datos de CA; el plano de control las resume por disposición. Pendiente es una solicitud a la espera de la aprobación de un administrador de CA, distinta de fallida y denegada.",
   "source.adcs.database.none.f4adcs0003":
     "No se ha ingerido ninguna base de datos de CA. Un relé unido al dominio ejecuta certutil contra una CA y publica las filas; hasta que alguno lo haga, no hay nada que resumir, lo cual no es lo mismo que una CA sin certificados.",
-  "source.adcs.ca.f4adcs0004":
-    "CA",
-  "source.adcs.issued.f4adcs0005":
-    "Emitidos",
-  "source.adcs.pending.f4adcs0006":
-    "Pendientes",
-  "source.adcs.revoked.f4adcs0007":
-    "Revocados",
-  "source.adcs.denied.f4adcs0008":
-    "Denegados",
-  "source.adcs.failed.f4adcs0009":
-    "Fallidos",
-  "source.adcs.gaps.f4adcs0010":
-    "Lagunas",
-  "source.adcs.ingested.f4adcs0011":
-    "Última ingesta",
+  "source.adcs.ca.f4adcs0004": "CA",
+  "source.adcs.issued.f4adcs0005": "Emitidos",
+  "source.adcs.pending.f4adcs0006": "Pendientes",
+  "source.adcs.revoked.f4adcs0007": "Revocados",
+  "source.adcs.denied.f4adcs0008": "Denegados",
+  "source.adcs.failed.f4adcs0009": "Fallidos",
+  "source.adcs.gaps.f4adcs0010": "Lagunas",
+  "source.adcs.ingested.f4adcs0011": "Última ingesta",
   "source.adcs.database.note.f4adcs0012":
     "Esto es visibilidad, no control: trstctl lee la base de datos de la CA, no aprueba ni revoca a través de esta superficie. Las lagunas cuentan las filas que la ingesta no pudo leer por completo, para que un problema de recopilación no se interprete como una CA vacía o sana.",
-  "source.adcs.database.error.f4adcs0013":
-    "No se pudo cargar el resumen de la base de datos de certificados de AD CS.",
-  "source.adcs.never.f4adcs0014":
-    "nunca",
+  "source.adcs.database.error.f4adcs0013": "No se pudo cargar el resumen de la base de datos de certificados de AD CS.",
+  "source.adcs.never.f4adcs0014": "nunca",
   // L3 provider console — Machine-authored translations, FLAG FOR HUMAN REVIEW.
-  "source.provider.console.l3prov0001":
-    "Consola del proveedor",
+  "source.provider.console.l3prov0001": "Consola del proveedor",
   "source.provider.login.intro.l3prov0002":
     "Inicie sesión con el token de operador de su IdP de proveedor. Este plano gestiona los inquilinos de clientes, por lo que está separado de la consola de inquilino y guarda su propia credencial de operador de corta duración solo en esta pestaña.",
-  "source.provider.token.l3prov0003":
-    "Token de portador del operador",
-  "source.provider.signin.l3prov0004":
-    "Iniciar sesión",
-  "source.provider.customers.intro.l3prov0005":
-    "Sus inquilinos de clientes y su estado de ciclo de vida.",
-  "source.provider.signout.l3prov0006":
-    "Cerrar sesión",
-  "source.provider.provision.l3prov0007":
-    "Aprovisionar un cliente",
-  "source.provider.slug.l3prov0008":
-    "Identificador",
-  "source.provider.name.l3prov0009":
-    "Nombre",
-  "source.provider.provision.action.l3prov0010":
-    "Aprovisionar",
-  "source.provider.customers.l3prov0011":
-    "Clientes",
-  "source.provider.none.l3prov0012":
-    "Aún no hay inquilinos de clientes. Aprovisione uno arriba.",
-  "source.provider.col.name.l3prov0013":
-    "Cliente",
-  "source.provider.col.slug.l3prov0014":
-    "Identificador",
-  "source.provider.col.status.l3prov0015":
-    "Estado",
-  "source.provider.col.created.l3prov0016":
-    "Incorporado",
-  "source.provider.col.actions.l3prov0017":
-    "Acciones",
-  "source.provider.suspend.confirm.l3prov0018":
-    "¿Suspender a este cliente? Su inquilino deja de prestar servicio hasta que lo reactive.",
-  "source.provider.suspend.l3prov0019":
-    "Suspender",
-  "source.provider.offboard.confirm.l3prov0020":
-    "¿Dar de baja a este cliente? Esto comienza a eliminar su inquilino y no se puede deshacer.",
-  "source.provider.offboard.l3prov0021":
-    "Dar de baja",
+  "source.provider.token.l3prov0003": "Token de portador del operador",
+  "source.provider.signin.l3prov0004": "Iniciar sesión",
+  "source.provider.customers.intro.l3prov0005": "Sus inquilinos de clientes y su estado de ciclo de vida.",
+  "source.provider.signout.l3prov0006": "Cerrar sesión",
+  "source.provider.provision.l3prov0007": "Aprovisionar un cliente",
+  "source.provider.slug.l3prov0008": "Identificador",
+  "source.provider.name.l3prov0009": "Nombre",
+  "source.provider.provision.action.l3prov0010": "Aprovisionar",
+  "source.provider.customers.l3prov0011": "Clientes",
+  "source.provider.none.l3prov0012": "Aún no hay inquilinos de clientes. Aprovisione uno arriba.",
+  "source.provider.col.name.l3prov0013": "Cliente",
+  "source.provider.col.slug.l3prov0014": "Identificador",
+  "source.provider.col.status.l3prov0015": "Estado",
+  "source.provider.col.created.l3prov0016": "Incorporado",
+  "source.provider.col.actions.l3prov0017": "Acciones",
+  "source.provider.suspend.confirm.l3prov0018": "¿Suspender a este cliente? Su inquilino deja de prestar servicio hasta que lo reactive.",
+  "source.provider.suspend.l3prov0019": "Suspender",
+  "source.provider.offboard.confirm.l3prov0020": "¿Dar de baja a este cliente? Esto comienza a eliminar su inquilino y no se puede deshacer.",
+  "source.provider.offboard.l3prov0021": "Dar de baja",
   // L3 provider quota — Machine-authored translations, FLAG FOR HUMAN REVIEW.
-  "source.provider.quota.l3prov0022":
-    "Cuota",
-  "source.provider.quota.none.l3prov0023":
-    "No hay cuota establecida para este cliente; no tiene límite.",
-  "source.provider.quota.agents.l3prov0024":
-    "Máx. agentes",
-  "source.provider.quota.certs.l3prov0025":
-    "Máx. certificados",
-  "source.provider.quota.secrets.l3prov0026":
-    "Máx. secretos",
-  "source.provider.quota.unlimited.l3prov0027":
-    "ilimitado",
+  "source.provider.quota.l3prov0022": "Cuota",
+  "source.provider.quota.none.l3prov0023": "No hay cuota establecida para este cliente; no tiene límite.",
+  "source.provider.quota.agents.l3prov0024": "Máx. agentes",
+  "source.provider.quota.certs.l3prov0025": "Máx. certificados",
+  "source.provider.quota.secrets.l3prov0026": "Máx. secretos",
+  "source.provider.quota.unlimited.l3prov0027": "ilimitado",
   // L3 quota editor — Machine-authored, FLAG FOR HUMAN REVIEW.
   "source.provider.quota.edit.hint.l3prov0028":
     "Deje un campo en blanco para no poner límite. Un límite de cero significa que el cliente no puede crear nada, distinto de sin tope.",
-  "source.provider.quota.save.l3prov0029":
-    "Guardar cuota",
+  "source.provider.quota.save.l3prov0029": "Guardar cuota",
   // L3 brand editor — Machine-authored, FLAG FOR HUMAN REVIEW.
-  "source.provider.brand.l3prov0030":
-    "Marca",
+  "source.provider.brand.l3prov0030": "Marca",
   "source.provider.brand.hint.l3prov0031":
     "Establezca la marca de marca blanca de este cliente. Un dominio personalizado debe ser único: dos clientes no pueden reclamar un mismo host, y el plano rechaza un duplicado.",
-  "source.provider.brand.product.l3prov0032":
-    "Nombre del producto",
-  "source.provider.brand.domain.l3prov0033":
-    "Dominio personalizado",
-  "source.provider.brand.message.l3prov0034":
-    "Mensaje de inicio de sesión",
-  "source.provider.brand.save.l3prov0035":
-    "Guardar marca",
+  "source.provider.brand.product.l3prov0032": "Nombre del producto",
+  "source.provider.brand.domain.l3prov0033": "Dominio personalizado",
+  "source.provider.brand.message.l3prov0034": "Mensaje de inicio de sesión",
+  "source.provider.brand.save.l3prov0035": "Guardar marca",
   // L3 isolation drill — Machine-authored, FLAG FOR HUMAN REVIEW.
-  "source.provider.drill.title.l3prov0036":
-    "Aislamiento de inquilinos",
+  "source.provider.drill.title.l3prov0036": "Aislamiento de inquilinos",
   "source.provider.drill.intro.l3prov0037":
     "Ejecute un simulacro bajo demanda que demuestre que un cliente no puede leer ni sobrescribir los datos de otro cliente. Solo para administradores.",
-  "source.provider.drill.run.l3prov0038":
-    "Ejecutar simulacro de aislamiento",
-  "source.provider.drill.pass.l3prov0039":
-    "El aislamiento se mantiene: todas las comprobaciones pasaron.",
-  "source.provider.drill.fail.l3prov0040":
-    "El simulacro de aislamiento FALLÓ: investigue de inmediato.",
+  "source.provider.drill.run.l3prov0038": "Ejecutar simulacro de aislamiento",
+  "source.provider.drill.pass.l3prov0039": "El aislamiento se mantiene: todas las comprobaciones pasaron.",
+  "source.provider.drill.fail.l3prov0040": "El simulacro de aislamiento FALLÓ: investigue de inmediato.",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

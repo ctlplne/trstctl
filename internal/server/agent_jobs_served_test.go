@@ -4,6 +4,8 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -14,7 +16,107 @@ import (
 	"trstctl.com/trstctl/internal/agent"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/ticketintake"
 )
+
+const servedTicketIntakeTokenRef = "secret://itsm/intake" // #nosec G101 -- secret-store reference/pointer, never credential material (CWE-798)
+
+func TestSignedTicketResultStaysRetryableUntilProjectionSucceeds(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, agentJobKindTicketSync)
+	token := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
+	status, body := secretsReqKey(t, h.servedHarness, http.MethodPut,
+		"/api/v1/issuance-requests/intake-schedule", token, "ticket-result-config", map[string]any{
+			"system": "servicenow", "instance_url": "https://servicenow.internal.example",
+			"token_ref": servedTicketIntakeTokenRef, "sn_table": "incident",
+			"subject_field": "u_subject", "profile_field": "u_profile",
+			"interval_seconds": 3600, "enabled": true,
+		})
+	if status != http.StatusOK {
+		t.Fatalf("configure ticket intake: %d %s", status, body)
+	}
+	seedRoleJob(t, ctx, h, agentJobKindTicketSync, "ticket-result-job")
+	intentBytes, err := json.Marshal(ticketintake.SyncIntent{
+		InstanceURL: "https://servicenow.internal.example", TokenRef: servedTicketIntakeTokenRef,
+		SNTable: "incident", SubjectField: "u_subject", ProfileField: "u_profile", PageLimit: ticketIntakePageLimit,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE outbox SET payload = $2 WHERE tenant_id = $1 AND idempotency_key = 'ticket-result-job'`, h.tenant, intentBytes)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{agentJobKindTicketSync}, Limit: 1})
+	if err != nil || len(claimed.Jobs) != 1 {
+		t.Fatalf("claim: jobs=%d err=%v", len(claimed.Jobs), err)
+	}
+	job := claimed.Jobs[0]
+	// The schedule is mutable, but this already-issued job is not. Changing the
+	// table after claim must not relabel the signed result or its ticket key.
+	status, body = secretsReqKey(t, h.servedHarness, http.MethodPut,
+		"/api/v1/issuance-requests/intake-schedule", token, "ticket-result-config-2", map[string]any{
+			"system": "servicenow", "instance_url": "https://servicenow.internal.example",
+			"token_ref": servedTicketIntakeTokenRef, "sn_table": "sc_req_item",
+			"subject_field": "u_subject", "profile_field": "u_profile",
+			"interval_seconds": 3600, "enabled": true,
+		})
+	if status != http.StatusOK {
+		t.Fatalf("change ticket schedule after claim: %d %s", status, body)
+	}
+
+	// This report is correctly signed but structurally unusable. The receiver
+	// must reject it WITHOUT closing the claim, or a crash/parse failure in this
+	// window loses the already-completed external observation forever.
+	if _, err := h.client.ReportJobResult(ctx,
+		h.report(t, job.JobID, job.Attempt, transport.JobOutcomeExecuted, "{", "")); err == nil {
+		t.Fatal("an undecodable signed result was accepted")
+	}
+	var completed bool
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT claim_completed_at IS NOT NULL FROM outbox WHERE tenant_id = $1 AND id = $2`, h.tenant, job.JobID).Scan(&completed)
+	}); err != nil || completed {
+		t.Fatalf("failed result closed the claim: completed=%v err=%v", completed, err)
+	}
+
+	reportBytes, err := json.Marshal(ticketintake.SyncReport{
+		ObservedAt: time.Now().UTC(),
+		Tickets:    []ticketintake.Ticket{{SysID: "tick-77", Subject: "api.example.test", Profile: "tls-server", Requester: "Dana Ops"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := h.client.ReportJobResult(ctx,
+		h.report(t, job.JobID, job.Attempt, transport.JobOutcomeExecuted, string(reportBytes), ""))
+	if err != nil || !accepted.Accepted {
+		t.Fatalf("corrected report: accepted=%v err=%v", accepted, err)
+	}
+	var rowStatus string
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status FROM outbox WHERE tenant_id = $1 AND id = $2`, h.tenant, job.JobID).Scan(&rowStatus)
+	}); err != nil || rowStatus != "delivered" {
+		t.Fatalf("accepted result did not atomically retire its durable intent: status=%q err=%v", rowStatus, err)
+	}
+	requests, err := h.store.ListIssuanceRequests(ctx, h.tenant, "", 50)
+	if err != nil || len(requests) != 1 || requests[0].TicketRef != "incident:tick-77" {
+		t.Fatalf("projected requests=%+v err=%v", requests, err)
+	}
+
+	// The agent can replay after losing the response. Completion refuses the
+	// duplicate, and the stable ticket/event identity leaves exactly one row.
+	replayed, err := h.client.ReportJobResult(ctx,
+		h.report(t, job.JobID, job.Attempt, transport.JobOutcomeExecuted, string(reportBytes), ""))
+	if err != nil || replayed.Accepted {
+		t.Fatalf("replayed report: accepted=%v err=%v", replayed, err)
+	}
+	requests, err = h.store.ListIssuanceRequests(ctx, h.tenant, "", 50)
+	if err != nil || len(requests) != 1 {
+		t.Fatalf("replay created duplicate requests=%+v err=%v", requests, err)
+	}
+}
 
 // The job claim protocol, proven on the assembled binary (epic A1).
 //

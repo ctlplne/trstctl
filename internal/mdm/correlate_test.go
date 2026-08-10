@@ -3,6 +3,11 @@
 package mdm
 
 import (
+	"archive/zip"
+	"bytes"
+	"context"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -36,22 +41,19 @@ func TestAFilterCannotEscapeIntoTheMDMPath(t *testing.T) {
 	}
 }
 
-// An unrecognised MDM state must be UNKNOWN, never failed.
-//
-// Microsoft adds registration states. A mapping that treated a new one as a
-// failure would raise alerts on healthy devices the first time Graph shipped a
-// value we had not seen.
-func TestAnUnrecognisedIntuneStateIsUnknownNotFailed(t *testing.T) {
+// deviceRegistrationState says whether the DEVICE is registered. It does not
+// say whether the SCEP profile or the exact certificate installed. Treating
+// "registered" as installed was AUD-50's remaining false positive.
+func TestIntuneDeviceRegistrationStateNeverClaimsCertificateInstallation(t *testing.T) {
 	t.Parallel()
-	if got := intuneState("someFutureStateMicrosoftAdds"); got != OutcomeUnknown {
-		t.Fatalf("unknown state mapped to %q. Treating a state we do not recognise as a failure "+
-			"raises alerts on healthy devices the first time the vendor ships a new value", got)
-	}
-	if got := intuneState("registered"); got != OutcomeOK {
-		t.Fatalf("registered = %q, want ok", got)
-	}
-	if got := intuneState("revoked"); got != OutcomeFailed {
-		t.Fatalf("revoked = %q, want failed", got)
+	for _, state := range []string{"registered", "revoked", "someFutureStateMicrosoftAdds"} {
+		got, err := ParseIntuneDevices(strings.NewReader(`{"value":[{"id":"d1","deviceName":"laptop","serialNumber":"SER1","deviceRegistrationState":"` + state + `"}]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].InstallState != OutcomeUnknown || got[0].InstallObserved {
+			t.Fatalf("registration state %q produced %+v; only certificate/profile readback may claim installation", state, got)
+		}
 	}
 }
 
@@ -74,6 +76,99 @@ func TestJamfDoesNotClaimAnInstallItDidNotObserve(t *testing.T) {
 	if got[0].SerialNumber != "C02XYZ" {
 		t.Fatalf("serial = %q, want the hardware serial — it is the join key", got[0].SerialNumber)
 	}
+}
+
+func TestJamfCertificateInventoryCarriesExactInstallEvidence(t *testing.T) {
+	t.Parallel()
+	endpoint, err := JamfDevicesEndpoint("https://example.jamfcloud.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sections := strings.Join(u.Query()["section"], ",")
+	for _, required := range []string{"GENERAL", "HARDWARE", "CERTIFICATES"} {
+		if !strings.Contains(sections, required) {
+			t.Fatalf("Jamf read sections = %q; %s is required for exact certificate installation evidence", sections, required)
+		}
+	}
+	got, err := ParseJamfDevices(strings.NewReader(`{"results":[{"id":"7","general":{"name":"mac-1"},"hardware":{"serialNumber":"C02XYZ"},"certificates":[{"serialNumber":"00A7","certificateStatus":"ACTIVE","commonName":"C02XYZ"}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || !got[0].InstallObserved || len(got[0].Certificates) != 1 || got[0].Certificates[0].SerialNumber != "00A7" {
+		t.Fatalf("Jamf certificate evidence = %+v; want an explicit, attributable inventory observation", got)
+	}
+}
+
+func TestIntuneCertificateReportUsesOnlyExactDeviceAndCertificateEvidence(t *testing.T) {
+	t.Parallel()
+	zipBytes := newIntuneReportZIP(t, "DeviceId,PolicyId,SerialNumber,CertificateStatus,ValidTo\n"+
+		"device-7,profile-9,00A7,Active,2030-01-01T00:00:00Z\n")
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		var body string
+		switch {
+		case req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/beta/deviceManagement/reports/exportJobs"):
+			body = `{"id":"job-7","status":"notStarted"}`
+		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "exportJobs"):
+			body = `{"id":"job-7","status":"completed","url":"https://download.example.test/report.zip"}`
+		case req.Method == http.MethodGet && req.URL.Host == "download.example.test":
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(zipBytes)), Request: req}, nil
+		default:
+			t.Fatalf("unexpected Intune report request: %s %s", req.Method, req.URL)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+	})}
+	got, err := ReadIntuneCertificateEvidence(context.Background(), client, "https://graph.microsoft.com", []byte("token"), []string{"profile-9"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].MDMDeviceID != "device-7" || got[0].SerialNumber != "00A7" || got[0].Status != "Active" {
+		t.Fatalf("Intune certificate evidence = %+v; want exact device/profile/certificate observation", got)
+	}
+}
+
+func TestCertificateInstallationRequiresTheExactIssuedSerialAndProviderStatus(t *testing.T) {
+	t.Parallel()
+	device := Device{
+		MDM: MDMIntune, MDMDeviceID: "device-7", InstallObserved: true,
+		Certificates: []CertificateObservation{
+			{MDMDeviceID: "device-7", PolicyID: "profile-9", SerialNumber: "00:A7", Status: "Active"},
+		},
+	}
+	if outcome, detail := EvaluateCertificateInstallation(device, "a7"); outcome != OutcomeOK || !strings.Contains(detail, "exact issued serial") {
+		t.Fatalf("matching evidence = %q %q, want attributable ok", outcome, detail)
+	}
+	if outcome, detail := EvaluateCertificateInstallation(device, "b8"); outcome != OutcomeFailed || !strings.Contains(detail, "did not contain") {
+		t.Fatalf("different certificate = %q %q, want explicit failed readback", outcome, detail)
+	}
+	device.InstallObserved = false
+	if outcome, _ := EvaluateCertificateInstallation(device, "a7"); outcome != OutcomeUnknown {
+		t.Fatalf("unobserved provider evidence = %q, want unknown", outcome)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func newIntuneReportZIP(t *testing.T, contents string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	f, err := zw.Create("CertificatesByRAPolicy.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(f, contents); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }
 
 // A device record with no id joins to nothing and must not become a row.

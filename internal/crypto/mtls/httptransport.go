@@ -14,6 +14,15 @@ import (
 // example the Kubernetes API client, which must trust the cluster CA) can build
 // a trusting HTTP client without importing crypto/* themselves (AN-3).
 func HTTPTransport(caPEM []byte) (*http.Transport, error) {
+	return HTTPTransportForServerName(caPEM, "")
+}
+
+// HTTPTransportForServerName is HTTPTransport with an explicit certificate
+// identity override. This is needed when an operator reaches a private HTTPS
+// service by IP or an internal alias while its certificate names a stable DNS
+// identity. The override changes verification only; dialing still uses the URL
+// host and remains subject to the caller's SSRF policy.
+func HTTPTransportForServerName(caPEM []byte, serverName string) (*http.Transport, error) {
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(caPEM) {
 		return nil, errors.New("mtls: no CA certificates found in PEM")
@@ -21,6 +30,7 @@ func HTTPTransport(caPEM []byte) (*http.Transport, error) {
 	return &http.Transport{
 		TLSClientConfig: &tls.Config{
 			RootCAs:    pool,
+			ServerName: serverName,
 			MinVersion: tls.VersionTLS12,
 		},
 	}, nil

@@ -71,10 +71,20 @@ type DRDrill struct {
 	// RTOSeconds is how long the restore took into an ephemeral target. A
 	// FLOOR, not a recovery-time promise, which Limitations states in the
 	// attestation itself so the number cannot travel without its caveat.
-	RTOSeconds     int64    `json:"rto_seconds"`
-	EventsRestored int      `json:"events_restored"`
-	Detail         string   `json:"detail"`
-	Limitations    []string `json:"limitations"`
+	RTOSeconds     int64 `json:"rto_seconds"`
+	EventsRestored int   `json:"events_restored"`
+	// Full-set and health evidence comes from the isolated recovered target. A
+	// restored outcome cannot be emitted unless all of these are true.
+	PostgresRecordsRestored int            `json:"postgres_records_restored"`
+	PostgresTablesRestored  map[string]int `json:"postgres_tables_restored"`
+	ArtifactsRestored       []string       `json:"artifacts_restored"`
+	FullSetRestored         bool           `json:"full_set_restored"`
+	StoreHealthy            bool           `json:"store_healthy"`
+	EventLogHealthy         bool           `json:"event_log_healthy"`
+	SignerHealthy           bool           `json:"signer_healthy"`
+	ServerHealthy           bool           `json:"server_healthy"`
+	Detail                  string         `json:"detail"`
+	Limitations             []string       `json:"limitations"`
 }
 
 // DRArtifactFailure is one artifact that did not verify.
@@ -109,7 +119,15 @@ func (a *API) listDRPosture(w http.ResponseWriter, r *http.Request) {
 				Outcome: string(att.Outcome), RanAt: att.StartedAt.UTC().Format(time.RFC3339),
 				RPOSeconds: att.RPOSeconds, RTOSeconds: att.RTOSeconds,
 				EventsRestored: att.EventsRestored, Detail: att.Detail,
-				Limitations: att.Limitations,
+				PostgresRecordsRestored: att.PostgresRecordsRestored,
+				PostgresTablesRestored:  att.PostgresTablesRestored,
+				ArtifactsRestored:       att.ArtifactsRestored,
+				FullSetRestored:         att.FullSetRestored,
+				StoreHealthy:            att.StoreHealthy,
+				EventLogHealthy:         att.EventLogHealthy,
+				SignerHealthy:           att.SignerHealthy,
+				ServerHealthy:           att.ServerHealthy,
+				Limitations:             att.Limitations,
 			}
 		}
 	}

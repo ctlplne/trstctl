@@ -171,8 +171,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// delegated edge sub-CA is that CA's one bounded exception, not a product.
 	// F4's two `adcs ca-database` commands raised it to 357, on the discovery
 	// row: ingesting an AD CS CA database is lifecycle visibility, not issuance.
-	if len(out) != 357 {
-		t.Fatalf("CLI commands = %d, want 357", len(out))
+	// AUD-104's `incidents outbox-reconciliation-conflicts list` raises it to
+	// 358 and maps the AUD-97 quarantine onto the incident-response row.
+	if len(out) != 358 {
+		t.Fatalf("CLI commands = %d, want 358", len(out))
 	}
 	return out
 }

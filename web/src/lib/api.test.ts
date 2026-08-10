@@ -239,7 +239,7 @@ describe("api compliance evidence packs", () => {
     mockFetch(
       200,
       JSON.stringify({
-        format: "trstctl.compliance.evidence-pack.v1",
+        format: "trstctl.compliance.evidence-pack.v2",
         framework: "soc2",
         signed_export: { manifest: { framework: "soc2", controls: [] }, signature: "sig" },
         public_key_der: "BASE64PUBLICKEY",
@@ -1805,6 +1805,12 @@ describe("CLI-parity client methods (S3.3)", () => {
     },
     { name: "deleteConnectorTarget", call: () => api.deleteConnectorTarget("t1"), method: "DELETE", path: "/api/v1/connectors/targets/t1", status: 204 },
     { name: "outboxCircuits", call: () => api.outboxCircuits(), method: "GET", path: "/api/v1/connectors/outbox-circuits" },
+    {
+      name: "outboxReconciliationConflicts",
+      call: () => api.outboxReconciliationConflicts(),
+      method: "GET",
+      path: "/api/v1/incidents/outbox-reconciliation-conflicts",
+    },
     {
       name: "connectorDeliveries",
       call: () => api.connectorDeliveries({ limit: 20, identityId: "i1" }),

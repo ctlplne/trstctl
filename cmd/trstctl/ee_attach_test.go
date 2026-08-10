@@ -184,6 +184,18 @@ func TestAttachEEProviderLicenseMountsEnterpriseAndProviderSurfaces(t *testing.T
 	}
 }
 
+func TestOneShotRecoveryProjectionAttachIsProviderGated(t *testing.T) {
+	t.Parallel()
+	options, err := attachEEProjectionOptions(context.Background(), &config.Config{}, license.Community(), nil, nil)
+	if err != nil || len(options) != 0 {
+		t.Fatalf("community recovery projection options = %d/%v, want none", len(options), err)
+	}
+	if _, err := attachEEProjectionOptions(context.Background(), &config.Config{},
+		commercialLicense(t, license.TierProvider), nil, nil); err == nil {
+		t.Fatal("provider recovery projection accepted missing PostgreSQL/JetStream; a restore would silently omit authority state")
+	}
+}
+
 // TestAttachVerifiableDecommissionMountsBothSeams is the AUD-2/AUD-3 attach
 // regression: the VDEC block must mount BOTH the re-protection outbox handler
 // AND the API options factory (retirement checklist source + the re-protection

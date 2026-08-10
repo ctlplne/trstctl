@@ -8,26 +8,28 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
-// JOURNEY-003 acceptance: a compromised issuer response is a served fleet
-// reissuance workflow, not a static plan. The API enumerates affected identities
-// by issuer, reissues and deploys replacements in batches, revokes the old
-// identities, records rollback evidence, supports pause/resume/rollback state
-// snapshots, exports evidence, and persists the whole run through AN-2 events.
-func TestServedFleetReissuanceForCompromisedIssuerReissuesRevokesAndExportsEvidence(t *testing.T) {
+// AUD-31 / D6 acceptance: the request publishes only a canary command. Pause is
+// a real worker gate, unsigned verification cannot release the next batch, a
+// signed failure durably halts it, resume continues at the same cursor, and a
+// restarted receiver cannot duplicate replacement identities or later commands.
+func TestServedFleetReissuanceIsDurableCanaryFirstAcrossPauseHaltResumeAndRestart(t *testing.T) {
 	if testing.Short() {
-		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+		t.Skip("starts embedded PostgreSQL and NATS; skipped in -short")
 	}
 	ctx := context.Background()
 	const tenantID = "11111111-1111-1111-1111-111111111111"
@@ -52,7 +54,7 @@ func TestServedFleetReissuanceForCompromisedIssuerReissuesRevokesAndExportsEvide
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
-	auditKey, err := jose.GenerateRSASigningKey("journey-003-audit")
+	auditKey, err := jose.GenerateRSASigningKey("aud-31-audit")
 	if err != nil {
 		_ = log.Close()
 		t.Fatalf("generate audit key: %v", err)
@@ -74,163 +76,266 @@ func TestServedFleetReissuanceForCompromisedIssuerReissuesRevokesAndExportsEvide
 	secondID := createIdentityWithIssuerWithToken(t, ts, adminToken, owner.ID, issuerID, "payments-worker", "fleet-identity-2")
 	for _, id := range []string{firstID, secondID} {
 		if code, body := transitionIdentityWithToken(t, ts, adminToken, id, "issued", "fleet-issued-"+id); code != http.StatusOK {
-			t.Fatalf("issue identity %s = %d, want 200; body=%s", id, code, body)
+			t.Fatalf("issue identity %s = %d body=%s", id, code, body)
 		}
 		if code, body := transitionIdentityWithToken(t, ts, adminToken, id, "deployed", "fleet-deployed-"+id); code != http.StatusOK {
-			t.Fatalf("deploy identity %s = %d, want 200; body=%s", id, code, body)
+			t.Fatalf("deploy identity %s = %d body=%s", id, code, body)
 		}
 	}
 
 	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs", adminToken, "fleet-run-1", map[string]any{
-		"issuer_id":     issuerID,
-		"reason":        "intermediate CA private key exposure",
-		"batch_size":    1,
-		"connector":     "nginx",
-		"target":        "edge/prod",
-		"rollback_ref":  "restore previous fullchain on every edge target",
-		"health_gates":  []map[string]string{{"name": "replacement deployed", "status": "passed"}, {"name": "revocation published", "status": "passed"}},
-		"evidence_hint": "ca-compromise-drill-42",
+		"issuer_id": issuerID, "reason": "intermediate CA private key exposure",
+		"batch_size": 1, "connector": "nginx", "target": "edge/prod",
+		"rollback_ref": "restore previous fullchain on every edge target",
 	})
 	if code != http.StatusCreated {
-		t.Fatalf("start fleet reissuance = %d, want 201; body=%s", code, body)
+		t.Fatalf("start fleet reissuance = %d body=%s", code, body)
 	}
-	var run struct {
-		ID                     string   `json:"id"`
-		IssuerID               string   `json:"issuer_id"`
-		Status                 string   `json:"status"`
-		Phase                  string   `json:"phase"`
-		Reason                 string   `json:"reason"`
-		BatchSize              int      `json:"batch_size"`
-		AffectedIdentityIDs    []string `json:"affected_identity_ids"`
-		ReplacementIdentityIDs []string `json:"replacement_identity_ids"`
-		RevokedIdentityIDs     []string `json:"revoked_identity_ids"`
-		ConnectorDeliveryIDs   []string `json:"connector_delivery_ids"`
-		ConnectorDeliveries    []struct {
-			Status   string `json:"status"`
-			Attempts int    `json:"attempts"`
-		} `json:"connector_deliveries"`
-		BatchCount int `json:"batch_count"`
-		Batches    []struct {
-			Index                  int      `json:"index"`
-			Status                 string   `json:"status"`
-			IdentityIDs            []string `json:"identity_ids"`
-			ReplacementIdentityIDs []string `json:"replacement_identity_ids"`
-			HealthGate             string   `json:"health_gate"`
-		} `json:"batches"`
-		HealthGates          []struct{ Name, Status string } `json:"health_gates"`
-		GraphImpact          json.RawMessage                 `json:"graph_impact"`
-		FailedTargets        []string                        `json:"failed_targets"`
-		RollbackRefs         []string                        `json:"rollback_refs"`
-		EvidenceBundleFormat string                          `json:"evidence_bundle_format"`
-		EvidenceBundle       string                          `json:"evidence_bundle"`
+	var started fleetRunTestResponse
+	if err := json.Unmarshal(body, &started); err != nil {
+		t.Fatalf("decode start response: %v body=%s", err, body)
 	}
-	if err := json.Unmarshal(body, &run); err != nil {
-		t.Fatalf("decode fleet run: %v body=%s", err, body)
+	if started.Status != "running" || started.Phase != "canary_queued" || started.NextBatchIndex != 1 {
+		t.Fatalf("start state = %s/%s cursor=%d", started.Status, started.Phase, started.NextBatchIndex)
 	}
-	if run.ID == "" || run.IssuerID != issuerID {
-		t.Fatalf("fleet run ids = %+v", run)
+	if len(started.ReplacementIdentityIDs) != 0 || len(started.RevokedIdentityIDs) != 0 {
+		t.Fatalf("request path mutated fleet: replacements=%v revoked=%v", started.ReplacementIdentityIDs, started.RevokedIdentityIDs)
 	}
-	if run.Status != "executed" || run.Phase != "fleet_reissued_and_compromised_revoked" {
-		t.Fatalf("fleet run status/phase = %s/%s", run.Status, run.Phase)
+	if len(started.Batches) != 2 || started.Batches[0].Status != servedstatus.FleetBatchQueued || started.Batches[1].Status != servedstatus.FleetBatchPlanned {
+		t.Fatalf("start batches = %#v; want only canary queued", started.Batches)
 	}
-	if run.BatchSize != 1 || run.BatchCount != 2 || len(run.Batches) != 2 {
-		t.Fatalf("fleet batches = size %d count %d items %#v", run.BatchSize, run.BatchCount, run.Batches)
+	canaryReplacement := started.Batches[0].ReplacementIdentityIDs[0]
+	secondReplacement := started.Batches[1].ReplacementIdentityIDs[0]
+	assertIdentityState(t, st, tenantID, firstID, orchestrator.StateDeployed)
+	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateDeployed)
+	assertIdentityAbsent(t, st, tenantID, canaryReplacement)
+	assertIdentityAbsent(t, st, tenantID, secondReplacement)
+
+	canaryMessage := fleetBatchMessage(t, st, tenantID, started.ID, 1)
+	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 1); got != 1 {
+		t.Fatalf("canary outbox commands = %d, want exactly 1", got)
 	}
-	if !sameMembers(run.AffectedIdentityIDs, []string{firstID, secondID}) || !sameMembers(run.RevokedIdentityIDs, []string{firstID, secondID}) {
-		t.Fatalf("affected/revoked ids = affected %#v revoked %#v", run.AffectedIdentityIDs, run.RevokedIdentityIDs)
-	}
-	if len(run.ReplacementIdentityIDs) != 2 || len(run.ConnectorDeliveryIDs) != 2 {
-		t.Fatalf("replacement/delivery ids = replacements %#v deliveries %#v", run.ReplacementIdentityIDs, run.ConnectorDeliveryIDs)
-	}
-	if len(run.ConnectorDeliveries) != 2 {
-		t.Fatalf("connector delivery evidence = %#v, want two queued intents", run.ConnectorDeliveries)
-	}
-	for _, delivery := range run.ConnectorDeliveries {
-		if delivery.Status != "queued" || delivery.Attempts != 0 || delivery.Status == "delivered" {
-			t.Fatalf("pre-worker fleet delivery evidence = %+v, want queued/0 and never delivered", delivery)
-		}
-	}
-	if !bytes.Contains(run.GraphImpact, []byte(`"id":"iss:`+issuerID+`"`)) {
-		t.Fatalf("graph impact does not anchor the compromised issuer: %s", run.GraphImpact)
-	}
-	if len(run.HealthGates) != 2 || run.HealthGates[0].Status != "passed" {
-		t.Fatalf("health gates = %#v", run.HealthGates)
-	}
-	if len(run.FailedTargets) != 0 {
-		t.Fatalf("queued fleet connector intents were presented as failed targets: %#v", run.FailedTargets)
-	}
-	if len(run.RollbackRefs) < 7 || !strings.Contains(strings.Join(run.RollbackRefs, " "), "previous fullchain") {
-		t.Fatalf("rollback refs = %#v", run.RollbackRefs)
-	}
-	if run.EvidenceBundleFormat != "jws" || strings.Count(run.EvidenceBundle, ".") != 2 {
-		t.Fatalf("evidence bundle = format %q bundle %q; want compact JWS", run.EvidenceBundleFormat, run.EvidenceBundle)
+	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 2); got != 0 {
+		t.Fatalf("later batch was published before canary verification: %d", got)
 	}
 
-	for _, id := range []string{firstID, secondID} {
-		code, identityBody := doBearer(t, ts, http.MethodGet, "/api/v1/identities/"+id, adminToken, "", nil)
-		if code != http.StatusOK || !bytes.Contains(identityBody, []byte(`"status":"revoked"`)) {
-			t.Fatalf("compromised identity %s after fleet run = %d body=%s; want revoked", id, code, identityBody)
-		}
-	}
-	for _, id := range run.ReplacementIdentityIDs {
-		code, identityBody := doBearer(t, ts, http.MethodGet, "/api/v1/identities/"+id, adminToken, "", nil)
-		if code != http.StatusOK || !bytes.Contains(identityBody, []byte(`"status":"deployed"`)) {
-			t.Fatalf("replacement identity %s after fleet run = %d body=%s; want deployed", id, code, identityBody)
-		}
-	}
-
-	code, listBody := doBearer(t, ts, http.MethodGet, "/api/v1/incidents/fleet-reissuance-runs?issuer_id="+issuerID, adminToken, "", nil)
-	if code != http.StatusOK || !bytes.Contains(listBody, []byte(run.ID)) {
-		t.Fatalf("list fleet runs = %d body=%s; want run id", code, listBody)
-	}
-	code, getBody := doBearer(t, ts, http.MethodGet, "/api/v1/incidents/fleet-reissuance-runs/"+run.ID, adminToken, "", nil)
-	if code != http.StatusOK || !bytes.Contains(getBody, []byte(run.ConnectorDeliveryIDs[0])) {
-		t.Fatalf("get fleet run = %d body=%s; want connector delivery evidence", code, getBody)
-	}
-	code, pauseBody := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+run.ID+"/pause", adminToken, "fleet-pause-1", map[string]string{"reason": "freeze while edge health is inspected"})
+	code, pauseBody := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+started.ID+"/pause", adminToken, "fleet-pause-1", map[string]string{"reason": "inspect edge"})
 	if code != http.StatusOK || !bytes.Contains(pauseBody, []byte(`"status":"paused"`)) {
-		t.Fatalf("pause fleet run = %d body=%s; want paused", code, pauseBody)
+		t.Fatalf("pause = %d body=%s", code, pauseBody)
 	}
-	code, resumeBody := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+run.ID+"/resume", adminToken, "fleet-resume-1", map[string]string{"reason": "edge health clear"})
-	if code != http.StatusOK || !bytes.Contains(resumeBody, []byte(`"phase":"resume_recorded"`)) {
-		t.Fatalf("resume fleet run = %d body=%s; want resume phase", code, resumeBody)
+	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
+		t.Fatal("paused canary command was acknowledged instead of deferred")
 	}
-	code, rollbackBody := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+run.ID+"/rollback", adminToken, "fleet-rollback-1", map[string]string{
-		"reason":       "operator rollback drill",
-		"rollback_ref": "restore old edge bindings from signed runbook",
-	})
-	if code != http.StatusOK || !bytes.Contains(rollbackBody, []byte(`"status":"rollback_recorded"`)) || !bytes.Contains(rollbackBody, []byte("signed runbook")) {
-		t.Fatalf("rollback fleet run = %d body=%s; want rollback evidence", code, rollbackBody)
+	assertIdentityAbsent(t, st, tenantID, canaryReplacement)
+
+	code, resumeBody := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+started.ID+"/resume", adminToken, "fleet-resume-1", map[string]string{"reason": "continue canary"})
+	if code != http.StatusOK || !bytes.Contains(resumeBody, []byte(`"phase":"batch_resumed"`)) {
+		t.Fatalf("resume = %d body=%s", code, resumeBody)
 	}
-	code, evidenceBody := doBearer(t, ts, http.MethodGet, "/api/v1/incidents/fleet-reissuance-runs/"+run.ID+"/evidence", adminToken, "", nil)
-	if code != http.StatusOK || !bytes.Contains(evidenceBody, []byte(run.EvidenceBundle)) || !bytes.Contains(evidenceBody, []byte("signed runbook")) {
-		t.Fatalf("fleet evidence export = %d body=%s; want signed bundle and rollback refs", code, evidenceBody)
+	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
+		t.Fatal("canary publish should defer while it waits for signed verification")
+	}
+	assertIdentityState(t, st, tenantID, canaryReplacement, orchestrator.StateIssued)
+	assertIdentityAbsent(t, st, tenantID, secondReplacement)
+	assertIdentityState(t, st, tenantID, firstID, orchestrator.StateDeployed)
+	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateDeployed)
+
+	// A delivery row that says verify_failed but has no accepted agent signature
+	// is not evidence and must not halt or advance the state machine.
+	recordFleetVerification(t, st, srv.orch, tenantID, canaryReplacement, "unsigned-canary", servedstatus.ConnectorVerifyFailed, false)
+	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
+		t.Fatal("unsigned canary receipt released the waiting command")
+	}
+	run := mustFleetRun(t, st, tenantID, started.ID)
+	if run.Status != "running" || run.NextBatchIndex != 1 {
+		t.Fatalf("unsigned receipt changed durable run: %s cursor=%d", run.Status, run.NextBatchIndex)
 	}
 
-	var sawRecords int
-	if err := log.Replay(ctx, 0, func(ev events.Event) error {
-		if ev.Type == projections.EventIncidentFleetReissuanceRecorded && ev.TenantID == tenantID && bytes.Contains(ev.Data, []byte(run.ID)) {
-			sawRecords++
-		}
-		return nil
+	recordFleetVerification(t, st, srv.orch, tenantID, canaryReplacement, "signed-canary-failure", servedstatus.ConnectorVerifyFailed, true)
+	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
+		t.Fatal("failed canary should remain pending for operator resume")
+	}
+	run = mustFleetRun(t, st, tenantID, started.ID)
+	if run.Status != "halted" || run.HaltedReason == "" || run.Batches[0].Status != servedstatus.FleetBatchFailed || run.Batches[1].Status != servedstatus.FleetBatchHalted {
+		t.Fatalf("durable halt = status=%s reason=%q batches=%#v", run.Status, run.HaltedReason, run.Batches)
+	}
+	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 2); got != 0 {
+		t.Fatalf("failed canary published batch 2: %d", got)
+	}
+	assertIdentityState(t, st, tenantID, firstID, orchestrator.StateDeployed)
+	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateDeployed)
+
+	// The operator fixes the endpoint and a later signed receipt proves it.
+	recordFleetVerification(t, st, srv.orch, tenantID, canaryReplacement, "signed-canary-success", servedstatus.ConnectorVerified, true)
+	code, _ = doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+started.ID+"/resume", adminToken, "fleet-resume-2", map[string]string{"reason": "signed canary is healthy"})
+	if code != http.StatusOK {
+		t.Fatalf("resume halted canary = %d", code)
+	}
+	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
+		t.Fatal("resumed canary publish should first return to waiting_verification")
+	}
+	if err := srv.obHandler.Deliver(ctx, canaryMessage); err != nil {
+		t.Fatalf("advance healthy canary: %v", err)
+	}
+	run = mustFleetRun(t, st, tenantID, started.ID)
+	if run.NextBatchIndex != 2 || run.Batches[0].Status != servedstatus.FleetBatchExecuted || run.Batches[1].Status != servedstatus.FleetBatchQueued {
+		t.Fatalf("post-canary cursor/batches = %d %#v", run.NextBatchIndex, run.Batches)
+	}
+	assertIdentityState(t, st, tenantID, firstID, orchestrator.StateRevoked)
+	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateDeployed)
+	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 2); got != 1 {
+		t.Fatalf("batch 2 commands = %d, want exactly 1", got)
+	}
+
+	// A new receiver after restart sees the durable cursor. Replaying the old
+	// canary command is an ACK-only no-op and cannot duplicate batch 2.
+	restarted := &issuanceDispatcher{store: st, orch: srv.orch}
+	if err := restarted.Deliver(ctx, canaryMessage); err != nil {
+		t.Fatalf("restart replay of completed canary: %v", err)
+	}
+	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 2); got != 1 {
+		t.Fatalf("restart duplicated batch 2 command: %d", got)
+	}
+
+	secondMessage := fleetBatchMessage(t, st, tenantID, started.ID, 2)
+	if err := restarted.Deliver(ctx, secondMessage); err == nil {
+		t.Fatal("batch 2 publish should wait for verification")
+	}
+	if err := restarted.Deliver(ctx, secondMessage); err == nil {
+		t.Fatal("replayed batch 2 should still wait without creating another identity")
+	}
+	assertIdentityState(t, st, tenantID, secondReplacement, orchestrator.StateIssued)
+	if got := countIdentityRows(t, st, tenantID, secondReplacement); got != 1 {
+		t.Fatalf("restart duplicated deterministic replacement: %d", got)
+	}
+
+	recordFleetVerification(t, st, srv.orch, tenantID, secondReplacement, "signed-batch-2-success", servedstatus.ConnectorVerified, true)
+	if err := restarted.Deliver(ctx, secondMessage); err != nil {
+		t.Fatalf("complete batch 2: %v", err)
+	}
+	run = mustFleetRun(t, st, tenantID, started.ID)
+	if run.Status != "executed" || run.NextBatchIndex != 3 || len(run.RevokedIdentityIDs) != 2 || len(run.ReplacementIdentityIDs) != 2 {
+		t.Fatalf("completed run = status=%s cursor=%d replacements=%v revoked=%v", run.Status, run.NextBatchIndex, run.ReplacementIdentityIDs, run.RevokedIdentityIDs)
+	}
+	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateRevoked)
+}
+
+type fleetRunTestResponse struct {
+	ID                     string   `json:"id"`
+	Status                 string   `json:"status"`
+	Phase                  string   `json:"phase"`
+	NextBatchIndex         int      `json:"next_batch_index"`
+	ReplacementIdentityIDs []string `json:"replacement_identity_ids"`
+	RevokedIdentityIDs     []string `json:"revoked_identity_ids"`
+	Batches                []struct {
+		Index                  int      `json:"index"`
+		Status                 string   `json:"status"`
+		IdentityIDs            []string `json:"identity_ids"`
+		ReplacementIdentityIDs []string `json:"replacement_identity_ids"`
+	} `json:"batches"`
+}
+
+func fleetBatchMessage(t *testing.T, st *store.Store, tenantID, runID string, index int) orchestrator.Message {
+	t.Helper()
+	var m orchestrator.Message
+	err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT id, tenant_id::text, destination, idempotency_key, payload, attempts
+			FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`, tenantID,
+			orchestrator.FleetReissuanceBatchIdempotencyKey(runID, index)).
+			Scan(&m.ID, &m.TenantID, &m.Destination, &m.IdempotencyKey, &m.Payload, &m.Attempts)
+	})
+	if err != nil {
+		t.Fatalf("load fleet batch %d message: %v", index, err)
+	}
+	return m
+}
+
+func countFleetBatchCommands(t *testing.T, st *store.Store, tenantID, runID string, index int) int {
+	t.Helper()
+	var count int
+	if err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT count(*) FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+			tenantID, orchestrator.FleetReissuanceBatchIdempotencyKey(runID, index)).Scan(&count)
 	}); err != nil {
-		t.Fatalf("replay event log: %v", err)
+		t.Fatalf("count fleet batch commands: %v", err)
 	}
-	if sawRecords < 4 {
-		t.Fatalf("incident.fleet_reissuance.recorded events = %d, want start+pause+resume+rollback", sawRecords)
+	return count
+}
+
+func recordFleetVerification(t *testing.T, st *store.Store, orch *orchestrator.Orchestrator, tenantID, identityID, key, status string, signed bool) {
+	t.Helper()
+	var jobID int64
+	if err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane)
+			VALUES ($1, 'connector.deploy', '{}'::bytea, $2, $2) RETURNING id`, tenantID, key).Scan(&jobID)
+	}); err != nil {
+		t.Fatalf("insert verification job: %v", err)
 	}
+	if signed {
+		if err := st.RecordAgentJobReceipt(t.Context(), tenantID, store.AgentJobReceipt{
+			JobID: jobID, Attempt: 1, Agent: "signed-agent", Kind: "connector.deploy",
+			Outcome: status, State: store.AgentJobReceiptVerified,
+			SignerFingerprint: "sha256:test-agent", Statement: "canonical", Signature: "signature",
+			ObservedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("record signed verification receipt: %v", err)
+		}
+	}
+	id := identityID
+	if _, err := orch.RecordConnectorDelivery(t.Context(), tenantID, store.ConnectorDeliveryReceipt{
+		IdentityID: &id, Destination: "connector.deploy", Connector: "nginx", Target: "edge/prod",
+		Status: status, Attempts: 1, IdempotencyKey: key + ":verified",
+	}); err != nil {
+		t.Fatalf("record connector verification: %v", err)
+	}
+}
+
+func mustFleetRun(t *testing.T, st *store.Store, tenantID, runID string) store.IncidentFleetReissuanceRun {
+	t.Helper()
+	run, err := st.GetIncidentFleetReissuanceRun(t.Context(), tenantID, runID)
+	if err != nil {
+		t.Fatalf("get fleet run: %v", err)
+	}
+	return run
+}
+
+func assertIdentityState(t *testing.T, st *store.Store, tenantID, identityID string, want orchestrator.State) {
+	t.Helper()
+	identity, err := st.GetIdentity(t.Context(), tenantID, identityID)
+	if err != nil {
+		t.Fatalf("get identity %s: %v", identityID, err)
+	}
+	if identity.Status != string(want) {
+		t.Fatalf("identity %s state = %s, want %s", identityID, identity.Status, want)
+	}
+}
+
+func assertIdentityAbsent(t *testing.T, st *store.Store, tenantID, identityID string) {
+	t.Helper()
+	if _, err := st.GetIdentity(t.Context(), tenantID, identityID); err == nil {
+		t.Fatalf("identity %s exists before its batch was published", identityID)
+	}
+}
+
+func countIdentityRows(t *testing.T, st *store.Store, tenantID, identityID string) int {
+	t.Helper()
+	var count int
+	if err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT count(*) FROM identities WHERE tenant_id = $1 AND id = $2`, tenantID, identityID).Scan(&count)
+	}); err != nil {
+		t.Fatalf("count identity rows: %v", err)
+	}
+	return count
 }
 
 func createX509IssuerWithToken(t *testing.T, ts *httptest.Server, token string) string {
 	t.Helper()
 	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/issuers", token, "fleet-issuer", map[string]any{
-		"kind":     "x509_ca",
-		"name":     "compromised intermediate",
-		"chain":    []string{"-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"},
-		"internal": true,
+		"kind": "x509_ca", "name": "compromised intermediate",
+		"chain": []string{"-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"}, "internal": true,
 	})
 	if code != http.StatusCreated {
-		t.Fatalf("create issuer = %d, want 201; body=%s", code, body)
+		t.Fatalf("create issuer = %d body=%s", code, body)
 	}
 	var got struct {
 		ID string `json:"id"`
@@ -244,13 +349,10 @@ func createX509IssuerWithToken(t *testing.T, ts *httptest.Server, token string) 
 func createIdentityWithIssuerWithToken(t *testing.T, ts *httptest.Server, token, ownerID, issuerID, name, idem string) string {
 	t.Helper()
 	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/identities", token, idem, map[string]any{
-		"kind":      "x509_certificate",
-		"name":      name,
-		"owner_id":  ownerID,
-		"issuer_id": issuerID,
+		"kind": "x509_certificate", "name": name, "owner_id": ownerID, "issuer_id": issuerID,
 	})
 	if code != http.StatusCreated {
-		t.Fatalf("create identity %s = %d, want 201; body=%s", name, code, body)
+		t.Fatalf("create identity %s = %d body=%s", name, code, body)
 	}
 	var got struct {
 		ID string `json:"id"`

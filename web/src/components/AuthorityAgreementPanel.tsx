@@ -49,9 +49,7 @@ export function AuthorityAgreementPanel() {
         <h2 id="authority-agreement-heading" className="text-title font-semibold">
           {translateNow("source.authority.agreement.c4xr000001")}
         </h2>
-        <p className="mt-2 max-w-3xl text-caption text-muted-foreground">
-          {translateNow("source.agreement.unavailable.c4xr000002")}
-        </p>
+        <p className="mt-2 max-w-3xl text-caption text-muted-foreground">{translateNow("source.agreement.unavailable.c4xr000002")}</p>
       </section>
     );
   }
@@ -70,31 +68,21 @@ export function AuthorityAgreementPanel() {
             /* Attached and looking at nothing. Shown as a warning rather than a
                clean result, because every ingredient of "we checked and your
                authorities agree" is present except anything doing the checking. */
-            <p className="mt-2 text-caption text-status-warning">
-              {translateNow("source.not.collecting.c4xr000010")}
-            </p>
+            <p className="mt-2 text-caption text-status-warning">{translateNow("source.not.collecting.c4xr000010")}</p>
           ) : null}
           {report.configured && report.collecting ? (
             <>
               <dl className="mt-4 grid gap-4 sm:grid-cols-3">
                 <div>
-                  <dt className="text-caption font-medium text-muted-foreground">
-                    {translateNow("source.open.witnesses.c4xr000003")}
-                  </dt>
+                  <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.open.witnesses.c4xr000003")}</dt>
                   <dd
-                    className={
-                      report.open_witnesses > 0
-                        ? "text-title font-semibold tabular-nums text-status-danger"
-                        : "text-title font-semibold tabular-nums"
-                    }
+                    className={report.open_witnesses > 0 ? "text-title font-semibold tabular-nums text-status-danger" : "text-title font-semibold tabular-nums"}
                   >
                     {report.open_witnesses}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-caption font-medium text-muted-foreground">
-                    {translateNow("source.replay.watermark.c4xr000004")}
-                  </dt>
+                  <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.replay.watermark.c4xr000004")}</dt>
                   {/* Next to the count on purpose. A projection lagging the
                       event log reports an old world confidently, and an
                       operator reading zero deserves to know whether that is
@@ -102,12 +90,8 @@ export function AuthorityAgreementPanel() {
                   <dd className="text-title font-semibold tabular-nums">{report.replay_watermark}</dd>
                 </div>
                 <div>
-                  <dt className="text-caption font-medium text-muted-foreground">
-                    {translateNow("source.median.resolution.c4xr000005")}
-                  </dt>
-                  <dd className="text-title font-semibold tabular-nums">
-                    {report.median_resolution_seconds}s
-                  </dd>
+                  <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.median.resolution.c4xr000005")}</dt>
+                  <dd className="text-title font-semibold tabular-nums">{report.median_resolution_seconds}s</dd>
                   {/* Sample size, so a median over one witness cannot pass for
                       a trend. */}
                   <span className="mt-1 block text-xs text-muted-foreground">
@@ -130,9 +114,7 @@ export function AuthorityAgreementPanel() {
                         <tr key={authority.authority_id}>
                           <td className="font-medium">{authority.authority_id}</td>
                           <td className="tabular-nums">{authority.total}</td>
-                          <td>
-                            {authority.witnesses.map((w) => `${w.class} (${w.count})`).join(", ")}
-                          </td>
+                          <td>{authority.witnesses.map((w) => `${w.class} (${w.count})`).join(", ")}</td>
                         </tr>
                       ))}
                     </tbody>

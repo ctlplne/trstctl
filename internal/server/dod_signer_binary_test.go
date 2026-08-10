@@ -23,11 +23,39 @@ type dodShippedSignerLicense struct {
 	trustedPublicKey []byte
 }
 
+type dodShippedSignerProcess struct {
+	t             *testing.T
+	socket        string
+	tokenProvider signing.SignTokenProvider
+	stderr        *bytes.Buffer
+}
+
+func (p *dodShippedSignerProcess) connect() runSigner {
+	p.t.Helper()
+	client, err := signing.DialReady(context.Background(), p.socket, 10*time.Second)
+	if err != nil {
+		p.t.Fatalf("dial shipped trstctl-signer: %v; stderr=%s", err, p.stderr.String())
+	}
+	p.t.Cleanup(func() { _ = client.Close() })
+	return runSigner{signer: signing.StaticProvider{C: client}, tokenProvider: p.tokenProvider}
+}
+
 // dodStartShippedSignerProcess builds cmd/trstctl-signer and launches that exact
 // shipped program with its production flags. Runtime proofs use this shared seam
 // so they cover main's hardening, auth-secret, persistent-keystore, managed-key
 // attach, and UDS startup path rather than a test-binary helper server.
 func dodStartShippedSignerProcess(t *testing.T, dir, label, authFile, managedKeysConfig string, tokenProvider signing.SignTokenProvider, licenses ...dodShippedSignerLicense) runSigner {
+	t.Helper()
+	first, _ := dodStartRestartableShippedSignerProcess(t, dir, label, authFile, managedKeysConfig, tokenProvider, licenses...)
+	return first
+}
+
+// dodStartRestartableShippedSignerProcess models a control-plane restart against
+// one persistent external signer process. Each call to reconnect returns a new
+// gRPC Client with no stale admission hook from the previous Server. That is the
+// production lifecycle: Run opens a connection, Build binds that connection to
+// its own signing pool, and shutdown closes the connection before a new Run.
+func dodStartRestartableShippedSignerProcess(t *testing.T, dir, label, authFile, managedKeysConfig string, tokenProvider signing.SignTokenProvider, licenses ...dodShippedSignerLicense) (runSigner, func() runSigner) {
 	t.Helper()
 	if len(licenses) > 1 {
 		t.Fatal("shipped signer proof accepts at most one license fixture")
@@ -76,8 +104,8 @@ func dodStartShippedSignerProcess(t *testing.T, dir, label, authFile, managedKey
 	}
 	cmd := exec.Command(binary, args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Stdout = io.Discard
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderr := &bytes.Buffer{}
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start shipped trstctl-signer: %v", err)
 	}
@@ -102,15 +130,9 @@ func dodStartShippedSignerProcess(t *testing.T, dir, label, authFile, managedKey
 		}
 	})
 
-	client, err := signing.DialReady(context.Background(), socket, 10*time.Second)
-	if err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		stopped = true
-		t.Fatalf("dial shipped trstctl-signer: %v; stderr=%s", err, stderr.String())
-	}
-	t.Cleanup(func() { _ = client.Close() })
-	return runSigner{signer: signing.StaticProvider{C: client}, tokenProvider: tokenProvider}
+	process := &dodShippedSignerProcess{t: t, socket: socket, tokenProvider: tokenProvider, stderr: stderr}
+	first := process.connect()
+	return first, process.connect
 }
 
 func TestShippedSignerBinaryProofHelperUsesProductionMain(t *testing.T) {

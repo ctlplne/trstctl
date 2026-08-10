@@ -24,12 +24,16 @@ export type StatusBadgeProps = HTMLAttributes<HTMLSpanElement> & {
 };
 
 export function StatusBadge({ className, value, vocabulary = "lifecycle", label, tone, ...props }: StatusBadgeProps) {
-  const described = describeStatus(vocabulary, value);
+  // Older server responses and deliberately sparse preview fixtures can omit a
+  // newly-added status field. Render that as unknown instead of crashing the
+  // whole operator surface; absence is not a successful status.
+  const normalizedValue = typeof value === "string" && value.trim() !== "" ? value : "unknown";
+  const described = describeStatus(vocabulary, normalizedValue);
   const resolvedTone = tone ?? described.tone;
   return (
     <span
       data-status-badge={vocabulary}
-      data-status-value={value}
+      data-status-value={normalizedValue}
       className={cn("inline-flex min-h-7 items-center rounded-control border px-2 py-1 text-caption font-medium", toneClasses[resolvedTone], className)}
       {...props}
     >

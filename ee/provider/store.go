@@ -181,17 +181,27 @@ func (g BreakGlassGrant) Usable(now time.Time) bool {
 	return g.State(now) == GrantActive
 }
 
-// Store is the provider storage boundary. It exposes provider lifecycle metadata
-// and break-glass grants, but a direct tenant snapshot read must fail closed.
+// Store is the read-side provider storage boundary. Production PostgreSQL
+// implementations deliberately expose no mutation methods: authority changes
+// can only enter through MutationSink and the event projection. MemStore keeps
+// mutation helpers for deterministic legacy unit fixtures, but those helpers
+// are not part of this production interface.
 type Store interface {
 	CountBillableTenants(context.Context) (int, error)
-	CreateTenant(context.Context, Tenant) (Tenant, error)
 	ListTenants(context.Context) ([]Tenant, error)
 	Tenant(context.Context, string) (Tenant, error)
-	UpdateTenantStatus(context.Context, string, TenantStatus, time.Time) (Tenant, error)
 	DirectTenantSnapshot(context.Context, string) (TenantSnapshot, error)
-	CreateBreakGlassGrant(context.Context, BreakGlassGrant) (BreakGlassGrant, error)
 	BreakGlassGrant(context.Context, string) (BreakGlassGrant, error)
+}
+
+// legacyMutableStore is intentionally package-private. It exists only so
+// in-memory unit fixtures can exercise domain rules without PostgreSQL/NATS;
+// assembled binaries always provide MutationSink and never reach this branch.
+type legacyMutableStore interface {
+	Store
+	CreateTenant(context.Context, Tenant) (Tenant, error)
+	UpdateTenantStatus(context.Context, string, TenantStatus, time.Time) (Tenant, error)
+	CreateBreakGlassGrant(context.Context, BreakGlassGrant) (BreakGlassGrant, error)
 	UpdateBreakGlassGrant(context.Context, BreakGlassGrant) (BreakGlassGrant, error)
 	IncrementBreakGlassUse(context.Context, string, time.Time) error
 }

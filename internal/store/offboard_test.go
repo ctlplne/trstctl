@@ -78,6 +78,7 @@ func newStore(t *testing.T) *store.Store {
 	// tenant-scoped table (and the operational tables) between tests.
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits,
+		          enrollment_diagnostic_observations, enrollment_diagnostics,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,

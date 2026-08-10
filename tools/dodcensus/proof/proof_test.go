@@ -850,6 +850,7 @@ func TestBrokerDynamicEnvironmentNamesAreExact(t *testing.T) {
 		expected expectation
 		want     string
 	}{
+		{expectation{ID: "external_ca.adcs"}, "TRSTCTL_ADCS_TLS_SERVER_CERT_FILE,TRSTCTL_ADCS_TLS_SERVER_KEY_FILE"},
 		{expectation{ID: "external_ca.entrust"}, "TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE,TRSTCTL_ENTRUST_MTLS_SERVER_KEY_FILE,TRSTCTL_ENTRUST_MTLS_CLIENT_CA_FILE"},
 		{expectation{ID: "code_signing.default"}, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE"},
 		{expectation{ID: "hsm_kms.tpm2", SubstrateID: "managed_key_custody"}, "TRSTCTL_HSM_PROOF_IMAGE,TRSTCTL_HSM_PROOF_NETWORK"},

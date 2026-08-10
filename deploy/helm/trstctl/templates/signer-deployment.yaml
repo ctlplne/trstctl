@@ -56,6 +56,7 @@ spec:
             - "--keystore=/data/signer/keys"
             {{- include "trstctl.signerCustodyArgs" . | nindent 12 }}
             - "--auth-secret=/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
+            - "--legacy-audit-key=/data/audit/audit-signing.key"
           env:
             - name: SIGNER_MTLS_PEER_PIN
               valueFrom:
@@ -71,6 +72,8 @@ spec:
               readOnly: true
             - name: signer-keys
               mountPath: /data/signer
+            - name: cp-data
+              mountPath: /data
             {{- if not (and .Values.externalKMS .Values.externalKMS.enabled) }}
             - name: kek
               mountPath: /etc/trstctl/kek
@@ -96,10 +99,15 @@ spec:
             # mtls.GenerateSignerPeerMaterial or your PKI) — never inlined here.
             secretName: {{ .Values.signer.mtls.signerSecret | default (printf "%s-signer-mtls" (include "trstctl.fullname" .)) }}
         {{- if .Values.persistence.enabled }}
+        - name: cp-data
+          persistentVolumeClaim:
+            claimName: {{ include "trstctl.fullname" . }}-data
         - name: signer-keys
           persistentVolumeClaim:
             claimName: {{ include "trstctl.fullname" . }}-signer-keys
         {{- else }}
+        - name: cp-data
+          emptyDir: {}
         - name: signer-keys
           emptyDir: {}
         {{- end }}

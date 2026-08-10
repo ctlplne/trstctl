@@ -179,9 +179,7 @@ export function Owners() {
               : owner.ownership_source}
           </span>
         ) : (
-          <span className="text-caption text-muted-foreground">
-            {translateNow("source.ownership.source.unrecorded.i2own00007")}
-          </span>
+          <span className="text-caption text-muted-foreground">{translateNow("source.ownership.source.unrecorded.i2own00007")}</span>
         ),
     },
     {

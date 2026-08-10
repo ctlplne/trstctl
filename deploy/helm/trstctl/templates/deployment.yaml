@@ -75,6 +75,7 @@ spec:
             - "--keystore=/data/signer/keys"
             {{- include "trstctl.signerCustodyArgs" . | nindent 12 }}
             - "--auth-secret=/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
+            - "--legacy-audit-key=/data/audit/audit-signing.key"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -86,6 +87,8 @@ spec:
               mountPath: /run/trstctl
             - name: signer-keys
               mountPath: /data/signer
+            - name: cp-data
+              mountPath: /data
             {{- if not (and .Values.externalKMS .Values.externalKMS.enabled) }}
             - name: kek
               mountPath: /etc/trstctl/kek
@@ -255,8 +258,8 @@ metadata:
   labels:
     {{- include "trstctl.labels" . | nindent 4 }}
 spec:
-  # RWX by default so every HA replica shares the CA cert + audit signing key
-  # (RESIL-002); ReadWriteOnce for a single-replica eval.
+  # RWX by default so every HA replica shares the CA cert and the signer can
+  # atomically absorb an upgrade-era audit PEM (RESIL-002 / AUD-63).
   accessModes: [{{ .Values.persistence.controlPlaneAccessMode | quote }}]
   {{- with .Values.persistence.storageClass }}
   storageClassName: {{ . | quote }}

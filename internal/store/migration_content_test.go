@@ -4,6 +4,7 @@ package store_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,9 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	140: true,
+	137: true,
+	136: true,
 	114: true,
 	109: true,
 	108: true,
@@ -158,6 +162,99 @@ func TestMigrationsPreserveSeededContent(t *testing.T) {
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0143_lifecycle_rotation_event_order", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 143)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO lifecycle_rotation_runs
+			       (id, tenant_id, identity_id, outbox_id, status, trigger, reason,
+			        predecessor_fingerprint, successor_fingerprint, rollback_ref,
+			        error, idempotency_key, created_at, updated_at, completed_at)
+			VALUES ('10000000-0000-4000-8000-000000000143',
+			        '11111111-1111-1111-1111-111111111111',
+			        '10000000-0000-4000-8000-000000000144', 143,
+			        'succeeded', 'scheduled', 'legacy row', 'sha256:old',
+			        'sha256:new', 'restore sha256:old', '', 'legacy:143',
+			        '2026-08-10T12:00:00Z', '2026-08-10T12:01:00Z',
+			        '2026-08-10T12:01:00Z')`); err != nil {
+			t.Fatalf("seed pre-0143 lifecycle row: %v", err)
+		}
+		const stableProjection = `
+			SELECT id::text, tenant_id::text, identity_id::text, outbox_id::text,
+			       status, trigger, reason, predecessor_fingerprint,
+			       successor_fingerprint, rollback_ref, error, idempotency_key,
+			       created_at::text, updated_at::text, completed_at::text
+			  FROM lifecycle_rotation_runs
+			 ORDER BY tenant_id, id`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stableProjection)
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, stableProjection)
+		if beforeCount != afterCount || beforeChecksum != afterChecksum {
+			t.Fatalf("0143 rewrote legacy lifecycle evidence: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var first, latest sql.NullInt64
+		if err := pool.QueryRow(ctx, `
+			SELECT first_event_sequence, latest_event_sequence
+			  FROM lifecycle_rotation_runs
+			 WHERE id = '10000000-0000-4000-8000-000000000143'`).Scan(&first, &latest); err != nil {
+			t.Fatalf("read post-0143 sequence columns: %v", err)
+		}
+		if first.Valid || latest.Valid {
+			t.Fatalf("legacy row sequence epoch = first:%v latest:%v, want NULL/NULL", first, latest)
+		}
+		if _, err := pool.Exec(ctx, `
+			UPDATE lifecycle_rotation_runs
+			   SET first_event_sequence = 144, latest_event_sequence = 143
+			 WHERE id = '10000000-0000-4000-8000-000000000143'`); err == nil {
+			t.Fatal("0143 accepted a latest event sequence before its first sequence")
+		}
+	})
+
+	t.Run("0140_discovery_finding_replay_identity", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 140)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedDiscoveryFindingBackfillContent(t, ctx, pool)
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, discoveryFindingStableProjectionSQL())
+		if beforeCount == 0 {
+			t.Fatal("precondition: migration 0140 needs existing discovery findings")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, discoveryFindingStableProjectionSQL())
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0140 changed existing discovery rows: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+		var badAliases int
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*)
+			  FROM discovery_findings
+			 WHERE cardinality(recorded_ids) <> 1 OR recorded_ids[1] <> id`).Scan(&badAliases); err != nil {
+			t.Fatalf("read post-0140 aliases: %v", err)
+		}
+		if badAliases != 0 {
+			t.Fatalf("0140 left %d existing findings without their exact payload-ID alias", badAliases)
+		}
+	})
+
 	// 0098 adds the agent claim columns to the outbox — the busiest table in the
 	// deployment, and one that is never empty in a running system. The property
 	// that matters is not that the columns appear: it is that adding them leaves
@@ -847,6 +944,176 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0090_azure_workload_identity_defaults", testMigration0090AzureWorkloadIdentityDefaults)
 	t.Run("0092_idempotency_result_codec_classification", testMigration0092IdempotencyResultCodecClassification)
 	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
+	t.Run("0136_fleet_reissuance_cursor_defaults", testMigration0136FleetReissuanceCursorDefaults)
+	t.Run("0137_relay_external_pollers", testMigration0137RelayExternalPollers)
+}
+
+func testMigration0137RelayExternalPollers(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 137)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	for index, tenantID := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name) VALUES ($1, $2)`, tenantID, fmt.Sprintf("relay-migration-%d", index)); err != nil {
+			t.Fatalf("seed tenant %s: %v", tenantID, err)
+		}
+	}
+	const agentID = "99999999-9999-9999-9999-999999999999"
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO outbox
+		       (tenant_id, destination, payload, idempotency_key, status,
+		        claimed_by_agent_id, claim_expires_at, claim_completed_at)
+		VALUES ($1, 'cmdb.sync', '{}'::bytea, 'pre-0137-split', 'pending',
+		        $2::uuid, '2026-08-10T04:00:00Z'::timestamptz, '2026-08-10T03:00:00Z'::timestamptz)`,
+		tenantA, agentID); err != nil {
+		t.Fatalf("seed split outbox row: %v", err)
+	}
+	for _, row := range []struct {
+		tenantID, tokenRef string
+	}{
+		{tenantA, "env:LEGACY_TOKEN"},
+		{tenantB, "secret://estate/token"},
+	} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO cmdb_reconcile_schedules
+			       (tenant_id, instance_url, token_ref, interval_seconds, enabled, execution)
+			VALUES ($1, 'https://now.example', $2, 3600, true, 'control_plane')`, row.tenantID, row.tokenRef); err != nil {
+			t.Fatalf("seed CMDB schedule %s: %v", row.tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO mdm_poll_schedules
+			       (tenant_id, mdm, base_url, token_ref, interval_seconds, enabled, execution)
+			VALUES ($1, 'intune', 'https://graph.example', $2, 3600, true, 'control_plane')`, row.tenantID, row.tokenRef); err != nil {
+			t.Fatalf("seed MDM schedule %s: %v", row.tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO ticket_intake_schedules
+			       (tenant_id, system, instance_url, token_ref, sn_table,
+			        subject_field, profile_field, interval_seconds, enabled)
+			VALUES ($1, 'servicenow', 'https://now.example', $2, 'incident',
+			        'u_subject', 'u_profile', 3600, true)`, row.tenantID, row.tokenRef); err != nil {
+			t.Fatalf("seed ticket schedule %s: %v", row.tenantID, err)
+		}
+	}
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	var status string
+	var deliveredAt, completedAt string
+	if err := pool.QueryRow(ctx, `
+		SELECT status, delivered_at::text, claim_completed_at::text
+		  FROM outbox WHERE tenant_id = $1 AND idempotency_key = 'pre-0137-split'`, tenantA).
+		Scan(&status, &deliveredAt, &completedAt); err != nil {
+		t.Fatalf("inspect repaired outbox row: %v", err)
+	}
+	if status != "delivered" || deliveredAt == "" || deliveredAt != completedAt {
+		t.Fatalf("split row repair status=%q delivered=%q completed=%q", status, deliveredAt, completedAt)
+	}
+
+	for _, table := range []string{"cmdb_reconcile_schedules", "mdm_poll_schedules"} {
+		for _, row := range []struct {
+			tenantID    string
+			wantEnabled bool
+		}{
+			{tenantA, false},
+			{tenantB, true},
+		} {
+			var execution, lastError string
+			var enabled bool
+			query := fmt.Sprintf(`SELECT execution, enabled, last_error FROM %s WHERE tenant_id = $1`, table) // #nosec G201 -- closed test table list above
+			if err := pool.QueryRow(ctx, query, row.tenantID).Scan(&execution, &enabled, &lastError); err != nil {
+				t.Fatalf("inspect %s/%s: %v", table, row.tenantID, err)
+			}
+			if execution != "relay" || enabled != row.wantEnabled || (!row.wantEnabled && !strings.Contains(lastError, "secret://")) {
+				t.Fatalf("%s/%s execution=%q enabled=%t error=%q", table, row.tenantID, execution, enabled, lastError)
+			}
+		}
+	}
+	for _, row := range []struct {
+		tenantID    string
+		wantEnabled bool
+	}{
+		{tenantA, false},
+		{tenantB, true},
+	} {
+		var enabled bool
+		var lastError string
+		if err := pool.QueryRow(ctx, `SELECT enabled, last_error FROM ticket_intake_schedules WHERE tenant_id = $1`, row.tenantID).
+			Scan(&enabled, &lastError); err != nil {
+			t.Fatalf("inspect ticket schedule %s: %v", row.tenantID, err)
+		}
+		if enabled != row.wantEnabled || (!row.wantEnabled && !strings.Contains(lastError, "secret://")) {
+			t.Fatalf("ticket/%s enabled=%t error=%q", row.tenantID, enabled, lastError)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE mdm_poll_schedules SET execution = 'control_plane' WHERE tenant_id = $1`, tenantB); err == nil {
+		t.Fatal("0137 relay-only MDM constraint accepted control_plane")
+	}
+	var sourceEventColumn bool
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) = 1 FROM information_schema.columns
+		 WHERE table_schema = 'public' AND table_name = 'owner_ownership_conflicts' AND column_name = 'source_event_id'`).
+		Scan(&sourceEventColumn); err != nil || !sourceEventColumn {
+		t.Fatalf("source_event_id column present=%t err=%v", sourceEventColumn, err)
+	}
+}
+
+func testMigration0136FleetReissuanceCursorDefaults(t *testing.T) {
+	stable := `
+		SELECT id::text, tenant_id::text, issuer_id::text, status, phase, reason,
+		       batch_size::text, connector, target, graph_impact::text,
+		       affected_identity_ids::text, replacement_identity_ids::text,
+		       revoked_identity_ids::text, connector_delivery_ids::text,
+		       batches::text, health_gates::text, failed_targets::text,
+		       rollback_refs::text, evidence_bundle_format, evidence_bundle,
+		       idempotency_key, created_by, created_at::text, updated_at::text
+		  FROM incident_fleet_reissuance_runs
+		 ORDER BY tenant_id, id`
+	runPopulatedDefaultMigrationHarness(t, 136, stable,
+		func(ctx context.Context, pool *pgxpool.Pool) {
+			for index, tenantID := range []string{tenantA, tenantB} {
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO incident_fleet_reissuance_runs
+					       (id, tenant_id, issuer_id, status, phase, reason,
+					        batch_size, connector, target, graph_impact,
+					        affected_identity_ids, batches, health_gates,
+					        rollback_refs, idempotency_key, created_by,
+					        created_at, updated_at)
+					VALUES ($1, $2, $3, 'running', 'canary_waiting_verification',
+					        'pre-0136 compromised issuer', 1, 'nginx', 'edge/prod',
+					        '{"affected":1}'::jsonb, ARRAY[$4],
+					        '[{"index":1,"status":"planned"}]'::jsonb,
+					        '[{"name":"replacement deployment","status":"not_evaluated"}]'::jsonb,
+					        ARRAY['restore:edge'], $5, 'migration-harness',
+					        '2026-08-09T10:00:00Z'::timestamptz,
+					        '2026-08-09T10:01:00Z'::timestamptz)`,
+					uuid(tenantID, 13600+index), tenantID, uuid(tenantID, 13610+index),
+					uuid(tenantID, 13620+index), fmt.Sprintf("pre-0136-%d", index)); err != nil {
+					t.Fatalf("seed pre-0136 fleet run %s: %v", tenantID, err)
+				}
+			}
+		},
+		func(ctx context.Context, pool *pgxpool.Pool, want int) {
+			var rows int
+			var cursorOK, haltOK, nonnull bool
+			if err := pool.QueryRow(ctx, `
+				SELECT count(*), bool_and(next_batch_index = 1),
+				       bool_and(halted_reason = ''),
+				       bool_and(next_batch_index IS NOT NULL AND halted_reason IS NOT NULL)
+				  FROM incident_fleet_reissuance_runs`).Scan(&rows, &cursorOK, &haltOK, &nonnull); err != nil {
+				t.Fatalf("inspect 0136 fleet cursor defaults: %v", err)
+			}
+			if rows != want || !cursorOK || !haltOK || !nonnull {
+				t.Fatalf("0136 defaults rows=%d want=%d cursor=%t halt=%t nonnull=%t",
+					rows, want, cursorOK, haltOK, nonnull)
+			}
+		})
 }
 
 func testMigration0094CryptoAssetProjectionOrderDefaults(t *testing.T) {

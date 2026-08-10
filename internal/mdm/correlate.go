@@ -3,6 +3,7 @@
 package mdm
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,13 +14,13 @@ import (
 
 // Read-only device correlation against Intune and Jamf (epic I5).
 //
-// The acceptance says "read-only proven (no MDM writes)". That is held here the
-// way I2 holds it for the CMDB: this file contains no request builder that can
-// emit anything but a GET, and the two endpoint helpers below are the ONLY
-// places a URL is constructed, each against a fixed path. A configuration flag
-// would be one careless default away from writing to a customer's device
-// management system, where a bad write does not corrupt a record — it pushes a
-// profile to real laptops.
+// The acceptance says "read-only proven (no MDM writes)". Inventory URLs are
+// fixed GET resources. Intune's certificate evidence requires creating a
+// fixed CertificatesByRAPolicy export artifact; that report-only POST is
+// isolated in intune_report.go and cannot name a policy/device mutation path.
+// A configuration flag would be one careless default away from writing to a
+// customer's device management system, where a bad write pushes a profile to
+// real laptops.
 
 // MDM names a supported device management system. Intune and Jamf are kept
 // distinct rather than normalised: an estate can run both, and a device present
@@ -44,11 +45,29 @@ type Device struct {
 	MDMDeviceID  string
 	Name         string
 	SerialNumber string
-	// InstallState is the MDM's word about the certificate profile, in our
-	// vocabulary. Unknown is NOT failed.
+	// InstallState is populated only after the control plane compares an exact
+	// issued-certificate serial with the certificate observations below.
+	// Device enrollment or registration is never certificate evidence.
 	InstallState  Outcome
 	InstallDetail string
-	ObservedAt    time.Time
+	// InstallObserved says the provider returned its certificate-specific
+	// inventory/report for this device. An observed empty list is different
+	// from a provider response that did not contain certificate evidence.
+	InstallObserved bool
+	Certificates    []CertificateObservation
+	ObservedAt      time.Time
+}
+
+// CertificateObservation is one provider-attributable statement about one
+// exact certificate. It is evidence, not a conclusion: the control plane must
+// still compare SerialNumber with the immutable issuance event for the device.
+type CertificateObservation struct {
+	MDMDeviceID  string    `json:"mdm_device_id,omitempty"`
+	PolicyID     string    `json:"policy_id,omitempty"`
+	SerialNumber string    `json:"serial_number"`
+	Status       string    `json:"status,omitempty"`
+	CommonName   string    `json:"common_name,omitempty"`
+	ValidTo      time.Time `json:"valid_to,omitempty"`
 }
 
 // IntuneDevicesEndpoint builds the Microsoft Graph managed-devices read URL.
@@ -71,21 +90,19 @@ func IntuneDevicesEndpoint(base, filter string) (string, error) {
 }
 
 // JamfDevicesEndpoint builds the Jamf Pro computer-inventory read URL.
-func JamfDevicesEndpoint(base, section string) (string, error) {
+func JamfDevicesEndpoint(base, _ string) (string, error) {
 	u, err := parseAbsolute(base)
 	if err != nil {
 		return "", err
 	}
 	u.Path = strings.TrimRight(u.Path, "/") + "/api/v1/computers-inventory"
 	q := url.Values{}
-	// Only the sections correlation needs. Asking for everything would pull
-	// user and location data this feature has no use for, and data you did not
-	// need is data you should not have fetched.
-	s := strings.TrimSpace(section)
-	if s == "" {
-		s = "GENERAL,HARDWARE"
-	}
-	q.Set("section", s)
+	// These are the complete and fixed read sections correlation needs. The
+	// caller cannot remove CERTIFICATES (which would erase install evidence) or
+	// add privacy-heavy sections this feature has no use for.
+	q.Add("section", "GENERAL")
+	q.Add("section", "HARDWARE")
+	q.Add("section", "CERTIFICATES")
 	u.RawQuery = q.Encode()
 	u.Fragment = ""
 	return u.String(), nil
@@ -109,9 +126,6 @@ func ParseIntuneDevices(r io.Reader) ([]Device, error) {
 			ID           string `json:"id"`
 			DeviceName   string `json:"deviceName"`
 			SerialNumber string `json:"serialNumber"`
-			// Graph's own vocabulary for the compliance/profile state.
-			State  string `json:"deviceRegistrationState"`
-			Detail string `json:"managementAgent"`
 			// lastSyncDateTime is the DEVICE's last check-in, and it is what
 			// ObservedAt must carry: the renewal check asks when the MDM last
 			// heard from the device, and stamping the POLL time instead would
@@ -132,8 +146,9 @@ func ParseIntuneDevices(r io.Reader) ([]Device, error) {
 		}
 		out = append(out, Device{
 			MDM: MDMIntune, MDMDeviceID: d.ID, Name: d.DeviceName,
-			SerialNumber: d.SerialNumber, InstallState: intuneState(d.State),
-			InstallDetail: strings.TrimSpace(d.Detail),
+			SerialNumber: d.SerialNumber, InstallState: OutcomeUnknown,
+			InstallDetail: "Intune managedDevices reports device enrollment, not SCEP certificate installation; " +
+				"certificate evidence requires a CertificatesByRAPolicy report for the configured profile.",
 			// The device's OWN last check-in, never the poll time. A record
 			// with no lastSyncDateTime carries a ZERO ObservedAt — "the MDM
 			// did not say" — which the renewal check treats as never observed
@@ -159,22 +174,6 @@ func parseMDMTime(s string) time.Time {
 	return time.Time{}
 }
 
-// intuneState maps Graph's registration states onto our three-value vocabulary.
-//
-// Anything unrecognised becomes UNKNOWN rather than failed. Microsoft adds
-// states; a mapping that treated a new one as a failure would raise alerts on
-// healthy devices the first time Graph shipped a value we had not seen.
-func intuneState(s string) Outcome {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "registered":
-		return OutcomeOK
-	case "revoked", "keyconflict", "approvalpending", "certificatereset", "notregisteredpendingenrollment":
-		return OutcomeFailed
-	default:
-		return OutcomeUnknown
-	}
-}
-
 // ParseJamfDevices maps a Jamf Pro computers-inventory response.
 func ParseJamfDevices(r io.Reader) ([]Device, error) {
 	var resp struct {
@@ -190,6 +189,7 @@ func ParseJamfDevices(r io.Reader) ([]Device, error) {
 			Hardware struct {
 				SerialNumber string `json:"serialNumber"`
 			} `json:"hardware"`
+			Certificates json.RawMessage `json:"certificates"`
 		} `json:"results"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r, responseLimit)).Decode(&resp); err != nil {
@@ -200,19 +200,53 @@ func ParseJamfDevices(r io.Reader) ([]Device, error) {
 		if strings.TrimSpace(d.ID) == "" {
 			continue
 		}
-		out = append(out, Device{
+		device := Device{
 			MDM: MDMJamf, MDMDeviceID: d.ID, Name: d.General.Name,
 			SerialNumber: d.Hardware.SerialNumber,
-			// Jamf's inventory endpoint does not report per-profile install
-			// state. UNKNOWN is the honest answer: claiming "ok" because the
-			// device is enrolled would assert something we did not observe.
 			InstallState: OutcomeUnknown,
-			InstallDetail: "Jamf computers-inventory does not report per-profile install state; " +
-				"the certificate's presence on this device has not been observed.",
+			InstallDetail: "Jamf certificate inventory was not present in this device response; " +
+				"the issued certificate's presence has not been observed.",
 			ObservedAt: parseMDMTime(d.General.LastContactTime),
-		})
+		}
+		raw := bytes.TrimSpace(d.Certificates)
+		if len(raw) > 0 && !bytes.Equal(raw, []byte("null")) {
+			var certificates []struct {
+				SerialNumber      string `json:"serialNumber"`
+				CertificateStatus string `json:"certificateStatus"`
+				LifecycleStatus   string `json:"lifecycleStatus"`
+				Status            string `json:"status"`
+				CommonName        string `json:"commonName"`
+				ExpirationDate    string `json:"expirationDate"`
+			}
+			if err := json.Unmarshal(raw, &certificates); err != nil {
+				return nil, fmt.Errorf("mdm: parse Jamf certificate inventory for device %q: %w", d.ID, err)
+			}
+			device.InstallObserved = true
+			device.InstallDetail = "Jamf returned the certificate inventory for this device; " +
+				"the control plane must compare it with the exact issued serial."
+			for _, certificate := range certificates {
+				status := firstNonempty(certificate.CertificateStatus, certificate.LifecycleStatus, certificate.Status)
+				device.Certificates = append(device.Certificates, CertificateObservation{
+					MDMDeviceID:  d.ID,
+					SerialNumber: strings.TrimSpace(certificate.SerialNumber),
+					Status:       status,
+					CommonName:   strings.TrimSpace(certificate.CommonName),
+					ValidTo:      parseMDMTime(certificate.ExpirationDate),
+				})
+			}
+		}
+		out = append(out, device)
 	}
 	return out, nil
+}
+
+func firstNonempty(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // CorrelateBySerial joins MDM devices to our SCEP transactions by serial number.
@@ -255,8 +289,9 @@ func CorrelateBySerial(devices []Device, bySerial map[string]string) (matched []
 // their own tests. TokenRef is a secret:// REFERENCE the relay redeems per
 // attempt.
 type SyncIntent struct {
-	MDM      string `json:"mdm"`
-	BaseURL  string `json:"base_url"`
-	Filter   string `json:"filter,omitempty"`
-	TokenRef string `json:"token_ref"`
+	MDM            string   `json:"mdm"`
+	BaseURL        string   `json:"base_url"`
+	Filter         string   `json:"filter,omitempty"`
+	TokenRef       string   `json:"token_ref"`
+	SCEPProfileIDs []string `json:"scep_profile_ids,omitempty"`
 }

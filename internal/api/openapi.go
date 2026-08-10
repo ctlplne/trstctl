@@ -2055,9 +2055,21 @@ func componentSchemas() map[string]*Schema {
 		"outcome":     {Type: "string", Enum: []string{"restored", "failed", "skipped"}},
 		"ran_at":      timestamp(),
 		"rpo_seconds": {Type: "integer"}, "rto_seconds": {Type: "integer"},
-		"events_restored": {Type: "integer"}, "detail": str(),
-		"limitations": {Type: "array", Items: str()},
-	}, "outcome", "ran_at", "rpo_seconds", "rto_seconds", "events_restored", "detail", "limitations")
+		"events_restored":           {Type: "integer"},
+		"postgres_records_restored": {Type: "integer"},
+		"postgres_tables_restored":  {Type: "object", AdditionalProperties: &Schema{Type: "integer"}},
+		"artifacts_restored":        {Type: "array", Items: str()},
+		"full_set_restored":         {Type: "boolean"},
+		"store_healthy":             {Type: "boolean"},
+		"event_log_healthy":         {Type: "boolean"},
+		"signer_healthy":            {Type: "boolean"},
+		"server_healthy":            {Type: "boolean"},
+		"detail":                    str(),
+		"limitations":               {Type: "array", Items: str()},
+	}, "outcome", "ran_at", "rpo_seconds", "rto_seconds", "events_restored",
+		"postgres_records_restored", "postgres_tables_restored", "artifacts_restored",
+		"full_set_restored", "store_healthy", "event_log_healthy", "signer_healthy", "server_healthy",
+		"detail", "limitations")
 	drPosture := object(map[string]*Schema{
 		"backup_configured":      {Type: "boolean"},
 		"last_backup_at":         timestamp(),
@@ -3335,7 +3347,7 @@ func componentSchemas() map[string]*Schema {
 		"mdm":        {Type: "string", Enum: []string{"intune", "jamf"}},
 		"base_url":   str(), "token_ref": str(), "filter": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
-		"execution":           {Type: "string", Enum: []string{"control_plane", "relay", ""}},
+		"execution":           {Type: "string", Enum: []string{"relay", ""}},
 		"renewal_window_days": {Type: "integer"},
 		"last_run_at":         str(), "last_error": str(), "guidance": str(),
 	}, "configured", "enabled", "guidance")
@@ -3343,7 +3355,7 @@ func componentSchemas() map[string]*Schema {
 		"mdm":      {Type: "string", Enum: []string{"intune", "jamf"}},
 		"base_url": str(), "token_ref": str(), "filter": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
-		"execution":           {Type: "string", Enum: []string{"control_plane", "relay", ""}},
+		"execution":           {Type: "string", Enum: []string{"relay", ""}},
 		"renewal_window_days": {Type: "integer"},
 	}, "mdm", "base_url", "token_ref", "interval_seconds")
 	mdmPollScheduleList := object(map[string]*Schema{
@@ -3503,10 +3515,9 @@ func componentSchemas() map[string]*Schema {
 		"configured": {Type: "boolean"}, "instance_url": str(), "token_ref": str(),
 		"ci_query": str(), "allow_private_endpoint": {Type: "boolean"},
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
-		// execution is the sync vantage (I2): control_plane fetches from the
-		// brain; relay dispatches a cmdb.sync job a network relay inside the
-		// segment claims.
-		"execution": {Type: "string", Enum: []string{"control_plane", "relay", ""}},
+		// Scheduled external reads are relay-only: the control plane commits the
+		// intent and ingests a signed observation, but never dials the CMDB.
+		"execution": {Type: "string", Enum: []string{"relay", ""}},
 		// last_error is served rather than only logged: a sync failing for a week
 		// otherwise looks identical to one that found nothing to do.
 		"last_run_at": str(), "last_error": str(), "guidance": str(),
@@ -3522,6 +3533,25 @@ func componentSchemas() map[string]*Schema {
 		"affected": {Type: "array", Items: ref("GraphNode")},
 		"by_kind":  {Type: "object"},
 	}, "node", "affected", "by_kind")
+	outboxReconciliationConflict := object(map[string]*Schema{
+		"id": str(), "tenant_id": uuid(), "source_event_id": str(),
+		"source_event_sequence": {Type: "integer"}, "source_event_type": str(),
+		"idempotency_key": str(), "existing_outbox_id": {Type: "integer"},
+		"existing_destination": str(), "existing_effect_lane": str(),
+		"existing_payload_sha256": str(), "existing_required_agent_role": str(),
+		"existing_required_agent_id": str(), "candidate_destination": str(),
+		"candidate_effect_lane": str(), "candidate_payload_sha256": str(),
+		"candidate_required_agent_role": str(), "candidate_required_agent_id": str(),
+		"reason": str(), "status": {Type: "string", Enum: []string{"quarantined"}},
+		"detected_at": timestamp(),
+	}, "id", "tenant_id", "source_event_id", "source_event_sequence", "source_event_type",
+		"idempotency_key", "existing_outbox_id", "existing_destination", "existing_effect_lane",
+		"existing_payload_sha256", "candidate_destination", "candidate_effect_lane",
+		"candidate_payload_sha256", "reason", "status", "detected_at")
+	outboxReconciliationConflictList := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("OutboxReconciliationConflict")},
+		"guidance": str(),
+	}, "items", "guidance")
 	incidentExecution := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "compromised_identity_id": uuid(),
 		"replacement_identity_id": uuid(), "connector_delivery_id": uuid(),
@@ -3534,7 +3564,8 @@ func componentSchemas() map[string]*Schema {
 	fleetReissuanceRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "issuer_id": uuid(),
 		"status": str(), "phase": str(), "reason": str(), "batch_size": {Type: "integer"},
-		"batch_count": {Type: "integer"}, "connector": str(), "target": str(),
+		"batch_count": {Type: "integer"}, "next_batch_index": {Type: "integer"},
+		"halted_reason": str(), "connector": str(), "target": str(),
 		"graph_impact":             ref("GraphImpact"),
 		"affected_identity_ids":    {Type: "array", Items: uuid()},
 		"replacement_identity_ids": {Type: "array", Items: uuid()},
@@ -3548,7 +3579,7 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(), "created_by": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"replacement_identities": {Type: "array", Items: ref("Identity")},
 		"connector_deliveries":   {Type: "array", Items: ref("ConnectorDelivery")},
-	}, "id", "tenant_id", "issuer_id", "status", "phase", "batch_size", "batch_count", "graph_impact", "affected_identity_ids", "replacement_identity_ids", "revoked_identity_ids", "batches", "health_gates", "rollback_refs", "created_at", "updated_at")
+	}, "id", "tenant_id", "issuer_id", "status", "phase", "batch_size", "batch_count", "next_batch_index", "graph_impact", "affected_identity_ids", "replacement_identity_ids", "revoked_identity_ids", "batches", "health_gates", "rollback_refs", "created_at", "updated_at")
 	fleetReissuanceEvidence := object(map[string]*Schema{
 		"run_id": uuid(), "evidence_bundle_format": str(), "evidence_bundle": str(),
 		"rollback_refs":  {Type: "array", Items: str()},
@@ -4550,6 +4581,8 @@ func componentSchemas() map[string]*Schema {
 		"IncidentExecutionRequest":                 incidentExecutionReq,
 		"IncidentExecution":                        incidentExecution,
 		"IncidentExecutionList":                    list("IncidentExecution"),
+		"OutboxReconciliationConflict":             outboxReconciliationConflict,
+		"OutboxReconciliationConflictList":         outboxReconciliationConflictList,
 		"RemediationPlaybook":                      remediationPlaybook,
 		"RemediationPlaybookCatalog":               remediationPlaybookCatalog,
 		"RemediationPlaybookRunRequest":            remediationPlaybookRunReq,

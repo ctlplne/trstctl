@@ -75,6 +75,11 @@ type SignerServiceClient interface {
 	// routing metadata and opaque evidence/precondition bytes; the attached
 	// edition implementation owns the semantics and may return an opaque signed
 	// refusal record. No private key material crosses this RPC.
+	// These message names predate the Buf naming gate and are part of the
+	// control-plane/signer descriptor contract. Renaming either makes the FILE
+	// breaking gate fail; suppress only this legacy RPC, not the file or rule.
+	// buf:lint:ignore RPC_REQUEST_STANDARD_NAME
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
 	VerifyOperation(ctx context.Context, in *OperationRequest, opts ...grpc.CallOption) (*OperationResponse, error)
 	// GatedDestroy asks an attached edition-neutral destruction gate to verify
 	// opaque public evidence inside the signer before the signer-local key destroy
@@ -321,6 +326,11 @@ type SignerServiceServer interface {
 	// routing metadata and opaque evidence/precondition bytes; the attached
 	// edition implementation owns the semantics and may return an opaque signed
 	// refusal record. No private key material crosses this RPC.
+	// These message names predate the Buf naming gate and are part of the
+	// control-plane/signer descriptor contract. Renaming either makes the FILE
+	// breaking gate fail; suppress only this legacy RPC, not the file or rule.
+	// buf:lint:ignore RPC_REQUEST_STANDARD_NAME
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
 	VerifyOperation(context.Context, *OperationRequest) (*OperationResponse, error)
 	// GatedDestroy asks an attached edition-neutral destruction gate to verify
 	// opaque public evidence inside the signer before the signer-local key destroy

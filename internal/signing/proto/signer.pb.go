@@ -230,13 +230,14 @@ func (RSAPadding) EnumDescriptor() ([]byte, []int) {
 type KeyPurpose int32
 
 const (
-	KeyPurpose_KEY_PURPOSE_UNSPECIFIED  KeyPurpose = 0 // no purpose asserted; rejected by a constrained key
-	KeyPurpose_KEY_PURPOSE_CA_SIGN      KeyPurpose = 1 // sign CA/intermediate/leaf X.509 certificates
-	KeyPurpose_KEY_PURPOSE_LEAF_TLS     KeyPurpose = 2 // sign leaf TLS certificates only
-	KeyPurpose_KEY_PURPOSE_SSH_CERT     KeyPurpose = 3 // sign SSH certificates
-	KeyPurpose_KEY_PURPOSE_CODE_SIGN    KeyPurpose = 4 // produce code-signing signatures
-	KeyPurpose_KEY_PURPOSE_GENERIC      KeyPurpose = 5 // unclassified signing (e.g. test/CSR self-sign)
-	KeyPurpose_KEY_PURPOSE_ACME_ACCOUNT KeyPurpose = 6 // sign ACME account JWS requests only
+	KeyPurpose_KEY_PURPOSE_UNSPECIFIED    KeyPurpose = 0 // no purpose asserted; rejected by a constrained key
+	KeyPurpose_KEY_PURPOSE_CA_SIGN        KeyPurpose = 1 // sign CA/intermediate/leaf X.509 certificates
+	KeyPurpose_KEY_PURPOSE_LEAF_TLS       KeyPurpose = 2 // sign leaf TLS certificates only
+	KeyPurpose_KEY_PURPOSE_SSH_CERT       KeyPurpose = 3 // sign SSH certificates
+	KeyPurpose_KEY_PURPOSE_CODE_SIGN      KeyPurpose = 4 // produce code-signing signatures
+	KeyPurpose_KEY_PURPOSE_GENERIC        KeyPurpose = 5 // unclassified signing (e.g. test/CSR self-sign)
+	KeyPurpose_KEY_PURPOSE_ACME_ACCOUNT   KeyPurpose = 6 // sign ACME account JWS requests only
+	KeyPurpose_KEY_PURPOSE_AUDIT_EVIDENCE KeyPurpose = 7 // sign audit, recovery, retention, tenant-control, and invoice evidence only
 )
 
 // Enum value maps for KeyPurpose.
@@ -249,15 +250,17 @@ var (
 		4: "KEY_PURPOSE_CODE_SIGN",
 		5: "KEY_PURPOSE_GENERIC",
 		6: "KEY_PURPOSE_ACME_ACCOUNT",
+		7: "KEY_PURPOSE_AUDIT_EVIDENCE",
 	}
 	KeyPurpose_value = map[string]int32{
-		"KEY_PURPOSE_UNSPECIFIED":  0,
-		"KEY_PURPOSE_CA_SIGN":      1,
-		"KEY_PURPOSE_LEAF_TLS":     2,
-		"KEY_PURPOSE_SSH_CERT":     3,
-		"KEY_PURPOSE_CODE_SIGN":    4,
-		"KEY_PURPOSE_GENERIC":      5,
-		"KEY_PURPOSE_ACME_ACCOUNT": 6,
+		"KEY_PURPOSE_UNSPECIFIED":    0,
+		"KEY_PURPOSE_CA_SIGN":        1,
+		"KEY_PURPOSE_LEAF_TLS":       2,
+		"KEY_PURPOSE_SSH_CERT":       3,
+		"KEY_PURPOSE_CODE_SIGN":      4,
+		"KEY_PURPOSE_GENERIC":        5,
+		"KEY_PURPOSE_ACME_ACCOUNT":   6,
+		"KEY_PURPOSE_AUDIT_EVIDENCE": 7,
 	}
 )
 
@@ -2807,7 +2810,7 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"RSAPadding\x12\x1b\n" +
 	"\x17RSA_PADDING_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14RSA_PADDING_PKCS1V15\x10\x01\x12\x13\n" +
-	"\x0fRSA_PADDING_PSS\x10\x02*\xc8\x01\n" +
+	"\x0fRSA_PADDING_PSS\x10\x02*\xe8\x01\n" +
 	"\n" +
 	"KeyPurpose\x12\x1b\n" +
 	"\x17KEY_PURPOSE_UNSPECIFIED\x10\x00\x12\x17\n" +
@@ -2816,7 +2819,8 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x14KEY_PURPOSE_SSH_CERT\x10\x03\x12\x19\n" +
 	"\x15KEY_PURPOSE_CODE_SIGN\x10\x04\x12\x17\n" +
 	"\x13KEY_PURPOSE_GENERIC\x10\x05\x12\x1c\n" +
-	"\x18KEY_PURPOSE_ACME_ACCOUNT\x10\x06*\xb5\x01\n" +
+	"\x18KEY_PURPOSE_ACME_ACCOUNT\x10\x06\x12\x1e\n" +
+	"\x1aKEY_PURPOSE_AUDIT_EVIDENCE\x10\a*\xb5\x01\n" +
 	"\x10ManagedKeyAction\x12\"\n" +
 	"\x1eMANAGED_KEY_ACTION_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bMANAGED_KEY_ACTION_GENERATE\x10\x01\x12\x1d\n" +

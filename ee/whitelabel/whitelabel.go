@@ -27,8 +27,6 @@ type Store interface {
 	TenantBrand(context.Context, string) (*Record, error)
 	TenantByDomain(context.Context, string) (*Record, error)
 	ProviderBrand(context.Context) (*Record, error)
-	SetTenantBrand(context.Context, Record) error
-	SetProviderBrand(context.Context, Record) error
 }
 
 type Resolver struct {

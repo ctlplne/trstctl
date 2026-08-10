@@ -211,13 +211,13 @@ kek:
   existingSecretKey: kek.bin
   generate: false
 
-# The control plane persists the issuing CA cert + audit signing key under /data;
-# the signer persists its sealed CA key store. Both need stable storage so a
-# restart preserves the issuing CA (R3.2) and the audit chain (R2.1).
+# The control plane persists the issuing CA cert + legacy migration path under /data;
+# the signer persists its sealed CA + audit-evidence key store. Both need stable
+# storage so a restart preserves the issuing CA (R3.2) and audit identity (R2.1).
 #
 # For multi-replica HA (replicaCount >= 2) BOTH volumes default to ReadWriteMany so
 # all replicas SHARE the issuing CA: the signer key store (sealed CA key, AN-8) and
-# the control-plane data dir (public CA cert + the audit signing key) are the same
+# the control-plane data dir (public CA cert + legacy audit migration path) are the same
 # across pods, so every replica is the same CA and verifies the same audit chain. Use
 # an RWX-capable StorageClass (e.g. an NFS/EFS/Filestore/Azure Files class); set both
 # back to ReadWriteOnce only when you run a single replica. The sealed key never
@@ -226,8 +226,8 @@ kek:
 persistence:
   enabled: true
   storageClass: ""
-  # Access mode for the control-plane data PVC (CA cert + audit signing key). RWX so
-  # every HA replica reads the same CA cert + audit key. ReadWriteOnce for one replica.
+  # Access mode for the control-plane data PVC (CA cert + one-time legacy audit
+  # migration path). RWX lets the signer absorb and delete an upgrade-era PEM.
   controlPlaneAccessMode: ReadWriteMany
   # Access mode for the signer key-store PVC (the sealed CA key). RWX so every
   # signer process loads the SAME sealed CA key (RESIL-002). ReadWriteOnce for one

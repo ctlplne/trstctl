@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"trstctl.com/trstctl/internal/mdm"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // Relay-executed MDM read (epic I5). Same shape as the CMDB sync: the relay
@@ -74,7 +76,7 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 		report(ctx, ch, job, OutcomeFailed, "mdm request could not be built")
 		return false
 	}
-	req.Header.Set("Authorization", "Bearer "+string(token))
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
 	req.Header.Set("Accept", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -99,10 +101,19 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 		report(ctx, ch, job, OutcomeFailed, "mdm response could not be parsed")
 		return false
 	}
+	if intent.MDM == mdm.MDMIntune && len(intent.SCEPProfileIDs) > 0 {
+		evidence, reportErr := mdm.ReadIntuneCertificateEvidence(ctx, client, intent.BaseURL, token, intent.SCEPProfileIDs)
+		if reportErr != nil {
+			report(ctx, ch, job, OutcomeFailed, "Intune certificate evidence report could not be read")
+			return false
+		}
+		mdm.AttachIntuneCertificateEvidence(devices, evidence)
+	}
 	detail, err := json.Marshal(struct {
-		MDM     string       `json:"mdm"`
-		Devices []mdm.Device `json:"devices"`
-	}{MDM: intent.MDM, Devices: devices})
+		ObservedAt time.Time    `json:"observed_at"`
+		MDM        string       `json:"mdm"`
+		Devices    []mdm.Device `json:"devices"`
+	}{ObservedAt: time.Now().UTC(), MDM: intent.MDM, Devices: devices})
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "mdm devices could not be encoded")
 		return false

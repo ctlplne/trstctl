@@ -16,9 +16,11 @@ import (
 	"time"
 	"trstctl.com/trstctl/internal/lifecycle"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
-	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/buildinfo"
@@ -111,11 +113,11 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	}
 	defer runSecrets.Close()
 
-	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	runSigner, auditKey, err := openAuditSigningRuntime(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("audit signing key: %w", err)
+		return err
 	}
-
+	defer runSigner.Close()
 	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
 	if err != nil {
 		return fmt.Errorf("open event log: %w", err)
@@ -126,12 +128,6 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 			_ = log.Close()
 		}
 	}()
-
-	runSigner, err := openRunSigner(ctx, cfg)
-	if err != nil {
-		return err
-	}
-	defer runSigner.Close()
 
 	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger, egressGuard, auditKey)
 	if err != nil {
@@ -310,6 +306,35 @@ func openRunSigner(ctx context.Context, cfg *config.Config) (runSigner, error) {
 	return out, nil
 }
 
+// openAuditSigningRuntime starts or connects to the isolated signer and binds
+// the stable, purpose-constrained audit-export handle. In external-signer mode a
+// legacy PEM visible only to the control-plane host is a hard error: silently
+// generating a different remote key would make historical evidence unverifiable.
+// Operators must expose that file to trstctl-signer and use its
+// --legacy-audit-key migration flag (AUD-63 / AN-4).
+func openAuditSigningRuntime(ctx context.Context, cfg *config.Config) (runSigner, *jose.SigningKey, error) {
+	if cfg.Signer.Mode == config.SignerExternal && cfg.Audit.SigningKeyFile != "" {
+		if _, err := os.Lstat(cfg.Audit.SigningKeyFile); err == nil {
+			return runSigner{}, nil, fmt.Errorf(
+				"audit signing key: legacy PEM exists at %s; configure the external trstctl-signer with --legacy-audit-key and remove the control-plane copy before startup",
+				cfg.Audit.SigningKeyFile,
+			)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return runSigner{}, nil, fmt.Errorf("audit signing key: inspect legacy PEM path: %w", err)
+		}
+	}
+	runtime, err := openRunSigner(ctx, cfg)
+	if err != nil {
+		return runSigner{}, nil, err
+	}
+	key, err := loadRunAuditSigningKey(ctx, runtime.signer, nil)
+	if err != nil {
+		runtime.Close()
+		return runSigner{}, nil, err
+	}
+	return runtime, key, nil
+}
+
 func buildSignTokenProvider(cfg *config.Config) (signing.SignTokenProvider, error) {
 	if cfg.Signer.AuthTokenCommand != "" {
 		return newSignTokenCommand(cfg.Signer.AuthTokenCommand), nil
@@ -379,6 +404,7 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 		"--keystore", cfg.Signer.KeyStoreDir,
 		"--kek", cfg.Secrets.KEKFile,
 		"--auth-secret", cfg.Signer.AuthSecretFile,
+		"--legacy-audit-key", cfg.Audit.SigningKeyFile,
 	}
 	managedKeysCleanup := func() {}
 	if cfg.ManagedKeys.Enabled {
@@ -458,7 +484,7 @@ func runLeafPluginAndModelConfig(cfg *config.Config, egressGuard *egress.Guard) 
 }
 
 func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
-	auditKey, err := loadRunAuditSigningKey(cfg, suppliedAuditKey)
+	auditKey, err := loadRunAuditSigningKey(ctx, signer.signer, suppliedAuditKey)
 	if err != nil {
 		return Deps{}, err
 	}
@@ -742,7 +768,8 @@ func idempotencyResultProtectionFromConfig(
 }
 
 func loadRunAuditSigningKey(
-	cfg *config.Config,
+	ctx context.Context,
+	provider SignerProvider,
 	supplied []*jose.SigningKey,
 ) (*jose.SigningKey, error) {
 	if len(supplied) > 1 {
@@ -754,11 +781,58 @@ func loadRunAuditSigningKey(
 		}
 		return supplied[0], nil
 	}
-	key, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if provider == nil || provider.Client() == nil {
+		return nil, errors.New("audit signing key: signer is unavailable")
+	}
+	client := provider.Client()
+	remote, err := client.SignerForHandleWithPurpose(ctx, "audit-export", signing.PurposeAuditEvidence)
+	if status.Code(err) == codes.NotFound {
+		remote, err = client.GenerateConstrainedKeyHandle(
+			ctx,
+			crypto.RSA2048,
+			"audit-export",
+			[]signing.KeyPurpose{signing.PurposeAuditEvidence},
+			signing.PurposeAuditEvidence,
+		)
+		if status.Code(err) == codes.AlreadyExists {
+			remote, err = client.SignerForHandleWithPurpose(ctx, "audit-export", signing.PurposeAuditEvidence)
+		}
+	}
 	if err != nil {
-		return nil, fmt.Errorf("audit signing key: %w", err)
+		return nil, fmt.Errorf("audit signing key: bind signer handle: %w", err)
+	}
+	key, err := jose.NewArtifactSigningKey("audit-export", remote.Public(), remoteAuditArtifactSigner{
+		client: client,
+		public: remote.Public(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("audit signing key: wrap signer handle: %w", err)
 	}
 	return key, nil
+}
+
+type remoteAuditArtifactSigner struct {
+	client *signing.Client
+	public crypto.PublicKey
+}
+
+func (s remoteAuditArtifactSigner) SignArtifact(kind string, payload []byte) (string, error) {
+	if s.client == nil {
+		return "", errors.New("audit evidence signer is unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := s.client.SignArtifact(ctx, signing.ArtifactSignRequest{
+		Kind: kind, TenantID: "deployment", AuthorityID: "audit-evidence",
+		KeyID: "audit-export", Payload: payload,
+	})
+	if err != nil {
+		return "", err
+	}
+	if result.KeyID != "audit-export" || result.Algorithm != s.public.Algorithm || !bytes.Equal(result.PublicKeyDER, s.public.DER) {
+		return "", errors.New("audit evidence signer returned mismatched public identity")
+	}
+	return string(result.Signature), nil
 }
 
 // vaultCompatRuntimeFromConfig binds Vault/OpenBao compatibility to the same

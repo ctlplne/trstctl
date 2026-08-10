@@ -9,14 +9,43 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
+
+const (
+	// EventRequestObserved records a parsed, tenant-bound SCEP request before
+	// challenge validation or issuance. It is the immutable requested-stage
+	// evidence used by the MDM trace; a transaction id in a correlation row is
+	// only a join key and cannot substitute for this event.
+	EventRequestObserved = "protocol.scep.request.observed"
+	// EventIssuanceObserved records the terminal issuance outcome for that exact
+	// transaction. Successful values include the minted certificate identity;
+	// failures include a bounded operator-facing reason and no invented cert.
+	EventIssuanceObserved = "protocol.scep.issuance.observed"
+)
+
+// AttemptEvidence is the public, secret-free event payload that joins an MDM
+// device to one SCEP attempt. DeviceSerial is taken from the verified CSR common
+// name (the documented Intune/Jamf profile convention), never from an MDM row.
+// The certificate fields exist only after the enroller returned a parseable leaf.
+type AttemptEvidence struct {
+	TransactionID          string    `json:"transaction_id"`
+	DeviceSerial           string    `json:"device_serial"`
+	Profile                string    `json:"profile,omitempty"`
+	Outcome                string    `json:"outcome"`
+	Detail                 string    `json:"detail,omitempty"`
+	CertificateSerial      string    `json:"certificate_serial,omitempty"`
+	CertificateFingerprint string    `json:"certificate_fingerprint,omitempty"`
+	CertificateNotAfter    time.Time `json:"certificate_not_after,omitempty"`
+}
 
 // Enroller brokers a SCEP enrollment to the platform issuance path: it validates the CSR
 // against profileName (S8.1) and mints a certificate idempotently (AN-5/AN-6). Same
@@ -153,6 +182,22 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "scep: bad request", http.StatusBadRequest)
 		return
 	}
+	deviceSerial, err := scepDeviceSerial(req.CSRDER)
+	if err != nil {
+		s.audit(r.Context(), "deny", "invalid csr", req.TransactionID)
+		s.emitAttempt(r.Context(), EventIssuanceObserved, AttemptEvidence{
+			TransactionID: req.TransactionID, Profile: s.profile, Outcome: "failed", Detail: "The certificate request could not be inspected.",
+		})
+		http.Error(w, "scep: bad request", http.StatusBadRequest)
+		return
+	}
+	baseEvidence := AttemptEvidence{
+		TransactionID: req.TransactionID, DeviceSerial: deviceSerial, Profile: s.profile,
+	}
+	requestEvidence := baseEvidence
+	requestEvidence.Outcome = "ok"
+	requestEvidence.Detail = "The SCEP request was parsed and bound to this transaction and device serial."
+	s.emitAttempt(r.Context(), EventRequestObserved, requestEvidence)
 	if s.challenge != nil {
 		pw, _ := crypto.ChallengePasswordFromCSR(req.CSRDER)
 		cerr := s.challenge(r.Context(), ChallengeRequest{
@@ -163,6 +208,10 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		})
 		if cerr != nil {
 			s.audit(r.Context(), "deny", "challenge rejected", req.TransactionID)
+			failed := baseEvidence
+			failed.Outcome = "failed"
+			failed.Detail = "Challenge validation rejected the request; verify the MDM challenge trust, audience, expiry, and one-time nonce."
+			s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
 			http.Error(w, "scep: challenge rejected", http.StatusForbidden)
 			return
 		}
@@ -170,34 +219,73 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 	allowed, err := s.allowDeviceEnrollment(r.Context(), req.CSRDER)
 	if err != nil {
 		s.audit(r.Context(), "deny", "invalid csr", req.TransactionID)
+		failed := baseEvidence
+		failed.Outcome = "failed"
+		failed.Detail = "The certificate request did not satisfy the device enrollment checks."
+		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
 		http.Error(w, "scep: bad request", http.StatusBadRequest)
 		return
 	}
 	if !allowed {
 		s.audit(r.Context(), "shed", "device rate limit", req.TransactionID)
+		failed := baseEvidence
+		failed.Outcome = "failed"
+		failed.Detail = "The per-device SCEP rate limit refused this attempt; wait for the configured window before retrying."
+		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
 		http.Error(w, "scep: device rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
+	issuedEvidence := baseEvidence
 	reply, rerr := s.runBounded(r.Context(), func(ctx context.Context) ([]byte, error) {
 		// The transaction id makes a retried enrollment idempotent (AN-5).
 		leaf, err := s.enroller.Enroll(ctx, req.CSRDER, s.profile, "scep", "scep:"+req.TransactionID)
 		if err != nil {
 			return nil, err
 		}
+		info, err := certinfo.Inspect(leaf)
+		if err != nil {
+			return nil, errors.New("scep: enroller returned an invalid certificate")
+		}
+		issuedEvidence.Outcome = "ok"
+		issuedEvidence.Detail = "The signer-backed issuance path minted this certificate for the SCEP transaction."
+		issuedEvidence.CertificateSerial = info.SerialNumber
+		issuedEvidence.CertificateFingerprint = info.SHA256Fingerprint
+		issuedEvidence.CertificateNotAfter = info.NotAfter.UTC()
 		return crypto.BuildSCEPSuccess(leaf, s.raCertDER, s.raKeyPKCS8, req)
 	})
 	switch {
 	case errors.Is(rerr, bulkhead.ErrRejected):
 		s.audit(r.Context(), "shed", "bulkhead full", req.TransactionID)
+		failed := baseEvidence
+		failed.Outcome = "failed"
+		failed.Detail = "The bounded SCEP worker pool was full; retry this same transaction."
+		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
 		http.Error(w, "busy", http.StatusServiceUnavailable)
 	case rerr != nil:
 		s.audit(r.Context(), "deny", rerr.Error(), req.TransactionID)
+		failed := baseEvidence
+		failed.Outcome = "failed"
+		failed.Detail = "The signer-backed issuance path refused this request; inspect the profile and signer evidence before retrying."
+		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
 		http.Error(w, "scep: enrollment refused", http.StatusForbidden)
 	default:
 		s.audit(r.Context(), "allow", "", req.TransactionID)
+		s.emitAttempt(r.Context(), EventIssuanceObserved, issuedEvidence)
 		w.Header().Set("Content-Type", "application/x-pki-message")
 		_, _ = w.Write(reply)
 	}
+}
+
+func scepDeviceSerial(csrDER []byte) (string, error) {
+	info, err := crypto.InspectCSR(csrDER)
+	if err != nil {
+		return "", err
+	}
+	serial := strings.ToUpper(strings.TrimSpace(info.CommonName))
+	if serial == "" {
+		return "", errors.New("scep: device CSR common name is empty")
+	}
+	return serial, nil
 }
 
 // readPKIMessage reads the pkiMessage DER from a POST body or a base64 GET "message".
@@ -284,6 +372,20 @@ func (s *Server) audit(ctx context.Context, decision, reason, txid string) {
 		_, err := s.log.Append(ctx, events.Event{Type: et, TenantID: tid, Data: d})
 		return err
 	}), nil, "protocol.scep.enroll", tenantFromCtx(ctx), payload)
+}
+
+func (s *Server) emitAttempt(ctx context.Context, eventType string, evidence AttemptEvidence) {
+	if s.log == nil {
+		return
+	}
+	payload, err := json.Marshal(evidence)
+	if err != nil {
+		return
+	}
+	_ = auditsink.Emit(ctx, auditsink.AuditorFunc(func(ctx context.Context, et, tid string, d []byte) error {
+		_, err := s.log.Append(ctx, events.Event{Type: et, TenantID: tid, Data: d})
+		return err
+	}), nil, eventType, tenantFromCtx(ctx), payload)
 }
 
 type tenantKey struct{}

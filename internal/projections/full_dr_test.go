@@ -57,6 +57,7 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 			t.Fatalf("full DR fixture did not seed %s", table)
 		}
 	}
+	srcProviderState := providerRecoveryState(t, src)
 	srcOwners := ownerNames(t, src, tenantA)
 	srcCerts := certFingerprints(t, src, tenantA)
 
@@ -101,6 +102,9 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 		if dstCounts[table] != srcCounts[table] {
 			t.Errorf("%s restored rows = %d, want %d", table, dstCounts[table], srcCounts[table])
 		}
+	}
+	if got := providerRecoveryState(t, dst); got != srcProviderState {
+		t.Errorf("provider registry and break-glass state after restore = %+v, want %+v", got, srcProviderState)
 	}
 }
 
@@ -495,6 +499,13 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			// that dropped this table would leave every operator refused on every
 			// customer and read as a broken plane rather than a lost table.
 			{`INSERT INTO provider_operator_delegations (operator_id, customer_tenant_id, operation, granted_by) VALUES ($1, $2, $3, $4)`, []any{"full-dr-operator", tenantA, "suspend", "full-dr-admin"}},
+			// L3: the provider's customer registry is the business-level source used
+			// to list and manage tenants. It is not projected from the event log, so
+			// a full restore must carry the actual slug, name, and lifecycle state.
+			{`INSERT INTO provider_tenants (tenant_id, slug, name, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{tenantA, "full-dr-customer", "Full DR Customer", "suspended", now.Add(-time.Hour), now}},
+			// L4: the break-glass row is the regulator-facing two-person-consent
+			// ledger. Restore the decision evidence, not merely an empty table.
+			{`INSERT INTO provider_breakglass_grants (id, tenant_id, operator_id, operator_email, reason, requested_at, expires_at, consented_at, consented_by, consented_at_2, consented_by_2, use_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{"full-dr-breakglass", tenantA, "full-dr-operator", "operator@example.test", "recovery drill", now.Add(-30 * time.Minute), now.Add(30 * time.Minute), now.Add(-20 * time.Minute), "approver-one", now.Add(-10 * time.Minute), "approver-two", 2}},
 			{`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, scopes, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{"00000000-0000-0000-0000-00000000a001", tenantA, "full-dr-api-token-hash", "ci", []string{"owners:read"}, now.Add(time.Hour)}},
 			{`INSERT INTO agent_bootstrap_tokens (id, tenant_id, token_hash, allowed_identity, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{"00000000-0000-0000-0000-00000000a002", tenantA, "full-dr-bootstrap-hash", "edge-1", now.Add(time.Hour)}},
 			// A3: the credential-redemption ledger must survive a restore intact.
@@ -566,6 +577,37 @@ func recoveredTableCounts(t *testing.T, st *store.Store) map[string]int {
 		counts[table] = n
 	}
 	return counts
+}
+
+type recoveredProviderState struct {
+	Slug               string
+	Name               string
+	Status             string
+	OperatorID         string
+	Reason             string
+	FirstApprover      string
+	SecondApprover     string
+	BreakGlassUseCount int
+}
+
+func providerRecoveryState(t *testing.T, st *store.Store) recoveredProviderState {
+	t.Helper()
+	var got recoveredProviderState
+	err := st.SystemPool().QueryRow(context.Background(),
+		`SELECT tenant.slug, tenant.name, tenant.status,
+		        bg.operator_id, bg.reason, bg.consented_by,
+		        COALESCE(bg.consented_by_2, ''), bg.use_count
+		   FROM provider_tenants AS tenant
+		   JOIN provider_breakglass_grants AS bg ON bg.tenant_id = tenant.tenant_id
+		  WHERE tenant.tenant_id = $1 AND bg.id = $2`,
+		tenantA, "full-dr-breakglass").Scan(
+		&got.Slug, &got.Name, &got.Status, &got.OperatorID, &got.Reason,
+		&got.FirstApprover, &got.SecondApprover, &got.BreakGlassUseCount,
+	)
+	if err != nil {
+		t.Fatalf("read provider recovery state: %v", err)
+	}
+	return got
 }
 
 func outboxRowsByIdempotencyKey(t *testing.T, st *store.Store, key string) int {

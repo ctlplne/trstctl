@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
+	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/fleet"
 	"trstctl.com/trstctl/internal/netsec"
 )
 

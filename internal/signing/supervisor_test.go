@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -45,6 +46,15 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 	if c := sup.Client(); c == nil || !c.Healthy(ctx) {
 		t.Fatal("signer not healthy after initial start")
 	}
+	var admitted atomic.Int32
+	sup.SetAdmission(func(call func() error) error {
+		admitted.Add(1)
+		return call()
+	})
+	if c := sup.Client(); c == nil || !c.AdmissionInstalled() || !c.Healthy(ctx) {
+		t.Fatal("signer admission was not installed on the initial client")
+	}
+	initialAdmissions := admitted.Load()
 	oldPid := sup.Pid()
 	if oldPid == 0 {
 		t.Fatal("supervisor reports no child pid")
@@ -59,7 +69,10 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 	for time.Now().Before(deadline) {
 		newPid := sup.Pid()
 		if newPid != 0 && newPid != oldPid {
-			if c := sup.Client(); c != nil && c.Healthy(ctx) {
+			if c := sup.Client(); c != nil && c.AdmissionInstalled() && c.Healthy(ctx) {
+				if admitted.Load() <= initialAdmissions {
+					t.Fatal("replacement signer client bypassed the supervisor admission hook")
+				}
 				// Recovered: a new, healthy child is running. The relaunch must
 				// also show in the restart counter the control plane samples for
 				// trstctl_signer_restarts_total (SF.3).

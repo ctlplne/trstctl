@@ -51,7 +51,7 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
-	signer := dodStartAuthorizedSoftwareSignerProcess(t, dir)
+	signer, reconnectSigner := dodStartRestartableAuthorizedSoftwareSignerProcess(t, dir)
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(dir, "audit-signing-key.pem")
@@ -106,6 +106,7 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	if err := bootstrap.Shutdown(ctx); err != nil {
 		t.Fatal(err)
 	}
+	signer = reconnectSigner()
 	st = dodReopenBreakglassStore(t, ctx)
 	log = dodReopenBreakglassLog(t, ctx, natsDir)
 	caPath := filepath.Join(dir, "breakglass-ca.der")
@@ -183,6 +184,10 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	if err := srv.Shutdown(ctx); err != nil {
 		t.Fatal(err)
 	}
+	// A production control-plane restart creates a fresh signer connection. The
+	// old Client remains bound to the old Server's now-closed signing bulkhead and
+	// must not be reused for pre-Build audit/break-glass handle binding.
+	signer = reconnectSigner()
 	st = dodReopenBreakglassStore(t, ctx)
 	log = dodReopenBreakglassLog(t, ctx, natsDir)
 	srv = dodBreakglassBuildServer(t, ctx, cfg, st, log, signer, runSecrets) // exact assembly restart replays active handle/certificate.

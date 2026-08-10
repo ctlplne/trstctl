@@ -95,7 +95,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 		t.Fatalf("load production secrets: %v", err)
 	}
 	t.Cleanup(runSecrets.Close)
-	signer := dodEvalStartShippedSigner(t, dir)
+	signer, reconnectSigner := dodEvalStartShippedSigner(t, dir)
 
 	challengeAddress, stopChallenge := dodEvalStartChallengeServer(t)
 	defer stopChallenge()
@@ -170,6 +170,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	firstDirectoryCanonical := dodEvalCanonicalACMEDirectory(t, firstDirectory)
 	first.Close(t)
 	firstClosed = true
+	signer = reconnectSigner()
 
 	restartedStore, err := store.Open(ctx, serverTestPostgresDSN(t))
 	if err != nil {
@@ -382,7 +383,7 @@ func (r *dodEvalRuntime) Close(t *testing.T) {
 	})
 }
 
-func dodEvalStartShippedSigner(t *testing.T, dir string) runSigner {
+func dodEvalStartShippedSigner(t *testing.T, dir string) (runSigner, func() runSigner) {
 	t.Helper()
 	authFile := filepath.Join(dir, "signer-auth.bin")
 	authorizer, err := signing.LoadOrCreateAuthorizer(authFile)
@@ -390,7 +391,7 @@ func dodEvalStartShippedSigner(t *testing.T, dir string) runSigner {
 		t.Fatalf("load signer content authorizer: %v", err)
 	}
 	t.Cleanup(authorizer.Destroy)
-	return dodStartShippedSignerProcess(t, dir, "eval-protocols", authFile, "", authorizer)
+	return dodStartRestartableShippedSignerProcess(t, dir, "eval-protocols", authFile, "", authorizer)
 }
 
 func dodEvalStartChallengeServer(t *testing.T) (string, func()) {

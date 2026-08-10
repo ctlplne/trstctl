@@ -50,7 +50,9 @@ func TestASuccessfulDrillMeasuresRPOAndRTO(t *testing.T) {
 	dir := drillableBackup(t, 3*time.Hour)
 
 	att, err := backup.RunDrill(context.Background(), dir,
-		func(context.Context) (int, error) { return 1200, nil }, nil)
+		func(context.Context) (backup.RestoreResult, error) {
+			return healthyRestoreResult(1200), nil
+		}, nil)
 	if err != nil {
 		t.Fatalf("drill: %v", err)
 	}
@@ -81,7 +83,9 @@ func TestAFailedDrillStillProducesAnAttestation(t *testing.T) {
 	dir := drillableBackup(t, time.Hour)
 
 	att, err := backup.RunDrill(context.Background(), dir,
-		func(context.Context) (int, error) { return 0, errors.New("relation does not exist") }, nil)
+		func(context.Context) (backup.RestoreResult, error) {
+			return backup.RestoreResult{}, errors.New("relation does not exist")
+		}, nil)
 	if err != nil {
 		t.Fatalf("a failed drill returned an error instead of attesting the failure: %v", err)
 	}
@@ -107,7 +111,7 @@ func TestARestoreThatReplaysNothingIsAFailedDrill(t *testing.T) {
 	dir := drillableBackup(t, time.Hour)
 
 	att, _ := backup.RunDrill(context.Background(), dir,
-		func(context.Context) (int, error) { return 0, nil }, nil)
+		func(context.Context) (backup.RestoreResult, error) { return healthyRestoreResult(0), nil }, nil)
 	if att.Outcome != backup.DrillFailed {
 		t.Fatalf("a restore replaying zero events was attested as %q. It completed and proved "+
 			"nothing, which is the drill most likely to be mistaken for reassurance", att.Outcome)
@@ -128,7 +132,10 @@ func TestACorruptBackupIsNotRestored(t *testing.T) {
 
 	restored := false
 	att, _ := backup.RunDrill(context.Background(), dir,
-		func(context.Context) (int, error) { restored = true; return 5, nil }, nil)
+		func(context.Context) (backup.RestoreResult, error) {
+			restored = true
+			return healthyRestoreResult(5), nil
+		}, nil)
 	if restored {
 		t.Error("a backup that failed verification was still restored")
 	}
@@ -161,7 +168,7 @@ func TestTheSignedBytesCoverTheLimitations(t *testing.T) {
 	t.Parallel()
 	dir := drillableBackup(t, time.Hour)
 	att, _ := backup.RunDrill(context.Background(), dir,
-		func(context.Context) (int, error) { return 10, nil }, nil)
+		func(context.Context) (backup.RestoreResult, error) { return healthyRestoreResult(10), nil }, nil)
 
 	if len(att.Limitations) == 0 {
 		t.Fatal("a drill attestation carried no limitations; the RTO alone would read as a " +
@@ -189,5 +196,52 @@ func TestTheSignedBytesCoverTheLimitations(t *testing.T) {
 	if !saysFloor {
 		t.Error("the attestation does not say the measured RTO is a floor; it will be read as a " +
 			"promise about real recovery time")
+	}
+}
+
+// Event-only replay is not a disaster-recovery success. This is the exact false
+// green the scheduled production drill previously emitted.
+func TestEventOnlyReplayCannotAttestFullRestore(t *testing.T) {
+	t.Parallel()
+	dir := drillableBackup(t, time.Hour)
+
+	result := healthyRestoreResult(10)
+	result.FullSetRestored = false
+	result.PostgresRecordsRestored = 0
+	result.PostgresTablesRestored = nil
+	result.ArtifactsRestored = []string{"event-log"}
+	att, err := backup.RunDrill(context.Background(), dir,
+		func(context.Context) (backup.RestoreResult, error) { return result, nil }, nil)
+	if err != nil {
+		t.Fatalf("RunDrill: %v", err)
+	}
+	if att.Outcome != backup.DrillFailed {
+		t.Fatalf("event-only replay outcome = %q, want failed: %s", att.Outcome, att.Detail)
+	}
+	if att.FullSetRestored {
+		t.Fatal("event-only replay claimed the full backup set restored")
+	}
+}
+
+func TestUnhealthyRecoveredRuntimeCannotAttestRestore(t *testing.T) {
+	t.Parallel()
+	dir := drillableBackup(t, time.Hour)
+
+	result := healthyRestoreResult(10)
+	result.SignerHealthy = false
+	att, _ := backup.RunDrill(context.Background(), dir,
+		func(context.Context) (backup.RestoreResult, error) { return result, nil }, nil)
+	if att.Outcome != backup.DrillFailed {
+		t.Fatalf("unhealthy recovered signer outcome = %q, want failed", att.Outcome)
+	}
+}
+
+func healthyRestoreResult(events int) backup.RestoreResult {
+	return backup.RestoreResult{
+		EventsRestored: events, PostgresRecordsRestored: 3,
+		PostgresTablesRestored: map[string]int{"provider_tenants": 1},
+		ArtifactsRestored:      []string{"event-log", "postgres-state", "signer-keystore"},
+		FullSetRestored:        true, StoreHealthy: true, EventLogHealthy: true,
+		SignerHealthy: true, ServerHealthy: true,
 	}
 }

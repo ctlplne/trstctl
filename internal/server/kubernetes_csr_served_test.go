@@ -128,8 +128,18 @@ func TestServedKubernetesCertificateSigningRequestCAPK8S04(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("Kubernetes CSR posture: status %d body %s", status, body)
 	}
-	if strings.Contains(strings.ToUpper(string(body)), "PRIVATE KEY") || strings.Contains(string(body), "DaemonSet trstctl-agent runs") || strings.Contains(string(body), "BEGIN CERTIFICATE REQUEST") {
-		t.Fatalf("Kubernetes CSR posture leaked payload/static descriptor data: %s", body)
+	bodyText := string(body)
+	upperBody := strings.ToUpper(bodyText)
+	for _, forbidden := range []string{
+		`"private_key"`, `"private_key_pem"`, `"csr_der"`, `"certificate_pem"`, `"ca_bundle_pem"`,
+		"BEGIN PRIVATE KEY", "BEGIN RSA PRIVATE KEY", "BEGIN EC PRIVATE KEY", "BEGIN CERTIFICATE REQUEST",
+	} {
+		if strings.Contains(upperBody, strings.ToUpper(forbidden)) {
+			t.Fatalf("Kubernetes CSR posture leaked secret/payload marker %q: %s", forbidden, body)
+		}
+	}
+	if strings.Contains(bodyText, "DaemonSet trstctl-agent runs") {
+		t.Fatalf("Kubernetes CSR posture returned the obsolete static descriptor: %s", body)
 	}
 	var got struct {
 		Capability string `json:"capability"`

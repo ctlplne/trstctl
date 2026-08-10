@@ -79,10 +79,12 @@ services:
       - "--keystore=/data/signer/keys"
       - "--kek=/data/secrets/kek.bin"
       - "--auth-secret=/data/secrets/sign-auth.bin"
+      - "--legacy-audit-key=/data/audit/signing-key.pem"
     volumes:
       - signersock:/run/trstctl   # UDS shared with the control plane
       - signerkeys:/data/signer   # sealed CA-key custody (survives restart)
       - secrets:/data/secrets     # the deployment KEK (shared with the control plane)
+      - trstctldata:/data         # one-time legacy audit PEM migration; signer deletes it after sealing
 
   trstctl:
     build:

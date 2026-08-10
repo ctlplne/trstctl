@@ -171,7 +171,7 @@ func (s *Store) ApplyOwnershipConflictResolvedTx(ctx context.Context, tx pgx.Tx,
 // Conflicts are appended, never replaced. A disagreement that was recorded last
 // week and still stands is the same problem, and clearing the queue on each
 // sync would make a persistent conflict look freshly discovered every time.
-func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenantID, ownerID string,
+func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenantID, sourceEventID, ownerID string,
 	fields map[string]string, source, sourceRef string, observed time.Time, conflicts []OwnershipConflict) error {
 	if len(fields) > 0 {
 		// Only the four application-model columns are reachable from a
@@ -197,10 +197,12 @@ func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenan
 	for _, c := range conflicts {
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO owner_ownership_conflicts
-			   (tenant_id, owner_id, field, current_value, current_source,
+			   (tenant_id, source_event_id, owner_id, field, current_value, current_source,
 			    incoming_value, incoming_source, incoming_ref, current_attested)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			tenantID, c.OwnerID, c.Field, c.CurrentValue, c.CurrentSource,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			 ON CONFLICT (tenant_id, source_event_id, field)
+			 WHERE source_event_id IS NOT NULL DO NOTHING`,
+			tenantID, nullableText(sourceEventID), c.OwnerID, c.Field, c.CurrentValue, c.CurrentSource,
 			c.IncomingValue, c.IncomingSource, c.IncomingRef, c.CurrentAttested); err != nil {
 			return err
 		}
@@ -217,14 +219,13 @@ func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenan
 func (s *Store) ApplyCMDBScheduleConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in CMDBReconcileSchedule) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO cmdb_reconcile_schedules (tenant_id, instance_url, token_ref, ci_query, allow_private_endpoint, interval_seconds, enabled, execution)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, nullif($8, ''))
+		 VALUES ($1, $2, $3, $4, false, $5, $6, 'relay')
 		 ON CONFLICT (tenant_id) DO UPDATE SET
 		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref,
 		   ci_query = EXCLUDED.ci_query, allow_private_endpoint = EXCLUDED.allow_private_endpoint,
 		   interval_seconds = EXCLUDED.interval_seconds,
 		   enabled = EXCLUDED.enabled, execution = EXCLUDED.execution, updated_at = now()`,
-		tenantID, in.InstanceURL, in.TokenRef, in.CIQuery, in.AllowPrivateEndpoint,
-		in.IntervalSeconds, in.Enabled, in.Execution)
+		tenantID, in.InstanceURL, in.TokenRef, in.CIQuery, in.IntervalSeconds, in.Enabled)
 	return err
 }
 
@@ -530,7 +531,7 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 // backup-set manifest test (internal/backup) enforces that every persistent table
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
-var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "agent_cert_revocations", "kubernetes_controller_posture", "tenants", "tenant_key_domains", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides",
+var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "agent_cert_revocations", "kubernetes_controller_posture", "tenants", "tenant_key_domains", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides",
 	// I2. Both are projections: owner_ownership_conflicts from ownership.reconciled,
 	// cmdb_reconcile_schedules from cmdb.schedule.configured. A rebuild does lose
 	// the schedule's last_run_at/last_error, which the SCHEDULER writes rather than
@@ -552,7 +553,10 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	// edge.issuance.reconciled.
 	"edge_segment_policies", "edge_delegations", "edge_issuances",
 	// F4: projected from adcs.ca_database.ingested.
-	"adcs_ca_databases"}
+	"adcs_ca_databases",
+	// I4: projected from enrollment.diagnostic.observed. Counts and retention
+	// rebuild from the immutable observation stream.
+	"enrollment_diagnostic_observations", "enrollment_diagnostics"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

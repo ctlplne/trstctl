@@ -3858,7 +3858,6 @@
           },
           "execution": {
             "enum": [
-              "control_plane",
               "relay",
               ""
             ],
@@ -5998,11 +5997,23 @@
       },
       "DRDrill": {
         "properties": {
+          "artifacts_restored": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "detail": {
             "type": "string"
           },
+          "event_log_healthy": {
+            "type": "boolean"
+          },
           "events_restored": {
             "type": "integer"
+          },
+          "full_set_restored": {
+            "type": "boolean"
           },
           "limitations": {
             "items": {
@@ -6018,6 +6029,15 @@
             ],
             "type": "string"
           },
+          "postgres_records_restored": {
+            "type": "integer"
+          },
+          "postgres_tables_restored": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
           "ran_at": {
             "format": "date-time",
             "type": "string"
@@ -6027,6 +6047,15 @@
           },
           "rto_seconds": {
             "type": "integer"
+          },
+          "server_healthy": {
+            "type": "boolean"
+          },
+          "signer_healthy": {
+            "type": "boolean"
+          },
+          "store_healthy": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -6035,6 +6064,14 @@
           "rpo_seconds",
           "rto_seconds",
           "events_restored",
+          "postgres_records_restored",
+          "postgres_tables_restored",
+          "artifacts_restored",
+          "full_set_restored",
+          "store_healthy",
+          "event_log_healthy",
+          "signer_healthy",
+          "server_healthy",
           "detail",
           "limitations"
         ],
@@ -8970,6 +9007,8 @@
             "enum": [
               "halted",
               "planned",
+              "queued",
+              "waiting_verification",
               "executed",
               "failed",
               "completed"
@@ -9133,6 +9172,9 @@
           "graph_impact": {
             "$ref": "#/components/schemas/GraphImpact"
           },
+          "halted_reason": {
+            "type": "string"
+          },
           "health_gates": {
             "items": {
               "$ref": "#/components/schemas/FleetReissuanceHealthGate"
@@ -9149,6 +9191,9 @@
           "issuer_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "next_batch_index": {
+            "type": "integer"
           },
           "phase": {
             "type": "string"
@@ -9205,6 +9250,7 @@
           "phase",
           "batch_size",
           "batch_count",
+          "next_batch_index",
           "graph_impact",
           "affected_identity_ids",
           "replacement_identity_ids",
@@ -10800,7 +10846,6 @@
           },
           "execution": {
             "enum": [
-              "control_plane",
               "relay",
               ""
             ],
@@ -10852,7 +10897,6 @@
           },
           "execution": {
             "enum": [
-              "control_plane",
               "relay",
               ""
             ],
@@ -14455,6 +14499,112 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "OutboxReconciliationConflict": {
+        "properties": {
+          "candidate_destination": {
+            "type": "string"
+          },
+          "candidate_effect_lane": {
+            "type": "string"
+          },
+          "candidate_payload_sha256": {
+            "type": "string"
+          },
+          "candidate_required_agent_id": {
+            "type": "string"
+          },
+          "candidate_required_agent_role": {
+            "type": "string"
+          },
+          "detected_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "existing_destination": {
+            "type": "string"
+          },
+          "existing_effect_lane": {
+            "type": "string"
+          },
+          "existing_outbox_id": {
+            "type": "integer"
+          },
+          "existing_payload_sha256": {
+            "type": "string"
+          },
+          "existing_required_agent_id": {
+            "type": "string"
+          },
+          "existing_required_agent_role": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source_event_id": {
+            "type": "string"
+          },
+          "source_event_sequence": {
+            "type": "integer"
+          },
+          "source_event_type": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "quarantined"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "source_event_id",
+          "source_event_sequence",
+          "source_event_type",
+          "idempotency_key",
+          "existing_outbox_id",
+          "existing_destination",
+          "existing_effect_lane",
+          "existing_payload_sha256",
+          "candidate_destination",
+          "candidate_effect_lane",
+          "candidate_payload_sha256",
+          "reason",
+          "status",
+          "detected_at"
+        ],
+        "type": "object"
+      },
+      "OutboxReconciliationConflictList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OutboxReconciliationConflict"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "guidance"
         ],
         "type": "object"
       },
@@ -31392,6 +31542,53 @@
         ],
         "summary": "Record rollback evidence for a fleet reissuance run",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/incidents/outbox-reconciliation-conflicts": {
+      "get": {
+        "operationId": "listOutboxReconciliationConflicts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxReconciliationConflictList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List quarantined historical receiver-command conflicts without exposing executable payloads",
+        "x-trstctl-permission": "incidents:read"
       }
     },
     "/api/v1/incidents/response-integrations/dispatch": {

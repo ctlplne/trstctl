@@ -33,6 +33,7 @@ import (
 
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -99,7 +100,6 @@ type options struct {
 	sign           bool
 	failOn         string
 	dsn            string
-	auditKeyFile   string
 	signerSocket   string
 	now            func() time.Time
 }
@@ -149,7 +149,7 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 
 	if opts.sign {
-		if err := signReceipt(&receipt, opts.auditKeyFile); err != nil {
+		if err := signReceipt(ctx, &receipt, opts.signerSocket); err != nil {
 			_, _ = fmt.Fprintf(stderr, "doctor: sign receipt: %v\n", err)
 			return ExitError{2}
 		}
@@ -184,12 +184,7 @@ func parseFlags(args []string, getenv func(string) string, stderr io.Writer) (op
 	fs.BoolVar(&opts.sign, "sign", false, "sign the receipt with the deployment's audit-export key")
 	fs.StringVar(&opts.failOn, "fail-on", "fail", "exit non-zero threshold: fail or warn")
 	fs.StringVar(&opts.dsn, "postgres-dsn", getenv("TRSTCTL_POSTGRES_DSN"), "PostgreSQL DSN of the deployment (default $TRSTCTL_POSTGRES_DSN)")
-	auditDefault := getenv("TRSTCTL_AUDIT_SIGNING_KEY_FILE")
-	if auditDefault == "" {
-		auditDefault = "data/audit/signing-key.pem"
-	}
-	fs.StringVar(&opts.auditKeyFile, "audit-key", auditDefault, "path to the deployment's audit signing key PEM (for --sign; never created by doctor)")
-	fs.StringVar(&opts.signerSocket, "signer-socket", "", "path to the signer's Unix socket; enables the SIG-2 socket posture probe")
+	fs.StringVar(&opts.signerSocket, "signer-socket", getenv("TRSTCTL_SIGNER_SOCKET"), "path to the signer's Unix socket; required by --sign and enables the SIG-2 socket posture probe")
 	if err := fs.Parse(args); err != nil {
 		return opts, err
 	}
@@ -199,20 +194,28 @@ func parseFlags(args []string, getenv func(string) string, stderr io.Writer) (op
 	return opts, nil
 }
 
-func signReceipt(r *Receipt, keyFile string) error {
-	pem, err := os.ReadFile(keyFile) // #nosec G304 -- operator-supplied path to their own deployment's audit key (CWE-22)
-	if err != nil {
-		return fmt.Errorf("read audit key %s (doctor never creates one): %w", keyFile, err)
+func signReceipt(ctx context.Context, r *Receipt, signerSocket string) error {
+	if signerSocket == "" {
+		return errors.New("--sign requires --signer-socket or TRSTCTL_SIGNER_SOCKET; private audit keys are never loaded by doctor")
 	}
-	key, err := jose.ParseRSASigningKey("audit-export", pem)
+	client, err := signing.DialReady(ctx, signerSocket, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("parse audit key: %w", err)
+		return fmt.Errorf("connect signer: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+	remote, err := client.SignerForHandleWithPurpose(ctx, "audit-export", signing.PurposeAuditEvidence)
+	if err != nil {
+		return fmt.Errorf("bind audit-export signer handle: %w", err)
+	}
+	key, err := jose.NewDigestSigningKey("audit-export", remote)
+	if err != nil {
+		return fmt.Errorf("wrap audit-export signer handle: %w", err)
 	}
 	payload, err := json.Marshal(r) // signature field still nil: this is the canonical signed body
 	if err != nil {
 		return err
 	}
-	jws, err := key.Sign(payload)
+	jws, err := key.SignArtifact(jose.ArtifactDoctorReceipt, payload)
 	if err != nil {
 		return err
 	}

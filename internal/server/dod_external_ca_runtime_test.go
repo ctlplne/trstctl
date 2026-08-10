@@ -39,6 +39,9 @@ import (
 const dodExternalCATenant = "d0d00000-0000-4000-8000-000000000101"
 
 const (
+	dodADCSTLSServerName        = "adcs.dod.test"
+	dodADCSTLSServerCertEnv     = "TRSTCTL_ADCS_TLS_SERVER_CERT_FILE"
+	dodADCSTLSServerKeyEnv      = "TRSTCTL_ADCS_TLS_SERVER_KEY_FILE"
 	dodExternalSignerAzureVault = "https://dod.managedhsm.azure.net"
 	dodEntrustTLSServerName     = "entrust.dod.test"
 	dodEntrustTLSServerCertEnv  = "TRSTCTL_ENTRUST_MTLS_SERVER_CERT_FILE"
@@ -272,6 +275,15 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 		t.Fatalf("select external-CA runtime case: %v", err)
 	}
 	secretDir := t.TempDir()
+	var adcsTLS *mtls.SignerPeerMaterial
+	if _, ok := selected["external_ca.adcs"]; ok {
+		adcsTLS, err = mtls.GenerateSignerPeerMaterial(t.TempDir(), dodADCSTLSServerName, time.Hour)
+		if err != nil {
+			t.Fatalf("generate AD CS substrate TLS material: %v", err)
+		}
+		t.Setenv(dodADCSTLSServerCertEnv, adcsTLS.Signer.CertFile)
+		t.Setenv(dodADCSTLSServerKeyEnv, adcsTLS.Signer.KeyFile)
+	}
 	var entrustTLS *mtls.SignerPeerMaterial
 	if _, ok := selected["external_ca.entrust"]; ok {
 		entrustTLS, err = mtls.GenerateSignerPeerMaterial(t.TempDir(), dodEntrustTLSServerName, time.Hour)
@@ -297,6 +309,10 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 	smallstepExternal := dodStartExternalCASmallstep(t, only)
 	vaultExternal := dodStartExternalCAVaultPKI(t, only)
 	venafiExternal := dodStartExternalCAVenafi(t, only)
+	var adcsIssuanceRoot []byte
+	if adcsExternal != nil {
+		adcsIssuanceRoot = dodExternalCARootWithClient(t, adcsExternal.Endpoint(), dodExternalCATLSClient(t, adcsTLS.ControlPlane.PeerCAFile, adcsTLS.ServerName))
+	}
 	productionEndpoints := map[*proof.ExternalSubstrate]string{}
 	productionEndpoint := func(external *proof.ExternalSubstrate) string {
 		if external == nil {
@@ -361,7 +377,13 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 		return dodExternalCANetworkIfSelected(network, external)
 	}
 	addCase("external_ca.registry", "registry", registryExternal, config.ExternalCAConfig{ID: "registry", Type: "digicert", Name: "Registry Proof CA", Endpoint: endpoint(registryExternal), APIKeyRef: secretRef, Network: selectedNetwork(registryExternal)}, nil)
-	addCase("external_ca.adcs", "adcs", adcsExternal, config.ExternalCAConfig{ID: "adcs", Type: "adcs", Name: "ADCS", Endpoint: endpoint(adcsExternal), CAConfig: `HOST\CA`, Template: "WebServer", Username: "dod-user", PasswordRef: secretRef, PollInterval: "1ms", Network: selectedNetwork(adcsExternal)}, nil)
+	if adcsExternal != nil {
+		adcsNetwork := dodExternalCANetwork(t, productionEndpoint(adcsExternal))
+		adcsNetwork.AllowInsecureHTTP = false
+		adcsNetwork.RootCAFile = adcsTLS.ControlPlane.PeerCAFile
+		adcsNetwork.ServerName = adcsTLS.ServerName
+		addCase("external_ca.adcs", "adcs", adcsExternal, config.ExternalCAConfig{ID: "adcs", Type: "adcs", Name: "ADCS", Endpoint: productionEndpoint(adcsExternal), CAConfig: `HOST\CA`, Template: "WebServer", Username: "dod-user", PasswordRef: secretRef, PollInterval: "1ms", Network: adcsNetwork}, nil)
+	}
 	addCase("external_ca.awspca", "awspca", awsExternal, config.ExternalCAConfig{ID: "awspca", Type: "awspca", Name: "AWS PCA", Endpoint: endpoint(awsExternal), Region: "us-east-1", CertificateAuthorityARN: "arn:aws:acm-pca:us-east-1:123:certificate-authority/dod", AccessKeyID: "AKIADOD", SecretAccessKeyRef: secretRef, PollInterval: "1ms", Network: selectedNetwork(awsExternal)}, nil)
 	if azureExternal != nil {
 		azureCAFile := filepath.Join(secretDir, "azure-managed-hsm-ca.pem")
@@ -450,7 +472,7 @@ func TestDODExternalCAUniversalProductionAssembly(t *testing.T) {
 		dodProveExternalCA(t, srv, token, csr, "external_ca.registry", "registry", registryExternal)
 	}
 	if only == "" || only == "external_ca.adcs" {
-		dodProveExternalCA(t, srv, token, csr, "external_ca.adcs", "adcs", adcsExternal)
+		dodProveExternalCAWithRoot(t, srv, token, csr, "external_ca.adcs", "adcs", adcsExternal, adcsIssuanceRoot)
 	}
 	if only == "" || only == "external_ca.awspca" {
 		dodProveExternalCA(t, srv, token, csr, "external_ca.awspca", "awspca", awsExternal)
@@ -846,6 +868,20 @@ func dodExternalCAMTLSClient(t *testing.T, config mtls.SignerPeerConfig, serverN
 	}
 	t.Cleanup(identity.Destroy)
 	transport, err := mtls.AgentHTTPTransport(identity, rootPEM, serverName, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(transport.CloseIdleConnections)
+	return &http.Client{Transport: transport, Timeout: 5 * time.Second}
+}
+
+func dodExternalCATLSClient(t *testing.T, rootFile, serverName string) *http.Client {
+	t.Helper()
+	rootPEM, err := os.ReadFile(rootFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport, err := mtls.AgentHTTPTransport(nil, rootPEM, serverName, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

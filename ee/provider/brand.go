@@ -31,9 +31,16 @@ type TenantBrand struct {
 	CustomDomain  string
 }
 
-// BrandStore writes a customer's brand and invalidates any resolver cache.
+// BrandStore is the read-view cache seam. The PostgreSQL brand store exposes
+// no writer; after the event projection commits, the resolver cache is cleared
+// so the new projected row is served immediately.
 type BrandStore interface {
-	SetTenantBrand(ctx context.Context, brand TenantBrand) error
+	Invalidate()
+}
+
+type legacyBrandStore interface {
+	BrandStore
+	SetTenantBrand(context.Context, TenantBrand) error
 }
 
 // SetTenantBrand persists a customer's white-label brand.
@@ -62,12 +69,26 @@ func (s *Service) SetTenantBrand(ctx context.Context, actor Operator, customerID
 	brand.TenantID = customerID
 	brand.ProductName = strings.TrimSpace(brand.ProductName)
 	brand.CustomDomain = strings.ToLower(strings.TrimSpace(brand.CustomDomain))
-	if err := s.brands.SetTenantBrand(ctx, brand); err != nil {
+	now := s.clock()
+	if s.mutations != nil {
+		if _, err := s.emit(ctx, EventTenantBrandSet, customerID, AuthorityEvent{Brand: &brand,
+			Audit: AuditEvent{Type: EventTenantBrandSet, TenantID: customerID,
+				OperatorID: actor.ID, OperatorEmail: actor.Email, At: now}}); err != nil {
+			return err
+		}
+		s.brands.Invalidate()
+		return nil
+	}
+	legacy, ok := s.brands.(legacyBrandStore)
+	if !ok {
+		return fmt.Errorf("provider: production brand stores require the event mutation sink")
+	}
+	if err := legacy.SetTenantBrand(ctx, brand); err != nil {
 		// A custom-domain collision (two tenants claiming one host) surfaces
 		// from the store's uniqueness constraint. It is the store's job to
 		// refuse it; the plane passes the refusal through rather than guessing.
 		return err
 	}
-	return s.record(ctx, AuditEvent{Type: "provider.tenant.brand.set", TenantID: customerID,
-		OperatorID: actor.ID, OperatorEmail: actor.Email, At: s.clock()})
+	return s.record(ctx, AuditEvent{Type: EventTenantBrandSet, TenantID: customerID,
+		OperatorID: actor.ID, OperatorEmail: actor.Email, At: now})
 }

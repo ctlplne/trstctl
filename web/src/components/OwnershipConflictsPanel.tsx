@@ -41,9 +41,7 @@ export function OwnershipConflictsPanel() {
       <h2 id="ownership-conflicts-heading" className="text-title font-semibold">
         {translateNow("source.ownership.conflicts.i2own00001")}
       </h2>
-      <p className="text-sm">
-        {translateNow("source.ownership.conflicts.blurb.i2own00002", { value1: String(items.length) })}
-      </p>
+      <p className="text-sm">{translateNow("source.ownership.conflicts.blurb.i2own00002", { value1: String(items.length) })}</p>
       <ul className="space-y-2 text-sm">
         {items.slice(0, 25).map((item) => (
           <li key={item.id} className="border-b border-border pb-2 last:border-0">

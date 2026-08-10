@@ -9,11 +9,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	natsserver "github.com/nats-io/nats-server/v2/server"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/backup"
@@ -21,6 +25,9 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secrets"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestRunBackupRequiresExternalPostgresHistoryCoordinator(t *testing.T) {
@@ -554,6 +561,226 @@ func TestFullBackupEncryptedDirectoryAndRestorePolicy(t *testing.T) {
 	if plain.enabled() || !plain.manifestEncryption().AllowUnencryptedSensitiveArtifactsOverride {
 		t.Fatalf("plaintext backup override metadata = %+v", plain.manifestEncryption())
 	}
+}
+
+// The scheduled J2 verdict must exercise the artifact an operator would
+// deliver during an outage, not a private event-only shortcut. This proof uses
+// the shipped signer binary, real external JetStream, real PostgreSQL, the
+// production full-backup/full-restore functions, an isolated NATS target, and
+// the recovered server's real /readyz handler.
+func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs the shipped signer with real PostgreSQL and NATS")
+	}
+	assertNoSourceTreeSignerAuthSecret(t, "restore-drill preflight")
+	installSiblingSignerBinary(t)
+	assertNoSourceTreeSignerAuthSecret(t, "building the shipped signer")
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	nats := startBackupTestNATS(t)
+	cfg := config.Default()
+	cfg.Postgres.Mode = config.PostgresExternal
+	cfg.Postgres.DSN = serverTestPostgresDSN(t)
+	cfg.NATS = config.NATS{
+		Mode: config.NATSExternal, URL: nats.ClientURL(), Replicas: 1,
+		AllowSingleReplica: true,
+	}
+	cfg.Secrets.KEKFile = filepath.Join(dir, "source", "deployment-kek.bin")
+	cfg.Signer.KeyStoreDir = filepath.Join(dir, "source", "signer-keystore")
+	cfg.Signer.AuthSecretFile = filepath.Join(dir, "source", "signer-auth-secret.bin")
+	socketDir, err := os.MkdirTemp("", "trstctl-drill-signer-")
+	if err != nil {
+		t.Fatalf("create short signer socket directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	cfg.Signer.Socket = filepath.Join(socketDir, "s.sock")
+	cfg.Signer.AllowInsecureDevNonLinux = runtime.GOOS != "linux"
+	cfg.Audit.SigningKeyFile = filepath.Join(dir, "source", "legacy-audit.pem")
+	cfg.CA.CertFile = filepath.Join(dir, "source", "issuing-ca.crt")
+	cfg.Backup.EncryptionKeyFile = filepath.Join(dir, "backup-encryption-key.bin")
+	if err := os.MkdirAll(filepath.Dir(cfg.Secrets.KEKFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
+	if err != nil {
+		t.Fatalf("create deployment KEK: %v", err)
+	}
+	kek.Destroy()
+	if err := os.WriteFile(cfg.Backup.EncryptionKeyFile, []byte("0123456789abcdef0123456789abcdef"), 0o400); err != nil {
+		t.Fatalf("write backup encryption key: %v", err)
+	}
+
+	st, err := store.Open(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		t.Fatalf("open source store: %v", err)
+	}
+	defer st.Close()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatalf("migrate source store: %v", err)
+	}
+	resetServerTestStore(t, st)
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	now := time.Now().UTC()
+	if _, err := st.SystemPool().Exec(ctx,
+		`INSERT INTO provider_tenants (tenant_id, slug, name, status, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		tenantID, "drill-customer", "Drill Customer", "suspended", now.Add(-time.Hour), now); err != nil {
+		t.Fatalf("seed provider tenant: %v", err)
+	}
+	if _, err := st.SystemPool().Exec(ctx,
+		`INSERT INTO provider_breakglass_grants
+		 (id, tenant_id, operator_id, operator_email, reason, requested_at, expires_at,
+		  consented_at, consented_by, consented_at_2, consented_by_2, use_count)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		"drill-breakglass", tenantID, "operator", "operator@example.test", "drill proof",
+		now.Add(-30*time.Minute), now.Add(30*time.Minute), now.Add(-20*time.Minute),
+		"approver-one", now.Add(-10*time.Minute), "approver-two", 2); err != nil {
+		t.Fatalf("seed break-glass ledger: %v", err)
+	}
+
+	sourceLog, err := events.Open(ctx, cfg.NATS)
+	if err != nil {
+		t.Fatalf("open source event log: %v", err)
+	}
+	if _, err := sourceLog.Append(ctx, events.Event{
+		ID: "drill-tenant-event", Type: projections.EventTenantRegistered,
+		TenantID: tenantID, SchemaVersion: 1, Time: now,
+		Data: []byte(`{"name":"Drill Customer"}`),
+	}); err != nil {
+		t.Fatalf("append source tenant event: %v", err)
+	}
+	if err := sourceLog.Close(); err != nil {
+		t.Fatalf("close source event log: %v", err)
+	}
+
+	// Provision a real issuing key/certificate before the backup. The restored
+	// server must bind this certificate to the recovered signer handle; a dummy
+	// PEM would let file copying pass while runtime assembly correctly failed.
+	signerRuntime, err := openRunSigner(ctx, cfg)
+	if err != nil {
+		t.Fatalf("start source signer: %v", err)
+	}
+	assertNoSourceTreeSignerAuthSecret(t, "starting the source signer")
+	provisioner := &Server{signAuthz: signerRuntime.tokenProvider}
+	if err := provisioner.provisionCA(ctx, signerRuntime.signer.Client(), "Drill Source CA", cfg.CA.CertFile); err != nil {
+		signerRuntime.Close()
+		t.Fatalf("provision source CA: %v", err)
+	}
+	signerRuntime.Close()
+
+	backupDir := filepath.Join(dir, "delivered-backup")
+	if _, err := RunFullBackup(ctx, cfg, backupDir); err != nil {
+		t.Fatalf("RunFullBackup: %v", err)
+	}
+	assertNoSourceTreeSignerAuthSecret(t, "full backup")
+	att, err := RunRestoreDrill(ctx, cfg, backupDir)
+	if err != nil {
+		t.Fatalf("RunRestoreDrill: %v; attestation=%+v", err, att)
+	}
+	assertNoSourceTreeSignerAuthSecret(t, "successful restore drill")
+	if att.Outcome != backup.DrillRestored || !att.FullSetRestored {
+		t.Fatalf("drill outcome = %q full_set=%v: %s", att.Outcome, att.FullSetRestored, att.Detail)
+	}
+	if att.EventsRestored != 1 {
+		t.Errorf("events restored = %d, want 1", att.EventsRestored)
+	}
+	if att.PostgresTablesRestored["provider_tenants"] != 1 ||
+		att.PostgresTablesRestored["provider_breakglass_grants"] != 1 {
+		t.Errorf("provider state restore evidence = %+v, want one registry and one break-glass row", att.PostgresTablesRestored)
+	}
+	if !att.StoreHealthy || !att.EventLogHealthy || !att.SignerHealthy || !att.ServerHealthy {
+		t.Errorf("recovered health = postgres:%v event-log:%v signer:%v server:%v, want all true",
+			att.StoreHealthy, att.EventLogHealthy, att.SignerHealthy, att.ServerHealthy)
+	}
+	for _, name := range []string{"event-log", "postgres-state", "signer-auth-secret", "signer-keystore", "ca-certificate"} {
+		if !backupContainsString(att.ArtifactsRestored, name) {
+			t.Errorf("restored artifacts %v do not include %s", att.ArtifactsRestored, name)
+		}
+	}
+
+	// The isolated drill may copy production inputs but must not rewrite them.
+	var sourceProviderTenants int
+	if err := st.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM provider_tenants WHERE tenant_id = $1`, tenantID).Scan(&sourceProviderTenants); err != nil {
+		t.Fatalf("read source after drill: %v", err)
+	}
+	if sourceProviderTenants != 1 {
+		t.Fatalf("drill changed source provider registry: rows=%d, want 1", sourceProviderTenants)
+	}
+
+	// A self-consistent but incomplete manifest used to be enough for the
+	// event-only scheduler to report green. Remove one required delivered
+	// artifact and prove the production full-restore path makes the verdict red.
+	manifest, err := backup.ReadFullManifest(filepath.Join(backupDir, backup.FullManifestName))
+	if err != nil {
+		t.Fatalf("read full manifest for missing-artifact proof: %v", err)
+	}
+	kept := manifest.Artifacts[:0]
+	for _, artifact := range manifest.Artifacts {
+		if artifact.Name != "signer-keystore" {
+			kept = append(kept, artifact)
+		}
+	}
+	manifest.Artifacts = kept
+	if err := backup.WriteFullManifest(filepath.Join(backupDir, backup.FullManifestName), manifest); err != nil {
+		t.Fatalf("write incomplete manifest: %v", err)
+	}
+	missing, err := RunRestoreDrill(ctx, cfg, backupDir)
+	if err != nil {
+		t.Fatalf("failed drill must attest rather than disappear: %v", err)
+	}
+	if missing.Outcome != backup.DrillFailed || missing.FullSetRestored {
+		t.Fatalf("missing signer-keystore drill = outcome:%q full_set:%v detail:%s",
+			missing.Outcome, missing.FullSetRestored, missing.Detail)
+	}
+}
+
+func installSiblingSignerBinary(t *testing.T) {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("locate server test binary: %v", err)
+	}
+	binary := filepath.Join(filepath.Dir(exe), "trstctl-signer")
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("working directory: %v", err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(workingDir, "../.."))
+	cmd := exec.Command("go", "build", "-o", binary, "./cmd/trstctl-signer") // #nosec G204 -- fixed repository binary and test-owned destination (CWE-78)
+	cmd.Dir = repoRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build sibling trstctl-signer: %v\n%s", err, out)
+	}
+	t.Cleanup(func() { _ = os.Remove(binary) })
+}
+
+func startBackupTestNATS(t *testing.T) *natsserver.Server {
+	t.Helper()
+	srv, err := natsserver.NewServer(&natsserver.Options{
+		ServerName: "full-restore-drill-source", JetStream: true,
+		StoreDir: t.TempDir(), Port: -1,
+	})
+	if err != nil {
+		t.Fatalf("create NATS server: %v", err)
+	}
+	go srv.Start()
+	if !srv.ReadyForConnections(10 * time.Second) {
+		srv.Shutdown()
+		t.Fatal("NATS server not ready")
+	}
+	t.Cleanup(srv.Shutdown)
+	return srv
+}
+
+func backupContainsString(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }
 
 func treeContainsBytes(root string, needle []byte) (bool, error) {

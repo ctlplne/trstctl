@@ -61,7 +61,8 @@ const ticketIntakeGuidance = "The intake reads the named ServiceNow table on the
 	"field mapping is explicit: tickets missing the mapped subject or profile are skipped and " +
 	"counted, never guessed at. Requests opened here carry origin=servicenow and the ticket " +
 	"reference, and the existing lifecycle — approval with separation of duties, denial with a " +
-	"reason, expiry — decides them. Jira intake is not built."
+	"reason, expiry — decides them. The read is a durable ticket.sync job executed by a network " +
+	"relay with per-attempt token redemption; the control plane never dials ServiceNow. Jira intake is not built."
 
 var ticketIntakeTables = map[string]bool{
 	"incident": true, "sc_req_item": true, "sc_request": true, "change_request": true,
@@ -82,9 +83,9 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 		if err := requireAbsoluteURL(body.InstanceURL, "instance_url"); err != nil {
 			return 0, nil, err
 		}
-		if strings.TrimSpace(body.TokenRef) == "" {
+		if !strings.HasPrefix(strings.TrimSpace(body.TokenRef), "secret://") {
 			return 0, nil, errStatus(http.StatusBadRequest,
-				"token_ref is required; it is a reference such as env:TRSTCTL_SERVICENOW_TOKEN, never the token itself")
+				"token_ref must be a secret:// reference redeemed by the network relay per attempt")
 		}
 		table := strings.TrimSpace(body.SNTable)
 		if !ticketIntakeTables[table] {
@@ -103,16 +104,8 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 				"interval_seconds must be at least 300")
 		}
 		if body.AllowPrivateEndpoint {
-			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
-				return 0, nil, err
-			}
-			if len(body.PrivateEgressCIDRs) == 0 {
-				return 0, nil, errStatus(http.StatusBadRequest,
-					"allow_private_endpoint requires private_egress_cidrs naming exactly which ranges the intake may dial")
-			}
-			if err := validatePrivateEgressCIDRs(body.PrivateEgressCIDRs); err != nil {
-				return 0, nil, errWithStatus(http.StatusBadRequest, err)
-			}
+			return 0, nil, errStatus(http.StatusBadRequest,
+				"allow_private_endpoint is a control-plane egress grant and is not valid for relay-only ticket intake")
 		}
 		saved := store.TicketIntakeSchedule{
 			TenantID: tenantID, System: "servicenow",
@@ -124,8 +117,8 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 			RequesterField:     strings.TrimSpace(body.RequesterField),
 			JustificationField: strings.TrimSpace(body.JustificationField),
 			IntervalSeconds:    body.IntervalSeconds, Enabled: body.Enabled,
-			AllowPrivateEndpoint: body.AllowPrivateEndpoint,
-			PrivateEgressCIDRs:   cleanAPIStringList(body.PrivateEgressCIDRs),
+			AllowPrivateEndpoint: false,
+			PrivateEgressCIDRs:   nil,
 		}
 		if err := a.orch.ConfigureTicketIntake(ctx, tenantID, projections.TicketIntakeConfigured{
 			System: saved.System, InstanceURL: saved.InstanceURL, TokenRef: saved.TokenRef,

@@ -101,34 +101,3 @@ func (p *PGStore) ProviderBrand(ctx context.Context) (*Record, error) {
 	// with tenant brands; a separate table would drift.
 	return p.TenantBrand(ctx, corestore.ZeroUUID)
 }
-
-// SetTenantBrand writes a tenant's brand.
-func (p *PGStore) SetTenantBrand(ctx context.Context, r Record) error {
-	if p == nil || p.store == nil {
-		return nil
-	}
-	tokens, err := json.Marshal(r.TokenOverrides)
-	if err != nil {
-		return err
-	}
-	return p.store.WithTenant(ctx, r.TenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO tenant_branding (tenant_id, product_name, logo_data_uri, login_message,
-			   token_overrides, email_from_name, email_footer, custom_domain)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			 ON CONFLICT (tenant_id) DO UPDATE SET
-			   product_name = EXCLUDED.product_name, logo_data_uri = EXCLUDED.logo_data_uri,
-			   login_message = EXCLUDED.login_message, token_overrides = EXCLUDED.token_overrides,
-			   email_from_name = EXCLUDED.email_from_name, email_footer = EXCLUDED.email_footer,
-			   custom_domain = EXCLUDED.custom_domain, updated_at = now()`,
-			r.TenantID, r.ProductName, r.LogoDataURI, r.LoginMessage, tokens,
-			r.EmailFromName, r.EmailFooter, r.CustomDomain)
-		return err
-	})
-}
-
-// SetProviderBrand writes the pre-tenant brand.
-func (p *PGStore) SetProviderBrand(ctx context.Context, r Record) error {
-	r.TenantID = corestore.ZeroUUID
-	return p.SetTenantBrand(ctx, r)
-}

@@ -127,6 +127,12 @@ RUN set -eu; \
 # by digest").
 FROM ${BASE_IMAGE} AS runtime
 
+# Distroless defaults to /home/nonroot. The application deliberately uses
+# relative data/* defaults for a local binary, while containers mount persistent
+# state at /data. Root makes those same defaults resolve into that mount instead
+# of the disposable container layer (AUD-100).
+WORKDIR /
+
 COPY --from=build /out/trstctl          /usr/local/bin/trstctl
 COPY --from=build /out/trstctl-signer   /usr/local/bin/trstctl-signer
 # The agent ships in the same image; the DaemonSet runs it by overriding the

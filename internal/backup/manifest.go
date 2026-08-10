@@ -120,6 +120,20 @@ var RecoveredFromPostgresBackup = []string{
 	// grants did not come back". Failing safe is not the same as failing
 	// visibly.
 	"provider_operator_delegations",
+	// L3: the durable provider tenant registry. RecoveredFromPostgresBackup, NOT
+	// a log projection — provisioning writes the row directly through the
+	// provider plane's pgstore; no event replays it. This table exists BECAUSE
+	// losing the customer list on redeploy was the defect L3 fixed; a restore
+	// that dropped it would reintroduce exactly that loss, this time labeled
+	// "recovered".
+	"provider_tenants",
+	// L4: the break-glass grant ledger with two-person consent state.
+	// RecoveredFromPostgresBackup — grants, consents, denials, revocations and
+	// use counts are written directly by the plane, never derived from the log.
+	// Losing it fails DANGEROUS in one direction: an emergency grant's consent
+	// history is the audit trail a regulator asks for, and a restore that
+	// dropped it would erase who approved reading into a customer's tenancy.
+	"provider_breakglass_grants",
 }
 
 // Ephemeral state is not required for a correct restore (it regenerates).

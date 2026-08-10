@@ -43,7 +43,7 @@ func (s *AuditKeySigner) SignEvidence(canonical []byte) (*EvidenceSignature, err
 	if s == nil || s.Key == nil {
 		return nil, fmt.Errorf("billing: no audit signing key attached")
 	}
-	jws, err := s.Key.Sign(canonical)
+	jws, err := s.Key.SignArtifact(jose.ArtifactBillingInvoice, canonical)
 	if err != nil {
 		return nil, fmt.Errorf("billing: sign evidence: %w", err)
 	}

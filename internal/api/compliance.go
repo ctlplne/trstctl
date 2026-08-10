@@ -14,9 +14,11 @@ import (
 )
 
 // ComplianceEvidencePackFormat is the stable wire marker for signed compliance
-// evidence packs. The signed_export field is self-verifying; public_key_der is
-// the verifier material an auditor needs offline.
-const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v1"
+// evidence packs. Version 2 binds the signed manifest to a tenant and bounded
+// evidence window and carries exact immutable event/object references plus
+// missing prerequisites. The signed_export field is self-verifying;
+// public_key_der is the verifier material an auditor needs offline.
+const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v2"
 
 // ComplianceFramework is the stable path/API value for a governance evidence pack.
 type ComplianceFramework string

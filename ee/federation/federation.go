@@ -169,9 +169,10 @@ func (w *Worker) replicatePeer(ctx context.Context, peer Peer) error {
 		if err := w.projector.Apply(ctx, local); err != nil {
 			return fmt.Errorf("federation: project peer %q seq %d: %w", peer.ID, sourceSeq, err)
 		}
-		if err := w.projector.AdvanceCheckpoint(ctx, local.Sequence); err != nil {
-			return fmt.Errorf("federation: advance projection checkpoint for peer %q seq %d: %w", peer.ID, sourceSeq, err)
-		}
+		// Federation can prove that this imported event was applied, but it cannot
+		// prove that every earlier LOCAL stream sequence was applied. Only the
+		// ordered tail owns that contiguous checkpoint; advancing it here could leap
+		// over a poison event and falsely clear projection readiness.
 		if err := w.checkpoints.AdvanceFederationCheckpoint(ctx, peer.ID, sourceSeq); err != nil {
 			return err
 		}

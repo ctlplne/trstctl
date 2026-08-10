@@ -36,13 +36,13 @@ func newBlockingPQCCampaignSigner(delegate *jose.SigningKey) *blockingPQCCampaig
 	}
 }
 
-func (s *blockingPQCCampaignSigner) Sign(payload []byte) (string, error) {
+func (s *blockingPQCCampaignSigner) SignArtifact(kind string, payload []byte) (string, error) {
 	s.mu.Lock()
 	s.payload = append([]byte(nil), payload...)
 	s.mu.Unlock()
 	s.enteredOnce.Do(func() { close(s.entered) })
 	<-s.release
-	return s.delegate.Sign(payload)
+	return s.delegate.SignArtifact(kind, payload)
 }
 
 func (s *blockingPQCCampaignSigner) PublicJWKS() ([]byte, error) {

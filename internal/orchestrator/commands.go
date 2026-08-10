@@ -94,7 +94,24 @@ const (
 	eventProfileEditApprovalRefused   = "profile.edit_approval.refused"
 	EventAuthzDecision                = "authz.decision"
 	DestinationConnectorRightSize     = "connector.right_size"
+	// DestinationFleetReissuanceBatch is an internal, bounded worker command.
+	// Exactly one command is published for the durable cursor; later batches do
+	// not exist in the outbox until signed canary verification advances it.
+	DestinationFleetReissuanceBatch = "incident.fleet_reissuance.batch"
 )
+
+// FleetReissuanceBatchCommand names one durable fleet execution unit. The run
+// projection owns the identity lists, connector routing, and cursor, so the
+// outbox body cannot substitute a different target set.
+type FleetReissuanceBatchCommand struct {
+	RunID      string `json:"run_id"`
+	BatchIndex int    `json:"batch_index"`
+}
+
+// FleetReissuanceBatchIdempotencyKey is stable across restart reconciliation.
+func FleetReissuanceBatchIdempotencyKey(runID string, batchIndex int) string {
+	return fmt.Sprintf("fleet-reissuance:%s:batch:%d", runID, batchIndex)
+}
 
 type approvalProfileEditRequest struct {
 	Request approval.Request `json:"request"`
@@ -891,6 +908,47 @@ func (o *Orchestrator) CreateIdentity(ctx context.Context, tenantID string, in s
 	return out, nil
 }
 
+// EnsureIdentity creates one identity at a caller-supplied deterministic id, or
+// returns the already-projected identity after a worker restart. Only durable
+// receivers should use it; public creation continues to use random ids.
+func (o *Orchestrator) EnsureIdentity(ctx context.Context, tenantID, id string, in store.Identity) (store.Identity, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return store.Identity{}, errors.New("orchestrator: ensure identity requires id")
+	}
+	if existing, err := o.store.GetIdentity(ctx, tenantID, id); err == nil {
+		if existing.Kind != in.Kind || existing.OwnerID != in.OwnerID || !sameOptionalString(existing.IssuerID, in.IssuerID) {
+			return store.Identity{}, fmt.Errorf("orchestrator: deterministic identity %s belongs to another command", id)
+		}
+		return existing, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return store.Identity{}, err
+	}
+	payload, err := json.Marshal(projections.IdentityCreated{
+		ID: id, Kind: string(in.Kind), Name: in.Name, OwnerID: in.OwnerID, IssuerID: in.IssuerID, Attributes: in.Attributes,
+	})
+	if err != nil {
+		return store.Identity{}, err
+	}
+	ev, err := o.emitPrepared(ctx, events.Event{
+		ID:   uuid.NewSHA1(uuid.NameSpaceOID, []byte("fleet-identity-event\x00"+tenantID+"\x00"+id)).String(),
+		Type: projections.EventIdentityCreated, TenantID: tenantID, Data: payload,
+	})
+	if err != nil {
+		return store.Identity{}, err
+	}
+	out := in
+	out.ID, out.TenantID, out.Status, out.CreatedAt = id, tenantID, string(StateRequested), ev.Time
+	return out, nil
+}
+
+func sameOptionalString(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
 // UpsertDeploymentTarget records a tenant-owned connector target. The target
 // config is metadata and credential references only; secret bytes stay outside
 // this read model.
@@ -1435,7 +1493,8 @@ func (o *Orchestrator) RecordIncidentFleetReissuance(ctx context.Context, tenant
 	}
 	payload, err := json.Marshal(projections.IncidentFleetReissuanceRecorded{
 		ID: r.ID, IssuerID: r.IssuerID, Status: r.Status, Phase: r.Phase,
-		Reason: r.Reason, BatchSize: r.BatchSize, Connector: r.Connector, Target: r.Target,
+		Reason: r.Reason, BatchSize: r.BatchSize, NextBatchIndex: r.NextBatchIndex,
+		HaltedReason: r.HaltedReason, Connector: r.Connector, Target: r.Target,
 		GraphImpact: r.GraphImpact, AffectedIdentityIDs: r.AffectedIdentityIDs,
 		ReplacementIdentityIDs: r.ReplacementIdentityIDs, RevokedIdentityIDs: r.RevokedIdentityIDs,
 		ConnectorDeliveryIDs: r.ConnectorDeliveryIDs, Batches: batches, HealthGates: healthGates,
@@ -1447,6 +1506,77 @@ func (o *Orchestrator) RecordIncidentFleetReissuance(ctx context.Context, tenant
 		return store.IncidentFleetReissuanceRun{}, err
 	}
 	ev, err := o.emit(ctx, projections.EventIncidentFleetReissuanceRecorded, tenantID, payload)
+	if err != nil {
+		return store.IncidentFleetReissuanceRun{}, err
+	}
+	r.TenantID = tenantID
+	if r.CreatedAt.IsZero() {
+		r.CreatedAt = ev.Time
+	}
+	r.UpdatedAt = ev.Time
+	return r, nil
+}
+
+// RecordIncidentFleetReissuanceAndEnqueueBatch projects the cursor update and
+// publishes that exact batch in one PostgreSQL transaction. The immutable event
+// is also sufficient for ReconcileOutbox to heal the narrow event/SQL crash gap.
+func (o *Orchestrator) RecordIncidentFleetReissuanceAndEnqueueBatch(
+	ctx context.Context, tenantID string, r store.IncidentFleetReissuanceRun, batchIndex int,
+) (store.IncidentFleetReissuanceRun, error) {
+	if batchIndex <= 0 {
+		return store.IncidentFleetReissuanceRun{}, errors.New("orchestrator: fleet batch index must be positive")
+	}
+	if r.ID == "" {
+		r.ID = uuid.NewString()
+	}
+	batches := make([]projections.FleetReissuanceBatch, 0, len(r.Batches))
+	for _, b := range r.Batches {
+		batches = append(batches, projections.FleetReissuanceBatch{
+			Index: b.Index, Status: b.Status, IdentityIDs: b.IdentityIDs,
+			ReplacementIdentityIDs: b.ReplacementIdentityIDs, HealthGate: b.HealthGate,
+		})
+	}
+	healthGates := make([]projections.FleetReissuanceHealthGate, 0, len(r.HealthGates))
+	for _, g := range r.HealthGates {
+		healthGates = append(healthGates, projections.FleetReissuanceHealthGate{Name: g.Name, Status: g.Status})
+	}
+	payload, err := json.Marshal(projections.IncidentFleetReissuanceRecorded{
+		ID: r.ID, IssuerID: r.IssuerID, Status: r.Status, Phase: r.Phase,
+		Reason: r.Reason, BatchSize: r.BatchSize, NextBatchIndex: r.NextBatchIndex,
+		HaltedReason: r.HaltedReason, Connector: r.Connector, Target: r.Target,
+		GraphImpact: r.GraphImpact, AffectedIdentityIDs: r.AffectedIdentityIDs,
+		ReplacementIdentityIDs: r.ReplacementIdentityIDs, RevokedIdentityIDs: r.RevokedIdentityIDs,
+		ConnectorDeliveryIDs: r.ConnectorDeliveryIDs, Batches: batches, HealthGates: healthGates,
+		FailedTargets: r.FailedTargets, RollbackRefs: r.RollbackRefs,
+		EvidenceBundleFormat: r.EvidenceBundleFormat, EvidenceBundle: r.EvidenceBundle,
+		IdempotencyKey: r.IdempotencyKey, CreatedBy: r.CreatedBy,
+	})
+	if err != nil {
+		return store.IncidentFleetReissuanceRun{}, err
+	}
+	commandPayload, err := json.Marshal(FleetReissuanceBatchCommand{RunID: r.ID, BatchIndex: batchIndex})
+	if err != nil {
+		return store.IncidentFleetReissuanceRun{}, err
+	}
+	var ev events.Event
+	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		ev, err = o.log.Append(ctx, events.Event{
+			Type: projections.EventIncidentFleetReissuanceRecorded, TenantID: tenantID, Data: payload,
+		})
+		if err != nil {
+			return err
+		}
+		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		_, err = o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+			TenantID: tenantID, Destination: DestinationFleetReissuanceBatch,
+			IdempotencyKey: FleetReissuanceBatchIdempotencyKey(r.ID, batchIndex),
+			EffectLane:     DestinationFleetReissuanceBatch + ":" + r.ID,
+			Payload:        commandPayload, RequiredAgentRole: "control_plane",
+		})
+		return err
+	})
 	if err != nil {
 		return store.IncidentFleetReissuanceRun{}, err
 	}

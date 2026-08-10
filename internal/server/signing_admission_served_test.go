@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/signing"
 )
 
 // TestServedAssembly_InstallsSignerAdmission pins the AUD-6 wiring at the
@@ -17,9 +16,8 @@ import (
 // that fails if the assembly stops installing the hook — the exact
 // pool-with-no-work-in-it defect the unreachable-capability audit found.
 func TestServedAssembly_InstallsSignerAdmission(t *testing.T) {
-	signing.SetSignerAdmission(nil)
-	_ = newServedHarness(t, config.Protocols{})
-	if !signing.SignerAdmissionInstalled() {
+	h := newServedHarness(t, config.Protocols{})
+	if h.signer == nil || h.signer.Client() == nil || !h.signer.Client().AdmissionInstalled() {
 		t.Fatal("served assembly did not install the signer admission hook — bulkheads.signing bounds nothing (AUD-6)")
 	}
 }

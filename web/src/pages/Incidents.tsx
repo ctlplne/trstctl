@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Activity, Bell, CheckCircle, Download, Pause, Play, RotateCcw, Send } from "lucide-react";
+import { Activity, Bell, CheckCircle, Play, RotateCcw, Send } from "lucide-react";
 import {
   api,
   type ConnectorCatalogItem,
@@ -16,6 +16,7 @@ import {
   type NHIInventoryItem,
   type OwnerRemediationQueue,
   type OwnerRemediationRun,
+  type OutboxReconciliationConflictList,
   type ResponseIntegrationDispatch,
   type ResponseIntegrationDispatchRequest,
   type RemediationPlaybook,
@@ -37,6 +38,8 @@ import { Button } from "@/components/ui/button";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { IncidentSeverityBadge, IncidentStepper } from "./incidents/IncidentsPageParts";
+import { FleetReissuanceTable } from "./incidents/FleetReissuanceParts";
+import { OutboxRecoveryPanel } from "./incidents/OutboxRecoveryPanel";
 import { formatDateTime } from "@/i18n/format";
 import { describeStatus, type StatusTone } from "@/lib/statusVocab";
 
@@ -202,6 +205,7 @@ export function Incidents() {
   const [evidenceRunsError, setEvidenceRunsError] = useState<string | null>(null);
   const [evidenceRunDetail, setEvidenceRunDetail] = useState<RemediationPlaybookRun | null>(null);
   const [ownerQueueEvidence, setOwnerQueueEvidence] = useState<OwnerRemediationQueue | null>(null);
+  const [outboxRecovery, setOutboxRecovery] = useState<OutboxReconciliationConflictList | null>(null);
   // C-P1 (DA-10): picker rosters — the identities, connector vocabulary, and
   // NHI inventory the rest of the console already loads elsewhere.
   const [identityRoster, setIdentityRoster] = useState<Identity[]>([]);
@@ -218,6 +222,18 @@ export function Incidents() {
     });
     void readRoster(() => api.nhiInventory()).then((inventory) => {
       if (active && inventory?.items) setInventoryRoster(inventory.items);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void readRoster(() => api.outboxReconciliationConflicts()).then((conflicts) => {
+      if (active && conflicts && Array.isArray(conflicts.items) && typeof conflicts.guidance === "string") {
+        setOutboxRecovery(conflicts);
+      }
     });
     return () => {
       active = false;
@@ -1226,6 +1242,8 @@ export function Incidents() {
         )}
       </section>
 
+      {tab === "overview" && outboxRecovery && <OutboxRecoveryPanel conflicts={outboxRecovery} />}
+
       {(evidenceRuns || ownerQueueEvidence) && (
         <section aria-labelledby="remediation-evidence-heading" className={tab === "overview" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
           <div>
@@ -1518,110 +1536,6 @@ export function Incidents() {
   );
 }
 
-function FleetReissuanceTable({
-  runs,
-  action,
-  onAction,
-}: {
-  runs: FleetReissuanceRun[];
-  action: string | null;
-  onAction: (kind: "pause" | "resume" | "rollback" | "evidence", run: FleetReissuanceRun) => void;
-}) {
-  if (runs.length === 0) {
-    return <p className="text-sm text-muted-foreground">{translateNow("source.no.fleet.reissuance.runs.have.been.recorde.0f1169b466")}</p>;
-  }
-  return (
-    <div className="overflow-x-auto rounded-panel border border-border">
-      <table className="ui-table min-w-[76rem]">
-        <caption className="sr-only">{translateNow("source.fleet.reissuance.runs.c1afb05039")}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{translateNow("source.run.00d60e31a4")}</th>
-            <th scope="col">{translateNow("source.issuer.39e02c46a0")}</th>
-            <th scope="col">{translateNow("source.status.920e413c7d")}</th>
-            <th scope="col">{translateNow("source.scope.b073f6c68e")}</th>
-            <th scope="col">{translateNow("source.batches.56a8df948f")}</th>
-            <th scope="col">{translateNow("source.failed.targets.4ffa850540")}</th>
-            <th scope="col">{translateNow("source.evidence.03867aea70")}</th>
-            <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((run) => (
-            <tr key={run.id} className="align-top">
-              <td className="font-mono text-xs">{run.id}</td>
-              <td className="font-mono text-xs">{run.issuer_id}</td>
-              <td>
-                <p className="font-medium">{run.status}</p>
-                <p className="text-xs text-muted-foreground">{run.phase}</p>
-              </td>
-              <td>
-                <p>
-                  {run.affected_identity_ids.length} {translateNow("source.affected.19b6357dad")}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {run.revoked_identity_ids.length} {translateNow("source.revoked.4bb47f186d")}
-                </p>
-              </td>
-              <td>
-                <p>
-                  {run.batch_count} {translateNow("source.batches.467629e63d")}
-                </p>
-                <p className="text-xs text-muted-foreground">{run.health_gates.map((gate) => `${gate.name}:${gate.status}`).join(", ")}</p>
-              </td>
-              <td>{run.failed_targets?.length ? run.failed_targets.join(", ") : translateNow("source.none.140bedbf9c")}</td>
-              <td>
-                <p className="font-medium">{run.evidence_bundle_format || translateNow("source.unavailable.ba691ba042")}</p>
-                <p className="max-w-[14rem] truncate font-mono text-xs text-muted-foreground">{run.evidence_bundle || "-"}</p>
-              </td>
-              <td>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onAction("pause", run)}
-                    disabled={action === `pause:${run.id}`}
-                    aria-label={translateNow("source.pause.fleet.run.value1.225d7f781f", { value1: shortId(run.id) })}
-                  >
-                    <Pause className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onAction("resume", run)}
-                    disabled={action === `resume:${run.id}`}
-                    aria-label={translateNow("source.resume.fleet.run.value1.82d98d67fc", { value1: shortId(run.id) })}
-                  >
-                    <Play className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onAction("rollback", run)}
-                    disabled={action === `rollback:${run.id}`}
-                    aria-label={translateNow("source.rollback.fleet.run.value1.21446f0a1d", { value1: shortId(run.id) })}
-                  >
-                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onAction("evidence", run)}
-                    disabled={action === `evidence:${run.id}`}
-                    aria-label={translateNow("source.export.fleet.run.value1.evidence.6065920a10", { value1: shortId(run.id) })}
-                  >
-                    <Download className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function ResponseIntegrationDestinationTable({ dispatch, t }: { dispatch: ResponseIntegrationDispatch; t: I18nContextValue["t"] }) {
   return (
     <div className="mt-3 overflow-x-auto rounded-panel border border-border">
@@ -1798,10 +1712,6 @@ function displayValue(value: unknown): string {
   } catch {
     return String(value);
   }
-}
-
-function shortId(id: string): string {
-  return id.length > 8 ? id.slice(0, 8) : id;
 }
 
 function splitList(value: string): string[] {

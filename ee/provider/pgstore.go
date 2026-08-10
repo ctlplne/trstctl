@@ -5,7 +5,6 @@ package provider
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -49,26 +48,6 @@ func (p *PGStore) CountBillableTenants(ctx context.Context) (int, error) {
 	return n, err
 }
 
-func (p *PGStore) CreateTenant(ctx context.Context, tenant Tenant) (Tenant, error) {
-	if tenant.ID == "" {
-		return Tenant{}, fmt.Errorf("provider: a durable tenant needs an id")
-	}
-	if tenant.CreatedAt.IsZero() {
-		tenant.CreatedAt = time.Now().UTC()
-	}
-	tenant.UpdatedAt = tenant.CreatedAt
-	_, err := p.store.SystemPool().Exec(ctx,
-		`INSERT INTO provider_tenants (tenant_id, slug, name, status, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		tenant.ID, tenant.Slug, tenant.Name, string(tenant.Status), tenant.CreatedAt.UTC(), tenant.UpdatedAt.UTC())
-	if err != nil {
-		// A duplicate slug or id surfaces as a unique-violation; report it as a
-		// conflict the caller already handles rather than a raw driver error.
-		return Tenant{}, fmt.Errorf("provider: create tenant %q: %w", tenant.Slug, err)
-	}
-	return tenant, nil
-}
-
 func (p *PGStore) ListTenants(ctx context.Context) ([]Tenant, error) {
 	rows, err := p.store.SystemPool().Query(ctx,
 		`SELECT tenant_id::text, slug, name, status, created_at, updated_at
@@ -92,19 +71,6 @@ func (p *PGStore) Tenant(ctx context.Context, id string) (Tenant, error) {
 	row := p.store.SystemPool().QueryRow(ctx,
 		`SELECT tenant_id::text, slug, name, status, created_at, updated_at
 		   FROM provider_tenants WHERE tenant_id = $1`, id)
-	t, err := scanProviderTenant(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Tenant{}, ErrNotFound
-	}
-	return t, err
-}
-
-func (p *PGStore) UpdateTenantStatus(ctx context.Context, id string, status TenantStatus, now time.Time) (Tenant, error) {
-	row := p.store.SystemPool().QueryRow(ctx,
-		`UPDATE provider_tenants SET status = $2, updated_at = $3
-		  WHERE tenant_id = $1
-		  RETURNING tenant_id::text, slug, name, status, created_at, updated_at`,
-		id, string(status), now.UTC())
 	t, err := scanProviderTenant(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Tenant{}, ErrNotFound
@@ -142,20 +108,10 @@ func (p *PGStore) DirectTenantSnapshot(ctx context.Context, tenantID string) (Te
 	return TenantSnapshot{TenantID: tenantID, Health: health, ActiveCertificates: active}, nil
 }
 
-func (p *PGStore) CreateBreakGlassGrant(ctx context.Context, g BreakGlassGrant) (BreakGlassGrant, error) {
-	if g.ID == "" {
-		return BreakGlassGrant{}, fmt.Errorf("provider: a durable break-glass grant needs an id")
-	}
-	_, err := p.store.SystemPool().Exec(ctx,
-		`INSERT INTO provider_breakglass_grants
-		   (id, tenant_id, operator_id, operator_email, reason, requested_at, expires_at, use_count)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		g.ID, g.TenantID, g.OperatorID, g.OperatorEmail, g.Reason,
-		g.RequestedAt.UTC(), g.ExpiresAt.UTC(), g.UseCount)
-	if err != nil {
-		return BreakGlassGrant{}, err
-	}
-	return g, nil
+// TenantSnapshot is the break-glass telemetry reader twin. It deliberately
+// shares the same tenant-confined implementation as the normal direct view.
+func (p *PGStore) TenantSnapshot(ctx context.Context, tenantID string) (TenantSnapshot, error) {
+	return p.DirectTenantSnapshot(ctx, tenantID)
 }
 
 func (p *PGStore) BreakGlassGrant(ctx context.Context, id string) (BreakGlassGrant, error) {
@@ -165,35 +121,6 @@ func (p *PGStore) BreakGlassGrant(ctx context.Context, id string) (BreakGlassGra
 		return BreakGlassGrant{}, ErrNotFound
 	}
 	return g, err
-}
-
-func (p *PGStore) UpdateBreakGlassGrant(ctx context.Context, g BreakGlassGrant) (BreakGlassGrant, error) {
-	tag, err := p.store.SystemPool().Exec(ctx,
-		`UPDATE provider_breakglass_grants
-		    SET consented_at = $2, consented_by = $3, denied_at = $4, denied_by = $5,
-		        revoked_at = $6, use_count = $7, consented_at_2 = $8, consented_by_2 = $9
-		  WHERE id = $1`,
-		g.ID, nullTime(g.ConsentedAt), g.ConsentedBy, nullTime(g.DeniedAt), g.DeniedBy,
-		nullTime(g.RevokedAt), g.UseCount, nullTime(g.SecondConsentedAt), g.SecondConsentedBy)
-	if err != nil {
-		return BreakGlassGrant{}, err
-	}
-	if tag.RowsAffected() == 0 {
-		return BreakGlassGrant{}, ErrNotFound
-	}
-	return g, nil
-}
-
-func (p *PGStore) IncrementBreakGlassUse(ctx context.Context, id string, _ time.Time) error {
-	tag, err := p.store.SystemPool().Exec(ctx,
-		`UPDATE provider_breakglass_grants SET use_count = use_count + 1 WHERE id = $1`, id)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
 }
 
 const breakGlassSelect = `SELECT id, tenant_id::text, operator_id, operator_email, reason,
@@ -232,11 +159,4 @@ func scanBreakGlassGrant(row pgx.Row) (BreakGlassGrant, error) {
 		g.RevokedAt = *revokedAt
 	}
 	return g, nil
-}
-
-func nullTime(t time.Time) any {
-	if t.IsZero() {
-		return nil
-	}
-	return t.UTC()
 }

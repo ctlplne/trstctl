@@ -24,8 +24,10 @@ compliant.
   persistent key, verifiable even after a restart.
 - Signed framework evidence packs. `GET
   /api/v1/compliance/evidence-packs/{framework}` turns the audit log and
-  CBOM graph into a signed report across fourteen frameworks (full list in
-  [Framework evidence packs](#framework-evidence-packs) below).
+  tenant graph into a signed report across 15 frameworks (full list in
+  [Framework evidence packs](#framework-evidence-packs) below). Each report
+  evaluates one explicit 90-day window; it does not treat “some audit data
+  exists” as proof of an unrelated control.
 - Compliance inventory reporting and schedule definitions. `GET
   /api/v1/compliance/inventory-report` and `POST
   /api/v1/compliance/report-schedules` expose supported frameworks, report
@@ -68,32 +70,46 @@ has four stable fields:
 
 | Field | Meaning |
 | --- | --- |
-| `format` | Wire marker: `trstctl.compliance.evidence-pack.v1`. |
+| `format` | Wire marker: `trstctl.compliance.evidence-pack.v2`. |
 | `framework` | The normalized framework id used to build the report. |
-| `signed_export` | A signed envelope whose manifest contains controls, CBOM crypto posture, product evidence, and operator-attestation gaps. |
+| `signed_export` | A signed envelope whose manifest binds `tenant_id`, `generated_at`, the inclusive `evidence_window`, per-control verdicts/windows, exact evidence references, missing prerequisites, CBOM crypto posture, and operator-attestation gaps. |
 | `public_key_der` | PKIX DER public key bytes for offline verification. |
 
-The manifest is honest: it marks each control `evidenced` or `gap`,
-includes CBOM-derived post-quantum and quantum-vulnerable counts, and
-separates what trstctl can prove from what your organization must still
-attest:
+The v2 manifest is derived from tenant-scoped facts, not static product
+capability labels. An audit-event reference contains the immutable event ID,
+tenant-local sequence, event type, observation time, and audit-chain digest;
+current inventory references name the exact tenant graph object and snapshot
+time. A control is `evidenced` only when every named prerequisite resolves in
+the signed window. Missing, stale, malformed, or wrong-tenant input becomes an
+explicit `gap` with `missing` prerequisites. The signature authenticates these
+bounded claims; it does not prove that an external auditor agrees with their
+sufficiency.
 
-- `soc2` maps NHI/change-management evidence to CC6/CC7/CC8-style
-  criteria, leaving trust-services scope, management assertion, and the
-  CPA examination as operator/auditor work — not a certification claim.
+The manifest also includes CBOM-derived post-quantum and quantum-vulnerable
+counts and separates what trstctl can prove from what your organization must
+still attest:
+
+- `soc2` marks CC6 only with a current credential inventory, complete ownership,
+  and a completed access-review campaign; CC7 requires policy-decision,
+  credential-lifecycle, and monitoring/incident events; CC8 requires an active
+  authored policy, an approved change with distinct approver evidence, and a
+  credential-lifecycle event. Trust-services scope, management assertion, and
+  the CPA examination remain operator/auditor work — not a certification claim.
 - `nist-800-53`, `nist-csf-2.0`, `fedramp`, `cmmc-2.0`, `eidas`, and `nis2`
   bind audit evidence, NHI inventory, and posture (least-privilege,
   stale/orphaned, static-credential, CBOM) to framework controls, leaving
   system boundary, authorization packages, CUI scope, and assessor
   decisions as operator/auditor attestations.
-- `fips-140` shows the FIPS-capable build gate, `--fips` fail-closed POST,
-  crypto boundary, and signer isolation, leaving the module's NIST CMVP
-  certificate and approved configuration as operator/vendor artifacts.
-- `common-criteria` maps TOE evidence for API, signer, tenant isolation,
-  RBAC, and tamper-evident audit, keeping the lab evaluation report,
-  certificate, and protection profile as external residuals.
-- `cabf-br` adds CA/Browser Forum Baseline Requirements posture (profile
-  lint/zlint, issuance/revocation, HSM-capable key management), leaving
+- `fips-140` marks a runtime POST only when the active process reports an active
+  FIPS module and a passed self-test. The signed build provenance, crypto-boundary
+  artifact, NIST CMVP certificate, and approved deployment configuration remain
+  gaps unless separately supplied as exact evidence. Tenant custody validation
+  and approved-algorithm inventory are evaluated independently.
+- `common-criteria` maps attributable active-policy, approved-change, and
+  credential-lifecycle facts while keeping the security target, evaluated TOE
+  boundary, lab report, certificate, and protection profile as explicit gaps.
+- `cabf-br` requires exact profile decision, CA issuance/revocation, tenant
+  custody, and authority-ceremony events; it leaves
   CP/CPS publication and independent public-trust audit as
   operator/external-auditor work.
 - `webtrust` and `etsi` add broader CA-audit posture, keeping the WebTrust
@@ -135,10 +151,11 @@ unserved email/webhook delivery can never look like a category met.
 
 trstctl enables the controls below; you operate them:
 
-- **Custody and back up the export signing key**
-  (`TRSTCTL_AUDIT_SIGNING_KEY_FILE`, `0600`). Losing it means past bundles
-  still verify but you cannot produce new ones under the same key;
-  rotating it changes the verification key your auditor pins.
+- **Custody and back up the signer key store plus its KEK.** The purpose-bound
+  `audit-export` private key lives only there. `TRSTCTL_AUDIT_SIGNING_KEY_FILE`
+  is a one-time legacy migration path, not live custody. Losing the sealed store
+  or KEK means past bundles still verify but you cannot produce new ones under
+  the same key; rotating it changes the verification key your auditor pins.
 - Distribute the verification (public) key to auditors out of band.
 - Connect report schedules to your evidence operations — external WORM
   storage, ticketing, email, and webhook dispatch remain operator-run

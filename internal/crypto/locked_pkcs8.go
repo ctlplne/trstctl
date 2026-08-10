@@ -7,10 +7,27 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
+
+// LockedKeyFromPKCS8PEM imports a legacy PKCS#8 PEM document into locked,
+// zeroizable custody. The decoded DER is wiped before return. This is the narrow
+// upgrade helper used by the isolated signer to absorb historical audit keys;
+// control-plane code must never call it (AUD-63 / AN-4).
+func LockedKeyFromPKCS8PEM(pemBytes []byte) (*LockedSigner, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, fmt.Errorf("crypto: decode PKCS#8 PEM")
+	}
+	defer secret.Wipe(block.Bytes)
+	if block.Type != "PRIVATE KEY" {
+		return nil, fmt.Errorf("crypto: PEM type %q is not PRIVATE KEY", block.Type)
+	}
+	return LockedKeyFromPKCS8(block.Bytes)
+}
 
 // PKCS8 returns a copy of the locked private key as PKCS#8 DER, for sealed
 // persistence (R3.2: keys survive a signer restart). The returned slice is

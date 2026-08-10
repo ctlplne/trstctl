@@ -3,7 +3,7 @@
   "name": "trstctl universal external CA high-fidelity emulator contract",
   "entries": {
     "external_ca.registry": "served registry routes one issue through a configured driver and returns an OpenSSL-verifiable leaf plus chain",
-    "external_ca.adcs": "exact Basic-authenticated ADCS certsrv request submission, request-id retrieval, and issued PEM chain",
+    "external_ca.adcs": "TLS 1.3 ADCS Web Enrollment with a pinned server root and name, then exact Basic-authenticated certsrv request submission, request-id retrieval, and issued PEM chain",
     "external_ca.awspca": "canonical SigV4-verified POST / ACM PCA IssueCertificate followed by POST / GetCertificate as exact authenticated method/path/X-Amz-Target operations in wire order; content-type, host, date, and target are all required signed headers before the issued PEM chain is returned",
     "external_ca.azurekv": "bearer-authenticated Azure Keys/Managed-HSM deterministic key lookup returning 404 before creation, one exact key/version create, stateful JWK read, and digest sign restricted to that created key/version; the control plane constructs and verifies the leaf against the operator CA chain while the private key remains remote",
     "external_ca.digicert": "CertCentral API-key order, issued-state poll, PEM-chain download",
@@ -21,6 +21,6 @@
   "security": {
     "process": "out-of-process, nonce/entry/PID bound",
     "authority": "ephemeral OpenSSL root key is generated inside the substrate and removed on exit",
-    "completion": "passed is true only after the entry-specific authenticated wire operations occur in provider order and produce a chain independently verified by OpenSSL; DigiCert requires order, issued-state poll, and download in sequence; Azure requires authenticated miss, create, and same-key/version sign in sequence; AWS PCA requires a recomputed credential-, region-, service-, header-, and payload-bound SigV4 signature; Entrust requires mutually authenticated TLS 1.3 and independently failed handshakes for absent and untrusted client certificates"
+    "completion": "passed is true only after the entry-specific authenticated wire operations occur in provider order and produce a chain independently verified by OpenSSL; ADCS requires server-authenticated TLS 1.3 before Basic credentials and its certsrv exchange; DigiCert requires order, issued-state poll, and download in sequence; Azure requires authenticated miss, create, and same-key/version sign in sequence; AWS PCA requires a recomputed credential-, region-, service-, header-, and payload-bound SigV4 signature; Entrust requires mutually authenticated TLS 1.3 and independently failed handshakes for absent and untrusted client certificates"
   }
 }

@@ -929,6 +929,32 @@ func TestObservabilityDocsCoverAsyncSpineAndFleetHealth(t *testing.T) {
 	}
 }
 
+// TestObservabilityDocsCoverProjectionTailReadiness pins AUD-103's operator
+// contract. A green database and event log are not enough when the relational
+// read model stopped consuming that log; the public readiness example and the
+// troubleshooting page must name the projection dependency and its no-restart
+// recovery signal explicitly.
+func TestObservabilityDocsCoverProjectionTailReadiness(t *testing.T) {
+	observability := read(t, "observability.md")
+	for _, want := range []string{
+		`"projection":"ok"`,
+		"failed sequence",
+		"projection checkpoint",
+		"without restarting",
+	} {
+		if !strings.Contains(observability, want) {
+			t.Errorf("observability.md should document projection-tail readiness phrase %q", want)
+		}
+	}
+
+	troubleshooting := read(t, "troubleshooting.md")
+	for _, want := range []string{"projection tail", "failed sequence", "projection checkpoint"} {
+		if !strings.Contains(strings.ToLower(troubleshooting), want) {
+			t.Errorf("troubleshooting.md should document projection-tail recovery phrase %q", want)
+		}
+	}
+}
+
 // TestOperationsDocIsReal cross-checks the resilience page against the code: it
 // documents the live-path controls (bulkheads, rate limiting with 429, graceful
 // drain, fail-closed signing) and a setting the loader actually reads, and the

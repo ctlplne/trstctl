@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/issuancerequest"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -26,6 +27,21 @@ const defaultIssuanceRequestTTL = 7 * 24 * time.Hour
 
 // OpenIssuanceRequest records a new request (I3).
 func (o *Orchestrator) OpenIssuanceRequest(ctx context.Context, tenantID string, in projections.IssuanceRequestOpened) (store.IssuanceRequest, error) {
+	return o.openIssuanceRequest(ctx, tenantID, in, "")
+}
+
+// OpenIssuanceRequestFromRelay is the durable ticket-result receiver. Both the
+// request and event identities derive from the outbox idempotency key and exact
+// ticket reference, so a crash after append but before job completion replays
+// the same fact instead of opening a second request.
+func (o *Orchestrator) OpenIssuanceRequestFromRelay(ctx context.Context, tenantID, resultKey string, in projections.IssuanceRequestOpened) (store.IssuanceRequest, error) {
+	binding := tenantID + "\x00" + resultKey + "\x00" + in.TicketRef
+	in.ID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("ticket-intake-request\x00"+binding)).String()
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("ticket-intake-event\x00"+binding)).String()
+	return o.openIssuanceRequest(ctx, tenantID, in, eventID)
+}
+
+func (o *Orchestrator) openIssuanceRequest(ctx context.Context, tenantID string, in projections.IssuanceRequestOpened, eventID string) (store.IssuanceRequest, error) {
 	if strings.TrimSpace(in.Subject) == "" {
 		return store.IssuanceRequest{}, fmt.Errorf("orchestrator: issuance request needs a subject")
 	}
@@ -46,7 +62,14 @@ func (o *Orchestrator) OpenIssuanceRequest(ctx context.Context, tenantID string,
 	if err != nil {
 		return store.IssuanceRequest{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventIssuanceRequestOpened, tenantID, payload)
+	var ev events.Event
+	if eventID == "" {
+		ev, err = o.emit(ctx, projections.EventIssuanceRequestOpened, tenantID, payload)
+	} else {
+		ev, err = o.emitPrepared(ctx, events.Event{
+			ID: eventID, Type: projections.EventIssuanceRequestOpened, TenantID: tenantID, Data: payload,
+		})
+	}
 	if err != nil {
 		return store.IssuanceRequest{}, err
 	}

@@ -240,7 +240,14 @@ func (s *liveSoakSampler) appendEventAndAdvanceProjection(ctx context.Context, p
 	if ev.Sequence > lag {
 		applied = ev.Sequence - lag
 	}
-	if _, err := s.store.SystemPool().Exec(ctx, `UPDATE projection_checkpoint SET applied_seq = $1, updated_at = now() WHERE id = 1`, applied); err != nil {
+	if _, err := s.store.SystemPool().Exec(ctx,
+		`UPDATE projection_checkpoint
+		    SET applied_seq = $1,
+		        failed_seq = CASE WHEN failed_seq <= $1 THEN NULL ELSE failed_seq END,
+		        last_error = CASE WHEN failed_seq <= $1 THEN NULL ELSE last_error END,
+		        failed_at = CASE WHEN failed_seq <= $1 THEN NULL ELSE failed_at END,
+		        updated_at = now()
+		  WHERE id = 1`, applied); err != nil {
 		return fmt.Errorf("advance projection checkpoint: %w", err)
 	}
 	return nil

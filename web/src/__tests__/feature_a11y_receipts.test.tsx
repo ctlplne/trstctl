@@ -516,7 +516,7 @@ const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
         };
       case "complianceEvidencePack":
         return {
-          format: "trstctl.compliance.evidence-pack.v1",
+          format: "trstctl.compliance.evidence-pack.v2",
           framework: "soc2",
           public_key_der: "BASE64PUBLICKEY",
           signed_export: {

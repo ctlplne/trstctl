@@ -37,16 +37,8 @@ export function CMDBSyncPanel() {
       ) : (
         <p className="text-sm">{translateNow("source.cmdb.sync.neverran.i2own00012")}</p>
       )}
-      {s.last_error ? (
-        <p className="text-sm text-risk-critical">
-          {translateNow("source.cmdb.sync.failing.i2own00013", { value1: s.last_error })}
-        </p>
-      ) : null}
-      {s.execution === "relay" ? (
-        <p className="text-caption text-muted-foreground">
-          {translateNow("source.cmdb.sync.relay.i2own00014")}
-        </p>
-      ) : null}
+      {s.last_error ? <p className="text-sm text-risk-critical">{translateNow("source.cmdb.sync.failing.i2own00013", { value1: s.last_error })}</p> : null}
+      {s.execution === "relay" ? <p className="text-caption text-muted-foreground">{translateNow("source.cmdb.sync.relay.i2own00014")}</p> : null}
       <p className="text-caption text-muted-foreground">{s.guidance}</p>
     </section>
   );

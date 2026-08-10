@@ -4,15 +4,20 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
-func RunGrantCommand(ctx context.Context, dsn string, args []string, stdout, stderr io.Writer) error {
+func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("provider-grant", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
@@ -21,6 +26,7 @@ func RunGrantCommand(ctx context.Context, dsn string, args []string, stdout, std
 		operations = fs.String("operations", "", "comma-separated operations: read,provision,suspend,resume,offboard,break-glass")
 		grantedBy  = fs.String("granted-by", "", "who issued this grant, recorded for audit")
 		revoke     = fs.Bool("revoke", false, "remove the named grants instead of adding them")
+		idemKey    = fs.String("idempotency-key", "", "required stable key; identical retry returns the original authority event")
 	)
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(stderr, "usage: trstctl provider-grant -operator ID -customer TENANT -operations read,suspend\n\n"+
@@ -37,6 +43,10 @@ func RunGrantCommand(ctx context.Context, dsn string, args []string, stdout, std
 		return fmt.Errorf("provider-grant: both -operator and -customer are required; a grant " +
 			"naming only one side reads like access somebody has")
 	}
+	if strings.TrimSpace(*idemKey) == "" {
+		fs.Usage()
+		return fmt.Errorf("provider-grant: -idempotency-key is required; provider authority mutations may not bypass AN-5")
+	}
 	ops, err := parseDelegatedOperations(*operations)
 	if err != nil {
 		return err
@@ -47,26 +57,54 @@ func RunGrantCommand(ctx context.Context, dsn string, args []string, stdout, std
 		return fmt.Errorf("provider-grant: open database: %w", err)
 	}
 	defer st.Close()
-	src := NewPGDelegationSource(st)
-	if src == nil {
-		return fmt.Errorf("provider-grant: no database, so there is nowhere to record a grant")
+	if err := st.Migrate(ctx); err != nil {
+		return fmt.Errorf("provider-grant: migrate database: %w", err)
 	}
-
+	log, err := events.Open(ctx, natsConfig,
+		events.WithHistoryRewriteCoordinator(corestore.NewHistoryRewriteCoordinator(st)))
+	if err != nil {
+		return fmt.Errorf("provider-grant: open event log (run this offline when using embedded NATS): %w", err)
+	}
+	defer func() { _ = log.Close() }()
+	runtime := NewAuthorityRuntime(st, log)
+	if err := runtime.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("provider-grant: bootstrap authority history: %w", err)
+	}
+	mutations := make([]DelegationMutation, 0, len(ops))
+	for _, op := range ops {
+		mutations = append(mutations, DelegationMutation{
+			OperatorID: strings.TrimSpace(*operator), CustomerID: strings.TrimSpace(*customer),
+			Operation: op, GrantedBy: strings.TrimSpace(*grantedBy),
+		})
+	}
+	bindingBytes, err := json.Marshal(struct {
+		Operator, Customer, Operations, GrantedBy string
+		Revoke                                    bool
+	}{
+		Operator: strings.TrimSpace(*operator), Customer: strings.TrimSpace(*customer),
+		Operations: strings.TrimSpace(*operations), GrantedBy: strings.TrimSpace(*grantedBy),
+		Revoke: *revoke,
+	})
+	if err != nil {
+		return err
+	}
+	ctx = contextWithMutationBinding(ctx, "sha256:"+crypto.SHA256Hex(bindingBytes))
+	typ, verb := EventDelegationGranted, "granted"
 	if *revoke {
-		for _, op := range ops {
-			if err := src.Revoke(ctx, *operator, *customer, op); err != nil {
-				return fmt.Errorf("provider-grant: revoke %s: %w", op, err)
-			}
-		}
-		_, _ = fmt.Fprintf(stdout, "revoked %s on %s from %s\n", *operations, *customer, *operator)
-		return nil
+		typ, verb = EventDelegationRevoked, "revoked"
 	}
-	if err := src.Grant(ctx, Delegation{
-		OperatorID: *operator, CustomerID: *customer, Operations: ops,
-	}, *grantedBy); err != nil {
+	now := time.Now().UTC()
+	if _, err := runtime.Mutations.Append(ctx, strings.TrimSpace(*idemKey), typ, strings.TrimSpace(*customer),
+		AuthorityEvent{Delegations: mutations, EffectiveAt: now,
+			Audit: AuditEvent{Type: typ, TenantID: strings.TrimSpace(*customer),
+				OperatorID: strings.TrimSpace(*grantedBy), Subject: "provider-grant", At: now}}); err != nil {
 		return fmt.Errorf("provider-grant: %w", err)
 	}
-	_, _ = fmt.Fprintf(stdout, "granted %s on %s to %s\n", *operations, *customer, *operator)
+	preposition := "to"
+	if *revoke {
+		preposition = "from"
+	}
+	_, _ = fmt.Fprintf(stdout, "%s %s on %s %s %s\n", verb, *operations, *customer, preposition, *operator)
 	return nil
 }
 

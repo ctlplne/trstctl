@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/api"
-	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -25,6 +25,9 @@ import (
 // add stronger route/emulator evidence as their manifest rows are promoted.
 func TestDODGateProductionAssemblyCanary(t *testing.T) {
 	ctx := context.Background()
+	assertNoSourceTreeSignerAuthSecret(t, "production-assembly canary preflight")
+	t.Cleanup(func() { assertNoSourceTreeSignerAuthSecret(t, "production-assembly canary") })
+	persistentRoot := t.TempDir()
 	st := newServerTestStore(t)
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: servedTestTenant, Name: "DoD tenant", EventSeq: 1}); err != nil {
 		t.Fatalf("seed DoD tenant: %v", err)
@@ -32,9 +35,13 @@ func TestDODGateProductionAssemblyCanary(t *testing.T) {
 	token := seedScopedToken(t, st, servedTestTenant, "access:read", "keys:read")
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
-	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
-	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek")
-	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	cfg.Audit.SigningKeyFile = filepath.Join(persistentRoot, "audit-signing-key.pem")
+	cfg.Secrets.KEKFile = filepath.Join(persistentRoot, "secrets-kek")
+	cfg.Secrets.AuthSecretFile = filepath.Join(persistentRoot, "machine-auth.bin")
+	cfg.Signer.AuthSecretFile = filepath.Join(persistentRoot, "sign-auth.bin")
+	cfg.Signer.KeyStoreDir = filepath.Join(persistentRoot, "signer-keys")
+	cfg.CA.CertFile = filepath.Join(persistentRoot, "issuing-ca.crt")
+	auditKey, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
 		t.Fatalf("load audit signing key before event-log recovery: %v", err)
 	}

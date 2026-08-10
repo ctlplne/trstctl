@@ -17,6 +17,9 @@ import type {
   CMDBReconcileSchedule,
   IssuanceRequestList,
   MDMDeviceList,
+  MDMDeviceTrace,
+  MDMPollScheduleList,
+  TicketIntakeSchedule,
   AgentUpgradeCampaign,
   OwnershipConflictList,
   DRPosture,
@@ -249,6 +252,7 @@ import type {
   OwnerRemediationAcceptRequest,
   OwnerRemediationQueue,
   OwnerRemediationRun,
+  OutboxReconciliationConflictList,
   OwnerRequest,
   OwnershipAttribution,
   OwnershipAttributionItem,
@@ -460,8 +464,10 @@ export type { CryptoReadiness, CryptoReadinessRow, CryptoDependent } from "./api
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileSchedule } from "./api-types.gen";
 export type { IssuanceRequestList, IssuanceRequest } from "./api-types.gen";
-export type { MDMDeviceList, MDMDevice, MDMDeviceTrace } from "./api-types.gen";
+export type { TicketIntakeSchedule } from "./api-types.gen";
+export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
+export type { OutboxReconciliationConflict, OutboxReconciliationConflictList } from "./api-types.gen";
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -1333,8 +1339,14 @@ export interface Api {
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
   issuanceRequests(): Promise<IssuanceRequestList>;
+  /** I3/AUD-45: durable ServiceNow relay schedule and its last observable outcome. */
+  ticketIntakeSchedule(): Promise<TicketIntakeSchedule>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
   mdmDevices(): Promise<MDMDeviceList>;
+  /** I5/AUD-45: relay-only Intune/Jamf schedules, including waiting/failure state. */
+  mdmPollSchedules(): Promise<MDMPollScheduleList>;
+  /** I5: evidence-backed requested/issued/installed/renewing trace for one device. */
+  mdmDeviceTrace(mdm: string, id: string): Promise<MDMDeviceTrace>;
   /** A5: staged rollout state, ring assignment, and the fleet version histogram. */
   agentUpgradeCampaign(): Promise<AgentUpgradeCampaign>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
@@ -1413,6 +1425,7 @@ export interface Api {
   dispatchResponseIntegrations(input: ResponseIntegrationDispatchRequest): Promise<ResponseIntegrationDispatch>;
   createServiceNowTicket(input: ServiceNowTicketRequest): Promise<ITSMTicket>;
   incidentExecutions(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<IncidentExecutionList>;
+  outboxReconciliationConflicts(): Promise<OutboxReconciliationConflictList>;
   getIncidentExecution(id: string): Promise<IncidentExecution>;
   remediationPlaybooks(): Promise<RemediationPlaybookCatalog>;
   runRemediationPlaybook(id: string, input: RemediationPlaybookRunRequest): Promise<RemediationPlaybookRun>;
@@ -1663,9 +1676,7 @@ const liveApi: Api = {
   // No customer_id: the route serves the caller's own tenancy and refuses a
   // query naming anyone else, so sending one could only ever be a 403.
   usageEvidence: (periodStart, periodEnd) =>
-    req<UsageEvidence>(
-      `/api/v1/provider/usage-evidence?period_start=${encodeURIComponent(periodStart)}&period_end=${encodeURIComponent(periodEnd)}`,
-    ),
+    req<UsageEvidence>(`/api/v1/provider/usage-evidence?period_start=${encodeURIComponent(periodStart)}&period_end=${encodeURIComponent(periodEnd)}`),
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),
   // Through mutate(), not a hand-rolled req(): mutate is what attaches the
@@ -1678,7 +1689,10 @@ const liveApi: Api = {
     }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
+  ticketIntakeSchedule: () => req<TicketIntakeSchedule>("/api/v1/issuance-requests/intake-schedule"),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
+  mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),
+  mdmDeviceTrace: (mdm, id) => req<MDMDeviceTrace>(`/api/v1/mdm/${encodeURIComponent(mdm)}/devices/${encodeURIComponent(id)}/trace`),
   agentUpgradeCampaign: () => req<AgentUpgradeCampaign>("/api/v1/agents/upgrade-campaign"),
   tenantKeyDomain: () => req<TenantKeyDomainStatus>("/api/v1/platform/tenant-key-domain"),
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
@@ -1811,6 +1825,7 @@ const liveApi: Api = {
   dispatchResponseIntegrations: (input) => mutate<ResponseIntegrationDispatch>("POST", "/api/v1/incidents/response-integrations/dispatch", input),
   createServiceNowTicket: (input) => mutate<ITSMTicket>("POST", "/api/v1/itsm/servicenow/tickets", input),
   incidentExecutions: (options) => req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
+  outboxReconciliationConflicts: () => req<OutboxReconciliationConflictList>("/api/v1/incidents/outbox-reconciliation-conflicts"),
   getIncidentExecution: (id) => req<IncidentExecution>(`/api/v1/incidents/executions/${encodeURIComponent(id)}`),
   remediationPlaybooks: () => req<RemediationPlaybookCatalog>("/api/v1/remediation/playbooks"),
   runRemediationPlaybook: (id, input) => mutate<RemediationPlaybookRun>("POST", `/api/v1/remediation/playbooks/${encodeURIComponent(id)}/runs`, input),
