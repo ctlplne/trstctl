@@ -15,21 +15,22 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
-	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretscan"
-	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
-	"trstctl.com/trstctl/internal/tenantseal"
 )
 
 // sealKeyWrapper is the envelope-encryption key wrapper the served secret store seals
 // values under at rest (the credential KEK). It is an alias for seal.KeyWrapper so
 // Deps can name the type without server.go itself importing the seal package.
 type sealKeyWrapper = seal.KeyWrapper
+
+type secretCommandMAC interface {
+	KeyedDigest(domain, material []byte) ([]byte, error)
+}
 
 type secretScanner interface {
 	Scan(ctx context.Context, path string) (secretscan.Report, error)
@@ -71,11 +72,16 @@ type dynamicSecretOutboxQueue struct {
 }
 
 func (q dynamicSecretOutboxQueue) Enqueue(ctx context.Context, item dynsecret.RevokeItem) error {
+	tenantEpoch, err := q.store.DynamicSecretTenantEpoch(ctx, q.tenantID)
+	if err != nil {
+		return fmt.Errorf("server: resolve dynamic-secret revoke tenant epoch: %w", err)
+	}
+	item.TenantEpoch = tenantEpoch
 	payload, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
-	key := dynamicSecretRevokeKey(item.LeaseID)
+	key := dynamicSecretRevokeKey(tenantEpoch, item.LeaseID)
 	return q.store.WithTenant(ctx, q.tenantID, func(tx pgx.Tx) error {
 		_, err := q.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID: q.tenantID, Destination: dynamicSecretRevokeDestination,
@@ -113,14 +119,16 @@ func (q dynamicSecretOutboxQueue) Pending(ctx context.Context) ([]dynsecret.Revo
 // completeSecretIntegrationOutbox marks one secret-integration outbox row delivered
 // through the orchestrator (AN-6) instead of hand-rolling the UPDATE.
 //
-// These two queues are drained twice: by the outbox dispatcher
-// (secretIntegrationOutboxDispatcher handles dynsecret.revoke and secret.sync.*),
-// and in-request by dynsecret.Engine.RunRevocations / secretsync.Engine.RunDeliveries
-// through Queue.Done. Only the dispatcher ever holds a lease, so a hand-rolled
-// "status <> 'delivered'" completion here could flip a row a dispatch worker was
-// still holding — the double-completion the lease predicate exists to prevent — and
-// never recorded the destination's circuit success, leaving a healthy endpoint
-// backed off. Outbox.CompleteByKey carries both.
+// The served production path drains both queues only through
+// secretIntegrationOutboxDispatcher. The queue adapters remain usable by explicit
+// compatibility callers of dynsecret.Engine.RunRevocations or
+// secretsync.Engine.RunDeliveries, but request handlers must never invoke those
+// drainers: an external provider or connector call belongs to the worker (AN-6).
+// Only the dispatcher ever holds a lease, so a hand-rolled "status <> 'delivered'"
+// completion here could flip a row a dispatch worker was still holding — the
+// double-completion the lease predicate exists to prevent — and never record the
+// destination's circuit success, leaving a healthy endpoint backed off.
+// Outbox.CompleteByKey carries both.
 //
 // orchestrator.ErrOutboxLeaseHeld is deliberately NOT mapped to nil. The queues'
 // Pending already skips rows a dispatch worker holds, so this can only fire when the
@@ -135,12 +143,16 @@ func completeSecretIntegrationOutbox(ctx context.Context, ob *orchestrator.Outbo
 }
 
 func (q dynamicSecretOutboxQueue) Done(ctx context.Context, leaseID string) error {
+	tenantEpoch, err := q.store.DynamicSecretTenantEpoch(ctx, q.tenantID)
+	if err != nil {
+		return fmt.Errorf("server: resolve dynamic-secret revoke completion epoch: %w", err)
+	}
 	return completeSecretIntegrationOutbox(ctx, q.outbox, q.tenantID,
-		dynamicSecretRevokeDestination, dynamicSecretRevokeKey(leaseID))
+		dynamicSecretRevokeDestination, dynamicSecretRevokeKey(tenantEpoch, leaseID))
 }
 
-func dynamicSecretRevokeKey(leaseID string) string {
-	return fmt.Sprintf("%s:%s", dynamicSecretRevokeDestination, leaseID)
+func dynamicSecretRevokeKey(tenantEpoch, leaseID string) string {
+	return store.DynamicSecretRevokeOutboxIdempotencyKey(tenantEpoch, leaseID)
 }
 
 type secretSyncOutboxPayload struct {
@@ -151,94 +163,12 @@ type secretSyncOutboxPayload struct {
 	Sealed         []byte `json:"sealed"`
 }
 
-type secretSyncOutboxQueue struct {
-	store    *store.Store
-	outbox   *orchestrator.Outbox
-	tenantID string
-	target   string
-	kek      seal.KeyWrapper
-	crypto   tenantseal.Access
-}
-
-func (q secretSyncOutboxQueue) Enqueue(ctx context.Context, item secretsync.SyncItem) error {
-	if q.kek == nil {
-		return errors.New("server: secret sync outbox requires a KEK")
-	}
-	sealed, err := sealTenantValue(ctx, q.crypto, q.kek, q.tenantID, item.Value, secretSyncAAD(q.tenantID, q.target, item.ID, item.Key))
-	if err != nil {
-		return err
-	}
-	payload, err := json.Marshal(secretSyncOutboxPayload{
-		ID: item.ID, Key: item.Key, Target: item.Target, Sealed: sealed,
-	})
-	if err != nil {
-		return err
-	}
-	key := secretSyncOutboxKey(q.target, item.ID)
-	return q.store.WithTenant(ctx, q.tenantID, func(tx pgx.Tx) error {
-		_, err := q.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-			TenantID: q.tenantID, Destination: secretSyncDestination(q.target),
-			EffectLane: "secret.sync:" + q.target, IdempotencyKey: key, Payload: payload,
-		})
-		return err
-	})
-}
-
-func (q secretSyncOutboxQueue) Pending(ctx context.Context) ([]secretsync.SyncItem, error) {
-	if q.kek == nil {
-		return nil, errors.New("server: secret sync outbox requires a KEK")
-	}
-	records, err := q.outbox.Pending(ctx, q.tenantID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]secretsync.SyncItem, 0, len(records))
-	for _, rec := range records {
-		if rec.Destination != secretSyncDestination(q.target) {
-			continue
-		}
-		if rec.LeaseHeld {
-			// The outbox dispatcher is pushing this item right now under its lease.
-			// Handing it to the in-request drainer as well would deliver the same secret
-			// twice, and only the leaseholder may complete the row (AN-6).
-			continue
-		}
-		var payload secretSyncOutboxPayload
-		if err := json.Unmarshal(rec.Payload, &payload); err != nil {
-			wipeSyncItems(out)
-			return nil, err
-		}
-		value, err := openTenantValue(ctx, q.crypto, q.kek, q.tenantID, payload.Sealed, secretSyncAAD(q.tenantID, q.target, payload.ID, payload.Key))
-		if err != nil {
-			wipeSyncItems(out)
-			return nil, err
-		}
-		out = append(out, secretsync.SyncItem{ID: payload.ID, Key: payload.Key, Target: payload.Target, Value: value})
-	}
-	return out, nil
-}
-
-func (q secretSyncOutboxQueue) Done(ctx context.Context, id string) error {
-	return completeSecretIntegrationOutbox(ctx, q.outbox, q.tenantID,
-		secretSyncDestination(q.target), secretSyncOutboxKey(q.target, id))
-}
-
 func secretSyncDestination(target string) string {
 	return secretSyncDestinationPrefix + target
 }
 
-func secretSyncOutboxKey(target, id string) string {
-	return secretSyncDestination(target) + ":" + id
-}
-
 func secretSyncAAD(tenantID, target, id, key string) []byte {
 	return []byte(tenantID + "/secret-sync/" + target + "/" + id + "/" + key)
-}
-
-func wipeSyncItems(items []secretsync.SyncItem) {
-	for _, item := range items {
-		secret.Wipe(item.Value)
-	}
 }
 
 // RecordIssued notes that the CA issued a serial so OCSP can answer "good" rather
@@ -303,6 +233,7 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		KEK:                d.KEK,
 		TenantCrypto:       d.TenantCrypto,
 		Store:              d.Store,
+		EventLog:           d.Log,
 		Audit:              audit.NewAuditor(s.log),
 		AuthSecret:         d.SecretsAuthSecret,
 		MachineAuthMethods: d.MachineAuthMethods,
@@ -327,28 +258,34 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		SecretSyncTargets:          d.SecretSyncTargets,
 		SecretScanner:              secretScannerFromDeps(d),
 	}
+	if mac, ok := d.KEK.(secretCommandMAC); ok {
+		be.CommandMAC = mac.KeyedDigest
+	}
 	if d.TenantDynamicSecretProviders != nil {
 		be.DynamicProvidersForTenant = d.TenantDynamicSecretProviders.ForTenant
+		be.DynamicLifecycleTenantIDs = d.TenantDynamicSecretProviders.TenantIDs
+	}
+	if d.TenantDynamicSecretProviders != nil || len(d.DynamicSecretProviders) > 0 {
 		be.DynamicLifecycleForTenant = func(tenantID string) (dynsecret.Lifecycle, error) {
+			providers := append([]dynsecret.Provider(nil), d.DynamicSecretProviders...)
+			if d.TenantDynamicSecretProviders != nil {
+				providers = d.TenantDynamicSecretProviders.ForTenant(tenantID)
+			}
 			return newDurableDynamicSecretLifecycle(
-				tenantID, d.TenantDynamicSecretProviders.ForTenant(tenantID), d.Store, d.Log, d.KEK, s.outbox,
+				tenantID, providers, d.Store, d.Log, d.KEK, s.outbox,
 				s.wakeOutbox, d.TenantCrypto,
 			)
 		}
-		be.DynamicLifecycleTenantIDs = d.TenantDynamicSecretProviders.TenantIDs
 	}
 	if d.TenantSecretSyncTargets != nil {
 		be.SecretSyncTargetsForTenant = d.TenantSecretSyncTargets.ForTenant
-		be.QueueSecretSync = func(ctx context.Context, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error {
-			return queueSecretSyncEvent(ctx, d.Store, d.Log, d.KEK, tenantID, secretName, secretVersion, target, remoteKey, idempotencyKey, requestBinding, value, d.TenantCrypto)
-		}
+	}
+	be.QueueSecretSync = func(ctx context.Context, tenantID, secretName string, secretVersion int, target, remoteKey, idempotencyKey, requestBinding string, value []byte) error {
+		return queueSecretSyncEvent(ctx, d.Store, d.Log, d.KEK, tenantID, secretName, secretVersion, target, remoteKey, idempotencyKey, requestBinding, value, d.TenantCrypto)
 	}
 	if s.outbox != nil {
 		be.DynamicRevokeQueue = func(tenantID string) dynsecret.RevokeQueue {
 			return dynamicSecretOutboxQueue{store: d.Store, outbox: s.outbox, tenantID: tenantID}
-		}
-		be.SecretSyncOutbox = func(tenantID, target string) secretsync.Outbox {
-			return secretSyncOutboxQueue{store: d.Store, outbox: s.outbox, tenantID: tenantID, target: target, kek: d.KEK, crypto: d.TenantCrypto}
 		}
 	}
 	return be

@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 )
 
 const (
@@ -77,6 +78,67 @@ func TestSearchFiltersByTenantAndType(t *testing.T) {
 	}
 	if len(recs) != 1 || recs[0].Type != "identity.deployed" {
 		t.Fatalf("type filter = %v, want one identity.deployed", recs)
+	}
+}
+
+func TestSearchFailsClosedBeforeFilteringUnsafeLegacySchedulerHistory(t *testing.T) {
+	log := openLog(t)
+	secret := "postgres://audit-user:credential@provider.internal/db"
+	_, err := log.Append(context.Background(), events.Event{
+		Type: schedulerhistory.EventType, TenantID: tenantA,
+		SchemaVersion: schedulerhistory.LegacySchemaVersion,
+		Data:          []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"` + secret + `"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	records, err := newService(t, log).Search(context.Background(), audit.Query{
+		TenantID: tenantA, Types: []string{"identity.issued"},
+	})
+	if !errors.Is(err, schedulerhistory.ErrSanitationRequired) {
+		t.Fatalf("Search error = %v, want sanitation-required", err)
+	}
+	if records != nil {
+		t.Fatalf("Search returned partial records: %#v", records)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatal("Search error disclosed unsafe scheduler data")
+	}
+}
+
+type fixedAuditCheckpoint struct{ checkpoint audit.Checkpoint }
+
+func (s fixedAuditCheckpoint) LatestAuditCheckpoint(context.Context, string) (audit.Checkpoint, bool, error) {
+	return s.checkpoint, true, nil
+}
+
+func TestSearchPreflightsUnsafeRetainedPrefixBelowCheckpoint(t *testing.T) {
+	log := openLog(t)
+	secret := "credential-hidden-below-retention-floor"
+	unsafe, err := log.Append(context.Background(), events.Event{
+		Type: schedulerhistory.EventType, TenantID: tenantA, SchemaVersion: 1,
+		Data: []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"` + secret + `"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendEvent(t, log, tenantA, "identity.issued")
+	key, err := jose.GenerateRSASigningKey("audit-prefix-preflight")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := audit.NewService(log, key, audit.WithCheckpoints(fixedAuditCheckpoint{checkpoint: audit.Checkpoint{
+		TenantID: tenantA, BoundarySeq: unsafe.Sequence, BoundaryHash: "sealed-prefix-head", RecordCount: 1,
+	}}))
+	records, err := svc.Search(context.Background(), audit.Query{
+		TenantID: tenantA, Types: []string{"identity.issued"}, Limit: 1,
+	})
+	if !errors.Is(err, schedulerhistory.ErrSanitationRequired) || records != nil {
+		t.Fatalf("Search below checkpoint = (%#v, %v), want fixed sanitation failure", records, err)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatal("retained-prefix preflight error disclosed unsafe data")
 	}
 }
 

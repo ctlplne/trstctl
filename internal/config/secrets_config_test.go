@@ -67,6 +67,7 @@ func TestTenantSealLocalWrapperEnvOverride(t *testing.T) {
 		"TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID":        "operator-a",
 		"TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE":      "/custody/operator-a.key",
 		"TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY":      "true",
+		"TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY": "true",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -80,6 +81,9 @@ func TestTenantSealLocalWrapperEnvOverride(t *testing.T) {
 	}
 	if !cfg.Secrets.IdempotencyResultFleetReady {
 		t.Fatal("idempotency result fleet-ready assertion was not loaded")
+	}
+	if !cfg.Secrets.SecretRotationHistoryFleetReady {
+		t.Fatal("secret-rotation history fleet-ready assertion was not loaded")
 	}
 }
 

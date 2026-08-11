@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { CheckCircle2, RefreshCw, XCircle } from "lucide-react";
-import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
-import { api, ApiError, type ConnectorDelivery, type RotationRun } from "@/lib/api";
+import { approvalRequestsQueryKey, approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
+import { api, ApiError, type ConnectorDelivery, type PendingApprovalRequest, type RotationRun } from "@/lib/api";
+import { useApiQuery, useQueryClient } from "@/lib/query";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { AgentJobLedgerPanel } from "@/pages/operations/AgentJobLedgerPanel";
@@ -73,44 +74,28 @@ const typeOptions: Array<{ value: "" | OperationType; label: string }> = [
 
 export function Operations() {
   const { t } = useTranslation();
-  const [rows, setRows] = useState<OperationRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const rotations = useApiQuery(["rotation-runs", { limit: 50 }], () => api.rotationRuns({ limit: 50 }), { live: { intervalMs: 10_000 } });
+  const deliveries = useApiQuery(["connector-deliveries", { limit: 50 }], () => api.connectorDeliveries({ limit: 50 }), {
+    live: { intervalMs: 10_000 },
+  });
+  const approvals = useApiQuery(approvalRequestsQueryKey, api.approvalRequests, { live: { intervalMs: 10_000 } });
   const [error, setError] = useState<Notice | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<"" | OperationType>("");
   const [rejectTarget, setRejectTarget] = useState<RejectTarget>(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [rotations, deliveries, identities] = await Promise.all([
-        api.rotationRuns({ limit: 50 }),
-        api.connectorDeliveries({ limit: 50 }),
-        api.identities(),
-      ]);
-      setRows([
-        ...rotations.items.map(rotationOperationRow),
-        ...deliveries.items.map(deliveryOperationRow),
-        ...approvalRows(identities).map(approvalOperationRow),
-      ]);
-    } catch (err) {
-      setError({ kind: "error", message: errorText(err, "Could not load operations") });
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => void load(), 10_000);
-    return () => window.clearInterval(id);
-  }, [load]);
+  const rows = useMemo<OperationRow[]>(
+    () => [
+      ...(rotations.data?.items ?? []).map(rotationOperationRow),
+      ...(deliveries.data?.items ?? []).map(deliveryOperationRow),
+      ...approvalRows(approvals.data ?? []).map(approvalOperationRow),
+    ],
+    [approvals.data, deliveries.data, rotations.data],
+  );
+  const loading = rotations.loading || deliveries.loading || approvals.loading;
+  const loadError = rotations.error ?? deliveries.error ?? approvals.error;
 
   const filteredRows = useMemo(
     () => rows.filter((row) => (!statusFilter || row.statusKey === statusFilter) && (!typeFilter || row.type === typeFilter)),
@@ -122,9 +107,26 @@ export function Operations() {
     setNotice(null);
     setError(null);
     try {
-      const result = await api.approveIdentityAction(row.approval.identity.id, row.approval.action);
-      setNotice({ kind: "success", message: `${result.action} approval recorded for ${result.resource}` });
-      await load();
+      const result = await api.approveApprovalRequest(row.approval.id, row.approval.intent_digest);
+      queryClient.setQueryData<PendingApprovalRequest[]>(approvalRequestsQueryKey, (current) =>
+        current
+          ?.map((request) =>
+            request.id === row.approval.id
+              ? {
+                  ...request,
+                  approval_count: result.approval_count,
+                  required_approvals: result.required_approvals,
+                  status: result.status,
+                }
+              : request,
+          )
+          .filter((request) => request.status === "pending"),
+      );
+      setNotice({
+        kind: "success",
+        message: `${row.approval.action} approval recorded for ${row.approval.resource_name || row.approval.resource_id}`,
+      });
+      void queryClient.invalidateQueries({ queryKey: approvalRequestsQueryKey });
     } catch (err) {
       setError({ kind: "error", message: errorText(err, "Could not approve request") });
     } finally {
@@ -137,10 +139,11 @@ export function Operations() {
     setNotice(null);
     setError(null);
     try {
-      await api.transitionIdentity(row.approval.identity.id, "retired", reason);
+      await api.denyApprovalRequest(row.approval.id, row.approval.intent_digest, reason);
+      queryClient.setQueryData<PendingApprovalRequest[]>(approvalRequestsQueryKey, (current) => current?.filter((request) => request.id !== row.approval.id));
       setRejectTarget(null);
-      setNotice({ kind: "success", message: `request rejected for ${row.approval.identity.id}` });
-      await load();
+      setNotice({ kind: "success", message: `request rejected for ${row.approval.resource_name || row.approval.resource_id}` });
+      void queryClient.invalidateQueries({ queryKey: approvalRequestsQueryKey });
     } catch (err) {
       setError({ kind: "error", message: errorText(err, "Could not reject request") });
     } finally {
@@ -161,7 +164,16 @@ export function Operations() {
         titleId="operations-heading"
         description="The execution queue — jobs in flight like credential rotations and connector deployments, with attempts and outcomes. To approve or deny pending requests, see Approvals."
         actions={
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              rotations.refetch();
+              deliveries.refetch();
+              approvals.refetch();
+            }}
+            disabled={loading}
+          >
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
             {translateNow("source.refresh.0e91610117")}
           </Button>
@@ -170,6 +182,7 @@ export function Operations() {
 
       {notice && <OperationNotice notice={notice} onDismiss={() => setNotice(null)} />}
       {error && <ErrorState title={translateNow("source.operations.unavailable.b176555a53")}>{error.message}</ErrorState>}
+      {!error && loadError && <ErrorState title={translateNow("source.operations.unavailable.b176555a53")}>{loadError}</ErrorState>}
 
       {/* A1: estate-touching work is executed by agents, so the queue an operator
           needs to watch is the one agents claim from — not only the control
@@ -298,10 +311,16 @@ function OperationActions({
     return (
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onApprove(row)}>
-          {translateNow("source.approve.value1.for.value2.f59c2fc633", { value1: row.approval.action, value2: row.approval.identity.name })}
+          {translateNow("source.approve.value1.for.value2.f59c2fc633", {
+            value1: row.approval.action,
+            value2: row.approval.resource_name || row.approval.resource_id,
+          })}
         </Button>
         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onReject(row)}>
-          {translateNow("source.reject.value1.for.value2.30ca8dca77", { value1: row.approval.action, value2: row.approval.identity.name })}
+          {translateNow("source.reject.value1.for.value2.30ca8dca77", {
+            value1: row.approval.action,
+            value2: row.approval.resource_name || row.approval.resource_id,
+          })}
         </Button>
       </div>
     );
@@ -329,7 +348,7 @@ function RejectDialog({
 }) {
   const [reason, setReason] = useState("");
   const reasonRef = useRef<HTMLTextAreaElement>(null);
-  const title = `Reject ${row.approval.action} for ${row.approval.identity.name}`;
+  const title = `Reject ${row.approval.action} for ${row.approval.resource_name || row.approval.resource_id}`;
   const titleId = "operation-reject-heading";
   const descriptionId = "operation-reject-description";
 
@@ -443,14 +462,14 @@ function deliveryOperationRow(delivery: ConnectorDelivery): OperationRow {
 
 function approvalOperationRow(approval: ApprovalQueueRow): OperationRow {
   return {
-    id: `approval-${approval.identity.id}-${approval.action}`,
+    id: `approval-${approval.id}`,
     type: "approval",
     status: "Awaiting approval",
     statusKey: "awaiting_approval",
-    subject: approval.identity.name,
-    attempts: approval.approvals,
+    subject: approval.resource_name || approval.resource_id,
+    attempts: `${approval.approval_count} / ${approval.required_approvals}`,
     verification: "not_applicable",
-    updatedAt: approval.identity.created_at || "",
+    updatedAt: approval.created_at,
     approval,
   };
 }

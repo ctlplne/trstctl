@@ -244,6 +244,37 @@ func IsDeliveryDeferred(err error) bool {
 	return errors.As(err, &deferred)
 }
 
+// DefiniteNoEffectError proves that a failed delivery returned before receiver
+// I/O began. Only this proof lets a domain terminal callback turn retry
+// exhaustion into a permanent failed fact. A timeout, lost response, or ordinary
+// transport error is deliberately NOT this type because the receiver may already
+// have committed the operation.
+type DefiniteNoEffectError struct{ cause error }
+
+func (e *DefiniteNoEffectError) Error() string {
+	if e.cause == nil {
+		return "outbox delivery had no external effect"
+	}
+	return e.cause.Error()
+}
+func (e *DefiniteNoEffectError) Unwrap() error { return e.cause }
+
+// DefiniteNoEffect marks a pre-I/O failure. Callers must not use it after opening
+// a receiver request; doing so could let a newer ordered command overtake an old
+// write whose response was merely lost.
+func DefiniteNoEffect(err error) error {
+	if err == nil || IsDefiniteNoEffect(err) {
+		return err
+	}
+	return &DefiniteNoEffectError{cause: err}
+}
+
+// IsDefiniteNoEffect reports whether the delivery path supplied the typed proof.
+func IsDefiniteNoEffect(err error) bool {
+	var definite *DefiniteNoEffectError
+	return errors.As(err, &definite)
+}
+
 // Outbox implements AN-6: external calls are recorded in the same transaction as
 // the state change that triggers them (Enqueue), and a separate worker performs
 // them (Dispatch). This gives at-least-once delivery; an idempotent Handler makes
@@ -350,8 +381,9 @@ func WithCircuitObserver(f func(CircuitTransition)) Option {
 }
 
 // WithMaxInFlightPerDestination caps concurrently processing rows for one
-// destination. This prevents one down CA/connector/webhook from occupying every
-// outbox worker.
+// tenant/effective receiver lane. This prevents one down CA/connector/webhook
+// from occupying every outbox worker without coupling a same-named receiver in
+// another tenant to that tenant's capacity.
 func WithMaxInFlightPerDestination(n int) Option {
 	return func(o *Outbox) {
 		if n > 0 {
@@ -521,12 +553,93 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 	return false, nil
 }
 
+// rewriteCanonicalIfPresent replaces only the executable payload of the exact
+// tenant/idempotency-key command after a privacy history rewrite. Delivery state,
+// attempts, receipts, and scheduling stay untouched. The same advisory lock as
+// EnqueueIfAbsent closes the missing-row/reconciliation race.
+//
+// A processing row is never rewritten: a worker may already hold its old bytes
+// outside PostgreSQL. The erasure must retry after that claim finishes so success
+// never means raw personal data is still executing in another address space.
+func (o *Outbox) rewriteCanonicalIfPresent(ctx context.Context, tx pgx.Tx, e Entry) (bool, error) {
+	lane := effectiveOutboxLane(e.Destination, e.EffectLane)
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"outbox-enqueue-if-absent\x1f"+e.TenantID+"\x1f"+e.IdempotencyKey); err != nil {
+		return false, fmt.Errorf("orchestrator: lock canonical outbox rewrite: %w", err)
+	}
+
+	var (
+		existingID, duplicateCount                       int64
+		destination, existingLane, existingRole, agentID string
+		status                                           string
+		payload                                          []byte
+	)
+	err := tx.QueryRow(ctx,
+		`SELECT o.id, o.destination, o.payload,
+		        COALESCE(NULLIF(o.effect_lane, ''), o.destination),
+		        COALESCE(o.required_agent_role, ''),
+		        COALESCE(o.required_agent_id::text, ''), o.status,
+		        (SELECT count(*) FROM outbox duplicates
+		          WHERE duplicates.tenant_id = $1 AND duplicates.idempotency_key = $2)
+		   FROM outbox o
+		  WHERE o.tenant_id = $1 AND o.idempotency_key = $2
+		  ORDER BY o.id
+		  LIMIT 1
+		  FOR UPDATE OF o`, e.TenantID, e.IdempotencyKey).Scan(
+		&existingID, &destination, &payload, &existingLane, &existingRole,
+		&agentID, &status, &duplicateCount)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("orchestrator: load canonical outbox rewrite target: %w", err)
+	}
+	if duplicateCount != 1 {
+		return false, fmt.Errorf("%w: canonical outbox rewrite found duplicate receiver keys", store.ErrIdempotencyConflict)
+	}
+	if destination != e.Destination || existingLane != lane || existingRole != e.RequiredAgentRole || agentID != e.RequiredAgentID {
+		return false, &OutboxCommandConflictError{
+			TenantID: e.TenantID, IdempotencyKey: e.IdempotencyKey,
+			ExistingOutboxID: existingID, ExistingDestination: destination,
+			ExistingEffectLane: existingLane, ExistingPayloadSHA256: trstcrypto.SHA256Hex(payload),
+			ExistingRequiredAgentRole: existingRole, ExistingRequiredAgentID: agentID,
+			CandidateDestination: e.Destination, CandidateEffectLane: lane,
+			CandidatePayloadSHA256:     trstcrypto.SHA256Hex(e.Payload),
+			CandidateRequiredAgentRole: e.RequiredAgentRole, CandidateRequiredAgentID: e.RequiredAgentID,
+		}
+	}
+	if status == "processing" {
+		return false, ErrOutboxLeaseHeld
+	}
+	if bytes.Equal(payload, e.Payload) {
+		return true, nil
+	}
+	command, err := tx.Exec(ctx,
+		`UPDATE outbox SET payload = $3 WHERE tenant_id = $1 AND id = $2`,
+		e.TenantID, existingID, e.Payload)
+	if err != nil {
+		return false, fmt.Errorf("orchestrator: rewrite canonical outbox payload: %w", err)
+	}
+	if command.RowsAffected() != 1 {
+		return false, fmt.Errorf("orchestrator: canonical outbox rewrite target disappeared")
+	}
+	return true, nil
+}
+
 func effectiveOutboxLane(destination, lane string) string {
 	lane = strings.TrimSpace(lane)
 	if lane == "" {
 		return destination
 	}
 	return lane
+}
+
+func tenantEffectiveOutboxLaneKey(tenantID, destination, lane string) string {
+	return circuitKey{
+		tenantID:    tenantID,
+		destination: effectiveOutboxLane(destination, lane),
+	}.string()
 }
 
 // Dispatch performs entries that are due now, one leased row at a time, and
@@ -538,8 +651,9 @@ func effectiveOutboxLane(destination, lane string) string {
 // Entries scheduled into the future (a failed entry serving its backoff) and
 // entries already handled in this run are skipped, so one Dispatch call drains the
 // currently-due backlog without spinning on a zero-backoff failure. Fairness is
-// round-robin by tenant and destination: each round claims at most one row per
-// tenant and destination, then starts a new round if more due work remains.
+// round-robin by tenant and effective receiver lane: each round claims at most
+// one row per tenant and one row per tenant/lane, then starts a new round if more
+// due work remains.
 func (o *Outbox) Dispatch(ctx context.Context, h Handler) (int, error) {
 	return o.DispatchScoped(ctx, h, DestinationScope{})
 }
@@ -554,29 +668,34 @@ func (o *Outbox) DispatchScoped(ctx context.Context, h Handler, scope Destinatio
 	}
 	cutoff := o.clockNow()
 	seenTenants := make(map[string]bool)
-	seenDestinations := make(map[string]bool)
+	seenTenantLanes := make(map[string]bool)
 	processed := 0
 	for {
-		claim, claimed, err := o.claimOne(ctx, cutoff, seenTenants, seenDestinations, scope)
+		claim, claimed, err := o.claimOne(ctx, cutoff, seenTenants, seenTenantLanes, scope)
 		if err != nil {
 			return processed, err
 		}
 		if !claimed {
-			if len(seenTenants) == 0 && len(seenDestinations) == 0 {
+			if len(seenTenants) == 0 && len(seenTenantLanes) == 0 {
 				break
 			}
 			seenTenants = make(map[string]bool)
-			seenDestinations = make(map[string]bool)
+			seenTenantLanes = make(map[string]bool)
 			continue
 		}
 
 		seenTenants[claim.msg.TenantID] = true
-		seenDestinations[effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)] = true
+		seenTenantLanes[tenantEffectiveOutboxLaneKey(claim.msg.TenantID, claim.msg.Destination, claim.msg.EffectLane)] = true
 		processed++
 		deliverErr := o.deliver(ctx, h, claim)
 		if deliverErr != nil && !IsDeliveryDeferred(deliverErr) && claim.attempts >= o.maxAttempts {
 			if terminal, ok := h.(TerminalFailureHandler); ok {
-				if err := terminal.DeliverTerminalFailure(ctx, claim.msg, deliverErr); err != nil {
+				if err := terminal.DeliverTerminalFailure(ctx, claim.msg, deliverErr); IsDeliveryDeferred(err) {
+					// The domain knows this failure is ambiguous. Keep the durable
+					// command pending, refund this claim, and preserve its FIFO barrier
+					// until reconciliation or a later idempotent retry proves an outcome.
+					deliverErr = err
+				} else if err != nil {
 					destroyDeliveryError(deliverErr)
 					return processed, fmt.Errorf("orchestrator: record terminal delivery failure: %w", err)
 				}
@@ -616,7 +735,7 @@ func (o *Outbox) deliver(ctx context.Context, h Handler, claim claimedOutboxEntr
 // short transaction. The external call happens after this transaction commits, so
 // slow destinations do not hold row locks, database transactions, or pool
 // connections while the network is blocked.
-func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, seenDestinations map[string]bool, scope DestinationScope) (claimedOutboxEntry, bool, error) {
+func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, seenTenantLanes map[string]bool, scope DestinationScope) (claimedOutboxEntry, bool, error) {
 	tx, err := o.store.SystemPool().Begin(ctx)
 	if err != nil {
 		return claimedOutboxEntry{}, false, err
@@ -662,8 +781,8 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		        -- required_agent_role.
 		        AND o.required_agent_id IS NULL
 		        AND o.tenant_id::text <> ALL($7::text[])
-			        AND COALESCE(NULLIF(o.effect_lane, ''), o.destination) <> ALL($8::text[])
-			        AND (o.tenant_id::text || chr(31) || COALESCE(NULLIF(o.effect_lane, ''), o.destination)) <> ALL($9::text[])
+		        AND (o.tenant_id::text || chr(31) || COALESCE(NULLIF(o.effect_lane, ''), o.destination)) <> ALL($8::text[])
+		        AND (o.tenant_id::text || chr(31) || COALESCE(NULLIF(o.effect_lane, ''), o.destination)) <> ALL($9::text[])
 		        AND (
 		            COALESCE(cardinality($10::text[]), 0) = 0
 		            OR EXISTS (
@@ -675,11 +794,73 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		            SELECT 1 FROM unnest($11::text[]) AS excluded(prefix)
 		             WHERE left(o.destination, char_length(excluded.prefix)) = excluded.prefix
 		        )
+		        -- Secret-sync ordering is a separate tenant+target causal fence.
+		        -- effect_lane stays target-scoped for bulkheads/circuits; target_order
+		        -- prevents a retry in backoff from being overtaken. Migration 0153's
+		        -- trigger repeats this check for mixed-version workers whose SQL lacks it.
+		        AND (
+		            left(o.destination, 12) <> 'secret.sync.'
+		            OR EXISTS (
+		                SELECT 1
+		                  FROM secret_sync_jobs current_sync
+			                 WHERE current_sync.tenant_id = o.tenant_id
+			                   AND current_sync.outbox_id = o.id
+			                   AND current_sync.target_order = o.secret_sync_target_order
+			                   AND (
+			                       -- Terminal evidence with a pending outbox is the safe
+			                       -- append/project-before-finalize crash shape. Its
+			                       -- handler performs zero receiver I/O, so cleanup does
+			                       -- not wait behind an ambiguous predecessor.
+			                       current_sync.status IN ('delivered', 'failed')
+			                       OR (
+			                           current_sync.status = 'pending'
+			                           AND (
+			                               o.secret_sync_order_from_event = false
+			                               OR EXISTS (
+			                                   SELECT 1
+			                                     FROM projection_checkpoint checkpoint
+			                                    WHERE checkpoint.id = 1
+			                                      AND checkpoint.applied_seq >= current_sync.target_order
+			                               )
+			                           )
+				                           AND NOT EXISTS (
+				                               SELECT 1
+				                                 FROM outbox older_sync_outbox
+				                                 LEFT JOIN secret_sync_jobs older_sync_job
+				                                   ON older_sync_job.tenant_id = older_sync_outbox.tenant_id
+				                                  AND older_sync_job.outbox_id = older_sync_outbox.id
+				                                  AND older_sync_job.target_order = older_sync_outbox.secret_sync_target_order
+				                                  AND older_sync_outbox.destination = 'secret.sync.' || older_sync_job.target
+				                                WHERE older_sync_outbox.tenant_id = o.tenant_id
+				                                  AND older_sync_outbox.destination = o.destination
+				                                  AND older_sync_outbox.secret_sync_target_order < o.secret_sync_target_order
+				                                  -- A missing/malformed job or a command with more
+				                                  -- than one receiver-I/O start stays a barrier even
+				                                  -- after SQL terminalization. Only one exact,
+				                                  -- canonical terminal choice releases successors.
+				                                  AND NOT COALESCE(
+				                                      (older_sync_job.status = 'delivered'
+				                                          AND older_sync_outbox.secret_sync_receiver_effect_state = 'effect_possible'
+				                                          AND older_sync_outbox.secret_sync_receiver_io_starts = 1)
+				                                      OR
+				                                      (older_sync_job.status = 'failed'
+				                                          AND older_sync_outbox.secret_sync_receiver_effect_state = 'failure_authorized'
+				                                          AND older_sync_outbox.secret_sync_receiver_io_starts BETWEEN 0 AND 1
+				                                          AND older_sync_outbox.secret_sync_failure_detail = older_sync_job.last_error
+				                                          AND older_sync_outbox.secret_sync_failure_attempts = older_sync_job.attempts),
+				                                      false
+				                                  )
+				                           )
+			                       )
+				                   )
+		            )
+		        )
 		        AND (
 		            SELECT count(*)
 		              FROM outbox p
 		             WHERE p.status = 'processing'
-			               AND COALESCE(NULLIF(p.effect_lane, ''), p.destination) = COALESCE(NULLIF(o.effect_lane, ''), o.destination)
+		               AND p.tenant_id = o.tenant_id
+		               AND COALESCE(NULLIF(p.effect_lane, ''), p.destination) = COALESCE(NULLIF(o.effect_lane, ''), o.destination)
 		               AND p.lease_until > $2
 		        ) < $3
 		        AND (
@@ -700,14 +881,21 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		                    WHERE left(p.destination, char_length(excluded.prefix)) = excluded.prefix
 		               )
 		        ) < $4
-		        AND NOT EXISTS (
-		            SELECT 1
-		              FROM outbox older
-		             WHERE older.status = 'pending'
-		               AND older.next_attempt_at <= $1
-		               AND older.tenant_id = o.tenant_id
-			               AND COALESCE(NULLIF(older.effect_lane, ''), older.destination) = COALESCE(NULLIF(o.effect_lane, ''), o.destination)
-		               AND (older.next_attempt_at, older.id) < (o.next_attempt_at, o.id)
+		        AND (
+		            -- Secret sync has an immutable event-sequence fence above. Its
+		            -- SQL ids can be reversed when two projections commit out of
+		            -- order, so applying the generic id-based lane fence as well
+		            -- can make each row wait for the other forever.
+		            left(o.destination, 12) = 'secret.sync.'
+		            OR NOT EXISTS (
+		                SELECT 1
+		                  FROM outbox older
+		                 WHERE older.status = 'pending'
+		                   AND older.next_attempt_at <= $1
+		                   AND older.tenant_id = o.tenant_id
+		                   AND COALESCE(NULLIF(older.effect_lane, ''), older.destination) = COALESCE(NULLIF(o.effect_lane, ''), o.destination)
+		                   AND (older.next_attempt_at, older.id) < (o.next_attempt_at, o.id)
+		            )
 		        )
 		      ORDER BY o.next_attempt_at, o.id
 		      FOR UPDATE OF o SKIP LOCKED
@@ -724,7 +912,7 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		 RETURNING o.id, o.tenant_id::text, o.destination, o.payload, o.idempotency_key, o.attempts,
 		           COALESCE(NULLIF(o.effect_lane, ''), o.destination)`,
 		cutoff, now, o.maxInFlightPerDestination, o.maxInFlightPerTenant,
-		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenDestinations), blockedCircuitKeys,
+		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenTenantLanes), blockedCircuitKeys,
 		scope.IncludePrefixes, scope.ExcludePrefixes).
 		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts, &claim.msg.EffectLane)
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -16,8 +17,10 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -36,6 +39,16 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	src := newStore(t)
 	srcLog := openLog(t)
 	resetFullDRState(t, src)
+	registration, err := srcLog.Append(ctx, events.Event{
+		ID: events.NewID(), Type: projections.EventTenantRegistered,
+		TenantID: tenantA, Data: tenantRegistered("full-dr-tenant"),
+	})
+	if err != nil {
+		t.Fatalf("append full-DR tenant registration: %v", err)
+	}
+	if err := projections.New(src).Apply(ctx, registration); err != nil {
+		t.Fatalf("project full-DR tenant registration: %v", err)
+	}
 
 	orch := orchestrator.NewOrchestrator(srcLog, src, orchestrator.NewOutbox(src))
 	owner, err := orch.CreateOwner(ctx, tenantA, "workload", "payments", "")
@@ -49,7 +62,11 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RecordCertificate: %v", err)
 	}
-	seedRecoveredFromPostgresTables(t, src)
+	seedRecoveredFromPostgresTables(t, src, registration.ID, registration.Sequence)
+	srcTick, err := src.GetSecretRotationScheduleTick(ctx, tenantA, "full-dr-idempotency")
+	if err != nil {
+		t.Fatalf("load source scheduled-rotation tick: %v", err)
+	}
 
 	srcCounts := recoveredTableCounts(t, src)
 	for _, table := range backup.RecoveredFromPostgresBackup {
@@ -103,8 +120,48 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 			t.Errorf("%s restored rows = %d, want %d", table, dstCounts[table], srcCounts[table])
 		}
 	}
+	restoredCursor, err := dst.GetSecretRotationScheduleScanCursor(ctx, tenantA)
+	if err != nil || restoredCursor.AfterScheduleID != "00000000-0000-4000-8000-00000000a106" ||
+		restoredCursor.Generation != 500 || restoredCursor.LeaseToken != "" {
+		t.Fatalf("rotation scan cursor changed across full DR: %+v err=%v", restoredCursor, err)
+	}
+	restoredTick, err := dst.GetSecretRotationScheduleTick(ctx, tenantA, "full-dr-idempotency")
+	if err != nil || restoredTick.IdempotencyKey != srcTick.IdempotencyKey ||
+		restoredTick.RequestBinding != srcTick.RequestBinding ||
+		!restoredTick.DueThrough.Equal(srcTick.DueThrough) || restoredTick.Phase != "terminal" ||
+		restoredTick.StartScheduleID != srcTick.StartScheduleID ||
+		restoredTick.AfterScheduleID != srcTick.AfterScheduleID ||
+		restoredTick.TerminalHTTPStatus == nil || srcTick.TerminalHTTPStatus == nil ||
+		*restoredTick.TerminalHTTPStatus != *srcTick.TerminalHTTPStatus ||
+		!bytes.Equal(restoredTick.TerminalBody, srcTick.TerminalBody) {
+		t.Fatalf("rotation tick authority changed across full DR: source=%+v restored=%+v err=%v", srcTick, restoredTick, err)
+	}
 	if got := providerRecoveryState(t, dst); got != srcProviderState {
 		t.Errorf("provider registry and break-glass state after restore = %+v, want %+v", got, srcProviderState)
+	}
+	restoredFence, err := dst.GetApplicationSecretMutationFence(ctx, tenantA, "app/pending")
+	if err != nil {
+		t.Fatalf("load restored application-secret fence actor: %v", err)
+	}
+	wantFenceActor := &events.Actor{Subject: "full-dr-secret-actor", Roles: []string{"auditor", "operator"}}
+	if !reflect.DeepEqual(restoredFence.Actor, wantFenceActor) ||
+		restoredFence.ActorSubjectRef != privacy.SubjectRef(tenantA, wantFenceActor.Subject) {
+		t.Fatalf("application-secret fence actor changed across full DR: %+v", restoredFence)
+	}
+	const restoredScheduleID = "00000000-0000-4000-8000-00000000a106"
+	restoredCommand, err := dst.GetLatestSecretRotationScheduleCommand(ctx, tenantA, restoredScheduleID)
+	if err != nil {
+		t.Fatalf("load restored scheduled-rotation command: %v", err)
+	}
+	wantRotationRunID := orchestrator.SecretRotationScheduleRunID(
+		tenantA, restoredCommand.TenantRegistrationEventSequence,
+		restoredScheduleID, restoredCommand.DueAt)
+	if restoredCommand.Status != "claimed" ||
+		restoredCommand.RunID != wantRotationRunID ||
+		restoredCommand.CommandKey != orchestrator.SecretRotationScheduleCommandKey(wantRotationRunID) ||
+		restoredCommand.TerminalEventID != orchestrator.SecretRotationScheduleRunEventID(wantRotationRunID) ||
+		restoredCommand.RequestBinding != strings.Repeat("6", 64) {
+		t.Fatalf("scheduled-rotation command changed across full DR: %+v", restoredCommand)
 	}
 }
 
@@ -127,14 +184,21 @@ func TestFullRestoreFinalRebuildHealsPrivacyOperationMissingFromPostgresCut(t *t
 		eventID        = "full-dr-privacy-crash-event"
 		operationID    = "full-dr-privacy-crash-operation"
 		requestBinding = "sha256:full-dr-privacy-crash-command"
-		subjectRef     = "subject:full-dr-crash"
 	)
+	subjectRef := strings.Repeat("f", 64)
 	payload, err := json.Marshal(projections.PrivacySubjectErased{
 		OperationID:    operationID,
 		RequestBinding: requestBinding,
 		SubjectRef:     subjectRef,
 		Reason:         "approved erasure",
-		Counts:         map[string]int{"owners": 1},
+		Counts: map[string]int{
+			"owners": 1, "secret_rotation_schedule_ticks": 0,
+			"secret_rotation_schedule_tick_rows":         0,
+			"secret_rotation_schedule_commands":          0,
+			"secret_rotation_schedule_outer_resolutions": 0,
+		},
+		RecoveryFences:        []store.PrivacyRecoveryFenceDisposition{},
+		SchedulerDispositions: []store.SecretRotationSchedulePrivacyDisposition{},
 	})
 	if err != nil {
 		t.Fatalf("marshal privacy erasure event: %v", err)
@@ -321,7 +385,7 @@ func TestFullDRConcurrentMutationRestoresSingleEventCut(t *testing.T) {
 	}
 
 	var (
-		tx  pgx.Tx
+		tx  *backup.PostgresStateSnapshot
 		cut uint64
 	)
 	backupCutDone := make(chan error, 1)
@@ -464,12 +528,30 @@ func resetFullDRState(t *testing.T, st *store.Store) {
 	}
 }
 
-func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
+func seedRecoveredFromPostgresTables(
+	t *testing.T,
+	st *store.Store,
+	registrationID string,
+	registrationSequence uint64,
+) {
 	t.Helper()
 	ctx := context.Background()
 	now := time.Now().UTC()
 	caID := "00000000-0000-0000-0000-00000000ca01"
 	approvalResource := "identity:00000000-0000-0000-0000-00000000aa01"
+	approvedTargetPayload := []byte(`{"fixture":"full-dr-approved-target"}`)
+	approvedTargetRequestID := "00000000-0000-0000-0000-00000000a015"
+	approvedTargetIntentDigest := "sha256:" + strings.Repeat("e", 64)
+	rotationScheduleID := "00000000-0000-4000-8000-00000000a106"
+	rotationDueAt := now.Add(-time.Minute).Truncate(time.Microsecond)
+	rotationRunID := orchestrator.SecretRotationScheduleRunID(
+		tenantA, registrationSequence, rotationScheduleID, rotationDueAt)
+	rotationTickKey := "full-dr-idempotency"
+	rotationTickBinding := strings.Repeat("7", 64)
+	approvedTargetApproval := fmt.Sprintf(
+		`{"request_id":%q,"intent_digest":%q,"resource_kind":"code_signing","resource_id":"code_signing:full-dr","action":"sign","required_approvals":1}`,
+		approvedTargetRequestID, approvedTargetIntentDigest,
+	)
 	err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		statements := []struct {
 			sql  string
@@ -530,7 +612,10 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			{`INSERT INTO ct_watched_domains (id, tenant_id, domain) VALUES ($1, $2, $3)`, []any{"00000000-0000-0000-0000-00000000a007", tenantA, "example.com"}},
 			{`INSERT INTO deployment_target_revisions (tenant_id, target_id, revision_id, name, type, config, enabled, created_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`, []any{tenantA, "00000000-0000-0000-0000-00000000a008", "full-dr-revision-1", "edge", "kubernetes", `{"namespace":"prod"}`, true, now}},
 			{`INSERT INTO deployment_targets (id, tenant_id, name, type, config, revision_id) VALUES ($1, $2, $3, $4, $5::jsonb, $6)`, []any{"00000000-0000-0000-0000-00000000a008", tenantA, "edge", "kubernetes", `{"namespace":"prod"}`, "full-dr-revision-1"}},
-			{`INSERT INTO idempotency_keys (tenant_id, key, status, result, completed_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "full-dr-idempotency", "completed", []byte(`{"ok":true}`), now}},
+			{`INSERT INTO idempotency_keys
+			        (tenant_id, key, status, request_binding, result, completed_at)
+			  VALUES ($1, $2, 'completed', $3, $4, $5)`,
+				[]any{tenantA, rotationTickKey, rotationTickBinding, []byte(`{"ok":true}`), now}},
 			{`INSERT INTO issuance_approval_requests (tenant_id, resource, action, requester, required) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, approvalResource, "issue", "requester", 2}},
 			{`INSERT INTO issuance_approvals (tenant_id, resource, action, approver, approved_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, approvalResource, "issue", "approver-1", now}},
 			{`INSERT INTO notification_routing_policies (id, tenant_id, name, channels_by_severity, default_channels, created_at, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)`, []any{"00000000-0000-0000-0000-00000000a012", tenantA, "expiry-default", `{"critical":["pagerduty","slack"],"low":["email"]}`, `["email"]`, now, now}},
@@ -546,8 +631,73 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 					"actor:full-dr", "approved erasure", `{}`, `{"owners":1}`, now,
 				}},
 			{`INSERT INTO secret_shares (tenant_id, token_sha256, share_id, sealed, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "full-dr-token-hash", "full-dr-share", []byte{0xee, 0xff}, now.Add(time.Hour)}},
+			// AUD-77: a crash fence and a completed mutation receipt are independent
+			// PostgreSQL recovery state. They intentionally use different event IDs:
+			// a completed command deletes its fence atomically, while an interrupted
+			// command has a fence but no receipt yet.
+			{`INSERT INTO application_secret_tenant_epochs (tenant_id, epoch_id, created_at)
+			  VALUES ($1, $2, $3)`, []any{tenantA, "00000000-0000-0000-0000-00000000a017", now}},
+			// AUD-106: a claimed due-edge receiver is independent PostgreSQL
+			// authority. Full DR must retain it even though its schedule row is a
+			// separately rebuilt event projection and may not exist at PG import.
+			{`INSERT INTO secret_rotation_schedule_commands
+			        (tenant_id, identity_version, tenant_registration_event_id,
+			         tenant_registration_event_sequence,
+			         schedule_id, run_id, due_at, provider, secret_key,
+			         old_ref, interval_seconds, config_event_sequence,
+			         tick_idempotency_key, tick_ordinal,
+			         command_key, request_binding, terminal_event_id,
+			         created_at, updated_at)
+			  VALUES ($1, 3, $2, $3, $4, $5, $6, $7, $8, $9,
+			          60, $10, $11, 1, $12, $13, $14, $15, $15)`,
+				[]any{
+					tenantA, registrationID, registrationSequence,
+					rotationScheduleID, rotationRunID, rotationDueAt,
+					"connector:ci", "rotation/full-dr", "version:1",
+					registrationSequence + 1, rotationTickKey,
+					orchestrator.SecretRotationScheduleCommandKey(rotationRunID), strings.Repeat("6", 64),
+					orchestrator.SecretRotationScheduleRunEventID(rotationRunID), now,
+				}},
+			{`INSERT INTO application_secret_mutation_fences
+			        (tenant_id, secret_name, operation, event_id, event_type,
+			         schema_version, approval_required, request_binding,
+			         command_payload, payload_sha256, event_time, actor, actor_subject_ref)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13)`,
+				[]any{
+					tenantA, "app/pending", "create", "00000000-0000-0000-0000-00000000a013",
+					projections.EventApplicationSecretCreated, projections.ApplicationSecretMutationSchemaVersion,
+					false, strings.Repeat("a", 64), []byte(`{"fixture":"full-dr"}`),
+					crypto.SHA256Hex([]byte(`{"fixture":"full-dr"}`)), now,
+					`{"subject":"full-dr-secret-actor","roles":["auditor","operator"]}`,
+					privacy.SubjectRef(tenantA, "full-dr-secret-actor"),
+				}},
+			// AUD-77: approved certificate/code-signing first-command fences are
+			// independent PostgreSQL recovery state until their target projection
+			// commits. Full DR must not silently make a consumed grant unrecoverable.
+			{`INSERT INTO approved_target_event_fences
+			        (tenant_id, target_kind, command_key, request_binding,
+			         approval_request_id, approval_intent_digest, event_id,
+			         event_type, schema_version, event_time, event_payload,
+			         payload_sha256, semantic_sha256, approval, claim_state)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, 'claimed')`,
+				[]any{
+					tenantA, store.ApprovedTargetCodeSigningCommand, "codesign-full-dr-fence",
+					strings.Repeat("f", 64), approvedTargetRequestID, approvedTargetIntentDigest,
+					"00000000-0000-0000-0000-00000000a016", projections.EventCodeSigningCommanded,
+					projections.CodeSigningApprovalEventSchemaVersion, now, approvedTargetPayload,
+					crypto.SHA256Hex(approvedTargetPayload), strings.Repeat("a", 64), approvedTargetApproval,
+				}},
 			{`INSERT INTO secret_store (id, tenant_id, name, sealed, version) VALUES ($1, $2, $3, $4, $5)`, []any{"00000000-0000-0000-0000-00000000a010", tenantA, "app/db", []byte{0xcc, 0xdd}, 1}},
 			{`INSERT INTO secret_store_versions (tenant_id, name, version, sealed, written_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "app/db", 1, []byte{0xcc, 0xdd}, now}},
+			{`INSERT INTO application_secret_mutation_receipts
+			        (tenant_id, event_id, semantic_sha256, request_binding,
+			         secret_name, action, result_version, result_created_at,
+			         result_updated_at, applied_at)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+				[]any{
+					tenantA, "00000000-0000-0000-0000-00000000a014", strings.Repeat("c", 64),
+					strings.Repeat("d", 64), "app/db", "create", 1, now, now, now,
+				}},
 			{`INSERT INTO ssh_keys (id, tenant_id, fingerprint, key_type, comment, source, location, standing_access, orphaned) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, []any{"00000000-0000-0000-0000-00000000a011", tenantA, "SHA256:fulldr", "ssh-ed25519", "edge", "authorized_keys", "/home/app/.ssh/authorized_keys", true, false}},
 		}
 		for _, stmt := range statements {
@@ -559,6 +709,34 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 	})
 	if err != nil {
 		t.Fatalf("seed independent PostgreSQL tables: %v", err)
+	}
+	// Cursor/tick receipt columns are deliberately unavailable to trstctl_app.
+	// Seed this trusted DR fixture through the same narrow owner-role boundary as
+	// the production tick state machine, using a coherent terminal receiver.
+	terminalTickBody := `{"ran":0,"scanned":0,"runs":[],"deferred":[],"run_limit_reached":false,"scan_limit_reached":false,"complete":true,"partial":false}`
+	if err := st.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO secret_rotation_schedule_scan_cursors
+			        (tenant_id, after_schedule_id, generation, updated_at)
+			 VALUES ($1, $2, 500, $3)`, tenantA, rotationScheduleID, now); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx,
+			`INSERT INTO secret_rotation_schedule_ticks
+			        (tenant_id, identity_version, tenant_registration_event_id,
+			         tenant_registration_event_sequence,
+			         idempotency_key, request_binding, due_through,
+			         start_schedule_id, after_schedule_id, phase, snapshot_count, receipt,
+			         owner_token, owner_generation, terminal_http_status,
+			         terminal_body, created_at, updated_at, completed_at)
+			 VALUES ($1, 3, $2, $3, $4, $5, $6, $7, $7, 'terminal', 0, $8::jsonb,
+			         '', 1, 200, $9, $10, $10, $10)`,
+			tenantA, registrationID, registrationSequence,
+			rotationTickKey, rotationTickBinding, rotationDueAt,
+			rotationScheduleID, terminalTickBody, []byte(terminalTickBody), now)
+		return err
+	}); err != nil {
+		t.Fatalf("seed protected scheduler recovery authority: %v", err)
 	}
 	if _, err := st.SystemPool().Exec(ctx, `INSERT INTO federation_peer_checkpoints (peer_id, source_seq, updated_at) VALUES ($1, $2, $3)`, "full-dr-peer", int64(42), now); err != nil {
 		t.Fatalf("seed federation_peer_checkpoints: %v", err)

@@ -72,11 +72,12 @@ value, while `GET /api/v1/secrets/store/{name}?resolve=true` expands references 
 tenant/permission scope instead. Cycles like `a -> b -> a` return a structured `409`
 with the cycle path; missing references return a normal `404`.
 
-`POST /api/v1/secrets/store/import` bulk-imports a body like
-`{"prefix":"app","values":{"db/user":"svc","db/dsn":"postgres://${secret.app/db/user}@db"}}`.
-Each value is sealed independently as version 1, the response is metadata-only, and if
-any imported name already exists the whole import is rejected so a tree cannot
-half-land.
+Bulk application-secret import is deliberately unavailable. The compatibility route
+`POST /api/v1/secrets/store/import` returns `501 Not Implemented` and writes nothing;
+its OpenAPI operation is deprecated and marked `x-trstctl-availability: unavailable`.
+An atomic batch command must fence, append, project, and receipt every name together
+before this can be enabled without bypassing the immutable event log. Until then,
+create each secret through `POST /api/v1/secrets/store` with a distinct idempotency key.
 
 The served store seals through a versioned binary container, its KEK loaded into
 locked, zeroizable memory at startup, never a raw byte slice on the heap. An older
@@ -140,10 +141,10 @@ After the child exits, trstctl wipes the byte-backed copies fetched — the OS
 environment remains an edge string API, so use `run` for trusted processes and skip
 debug commands printing the full environment.
 
-Developers can also load configuration as a tree with `trstctl-cli secrets store
-import --body-file import.json`, or read with `trstctl-cli secrets store get NAME
---resolve=true` for the same opt-in resolve/cycle-detect behavior, scoped to the
-caller's tenant and RBAC.
+Developers can read with `trstctl-cli secrets store get NAME --resolve=true` for the
+same opt-in resolve/cycle-detect behavior, scoped to the caller's tenant and RBAC.
+There is no bulk-import CLI command while the server route is unavailable; scripts
+must create one secret per idempotent request.
 
 ### Dynamic secrets (F65) and PKI-as-a-secrets-engine (F67)
 
@@ -178,33 +179,104 @@ is generated in wipeable memory and zeroed immediately after use.
 
 ### Secret rotation (F37)
 
-The rotation engine replaces a long-lived secret in **four rollback-safe phases**:
-stage, cutover, verify, retire. A failed cutover or verification auto-rolls-back so the
-application is never left broken; if rollback itself fails, the report sets
-`RollbackAttempted` and `RollbackFailed`, leaves `RolledBack` false, and audits
-`rotation.rollback_failed` so operators know the consumer may need intervention.
+The repository contains a four-phase static-provider engine (stage, cutover, verify,
+retire), but that engine keeps staged authority in process memory and cannot recover
+an ACK-loss crash between provider effects. The served API therefore does not invoke
+it. `POST /api/v1/secrets/rotations` currently accepts only `connector:<target>` and
+commits one application-secret event plus its sealed outbox intent before returning
+queued, non-secret evidence. Manual static-provider and dynamic-lease requests return
+`503` before stage, issue, cutover, delivery, verification, rollback, revoke, or
+retirement. Native-store value rotation remains a separate event-sourced operation.
 
-trstctl serves this at `POST /api/v1/secrets/rotations` — the request names a provider,
-consumer key, and current backend reference; the response returns only non-secret
-evidence (`old_ref`, `new_ref`, completed/rolled-back flags, failure phase). The
-scheduled path records cadences at `POST /api/v1/secrets/rotation-schedules`, lists
-them with `GET /api/v1/secrets/rotation-schedules`, and runs due ones with
-`POST /api/v1/secrets/rotation-schedules/run-due`, advancing `old_ref` only after a
-completed rotation.
+The scheduled path records connector cadences at
+`POST /api/v1/secrets/rotation-schedules`, lists them with
+`GET /api/v1/secrets/rotation-schedules`, and runs due ones with
+`POST /api/v1/secrets/rotation-schedules/run-due`. New static and dynamic-lease
+schedules fail closed with `503`. A historical static or dynamic schedule is terminalized as
+`unsupported`, disabled, and makes zero provider calls instead of pretending that
+its phase chain is crash-safe. A queued connector run advances `old_ref`; a
+connector whose local version committed before terminal delivery failure also
+advances to that committed version so later cadences cannot stale-loop.
 
-The same endpoint accepts three backend classes:
+The terminal `error` field is a closed, status-specific evidence class, never a
+provider response or wrapped error string. Empty-success statuses carry no error;
+delivery and rollback failures use their exact fixed classes; unavailable and
+other terminal statuses accept only their documented finite classes. Startup also
+sanitizes retained schema-v1 events written by older binaries. That rewrite is
+fleet-gated by `TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY`, signed, sequence
+preserving, and limited to the one JSON error token. Until it is safe to stop old
+writers, projection catch-up, audit/search, retention, and backup export fail
+closed without returning any legacy payload bytes.
 
-- Static providers such as `postgresql`, `mysql`, and `aws-iam` rotate a long-lived
-  backend credential and publish it to the configured consumer pointer.
-- `connector:<target>` rotates a native-store secret version, pushes the new value
-  through the configured secret-sync outbox target, and restores the prior `old_ref`
-  (`version:<n>`) if connector delivery fails.
-- `dynamic-lease:<provider>` issues a replacement dynamic lease for `key` (the role),
-  delivers the one-time credential to `target`/`remote_key`, then revokes the old lease
-  named in `old_ref` — the response never returns the credential.
+Each `run-due` idempotency key owns one durable PostgreSQL tick. The tick freezes
+`due_through` from the outer idempotency row's database `created_at`, the UUID-ring
+cursor where scanning began, the current row snapshot, the ordered non-secret
+receipt, and the exact 50-run/500-scan budgets. One tenant has one live tick owner:
+every progress or terminal compare-and-swap checks its fresh lease token,
+generation, and PostgreSQL-clock lease. A simultaneous same-key caller receives a
+non-cached `503` in-progress error; a different live key receives a busy `503`.
+After expiry, the same key resumes the same cutoff, cursor, receipt, and budgets. A
+different key first freezes the abandoned tick as an exact indeterminate `503`,
+without moving its cursor, then begins from that cursor; replaying the abandoned
+key returns those retained bytes.
+
+Before a scheduled connector effect can start, the tick saves the row it is about
+to run and PostgreSQL records one immutable child command for the exact
+`(tenant, schedule, due_at)` edge. Run, command, and terminal-event IDs are
+deterministic, while each live claimant receives a fresh lease token. Overlap,
+runner replacement, restart, and projection rebuild therefore resume or reconcile
+the same command instead of minting another secret version. The version-3 terminal
+event carries the exact due time, provider, key, old reference, command key, and
+request binding. Cadence replay advances from `due_at`, not a producer's wall
+clock; an unmatched schedule compare-and-swap rolls back terminalization instead
+of manufacturing a completed command. Tick progress, receipt, cursor movement,
+and an optional deferred child-lease release commit in one transaction, so a crash
+exposes either all of a row's progress or none of it.
+
+There are exactly four nonterminal deferral reasons: `approval_pending`,
+`command_in_flight`, `command_claimed`, and `config_revision_unanchored`. The last
+one means a schedule created before immutable configuration evidence existed must
+be saved again; that scan creates no child command and calls no provider. Every
+deferral keeps the same due edge and is returned with schedule ID, reason, due time,
+and optional error; later due rows are still scanned. The stable UUID ring wraps at
+most once per tick. One tick executes at most 50 rotations and scans at most 500
+rows. Landing exactly on either bound is reported conservatively as
+`run_limit_reached` or `scan_limit_reached`, with
+`complete:false`, because only an under-budget empty or short ring proves that no
+due row remains. The console names the consumed bound and tells the operator to run
+the next tick from the durable cursor.
+
+If shared store, event, custody, or integrity state fails after earlier rows finish,
+the endpoint returns a truthful `503` envelope with `complete:false`,
+`partial:true`, the failed schedule ID, and the system error. The outer idempotency
+record caches that whole envelope: replaying the same key is byte-identical and
+executes no child command; a new key reconciles any retained terminal event and
+continues later rows. A tick's composite foreign key keeps its bound outer
+idempotency row out of normal garbage collection. The indeterminate takeover
+receipt stays until its original key returns and completes the outer row; deleting
+that completed outer row then cascades to the tick. Terminal child-command
+receivers are garbage collected only after their exact immutable version-3
+terminal event is still retained, the schedule has advanced past that due edge,
+and a newer command exists. The newest command remains as a finite
+one-row-per-schedule lineage fence; claimed or ambiguous commands are never purged.
+
+The endpoint currently accepts one provider class:
+
+- `connector:<target>` atomically commits a native-store version and one sealed
+  secret-sync outbox command. The response sets `queued:true` and `completed:false`;
+  only the bounded outbox worker calls the connector. Delivery failure stays on the
+  durable job for retry and does not perform a compensating direct write.
+
+Static providers such as `postgresql`, `mysql`, and `aws-iam`, plus
+`dynamic-lease:<provider>`, fail closed with a stable `503` before any provider,
+connector, event, or outbox effect. Issuing, renewing, and revoking dynamic leases
+remain supported through the lease endpoints. Provider rotation stays unavailable
+until one durable worker command can autonomously own every effect and compensation
+across every crash boundary.
 
 PostgreSQL, MySQL, and AWS IAM rotators ship as concrete, infrastructure-verified
-backends covering the full stage/cutover/verify/retire-and-rollback path.
+library backends covering stage/cutover/verify/retire-and-rollback; the served
+request path deliberately does not invoke them yet.
 
 ### Ephemeral API keys (F38)
 
@@ -296,6 +368,30 @@ both `ClientRequestToken` and `Idempotency-Key`; GCP Secret Manager and Azure Ke
 compare the current version before creating another, forwarding the ID too — so a
 crash between commit and acknowledgement reconciles to the existing value instead of
 duplicating, rejecting any changed replay outright.
+
+Commands are FIFO across the whole tenant+target, not merely one spelling of a
+remote key: receivers commonly normalize `/TOKEN/` and `TOKEN` to the same object.
+Each new command copies its positive immutable event sequence into the projected job
+and outbox row; a retry/backoff therefore blocks later same-target commands while a
+different target can progress. Terminal delivery evidence is itself a deterministic
+event receipt, and startup compares retained history with SQL before workers run.
+Immediately before receiver I/O, the worker records a monotonic command-global
+start token under the same tenant+job terminal-choice lock. A failed event is safe
+only when durable authority proves no generation could have changed the receiver;
+an ordinary timeout or expired worker remains `effect_possible`, keeps its FIFO
+barrier, and is retried with the same receiver idempotency key until delivery is
+proved. The one exception is a typed local no-network result owned by the first and
+still-only start token. Its closed error and event attempt count are frozen before
+append so crash recovery reproduces the same canonical evidence bytes.
+The command ID also includes the tenant's secret lifecycle epoch, so offboarding and
+re-registering the same tenant UUID cannot reactivate old ciphertext or outcomes.
+
+Worker capacity and fairness use the tenant plus that effective target lane. Two
+tenants may both call a target `ci`, but one tenant's slow `ci` receiver does not
+consume the other tenant's `ci` lane or circuit allowance. Within either tenant,
+the whole target remains serial and FIFO, including remote-key aliases. The bounded
+secret-sync family worker pool and queue still cap aggregate work across tenants and
+reject promptly when that global provider-plane budget is full.
 
 Targets are configured under `secret_integrations.sync_targets`, one tenant/credential
 reference each, resolved for a single outbox attempt before the locked buffer is
@@ -531,8 +627,9 @@ Approvers call `POST /api/v1/secrets/store/approvals/{name}` with `{"action":"ro
 
 The console renders the store as a **secrets workspace** at `/secrets`: a folder tree,
 a `${secret.path}` reference resolver, an **environment diff** between environments or
-versions, a version-history selector, bulk **secret import**, and a **transit**
-sub-console for encrypt/decrypt/HMAC. See [The web console](../web-console.md).
+versions, a version-history selector, a disabled bulk-import disclosure, and a
+**transit** sub-console for encrypt/decrypt/HMAC. Import stays disabled because its
+compatibility route returns `501` without writing. See [The web console](../web-console.md).
 
 ## Use it
 
@@ -561,8 +658,9 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 
 ## Pitfalls & limits
 
-- **Serving status:** rotation ships four variants — rollback-safe static,
-  connector-backed, dynamic-lease handoff, scheduled dual-phase. An unconfigured
+- **Serving status:** rotation serves worker-queued connector-backed manual and
+  scheduled variants. Static-provider and dynamic-lease rotation fail closed before
+  provider effects pending a durable multi-phase worker command. An unconfigured
   secret-sync target fails closed with `503` instead of dropping the write; a missing
   Gitleaks binary fails scanning closed with `503` too.
 - **Machine login tenant binding:** token credentials MAC-bind the tenant, the
@@ -606,7 +704,7 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   ingress, redacted findings only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
   `secret.rotation.connector_cutover`, `secret.rotation.connector_rolled_back`,
-  `secret.rotation.dynamic_cutover`, `secret.rotation_schedule.upserted`, `secret.rotation_schedule.ran`,
+  `secret.rotation_schedule.upserted`, `secret.rotation_schedule.ran`,
   `auth.session.issued`, `discovery.finding.recorded`, `discovery.run.completed`.
 
 ## See also

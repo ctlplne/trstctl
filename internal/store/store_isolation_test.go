@@ -182,6 +182,14 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		"internal/server/server.go":             1,
 		"internal/store/connector_lifecycle.go": 1,
 		"internal/store/lifecycle.go":           1,
+		// AUD-109: startup/rebuild must compare every tenant's terminal
+		// secret-sync SQL receipt with retained event history before any worker
+		// can run, so that inventory is deliberately deployment-wide and exposes
+		// only closed delivery metadata, never payload bytes. The second use pins
+		// one PostgreSQL session while it holds the tenant+job terminal-choice
+		// advisory lock; tenant reads and projection writes inside the callback
+		// still use their normal RLS-scoped transactions.
+		"internal/store/secret_sync_job.go": 2,
 		// D2: the verification scheduler's leader enumerator — "which tenants
 		// have endpoints worth re-probing" — has the same shape as the expiry
 		// enumerator above and the same justification: a scheduler must know

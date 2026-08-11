@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
@@ -89,6 +90,52 @@ func TestMutateFallbackBindingPreventsCrossRouteAndPrincipalReplay(t *testing.T)
 				}
 			}
 		})
+	}
+}
+
+func TestMutateBoundCachesProblemResponseMediaTypeAndBinding(t *testing.T) {
+	a := New(nil, orchestrator.NewMemoryIdempotency(), nil)
+	const (
+		key     = "stable-unavailable"
+		binding = "sha256:stable-unavailable-command"
+		detail  = "provider execution is unavailable before effects"
+	)
+	calls := 0
+	invoke := func(commandBinding string, fn func(context.Context, string) (int, any, error)) *httptest.ResponseRecorder {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		req := mutationBindingRequest("operator-a", http.MethodPost, "/test/mutations/unavailable")
+		a.mutateWithRecorder(recorder, req, key, commandBinding, fn, false)
+		return recorder
+	}
+	first := invoke(binding, func(context.Context, string) (int, any, error) {
+		calls++
+		return http.StatusServiceUnavailable,
+			problem.New(http.StatusServiceUnavailable, detail), nil
+	})
+	if first.Code != http.StatusServiceUnavailable ||
+		first.Header().Get("Content-Type") != problem.MediaType ||
+		!strings.Contains(first.Body.String(), detail) {
+		t.Fatalf("first cached problem = %d %q %s", first.Code,
+			first.Header().Get("Content-Type"), first.Body.String())
+	}
+	replay := invoke(binding, func(context.Context, string) (int, any, error) {
+		t.Fatal("exact problem replay reached callback")
+		return 0, nil, nil
+	})
+	if replay.Code != first.Code || replay.Body.String() != first.Body.String() ||
+		replay.Header().Get("Content-Type") != problem.MediaType || calls != 1 {
+		t.Fatalf("problem replay = %d %q %s calls=%d; first=%d %q %s",
+			replay.Code, replay.Header().Get("Content-Type"), replay.Body.String(), calls,
+			first.Code, first.Header().Get("Content-Type"), first.Body.String())
+	}
+	conflict := invoke("sha256:changed-command", func(context.Context, string) (int, any, error) {
+		t.Fatal("changed binding reached cached problem callback")
+		return 0, nil, nil
+	})
+	if conflict.Code != http.StatusConflict || calls != 1 {
+		t.Fatalf("changed binding = %d %s calls=%d, want 409 without callback",
+			conflict.Code, conflict.Body.String(), calls)
 	}
 }
 

@@ -170,7 +170,8 @@ The Secrets space gives each workspace its own route in the sidebar (S-C2);
 historical `/secrets?tab=` deep links redirect permanently. `/secrets` is the
 store — an Infisical-style workspace: a folder tree over the served key-value
 store, a reference resolver that expands `${secret.path}` chains, an environment
-diff, a version-history selector, and secret import. See
+diff, a version-history selector, and an explicit disabled bulk-import disclosure
+(the server route returns `501` until atomic event-sourced batch commands exist). See
 [Secrets](features/secrets.md). Backed by `/api/v1/secrets/store` and
 `/api/v1/secrets/store/{name}`. **Secret engines** (`/secrets/engines`) holds
 dynamic leases, PKI-as-a-secrets-engine, and the transit console for
@@ -178,6 +179,14 @@ encrypt/decrypt/HMAC against a managed key (`/api/v1/transit/*`).
 **One-time shares** (`/secrets/sharing`) covers reveal-once shares and ephemeral
 API keys, and **CI scanning** (`/secrets/scanning`) the pipeline secret-detection
 bridge; **Sync targets** (`/secrets/sync`) shows outbound synchronization posture.
+The store's scheduled-rotation panel renders one tick's exact run and deferred-row
+receipt. Deferred rows use only the served `approval_pending`,
+`command_in_flight`, and `command_claimed` states, including schedule ID, due time,
+and optional error. If the tick consumes exactly 50 runs or 500 scans, a localized
+continuation notice says which bound was reached and directs the operator to run
+again from the durable fair cursor. A typed partial `503` keeps that tick's fresh
+receipt visible; a generic or malformed error clears older receipt and limit text
+so stale success cannot look current.
 
 **Machine access** (`/secrets/access`) is the machine-auth console: grant a
 workload a scoped credential (standing token or TTL-bound ephemeral key) with a
@@ -296,7 +305,12 @@ shows the real response, including RFC 7807 problem details on failure. Backed b
 
 The operations queue shows issuance, renewal, deployment, and approval work with
 type/status filters, attempts, verification badges, cancel controls for
-pending/running work, and inline approve/reject for dual-control items. The
+pending/running work, and inline approve/reject for dual-control items. Approval rows
+are loaded through every cursor page instead of stopping at the first 100. Each row is
+visible only when the reviewer has the matching real authority: `certs:issue` for
+certificate actions, `secrets:write` for secret actions, or `keys:approve` for
+managed-key actions. Reject records an immutable denial of that exact request and
+does not retire, revoke, delete, or otherwise mutate the target resource. The
 Notifications inbox lists all notification rows and dead letters, filters by
 type/status, marks unread rows read, requeues failed delivery, and shows the
 configured channel families from `GET /api/v1/notification-channels` (email, Slack,

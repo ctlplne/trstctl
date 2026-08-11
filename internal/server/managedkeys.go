@@ -12,7 +12,7 @@ import (
 // buildManagedKeyService asks the licensed EE factory to assemble the served
 // managed-key lifecycle. Core passes only the event spine, idempotency recorder,
 // and the same transactional approval/outbox checker used by issuance.
-func buildManagedKeyService(d Deps, idem *orchestrator.Idempotency, outbox approvalOutbox) (api.ManagedKeyService, error) {
+func buildManagedKeyService(d Deps, idem *orchestrator.Idempotency, outbox approvalOutbox, orch *orchestrator.Orchestrator) (api.ManagedKeyService, error) {
 	if d.ManagedKeyFactory == nil {
 		return nil, nil
 	}
@@ -27,11 +27,14 @@ func buildManagedKeyService(d Deps, idem *orchestrator.Idempotency, outbox appro
 	if outbox == nil {
 		return nil, errors.New("server: managed-key dual control requires the transactional notification outbox")
 	}
+	if orch == nil {
+		return nil, errors.New("server: managed-key dual control requires the event-sourced orchestrator")
+	}
 	required := d.RequiredApprovals
 	if required < defaultRequiredApprovals {
 		required = defaultRequiredApprovals
 	}
-	checker := storeApprovalChecker{store: d.Store, outbox: outbox, required: required}
+	checker := storeApprovalChecker{store: d.Store, orch: orch, required: required}
 	return d.ManagedKeyFactory(ManagedKeyServiceDeps{
 		Store:           d.Store,
 		Log:             d.Log,

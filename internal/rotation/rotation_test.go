@@ -18,6 +18,8 @@ type fakeRotator struct {
 	failVerif   bool
 	rollbackErr error
 	rolled      bool
+	verified    bool
+	retired     bool
 }
 
 func (r *fakeRotator) Stage(_ context.Context, key string) (string, error) {
@@ -29,12 +31,16 @@ func (r *fakeRotator) Cutover(_ context.Context, _, newRef string) error {
 	return nil
 }
 func (r *fakeRotator) Verify(_ context.Context, _ string) error {
+	r.verified = true
 	if r.failVerif {
 		return errors.New("consumers unhealthy")
 	}
 	return nil
 }
-func (r *fakeRotator) Retire(_ context.Context, _, _ string) error { return nil }
+func (r *fakeRotator) Retire(_ context.Context, _, _ string) error {
+	r.retired = true
+	return nil
+}
 func (r *fakeRotator) Rollback(_ context.Context, _, oldRef string) error {
 	if r.rollbackErr != nil {
 		return r.rollbackErr
@@ -43,6 +49,10 @@ func (r *fakeRotator) Rollback(_ context.Context, _, oldRef string) error {
 	r.rolled = true
 	return nil
 }
+
+type queuedFakeRotator struct{ fakeRotator }
+
+func (*queuedFakeRotator) CutoverQueued() bool { return true }
 
 func TestRotationHappyPath(t *testing.T) {
 	r := &fakeRotator{active: "app-v1"}
@@ -57,6 +67,21 @@ func TestRotationHappyPath(t *testing.T) {
 	}
 	if rec.Count("rotation.completed") != 1 {
 		t.Error("completion not audited")
+	}
+}
+
+func TestRotationQueuedCutoverLeavesVerificationAndRetirementToWorker(t *testing.T) {
+	r := &queuedFakeRotator{fakeRotator: fakeRotator{active: "app-v1"}}
+	rec := &auditsink.Recorder{}
+	rep, err := New("t1", r, rec).Rotate(context.Background(), "app", "app-v1")
+	if err != nil || !rep.Queued || rep.Completed || rep.NewRef != "app-v2" {
+		t.Fatalf("queued rotate = %+v (err %v)", rep, err)
+	}
+	if r.verified || r.retired {
+		t.Fatalf("request path verified=%t retired=%t after queued cutover", r.verified, r.retired)
+	}
+	if rec.Count("rotation.queued") != 1 || rec.Count("rotation.completed") != 0 {
+		t.Fatalf("queued/completed audit counts = %d/%d", rec.Count("rotation.queued"), rec.Count("rotation.completed"))
 	}
 }
 

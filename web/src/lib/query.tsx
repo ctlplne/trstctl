@@ -69,6 +69,7 @@ export interface ApiQueryResult<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+  errorValue: unknown | null;
   refetch: () => void;
 }
 
@@ -86,6 +87,7 @@ export function useApiQuery<T>(key: readonly unknown[], loader: () => Promise<T>
     data: query.data ?? null,
     loading: query.isPending,
     error: query.error ? (query.error instanceof Error ? query.error.message : String(query.error)) : null,
+    errorValue: query.error ?? null,
     refetch: () => void query.refetch(),
   };
 }

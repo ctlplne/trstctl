@@ -21,8 +21,8 @@ import (
 
 // TestOutboxConnectorSaturationDoesNotStarveOtherFamilies is the adversarial
 // AN-7 proof against real PostgreSQL. Two connector calls occupy every connector
-// worker. External-CA, secret-sync, and notification rows for the SAME tenant
-// must still finish, a third connector sweep must shed promptly, and PostgreSQL
+// worker. External-CA and notification rows for the SAME tenant must still
+// finish, a third connector sweep must shed promptly, and PostgreSQL
 // must grant an ACCESS EXCLUSIVE table lock while the calls are blocked. That
 // last assertion proves the claim transaction committed before external I/O.
 func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
@@ -93,7 +93,6 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 		{TenantID: tenantID, Destination: "connector.deploy", IdempotencyKey: "family-connector-deploy", Payload: []byte(`{}`)},
 		{TenantID: tenantID, Destination: "connector.right_size", IdempotencyKey: "family-connector-right-size", Payload: []byte(`{}`)},
 		{TenantID: tenantID, Destination: "external-ca.issue", IdempotencyKey: "family-external-ca", Payload: []byte(`{}`)},
-		{TenantID: tenantID, Destination: "secret.sync.vault", IdempotencyKey: "family-secret-sync", Payload: []byte(`{}`)},
 		{TenantID: tenantID, Destination: "notification.test", IdempotencyKey: "family-notification", Payload: []byte(`{}`)},
 	}
 	connectorIDs := make([]int64, 0, 2)
@@ -136,7 +135,6 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 
 	wantFast := map[string]bool{
 		"external-ca.issue": false,
-		"secret.sync.vault": false,
 		"notification.test": false,
 	}
 	fastDeadline := time.NewTimer(2 * time.Second)

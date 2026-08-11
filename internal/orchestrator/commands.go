@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/profile"
@@ -134,8 +136,29 @@ type AuthzDecision struct {
 // ProfileApprovalRequirement is the profile-bound approval gate for an identity
 // issuance transition.
 type ProfileApprovalRequirement struct {
-	ProfileName      string
-	RequiresApproval bool
+	ProfileName         string
+	ProfileID           string
+	ProfileVersion      int
+	ProfileSpecDigest   string
+	RequestedTTLSeconds int64
+	EffectiveTTLSeconds int64
+	RequiresApproval    bool
+}
+
+// DefaultIdentityIssuanceTTL is the validity the identity lifecycle command asks
+// the signer to use when the API has no caller-selected TTL field. Both the
+// requested and effective values are pinned into any approval authority.
+const DefaultIdentityIssuanceTTL = 30 * 24 * time.Hour
+
+// IssuanceBinding turns the resolved requirement into the immutable command
+// shape that is covered by approval evidence and carried to the dispatcher.
+func (r ProfileApprovalRequirement) IssuanceBinding() *store.OperationApprovalIssuanceBinding {
+	return &store.OperationApprovalIssuanceBinding{
+		ProfileName: r.ProfileName, ProfileID: r.ProfileID,
+		ProfileVersion: r.ProfileVersion, ProfileSpecDigest: r.ProfileSpecDigest,
+		RequestedTTLSeconds: r.RequestedTTLSeconds,
+		EffectiveTTLSeconds: r.EffectiveTTLSeconds,
+	}
 }
 
 // ProfileEditPendingError reports that a profile create/edit is parked in the
@@ -166,15 +189,11 @@ func (o *Orchestrator) emitVersioned(ctx context.Context, eventType, tenantID st
 // emitPrepared is the narrow form used by durable receivers that must supply a
 // stable event ID (and, for self-erasure, an already-sanitized actor).
 func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (events.Event, error) {
-	if next.Type == projections.EventTenantRegistered || next.Type == projections.EventTenantOffboarded {
-		ev, err := o.log.Append(ctx, next)
-		if err != nil {
-			return events.Event{}, err
-		}
-		if err := o.proj.Apply(ctx, ev); err != nil {
-			return events.Event{}, err
-		}
-		return ev, nil
+	if next.Type == projections.EventTenantRegistered {
+		return events.Event{}, errors.New("orchestrator: live tenant registration requires ExecuteTenantRegistration")
+	}
+	if next.Type == projections.EventTenantOffboarded {
+		return o.emitTenantOffboard(ctx, next)
 	}
 
 	var ev events.Event
@@ -273,7 +292,18 @@ func (o *Orchestrator) ProfileApprovalRequirement(ctx context.Context, tenantID,
 		return ProfileApprovalRequirement{}, err
 	}
 	if profileName == "" {
-		return ProfileApprovalRequirement{}, nil
+		return defaultProfileApprovalRequirement(""), nil
+	}
+	return o.ProfileApprovalRequirementByName(ctx, tenantID, profileName)
+}
+
+// ProfileApprovalRequirementByName resolves a configured/default profile when
+// an identity has no explicit profile attribute. This keeps the policy label and
+// the issuance semantics on the same exact stored revision.
+func (o *Orchestrator) ProfileApprovalRequirementByName(ctx context.Context, tenantID, profileName string) (ProfileApprovalRequirement, error) {
+	profileName = strings.TrimSpace(profileName)
+	if profileName == "" {
+		return defaultProfileApprovalRequirement(""), nil
 	}
 	rec, err := o.store.GetActiveProfile(ctx, tenantID, profileName)
 	if err != nil {
@@ -283,7 +313,31 @@ func (o *Orchestrator) ProfileApprovalRequirement(ctx context.Context, tenantID,
 	if err != nil {
 		return ProfileApprovalRequirement{}, err
 	}
-	return ProfileApprovalRequirement{ProfileName: profileName, RequiresApproval: requires}, nil
+	requirement := defaultProfileApprovalRequirement(profileName)
+	requirement.ProfileID = rec.ID
+	requirement.ProfileVersion = rec.Version
+	requirement.ProfileSpecDigest = store.ProfileSpecDigest(rec.Spec)
+	requirement.RequiresApproval = requires
+	var resolved profile.CertificateProfile
+	if err := json.Unmarshal(rec.Spec, &resolved); err != nil {
+		return ProfileApprovalRequirement{}, fmt.Errorf("orchestrator: decode profile issuance policy: %w", err)
+	}
+	if maxValidity := time.Duration(resolved.MaxValidity); maxValidity > 0 && maxValidity < DefaultIdentityIssuanceTTL {
+		effectiveSeconds := int64(maxValidity / time.Second)
+		if effectiveSeconds <= 0 {
+			return ProfileApprovalRequirement{}, fmt.Errorf("orchestrator: profile %q max_validity is below one second", profileName)
+		}
+		requirement.EffectiveTTLSeconds = effectiveSeconds
+	}
+	return requirement, nil
+}
+
+func defaultProfileApprovalRequirement(profileName string) ProfileApprovalRequirement {
+	seconds := int64(DefaultIdentityIssuanceTTL / time.Second)
+	return ProfileApprovalRequirement{
+		ProfileName: strings.TrimSpace(profileName), RequestedTTLSeconds: seconds,
+		EffectiveTTLSeconds: seconds,
+	}
 }
 
 func profileNameFromIdentityAttributes(attrs json.RawMessage) (string, error) {
@@ -543,6 +597,11 @@ func (o *Orchestrator) erasePrivacySubjectBound(
 	if err := o.log.HistoryRewriteReady(); err != nil {
 		return store.PrivacySubjectErasure{}, fmt.Errorf("orchestrator: privacy subject erasure log preflight: %w", err)
 	}
+	if _, err := o.RecoverPrivacySubjectErasurePreparations(ctx); err != nil {
+		return store.PrivacySubjectErasure{}, fmt.Errorf(
+			"orchestrator: recover unfinished privacy subject erasure before new command: %w", err,
+		)
+	}
 
 	if authoritative, found, err := o.recoverPrivacyErasure(
 		ctx, tenantID, subject, identity, requestBinding,
@@ -556,61 +615,64 @@ func (o *Orchestrator) erasePrivacySubjectBound(
 	// inside the same deployment-wide rewrite-operation lease. A second replica
 	// can neither pass the recheck nor race beyond JetStream's finite dedup window
 	// before this operation projection commits.
-	var authoritative store.PrivacySubjectErasure
-	err := o.log.PseudonymizeSubjectWithCompletion(
+	var (
+		authoritative   store.PrivacySubjectErasure
+		prepared        store.PrivacySubjectErasurePreparation
+		alreadyComplete bool
+	)
+	err := o.log.PseudonymizeSubjectWithPreparationAndCompletion(
 		ctx,
 		tenantID,
 		subject,
-		func(completionCtx context.Context) error {
+		func(preparationCtx context.Context, report events.TenantDataRewriteReport) error {
+			// Another replica can finish while this caller waits for the exclusive
+			// history-operation lease. Recheck inside the lease before creating any
+			// new preparation; an already-projected operation needs only the no-op
+			// completion path below.
 			if recovered, found, err := o.recoverPrivacyErasure(
-				completionCtx, tenantID, subject, identity, requestBinding,
+				preparationCtx, tenantID, subject, identity, requestBinding,
 			); err != nil {
 				return err
 			} else if found {
 				authoritative = recovered
+				alreadyComplete = true
 				return nil
 			}
-
-			// The event-log rewrite does not touch PostgreSQL. Selecting here keeps
-			// raw rows available across a post-cutover crash, and prevents a later
-			// different-key request from reusing selectors captured before an
-			// earlier operation projected its erasure.
-			erasure, err := o.store.SelectPrivacySubjectErasure(completionCtx, tenantID, subject)
+			requestedByRef := ""
+			if actor, ok := events.ActorFromContext(preparationCtx); ok {
+				requestedByRef = privacy.SubjectRef(tenantID, actor.Subject)
+			}
+			candidate := store.PrivacySubjectErasurePreparation{
+				PrivacySubjectErasure: store.PrivacySubjectErasure{
+					TenantID: tenantID, SubjectRef: privacy.SubjectRef(tenantID, subject),
+					RequestedByRef: requestedByRef,
+					Reason:         sanitizePrivacyErasureText(tenantID, subject, reason),
+					ErasedAt:       time.Now().UTC(),
+				},
+				OperationID: identity.OperationID, RequestBinding: requestBinding,
+				EventID:            identity.EventID,
+				RewriteOperationID: report.OperationID,
+				TargetGeneration:   report.TargetGeneration,
+				EventActor:         sanitizedPrivacyErasureActor(preparationCtx, tenantID, subject),
+			}
+			var err error
+			prepared, err = o.store.PreparePrivacySubjectErasureWithSchedulerResolver(
+				preparationCtx, tenantID, subject, candidate,
+				o.durableIdem.ResolveSecretRotationSchedulePrivacyOuter)
 			if err != nil {
-				return err
+				return fmt.Errorf("orchestrator: prepare privacy subject erasure: %w", err)
 			}
-			if actor, ok := events.ActorFromContext(completionCtx); ok {
-				erasure.RequestedByRef = privacy.SubjectRef(tenantID, actor.Subject)
+			return nil
+		},
+		func(completionCtx context.Context) error {
+			if alreadyComplete {
+				return nil
 			}
-			erasure.Reason = sanitizePrivacyErasureText(tenantID, subject, reason)
-
-			payload, err := json.Marshal(projections.PrivacySubjectErased{
-				OperationID:    identity.OperationID,
-				RequestBinding: requestBinding,
-				SubjectRef:     erasure.SubjectRef,
-				RequestedByRef: erasure.RequestedByRef,
-				Reason:         erasure.Reason,
-				Selectors:      erasure.Selectors,
-				Counts:         erasure.Counts,
-			})
-			if err != nil {
-				return err
-			}
-			ev, err := o.emitPrepared(completionCtx, events.Event{
-				ID:            identity.EventID,
-				Type:          projections.EventPrivacySubjectErased,
-				TenantID:      tenantID,
-				SchemaVersion: projections.PrivacySubjectErasedEventSchemaVersion,
-				Data:          payload,
-				Actor:         sanitizedPrivacyErasureActor(completionCtx, tenantID, subject),
-			})
-			if err != nil {
-				return err
-			}
-			authoritative, err = privacyErasureFromEvent(
-				ev, tenantID, subject, identity, requestBinding,
+			completed, completionErr := o.completePreparedPrivacySubjectErasure(
+				completionCtx, prepared,
 			)
-			return err
+			authoritative = completed
+			return completionErr
 		},
 		o.tenantDataRewrite...,
 	)
@@ -618,6 +680,118 @@ func (o *Orchestrator) erasePrivacySubjectBound(
 		return store.PrivacySubjectErasure{}, err
 	}
 	return authoritative, nil
+}
+
+// RecoverPrivacySubjectErasurePreparations autonomously finishes every
+// independently durable SQL preparation before snapshot restore or ordinary
+// recovery publishers run. Log.Open has already recovered any signed staged
+// target; this method proves that exact generation, reconstructs the canonical
+// completion event entirely from non-PII preparation data, and retires the row
+// atomically with projection.
+func (o *Orchestrator) RecoverPrivacySubjectErasurePreparations(
+	ctx context.Context,
+) (int, error) {
+	if o == nil || o.log == nil || o.store == nil {
+		return 0, errors.New("orchestrator: privacy preparation recovery is not configured")
+	}
+	completed := 0
+	err := o.log.WithHistoryOperation(ctx, func(operationCtx context.Context) error {
+		keys, err := o.store.ListPrivacySubjectErasurePreparationKeysSystem(operationCtx)
+		if err != nil {
+			return fmt.Errorf("orchestrator: list privacy erasure preparations: %w", err)
+		}
+		for _, key := range keys {
+			prepared, err := o.store.GetPrivacySubjectErasurePreparation(
+				operationCtx, key.TenantID, key.OperationID,
+			)
+			if errors.Is(err, pgx.ErrNoRows) {
+				// Another replica completed this exact marker after the system
+				// inventory. The operation lock normally prevents that, but the
+				// missing row is still an already-safe outcome.
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("orchestrator: load privacy erasure preparation: %w", err)
+			}
+			if _, err := o.completePreparedPrivacySubjectErasure(operationCtx, prepared); err != nil {
+				return fmt.Errorf(
+					"orchestrator: complete privacy erasure preparation %s: %w",
+					prepared.OperationID, err,
+				)
+			}
+			completed++
+		}
+		return nil
+	})
+	return completed, err
+}
+
+func (o *Orchestrator) completePreparedPrivacySubjectErasure(
+	ctx context.Context,
+	prepared store.PrivacySubjectErasurePreparation,
+) (store.PrivacySubjectErasure, error) {
+	activeGeneration, err := o.log.ActiveGeneration(ctx)
+	if err != nil {
+		return store.PrivacySubjectErasure{}, fmt.Errorf("orchestrator: resolve prepared privacy generation: %w", err)
+	}
+	if activeGeneration != prepared.TargetGeneration {
+		return store.PrivacySubjectErasure{}, fmt.Errorf(
+			"orchestrator: prepared privacy generation %q is not active (active=%q)",
+			prepared.TargetGeneration, activeGeneration,
+		)
+	}
+	if err := o.rewriteLifecycleOutboxFromCanonicalHistory(ctx, prepared.TenantID); err != nil {
+		return store.PrivacySubjectErasure{}, err
+	}
+	completion := projections.PrivacySubjectErased{
+		OperationID:           prepared.OperationID,
+		RequestBinding:        prepared.RequestBinding,
+		SubjectRef:            prepared.SubjectRef,
+		RequestedByRef:        prepared.RequestedByRef,
+		Reason:                prepared.Reason,
+		Selectors:             prepared.Selectors,
+		Counts:                prepared.Counts,
+		RecoveryFences:        prepared.RecoveryFences,
+		SchedulerDispositions: prepared.SchedulerDispositions,
+	}
+	expected := events.Event{
+		ID:            prepared.EventID,
+		Type:          projections.EventPrivacySubjectErased,
+		TenantID:      prepared.TenantID,
+		Time:          prepared.ErasedAt,
+		SchemaVersion: projections.PrivacySubjectErasedEventSchemaVersion,
+		Actor:         prepared.EventActor,
+	}
+	if err := projections.ValidatePrivacySubjectErasedPayload(expected, completion); err != nil {
+		return store.PrivacySubjectErasure{}, fmt.Errorf(
+			"orchestrator: invalid durable privacy erasure preparation: %w", err,
+		)
+	}
+	payload, err := json.Marshal(completion)
+	if err != nil {
+		return store.PrivacySubjectErasure{}, err
+	}
+	expected.Data = payload
+	retained, found, err := o.log.EventByID(ctx, expected.ID)
+	if err != nil {
+		return store.PrivacySubjectErasure{}, err
+	}
+	if found {
+		if retained.Type != expected.Type || retained.TenantID != expected.TenantID ||
+			!retained.Time.Equal(expected.Time) || retained.SchemaVersion != expected.SchemaVersion ||
+			!reflect.DeepEqual(retained.Data, expected.Data) || !reflect.DeepEqual(retained.Actor, expected.Actor) {
+			return store.PrivacySubjectErasure{}, fmt.Errorf(
+				"%w: retained privacy completion differs from its durable preparation",
+				store.ErrIdempotencyConflict,
+			)
+		}
+		if err := o.proj.Apply(ctx, retained); err != nil {
+			return store.PrivacySubjectErasure{}, err
+		}
+	} else if _, err := o.emitPrepared(ctx, expected); err != nil {
+		return store.PrivacySubjectErasure{}, err
+	}
+	return prepared.PrivacySubjectErasure, nil
 }
 
 func (o *Orchestrator) recoverPrivacyErasure(
@@ -704,12 +878,16 @@ func privacyErasureFromEvent(
 	if ev.ID != identity.EventID ||
 		ev.Type != projections.EventPrivacySubjectErased ||
 		ev.TenantID != tenantID ||
-		ev.SchemaVersion != projections.PrivacySubjectErasedEventSchemaVersion {
+		ev.SchemaVersion < projections.PrivacySubjectErasedOperationEventSchemaVersion ||
+		ev.SchemaVersion > projections.PrivacySubjectErasedEventSchemaVersion {
 		return store.PrivacySubjectErasure{}, fmt.Errorf("%w: privacy erasure event identity belongs to another command", ErrIdempotencyConflict)
 	}
 	var payload projections.PrivacySubjectErased
 	if err := json.Unmarshal(ev.Data, &payload); err != nil {
 		return store.PrivacySubjectErasure{}, fmt.Errorf("orchestrator: decode canonical privacy erasure event: %w", err)
+	}
+	if err := projections.ValidatePrivacySubjectErasedPayload(ev, payload); err != nil {
+		return store.PrivacySubjectErasure{}, fmt.Errorf("%w: invalid canonical privacy erasure event: %v", ErrIdempotencyConflict, err)
 	}
 	expectedSubjectRef := privacy.SubjectRef(tenantID, subject)
 	if !crypto.ConstantTimeEqual([]byte(payload.OperationID), []byte(identity.OperationID)) ||
@@ -1043,11 +1221,395 @@ func deploymentRoute(target store.DeploymentTarget) string {
 // across a re-ingest of the same certificate.
 func (o *Orchestrator) RecordCertificate(ctx context.Context, tenantID string, in store.Certificate) (store.Certificate, error) {
 	id := uuid.NewString()
+	payload, err := json.Marshal(certificateRecordedPayload(id, in, nil, nil))
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	if _, err := o.emit(ctx, projections.EventCertificateRecorded, tenantID, payload); err != nil {
+		return store.Certificate{}, err
+	}
+	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
+}
+
+// RecordCertificateWithApproval records an approval-gated certificate and
+// consumes the exact immutable authority in the same tenant transaction as the
+// certificate projection. Its event and inventory IDs are deterministic from
+// request ID + digest, so a retry after append or projection returns the one
+// canonical certificate instead of consuming the grant twice.
+func (o *Orchestrator) RecordCertificateWithApproval(ctx context.Context, tenantID string, in store.Certificate, approval store.OperationApprovalUse, binding ephemerallib.ApprovalBinding, requestBindings ...string) (store.Certificate, error) {
+	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(approval.RequestID) == "" ||
+		strings.TrimSpace(approval.IntentDigest) == "" {
+		return store.Certificate{}, fmt.Errorf("orchestrator: approved certificate requires tenant, request id, and intent digest")
+	}
+	requestBinding, err := binding.Digest()
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	if len(requestBindings) > 0 {
+		requestBinding = requestBindings[0]
+	}
+	eventID := CertificateApprovalEventID(tenantID, approval)
+	rowID := projections.CertificateApprovalRowID(tenantID, approval)
+
+	// A claimed fence is the durable first command. Do not manufacture a new
+	// event timestamp while it survives: that would make an exact retry differ
+	// from the bytes already authorized before the crash. The request-binding and
+	// capability checks below keep a caller from using somebody else's fence as
+	// a result cache.
+	if fence, fenceErr := o.store.GetApprovedTargetFence(ctx, tenantID,
+		store.ApprovedTargetEphemeralCertificate, binding.ClientRequestIDSHA256); fenceErr == nil {
+		if fence.EventID != eventID || fence.EventType != projections.EventCertificateRecorded ||
+			fence.SchemaVersion != projections.CertificateApprovalEventSchemaVersion ||
+			!crypto.ConstantTimeEqual([]byte(fence.RequestBinding), []byte(requestBinding)) {
+			return store.Certificate{}, fmt.Errorf("%w: approved certificate retry differs from durable command", store.ErrIdempotencyConflict)
+		}
+		request, err := o.store.GetOperationApproval(ctx, tenantID, approval.RequestID)
+		if err != nil {
+			return store.Certificate{}, err
+		}
+		if err := validateApprovedCertificateReplayUse(tenantID, request, approval, eventID); err != nil {
+			return store.Certificate{}, err
+		}
+		attemptActor := approvedCertificateActor(ctx)
+		if err := store.ValidateApprovedTargetActorPrivacyRewrite(tenantID,
+			attemptActor, request.Requester, fence.Actor, approval.Requester); err != nil {
+			return store.Certificate{}, fmt.Errorf("%w: approved certificate retry actor differs", err)
+		}
+		return o.ProjectApprovedCertificateFence(ctx, tenantID, fence)
+	} else if !store.IsNotFound(fenceErr) {
+		return store.Certificate{}, fenceErr
+	}
+
+	// Search retained source-of-truth history before checking target validity.
+	// The approval row is then locked and revalidated. This ordering lets an
+	// exact completed retry recover after the certificate has expired, while a
+	// supersession that commits during the outside history scan wins before any
+	// newly prepared certificate can report a less-authoritative drift error.
+	retained, retainedFound, err := o.log.EventByID(ctx, eventID)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	var request store.OperationApprovalRequest
+	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var lockErr error
+		request, lockErr = o.store.GetOperationApprovalForUpdateTx(ctx, tx, tenantID, approval.RequestID)
+		if lockErr != nil {
+			return lockErr
+		}
+		return validateApprovedCertificateReplayUse(tenantID, request, approval, eventID)
+	})
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	if retainedFound {
+		canonical, currentUse, err := validateRetainedApprovedCertificate(ctx, tenantID,
+			retained, rowID, in, approval, binding, request)
+		if err != nil {
+			return store.Certificate{}, err
+		}
+		if result, getErr := o.store.GetCertificate(ctx, tenantID, rowID); getErr == nil {
+			return result, nil
+		} else if !store.IsNotFound(getErr) {
+			return store.Certificate{}, getErr
+		}
+		// Restore a lost read projection from the retained source event. Approval
+		// text may have been erased after the event was written, so project the
+		// exact current capability spelling after the semantic proof above.
+		canonical.Approval = &currentUse
+		projectData, err := json.Marshal(canonical)
+		if err != nil {
+			return store.Certificate{}, err
+		}
+		restored := retained
+		restored.Data = projectData
+		if err := o.proj.Apply(ctx, restored); err != nil {
+			return store.Certificate{}, fmt.Errorf("orchestrator: restore retained approved certificate: %w", err)
+		}
+		return o.store.GetCertificate(ctx, tenantID, rowID)
+	}
+	if request.Status == store.ApprovalStatusConsumed {
+		return store.Certificate{}, fmt.Errorf("%w: consumed certificate approval has no retained target event", store.ErrIdempotencyConflict)
+	}
+
+	candidate := certificateRecordedPayload(rowID, in, &approval, &binding)
+	payload, err := json.Marshal(candidate)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	candidateEvent := events.Event{
+		ID: eventID, Type: projections.EventCertificateRecorded,
+		TenantID: tenantID, Time: time.Now().UTC(),
+		SchemaVersion: projections.CertificateApprovalEventSchemaVersion,
+		Data:          payload,
+	}
+	candidateEvent.Actor = approvedCertificateActor(ctx)
+	if err := projections.ValidateApprovedCertificatePayload(candidateEvent, candidate); err != nil {
+		return store.Certificate{}, err
+	}
+	semanticDigest, err := projections.ApprovedCertificateSemanticDigest(candidateEvent, candidate)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	fence, _, err := o.store.ClaimApprovedTargetFence(ctx, store.ApprovedTargetFence{
+		TenantID: tenantID, TargetKind: store.ApprovedTargetEphemeralCertificate,
+		CommandKey: binding.ClientRequestIDSHA256, RequestBinding: requestBinding,
+		EventID: eventID, EventType: projections.EventCertificateRecorded,
+		SchemaVersion: projections.CertificateApprovalEventSchemaVersion,
+		EventTime:     candidateEvent.Time, Actor: candidateEvent.Actor, Payload: payload, SemanticDigest: semanticDigest,
+	}, approval)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	return o.ProjectApprovedCertificateFence(ctx, tenantID, fence)
+}
+
+func approvedCertificateActor(ctx context.Context) *events.Actor {
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	return &actor
+}
+
+// validateApprovedCertificateReplayUse separates immutable capability identity
+// from execution state. A consumed exact event remains replayable after expiry;
+// every unconsumed request still honors expiry, quorum, and supersession.
+func validateApprovedCertificateReplayUse(
+	tenantID string,
+	request store.OperationApprovalRequest,
+	use store.OperationApprovalUse,
+	eventID string,
+) error {
+	if request.TenantID != tenantID || request.ID != use.RequestID {
+		return store.ErrApprovalDrifted
+	}
+	if err := store.ValidateOperationApprovalUseBinding(request, use); err != nil {
+		if request.Status != store.ApprovalStatusConsumed || request.ConsumedEventID != eventID {
+			return err
+		}
+		current, currentErr := store.OperationApprovalUseFromRequest(request)
+		if currentErr != nil {
+			return currentErr
+		}
+		if privacyErr := store.ValidateApprovedTargetPrivacyRewrite(tenantID, use, current, use); privacyErr != nil {
+			return err
+		}
+	}
+	switch request.Status {
+	case store.ApprovalStatusConsumed:
+		if request.ConsumedEventID != eventID {
+			return store.ErrApprovalConsumed
+		}
+		return nil
+	case store.ApprovalStatusSuperseded:
+		return store.ErrApprovalSuperseded
+	case store.ApprovalStatusExpired:
+		return store.ErrApprovalExpired
+	case store.ApprovalStatusApproved:
+		if !time.Now().UTC().Before(request.ExpiresAt) {
+			return store.ErrApprovalExpired
+		}
+		if request.ApprovalCount < request.RequiredApprovals {
+			return store.ErrApprovalNotReady
+		}
+		return nil
+	default:
+		return store.ErrApprovalNotReady
+	}
+}
+
+func validateRetainedApprovedCertificate(
+	ctx context.Context,
+	tenantID string,
+	retained events.Event,
+	rowID string,
+	in store.Certificate,
+	use store.OperationApprovalUse,
+	binding ephemerallib.ApprovalBinding,
+	request store.OperationApprovalRequest,
+) (projections.CertificateRecorded, store.OperationApprovalUse, error) {
+	if retained.ID != CertificateApprovalEventID(tenantID, use) ||
+		retained.Type != projections.EventCertificateRecorded || retained.TenantID != tenantID ||
+		retained.SchemaVersion != projections.CertificateApprovalEventSchemaVersion {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{},
+			fmt.Errorf("%w: retained approved certificate envelope differs", store.ErrIdempotencyConflict)
+	}
+	var canonical projections.CertificateRecorded
+	if err := json.Unmarshal(retained.Data, &canonical); err != nil {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{},
+			fmt.Errorf("orchestrator: decode retained approved certificate: %w", err)
+	}
+	if err := projections.ValidateApprovedCertificatePayload(retained, canonical); err != nil {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{}, err
+	}
+	if canonical.Approval == nil {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{},
+			fmt.Errorf("%w: retained approved certificate lacks authority", store.ErrIdempotencyConflict)
+	}
+	currentUse, err := store.OperationApprovalUseFromRequest(request)
+	if err != nil {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{}, err
+	}
+	if err := store.ValidateOperationApprovalUseBinding(request, *canonical.Approval); err != nil {
+		if privacyErr := store.ValidateApprovedTargetPrivacyRewrite(tenantID,
+			use, currentUse, *canonical.Approval); privacyErr != nil {
+			return projections.CertificateRecorded{}, store.OperationApprovalUse{}, err
+		}
+	}
+	attemptActor := approvedCertificateActor(ctx)
+	if err := store.ValidateApprovedTargetActorPrivacyRewrite(tenantID,
+		attemptActor, currentUse.Requester, retained.Actor, use.Requester); err != nil {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{},
+			fmt.Errorf("%w: retained approved certificate actor differs", err)
+	}
+	attempt := certificateRecordedPayload(rowID, in, &use, &binding)
+	attemptEvent := retained
+	attemptEvent.Actor = attemptActor
+	attemptEvent.Data = nil
+	if err := projections.ValidateApprovedCertificatePayload(attemptEvent, attempt); err != nil {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{}, err
+	}
+	wantSemantic, err := projections.ApprovedCertificateSemanticDigest(attemptEvent, attempt)
+	if err != nil {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{}, err
+	}
+	gotSemantic, err := projections.ApprovedCertificateSemanticDigest(retained, canonical)
+	if err != nil {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{}, err
+	}
+	if !crypto.ConstantTimeEqual([]byte(wantSemantic), []byte(gotSemantic)) {
+		return projections.CertificateRecorded{}, store.OperationApprovalUse{},
+			fmt.Errorf("%w: retained approved certificate command differs", store.ErrIdempotencyConflict)
+	}
+	return canonical, currentUse, nil
+}
+
+// CertificateApprovalEventID is the stable target-event identity used both by
+// the command and by crash recovery to prove a consumed request produced this
+// exact certificate issuance.
+func CertificateApprovalEventID(tenantID string, approval store.OperationApprovalUse) string {
+	return projections.CertificateApprovalEventID(tenantID, approval)
+}
+
+// ProjectApprovedCertificateFence reconciles a command that already claimed its
+// approval in PostgreSQL. A retry scans retained history before publishing, so it
+// does not depend on JetStream still remembering the message ID. If restore lost
+// the event, the exact fenced bytes and timestamp are republished.
+func (o *Orchestrator) ProjectApprovedCertificateFence(ctx context.Context, tenantID string, fence store.ApprovedTargetFence) (store.Certificate, error) {
+	var result store.Certificate
+	err := o.store.WithPrivacyRecoveryBarrier(ctx, tenantID,
+		"approved-certificate recovery privacy barrier", func(barrierCtx context.Context) error {
+			latest, err := o.store.GetApprovedTargetFence(barrierCtx, tenantID,
+				store.ApprovedTargetEphemeralCertificate, fence.CommandKey)
+			if err != nil {
+				return err
+			}
+			if latest.EventID != fence.EventID || latest.RequestBinding != fence.RequestBinding {
+				return fmt.Errorf("%w: approved certificate fence changed across privacy barrier", store.ErrIdempotencyConflict)
+			}
+			result, err = o.projectApprovedCertificateFenceUnbarriered(barrierCtx, tenantID, latest)
+			return err
+		})
+	return result, err
+}
+
+func (o *Orchestrator) projectApprovedCertificateFenceUnbarriered(
+	ctx context.Context,
+	tenantID string,
+	fence store.ApprovedTargetFence,
+) (store.Certificate, error) {
+	if fence.TenantID != tenantID || fence.TargetKind != store.ApprovedTargetEphemeralCertificate {
+		return store.Certificate{}, fmt.Errorf("%w: approved certificate fence scope differs", store.ErrIdempotencyConflict)
+	}
+	retained, retainedFound, err := o.log.EventByID(ctx, fence.EventID)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	var canonical projections.CertificateRecorded
+	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		locked, use, privacyRewritten, err := o.store.LockApprovedTargetFenceTx(ctx, tx, tenantID,
+			store.ApprovedTargetEphemeralCertificate, fence.CommandKey)
+		if err != nil {
+			return err
+		}
+		var payload projections.CertificateRecorded
+		if err := json.Unmarshal(locked.Payload, &payload); err != nil {
+			return fmt.Errorf("orchestrator: decode approved certificate fence: %w", err)
+		}
+		originalApproval := payload.Approval
+		payload.Approval = &use
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		candidate := events.Event{
+			ID: locked.EventID, Type: locked.EventType, TenantID: tenantID,
+			Time: locked.EventTime, SchemaVersion: locked.SchemaVersion, Actor: locked.Actor, Data: data,
+		}
+		wantSemantic, err := projections.ApprovedCertificateSemanticDigest(candidate, payload)
+		if err != nil || wantSemantic != locked.SemanticDigest {
+			if err == nil {
+				err = store.ErrIdempotencyConflict
+			}
+			return fmt.Errorf("%w: approved certificate fence semantic digest differs", err)
+		}
+		event := retained
+		if !retainedFound {
+			event, err = o.log.Append(ctx, candidate)
+			if err != nil {
+				return err
+			}
+		}
+		if event.ID != locked.EventID || event.Type != locked.EventType || event.TenantID != tenantID ||
+			event.SchemaVersion != locked.SchemaVersion || !event.Time.Equal(locked.EventTime) {
+			return fmt.Errorf("%w: canonical approved certificate event envelope differs", store.ErrIdempotencyConflict)
+		}
+		if err := json.Unmarshal(event.Data, &canonical); err != nil {
+			return fmt.Errorf("orchestrator: decode canonical approved certificate: %w", err)
+		}
+		gotSemantic, err := projections.ApprovedCertificateSemanticDigest(event, canonical)
+		if err != nil || gotSemantic != locked.SemanticDigest {
+			if err == nil {
+				err = store.ErrIdempotencyConflict
+			}
+			return fmt.Errorf("%w: canonical approved certificate command differs", err)
+		}
+		if canonical.Approval == nil || originalApproval == nil {
+			return fmt.Errorf("%w: canonical approved certificate lacks approval", store.ErrIdempotencyConflict)
+		}
+		if privacyRewritten {
+			if err := store.ValidateApprovedTargetActorPrivacyRewrite(tenantID,
+				locked.Actor, use.Requester, event.Actor, originalApproval.Requester); err != nil {
+				return fmt.Errorf("%w: canonical approved certificate actor privacy rewrite differs", err)
+			}
+			if retainedFound {
+				if err := store.ValidateApprovedTargetPrivacyRewrite(tenantID, *originalApproval, use, *canonical.Approval); err != nil {
+					return fmt.Errorf("%w: canonical approved certificate privacy rewrite differs", err)
+				}
+			}
+			canonical.Approval = &use
+			projectData, err := json.Marshal(canonical)
+			if err != nil {
+				return err
+			}
+			event.Data = projectData
+		} else if !reflect.DeepEqual(event.Actor, locked.Actor) || !reflect.DeepEqual(*canonical.Approval, *originalApproval) {
+			return fmt.Errorf("%w: canonical approved certificate approval differs", store.ErrIdempotencyConflict)
+		}
+		return o.proj.ApplyTx(ctx, tx, event)
+	})
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	return o.store.GetCertificateByFingerprint(ctx, tenantID, canonical.Fingerprint)
+}
+
+func certificateRecordedPayload(id string, in store.Certificate, approval *store.OperationApprovalUse, approvalBinding *ephemerallib.ApprovalBinding) projections.CertificateRecorded {
 	sans := in.SANs
 	if sans == nil {
 		sans = []string{}
 	}
-	payload, err := json.Marshal(projections.CertificateRecorded{
+	return projections.CertificateRecorded{
 		ID: id, CAID: in.CAID, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source,
@@ -1057,14 +1619,9 @@ func (o *Orchestrator) RecordCertificate(ctx context.Context, tenantID string, i
 		KeyStorage:             in.KeyStorage,
 		KeyExportable:          in.KeyExportable,
 		KeyGeneratedBy:         in.KeyGeneratedBy,
-	})
-	if err != nil {
-		return store.Certificate{}, err
+		Approval:               approval,
+		ApprovalBinding:        approvalBinding,
 	}
-	if _, err := o.emit(ctx, projections.EventCertificateRecorded, tenantID, payload); err != nil {
-		return store.Certificate{}, err
-	}
-	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
 }
 
 // RevokeCertificate records a certificate.revoked event (keyed by the cert's

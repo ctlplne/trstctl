@@ -118,7 +118,9 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		return err
 	}
 	defer runSigner.Close()
-	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
+	log, err := openSanitizedHistoryAwareEventLog(
+		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
+	)
 	if err != nil {
 		return fmt.Errorf("open event log: %w", err)
 	}
@@ -1151,6 +1153,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunDispatcher),
 			startRuntimeWorker(workCtx, srv.RunRetention),
 			startRuntimeWorker(workCtx, srv.RunPrivacyRetention),
+			startRuntimeWorker(workCtx, srv.RunApplicationSecretMutationReconciler),
 			startRuntimeWorker(workCtx, srv.RunIdempotencyGC),
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),

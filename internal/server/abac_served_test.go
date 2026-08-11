@@ -10,10 +10,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -30,6 +32,10 @@ func TestServedABACDenyOverlayEnforcesChangeWindow(t *testing.T) {
 	const tenantID = "11111111-1111-1111-1111-111111111111"
 
 	st := newServerTestStore(t)
+	storeServerTestProfile(t, st, tenantID, "tls-server", profile.CertificateProfile{
+		Name: "tls-server", AllowedEKUs: []string{"serverAuth"},
+		MaxValidity: profile.Duration(365 * 24 * time.Hour), AllowedProtocols: []string{"api"},
+	})
 	owner, err := st.CreateOwner(ctx, store.Owner{TenantID: tenantID, Kind: store.OwnerWorkload, Name: "payments"})
 	if err != nil {
 		t.Fatalf("seed owner: %v", err)

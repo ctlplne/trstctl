@@ -135,8 +135,12 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// AUD-97's outbox reconciliation recovery read raised it to 347: the
 	// Incidents workspace now exposes the tenant-scoped, payload-free evidence
 	// for a startup command collision without rebinding the historical key.
-	if len(out) != 347 {
-		t.Fatalf("OpenAPI operationIds = %d, want 347", len(out))
+	// AUD-77's immutable approval-request list and exact approve/deny endpoints
+	// raise it to 350: the approval inbox now reads requests instead of inventing
+	// them from inventory state, and every decision binds request ID plus intent
+	// digest. Denial closes only the request; it never mutates the target.
+	if len(out) != 350 {
+		t.Fatalf("OpenAPI operationIds = %d, want 350", len(out))
 	}
 	return out
 }

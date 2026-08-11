@@ -3,12 +3,16 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -202,6 +206,200 @@ func (i *Idempotency) openResult(ctx context.Context, tenantID, key, binding, co
 		return nil, fmt.Errorf("orchestrator: open idempotency result: %w", err)
 	}
 	return append([]byte(nil), plaintext...), nil
+}
+
+// schedulerPrivacyCachedResponse mirrors the generic HTTP idempotency envelope
+// without coupling the orchestrator back to internal/api. Its compact field
+// names are a durable storage contract: the scheduler's terminal tick stores
+// the exact Body and Status that this protected envelope must authenticate.
+type schedulerPrivacyCachedResponse struct {
+	Status  int             `json:"s"`
+	Body    json.RawMessage `json:"b"`
+	Binding string          `json:"h,omitempty"`
+}
+
+// ResolveSecretRotationSchedulePrivacyOuter is the generic idempotency
+// receiver owner's same-transaction privacy seam. The caller already holds the
+// exact row lock in tx. This method authenticates the cached HTTP envelope,
+// re-protects it under the replacement key's AAD when the raw key changes, and
+// installs the result with an exact old-row CAS before returning an
+// acknowledgement. It never opens a second SQL mutation transaction.
+func (i *Idempotency) ResolveSecretRotationSchedulePrivacyOuter(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, rawIdempotencyKey string,
+	requirement store.SecretRotationSchedulePrivacyOuterRequirement,
+) (store.SecretRotationSchedulePrivacyOuterAcknowledgement, error) {
+	var acknowledgement store.SecretRotationSchedulePrivacyOuterAcknowledgement
+	if i == nil || i.store == nil || tx == nil || tenantID == "" ||
+		rawIdempotencyKey == "" || requirement.AuthorityRef == "" ||
+		requirement.RequestBinding == "" || requirement.Status == "" ||
+		requirement.ReplacementIdempotencyKey == "" {
+		return acknowledgement, errors.New("orchestrator: scheduler privacy outer resolver is incomplete")
+	}
+
+	var status, binding, codec string
+	var protected []byte
+	if err := tx.QueryRow(ctx,
+		`SELECT status, request_binding, result_codec, result
+		   FROM idempotency_keys
+		  WHERE tenant_id = $1 AND key = $2
+		  FOR UPDATE`, tenantID, rawIdempotencyKey).Scan(
+		&status, &binding, &codec, &protected); err != nil {
+		return acknowledgement, fmt.Errorf("orchestrator: lock scheduler privacy outer receiver: %w", err)
+	}
+	defer secret.Wipe(protected)
+	if status != requirement.Status ||
+		!crypto.ConstantTimeEqual([]byte(binding), []byte(requirement.RequestBinding)) ||
+		codec != requirement.ResultCodec {
+		return acknowledgement, fmt.Errorf(
+			"%w: scheduler privacy outer receiver differs from its locked requirement",
+			store.ErrSecretRotationScheduleTickConflict,
+		)
+	}
+	if requirement.RawKeyTokenMatch ==
+		(requirement.ReplacementIdempotencyKey == rawIdempotencyKey) {
+		return acknowledgement, fmt.Errorf(
+			"%w: scheduler privacy outer replacement key contradicts raw-key match",
+			store.ErrSecretRotationScheduleTickConflict,
+		)
+	}
+
+	acknowledgement = store.SecretRotationSchedulePrivacyOuterAcknowledgement{
+		AuthorityRef:           requirement.AuthorityRef,
+		RequestBinding:         binding,
+		OriginalResultCodec:    codec,
+		ResolvedIdempotencyKey: requirement.ReplacementIdempotencyKey,
+		ResolvedResultCodec:    codec,
+	}
+
+	switch status {
+	case "bound":
+		if !requirement.RawKeyTokenMatch || requirement.TerminalBodyMatch ||
+			requirement.TerminalHTTPStatus != 0 || len(requirement.OriginalTerminalBody) != 0 ||
+			len(requirement.RewrittenTerminalBody) != 0 || codec == "" || len(protected) != 0 {
+			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+				"%w: bound scheduler privacy outer has terminal result evidence",
+				store.ErrSecretRotationScheduleTickConflict,
+			)
+		}
+		tag, err := tx.Exec(ctx,
+			`UPDATE idempotency_keys
+			    SET key = $3
+			  WHERE tenant_id = $1 AND key = $2
+			    AND status = $4 AND request_binding = $5
+			    AND result_codec = $6 AND result IS NOT DISTINCT FROM $7`,
+			tenantID, rawIdempotencyKey, requirement.ReplacementIdempotencyKey,
+			status, binding, codec, protected)
+		if err != nil {
+			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{},
+				fmt.Errorf("orchestrator: rekey bound scheduler privacy outer: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+				"%w: bound scheduler privacy outer CAS changed %d rows",
+				store.ErrSecretRotationScheduleTickConflict, tag.RowsAffected(),
+			)
+		}
+		return acknowledgement, nil
+
+	case "completed":
+		if requirement.TerminalHTTPStatus == 0 || len(requirement.OriginalTerminalBody) == 0 ||
+			codec == "" || len(protected) == 0 {
+			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+				"%w: completed scheduler privacy outer lacks exact terminal evidence",
+				store.ErrSecretRotationScheduleTickConflict,
+			)
+		}
+	default:
+		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+			"%w: scheduler privacy outer status %q is unsupported",
+			store.ErrSecretRotationScheduleTickConflict, status,
+		)
+	}
+
+	protectedCAS := append([]byte(nil), protected...)
+	defer secret.Wipe(protectedCAS)
+	plaintext, err := i.openResult(
+		ctx, tenantID, rawIdempotencyKey, binding, codec,
+		append([]byte(nil), protected...),
+	)
+	if err != nil {
+		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, err
+	}
+	defer secret.Wipe(plaintext)
+	var cached schedulerPrivacyCachedResponse
+	if !json.Valid(plaintext) || json.Unmarshal(plaintext, &cached) != nil {
+		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+			"%w: protected scheduler response is not a cached HTTP envelope",
+			store.ErrSecretRotationScheduleTickConflict,
+		)
+	}
+	defer secret.Wipe(cached.Body)
+	if cached.Status != requirement.TerminalHTTPStatus ||
+		!crypto.ConstantTimeEqual([]byte(cached.Binding), []byte(binding)) ||
+		!bytes.Equal(cached.Body, requirement.OriginalTerminalBody) {
+		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+			"%w: protected scheduler response differs from exact terminal tick bytes",
+			store.ErrSecretRotationScheduleTickConflict,
+		)
+	}
+
+	nextPlaintext := plaintext
+	var rewritten []byte
+	if requirement.TerminalBodyMatch {
+		if len(requirement.RewrittenTerminalBody) == 0 ||
+			bytes.Equal(requirement.RewrittenTerminalBody, requirement.OriginalTerminalBody) {
+			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+				"%w: scheduler privacy terminal rewrite is empty or unchanged",
+				store.ErrSecretRotationScheduleTickConflict,
+			)
+		}
+		rewrittenBody := append(json.RawMessage(nil), requirement.RewrittenTerminalBody...)
+		defer secret.Wipe(rewrittenBody)
+		cached.Body = rewrittenBody
+		rewritten, err = json.Marshal(cached)
+		if err != nil {
+			return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, err
+		}
+		defer secret.Wipe(rewritten)
+		nextPlaintext = rewritten
+	} else if len(requirement.RewrittenTerminalBody) != 0 {
+		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+			"%w: scheduler privacy outer supplied an unrequested terminal rewrite",
+			store.ErrSecretRotationScheduleTickConflict,
+		)
+	}
+
+	resolvedCodec, resolvedProtected, err := i.protectResult(
+		ctx, tenantID, requirement.ReplacementIdempotencyKey, binding, nextPlaintext,
+	)
+	if err != nil {
+		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, err
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE idempotency_keys
+		    SET key = $3, result_codec = $4, result = $5
+		  WHERE tenant_id = $1 AND key = $2
+		    AND status = $6 AND request_binding = $7
+		    AND result_codec = $8 AND result IS NOT DISTINCT FROM $9`,
+		tenantID, rawIdempotencyKey, requirement.ReplacementIdempotencyKey,
+		resolvedCodec, resolvedProtected, status, binding, codec, protectedCAS)
+	if err != nil {
+		secret.Wipe(resolvedProtected)
+		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{},
+			fmt.Errorf("orchestrator: protect scheduler privacy outer in place: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		secret.Wipe(resolvedProtected)
+		return store.SecretRotationSchedulePrivacyOuterAcknowledgement{}, fmt.Errorf(
+			"%w: completed scheduler privacy outer CAS changed %d rows",
+			store.ErrSecretRotationScheduleTickConflict, tag.RowsAffected(),
+		)
+	}
+	acknowledgement.ResolvedResultCodec = resolvedCodec
+	acknowledgement.ProtectedResult = resolvedProtected
+	return acknowledgement, nil
 }
 
 // doProtectedTransactional preserves Do/DoBound's wait-and-replay behavior while
@@ -744,6 +942,159 @@ func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string
 	return append([]byte(nil), result...), nil
 }
 
+// TenantRegistrationIdempotencyClaim is the first phase of the one specialized
+// two-phase registration recorder. ProtectedResult ownership transfers to the
+// caller, which must wipe it after opening or abandoning it.
+type TenantRegistrationIdempotencyClaim struct {
+	Created         bool
+	Completed       bool
+	EventID         string
+	EventTime       time.Time
+	ResultCodec     string
+	ProtectedResult []byte
+}
+
+const tenantRegistrationAnchorPrefix = "trstctl-tenant-registration-anchor-v1\x00tenant-registration-"
+
+func tenantRegistrationAnchor(eventID string) ([]byte, error) {
+	const eventPrefix = "tenant-registration-"
+	if !strings.HasPrefix(eventID, eventPrefix) {
+		return nil, errors.New("orchestrator: tenant registration event id has the wrong prefix")
+	}
+	if _, err := uuid.Parse(strings.TrimPrefix(eventID, eventPrefix)); err != nil {
+		return nil, errors.New("orchestrator: tenant registration event id is malformed")
+	}
+	return []byte("trstctl-tenant-registration-anchor-v1\x00" + eventID), nil
+}
+
+func parseTenantRegistrationAnchor(raw []byte) (string, error) {
+	if !bytes.HasPrefix(raw, []byte(tenantRegistrationAnchorPrefix)) {
+		return "", errors.New("orchestrator: pending registration anchor has the wrong format")
+	}
+	eventID := string(raw[len("trstctl-tenant-registration-anchor-v1\x00"):])
+	canonical, err := tenantRegistrationAnchor(eventID)
+	if err != nil || !bytes.Equal(canonical, raw) {
+		return "", errors.New("orchestrator: pending registration anchor is malformed")
+	}
+	return eventID, nil
+}
+
+// PrepareTenantRegistrationTx commits the non-PII producer identity before an
+// event can be appended. The lifecycle advisory lock held by the caller makes
+// this row the single durable first-writer fence for a missing tenant UUID. A
+// pending retry gets the same event ID and PostgreSQL timestamp; it may then do
+// the exceptional retained-history recovery lookup without making that scan the
+// normal registration path.
+func (i *Idempotency) PrepareTenantRegistrationTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, key, binding, candidateEventID string,
+) (TenantRegistrationIdempotencyClaim, error) {
+	if i == nil || i.store == nil || tx == nil {
+		return TenantRegistrationIdempotencyClaim{}, errors.New("orchestrator: transactional idempotency store is not configured")
+	}
+	if tenantID == "" || key == "" || binding == "" || candidateEventID == "" {
+		return TenantRegistrationIdempotencyClaim{}, errors.New("orchestrator: transactional registration idempotency is incomplete")
+	}
+	anchor, err := tenantRegistrationAnchor(candidateEventID)
+	if err != nil {
+		return TenantRegistrationIdempotencyClaim{}, err
+	}
+	defer secret.Wipe(anchor)
+
+	// Reject a different-key preclaim before it can publish. Generic pending
+	// idempotency results are excluded by the exact format prefix and are never
+	// opened or interpreted as registration output.
+	rows, err := tx.Query(ctx, `
+		SELECT key, result
+		  FROM idempotency_keys
+		 WHERE tenant_id = $1 AND status = 'pending' AND result_codec = $2
+		   AND substring(result FROM 1 FOR $3) = $4
+		 ORDER BY key
+		 FOR UPDATE`, tenantID, ResultCodecRawV0,
+		len(tenantRegistrationAnchorPrefix), []byte(tenantRegistrationAnchorPrefix))
+	if err != nil {
+		return TenantRegistrationIdempotencyClaim{}, fmt.Errorf("orchestrator: inspect pending registration anchors: %w", err)
+	}
+	for rows.Next() {
+		var otherKey string
+		var raw []byte
+		if err := rows.Scan(&otherKey, &raw); err != nil {
+			rows.Close()
+			secret.Wipe(raw)
+			return TenantRegistrationIdempotencyClaim{}, fmt.Errorf("orchestrator: scan pending registration anchor: %w", err)
+		}
+		_, parseErr := parseTenantRegistrationAnchor(raw)
+		secret.Wipe(raw)
+		if parseErr != nil {
+			rows.Close()
+			return TenantRegistrationIdempotencyClaim{}, parseErr
+		}
+		if otherKey != key {
+			rows.Close()
+			return TenantRegistrationIdempotencyClaim{}, ErrInProgress
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return TenantRegistrationIdempotencyClaim{}, fmt.Errorf("orchestrator: iterate pending registration anchors: %w", err)
+	}
+	rows.Close()
+
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
+		INSERT INTO idempotency_keys
+		       (tenant_id, key, status, request_binding, result_codec, result, created_at)
+		VALUES ($1, $2, 'pending', $3, $4, $5, clock_timestamp())
+		ON CONFLICT (tenant_id, key) DO NOTHING
+		RETURNING created_at`, tenantID, key, binding, ResultCodecRawV0, anchor).Scan(&createdAt)
+	if err == nil {
+		return TenantRegistrationIdempotencyClaim{
+			Created: true, EventID: candidateEventID, EventTime: createdAt.UTC(),
+		}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return TenantRegistrationIdempotencyClaim{}, fmt.Errorf("orchestrator: prepare transactional registration key: %w", err)
+	}
+
+	var status, storedBinding, resultCodec string
+	var storedResult []byte
+	if err := tx.QueryRow(ctx, `
+		SELECT status, request_binding, result_codec, result, created_at
+		  FROM idempotency_keys
+		 WHERE tenant_id = $1 AND key = $2
+		 FOR UPDATE`, tenantID, key).Scan(
+		&status, &storedBinding, &resultCodec, &storedResult, &createdAt); err != nil {
+		return TenantRegistrationIdempotencyClaim{}, fmt.Errorf("orchestrator: load transactional registration binding: %w", err)
+	}
+	if !idempotencyBindingEqual(storedBinding, binding) {
+		secret.Wipe(storedResult)
+		return TenantRegistrationIdempotencyClaim{}, ErrIdempotencyConflict
+	}
+	switch status {
+	case "pending":
+		defer secret.Wipe(storedResult)
+		if resultCodec != ResultCodecRawV0 {
+			return TenantRegistrationIdempotencyClaim{}, ErrIdempotencyConflict
+		}
+		eventID, err := parseTenantRegistrationAnchor(storedResult)
+		if err != nil || createdAt.IsZero() {
+			return TenantRegistrationIdempotencyClaim{}, ErrIdempotencyConflict
+		}
+		return TenantRegistrationIdempotencyClaim{
+			EventID: eventID, EventTime: createdAt.UTC(),
+		}, nil
+	case "completed":
+		return TenantRegistrationIdempotencyClaim{
+			Completed: true, ResultCodec: resultCodec,
+			ProtectedResult: storedResult,
+		}, nil
+	default:
+		secret.Wipe(storedResult)
+		return TenantRegistrationIdempotencyClaim{}, incompleteResultError(status)
+	}
+}
+
 // doBoundMemory is the in-process model shared by transactional and durable
 // bound calls. It owns cached result bytes and makes identical concurrent calls
 // wait for one callback. Transactional claims disappear on callback failure,
@@ -1122,6 +1473,137 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 	}
 	if usedStored {
 		return i.openResult(ctx, tenantID, key, binding, resultCodec, storedResult)
+	}
+	return append([]byte(nil), out...), nil
+}
+
+// PreparedDurableEffectClaim is returned by a receiver-specific preparation
+// callback. CompletedResult remains protected and opaque until this package
+// checks the binding and opens it through the configured result protector.
+type PreparedDurableEffectClaim struct {
+	Completed       bool
+	ResultCodec     string
+	CompletedResult []byte
+}
+
+// DoPreparedDurableEffectBound is the strict durable path for a receiver whose
+// immutable work set must commit in the same transaction as the outer bind.
+// prepare owns that bind and receiver snapshot under repeatable-read. After fn
+// terminalizes the receiver and releases external resources, verifyTerminal
+// proves the plaintext result against that receiver in the same short
+// transaction that protects and completes the outer cache row.
+func (i *Idempotency) DoPreparedDurableEffectBound(
+	ctx context.Context,
+	tenantID, key, binding string,
+	prepare func(context.Context, pgx.Tx) (PreparedDurableEffectClaim, error),
+	verifyTerminal func(context.Context, pgx.Tx, []byte) error,
+	fn func(context.Context) ([]byte, error),
+) ([]byte, error) {
+	if i == nil || i.store == nil {
+		return nil, errors.New("orchestrator: prepared durable idempotency requires PostgreSQL")
+	}
+	if tenantID == "" || key == "" || binding == "" || prepare == nil || verifyTerminal == nil || fn == nil {
+		return nil, errors.New("orchestrator: prepared durable idempotency requires exact identity and callbacks")
+	}
+
+	var claim PreparedDurableEffectClaim
+	err := i.store.WithPrivacyTenantProjectionRepeatableRead(
+		ctx, tenantID, "secret rotation scheduler aggregate prepare", func(tx pgx.Tx) error {
+			var err error
+			claim, err = prepare(ctx, tx)
+			return err
+		})
+	defer secret.Wipe(claim.CompletedResult)
+	if err != nil {
+		return nil, err
+	}
+	if claim.Completed {
+		if claim.ResultCodec == "" || len(claim.CompletedResult) == 0 {
+			return nil, errors.New("orchestrator: completed prepared durable claim has no protected result")
+		}
+		opened, err := i.openResult(ctx, tenantID, key, binding, claim.ResultCodec, claim.CompletedResult)
+		if err != nil {
+			return nil, err
+		}
+		// A restored or pre-fix completed outer row is not proof by itself. Re-run
+		// the receiver verifier over the opened bytes so replay must still match
+		// the exact terminal receiver state and its current closed schema.
+		if err := i.store.WithPrivacyTenantProjectionRepeatableRead(
+			ctx, tenantID, "completed prepared durable result verification", func(tx pgx.Tx) error {
+				return verifyTerminal(ctx, tx, opened)
+			},
+		); err != nil {
+			secret.Wipe(opened)
+			return nil, err
+		}
+		return opened, nil
+	}
+
+	out, err := fn(ctx)
+	if err != nil {
+		secret.Wipe(out)
+		return nil, err
+	}
+	defer secret.Wipe(out)
+	codec, protected, err := i.protectResult(ctx, tenantID, key, binding, out)
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(protected)
+
+	var (
+		storedResult []byte
+		storedCodec  string
+		usedStored   bool
+	)
+	defer secret.Wipe(storedResult)
+	err = i.store.WithPrivacyTenantProjectionRepeatableRead(
+		ctx, tenantID, "secret rotation scheduler aggregate completion", func(tx pgx.Tx) error {
+			if err := verifyTerminal(ctx, tx, out); err != nil {
+				return err
+			}
+			tag, err := tx.Exec(ctx,
+				`UPDATE idempotency_keys
+			    SET status = 'completed', result_codec = $4, result = $5,
+			        completed_at = clock_timestamp()
+			  WHERE tenant_id = $1 AND key = $2
+			    AND status = 'bound' AND request_binding = $3`,
+				tenantID, key, binding, codec, protected)
+			if err != nil {
+				return fmt.Errorf("orchestrator: complete prepared durable key: %w", err)
+			}
+			if tag.RowsAffected() == 1 {
+				return nil
+			}
+			var status, storedBinding string
+			if err := tx.QueryRow(ctx,
+				`SELECT status, request_binding
+			   FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2
+			  FOR UPDATE`, tenantID, key).Scan(&status, &storedBinding); err != nil {
+				return fmt.Errorf("orchestrator: load prepared durable completion: %w", err)
+			}
+			if !idempotencyBindingEqual(storedBinding, binding) {
+				return ErrIdempotencyConflict
+			}
+			if status != "completed" {
+				return incompleteResultError(status)
+			}
+			if err := tx.QueryRow(ctx,
+				`SELECT result_codec, result
+			   FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2 AND request_binding = $3`,
+				tenantID, key, binding).Scan(&storedCodec, &storedResult); err != nil {
+				return fmt.Errorf("orchestrator: load prepared durable result: %w", err)
+			}
+			usedStored = true
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+	if usedStored {
+		return i.openResult(ctx, tenantID, key, binding, storedCodec, storedResult)
 	}
 	return append([]byte(nil), out...), nil
 }

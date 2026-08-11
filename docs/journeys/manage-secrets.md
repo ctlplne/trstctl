@@ -21,8 +21,9 @@ tamper-evident log. This is for a developer or platform engineer who wants their
 services to stop hard-coding secrets.
 
 > **In the console:** the `/secrets` workspace presents the same store as a folder
-> tree with a reference resolver, an environment diff, version history, bulk import, and
-> a transit (encrypt / decrypt / HMAC) sub-console. See [The web console](../web-console.md).
+> tree with a reference resolver, an environment diff, version history, a disabled
+> bulk-import disclosure, and a transit (encrypt / decrypt / HMAC) sub-console. The
+> import route returns `501` without writing. See [The web console](../web-console.md).
 
 ## Before you start
 
@@ -127,23 +128,30 @@ today (see [Current limitations](../limitations.md) and
    the stock CLI omits it, trstctl derives a replay key from method, path, and body so
    retries do not mint duplicates.
 
-3. Import a small tree and resolve references deliberately. Imports are all-or-nothing:
-   every value is sealed as version 1, and if one path already exists the import is
-   rejected. References use `${secret.path}` and expand only when the caller asks for
+3. Create a small tree one secret at a time, then resolve references deliberately.
+   Bulk import is currently unavailable: `/api/v1/secrets/store/import` returns `501`
+   without writing because an atomic event-sourced batch command is not implemented.
+   References use `${secret.path}` and expand only when the caller asks for
    `resolve=true`, so a normal read does not fan out across hidden dependencies.
 
    ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store/import \
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
-     -d '{"prefix":"app","values":{"db/user":"payments","db/dsn":"postgres://${secret.app/db/user}@db.service.local/payments"}}'
+     -d '{"name":"app/db/user","value":"payments"}'
+
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"name":"app/db/dsn","value":"postgres://${secret.app/db/user}@db.service.local/payments"}'
 
    curl -fksS "https://localhost:8443/api/v1/secrets/store/app/db/dsn?resolve=true" \
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
    ```
 
-   -> the first response lists only imported metadata; the second response expands the
+   -> each create response contains metadata only; the final response expands the
    referenced value for this tenant. A circular reference is a `409` problem response
    with a `cycle` field.
 
@@ -151,9 +159,9 @@ today (see [Current limitations](../limitations.md) and
    on write (old versions stay queryable), so a `PUT` rolls forward without losing
    history. If dual-control approvals are enabled, this first `PUT` opens the
    approval request and returns `403` until distinct approvers authorize the exact
-   secret/action. For backend static credentials, the served rotation API stages a
-   new credential, cuts the consumer pointer over, verifies the new login, retires the
-   old reference, and rolls back automatically if cutover or verification fails. See
+   secret/action. This native-store `PUT` only records the next sealed value in
+   trstctl; it does not rotate a credential at its backend. Manual static-provider and
+   dynamic-lease provider rotations fail before making any provider effect. See
    [Secrets](../features/secrets.md).
 
    ```sh
@@ -185,16 +193,16 @@ today (see [Current limitations](../limitations.md) and
    `Idempotency-Key` and the rotate succeeds. The requester cannot approve their own
    request.
 
-   Beyond in-store version rotation, the same served engine runs three
-   rollback-safe variants — backend static credentials
-   (`POST /api/v1/secrets/rotations`, provider `postgresql` etc.: stage, cut
-   over, verify, retire, auto-rollback), connector-backed rotation
-   (`secrets rotations run` with `provider":"connector:<target>"`, restoring
-   the prior version if delivery fails), and dynamic-lease rotation
-   (`provider":"dynamic-lease:<backend>"`, replacing and revoking leases after
-   cutover) — plus event-sourced schedules
+   Beyond in-store version rotation, the provider route currently runs only
+   connector-backed rotation (`secrets rotations run` with
+   `provider":"connector:<target>"`, atomically
+   committing the local version plus sealed outbox command and returning
+   `queued:true` until the worker delivers) — plus event-sourced schedules
    (`POST /api/v1/secrets/rotation-schedules`, then `/run-due`). Every
    response is metadata-only; no variant returns the new credential value.
+   Static providers such as `postgresql` and `dynamic-lease:<backend>` deliberately
+   return a stable `503` before any provider effect until their complete effect and
+   rollback chains share one durable worker command.
    Payload shapes and the rotation-mode taxonomy are on the
    [Secrets feature page](../features/secrets.md).
 

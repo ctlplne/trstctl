@@ -3,14 +3,18 @@
 package store_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -206,6 +210,363 @@ func TestBackupWriteFenceCancelledExternalMutationDoesNotRun(t *testing.T) {
 	} else if ok {
 		t.Fatal("cancelled external mutation persisted a checkpoint")
 	}
+}
+
+func TestPostgresStateSnapshotFenceBlocksExclusiveCutoverUntilSnapshotEnds(t *testing.T) {
+	primary := newStore(t)
+	peer := openHistoryRewritePeer(t)
+	ctx := context.Background()
+	tx, err := primary.BeginPostgresStateSnapshotTx(ctx)
+	if err != nil {
+		t.Fatalf("begin postgres-state snapshot: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	fenceEntered := make(chan struct{})
+	fenceResult := make(chan error, 1)
+	go func() {
+		fenceResult <- peer.WithBackupWriteFence(ctx, func(context.Context) error {
+			close(fenceEntered)
+			return nil
+		})
+	}()
+	waitForAcquiredConnections(t, peer, 1)
+	select {
+	case <-fenceEntered:
+		t.Fatal("exclusive history cutover entered while PostgreSQL-state snapshot was active")
+	default:
+	}
+
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("finish postgres-state snapshot: %v", err)
+	}
+	select {
+	case err := <-fenceResult:
+		if err != nil {
+			t.Fatalf("exclusive cutover after snapshot: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("exclusive cutover stayed blocked after PostgreSQL-state snapshot ended")
+	}
+}
+
+func TestPostgresStateSnapshotRecognizesOwningExclusiveFenceContext(t *testing.T) {
+	primary := newStore(t)
+	held := reserveStoreConnections(t, primary, 15)
+	defer releaseStoreConnections(held)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := primary.WithBackupWriteFence(ctx, func(fenceCtx context.Context) error {
+		tx, err := primary.BeginPostgresStateSnapshotTx(fenceCtx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback(fenceCtx) }()
+		return nil
+	}); err != nil {
+		t.Fatalf("pin snapshot inside owning exclusive fence: %v", err)
+	}
+}
+
+func TestStandalonePostgresStateSnapshotPinsAfterCrossingPrivacyCutover(t *testing.T) {
+	primary := newStore(t)
+	peer := openHistoryRewritePeer(t)
+	ctx := context.Background()
+	const tenantID = "a1140000-0000-4000-8000-000000000114"
+	cleanup := func() {
+		_, _ = primary.SystemPool().Exec(context.Background(),
+			`DELETE FROM privacy_subject_erasure_preparations WHERE tenant_id = $1`, tenantID)
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	cutoverEntered := make(chan struct{})
+	commitCutover := make(chan struct{})
+	cutoverResult := make(chan error, 1)
+	go func() {
+		cutoverResult <- peer.WithBackupWriteFence(ctx, func(fenceCtx context.Context) error {
+			close(cutoverEntered)
+			<-commitCutover
+			return peer.WithTenant(fenceCtx, tenantID, func(tx pgx.Tx) error {
+				_, err := tx.Exec(fenceCtx,
+					`INSERT INTO privacy_subject_erasure_preparations
+				        (tenant_id, operation_id, request_binding, event_id,
+				         rewrite_operation_id, target_generation, subject_ref,
+				         requested_by_ref, reason, selectors, counts,
+				         recovery_fences, erased_at)
+				 VALUES ($1, 'privacy-crossing-backup', 'binding', 'event',
+				         'rewrite', 'generation', $2, '', '', '{}'::jsonb,
+				         '{}'::jsonb, '[]'::jsonb, now())`,
+					tenantID, strings.Repeat("a", 64))
+				return err
+			})
+		})
+	}()
+	<-cutoverEntered
+
+	type exportResult struct {
+		err error
+	}
+	var artifact bytes.Buffer
+	exportDone := make(chan exportResult, 1)
+	go func() {
+		_, err := backup.WritePostgresState(ctx, primary, &artifact)
+		exportDone <- exportResult{err: err}
+	}()
+	waitForAcquiredConnections(t, primary, 1)
+	waitForAdvisoryLockWaiter(t, peer, store.BackupWriteFenceAdvisoryLockKey)
+	select {
+	case result := <-exportDone:
+		t.Fatalf("standalone export crossed an active exclusive cutover: %v", result.err)
+	default:
+	}
+
+	close(commitCutover)
+	if err := waitHistoryRewriteResult(t, cutoverResult); err != nil {
+		t.Fatalf("commit privacy cutover marker: %v", err)
+	}
+	select {
+	case result := <-exportDone:
+		if !errors.Is(result.err, store.ErrPrivacySubjectErasurePreparationActive) {
+			t.Fatalf("crossing export error = %v, want committed privacy preparation", result.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("standalone export did not resume after privacy cutover committed")
+	}
+	if artifact.Len() != 0 {
+		t.Fatalf("crossing export wrote %d pre-preparation bytes", artifact.Len())
+	}
+}
+
+func TestFullBackupSnapshotDowngradeBlocksCrossingPrivacyCutoverUntilExportEnds(t *testing.T) {
+	primary := newStore(t)
+	peer := openHistoryRewritePeer(t)
+	ctx := context.Background()
+	const tenantID = "a1140000-0000-4000-8000-000000000115"
+	cleanup := func() {
+		_, _ = primary.SystemPool().Exec(context.Background(),
+			`DELETE FROM privacy_subject_erasure_preparations WHERE tenant_id = $1`, tenantID)
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	var snapshot *backup.PostgresStateSnapshot
+	if err := primary.WithBackupWriteFence(ctx, func(fenceCtx context.Context) error {
+		var err error
+		snapshot, err = backup.BeginPostgresStateSnapshot(fenceCtx, primary)
+		return err
+	}); err != nil {
+		t.Fatalf("pin full-backup snapshot under exclusive cut: %v", err)
+	}
+	defer func() {
+		if snapshot != nil {
+			_ = snapshot.Rollback(context.Background())
+		}
+	}()
+
+	cutoverEntered := make(chan struct{})
+	cutoverResult := make(chan error, 1)
+	go func() {
+		cutoverResult <- peer.WithBackupWriteFence(ctx, func(fenceCtx context.Context) error {
+			close(cutoverEntered)
+			return peer.WithTenant(fenceCtx, tenantID, func(tx pgx.Tx) error {
+				_, err := tx.Exec(fenceCtx,
+					`INSERT INTO privacy_subject_erasure_preparations
+				        (tenant_id, operation_id, request_binding, event_id,
+				         rewrite_operation_id, target_generation, subject_ref,
+				         requested_by_ref, reason, selectors, counts,
+				         recovery_fences, erased_at)
+				 VALUES ($1, 'privacy-crossing-full-backup', 'binding', 'event',
+				         'rewrite', 'generation', $2, '', '', '{}'::jsonb,
+				         '{}'::jsonb, '[]'::jsonb, now())`,
+					tenantID, strings.Repeat("b", 64))
+				return err
+			})
+		})
+	}()
+	waitForAcquiredConnections(t, peer, 1)
+	waitForAdvisoryLockWaiter(t, peer, store.BackupWriteFenceAdvisoryLockKey)
+	select {
+	case <-cutoverEntered:
+		t.Fatal("privacy cutover crossed the full-backup exclusive-to-shared handoff")
+	default:
+	}
+
+	// Model the full coordinator's later PostgreSQL stream. It must stay on the
+	// pre-cutover snapshot paired with this event cut while the new cutover waits.
+	const eventCut = uint64(114)
+	var artifact bytes.Buffer
+	summary, err := backup.WritePostgresStateTx(ctx, snapshot, &artifact, eventCut)
+	if err != nil {
+		t.Fatalf("stream full-backup PostgreSQL snapshot: %v", err)
+	}
+	if summary.EventCutSequence != eventCut ||
+		summary.Tables["privacy_subject_erasure_preparations"] != 0 {
+		t.Fatalf("pre-cutover PostgreSQL artifact summary = %+v", summary)
+	}
+	verified, err := backup.VerifyPostgresState(bytes.NewReader(artifact.Bytes()))
+	if err != nil {
+		t.Fatalf("verify pre-cutover PostgreSQL artifact: %v", err)
+	}
+	if verified.EventCutSequence != eventCut ||
+		verified.Tables["privacy_subject_erasure_preparations"] != 0 {
+		t.Fatalf("verified pre-cutover PostgreSQL artifact = %+v", verified)
+	}
+	select {
+	case <-cutoverEntered:
+		t.Fatal("privacy cutover entered before the full-backup snapshot committed")
+	default:
+	}
+
+	if err := snapshot.Commit(ctx); err != nil {
+		t.Fatalf("finish full-backup PostgreSQL snapshot: %v", err)
+	}
+	snapshot = nil
+	if err := waitHistoryRewriteResult(t, cutoverResult); err != nil {
+		t.Fatalf("privacy cutover after full-backup snapshot: %v", err)
+	}
+	var livePreparation int
+	if err := primary.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM privacy_subject_erasure_preparations WHERE tenant_id = $1`,
+		tenantID).Scan(&livePreparation); err != nil {
+		t.Fatalf("inspect post-backup privacy preparation: %v", err)
+	}
+	if livePreparation != 1 {
+		t.Fatalf("post-backup privacy preparations = %d, want 1", livePreparation)
+	}
+}
+
+func TestFullBackupSnapshotHandoffGuardFailureReleasesConnectionAndFence(t *testing.T) {
+	primary := newStore(t)
+	peer := openHistoryRewritePeer(t)
+	ctx := context.Background()
+	const tenantID = "a1140000-0000-4000-8000-000000000116"
+	if _, err := primary.SystemPool().Exec(ctx,
+		`INSERT INTO privacy_subject_erasure_preparations
+		        (tenant_id, operation_id, request_binding, event_id,
+		         rewrite_operation_id, target_generation, subject_ref,
+		         requested_by_ref, reason, selectors, counts,
+		         recovery_fences, erased_at)
+		 VALUES ($1, 'privacy-full-backup-failure', 'binding', 'event',
+		         'rewrite', 'generation', $2, '', '', '{}'::jsonb,
+		         '{}'::jsonb, '[]'::jsonb, now())`,
+		tenantID, strings.Repeat("c", 64)); err != nil {
+		t.Fatalf("seed active privacy preparation: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = primary.SystemPool().Exec(context.Background(),
+			`DELETE FROM privacy_subject_erasure_preparations WHERE tenant_id = $1`, tenantID)
+	})
+
+	err := primary.WithBackupWriteFence(ctx, func(fenceCtx context.Context) error {
+		_, err := backup.BeginPostgresStateSnapshot(fenceCtx, primary)
+		return err
+	})
+	if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+		t.Fatalf("full-backup handoff guard error = %v, want active preparation", err)
+	}
+	waitForAcquiredConnections(t, primary, 0)
+
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := peer.WithBackupWriteFence(probeCtx, func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("exclusive fence after failed full-backup handoff: %v", err)
+	}
+}
+
+func TestStandalonePostgresStateSnapshotUsesOneAvailablePoolConnection(t *testing.T) {
+	primary := newStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := primary.SystemPool().Exec(ctx,
+		`DELETE FROM privacy_subject_erasure_preparations`); err != nil {
+		t.Fatalf("clear privacy preparations: %v", err)
+	}
+
+	// Reserve 15 of the store's 16 bounded slots. The snapshot must acquire the
+	// last connection, establish both advisory grants, begin, export, and commit
+	// on that same connection. A two-connection fence/snapshot design deadlocks.
+	held := reserveStoreConnections(t, primary, 15)
+	defer releaseStoreConnections(held)
+	var artifact bytes.Buffer
+	if _, err := backup.WritePostgresState(ctx, primary, &artifact); err != nil {
+		t.Fatalf("one-slot standalone PostgreSQL-state export: %v", err)
+	}
+	if artifact.Len() == 0 {
+		t.Fatal("one-slot standalone PostgreSQL-state export wrote no artifact")
+	}
+}
+
+func TestPostgresStateRestorePhysicallyPurgesLegacySnapshotPayloadAUD114(t *testing.T) {
+	primary := newStore(t)
+	ctx := context.Background()
+	if _, err := primary.SystemPool().Exec(ctx,
+		`DELETE FROM privacy_subject_erasure_preparations`); err != nil {
+		t.Fatalf("clear privacy preparations: %v", err)
+	}
+
+	// The independent-state stream deliberately never contains the ephemeral
+	// snapshot table. Seed the valid stream first, then model an already-migrated
+	// restore target on which an old replica left one raw v21 blob behind.
+	var artifact bytes.Buffer
+	if _, err := backup.WritePostgresState(ctx, primary, &artifact); err != nil {
+		t.Fatalf("write postgres-state fixture: %v", err)
+	}
+	if _, err := primary.SystemPool().Exec(ctx,
+		`ALTER TABLE read_model_snapshots
+		 DROP CONSTRAINT IF EXISTS read_model_snapshots_format_floor_v22`); err != nil {
+		t.Fatalf("model externally restored legacy snapshot schema: %v", err)
+	}
+	const rawSubject = "aud114-restore-raw-subject"
+	if _, err := primary.SystemPool().Exec(ctx, `
+		INSERT INTO read_model_snapshots
+		       (tenant_id, covered_seq, format_version, payload)
+		VALUES ('a1140000-0000-4000-8000-000000000004', 21, 21,
+		        jsonb_build_object('owners', jsonb_build_array(
+		          jsonb_build_object('name', $1::text))))`, rawSubject); err != nil {
+		t.Fatalf("seed legacy snapshot before restore: %v", err)
+	}
+	if _, err := backup.RestorePostgresState(ctx, primary, bytes.NewReader(artifact.Bytes())); err != nil {
+		t.Fatalf("restore postgres state: %v", err)
+	}
+	var rows, rawRows int
+	if err := primary.SystemPool().QueryRow(ctx, `
+		SELECT count(*),
+		       count(*) FILTER (WHERE payload::text LIKE '%' || $1 || '%')
+		  FROM read_model_snapshots`, rawSubject).Scan(&rows, &rawRows); err != nil {
+		t.Fatalf("inspect snapshots after postgres-state restore: %v", err)
+	}
+	if rows != 0 || rawRows != 0 {
+		t.Fatalf("snapshots after postgres-state restore = rows:%d raw-subject-rows:%d, want empty",
+			rows, rawRows)
+	}
+	if err := primary.Migrate(ctx); err != nil {
+		t.Fatalf("repair snapshot format floor after external-schema restore fixture: %v", err)
+	}
+}
+
+func waitForAdvisoryLockWaiter(t *testing.T, s *store.Store, key int64) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var waiting bool
+		if err := s.SystemPool().QueryRow(context.Background(), `
+			SELECT EXISTS (
+				SELECT 1
+				  FROM pg_locks
+				 WHERE locktype = 'advisory'
+				   AND NOT granted
+				   AND objsubid = 1
+				   AND ((classid::bigint << 32) | objid::bigint) = $1
+			)`, key).Scan(&waiting); err != nil {
+			t.Fatalf("inspect advisory lock waiter: %v", err)
+		}
+		if waiting {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("standalone PostgreSQL-state snapshot never waited on the privacy cutover fence")
 }
 
 func reserveStoreConnections(t *testing.T, s *store.Store, count int) []*pgxpool.Conn {

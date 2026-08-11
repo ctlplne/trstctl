@@ -317,16 +317,24 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 	}
 
 	params := cmd.pathParams()
-	if len(positionals) != len(params) {
+	bodyParams := []string(nil)
+	switch cmd.Body {
+	case bodyIntentDigest:
+		bodyParams = []string{"intent_digest"}
+	case bodyIntentDigestReason:
+		bodyParams = []string{"intent_digest", "reason"}
+	}
+	expectedParams := append(append([]string(nil), params...), bodyParams...)
+	if len(positionals) != len(expectedParams) {
 		return "", nil, nil, false, fmt.Errorf("%s expects %d argument(s) (%s), got %d",
-			strings.Join(cmd.Name, " "), len(params), strings.Join(params, ", "), len(positionals))
+			strings.Join(cmd.Name, " "), len(expectedParams), strings.Join(expectedParams, ", "), len(positionals))
 	}
 	path = cmd.Path
 	for i, p := range params {
 		path = strings.Replace(path, "{"+p+"}", url.PathEscape(positionals[i]), 1)
 	}
 
-	if cmd.Body == bodyFile {
+	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile {
 		if bodyFilePath == "" {
 			return "", nil, nil, false, fmt.Errorf("%s needs a request body: -f <file> or -f - for stdin", strings.Join(cmd.Name, " "))
 		}
@@ -334,21 +342,49 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 		if err != nil {
 			return "", nil, nil, false, err
 		}
+		if cmd.Body == bodyApprovalFile {
+			if err := validateExactApprovalBody(cmd, body); err != nil {
+				return "", nil, nil, false, err
+			}
+		}
 	} else if cmd.Body == bodyOptionalFile && bodyFilePath != "" {
 		body, err = readBody(bodyFilePath, stdin)
 		if err != nil {
 			return "", nil, nil, false, err
 		}
-	} else if cmd.Body == bodyAction {
-		if cmd.Action == "" {
-			return "", nil, nil, false, fmt.Errorf("%s has no fixed action", strings.Join(cmd.Name, " "))
+	} else if cmd.Body == bodyIntentDigest {
+		body, err = json.Marshal(map[string]string{"intent_digest": positionals[len(params)]})
+		if err != nil {
+			return "", nil, nil, false, err
 		}
-		body, err = json.Marshal(map[string]string{"action": cmd.Action})
+	} else if cmd.Body == bodyIntentDigestReason {
+		body, err = json.Marshal(map[string]string{
+			"intent_digest": positionals[len(params)],
+			"reason":        positionals[len(params)+1],
+		})
 		if err != nil {
 			return "", nil, nil, false, err
 		}
 	}
 	return path, query, body, force, nil
+}
+
+func validateExactApprovalBody(cmd Command, body []byte) error {
+	var decision struct {
+		Action       string `json:"action"`
+		RequestID    string `json:"request_id"`
+		IntentDigest string `json:"intent_digest"`
+	}
+	if err := json.Unmarshal(body, &decision); err != nil {
+		return fmt.Errorf("%s request body must be valid JSON: %w", strings.Join(cmd.Name, " "), err)
+	}
+	if strings.TrimSpace(decision.Action) == "" || strings.TrimSpace(decision.RequestID) == "" || strings.TrimSpace(decision.IntentDigest) == "" {
+		return fmt.Errorf("%s request body requires action, request_id, and intent_digest", strings.Join(cmd.Name, " "))
+	}
+	if cmd.Action != "" && decision.Action != cmd.Action {
+		return fmt.Errorf("%s request body action must be %q", strings.Join(cmd.Name, " "), cmd.Action)
+	}
+	return nil
 }
 
 // splitArgs separates positional arguments, recognized query flags, and the -f
@@ -494,8 +530,14 @@ func commandUsage(w io.Writer, cmd Command) {
 	for _, p := range cmd.pathParams() {
 		_, _ = fmt.Fprintf(w, " <%s>", p)
 	}
-	if cmd.Body == bodyFile {
+	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile {
 		_, _ = fmt.Fprint(w, " -f <file|->")
+	}
+	if cmd.Body == bodyIntentDigest {
+		_, _ = fmt.Fprint(w, " <intent_digest>")
+	}
+	if cmd.Body == bodyIntentDigestReason {
+		_, _ = fmt.Fprint(w, " <intent_digest> <reason>")
 	}
 	if cmd.Body == bodyOptionalFile {
 		_, _ = fmt.Fprint(w, " [-f <file|->]")
@@ -520,8 +562,14 @@ func commandExample(cmd Command) string {
 	for _, p := range cmd.pathParams() {
 		parts = append(parts, "<"+p+">")
 	}
-	if cmd.Body == bodyFile {
+	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile {
 		parts = append(parts, "-f", "request.json")
+	}
+	if cmd.Body == bodyIntentDigest {
+		parts = append(parts, "<intent_digest>")
+	}
+	if cmd.Body == bodyIntentDigestReason {
+		parts = append(parts, "<intent_digest>", "\"review reason\"")
 	}
 	if cmd.Body == bodyOptionalFile {
 		parts = append(parts, "-f", "request.json")

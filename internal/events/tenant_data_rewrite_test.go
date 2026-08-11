@@ -67,6 +67,31 @@ func rewriteProofOptions(t *testing.T) []TenantDataRewriteOption {
 	}
 }
 
+func TestOnlyPrivacyExternalPreparationDefersCutoverSnapshotInvalidation(t *testing.T) {
+	ctx := context.Background()
+	if TenantDataCutoverDefersSnapshotInvalidation(ctx) {
+		t.Fatal("plain context unexpectedly deferred snapshot invalidation")
+	}
+	generic := tenantDataCutoverPreparationContext(ctx, tenantDataRewriteOptions{})
+	if TenantDataCutoverDefersSnapshotInvalidation(generic) {
+		t.Fatal("generic rewrite unexpectedly deferred snapshot invalidation")
+	}
+	privacyCtx := tenantDataCutoverPreparationContext(ctx, tenantDataRewriteOptions{
+		externalPreparation: func(context.Context, TenantDataRewriteReport) error { return nil },
+		externalKind:        rewriteExternalPreparationPrivacySubjectErasure,
+	})
+	if !TenantDataCutoverDefersSnapshotInvalidation(privacyCtx) {
+		t.Fatal("privacy external preparation did not own target snapshot invalidation")
+	}
+	wrongKind := tenantDataCutoverPreparationContext(ctx, tenantDataRewriteOptions{
+		externalPreparation: func(context.Context, TenantDataRewriteReport) error { return nil },
+		externalKind:        "future_external_preparation",
+	})
+	if TenantDataCutoverDefersSnapshotInvalidation(wrongKind) {
+		t.Fatal("unknown external preparation weakened generic snapshot invalidation")
+	}
+}
+
 func rewriteTestContinuityVerifier(_ context.Context, evidence TenantDataContinuityEvidence) error {
 	if evidence.OperationID == "" || evidence.TenantID == "" ||
 		evidence.ReceiptSequence == 0 || evidence.Receipt.ID == "" ||
@@ -1376,6 +1401,167 @@ func TestLocalHistoryReadIsReentrantWhenCutoverWriterIsQueued(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("queued cutover did not acquire after outer read released")
+	}
+}
+
+func TestLocalHistoryCutoverMayEnterNestedRead(t *testing.T) {
+	history := newLocalHistoryRewriteCoordinator()
+	done := make(chan error, 1)
+	go func() {
+		done <- history.WithCutover(context.Background(), func(cutoverCtx context.Context) error {
+			return history.WithRead(cutoverCtx, func(context.Context) error { return nil })
+		})
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("cutover with nested read: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("nested history read deadlocked while its cutover held the exclusive barrier")
+	}
+}
+
+func TestEscapedLocalHistoryCutoverContextCannotBypassLaterCutover(t *testing.T) {
+	ctx := context.Background()
+	history := newLocalHistoryRewriteCoordinator()
+	var escapedCutover context.Context
+	if err := history.WithCutover(ctx, func(cutoverCtx context.Context) error {
+		escapedCutover = cutoverCtx
+		return nil
+	}); err != nil {
+		t.Fatalf("capture cutover context: %v", err)
+	}
+
+	cutoverEntered := make(chan struct{})
+	releaseCutover := make(chan struct{})
+	cutoverDone := make(chan error, 1)
+	go func() {
+		cutoverDone <- history.WithCutover(ctx, func(context.Context) error {
+			close(cutoverEntered)
+			<-releaseCutover
+			return nil
+		})
+	}()
+	<-cutoverEntered
+
+	readEntered := make(chan struct{})
+	readDone := make(chan error, 1)
+	go func() {
+		readDone <- history.WithRead(escapedCutover, func(context.Context) error {
+			close(readEntered)
+			return nil
+		})
+	}()
+	select {
+	case <-readEntered:
+		t.Fatal("escaped cutover context bypassed a later exclusive cutover")
+	case <-time.After(75 * time.Millisecond):
+	}
+	close(releaseCutover)
+	if err := <-cutoverDone; err != nil {
+		t.Fatalf("later cutover: %v", err)
+	}
+	if err := <-readDone; err != nil {
+		t.Fatalf("revoked cutover context read: %v", err)
+	}
+}
+
+type opaqueHistoryCutoverGrantContextKey struct{}
+
+type opaqueHistoryCutoverGrant struct {
+	coordinator *opaqueHistoryRewriteCoordinator
+	active      *atomic.Bool
+}
+
+type opaqueHistoryRewriteCoordinator struct {
+	operation sync.Mutex
+	barrier   sync.RWMutex
+	bypassed  atomic.Int32
+}
+
+func (c *opaqueHistoryRewriteCoordinator) WithRewriteOperation(
+	ctx context.Context,
+	fn func(context.Context) error,
+) error {
+	c.operation.Lock()
+	defer c.operation.Unlock()
+	return fn(ctx)
+}
+
+func (c *opaqueHistoryRewriteCoordinator) WithCutover(
+	ctx context.Context,
+	fn func(context.Context) error,
+) error {
+	c.barrier.Lock()
+	defer c.barrier.Unlock()
+	active := &atomic.Bool{}
+	active.Store(true)
+	defer active.Store(false)
+	return fn(context.WithValue(ctx, opaqueHistoryCutoverGrantContextKey{}, opaqueHistoryCutoverGrant{
+		coordinator: c,
+		active:      active,
+	}))
+}
+
+func (c *opaqueHistoryRewriteCoordinator) WithRead(
+	ctx context.Context,
+	fn func(context.Context) error,
+) error {
+	grant, _ := ctx.Value(opaqueHistoryCutoverGrantContextKey{}).(opaqueHistoryCutoverGrant)
+	if grant.coordinator == c && grant.active != nil && grant.active.Load() {
+		c.bypassed.Add(1)
+		return fn(ctx)
+	}
+	c.barrier.RLock()
+	defer c.barrier.RUnlock()
+	return fn(ctx)
+}
+
+func TestExpiredGenerationViewDropsOpaqueCoordinatorCutoverGrant(t *testing.T) {
+	coordinator := &opaqueHistoryRewriteCoordinator{}
+	log := &Log{history: coordinator}
+	readEntered := make(chan struct{}, 1)
+	readResult := make(chan error, 1)
+
+	err := coordinator.WithCutover(context.Background(), func(cutoverCtx context.Context) error {
+		var escaped context.Context
+		if err := log.withFrozenGenerationReadView(
+			cutoverCtx, "frozen-source", nil,
+			func(preparationCtx context.Context) error {
+				escaped = preparationCtx
+				return nil
+			},
+		); err != nil {
+			return err
+		}
+		go func() {
+			readResult <- log.withHistoryRead(escaped, func(context.Context) error {
+				readEntered <- struct{}{}
+				return nil
+			})
+		}()
+		select {
+		case <-readEntered:
+			return errors.New("expired generation view reused an opaque coordinator cutover grant")
+		case <-time.After(75 * time.Millisecond):
+			return nil
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-readResult:
+		if err != nil {
+			t.Fatalf("ordinary read after cutover: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expired generation context did not reacquire after cutover")
+	}
+	if got := coordinator.bypassed.Load(); got != 0 {
+		t.Fatalf("opaque coordinator grant bypasses = %d, want 0", got)
 	}
 }
 

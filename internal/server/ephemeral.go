@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
@@ -10,8 +11,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
@@ -22,6 +21,7 @@ import (
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -74,14 +74,6 @@ type ephemeralIssuerDeps struct {
 	CACertDER []byte
 	CAID      string
 	Audit     auditsink.Auditor
-}
-
-type ephemeralApprovalState struct {
-	Requester string
-	Required  int
-	Approvals int
-	CreatedAt time.Time
-	ExpiresAt time.Time
 }
 
 func newEphemeralIssuerService(d ephemeralIssuerDeps) (*ephemeralIssuerService, error) {
@@ -156,11 +148,18 @@ func (s *Server) IssueEphemeralCredential(ctx context.Context, tenantID, idempot
 	return s.ephemeralIssuer.IssueEphemeralCredential(ctx, tenantID, idempotencyKey, requester, req)
 }
 
-func (s *Server) ApproveEphemeralCredential(ctx context.Context, tenantID, requestID, approver string) (api.EphemeralApproval, error) {
+func (s *Server) ApproveEphemeralCredential(ctx context.Context, tenantID, requestID, intentDigest, approver string) (api.EphemeralApproval, error) {
 	if s.ephemeralIssuer == nil {
 		return api.EphemeralApproval{}, api.ErrEphemeralUnavailable
 	}
-	return s.ephemeralIssuer.ApproveEphemeralCredential(ctx, tenantID, requestID, approver)
+	return s.ephemeralIssuer.ApproveEphemeralCredential(ctx, tenantID, requestID, intentDigest, approver)
+}
+
+func (s *Server) ValidateEphemeralApprovalRequest(ctx context.Context, tenantID, requestID, intentDigest string) error {
+	if s.ephemeralIssuer == nil {
+		return api.ErrEphemeralUnavailable
+	}
+	return s.ephemeralIssuer.ValidateEphemeralApprovalRequest(ctx, tenantID, requestID, intentDigest)
 }
 
 func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, tenantID, idempotencyKey, requester string, req api.EphemeralCredentialRequest) (api.EphemeralCredential, error) {
@@ -179,38 +178,90 @@ func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, t
 	if err != nil {
 		return api.EphemeralCredential{}, fmt.Errorf("%w: %v", api.ErrEphemeralRejected, err)
 	}
-	state, requestedEvent, err := s.ensureApprovalRequest(ctx, tenantID, req.RequestID, requester, att)
+	requestBinding, err := ephemeralApprovedRequestBinding(requester, req, att)
 	if err != nil {
 		return api.EphemeralCredential{}, err
 	}
-	if requestedEvent {
-		s.emitApprovalRequested(ctx, tenantID, req.RequestID, requester, att, state)
+	expectedBinding, err := s.ephemeralApprovalBinding(req, att)
+	if err != nil {
+		return api.EphemeralCredential{}, err
 	}
-	if state.ExpiresAt.Before(time.Now().UTC()) {
-		return api.EphemeralCredential{}, fmt.Errorf("%w: request %q expired at %s", api.ErrEphemeralExpired, req.RequestID, state.ExpiresAt.Format(time.RFC3339))
+	commandKey := crypto.SHA256Hex([]byte(req.RequestID))
+	fence, fenceErr := s.store.GetApprovedTargetFence(ctx, tenantID,
+		store.ApprovedTargetEphemeralCertificate, commandKey)
+	if fenceErr == nil {
+		if fence.RequestBinding != requestBinding {
+			return api.EphemeralCredential{}, fmt.Errorf("%w: ephemeral request_id belongs to a different command", store.ErrIdempotencyConflict)
+		}
+		recorded, err := s.orch.ProjectApprovedCertificateFence(ctx, tenantID, fence)
+		if err != nil {
+			return api.EphemeralCredential{}, err
+		}
+		approvalRequest, err := s.store.GetOperationApproval(ctx, tenantID, fence.Approval.RequestID)
+		if err != nil {
+			return api.EphemeralCredential{}, err
+		}
+		return s.responseFromCertificate(ctx, verifier, req.RequestID, att, approvalRequest, recorded)
 	}
-	if state.Approvals < state.Required {
+	if !store.IsNotFound(fenceErr) {
+		return api.EphemeralCredential{}, fenceErr
+	}
+	approvalRequest, err := s.ensureEphemeralApprovalRequest(ctx, tenantID, requester, req, att)
+	if err != nil {
+		return api.EphemeralCredential{}, err
+	}
+	approvalUse, err := store.OperationApprovalUseFromRequest(approvalRequest)
+	if err != nil {
+		return api.EphemeralCredential{}, err
+	}
+	issueKey := "ephemeral-issue:" + approvalRequest.ID
+	if approvalRequest.Status == store.ApprovalStatusConsumed {
+		if approvalRequest.ConsumedEventID != orchestrator.CertificateApprovalEventID(tenantID, approvalUse) {
+			return api.EphemeralCredential{}, store.ErrApprovalConsumed
+		}
+		recovered, found, recoverErr := s.recoverApprovedEphemeralCertificate(ctx, tenantID, approvalRequest, expectedBinding)
+		if recoverErr != nil {
+			return api.EphemeralCredential{}, recoverErr
+		}
+		if !found {
+			return api.EphemeralCredential{}, fmt.Errorf("server: consumed ephemeral approval %q has no canonical certificate event", approvalRequest.ID)
+		}
+		return s.responseFromCertificate(ctx, verifier, req.RequestID, att, approvalRequest, recovered)
+	}
+	if !time.Now().UTC().Before(approvalRequest.ExpiresAt) || approvalRequest.Status == store.ApprovalStatusExpired {
+		return api.EphemeralCredential{}, store.ErrApprovalExpired
+	}
+	switch approvalRequest.Status {
+	case store.ApprovalStatusPending:
 		return api.EphemeralCredential{
 			State:             api.EphemeralStateAwaitingApproval,
 			RequestID:         req.RequestID,
+			ApprovalRequestID: approvalRequest.ID,
+			IntentDigest:      approvalRequest.IntentDigest,
 			Subject:           att.Subject,
-			RequiredApprovals: state.Required,
-			Approvals:         state.Approvals,
-			ExpiresAt:         state.ExpiresAt,
+			RequiredApprovals: approvalRequest.RequiredApprovals,
+			Approvals:         approvalRequest.ApprovalCount,
+			ExpiresAt:         approvalRequest.ExpiresAt,
 			Attestation:       att,
 		}, nil
+	case store.ApprovalStatusApproved:
+		if approvalRequest.ApprovalCount < approvalRequest.RequiredApprovals {
+			return api.EphemeralCredential{}, store.ErrApprovalNotReady
+		}
+	case store.ApprovalStatusSuperseded:
+		return api.EphemeralCredential{}, store.ErrApprovalSuperseded
+	case store.ApprovalStatusDenied:
+		return api.EphemeralCredential{}, fmt.Errorf("%w: approval request %q was denied", api.ErrEphemeralRejected, approvalRequest.ID)
+	default:
+		return api.EphemeralCredential{}, store.ErrApprovalNotReady
 	}
 
-	issueKey := "ephemeral-issue:" + idempotencyKey
-	recovered, err := recoverCertificatesByIssuanceKey(ctx, s.store, s.log, tenantID, issueKey)
+	recovered, found, err := s.recoverApprovedEphemeralCertificate(ctx, tenantID, approvalRequest, expectedBinding)
 	if err != nil {
 		return api.EphemeralCredential{}, err
 	}
-	if len(recovered) > 0 {
-		if len(recovered) != 1 {
-			return api.EphemeralCredential{}, fmt.Errorf("server: ephemeral issuance key %q recovered %d certificates, want 1", issueKey, len(recovered))
-		}
-		return s.responseFromCertificate(ctx, verifier, req.RequestID, att, state, recovered[0])
+	if found {
+		return s.responseFromCertificate(ctx, verifier, req.RequestID, att, approvalRequest, recovered)
 	}
 
 	issuer, err := ephemerallib.New(ephemerallib.Config{
@@ -243,8 +294,12 @@ func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, t
 	if err != nil {
 		return api.EphemeralCredential{}, err
 	}
+	approvalBinding, err := s.ephemeralApprovalBinding(req, issued.Attestation)
+	if err != nil {
+		return api.EphemeralCredential{}, err
+	}
 	nb, na := info.NotBefore, info.NotAfter
-	recorded, err := s.orch.RecordCertificate(ctx, tenantID, store.Certificate{
+	recorded, err := s.orch.RecordCertificateWithApproval(ctx, tenantID, store.Certificate{
 		CAID: s.caID, Subject: info.Subject, SANs: sansOf(info), Issuer: info.Issuer,
 		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
@@ -255,52 +310,156 @@ func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, t
 		// unrecorded — the key lives wherever the attested workload put it, and
 		// this side has no basis for a claim about that.
 		KeyOrigin: string(custody.OriginRequester),
-	})
+	}, approvalUse, approvalBinding, requestBinding)
 	if err != nil {
 		return api.EphemeralCredential{}, err
+	}
+	if len(recorded.CertificateDER) == 0 || recorded.NotAfter == nil {
+		return api.EphemeralCredential{}, errors.New("server: canonical ephemeral certificate is incomplete")
 	}
 	return api.EphemeralCredential{
 		State:             api.EphemeralStateIssued,
 		RequestID:         req.RequestID,
-		Subject:           issued.Subject,
-		CredentialID:      issued.CredentialID,
+		ApprovalRequestID: approvalRequest.ID,
+		IntentDigest:      approvalRequest.IntentDigest,
+		Subject:           issued.Attestation.Subject,
+		CredentialID:      "cred:" + crypto.SHA256Hex(recorded.CertificateDER),
 		CertificateID:     recorded.ID,
-		CertificatePEM:    string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issued.CertDER})),
-		RequiredApprovals: state.Required,
-		Approvals:         state.Approvals,
-		ExpiresAt:         state.ExpiresAt,
-		NotAfter:          issued.NotAfter,
+		CertificatePEM:    string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: recorded.CertificateDER})),
+		RequiredApprovals: approvalRequest.RequiredApprovals,
+		Approvals:         approvalRequest.ApprovalCount,
+		ExpiresAt:         approvalRequest.ExpiresAt,
+		NotAfter:          *recorded.NotAfter,
 		Attestation:       issued.Attestation,
 	}, nil
 }
 
-func (s *ephemeralIssuerService) ApproveEphemeralCredential(ctx context.Context, tenantID, requestID, approver string) (api.EphemeralApproval, error) {
+// recoverApprovedEphemeralCertificate accepts only the one deterministic target
+// event for this exact approval capability. Looking up an arbitrary row by the
+// issuance key is not authority: a legacy/corrupt row with that text must never
+// turn a still-approved grant into a successful response.
+func (s *ephemeralIssuerService) recoverApprovedEphemeralCertificate(
+	ctx context.Context,
+	tenantID string,
+	approval store.OperationApprovalRequest,
+	expectedBinding ephemerallib.ApprovalBinding,
+) (store.Certificate, bool, error) {
+	use, err := store.OperationApprovalUseFromRequest(approval)
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	eventID := orchestrator.CertificateApprovalEventID(tenantID, use)
+	event, found, err := s.log.EventByID(ctx, eventID)
+	if err != nil || !found {
+		return store.Certificate{}, found, err
+	}
+	if event.Type != projections.EventCertificateRecorded || event.TenantID != tenantID ||
+		event.SchemaVersion != projections.CertificateApprovalEventSchemaVersion {
+		return store.Certificate{}, false, fmt.Errorf("%w: recovered ephemeral target envelope differs", store.ErrIdempotencyConflict)
+	}
+	var payload projections.CertificateRecorded
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return store.Certificate{}, false, fmt.Errorf("server: decode recovered ephemeral target: %w", err)
+	}
+	if err := projections.ValidateApprovedCertificatePayload(event, payload); err != nil {
+		return store.Certificate{}, false, err
+	}
+	wantUse, err := json.Marshal(use)
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	gotUse, err := json.Marshal(payload.Approval)
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	wantBinding, err := expectedBinding.Digest()
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	gotBinding, err := payload.ApprovalBinding.Digest()
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	if !bytes.Equal(wantUse, gotUse) || wantBinding != gotBinding ||
+		payload.ID != projections.CertificateApprovalRowID(tenantID, use) {
+		return store.Certificate{}, false, fmt.Errorf("%w: recovered ephemeral target capability differs", store.ErrIdempotencyConflict)
+	}
+	if err := projections.New(s.store).Apply(ctx, event); err != nil {
+		return store.Certificate{}, false, fmt.Errorf("server: project recovered ephemeral target: %w", err)
+	}
+	cert, err := s.store.GetCertificate(ctx, tenantID, payload.ID)
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	if cert.ID != payload.ID || cert.Fingerprint != payload.Fingerprint ||
+		cert.IssuanceIdempotencyKey != payload.IssuanceIdempotencyKey ||
+		!bytes.Equal(cert.CertificateDER, payload.CertificateDER) {
+		return store.Certificate{}, false, fmt.Errorf("%w: recovered ephemeral projection differs from canonical event", store.ErrIdempotencyConflict)
+	}
+	return cert, true, nil
+}
+
+func ephemeralApprovedRequestBinding(requester string, req api.EphemeralCredentialRequest, att attest.Attestation) (string, error) {
+	basis := struct {
+		Requester string                         `json:"requester"`
+		Request   api.EphemeralCredentialRequest `json:"request"`
+		Attested  struct {
+			ID        string            `json:"id"`
+			Method    string            `json:"method"`
+			Subject   string            `json:"subject"`
+			Selectors []string          `json:"selectors"`
+			Claims    map[string]string `json:"claims"`
+		} `json:"attested"`
+	}{Requester: requester, Request: req}
+	basis.Attested.ID = att.ID
+	basis.Attested.Method = att.Method
+	basis.Attested.Subject = att.Subject
+	basis.Attested.Selectors = append([]string(nil), att.Selectors...)
+	basis.Attested.Claims = att.Claims
+	raw, err := json.Marshal(basis)
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(append([]byte("trstctl:ephemeral-approved-request:v1\x00"), raw...)), nil
+}
+
+func (s *ephemeralIssuerService) ApproveEphemeralCredential(ctx context.Context, tenantID, requestID, intentDigest, approver string) (api.EphemeralApproval, error) {
 	requestID = strings.TrimSpace(requestID)
+	intentDigest = strings.TrimSpace(intentDigest)
 	if tenantID == "" {
 		return api.EphemeralApproval{}, fmt.Errorf("%w: tenant is required", api.ErrEphemeralInvalid)
 	}
-	if requestID == "" {
-		return api.EphemeralApproval{}, fmt.Errorf("%w: request id is required", api.ErrEphemeralInvalid)
+	if requestID == "" || intentDigest == "" {
+		return api.EphemeralApproval{}, store.ErrApprovalRequestNotFound
 	}
 	if strings.TrimSpace(approver) == "" {
 		return api.EphemeralApproval{}, fmt.Errorf("%w: approver is required", api.ErrEphemeralInvalid)
 	}
-	state, err := s.loadApprovalState(ctx, tenantID, requestID)
+	request, err := s.orch.RecordOperationApprovalDecision(ctx, tenantID, orchestrator.OperationApprovalDecision{
+		RequestID: requestID, IntentDigest: intentDigest,
+		Approver: approver, Decision: store.ApprovalDecisionApprove,
+		ExpectedResourceKind: "ephemeral", ExpectedAction: "issue",
+	})
 	if err != nil {
 		return api.EphemeralApproval{}, err
 	}
-	if state.ExpiresAt.Before(time.Now().UTC()) {
-		return api.EphemeralApproval{}, fmt.Errorf("%w: request %q expired at %s", api.ErrEphemeralExpired, requestID, state.ExpiresAt.Format(time.RFC3339))
-	}
-	count, err := s.store.ApproveIssuance(ctx, tenantID, requestID, "issue", approver)
+	return api.EphemeralApproval{
+		ID: request.ID, IntentDigest: request.IntentDigest,
+		Resource: request.ResourceID, Action: request.Action, Approver: approver,
+		Approvals: request.ApprovalCount, ApprovalCount: request.ApprovalCount,
+		RequiredApprovals: request.RequiredApprovals, Status: request.Status,
+	}, nil
+}
+
+func (s *ephemeralIssuerService) ValidateEphemeralApprovalRequest(ctx context.Context, tenantID, requestID, intentDigest string) error {
+	request, err := s.store.GetOperationApproval(ctx, tenantID, strings.TrimSpace(requestID))
 	if err != nil {
-		if errors.Is(err, store.ErrSelfIssuanceApproval) || errors.Is(err, store.ErrAnonymousIssuanceApproval) {
-			return api.EphemeralApproval{}, fmt.Errorf("%w: %v", api.ErrEphemeralRejected, err)
-		}
-		return api.EphemeralApproval{}, err
+		return err
 	}
-	s.emitApprovalGranted(ctx, tenantID, requestID, approver, count)
-	return api.EphemeralApproval{Resource: requestID, Action: "issue", Approver: approver, Approvals: count}, nil
+	if request.IntentDigest != strings.TrimSpace(intentDigest) || request.ResourceKind != "ephemeral" || request.Action != "issue" {
+		return store.ErrApprovalDigestMismatch
+	}
+	return nil
 }
 
 func (s *ephemeralIssuerService) validate(tenantID, idempotencyKey, requester string, req api.EphemeralCredentialRequest) error {
@@ -329,88 +488,39 @@ func (s *ephemeralIssuerService) validate(tenantID, idempotencyKey, requester st
 	return nil
 }
 
-func (s *ephemeralIssuerService) ensureApprovalRequest(ctx context.Context, tenantID, requestID, requester string, att attest.Attestation) (ephemeralApprovalState, bool, error) {
-	var (
-		state    ephemeralApprovalState
-		inserted bool
-	)
-	err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO issuance_approval_requests (tenant_id, resource, action, requester, required)
-			 VALUES ($1, $2, 'issue', $3, $4)
-			 ON CONFLICT (tenant_id, resource, action) DO UPDATE
-			    SET requester = CASE
-			        WHEN issuance_approval_requests.requester = '' THEN EXCLUDED.requester
-			        ELSE issuance_approval_requests.requester
-			    END`,
-			tenantID, requestID, requester, s.requiredApprovals)
-		if err != nil {
-			return err
-		}
-		if err := scanEphemeralApprovalState(ctx, tx, tenantID, requestID, s.approvalTTL, &state); err != nil {
-			return err
-		}
-		if state.Requester != "" && state.Requester != requester {
-			return fmt.Errorf("%w: request %q was opened by a different requester", api.ErrEphemeralRejected, requestID)
-		}
-		payload, err := json.Marshal(struct {
-			RequestID         string   `json:"request_id"`
-			Requester         string   `json:"requester"`
-			Subject           string   `json:"subject"`
-			Method            string   `json:"method"`
-			Selectors         []string `json:"selectors"`
-			RequiredApprovals int      `json:"required_approvals"`
-			ExpiresAt         string   `json:"expires_at"`
-		}{
-			RequestID: requestID, Requester: requester, Subject: att.Subject, Method: att.Method,
-			Selectors: append([]string(nil), att.Selectors...), RequiredApprovals: state.Required,
-			ExpiresAt: state.ExpiresAt.Format(time.RFC3339),
-		})
-		if err != nil {
-			return err
-		}
-		inserted, err = s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-			TenantID:       tenantID,
-			Destination:    "ephemeral.approval",
-			IdempotencyKey: "ephemeral-approval:" + requestID,
-			Payload:        payload,
-		})
-		return err
-	})
+func (s *ephemeralIssuerService) ensureEphemeralApprovalRequest(ctx context.Context, tenantID, requester string, req api.EphemeralCredentialRequest, att attest.Attestation) (store.OperationApprovalRequest, error) {
+	binding, err := s.ephemeralApprovalBinding(req, att)
 	if err != nil {
-		return ephemeralApprovalState{}, false, err
+		return store.OperationApprovalRequest{}, err
 	}
-	return state, inserted, nil
-}
-
-func (s *ephemeralIssuerService) loadApprovalState(ctx context.Context, tenantID, requestID string) (ephemeralApprovalState, error) {
-	var state ephemeralApprovalState
-	err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return scanEphemeralApprovalState(ctx, tx, tenantID, requestID, s.approvalTTL, &state)
-	})
-	return state, err
-}
-
-func scanEphemeralApprovalState(ctx context.Context, tx pgx.Tx, tenantID, requestID string, approvalTTL time.Duration, state *ephemeralApprovalState) error {
-	err := tx.QueryRow(ctx,
-		`SELECT requester, required, created_at,
-		        (SELECT count(*) FROM issuance_approvals ia
-		          WHERE ia.tenant_id = r.tenant_id
-		            AND ia.resource = r.resource
-		            AND ia.action = r.action
-		            AND ia.approver <> r.requester)
-		   FROM issuance_approval_requests r
-		  WHERE tenant_id = $1 AND resource = $2 AND action = 'issue'`,
-		tenantID, requestID).Scan(&state.Requester, &state.Required, &state.CreatedAt, &state.Approvals)
+	toState, err := binding.ToState()
 	if err != nil {
-		return err
+		return store.OperationApprovalRequest{}, err
 	}
-	state.CreatedAt = state.CreatedAt.UTC()
-	state.ExpiresAt = state.CreatedAt.Add(approvalTTL).UTC()
-	return nil
+	evidenceRefs, err := binding.EvidenceRefs()
+	if err != nil {
+		return store.OperationApprovalRequest{}, err
+	}
+	return s.orch.EnsureOperationApprovalRequest(ctx, tenantID, orchestrator.OperationApprovalIntent{
+		ResourceKind: "ephemeral", ResourceID: "ephemeral:" + req.RequestID,
+		ResourceName: att.Subject, Action: "issue", Requester: requester,
+		FromState: "attested", ToState: toState, TargetVersion: 0,
+		Reason:            "authorize one exact attested ephemeral credential issuance",
+		EvidenceRefs:      evidenceRefs,
+		RequiredApprovals: s.requiredApprovals, TTL: s.approvalTTL,
+	})
 }
 
-func (s *ephemeralIssuerService) responseFromCertificate(ctx context.Context, verifier *attest.Verifier, requestID string, att attest.Attestation, state ephemeralApprovalState, cert store.Certificate) (api.EphemeralCredential, error) {
+func (s *ephemeralIssuerService) ephemeralApprovalBinding(req api.EphemeralCredentialRequest, att attest.Attestation) (ephemerallib.ApprovalBinding, error) {
+	spiffeID, err := attestedSPIFFEID(s.trustDomain, att.Subject)
+	if err != nil {
+		return ephemerallib.ApprovalBinding{}, err
+	}
+	return ephemerallib.NewApprovalBinding(s.caID, s.caCertDER, req.RequestID, att.Method, att.Subject,
+		att.Selectors, req.PublicKeyDER, spiffeID, s.ttl(req.TTLSeconds))
+}
+
+func (s *ephemeralIssuerService) responseFromCertificate(ctx context.Context, verifier *attest.Verifier, requestID string, att attest.Attestation, approval store.OperationApprovalRequest, cert store.Certificate) (api.EphemeralCredential, error) {
 	if len(cert.CertificateDER) == 0 {
 		return api.EphemeralCredential{}, errors.New("server: ephemeral recovered certificate without DER")
 	}
@@ -425,13 +535,15 @@ func (s *ephemeralIssuerService) responseFromCertificate(ctx context.Context, ve
 	return api.EphemeralCredential{
 		State:             api.EphemeralStateIssued,
 		RequestID:         requestID,
+		ApprovalRequestID: approval.ID,
+		IntentDigest:      approval.IntentDigest,
 		Subject:           att.Subject,
 		CredentialID:      credentialID,
 		CertificateID:     cert.ID,
 		CertificatePEM:    string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.CertificateDER})),
-		RequiredApprovals: state.Required,
-		Approvals:         state.Approvals,
-		ExpiresAt:         state.ExpiresAt,
+		RequiredApprovals: approval.RequiredApprovals,
+		Approvals:         approval.ApprovalCount,
+		ExpiresAt:         approval.ExpiresAt,
 		NotAfter:          info.NotAfter,
 		Attestation:       att,
 	}, nil
@@ -458,38 +570,5 @@ func (s *ephemeralIssuerService) sign() ephemerallib.SignFunc {
 			return nil, err
 		}
 		return crypto.SignSVID(s.caCertDER, s.caSigner, pubDER, spiffeID, ttl)
-	}
-}
-
-func (s *ephemeralIssuerService) emitApprovalRequested(ctx context.Context, tenantID, requestID, requester string, att attest.Attestation, state ephemeralApprovalState) {
-	payload, err := json.Marshal(struct {
-		RequestID         string `json:"request_id"`
-		Requester         string `json:"requester"`
-		Subject           string `json:"subject"`
-		Method            string `json:"method"`
-		RequiredApprovals int    `json:"required_approvals"`
-		ExpiresAt         string `json:"expires_at"`
-	}{
-		RequestID: requestID, Requester: requester, Subject: att.Subject, Method: att.Method,
-		RequiredApprovals: state.Required, ExpiresAt: state.ExpiresAt.Format(time.RFC3339),
-	})
-	if err == nil {
-		_ = auditsink.Emit(ctx, s.audit, nil, "ephemeral.approval.requested", tenantID, payload)
-	}
-}
-
-func (s *ephemeralIssuerService) emitApprovalGranted(ctx context.Context, tenantID, requestID, approver string, approvals int) {
-	payload, err := json.Marshal(struct {
-		RequestID  string `json:"request_id"`
-		Approver   string `json:"approver"`
-		Approvals  int    `json:"approvals"`
-		Action     string `json:"action"`
-		ApprovedAt string `json:"approved_at"`
-	}{
-		RequestID: requestID, Approver: approver, Approvals: approvals, Action: "issue",
-		ApprovedAt: time.Now().UTC().Format(time.RFC3339),
-	})
-	if err == nil {
-		_ = auditsink.Emit(ctx, s.audit, nil, "ephemeral.approval.granted", tenantID, payload)
 	}
 }

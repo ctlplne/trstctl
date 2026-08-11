@@ -424,6 +424,176 @@ func TestHistoryRewriteNestedReadUsesNoSecondConnection(t *testing.T) {
 	}
 }
 
+func TestHistoryRewriteCutoverAllowsNestedReadWithNoSecondConnection(t *testing.T) {
+	primary := newStore(t)
+	peer := openHistoryRewritePeer(t)
+	coordinator := store.NewHistoryRewriteCoordinator(primary)
+
+	// Leave one pooled session. The outer cutover owns it and the deployment-wide
+	// exclusive barrier, so a nested history read must recognize that stronger
+	// scoped grant instead of waiting for a second session/shared lock.
+	held := make([]*pgxpool.Conn, 0, 15)
+	for i := 0; i < 15; i++ {
+		conn, err := primary.SystemPool().Acquire(context.Background())
+		if err != nil {
+			t.Fatalf("acquire reserved pool connection %d: %v", i, err)
+		}
+		held = append(held, conn)
+	}
+	defer func() {
+		for _, conn := range held {
+			conn.Release()
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var nestedCalls atomic.Int32
+	err := coordinator.WithCutover(ctx, func(cutoverCtx context.Context) error {
+		assertAdvisoryLockUnavailable(
+			t, peer, store.HistoryRewriteBarrierAdvisoryLockKey, true,
+			"exclusive cutover before nested read",
+		)
+		return coordinator.WithRead(cutoverCtx, func(context.Context) error {
+			nestedCalls.Add(1)
+			if got := primary.SystemPool().Stat().AcquiredConns(); got != 16 {
+				return fmt.Errorf("connections during nested cutover read = %d, want 16", got)
+			}
+			assertAdvisoryLockUnavailable(
+				t, peer, store.HistoryRewriteBarrierAdvisoryLockKey, true,
+				"exclusive cutover during nested read",
+			)
+			return nil
+		})
+	})
+	if err != nil {
+		t.Fatalf("cutover nested history read: %v", err)
+	}
+	if got := nestedCalls.Load(); got != 1 {
+		t.Fatalf("nested read callback calls = %d, want 1", got)
+	}
+}
+
+func TestHistoryRewriteLeakedCutoverContextCannotBypassLaterCutover(t *testing.T) {
+	primary := newStore(t)
+	peer := openHistoryRewritePeer(t)
+	reader := store.NewHistoryRewriteCoordinator(primary)
+	cutover := store.NewHistoryRewriteCoordinator(peer)
+
+	var leaked context.Context
+	if err := reader.WithCutover(context.Background(), func(cutoverCtx context.Context) error {
+		leaked = cutoverCtx
+		return nil
+	}); err != nil {
+		t.Fatalf("capture cutover context: %v", err)
+	}
+	if leaked == nil {
+		t.Fatal("cutover callback did not expose its scoped context")
+	}
+
+	cutoverEntered := make(chan struct{})
+	releaseCutover := make(chan struct{})
+	cutoverResult := make(chan error, 1)
+	go func() {
+		cutoverResult <- cutover.WithCutover(context.Background(), func(context.Context) error {
+			close(cutoverEntered)
+			<-releaseCutover
+			return nil
+		})
+	}()
+	<-cutoverEntered
+
+	var leakedCalls atomic.Int32
+	leakedResult := make(chan error, 1)
+	go func() {
+		leakedResult <- reader.WithRead(leaked, func(context.Context) error {
+			leakedCalls.Add(1)
+			return nil
+		})
+	}()
+	waitForAcquiredConnections(t, primary, 1)
+	select {
+	case err := <-leakedResult:
+		t.Fatalf("escaped cutover context bypassed a later cutover: %v", err)
+	default:
+	}
+	if got := leakedCalls.Load(); got != 0 {
+		t.Fatalf("escaped cutover callback calls during later cutover = %d, want 0", got)
+	}
+
+	close(releaseCutover)
+	if err := waitHistoryRewriteResult(t, cutoverResult); err != nil {
+		t.Fatalf("release later cutover: %v", err)
+	}
+	if err := waitHistoryRewriteResult(t, leakedResult); err != nil {
+		t.Fatalf("escaped context read after cutover: %v", err)
+	}
+	if got := leakedCalls.Load(); got != 1 {
+		t.Fatalf("escaped cutover callback calls after release = %d, want 1", got)
+	}
+}
+
+func TestHistoryRewriteCutoverWaitsForEnteredNestedRead(t *testing.T) {
+	primary := newStore(t)
+	peer := openHistoryRewritePeer(t)
+	cutover := store.NewHistoryRewriteCoordinator(primary)
+	reader := store.NewHistoryRewriteCoordinator(peer)
+
+	nestedEntered := make(chan struct{})
+	releaseNested := make(chan struct{})
+	nestedResult := make(chan error, 1)
+	cutoverReturning := make(chan struct{})
+	cutoverResult := make(chan error, 1)
+	go func() {
+		cutoverResult <- cutover.WithCutover(context.Background(), func(cutoverCtx context.Context) error {
+			go func() {
+				nestedResult <- cutover.WithRead(cutoverCtx, func(context.Context) error {
+					close(nestedEntered)
+					<-releaseNested
+					return nil
+				})
+			}()
+			<-nestedEntered
+			close(cutoverReturning)
+			return nil
+		})
+	}()
+	<-cutoverReturning
+
+	readEntered := make(chan struct{}, 1)
+	readResult := make(chan error, 1)
+	go func() {
+		readResult <- reader.WithRead(context.Background(), func(context.Context) error {
+			readEntered <- struct{}{}
+			return nil
+		})
+	}()
+	waitForAcquiredConnections(t, peer, 1)
+	select {
+	case err := <-cutoverResult:
+		t.Fatalf("cutover returned while its entered nested read was active: %v", err)
+	case <-readEntered:
+		t.Fatal("peer read crossed the exclusive cutover while its nested read was active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(releaseNested)
+	if err := waitHistoryRewriteResult(t, nestedResult); err != nil {
+		t.Fatalf("nested cutover read: %v", err)
+	}
+	if err := waitHistoryRewriteResult(t, cutoverResult); err != nil {
+		t.Fatalf("cutover after nested read: %v", err)
+	}
+	if err := waitHistoryRewriteResult(t, readResult); err != nil {
+		t.Fatalf("peer read after cutover: %v", err)
+	}
+	select {
+	case <-readEntered:
+	default:
+		t.Fatal("peer read did not enter after nested read and cutover grants released")
+	}
+}
+
 func TestHistoryRewriteOuterReadWaitsForEnteredNestedCallback(t *testing.T) {
 	primary := newStore(t)
 	peer := openHistoryRewritePeer(t)

@@ -4,11 +4,9 @@ package server
 
 import (
 	"context"
-	"fmt"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/codesign"
-	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/policy"
 )
 
@@ -25,6 +23,7 @@ type servedCodeSigningGate struct {
 }
 
 var _ codesign.Gate = (*servedCodeSigningGate)(nil)
+var _ api.ExactApprovalChecker = (*servedCodeSigningGate)(nil)
 
 func codeSigningGateFromMutationGate(g api.MutationGate) codesign.Gate {
 	if g.Policy == nil && !g.RequireApproval {
@@ -54,26 +53,26 @@ func (g *servedCodeSigningGate) MaySign(ctx context.Context, tenantID, principal
 			return false, decision.Reason
 		}
 	}
-	if g.requireApproval {
-		resource := codeSigningApprovalResource(principal, keyID, digestHex)
-		if g.approvals == nil {
-			return false, "code-signing approval is required but no approval store is configured"
-		}
-		approved, reason := g.approvals.IsApproved(ctx, tenantID, resource, codeSigningApprovalAction, principal)
-		if !approved {
-			if reason == "" {
-				reason = "the requested signature lacks distinct-approver authorization"
-			}
-			return false, fmt.Sprintf("%s (approval resource %s, action %s)", reason, resource, codeSigningApprovalAction)
-		}
-	}
 	return true, ""
 }
 
-// codeSigningApprovalResource binds an approval to the authenticated requester,
-// one key-or-keyless identity, and one exact SHA-256 artifact digest without
-// placing those raw values in an approval URL. Tenant and action are separate
-// store keys.
-func codeSigningApprovalResource(principal, keyID, digestHex string) string {
-	return "codesign:" + crypto.SHA256Hex([]byte(principal+"\x00"+keyID+"\x00"+digestHex))
+// CodeSigningApprovalRequired lets the durable command path move dual control
+// ahead of command/outbox creation. MaySign remains the worker-time policy
+// recheck; a merely pending review must never become a terminal worker failure.
+func (g *servedCodeSigningGate) CodeSigningApprovalRequired() bool {
+	return g != nil && g.requireApproval
+}
+
+// AuthorizeApproval delegates to the generic immutable request authority. The
+// durable code-signing service supplies the exact command/key binding and embeds
+// the returned use in codesign.commanded for transactional consumption.
+func (g *servedCodeSigningGate) AuthorizeApproval(ctx context.Context, intent api.ApprovalIntent) (api.ApprovalAuthority, bool, string) {
+	if g == nil || g.approvals == nil {
+		return api.ApprovalAuthority{}, false, "code-signing approval is required but no approval store is configured"
+	}
+	exact, ok := g.approvals.(api.ExactApprovalChecker)
+	if !ok {
+		return api.ApprovalAuthority{}, false, "code-signing approval store does not support exact single-use authority"
+	}
+	return exact.AuthorizeApproval(ctx, intent)
 }

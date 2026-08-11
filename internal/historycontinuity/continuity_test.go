@@ -91,6 +91,34 @@ func TestReceiptVerifierRejectsSignatureTamperEvidenceMismatchAndWrongKey(t *tes
 	})
 }
 
+func TestReceiptVerifierBindsRewriteProfile(t *testing.T) {
+	key, err := jose.GenerateRSASigningKey("history-continuity-profile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := validReport()
+	report.Profile = "secret_rotation_schedule_v1_error_closure/v1"
+	receipt, err := NewReceiptSigner(key)(context.Background(), report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence := evidenceFor(report, receipt)
+	if err := NewReceiptVerifier(key)(context.Background(), evidence); err != nil {
+		t.Fatalf("profiled receipt did not verify: %v", err)
+	}
+	opened, err := VerifyReceipt(key, receipt)
+	if err != nil {
+		t.Fatalf("open profiled receipt: %v", err)
+	}
+	if opened.Profile != report.Profile || opened.OperationID != report.OperationID {
+		t.Fatalf("opened report = %#v, want signed profile/operation", opened)
+	}
+	evidence.Report.Profile = "different_rewrite/v1"
+	if err := NewReceiptVerifier(key)(context.Background(), evidence); err == nil {
+		t.Fatal("verifier accepted a rewrite profile outside the signed report")
+	}
+}
+
 func TestReceiptVerifierRejectsNonCanonicalSignedClaims(t *testing.T) {
 	key, err := jose.GenerateRSASigningKey("history-continuity-noncanonical")
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,23 @@ func TestPostgresStateRestoreOrderReturnsErrors(t *testing.T) {
 	missing := append([]string(nil), order[:len(order)-1]...)
 	if err := validatePostgresStateRestoreOrder(missing); err == nil || !strings.Contains(err.Error(), "table manifest") {
 		t.Fatalf("short restore order error = %v, want table manifest mismatch", err)
+	}
+}
+
+func TestDecodePostgresJSONByteaRequiresExactHexFormAUD109(t *testing.T) {
+	got, err := decodePostgresJSONBytea(json.RawMessage(`"\\x7b7d"`))
+	if err != nil || !bytes.Equal(got, []byte(`{}`)) {
+		t.Fatalf("decode PostgreSQL bytea = %q, %v; want {}", got, err)
+	}
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(`"e30="`),
+		json.RawMessage(`"\\x"`),
+		json.RawMessage(`"\\xnot-hex"`),
+		json.RawMessage(`null`),
+	} {
+		if decoded, err := decodePostgresJSONBytea(raw); err == nil {
+			t.Fatalf("invalid PostgreSQL bytea %s decoded as %x", raw, decoded)
+		}
 	}
 }
 
@@ -71,6 +89,123 @@ func TestPrivacyErasureOperationIsInPostgresRestoreOrder(t *testing.T) {
 		}
 	}
 	t.Fatalf("privacy_subject_erasure_operations missing from restore order: %v", order)
+}
+
+func TestPrivacyErasurePreparationPrecedesOperationInPostgresRestoreOrder(t *testing.T) {
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatalf("postgresStateRestoreOrder: %v", err)
+	}
+	positions := make(map[string]int, len(order))
+	for index, table := range order {
+		positions[table] = index
+	}
+	preparation, havePreparation := positions["privacy_subject_erasure_preparations"]
+	operation, haveOperation := positions["privacy_subject_erasure_operations"]
+	if !havePreparation || !haveOperation {
+		t.Fatalf("privacy recovery tables missing from restore order: %v", order)
+	}
+	if preparation >= operation {
+		t.Fatalf("privacy recovery restore order = preparation:%d operation:%d; crash marker must restore first", preparation, operation)
+	}
+}
+
+func TestApprovedTargetFenceIsInPostgresRestoreOrderAUD77(t *testing.T) {
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatalf("postgresStateRestoreOrder: %v", err)
+	}
+	for _, table := range order {
+		if table == "approved_target_event_fences" {
+			return
+		}
+	}
+	t.Fatalf("approved_target_event_fences missing from restore order: %v", order)
+}
+
+func TestSecretRotationCommandIsInIndependentPostgresRestoreOrderAUD106(t *testing.T) {
+	order, err := postgresStateRestoreOrder()
+	if err != nil {
+		t.Fatalf("postgresStateRestoreOrder: %v", err)
+	}
+	positions := make(map[string]int, len(order))
+	for index, table := range order {
+		positions[table] = index
+	}
+	command, ok := positions["secret_rotation_schedule_commands"]
+	if !ok {
+		t.Fatalf("secret_rotation_schedule_commands missing from restore order: %v", order)
+	}
+	if _, projected := positions["secret_rotation_schedules"]; projected {
+		t.Fatal("rebuildable secret_rotation_schedules must not enter independent PostgreSQL restore order")
+	}
+	cursor, ok := positions["secret_rotation_schedule_scan_cursors"]
+	if !ok {
+		t.Fatalf("secret_rotation_schedule_scan_cursors missing from restore order: %v", order)
+	}
+	tick, ok := positions["secret_rotation_schedule_ticks"]
+	if !ok {
+		t.Fatalf("secret_rotation_schedule_ticks missing from restore order: %v", order)
+	}
+	tickRow, ok := positions["secret_rotation_schedule_tick_rows"]
+	if !ok {
+		t.Fatalf("secret_rotation_schedule_tick_rows missing from restore order: %v", order)
+	}
+	if cursor <= positions["idempotency_keys"] || cursor >= tick {
+		t.Fatalf("schedule cursor restore position=%d, want it after outer keys and before tick receivers: %v", cursor, order)
+	}
+	if tick <= positions["idempotency_keys"] || tick <= cursor || tick >= tickRow {
+		t.Fatalf("schedule tick restore position=%d, want it after idempotency/cursor authority and before child commands: %v", tick, order)
+	}
+	if tickRow <= tick || tickRow >= command {
+		t.Fatalf("schedule tick row restore position=%d, want it after parent ticks and before commands: %v", tickRow, order)
+	}
+	if command <= tickRow || command >= positions["secret_store"] {
+		t.Fatalf("schedule command restore position=%d, want it after immutable tick rows in the independent receiver group: %v", command, order)
+	}
+}
+
+func TestApplicationSecretFenceActorPostgresStateRoundTripAUD77(t *testing.T) {
+	const (
+		subject = "backup-secret-actor"
+		ref     = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	)
+	backupRow := json.RawMessage(`{
+		"tenant_id":"11111111-1111-1111-1111-111111111111",
+		"secret_name":"backup/pending",
+		"actor":{"subject":"backup-secret-actor","roles":["auditor","operator"]},
+		"actor_subject_ref":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	}`)
+	normalized, err := normalizePostgresStateRows(
+		"application_secret_mutation_fences", []json.RawMessage{backupRow})
+	if err != nil {
+		t.Fatalf("normalize application-secret fence backup row: %v", err)
+	}
+	if len(normalized) != 1 {
+		t.Fatalf("normalized fence rows=%d, want 1", len(normalized))
+	}
+	var restored struct {
+		Actor struct {
+			Subject string   `json:"subject"`
+			Roles   []string `json:"roles"`
+		} `json:"actor"`
+		ActorSubjectRef string `json:"actor_subject_ref"`
+	}
+	if err := json.Unmarshal(normalized[0], &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.Actor.Subject != subject ||
+		!reflect.DeepEqual(restored.Actor.Roles, []string{"auditor", "operator"}) ||
+		restored.ActorSubjectRef != ref {
+		t.Fatalf("application-secret actor changed across PostgreSQL-state row round trip: %+v", restored)
+	}
+	found := false
+	for _, table := range postgresStateTables() {
+		found = found || table == "application_secret_mutation_fences"
+	}
+	if !found {
+		t.Fatal("application_secret_mutation_fences is absent from PostgreSQL-state backup manifest")
+	}
 }
 
 func TestRestorePostgresStateRejectsBadManifestBeforeStoreUse(t *testing.T) {
@@ -141,6 +276,36 @@ func TestNormalizeLegacyPostgresStateRowsAddsRawIdempotencyCodec(t *testing.T) {
 	}
 	if len(untouched) != 1 || !bytes.Equal(untouched[0], other[0]) {
 		t.Fatalf("unrelated backup row changed: got=%s want=%s", untouched[0], other[0])
+	}
+}
+
+func TestNormalizeLegacyOutboxRowsAddsOnlyNeutralNonSecretAuthorityAUD109(t *testing.T) {
+	legacy := []json.RawMessage{
+		json.RawMessage(`{"id":1,"tenant_id":"11111111-1111-1111-1111-111111111111","destination":"webhook.audit","attempts":3}`),
+		json.RawMessage(`{"id":2,"tenant_id":"11111111-1111-1111-1111-111111111111","destination":"secret.sync.ci","attempts":2}`),
+	}
+	normalized, err := normalizePostgresStateRows("outbox", legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var neutral map[string]json.RawMessage
+	if err := json.Unmarshal(normalized[0], &neutral); err != nil {
+		t.Fatal(err)
+	}
+	for field, want := range map[string]string{
+		"secret_sync_target_order":          "null",
+		"secret_sync_order_from_event":      "null",
+		"secret_sync_receiver_effect_state": `"none"`,
+		"secret_sync_receiver_io_starts":    "0",
+		"secret_sync_failure_detail":        `""`,
+		"secret_sync_failure_attempts":      "0",
+	} {
+		if got := string(neutral[field]); got != want {
+			t.Fatalf("neutral legacy outbox %s=%s, want %s", field, got, want)
+		}
+	}
+	if !bytes.Equal(normalized[1], legacy[1]) {
+		t.Fatalf("secret-sync legacy row was guessed before rebuilt-job reconciliation: got=%s want=%s", normalized[1], legacy[1])
 	}
 }
 

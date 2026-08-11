@@ -23,19 +23,42 @@ func (s *Store) ApplyDynamicSecretIssueIntentTx(
 	lease DynamicSecretLease,
 	payload []byte,
 ) error {
+	var err error
+	lease.TenantEpoch, err = s.resolveDynamicSecretWriteEpochTx(
+		ctx, tx, lease.TenantID, lease.TenantEpoch)
+	if err != nil {
+		return err
+	}
+	command, err := decodeDynamicSecretIssueOutboxBinding(payload)
+	if err != nil {
+		return err
+	}
+	hardExpiresAt := lease.HardExpiresAt
+	if hardExpiresAt.IsZero() {
+		hardExpiresAt = lease.ExpiresAt
+	}
+	if command.TenantEpoch != lease.TenantEpoch || command.ID != lease.ID ||
+		command.IdempotencyKey != lease.IdempotencyKey ||
+		command.RequestBinding != lease.RequestBinding || command.Provider != lease.Provider ||
+		command.Role != lease.Role ||
+		!sameDynamicSecretTime(command.ExpiresAt, lease.ExpiresAt) ||
+		!sameDynamicSecretTime(command.HardExpiresAt, hardExpiresAt) ||
+		!bytes.Equal(command.SealedPreparation, lease.SealedPreparation) {
+		return fmt.Errorf("%w: dynamic-secret issue outbox payload differs from lease command", ErrIdempotencyConflict)
+	}
 	binding := lease.RequestBinding
 	if binding == "" {
 		binding = "legacy-unbound"
 	}
 	if err := s.ApplyDynamicSecretOperationRequestedTx(ctx, tx, DynamicSecretOperation{
-		TenantID: lease.TenantID, OperationID: "issue:" + lease.ID,
+		TenantID: lease.TenantID, TenantEpoch: lease.TenantEpoch, OperationID: "issue:" + lease.ID,
 		IdempotencyKey: lease.IdempotencyKey, RequestBinding: binding,
 		Action: "issue", LeaseID: lease.ID, Response: []byte(`{}`),
 		CreatedAt: lease.IssuedAt, UpdatedAt: lease.UpdatedAt,
 	}); err != nil {
 		return err
 	}
-	key := "dynsecret.issue:" + lease.ID
+	key := DynamicSecretIssueOutboxIdempotencyKey(lease.TenantEpoch, lease.ID)
 	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, lease.TenantID, "dynsecret.issue", "dynsecret.provider:"+lease.Provider, key, payload)
 	if err != nil {
 		return err
@@ -55,18 +78,53 @@ func (s *Store) ApplyDynamicSecretRevocationIntentTx(
 	payload []byte,
 	revokedAt time.Time,
 ) error {
-	key := "dynsecret.revoke:" + leaseID
-	var provider string
+	tenantEpoch, err := s.resolveDynamicSecretWriteEpochTx(ctx, tx, tenantID, "")
+	if err != nil {
+		return err
+	}
+	return s.ApplyDynamicSecretRevocationIntentForEpochTx(
+		ctx, tx, tenantID, tenantEpoch, leaseID, payload, revokedAt)
+}
+
+func (s *Store) ApplyDynamicSecretRevocationIntentForEpochTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, tenantEpoch, leaseID string,
+	payload []byte,
+	revokedAt time.Time,
+) error {
+	if tenantID == "" || tenantEpoch == "" || leaseID == "" || revokedAt.IsZero() {
+		return errors.New("store: dynamic-secret revocation intent is incomplete")
+	}
+	if err := s.ValidateDynamicSecretTenantEpochTx(ctx, tx, tenantID, tenantEpoch); err != nil {
+		return err
+	}
+	command, err := decodeDynamicSecretRevokeOutboxBinding(payload)
+	if err != nil {
+		return err
+	}
+	var currentEpoch, provider, backendRef string
+	var state DynamicSecretLeaseState
 	if err := tx.QueryRow(ctx,
-		`SELECT provider FROM dynamic_secret_leases WHERE tenant_id = $1 AND id = $2`,
-		tenantID, leaseID).Scan(&provider); err != nil {
+		`SELECT tenant_epoch, provider, backend_ref, state
+		   FROM dynamic_secret_leases
+		  WHERE tenant_id = $1 AND tenant_epoch = $2 AND id = $3`,
+		tenantID, tenantEpoch, leaseID).Scan(&currentEpoch, &provider, &backendRef, &state); err != nil {
 		return fmt.Errorf("store: load dynamic-secret revoke effect lane: %w", err)
 	}
+	if command.TenantEpoch != tenantEpoch || currentEpoch != tenantEpoch ||
+		command.LeaseID != leaseID || command.Provider != provider ||
+		command.BackendRef != backendRef ||
+		(state != DynamicSecretLeaseActive && state != DynamicSecretLeaseRevoked) {
+		return fmt.Errorf("%w: dynamic-secret revoke outbox payload differs from lease command", ErrIdempotencyConflict)
+	}
+	key := DynamicSecretRevokeOutboxIdempotencyKey(tenantEpoch, leaseID)
 	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, tenantID, "dynsecret.revoke", "dynsecret.provider:"+provider, key, payload)
 	if err != nil {
 		return err
 	}
-	return s.ApplyDynamicSecretLeaseRevocationRequestedTx(ctx, tx, tenantID, leaseID, outboxID, revokedAt)
+	return s.ApplyDynamicSecretLeaseRevocationRequestedForEpochTx(
+		ctx, tx, tenantID, tenantEpoch, leaseID, outboxID, revokedAt)
 }
 
 // ApplySecretSyncIntentTx projects a queued sync job and recreates its sealed
@@ -79,7 +137,7 @@ func (s *Store) ApplySecretSyncIntentTx(
 	destination string,
 	payload []byte,
 ) error {
-	if job.TenantID == "" || job.ID == "" || job.SecretName == "" || job.SecretVersion <= 0 || job.Target == "" || job.RemoteKey == "" || job.ValueDigest == "" || job.IdempotencyKey == "" || destination == "" || len(payload) == 0 {
+	if job.TenantID == "" || job.TenantEpoch == "" || job.ID == "" || job.SecretName == "" || job.SecretVersion <= 0 || job.Target == "" || job.RemoteKey == "" || job.ValueDigest == "" || job.IdempotencyKey == "" || job.TargetOrder <= 0 || destination == "" || len(payload) == 0 {
 		return errors.New("store: secret-sync intent is incomplete")
 	}
 	if destination != "secret.sync."+job.Target {
@@ -92,6 +150,7 @@ func (s *Store) ApplySecretSyncIntentTx(
 	if proposedPayload.ID != job.ID || proposedPayload.Key != job.RemoteKey || proposedPayload.Target != job.Target || proposedPayload.RequestBinding != job.RequestBinding {
 		return fmt.Errorf("%w: secret-sync payload does not match job command", ErrIdempotencyConflict)
 	}
+	effectLane := "secret.sync:" + job.Target
 
 	// The job id is derived from tenant + raw Idempotency-Key and therefore stays
 	// stable even when a colliding retry changes target (and thus outbox key).
@@ -105,9 +164,11 @@ func (s *Store) ApplySecretSyncIntentTx(
 
 	var existing SecretSyncJob
 	err = scanSecretSyncJob(tx.QueryRow(ctx,
-		`SELECT id, tenant_id::text, secret_name, secret_version, target,
-		        remote_key, value_digest, status, outbox_id, attempts,
+		`SELECT id, tenant_id::text, tenant_epoch, secret_name, secret_version, target,
+		        remote_key, value_digest, status, outbox_id, target_order, attempts,
 		        remote_version, last_error, idempotency_key, request_binding, requested_at,
+		        terminal_event_id, terminal_event_type, terminal_event_sequence,
+		        terminal_event_digest, terminal_event_from_event,
 		        updated_at, delivered_at
 		   FROM secret_sync_jobs
 		  WHERE tenant_id = $1 AND id = $2`,
@@ -119,12 +180,18 @@ func (s *Store) ApplySecretSyncIntentTx(
 		}
 		var existingDestination, existingKey, existingLane string
 		var existingPayload []byte
+		var existingOrder int64
+		var orderFromEvent bool
 		if err := tx.QueryRow(ctx,
-			`SELECT destination, payload, idempotency_key, effect_lane
+			`SELECT destination, payload, idempotency_key, effect_lane,
+			        secret_sync_target_order, secret_sync_order_from_event
 			   FROM outbox
 			  WHERE tenant_id = $1 AND id = $2`,
-			job.TenantID, existing.OutboxID).Scan(&existingDestination, &existingPayload, &existingKey, &existingLane); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) && existing.Status == SecretSyncJobDelivered {
+			job.TenantID, existing.OutboxID).Scan(
+			&existingDestination, &existingPayload, &existingKey, &existingLane,
+			&existingOrder, &orderFromEvent); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) &&
+				(existing.Status == SecretSyncJobDelivered || existing.Status == SecretSyncJobFailed) {
 				return nil
 			}
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -136,13 +203,13 @@ func (s *Store) ApplySecretSyncIntentTx(
 		if err != nil {
 			return fmt.Errorf("store: secret-sync stored outbox payload: %w", err)
 		}
-		if existingDestination != destination || (existingLane != "" && existingLane != "secret.sync:"+job.Target) || existingKey != job.IdempotencyKey || storedPayload.ID != job.ID || storedPayload.Key != job.RemoteKey || storedPayload.Target != job.Target || storedPayload.RequestBinding != job.RequestBinding {
+		if existingDestination != destination || (existingLane != "" && existingLane != effectLane) || existingKey != job.IdempotencyKey || existing.TargetOrder != existingOrder || (orderFromEvent && job.TargetOrder != existingOrder) || storedPayload.ID != job.ID || storedPayload.Key != job.RemoteKey || storedPayload.Target != job.Target || storedPayload.RequestBinding != job.RequestBinding {
 			return fmt.Errorf("%w: secret-sync job/outbox binding differs", ErrIdempotencyConflict)
 		}
 		if existingLane == "" {
 			if _, err := tx.Exec(ctx,
 				`UPDATE outbox SET effect_lane = $3 WHERE tenant_id = $1 AND id = $2 AND effect_lane = ''`,
-				job.TenantID, existing.OutboxID, "secret.sync:"+job.Target); err != nil {
+				job.TenantID, existing.OutboxID, effectLane); err != nil {
 				return fmt.Errorf("store: backfill secret-sync effect lane: %w", err)
 			}
 		}
@@ -159,46 +226,113 @@ func (s *Store) ApplySecretSyncIntentTx(
 		existingDestination, existingLane string
 		existingKey                       string
 		existingPayload                   []byte
+		existingOrder                     int64
+		orderFromEvent                    bool
 	)
 	err = tx.QueryRow(ctx,
-		`SELECT id, destination, effect_lane, idempotency_key, payload
+		`SELECT id, destination, effect_lane, idempotency_key, payload,
+		        secret_sync_target_order, secret_sync_order_from_event
 		   FROM outbox
-		  WHERE tenant_id = $1 AND idempotency_key = $2
-		  ORDER BY id
-		  LIMIT 1`, job.TenantID, job.IdempotencyKey).Scan(
-		&existingOutboxID, &existingDestination, &existingLane, &existingKey, &existingPayload)
+		  WHERE tenant_id = $1 AND idempotency_key = $2 AND destination = $3`,
+		job.TenantID, job.IdempotencyKey, destination).Scan(
+		&existingOutboxID, &existingDestination, &existingLane, &existingKey,
+		&existingPayload, &existingOrder, &orderFromEvent)
 	if err == nil {
 		storedPayload, decodeErr := decodeSecretSyncOutboxBinding(existingPayload)
 		if decodeErr != nil || existingDestination != destination ||
-			(existingLane != "" && existingLane != "secret.sync:"+job.Target) ||
+			(existingLane != "" && existingLane != effectLane) ||
 			existingKey != job.IdempotencyKey || storedPayload.ID != job.ID ||
 			storedPayload.Key != job.RemoteKey || storedPayload.Target != job.Target ||
 			storedPayload.RequestBinding != job.RequestBinding ||
-			!bytes.Equal(storedPayload.Sealed, proposedPayload.Sealed) {
+			!bytes.Equal(storedPayload.Sealed, proposedPayload.Sealed) ||
+			existingOrder == 0 ||
+			(orderFromEvent && (existingOrder < 0 || existingOrder != job.TargetOrder)) ||
+			(!orderFromEvent && existingOrder > 0) {
 			return fmt.Errorf("%w: secret-sync retained outbox %d differs from rebuilt command", ErrIdempotencyConflict, existingOutboxID)
 		}
 		if existingLane == "" {
 			if _, err := tx.Exec(ctx,
 				`UPDATE outbox SET effect_lane = $3 WHERE tenant_id = $1 AND id = $2 AND effect_lane = ''`,
-				job.TenantID, existingOutboxID, "secret.sync:"+job.Target); err != nil {
+				job.TenantID, existingOutboxID, effectLane); err != nil {
 				return fmt.Errorf("store: restore secret-sync effect lane: %w", err)
 			}
 		}
 		job.OutboxID = existingOutboxID
-		return s.ApplySecretSyncJobQueuedTx(ctx, tx, job)
+		// Migration 0153 could not recover the original event sequence from legacy
+		// PostgreSQL rows, so its retained outbox value remains the stable replay
+		// authority. Every post-0153 row is marked event-derived and must match the
+		// immutable replayed event sequence exactly.
+		if !orderFromEvent {
+			job.TargetOrder = existingOrder
+		}
+		return s.applySecretSyncJobQueuedTx(ctx, tx, job, !orderFromEvent)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
 
 	if err := tx.QueryRow(ctx,
-		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO outbox
+		        (tenant_id, destination, effect_lane, payload, idempotency_key,
+		         secret_sync_target_order, secret_sync_order_from_event)
+		 VALUES ($1, $2, $3, $4, $5, $6, true)
 		 RETURNING id`,
-		job.TenantID, destination, "secret.sync:"+job.Target, payload, job.IdempotencyKey).Scan(&job.OutboxID); err != nil {
+		job.TenantID, destination, effectLane, payload, job.IdempotencyKey,
+		job.TargetOrder).Scan(&job.OutboxID); err != nil {
 		return fmt.Errorf("store: enqueue secret-sync outbox: %w", err)
 	}
 	return s.ApplySecretSyncJobQueuedTx(ctx, tx, job)
+}
+
+type dynamicSecretIssueOutboxBinding struct {
+	TenantEpoch       string    `json:"tenant_epoch"`
+	ID                string    `json:"id"`
+	IdempotencyKey    string    `json:"idempotency_key"`
+	RequestBinding    string    `json:"request_binding,omitempty"`
+	Provider          string    `json:"provider"`
+	Role              string    `json:"role"`
+	ExpiresAt         time.Time `json:"expires_at"`
+	HardExpiresAt     time.Time `json:"hard_expires_at"`
+	SealedPreparation []byte    `json:"sealed_preparation,omitempty"`
+}
+
+type dynamicSecretRevokeOutboxBinding struct {
+	TenantEpoch string `json:"tenant_epoch"`
+	LeaseID     string `json:"LeaseID"`
+	Provider    string `json:"Provider"`
+	BackendRef  string `json:"BackendRef"`
+}
+
+func DynamicSecretIssueOutboxIdempotencyKey(tenantEpoch, leaseID string) string {
+	return "dynsecret.issue:" + tenantEpoch + ":" + leaseID
+}
+
+func DynamicSecretRevokeOutboxIdempotencyKey(tenantEpoch, leaseID string) string {
+	return "dynsecret.revoke:" + tenantEpoch + ":" + leaseID
+}
+
+func decodeDynamicSecretIssueOutboxBinding(payload []byte) (dynamicSecretIssueOutboxBinding, error) {
+	var binding dynamicSecretIssueOutboxBinding
+	if err := json.Unmarshal(payload, &binding); err != nil {
+		return dynamicSecretIssueOutboxBinding{}, fmt.Errorf("store: decode dynamic-secret issue outbox payload: %w", err)
+	}
+	if binding.TenantEpoch == "" || binding.ID == "" || binding.IdempotencyKey == "" ||
+		binding.Provider == "" || binding.Role == "" || binding.ExpiresAt.IsZero() ||
+		binding.HardExpiresAt.IsZero() {
+		return dynamicSecretIssueOutboxBinding{}, errors.New("store: dynamic-secret issue outbox payload is incomplete")
+	}
+	return binding, nil
+}
+
+func decodeDynamicSecretRevokeOutboxBinding(payload []byte) (dynamicSecretRevokeOutboxBinding, error) {
+	var binding dynamicSecretRevokeOutboxBinding
+	if err := json.Unmarshal(payload, &binding); err != nil {
+		return dynamicSecretRevokeOutboxBinding{}, fmt.Errorf("store: decode dynamic-secret revoke outbox payload: %w", err)
+	}
+	if binding.TenantEpoch == "" || binding.LeaseID == "" || binding.Provider == "" || binding.BackendRef == "" {
+		return dynamicSecretRevokeOutboxBinding{}, errors.New("store: dynamic-secret revoke outbox payload is incomplete")
+	}
+	return binding, nil
 }
 
 type secretSyncOutboxBinding struct {
@@ -221,7 +355,7 @@ func decodeSecretSyncOutboxBinding(payload []byte) (secretSyncOutboxBinding, err
 }
 
 func SecretSyncCommandMatches(a, b SecretSyncJob) bool {
-	return a.TenantID == b.TenantID && a.ID == b.ID &&
+	return a.TenantID == b.TenantID && a.TenantEpoch == b.TenantEpoch && a.ID == b.ID &&
 		a.SecretName == b.SecretName && a.SecretVersion == b.SecretVersion &&
 		a.Target == b.Target && a.RemoteKey == b.RemoteKey &&
 		a.ValueDigest == b.ValueDigest && a.IdempotencyKey == b.IdempotencyKey &&

@@ -189,6 +189,140 @@ func TestOutboxEffectLanesLetUnrelatedReceiversWithOneDestinationProgress(t *tes
 	}
 }
 
+func TestOutboxFairnessKeysEffectiveLaneByTenantAUD110(t *testing.T) {
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	mustRegisterTenant(t, s, tenantB)
+	fixed := time.Now().UTC().Add(time.Minute)
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithNow(func() time.Time { return fixed }),
+		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
+		orchestrator.WithRetryJitter(func(time.Duration) time.Duration { return 0 }),
+		orchestrator.WithCircuitBreaker(0, 0),
+	)
+	const lane = "connector.deploy:shared-name"
+	for _, entry := range []orchestrator.Entry{
+		{TenantID: tenantA, Destination: "connector.deploy", EffectLane: lane, IdempotencyKey: "aud110-fairness-a", Payload: []byte(`{}`)},
+		{TenantID: tenantB, Destination: "connector.deploy", EffectLane: lane, IdempotencyKey: "aud110-fairness-b", Payload: []byte(`{}`)},
+	} {
+		enqueue(t, s, ob, entry)
+	}
+	if _, err := s.SystemPool().Exec(context.Background(),
+		`UPDATE outbox SET next_attempt_at = $1 WHERE idempotency_key LIKE 'aud110-fairness-%'`, fixed); err != nil {
+		t.Fatal(err)
+	}
+
+	var order []string
+	tenantAAttempts := 0
+	handler := orchestrator.HandlerFunc(func(_ context.Context, message orchestrator.Message) error {
+		order = append(order, message.TenantID)
+		if message.TenantID == tenantA {
+			tenantAAttempts++
+			if tenantAAttempts == 1 {
+				return errors.New("tenant A receiver asks for one retry")
+			}
+		}
+		return nil
+	})
+	processed, err := ob.DispatchScoped(context.Background(), handler,
+		orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if processed != 3 {
+		t.Fatalf("processed=%d, want A failure, B success, A retry", processed)
+	}
+	want := []string{tenantA, tenantB, tenantA}
+	if strings.Join(order, ",") != strings.Join(want, ",") {
+		t.Fatalf("tenant fairness order=%v, want %v; same-named lanes must be independent across tenants", order, want)
+	}
+}
+
+func TestOutboxProcessingCapKeysEffectiveLaneByTenantAUD110(t *testing.T) {
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	mustRegisterTenant(t, s, tenantB)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithMaxInFlightPerDestination(1),
+		orchestrator.WithMaxInFlightPerTenant(1),
+		orchestrator.WithWorkerID("aud110-processing-cap"),
+	)
+	const lane = "connector.deploy:shared-name"
+	for _, entry := range []orchestrator.Entry{
+		{TenantID: tenantA, Destination: "connector.deploy", EffectLane: lane, IdempotencyKey: "aud110-cap-a", Payload: []byte(`{}`)},
+		{TenantID: tenantB, Destination: "connector.deploy", EffectLane: lane, IdempotencyKey: "aud110-cap-b", Payload: []byte(`{}`)},
+	} {
+		enqueue(t, s, ob, entry)
+	}
+	if _, err := s.SystemPool().Exec(ctx,
+		`UPDATE outbox SET next_attempt_at = now() - interval '1 second' WHERE idempotency_key LIKE 'aud110-cap-%'`); err != nil {
+		t.Fatal(err)
+	}
+
+	tenantAEntered := make(chan struct{})
+	releaseTenantA := make(chan struct{})
+	tenantBDelivered := make(chan struct{})
+	var tenantAOnce, tenantBOnce sync.Once
+	handler := orchestrator.HandlerFunc(func(deliveryCtx context.Context, message orchestrator.Message) error {
+		switch message.TenantID {
+		case tenantA:
+			tenantAOnce.Do(func() { close(tenantAEntered) })
+			select {
+			case <-releaseTenantA:
+				return nil
+			case <-deliveryCtx.Done():
+				return deliveryCtx.Err()
+			}
+		case tenantB:
+			tenantBOnce.Do(func() { close(tenantBDelivered) })
+			return nil
+		default:
+			return fmt.Errorf("unexpected tenant %q", message.TenantID)
+		}
+	})
+	errCh := make(chan error, 2)
+	dispatch := func() {
+		processed, err := ob.DispatchScoped(ctx, handler,
+			orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}})
+		if err == nil && processed == 0 {
+			err = errors.New("dispatcher claimed no work")
+		}
+		errCh <- err
+	}
+	go dispatch()
+	select {
+	case <-tenantAEntered:
+	case <-ctx.Done():
+		t.Fatalf("tenant A receiver did not enter: %v", ctx.Err())
+	}
+
+	go dispatch()
+	var progressErr error
+	select {
+	case <-tenantBDelivered:
+	case <-time.After(time.Second):
+		progressErr = errors.New("tenant B same-named receiver was blocked by tenant A's processing lane")
+	}
+	close(releaseTenantA)
+	for range 2 {
+		select {
+		case err := <-errCh:
+			if err != nil && progressErr == nil {
+				progressErr = err
+			}
+		case <-ctx.Done():
+			if progressErr == nil {
+				progressErr = fmt.Errorf("dispatchers did not finish: %w", ctx.Err())
+			}
+		}
+	}
+	if progressErr != nil {
+		t.Fatal(progressErr)
+	}
+}
+
 // TestOutboxDeadLettersAtMaxAttempts is the dead-letter boundary (SPINE-012): an
 // entry whose handler keeps failing is retried until the attempt cap, then marked
 // failed and never dispatched again. With maxAttempts=3 and a zero backoff, three
@@ -271,7 +405,7 @@ func TestOutboxDeferredDeliveryRefundsAttemptAndSurvivesPastDeadLetterCap(t *tes
 		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
 	)
 	id := enqueue(t, s, ob, orchestrator.Entry{
-		TenantID: tenantA, Destination: "secret.sync.test", IdempotencyKey: "deferred-1", Payload: []byte(`{}`),
+		TenantID: tenantA, Destination: "test.deferred", IdempotencyKey: "deferred-1", Payload: []byte(`{}`),
 	})
 	handler := &deferredThenSuccessfulHandler{}
 
@@ -320,7 +454,7 @@ func TestOutboxProjectsTerminalFailureBeforeDeadLetterWithSanitizedError(t *test
 	ctx := context.Background()
 	ob := orchestrator.NewOutbox(s, orchestrator.WithMaxAttempts(1))
 	id := enqueue(t, s, ob, orchestrator.Entry{
-		TenantID: tenantA, Destination: "secret.sync.test", IdempotencyKey: "terminal-1", Payload: []byte(`{}`),
+		TenantID: tenantA, Destination: "test.terminal", IdempotencyKey: "terminal-1", Payload: []byte(`{}`),
 	})
 	handler := &terminalFailureFixture{}
 	if n, err := ob.Dispatch(ctx, handler); err != nil || n != 1 {
@@ -508,6 +642,60 @@ func TestOutboxScopedCircuitUsesReceiverLaneWithoutEscapingItsFamily(t *testing.
 	}
 	if calls != 1 {
 		t.Fatalf("dynamic-secret provider calls=%d, want one before its lane circuit opens", calls)
+	}
+}
+
+func TestOutboxCircuitKeysEffectiveLaneByTenantAUD110(t *testing.T) {
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	mustRegisterTenant(t, s, tenantB)
+	ctx := context.Background()
+	now := time.Now().UTC().Add(time.Hour).Truncate(time.Millisecond)
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithNow(func() time.Time { return now }),
+		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
+		orchestrator.WithRetryJitter(func(time.Duration) time.Duration { return 0 }),
+		orchestrator.WithCircuitBreaker(1, time.Minute),
+	)
+	const lane = "connector.deploy:shared-name"
+	enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "connector.deploy", EffectLane: lane,
+		IdempotencyKey: "aud110-circuit-a", Payload: []byte(`{}`),
+	})
+	scope := orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}}
+	if n, err := ob.DispatchScoped(ctx, orchestrator.HandlerFunc(
+		func(context.Context, orchestrator.Message) error {
+			return errors.New("tenant A receiver is unavailable")
+		}), scope); err != nil || n != 1 {
+		t.Fatalf("open tenant A circuit dispatch=(%d, %v), want one failed call", n, err)
+	}
+
+	bID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantB, Destination: "connector.deploy", EffectLane: lane,
+		IdempotencyKey: "aud110-circuit-b", Payload: []byte(`{}`),
+	})
+	bCalls := 0
+	if n, err := ob.DispatchScoped(ctx, orchestrator.HandlerFunc(
+		func(_ context.Context, message orchestrator.Message) error {
+			if message.TenantID != tenantB {
+				return fmt.Errorf("open tenant A circuit admitted tenant %q", message.TenantID)
+			}
+			bCalls++
+			return nil
+		}), scope); err != nil || n != 1 {
+		t.Fatalf("tenant B same-lane dispatch=(%d, %v), want one independent call", n, err)
+	}
+	if bCalls != 1 {
+		t.Fatalf("tenant B receiver calls=%d, want one despite tenant A's open circuit", bCalls)
+	}
+	bRecord, err := ob.Get(ctx, tenantB, bID)
+	if err != nil || bRecord.Status != "delivered" {
+		t.Fatalf("tenant B same-lane row=%+v, %v, want delivered", bRecord, err)
+	}
+	snapshots := ob.CircuitStates()
+	if len(snapshots) != 1 || snapshots[0].TenantID != tenantA ||
+		snapshots[0].Destination != lane || snapshots[0].State != orchestrator.CircuitOpen {
+		t.Fatalf("tenant-scoped circuit snapshots=%+v, want only tenant A/%s open", snapshots, lane)
 	}
 }
 

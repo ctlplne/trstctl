@@ -81,6 +81,41 @@ func TestOutboxReconciliationConflictsUseEventRecoveryAndSnapshotsAUD97(t *testi
 	}
 }
 
+func TestOperationApprovalsUseEventRecoveryAndSnapshotsAUD77(t *testing.T) {
+	for _, table := range []string{"operation_approval_requests", "operation_approval_decisions"} {
+		if !containsRecoveryTable(ReadModelTables, table) {
+			t.Errorf("%s is event-derived but missing from ReadModelTables", table)
+		}
+		if !containsRecoveryTable(snapshotTables, table) {
+			t.Errorf("%s is in the rebuild set but missing from snapshotTables; restore would erase pending approval authority", table)
+		}
+	}
+	for _, table := range []string{"issuance_approval_requests", "issuance_approvals"} {
+		if containsRecoveryTable(ReadModelTables, table) {
+			t.Errorf("%s contains legacy non-event-backed rows and must remain independent PostgreSQL history", table)
+		}
+		if containsRecoveryTable(snapshotTables, table) {
+			t.Errorf("%s is legacy PostgreSQL history and must not be restored from event-derived snapshots", table)
+		}
+	}
+	if SnapshotFormatVersion < 21 {
+		t.Errorf("SnapshotFormatVersion = %d; adding AUD-77 approval projections must invalidate older snapshots that would skip their events", SnapshotFormatVersion)
+	}
+}
+
+func TestSecretSyncTargetOrderUsesEventRecoveryAndSnapshotsAUD109(t *testing.T) {
+	const table = "secret_sync_jobs"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is event-derived but missing from ReadModelTables", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is event-derived but missing from snapshotTables", table)
+	}
+	if SnapshotFormatVersion < 21 {
+		t.Errorf("SnapshotFormatVersion = %d; AUD-109 target_order cannot be recovered from a v20 payload", SnapshotFormatVersion)
+	}
+}
+
 func TestPrivacyErasureOperationUsesIndependentPostgresRecovery(t *testing.T) {
 	const table = "privacy_subject_erasure_operations"
 	if containsRecoveryTable(ReadModelTables, table) {
@@ -88,6 +123,36 @@ func TestPrivacyErasureOperationUsesIndependentPostgresRecovery(t *testing.T) {
 	}
 	if containsRecoveryTable(snapshotTables, table) {
 		t.Errorf("%s is in snapshotTables; snapshot restore must not erase independent AN-5 evidence", table)
+	}
+}
+
+func TestApprovedTargetFencesUseIndependentPostgresRecoveryAUD77(t *testing.T) {
+	const table = "approved_target_event_fences"
+	if containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is in ReadModelTables; a rebuild must preserve the append/SQL crash bridge", table)
+	}
+	if containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is in snapshotTables; read-model snapshots must not overwrite independent command authority", table)
+	}
+}
+
+func TestSecretRotationScheduleCommandsUseIndependentPostgresRecoveryAUD106(t *testing.T) {
+	const table = "secret_rotation_schedule_commands"
+	if containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is in ReadModelTables; rebuild must preserve due-edge crash authority", table)
+	}
+	if containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is in snapshotTables; a read-model snapshot must not overwrite live command leases or receipts", table)
+	}
+}
+
+func TestSecretRotationScheduleTickRowsUseIndependentPostgresRecoveryAUD113(t *testing.T) {
+	const table = "secret_rotation_schedule_tick_rows"
+	if containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is in ReadModelTables; rebuild must preserve immutable tick membership", table)
+	}
+	if containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is in snapshotTables; a read-model snapshot must not replace prepared scheduler work", table)
 	}
 }
 

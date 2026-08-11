@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import {
+  ApiError,
   type DynamicLease,
   type MachineLoginResponse,
   type SecretApprovalAction,
   type SecretMeta,
   type SecretRepositoryScanPosture,
+  type SecretRotationDueRun,
   type SecretRotationSchedule,
   type ThirdPartySecretScanPosture,
 } from "@/lib/api";
@@ -27,6 +29,154 @@ export type SecretApprovalQueueItem = {
 };
 
 type Translate = ReturnType<typeof useTranslation>["t"];
+
+export type SecretRotationDeferredEvidence = {
+  schedule_id: string;
+  reason: "approval_pending" | "command_in_flight" | "command_claimed";
+  due_at: string;
+  error?: string;
+};
+
+export const secretRotationDeferredReasonKeys = {
+  approval_pending: "secrets.rotation.deferredReason.approvalPending",
+  command_in_flight: "secrets.rotation.deferredReason.commandInFlight",
+  command_claimed: "secrets.rotation.deferredReason.commandClaimed",
+} as const;
+
+const secretRotationDeferredReasons = new Set<SecretRotationDeferredEvidence["reason"]>([
+  "approval_pending",
+  "command_in_flight",
+  "command_claimed",
+]);
+
+export type SecretRotationDueEvidence = SecretRotationDueRun & {
+  scanned?: number;
+  deferred?: SecretRotationDeferredEvidence[];
+  run_limit_reached?: boolean;
+  scan_limit_reached?: boolean;
+  complete?: boolean;
+  partial?: boolean;
+  failed_schedule_id?: string;
+  system_error?: string;
+};
+
+export type SecretRotationPartialReceipt = SecretRotationDueEvidence & {
+  scanned: number;
+  deferred: SecretRotationDeferredEvidence[];
+  run_limit_reached: boolean;
+  scan_limit_reached: boolean;
+  complete: false;
+  partial: boolean;
+  system_error: string;
+};
+
+const secretRotationScheduleRunStatuses = new Set([
+  "completed",
+  "queued",
+  "failed",
+  "rolled_back",
+  "rollback_failed",
+  "retire_pending",
+  "delivery_failed",
+  "unsupported",
+]);
+const secretRotationUUIDPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// R-09: scheduler receipt decoding lives with the extracted Secrets page parts,
+// not in the monolith. A 503 is renderable evidence only when it is the exact,
+// bounded scheduler envelope; generic problem bodies must clear the prior tick.
+export function parseSecretRotationPartialReceipt(error: unknown): SecretRotationPartialReceipt | null {
+  if (!(error instanceof ApiError) || error.status !== 503) return null;
+
+  let value: unknown;
+  try {
+    value = JSON.parse(error.body);
+  } catch {
+    return null;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const receipt = value as Record<string, unknown>;
+  const runs = receipt.runs;
+  const deferred = receipt.deferred;
+  const ran = receipt.ran;
+  const scanned = receipt.scanned;
+  const systemError = receipt.system_error;
+  if (
+    typeof ran !== "number" ||
+    !Number.isInteger(ran) ||
+    ran < 0 ||
+    ran > 50 ||
+    typeof scanned !== "number" ||
+    !Number.isInteger(scanned) ||
+    scanned < 0 ||
+    scanned > 500 ||
+    !Array.isArray(runs) ||
+    !Array.isArray(deferred) ||
+    receipt.complete !== false ||
+    typeof receipt.partial !== "boolean" ||
+    typeof receipt.run_limit_reached !== "boolean" ||
+    typeof receipt.scan_limit_reached !== "boolean" ||
+    typeof systemError !== "string" ||
+    systemError.trim() === "" ||
+    (receipt.failed_schedule_id !== undefined &&
+      (typeof receipt.failed_schedule_id !== "string" || !secretRotationUUIDPattern.test(receipt.failed_schedule_id)))
+  ) {
+    return null;
+  }
+
+  const stringField = (record: Record<string, unknown>, key: string) => typeof record[key] === "string" && record[key] !== "";
+  const optionalStringField = (record: Record<string, unknown>, key: string) => record[key] === undefined || typeof record[key] === "string";
+  const timestampField = (record: Record<string, unknown>, key: string) => stringField(record, key) && !Number.isNaN(Date.parse(record[key] as string));
+  const uuidField = (record: Record<string, unknown>, key: string) => typeof record[key] === "string" && secretRotationUUIDPattern.test(record[key] as string);
+  const recordValue = (candidate: unknown): candidate is Record<string, unknown> =>
+    candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
+
+  const validRun = (candidate: unknown) => {
+    if (!recordValue(candidate) || !recordValue(candidate.rotation)) return false;
+    const rotation = candidate.rotation;
+    return (
+      uuidField(candidate, "schedule_id") &&
+      uuidField(candidate, "run_id") &&
+      stringField(candidate, "status") &&
+      secretRotationScheduleRunStatuses.has(candidate.status as string) &&
+      timestampField(candidate, "ran_at") &&
+      typeof candidate.reconciled === "boolean" &&
+      optionalStringField(candidate, "error") &&
+      stringField(rotation, "key") &&
+      stringField(rotation, "old_ref") &&
+      typeof rotation.new_ref === "string" &&
+      typeof rotation.completed === "boolean" &&
+      typeof rotation.queued === "boolean" &&
+      typeof rotation.rolled_back === "boolean" &&
+      typeof rotation.rollback_attempted === "boolean" &&
+      typeof rotation.rollback_failed === "boolean" &&
+      optionalStringField(rotation, "rollback_error") &&
+      optionalStringField(rotation, "failed_phase") &&
+      optionalStringField(rotation, "error")
+    );
+  };
+  const validDeferred = (candidate: unknown) =>
+    recordValue(candidate) &&
+    uuidField(candidate, "schedule_id") &&
+    typeof candidate.reason === "string" &&
+    secretRotationDeferredReasons.has(candidate.reason as SecretRotationDeferredEvidence["reason"]) &&
+    timestampField(candidate, "due_at") &&
+    optionalStringField(candidate, "error");
+
+  if (
+    runs.length !== ran ||
+    scanned < runs.length + deferred.length ||
+    receipt.partial !== (runs.length > 0 || deferred.length > 0) ||
+	(receipt.run_limit_reached === true && ran !== 50) ||
+	(receipt.scan_limit_reached === true && scanned !== 500) ||
+    !runs.every(validRun) ||
+    !deferred.every(validDeferred)
+  ) {
+    return null;
+  }
+  return receipt as unknown as SecretRotationPartialReceipt;
+}
 
 // S-C19 (extracted per R-09 before editing the Secrets monolith): rotation
 // schedules showed a next-run timestamp, which means the operator has to do
@@ -51,7 +201,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function rotationHealth(schedule: SecretRotationSchedule, now: Date = new Date()): RotationHealth {
   const neverRun = !schedule.last_run_at;
-  const lastRunFailed = (schedule.last_run_status ?? "").toLowerCase() === "failed";
+  const lastRunStatus = (schedule.last_run_status ?? "").toLowerCase();
+  const lastRunFailed = ["failed", "rolled_back", "delivery_failed", "rollback_failed", "retire_pending"].includes(lastRunStatus);
   if (!schedule.enabled) {
     // A disabled schedule is a deliberate operator choice, never a finding.
     return { overdue: false, overdueDays: 0, stale: false, neverRun, lastRunFailed };

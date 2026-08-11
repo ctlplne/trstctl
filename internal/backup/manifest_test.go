@@ -150,3 +150,78 @@ func TestPrivacyErasureOperationsSurviveLogReadModelRebuild(t *testing.T) {
 		}
 	}
 }
+
+func TestPrivacyErasurePreparationsAreDurablePostgresRecoveryAuthority(t *testing.T) {
+	const table = "privacy_subject_erasure_preparations"
+	class, ok := backup.Classify(table)
+	if !ok {
+		t.Fatalf("%s is missing from the recovery manifest", table)
+	}
+	if class != backup.ClassPostgresBackup {
+		t.Fatalf("%s recovery class = %q, want %q", table, class, backup.ClassPostgresBackup)
+	}
+	for _, rebuilt := range store.ReadModelTables {
+		if rebuilt == table {
+			t.Fatalf("%s is also in store.ReadModelTables; rebuild would erase the cross-store crash marker", table)
+		}
+	}
+}
+
+func TestApprovedTargetFencesSurviveLogReadModelRebuildAUD77(t *testing.T) {
+	const table = "approved_target_event_fences"
+	class, ok := backup.Classify(table)
+	if !ok {
+		t.Fatalf("%s is missing from the recovery manifest", table)
+	}
+	if class != backup.ClassPostgresBackup {
+		t.Fatalf("%s recovery class = %q, want %q", table, class, backup.ClassPostgresBackup)
+	}
+	for _, rebuilt := range store.ReadModelTables {
+		if rebuilt == table {
+			t.Fatalf("%s is also in store.ReadModelTables; rebuild would erase an unprojected canonical command", table)
+		}
+	}
+}
+
+func TestSecretRotationScheduleCommandsSurviveLogReadModelRebuildAUD106(t *testing.T) {
+	for _, table := range []string{
+		"secret_rotation_schedule_scan_cursors",
+		"secret_rotation_schedule_ticks",
+		"secret_rotation_schedule_tick_rows",
+		"secret_rotation_schedule_commands",
+	} {
+		class, ok := backup.Classify(table)
+		if !ok {
+			t.Fatalf("%s is missing from the recovery manifest", table)
+		}
+		if class != backup.ClassPostgresBackup {
+			t.Fatalf("%s recovery class = %q, want %q", table, class, backup.ClassPostgresBackup)
+		}
+		for _, rebuilt := range store.ReadModelTables {
+			if rebuilt == table {
+				t.Fatalf("%s is also in store.ReadModelTables; rebuild would erase scheduler crash authority", table)
+			}
+		}
+	}
+}
+
+func TestOperationApprovalRecoveryClassesAUD77(t *testing.T) {
+	for _, table := range []string{"operation_approval_requests", "operation_approval_decisions"} {
+		class, ok := backup.Classify(table)
+		if !ok {
+			t.Fatalf("%s is missing from the recovery manifest", table)
+		}
+		if class != backup.ClassLogRebuild {
+			t.Errorf("%s recovery class = %q, want %q", table, class, backup.ClassLogRebuild)
+		}
+	}
+	for _, table := range []string{"issuance_approval_requests", "issuance_approvals"} {
+		class, ok := backup.Classify(table)
+		if !ok {
+			t.Fatalf("legacy table %s is missing from the recovery manifest", table)
+		}
+		if class != backup.ClassPostgresBackup {
+			t.Errorf("legacy table %s recovery class = %q, want %q", table, class, backup.ClassPostgresBackup)
+		}
+	}
+}

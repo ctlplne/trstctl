@@ -111,6 +111,16 @@ func TestStoreVersionHistoryReconstructsFromEvents(t *testing.T) {
 	if written.Envelope.Ciphertext != nil {
 		t.Fatalf("current write event still uses the legacy JSON envelope")
 	}
+	var currentWire map[string]json.RawMessage
+	if err := json.Unmarshal(records[0].Data, &currentWire); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := currentWire["sealed"]; !ok {
+		t.Fatalf("current version-written wire payload omitted sealed: %s", records[0].Data)
+	}
+	if _, ok := currentWire["envelope"]; !ok {
+		t.Fatalf("non-pointer envelope with omitempty was unexpectedly omitted: %s", records[0].Data)
+	}
 
 	// Rebuild from the event log alone (AN-2 projection) and open with the wrapper.
 	rebuilt, err := Reconstruct(records, "t1")
@@ -140,6 +150,16 @@ func TestStoreReconstructAcceptsLegacyEnvelopeVersion(t *testing.T) {
 	payload, err := json.Marshal(writeEvent{Path: "app/db", Version: 1, Envelope: env})
 	if err != nil {
 		t.Fatal(err)
+	}
+	var legacyWire map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &legacyWire); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := legacyWire["sealed"]; ok {
+		t.Fatalf("legacy version-written wire payload unexpectedly contains sealed: %s", payload)
+	}
+	if _, ok := legacyWire["envelope"]; !ok {
+		t.Fatalf("legacy version-written wire payload omitted envelope: %s", payload)
 	}
 
 	rebuilt, err := Reconstruct([]auditsink.Record{{

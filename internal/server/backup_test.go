@@ -43,6 +43,53 @@ func TestRunBackupRequiresExternalPostgresHistoryCoordinator(t *testing.T) {
 	}
 }
 
+func TestPostgresStateBackupRefusesActivePrivacyPreparationBeforeArtifactBytes(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, serverTestPostgresDSN(t))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+	if err := st.Migrate(ctx); err != nil {
+		t.Fatalf("migrate store: %v", err)
+	}
+	const tenantID = "a1050000-0000-4000-8000-000000000105"
+	cleanup := func() {
+		_, _ = st.SystemPool().Exec(context.Background(),
+			`DELETE FROM privacy_subject_erasure_preparations WHERE tenant_id = $1`, tenantID)
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+	if _, err := st.SystemPool().Exec(ctx, `INSERT INTO privacy_subject_erasure_preparations
+		(tenant_id, operation_id, request_binding, event_id, rewrite_operation_id,
+		 target_generation, subject_ref, requested_by_ref, reason, selectors, counts,
+		 recovery_fences, erased_at)
+		VALUES ($1, 'privacy-backup-guard', 'binding', 'event', 'rewrite', 'generation',
+		        $2, '', '', '{}'::jsonb, '{}'::jsonb, '[]'::jsonb, now())`,
+		tenantID, strings.Repeat("a", 64)); err != nil {
+		t.Fatalf("seed active privacy preparation: %v", err)
+	}
+
+	var artifact bytes.Buffer
+	if _, err := backup.WritePostgresState(ctx, st, &artifact); !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+		t.Fatalf("WritePostgresState error = %v, want active privacy preparation", err)
+	}
+	if artifact.Len() != 0 {
+		t.Fatalf("refused PostgreSQL-state backup wrote %d bytes; want no apparently valid artifact", artifact.Len())
+	}
+
+	// The lower-level writer accepts only an attested snapshot returned by
+	// BeginPostgresStateSnapshot; a caller cannot wrap an already-stale
+	// transaction and bypass the fence. Nil/expired attestations fail before bytes.
+	artifact.Reset()
+	if _, err := backup.WritePostgresStateTx(ctx, nil, &artifact, 17); err == nil {
+		t.Fatal("WritePostgresStateTx accepted an unattested snapshot")
+	}
+	if artifact.Len() != 0 {
+		t.Fatalf("refused unattested PostgreSQL-state export wrote %d bytes; want zero", artifact.Len())
+	}
+}
+
 func TestBackupHistoryReadRetainsCheckpointedSourceBeforePinningExport(t *testing.T) {
 	ctx := context.Background()
 	const (

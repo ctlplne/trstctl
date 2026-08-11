@@ -69,14 +69,28 @@ func TestProfileApprovalRequirementResolvesIdentityBoundProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProfileApprovalRequirement standard: %v", err)
 	}
-	if normal.ProfileName != "standard" || normal.RequiresApproval {
+	normalActive, err := st.GetActiveProfile(ctx, tenantA, "standard")
+	if err != nil {
+		t.Fatalf("GetActiveProfile standard: %v", err)
+	}
+	if normal.ProfileName != "standard" || normal.ProfileID == "" || normal.ProfileVersion != 1 ||
+		normal.ProfileID != normalActive.ID || normal.ProfileSpecDigest != store.ProfileSpecDigest(normalActive.Spec) ||
+		normal.RequestedTTLSeconds != int64(orchestrator.DefaultIdentityIssuanceTTL/time.Second) ||
+		normal.EffectiveTTLSeconds != int64((24*time.Hour)/time.Second) || normal.RequiresApproval {
 		t.Fatalf("standard requirement = %+v, want standard without approval", normal)
 	}
 	gated, err := orch.ProfileApprovalRequirement(ctx, tenantA, gatedIdentity.ID)
 	if err != nil {
 		t.Fatalf("ProfileApprovalRequirement prod: %v", err)
 	}
-	if gated.ProfileName != "prod" || !gated.RequiresApproval {
+	gatedActive, err := st.GetActiveProfile(ctx, tenantA, "prod")
+	if err != nil {
+		t.Fatalf("GetActiveProfile prod: %v", err)
+	}
+	if gated.ProfileName != "prod" || gated.ProfileID == "" || gated.ProfileVersion != 1 ||
+		gated.ProfileID != gatedActive.ID || gated.ProfileSpecDigest != store.ProfileSpecDigest(gatedActive.Spec) ||
+		gated.RequestedTTLSeconds != int64(orchestrator.DefaultIdentityIssuanceTTL/time.Second) ||
+		gated.EffectiveTTLSeconds != int64((24*time.Hour)/time.Second) || !gated.RequiresApproval {
 		t.Fatalf("prod requirement = %+v, want prod requiring approval", gated)
 	}
 }

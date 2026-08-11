@@ -6,11 +6,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -22,9 +28,9 @@ type managedKeyCustodySpy struct {
 
 type managedKeyApprovalSpy struct{ calls int }
 
-func (s *managedKeyApprovalSpy) IsApproved(context.Context, string, string, string, string) (bool, string) {
+func (s *managedKeyApprovalSpy) AuthorizeApproval(context.Context, api.ApprovalIntent) (api.ApprovalAuthority, bool, string) {
 	s.calls++
-	return false, "approval deliberately unavailable after original completion"
+	return api.ApprovalAuthority{}, false, "approval deliberately unavailable after original completion"
 }
 
 func (s *managedKeyCustodySpy) ManageKey(context.Context, signing.ManagedKeyCommand) (signing.ManagedKeyResult, error) {
@@ -208,7 +214,7 @@ func TestManagedKeyDurableBindingSurvivesHTTPRecorderGC(t *testing.T) {
 	approval := &managedKeyApprovalSpy{}
 	keyLoads := 0
 	service := &durableService{
-		provider: "aws-kms", gate: approval,
+		provider: "aws-kms", approvals: approval,
 		loadOperation: func(context.Context, string, string) (store.ManagedKeyOperation, error) {
 			return operation, nil
 		},
@@ -237,5 +243,83 @@ func TestManagedKeyDurableBindingSurvivesHTTPRecorderGC(t *testing.T) {
 	}
 	if replay.KeyID != keyID || replay.State != "revoked" || approval.calls != 0 || keyLoads != 1 {
 		t.Fatalf("exact durable replay result=%+v approvals=%d key-loads=%d", replay, approval.calls, keyLoads)
+	}
+}
+
+type managedKeyExactIntentSpy struct {
+	intents []api.ApprovalIntent
+}
+
+func (s *managedKeyExactIntentSpy) AuthorizeApproval(_ context.Context, intent api.ApprovalIntent) (api.ApprovalAuthority, bool, string) {
+	s.intents = append(s.intents, intent)
+	return api.ApprovalAuthority{}, false, "awaiting exact approval"
+}
+
+func TestDurableManagedKeyApprovalIntentBindsCurrentTargetAndCommandEvidence(t *testing.T) {
+	const (
+		tenantID = "11111111-1111-1111-1111-111111111111"
+		keyID    = "https://vault.example.test/keys/root/signing/v7"
+	)
+	spy := &managedKeyExactIntentSpy{}
+	service := &durableService{
+		provider: "azure-key-vault", approvals: spy,
+		loadOperation: func(context.Context, string, string) (store.ManagedKeyOperation, error) {
+			return store.ManagedKeyOperation{}, pgx.ErrNoRows
+		},
+		loadKey: func(context.Context, string, string, string) (store.ManagedKey, error) {
+			return store.ManagedKey{
+				TenantID: tenantID, Provider: "azure-key-vault", KeyID: keyID,
+				Algorithm: string(crypto.ECDSAP384), Version: 9, State: "active",
+			}, nil
+		},
+	}
+
+	for _, idempotencyKey := range []string{"rotate-attempt-a", "rotate-attempt-a", "rotate-attempt-b"} {
+		_, err := service.Rotate(context.Background(), tenantID, keyID, "alice", idempotencyKey, "sha256:http-command")
+		if !errors.Is(err, ErrNotApproved) {
+			t.Fatalf("rotate %q error = %v, want ErrNotApproved", idempotencyKey, err)
+		}
+	}
+	if len(spy.intents) != 3 {
+		t.Fatalf("approval intents = %d, want three", len(spy.intents))
+	}
+	first := spy.intents[0]
+	if first.TenantID != tenantID || first.ResourceKind != "managed_key" ||
+		first.ResourceID != keyID || first.ResourceName != keyID || first.Action != ActionRotate ||
+		first.Requester != "alice" || first.FromState != "active" || first.ToState != "superseded" ||
+		first.TargetVersion != 9 || first.Reason != "authorize one exact managed-key rotate command" || len(first.EvidenceRefs) != 4 {
+		t.Fatalf("exact managed-key approval intent = %+v", first)
+	}
+	if !sameStrings(first.EvidenceRefs, spy.intents[1].EvidenceRefs) {
+		t.Fatalf("same Idempotency-Key changed approval evidence: %v vs %v", first.EvidenceRefs, spy.intents[1].EvidenceRefs)
+	}
+	if sameStrings(first.EvidenceRefs, spy.intents[2].EvidenceRefs) {
+		t.Fatalf("fresh Idempotency-Key reused approval intent evidence: %v vs %v", first.EvidenceRefs, spy.intents[2].EvidenceRefs)
+	}
+	for _, ref := range first.EvidenceRefs {
+		if strings.Contains(ref, "rotate-attempt-a") {
+			t.Fatal("raw Idempotency-Key leaked into approval evidence")
+		}
+	}
+}
+
+func sameStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestDurableManagedKeyFactoryRequiresExactApprovalAuthority(t *testing.T) {
+	_, err := NewDurableFactory("aws-kms")(server.ManagedKeyServiceDeps{
+		Store: &store.Store{}, Log: &events.Log{}, ApprovalChecker: nil,
+	})
+	if err == nil {
+		t.Fatal("durable managed-key factory accepted no exact approval authority")
 	}
 }

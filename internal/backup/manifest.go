@@ -84,7 +84,40 @@ var RecoveredFromPostgresBackup = []string{
 	// a pending raw Idempotency-Key still needs the exact canonical erasure
 	// response and request binding even before or independently of projection.
 	"privacy_subject_erasure_operations",
+	// The staged privacy-generation crash marker is independent cross-store
+	// recovery authority. A healthy capture refuses while any row is active, but
+	// classifying it as PostgreSQL state makes restore behavior explicit and keeps
+	// externally produced/older artifacts from silently dropping that authority.
+	"privacy_subject_erasure_preparations",
 	"secret_shares",
+	// Approved target fences are the durable bridge across a broker ACK / SQL
+	// rollback. They are independent command state, not event-derived read models;
+	// restore must preserve the exact event bytes and already-claimed capability.
+	"approved_target_event_fences",
+	// Exact application-secret mutation receipts commit beside the sealed primary
+	// state. They survive approval read-model rebuilds so the same target event is
+	// re-consumed without rotating or deleting the secret twice.
+	"application_secret_mutation_fences",
+	"application_secret_tenant_epochs",
+	"application_secret_mutation_receipts",
+	// One bounded row per tenant retains the UUID-ring position and live-replica
+	// lease for fair scheduled-rotation scans. It is operational PostgreSQL
+	// authority, not an event-derived schedule projection.
+	"secret_rotation_schedule_scan_cursors",
+	// One row per outer run-due Idempotency-Key freezes the PostgreSQL cutoff,
+	// ring start, row_started snapshot, logical budgets, ordered receipt, and
+	// canonical terminal HTTP bytes. Its FK to idempotency_keys gives it the same
+	// retention/reuse lifecycle, so both rows must cross a full restore together.
+	"secret_rotation_schedule_ticks",
+	// Immutable per-tick work membership and tuples. These rows cascade with the
+	// outer tick but must be captured/restored explicitly so a resumed ordinal can
+	// never be reconstructed from a mutable schedule projection.
+	"secret_rotation_schedule_tick_rows",
+	// One row binds an exact scheduled-rotation due edge before its canonical
+	// application-secret event/outbox is committed. It is an independent AN-5
+	// crash receiver with an operational lease, not a read-model snapshot: losing
+	// it could rerun an already-started command after retained-event reconciliation.
+	"secret_rotation_schedule_commands",
 	"secret_store",
 	"secret_store_versions",
 	"ssh_keys",
@@ -139,6 +172,12 @@ var RecoveredFromPostgresBackup = []string{
 // Ephemeral state is not required for a correct restore (it regenerates).
 var Ephemeral = []string{
 	"rate_limits",
+	// This durable deployment-local red light is recreated by migration and then
+	// managed by the restore coordinator. Copying it from the source PostgreSQL
+	// artifact would be wrong in both directions: an event-only target must remain
+	// fenced, while a full restore clears the target's row only after importing and
+	// validating exact receiver authority.
+	"secret_sync_recovery_authority",
 	// F1 AD CS template posture is an OBSERVATION of an external system, not a
 	// fact this system owns. Nothing in the event log can rebuild it, but
 	// nothing needs to: a relay re-reads the directory on its next sweep and the

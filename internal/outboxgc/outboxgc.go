@@ -68,13 +68,46 @@ func (w *Sweeper) Retention() time.Duration { return w.retention }
 // delivered_at partial index (migration 0020) makes the delete touch only the
 // eligible tail, so reclamation stays cheap as the table grows. Pending and failed
 // rows are never matched (status <> 'delivered'), so at-least-once delivery (AN-6)
-// and the visibility of stuck/failed entries are preserved. It is safe to call
-// concurrently and is idempotent: a second call right after reclaims nothing.
+// and the visibility of stuck/failed entries are preserved. An event-derived
+// secret-sync row is reclaimed only when its exact terminal job proves one safe
+// receiver choice. Missing jobs and multi-start commands remain durable FIFO
+// barriers: deleting either would let a later value pass an old generation that
+// may still write remotely. Migration-derived rows also remain because their
+// negative order cannot be reconstructed from retained AN-2 history. It is safe to
+// call concurrently and is idempotent: a second call right after reclaims nothing.
 func (w *Sweeper) Sweep(ctx context.Context) (int64, error) {
 	cutoff := time.Now().UTC().Add(-w.retention)
 	tag, err := w.store.SystemPool().Exec(ctx,
-		`DELETE FROM outbox
-		  WHERE status = 'delivered' AND delivered_at IS NOT NULL AND delivered_at < $1`, cutoff)
+		`DELETE FROM outbox AS queued
+		  WHERE queued.status = 'delivered'
+		    AND queued.delivered_at IS NOT NULL
+		    AND queued.delivered_at < $1
+		    AND (
+		        left(queued.destination, 12) <> 'secret.sync.'
+		        OR (
+		            queued.secret_sync_order_from_event
+		            AND queued.secret_sync_target_order > 0
+		            AND EXISTS (
+		                SELECT 1
+		                  FROM secret_sync_jobs AS terminal_job
+		                 WHERE terminal_job.tenant_id = queued.tenant_id
+		                   AND terminal_job.outbox_id = queued.id
+		                   AND terminal_job.target_order = queued.secret_sync_target_order
+		                   AND terminal_job.terminal_event_from_event
+		                   AND (
+		                       (terminal_job.status = 'delivered'
+		                           AND queued.secret_sync_receiver_effect_state = 'effect_possible'
+		                           AND queued.secret_sync_receiver_io_starts = 1)
+		                       OR
+		                       (terminal_job.status = 'failed'
+		                           AND queued.secret_sync_receiver_effect_state = 'failure_authorized'
+		                           AND queued.secret_sync_receiver_io_starts BETWEEN 0 AND 1
+		                           AND queued.secret_sync_failure_detail = terminal_job.last_error
+		                           AND queued.secret_sync_failure_attempts = terminal_job.attempts)
+		                   )
+		            )
+		        )
+		    )`, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("outboxgc: sweep: %w", err)
 	}

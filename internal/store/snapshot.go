@@ -4,11 +4,16 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // This file holds the read-model snapshot persistence (SPINE-007 / EXC-SCALE-01).
@@ -69,7 +74,40 @@ import (
 // Bumped to 20 when AUD-97 added tenant-visible outbox reconciliation conflict
 // incidents. A v19 snapshot predates that projection, so resuming after its
 // covered sequence would hide a quarantined receiver command from operators.
-const SnapshotFormatVersion = 20
+// Bumped to 21 for the single AUD-77/AUD-109 artifact. AUD-77 replaced standing
+// approval tuples with event-sourced exact requests/decisions; AUD-109 added an
+// immutable tenant+target order to secret-sync jobs. A v20 snapshot has neither
+// the approval projections nor target_order, so accepting it would erase reviewer
+// authority or make same-target receiver replay order unknowable.
+// Bumped to 22 when snapshot capture became an all-tenant generation. Every row
+// now carries the exact capture ID, projection head, tenant count, and digest of
+// the sorted tenant IDs. A v21 row cannot prove that a privacy-erased tenant's row
+// was not deleted while another tenant's positive offset survived, so it is never
+// allowed to move a cold restore above sequence zero.
+const SnapshotFormatVersion = 22
+
+const snapshotSetPayloadKey = "_trstctl_snapshot_set"
+
+// snapshotSetMetadata is copied into every tenant payload written by one complete
+// capture. The tenant IDs themselves stay in their tenant rows; only their
+// domain-separated digest is repeated. Restore recomputes that digest from the
+// rows it can actually see, which makes a deleted or partially written set
+// unusable instead of letting a neighbor's positive offset skip missing history.
+type snapshotSetMetadata struct {
+	ID              string `json:"id"`
+	CoveredSequence uint64 `json:"covered_seq"`
+	TenantCount     int    `json:"tenant_count"`
+	TenantSetSHA256 string `json:"tenant_set_sha256"`
+}
+
+type completeSnapshotSet struct {
+	metadata  snapshotSetMetadata
+	tenantIDs []string
+}
+
+type snapshotSetQuerier interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
 
 // snapshotTables are the read-model tables captured in a per-tenant snapshot, in
 // dependency order (parents before children) so a restore's inserts never trip a
@@ -106,7 +144,10 @@ var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme
 	// Format 17: the F4 AD CS certificate-database summary, same pairing.
 	"adcs_ca_databases",
 	// Format 18: I4's tenant-scoped diagnostic projection.
-	"enrollment_diagnostic_observations", "enrollment_diagnostics"}
+	"enrollment_diagnostic_observations", "enrollment_diagnostics",
+	// Format 21: parent before child keeps restore safe for the decision table's
+	// composite foreign key into the immutable request.
+	"operation_approval_requests", "operation_approval_decisions"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -117,20 +158,128 @@ func joinReadModel() string { return strings.Join(ReadModelTables, ", ") }
 // (or a full rebuild) rather than treating the absence as an error.
 var ErrNoSnapshot = errors.New("store: no read-model snapshot")
 
-// WriteTenantSnapshot captures tenant tenantID's current read-model rows and the
-// global offset coveredSeq they are consistent as-of, replacing any prior snapshot
-// for that tenant (SPINE-007). It runs under the tenant's RLS context (AN-1): the
-// capture SELECTs and the snapshot UPSERT all filter on tenant_id, so a tenant's
-// snapshot can only ever hold that tenant's rows. The capture and the write share
-// one transaction, so the stored snapshot is a consistent point-in-time view.
+// WriteTenantSnapshot captures one tenant's current read-model rows. It is the
+// compatibility entry point for narrow callers; the periodic worker uses
+// WriteReadModelSnapshots so every tenant row belongs to one complete generation.
+// A direct write still stamps the exact current tenant set. In a multi-tenant
+// deployment that deliberately makes the partial generation unrestorable until a
+// complete capture replaces it; one tenant's new positive offset can never be
+// mistaken for coverage of its missing neighbors.
 //
-// coveredSeq must be a sequence the read model has actually applied for this tenant
-// (the caller passes the projection checkpoint at capture time); every event with
-// sequence <= coveredSeq is reflected in the captured rows.
+// The shared privacy history-operation barrier is outermost, followed by the
+// projection lock and only then PostgreSQL reads/writes. This is the global order
+// used by catch-up, rebuild, restore, and privacy erasure. The barrier is
+// re-entrant through its callback context, so a higher-level guarded caller does
+// not consume another pool connection or deadlock itself.
 func (s *Store) WriteTenantSnapshot(ctx context.Context, tenantID string, coveredSeq uint64) error {
 	if tenantID == "" {
 		return fmt.Errorf("store: WriteTenantSnapshot requires a tenant id (AN-1)")
 	}
+	return s.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
+		return s.WithProjectionLock(barrierCtx, func(projectionCtx context.Context) error {
+			checkpoint, err := s.ProjectionCheckpoint(projectionCtx)
+			if err != nil {
+				return fmt.Errorf("store: read checkpoint for direct snapshot: %w", err)
+			}
+			if coveredSeq != checkpoint {
+				return fmt.Errorf(
+					"store: direct snapshot offset %d differs from projection checkpoint %d",
+					coveredSeq, checkpoint,
+				)
+			}
+			tenants, err := s.ListTenants(projectionCtx)
+			if err != nil {
+				return fmt.Errorf("store: list tenants for direct snapshot: %w", err)
+			}
+			metadata, found := newSnapshotSetMetadata(coveredSeq, tenants, tenantID)
+			if !found {
+				return fmt.Errorf("store: direct snapshot tenant %s is not registered", tenantID)
+			}
+			return s.writeTenantSnapshotInSet(projectionCtx, tenantID, coveredSeq, metadata)
+		})
+	})
+}
+
+// WriteReadModelSnapshots captures the exact current tenant set at one projection
+// head. The operation is intentionally crash-conservative: it first invalidates
+// the current-format generation, then writes each tenant row separately. A crash
+// can leave a partial set, but its stamped count/digest cannot validate, so restore
+// falls back to event history. Zero tenants explicitly leaves no v22 snapshots.
+func (s *Store) WriteReadModelSnapshots(ctx context.Context) (int, error) {
+	var written int
+	err := s.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
+		return s.WithProjectionLock(barrierCtx, func(projectionCtx context.Context) error {
+			coveredSeq, err := s.ProjectionCheckpoint(projectionCtx)
+			if err != nil {
+				return fmt.Errorf("store: read checkpoint for snapshot set: %w", err)
+			}
+			tenants, err := s.ListTenants(projectionCtx)
+			if err != nil {
+				return fmt.Errorf("store: list tenants for snapshot set: %w", err)
+			}
+			metadata, _ := newSnapshotSetMetadata(coveredSeq, tenants, "")
+			// A complete generation is published by its repeated metadata, not by a
+			// mutable pointer row. Removing the prior current-format rows first means a
+			// crash exposes only an obviously incomplete generation.
+			//trstctl:system-query — deployment-wide invalidation of the reconstructible current snapshot generation; every replacement row below is captured under its tenant's FORCE-RLS context (AN-1 exemption).
+			if _, err := s.pool.Exec(projectionCtx,
+				`DELETE FROM read_model_snapshots WHERE format_version = $1`,
+				SnapshotFormatVersion); err != nil {
+				return fmt.Errorf("store: invalidate prior snapshot set: %w", err)
+			}
+			if len(tenants) == 0 {
+				return nil
+			}
+			for _, tenant := range tenants {
+				if err := s.writeTenantSnapshotInSet(
+					projectionCtx, tenant.TenantID, coveredSeq, metadata,
+				); err != nil {
+					return err
+				}
+				written++
+			}
+			complete, err := readCompleteSnapshotSet(projectionCtx, s.pool)
+			if err != nil {
+				return fmt.Errorf("store: verify completed snapshot set: %w", err)
+			}
+			if complete.metadata != metadata {
+				return errors.New("store: completed snapshot set metadata changed during capture")
+			}
+			return nil
+		})
+	})
+	return written, err
+}
+
+func newSnapshotSetMetadata(
+	coveredSeq uint64,
+	tenants []Tenant,
+	requiredTenantID string,
+) (snapshotSetMetadata, bool) {
+	tenantIDs := make([]string, 0, len(tenants))
+	found := requiredTenantID == ""
+	for _, tenant := range tenants {
+		tenantIDs = append(tenantIDs, tenant.TenantID)
+		if tenant.TenantID == requiredTenantID {
+			found = true
+		}
+	}
+	sort.Strings(tenantIDs)
+	basis := []byte("trstctl:read-model-snapshot-tenant-set:v1\x00" + strings.Join(tenantIDs, "\x00"))
+	return snapshotSetMetadata{
+		ID:              uuid.NewString(),
+		CoveredSequence: coveredSeq,
+		TenantCount:     len(tenantIDs),
+		TenantSetSHA256: crypto.SHA256Hex(basis),
+	}, found
+}
+
+func (s *Store) writeTenantSnapshotInSet(
+	ctx context.Context,
+	tenantID string,
+	coveredSeq uint64,
+	metadata snapshotSetMetadata,
+) error {
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		// Build a jsonb document {table: [row, ...], ...} entirely inside PostgreSQL so
 		// the row encoding is the database's own (handles every column type), and it is
@@ -177,7 +326,9 @@ SELECT jsonb_build_object(
   'secret_rotation_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_rotation_schedules t),
   'dynamic_secret_operations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM dynamic_secret_operations t),
   'dynamic_secret_leases', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM dynamic_secret_leases t),
-  'secret_sync_jobs',      (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_sync_jobs t),
+  -- Secret-sync restore must reproduce the committed target order byte-for-byte.
+  -- Array order is explicit too: jsonb aggregation has no implicit row order.
+  'secret_sync_jobs',      (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.target, t.target_order, t.id), '[]'::jsonb) FROM secret_sync_jobs t),
   'managed_key_operations',(SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM managed_key_operations t),
   'managed_keys',          (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM managed_keys t),
   'code_signing_operations',(SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM code_signing_operations t),
@@ -221,10 +372,22 @@ SELECT jsonb_build_object(
   'adcs_ca_databases', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_ca_databases t),
   'enrollment_diagnostic_observations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM enrollment_diagnostic_observations t),
   'enrollment_diagnostics', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM enrollment_diagnostics t),
-  'outbox_reconciliation_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM outbox_reconciliation_conflicts t)
+  'outbox_reconciliation_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM outbox_reconciliation_conflicts t),
+  'operation_approval_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM operation_approval_requests t),
+  'operation_approval_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM operation_approval_decisions t)
+) || jsonb_build_object(
+  '_trstctl_snapshot_set', jsonb_build_object(
+    'id', $1::text,
+    'covered_seq', $2::bigint,
+    'tenant_count', $3::integer,
+    'tenant_set_sha256', $4::text
+  )
 )`
 		var payload []byte
-		if err := tx.QueryRow(ctx, payloadSQL).Scan(&payload); err != nil {
+		if err := tx.QueryRow(ctx, payloadSQL,
+			metadata.ID, int64(metadata.CoveredSequence), // #nosec G115 -- the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190)
+			metadata.TenantCount, metadata.TenantSetSHA256,
+		).Scan(&payload); err != nil {
 			return fmt.Errorf("store: capture snapshot payload: %w", err)
 		}
 		// Upsert the single per-tenant snapshot row. tenant_id is written explicitly and
@@ -245,32 +408,84 @@ SELECT jsonb_build_object(
 	})
 }
 
-// LatestSnapshotOffset returns the LOWEST covered offset across all current
-// snapshots in a known format — the watermark the boot restore resumes catch-up
-// from after rehydrating from snapshots (SPINE-007). It is the minimum because the
-// boot restore must replay every event any tenant is missing; resuming from the
-// lowest covered offset guarantees no tenant's tail is skipped (replaying an event a
-// tenant already has is an idempotent upsert). It returns ErrNoSnapshot when no
-// known-format snapshot exists, so the caller falls through to the existing
-// checkpoint catch-up. It is a system (RLS-bypassing) read.
+// LatestSnapshotOffset returns the one projection head covered by a complete v22
+// snapshot generation. Completeness is proven from the rows themselves: every row
+// must name the same capture ID/head/count/set digest, and recomputing the digest
+// over the actual tenant IDs must match. Missing, mixed, legacy, or partial sets
+// return ErrNoSnapshot, so a cold database replays sanitized history from its zero
+// checkpoint instead of trusting a surviving neighbor's positive offset.
 func (s *Store) LatestSnapshotOffset(ctx context.Context) (uint64, error) {
-	var min *int64
-	// cross-tenant by design: the boot restore needs the LOWEST covered offset across
-	// ALL tenants' snapshots so no tenant's tail is skipped (like the rebuild path).
-	err := s.pool.QueryRow(ctx,
-		//trstctl:system-query — cross-tenant min(covered_seq) over all tenants; runs on the pool, not under RLS (AN-1 exemption).
-		`SELECT min(covered_seq) FROM read_model_snapshots WHERE format_version = $1`,
-		SnapshotFormatVersion).Scan(&min)
+	set, err := readCompleteSnapshotSet(ctx, s.pool)
 	if err != nil {
-		return 0, fmt.Errorf("store: read latest snapshot offset: %w", err)
+		return 0, err
 	}
-	if min == nil {
-		return 0, ErrNoSnapshot
+	return set.metadata.CoveredSequence, nil
+}
+
+func readCompleteSnapshotSet(
+	ctx context.Context,
+	querier snapshotSetQuerier,
+) (completeSnapshotSet, error) {
+	//trstctl:system-query — cross-tenant read of reconstructible snapshot metadata; tenant IDs are used only to prove the exact complete capture set before a system restore (AN-1 exemption).
+	rows, err := querier.Query(ctx, `SELECT tenant_id::text, covered_seq,
+		payload -> $2
+		FROM read_model_snapshots
+		WHERE format_version = $1
+		ORDER BY tenant_id`, SnapshotFormatVersion, snapshotSetPayloadKey)
+	if err != nil {
+		return completeSnapshotSet{}, fmt.Errorf("store: read snapshot set metadata: %w", err)
 	}
-	if *min < 0 {
-		return 0, nil
+	defer rows.Close()
+
+	var out completeSnapshotSet
+	seen := make(map[string]struct{})
+	for rows.Next() {
+		var (
+			tenantID   string
+			coveredSeq int64
+			raw        []byte
+		)
+		if err := rows.Scan(&tenantID, &coveredSeq, &raw); err != nil {
+			return completeSnapshotSet{}, err
+		}
+		if coveredSeq < 0 || len(raw) == 0 {
+			return completeSnapshotSet{}, ErrNoSnapshot
+		}
+		var metadata snapshotSetMetadata
+		if err := json.Unmarshal(raw, &metadata); err != nil {
+			return completeSnapshotSet{}, ErrNoSnapshot
+		}
+		parsedID, err := uuid.Parse(metadata.ID)
+		if err != nil || parsedID.String() != metadata.ID || metadata.TenantCount <= 0 ||
+			metadata.CoveredSequence != uint64(coveredSeq) ||
+			len(metadata.TenantSetSHA256) != 64 {
+			return completeSnapshotSet{}, ErrNoSnapshot
+		}
+		if _, duplicate := seen[tenantID]; duplicate {
+			return completeSnapshotSet{}, ErrNoSnapshot
+		}
+		seen[tenantID] = struct{}{}
+		if len(out.tenantIDs) == 0 {
+			out.metadata = metadata
+		} else if metadata != out.metadata {
+			return completeSnapshotSet{}, ErrNoSnapshot
+		}
+		out.tenantIDs = append(out.tenantIDs, tenantID)
 	}
-	return uint64(*min), nil
+	if err := rows.Err(); err != nil {
+		return completeSnapshotSet{}, err
+	}
+	if len(out.tenantIDs) == 0 || len(out.tenantIDs) != out.metadata.TenantCount {
+		return completeSnapshotSet{}, ErrNoSnapshot
+	}
+	// ORDER BY tenant_id already gives the canonical order. Sort defensively so a
+	// future query refactor cannot weaken the digest proof by changing row order.
+	sort.Strings(out.tenantIDs)
+	basis := []byte("trstctl:read-model-snapshot-tenant-set:v1\x00" + strings.Join(out.tenantIDs, "\x00"))
+	if crypto.SHA256Hex(basis) != out.metadata.TenantSetSHA256 {
+		return completeSnapshotSet{}, ErrNoSnapshot
+	}
+	return out, nil
 }
 
 // RestoreSnapshotsTx truncates the event-sourced read model and reloads every
@@ -291,6 +506,14 @@ func (s *Store) LatestSnapshotOffset(ctx context.Context) (uint64, error) {
 // uses jsonb_populate_recordset against the table's own row type, so every column
 // type (text[], timestamptz, jsonb, derived status columns) is reconstructed exactly.
 func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int, err error) {
+	// Validate completeness on the caller's exact restore transaction BEFORE the
+	// destructive truncate. A target snapshot deleted by privacy preparation leaves
+	// its neighbors stamped with the old larger tenant set, so this returns
+	// ErrNoSnapshot and the caller replays sanitized history from its checkpoint.
+	complete, err := readCompleteSnapshotSet(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
 	// 1) Empty the event-sourced read model (same set the rebuild truncates), so the
 	// reload is a clean rehydration rather than an overlay on possibly-stale rows.
 	if _, err := tx.Exec(ctx, `TRUNCATE `+joinReadModel()+` CASCADE`); err != nil {
@@ -303,8 +526,10 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 	// re-inserted under that tenant's id, so AN-1 holds even with RLS bypassed here.
 	rows, err := tx.Query(ctx,
 		//trstctl:system-query — cross-tenant read of all tenants' snapshots for the boot/DR restore; owner role, not under RLS (AN-1 exemption).
-		`SELECT tenant_id, payload FROM read_model_snapshots WHERE format_version = $1 ORDER BY tenant_id`,
-		SnapshotFormatVersion)
+		`SELECT tenant_id, payload FROM read_model_snapshots
+		 WHERE format_version = $1 AND payload -> $2 ->> 'id' = $3
+		 ORDER BY tenant_id`,
+		SnapshotFormatVersion, snapshotSetPayloadKey, complete.metadata.ID)
 	if err != nil {
 		return 0, fmt.Errorf("store: read snapshots for restore: %w", err)
 	}
@@ -350,7 +575,42 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 		}
 		restored++
 	}
+	if restored != complete.metadata.TenantCount {
+		return 0, ErrNoSnapshot
+	}
 	return restored, nil
+}
+
+// deleteTenantSnapshotTx removes one tenant's disposable derived cache inside a
+// caller-owned transaction and returns the exact physical row count (zero or one).
+// Privacy preparation uses this primitive so cache deletion, its crash marker, and
+// the non-PII count evidence commit or roll back together.
+func deleteTenantSnapshotTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+) (int, error) {
+	tag, err := tx.Exec(ctx,
+		`DELETE FROM read_model_snapshots WHERE tenant_id = $1`, tenantID)
+	if err != nil {
+		return 0, fmt.Errorf("store: delete tenant read-model snapshot: %w", err)
+	}
+	deleted := tag.RowsAffected()
+	if deleted < 0 || deleted > 1 {
+		return 0, fmt.Errorf("store: tenant snapshot deletion changed %d rows", deleted)
+	}
+	return int(deleted), nil
+}
+
+func (s *Store) tenantSnapshotCount(ctx context.Context, tenantID string) (int, error) {
+	var count int
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT count(*) FROM read_model_snapshots WHERE tenant_id = $1`,
+			tenantID,
+		).Scan(&count)
+	})
+	return count, err
 }
 
 // DeleteAllSnapshots removes every read-model snapshot (SPINE-007). It is used by an

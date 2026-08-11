@@ -8,11 +8,13 @@ import "strings"
 type bodyMode int
 
 const (
-	bodyNone         bodyMode = iota // no request body
-	bodyFile                         // JSON body from -f <file> (or -f - for stdin)
-	bodyOptionalFile                 // optional JSON body from -f <file> (or -f - for stdin)
-	bodyCypher                       // positional argument(s) wrapped as {"query": ...}
-	bodyAction                       // fixed JSON body {"action": Command.Action}
+	bodyNone               bodyMode = iota // no request body
+	bodyFile                               // JSON body from -f <file> (or -f - for stdin)
+	bodyOptionalFile                       // optional JSON body from -f <file> (or -f - for stdin)
+	bodyCypher                             // positional argument(s) wrapped as {"query": ...}
+	bodyIntentDigest                       // one positional digest wrapped as {"intent_digest": ...}
+	bodyIntentDigestReason                 // digest + denial reason wrapped as an immutable decision
+	bodyApprovalFile                       // exact legacy approval JSON from -f, including request ID + digest
 )
 
 // Command maps a CLI invocation to one API operation, so the command set is
@@ -23,7 +25,7 @@ type Command struct {
 	Path    string   // API path template, with {param} placeholders
 	Query   []string // accepted query-parameter flag names
 	Body    bodyMode
-	Action  string // fixed action for bodyAction commands
+	Action  string // fixed action validated for bodyApprovalFile commands
 	Summary string
 }
 
@@ -132,14 +134,18 @@ var coreCommandTable = []Command{
 	{Name: []string{"setup", "protocols", "status"}, Method: "GET", Path: "/api/v1/setup/protocols", Summary: "Show the tenant-bound eval protocol profile status"},
 	{Name: []string{"setup", "protocols", "activate"}, Method: "POST", Path: "/api/v1/setup/protocols/activate", Body: bodyNone, Summary: "Activate the tenant-bound eval protocol profile"},
 
+	{Name: []string{"approval-requests", "list"}, Method: "GET", Path: "/api/v1/approval-requests", Query: []string{"status", "limit", "cursor"}, Summary: "List a paginated queue of genuine immutable operation approval requests"},
+	{Name: []string{"approval-requests", "approve"}, Method: "POST", Path: "/api/v1/approval-requests/{id}/approvals", Body: bodyIntentDigest, Summary: "Approve an exact immutable request ID and intent digest"},
+	{Name: []string{"approval-requests", "deny"}, Method: "POST", Path: "/api/v1/approval-requests/{id}/denials", Body: bodyIntentDigestReason, Summary: "Deny an exact immutable request with its digest and a review reason"},
+
 	{Name: []string{"identities", "create"}, Method: "POST", Path: "/api/v1/identities", Body: bodyFile, Summary: "Create an identity"},
 	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor"}, Summary: "List identities"},
 	{Name: []string{"identities", "get"}, Method: "GET", Path: "/api/v1/identities/{id}", Summary: "Get an identity"},
 	{Name: []string{"identities", "transition"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions", Body: bodyFile, Summary: "Apply a lifecycle transition"},
-	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyFile, Summary: "Approve a dual-control identity action (distinct approver)"},
-	{Name: []string{"identities", "approve", "issue"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyAction, Action: "issue", Summary: "Approve a dual-control identity issuance action"},
-	{Name: []string{"identities", "approve", "rotate"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyAction, Action: "rotate", Summary: "Approve a dual-control identity rotation action"},
-	{Name: []string{"identities", "approve", "revoke"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyAction, Action: "revoke", Summary: "Approve a dual-control identity revocation action"},
+	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Summary: "Approve an identity action using its exact request ID and intent digest"},
+	{Name: []string{"identities", "approve", "issue"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Action: "issue", Summary: "Approve an exact immutable identity issuance request"},
+	{Name: []string{"identities", "approve", "rotate"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Action: "rotate", Summary: "Approve an exact immutable identity rotation request"},
+	{Name: []string{"identities", "approve", "revoke"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Action: "revoke", Summary: "Approve an exact immutable identity revocation request"},
 	{Name: []string{"identities", "bulk-revoke"}, Method: "POST", Path: "/api/v1/identities/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke identities by id or criteria"},
 
 	{Name: []string{"nhi", "inventory"}, Method: "GET", Path: "/api/v1/nhi/inventory", Summary: "List unified NHI inventory across certificates, keys, tokens, secrets, roles, webhooks, and workload identities"},
@@ -182,7 +188,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"broker", "agent-identities", "issue"}, Method: "POST", Path: "/api/v1/broker/agent-identities", Body: bodyFile, Summary: "Issue a policy-gated AI/MCP agent identity"},
 	{Name: []string{"ephemeral", "issue"}, Method: "POST", Path: "/api/v1/ephemeral", Body: bodyFile, Summary: "Open or complete an approval-gated JIT credential request"},
 	{Name: []string{"ephemeral", "api-keys", "issue"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys", Body: bodyFile, Summary: "Mint a short-TTL API key"},
-	{Name: []string{"ephemeral", "approve"}, Method: "POST", Path: "/api/v1/ephemeral/{id}/approvals", Body: bodyFile, Summary: "Approve an ephemeral JIT credential request"},
+	{Name: []string{"ephemeral", "approve"}, Method: "POST", Path: "/api/v1/ephemeral/{id}/approvals", Body: bodyApprovalFile, Action: "issue", Summary: "Approve an exact immutable ephemeral JIT request"},
 
 	{Name: []string{"discovery", "sources", "create"}, Method: "POST", Path: "/api/v1/discovery/sources", Body: bodyFile, Summary: "Create a discovery source"},
 	{Name: []string{"discovery", "sources", "list"}, Method: "GET", Path: "/api/v1/discovery/sources", Query: []string{"limit", "cursor"}, Summary: "List discovery sources"},
@@ -423,19 +429,18 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "login"}, Method: "POST", Path: "/api/v1/secrets/login", Body: bodyFile, Summary: "Exchange a machine credential for a workload session"},
 	{Name: []string{"secrets", "store", "put"}, Method: "POST", Path: "/api/v1/secrets/store", Body: bodyFile, Summary: "Store a secret"},
 	{Name: []string{"secrets", "store", "list"}, Method: "GET", Path: "/api/v1/secrets/store", Query: []string{"limit", "cursor"}, Summary: "List stored secrets"},
-	{Name: []string{"secrets", "store", "import"}, Method: "POST", Path: "/api/v1/secrets/store/import", Body: bodyFile, Summary: "Import a tree of stored secrets"},
 	{Name: []string{"secrets", "store", "get"}, Method: "GET", Path: "/api/v1/secrets/store/{name}", Query: []string{"resolve"}, Summary: "Get a stored secret"},
 	{Name: []string{"secrets", "store", "history"}, Method: "GET", Path: "/api/v1/secrets/store/history/{name}", Query: []string{"version"}, Summary: "Get a historical stored-secret version"},
 	{Name: []string{"secrets", "store", "recover"}, Method: "POST", Path: "/api/v1/secrets/store/recover/{name}", Body: bodyFile, Summary: "Recover a stored secret to a point in time"},
 	{Name: []string{"secrets", "store", "update"}, Method: "PUT", Path: "/api/v1/secrets/store/{name}", Body: bodyFile, Summary: "Replace a stored secret"},
 	{Name: []string{"secrets", "store", "delete"}, Method: "DELETE", Path: "/api/v1/secrets/store/{name}", Summary: "Delete a stored secret"},
-	{Name: []string{"secrets", "approvals", "approve"}, Method: "POST", Path: "/api/v1/secrets/store/approvals/{name}", Body: bodyFile, Summary: "Approve a pending secret-store change"},
+	{Name: []string{"secrets", "approvals", "approve"}, Method: "POST", Path: "/api/v1/secrets/store/approvals/{name}", Body: bodyApprovalFile, Summary: "Approve an exact immutable secret-store change request"},
 	{Name: []string{"secrets", "leases", "issue"}, Method: "POST", Path: "/api/v1/secrets/leases", Body: bodyFile, Summary: "Issue a dynamic secret lease"},
 	{Name: []string{"secrets", "leases", "get"}, Method: "GET", Path: "/api/v1/secrets/leases/{lease_id}", Summary: "Get dynamic secret lease metadata"},
 	{Name: []string{"secrets", "leases", "renew"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/renew", Body: bodyFile, Summary: "Renew a dynamic secret lease"},
 	{Name: []string{"secrets", "leases", "revoke"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/revoke", Summary: "Revoke a dynamic secret lease"},
-	{Name: []string{"secrets", "rotations", "run"}, Method: "POST", Path: "/api/v1/secrets/rotations", Body: bodyFile, Summary: "Run a rollback-safe static, connector, or dynamic-lease secret rotation"},
-	{Name: []string{"secrets", "rotation-schedules", "create"}, Method: "POST", Path: "/api/v1/secrets/rotation-schedules", Body: bodyFile, Summary: "Create a scheduled zero-downtime dual-phase secret rotation"},
+	{Name: []string{"secrets", "rotations", "run"}, Method: "POST", Path: "/api/v1/secrets/rotations", Body: bodyFile, Summary: "Queue a worker-owned connector:<target> secret rotation"},
+	{Name: []string{"secrets", "rotation-schedules", "create"}, Method: "POST", Path: "/api/v1/secrets/rotation-schedules", Body: bodyFile, Summary: "Create a scheduled connector:<target> secret rotation"},
 	{Name: []string{"secrets", "rotation-schedules", "list"}, Method: "GET", Path: "/api/v1/secrets/rotation-schedules", Query: []string{"limit", "cursor"}, Summary: "List scheduled secret rotations"},
 	{Name: []string{"secrets", "rotation-schedules", "run-due"}, Method: "POST", Path: "/api/v1/secrets/rotation-schedules/run-due", Body: bodyNone, Summary: "Run due scheduled secret rotations"},
 	{Name: []string{"secrets", "cloud-secret-managers"}, Method: "GET", Path: "/api/v1/secrets/cloud-secret-managers", Summary: "Show cloud secret-manager discovery and sync integration coverage"},
@@ -481,7 +486,7 @@ var coreCommandTable = []Command{
 	// material; rotate/revoke/zeroize are destructive and require a distinct-approver
 	// approval (dual control) recorded through the dedicated served approval route.
 	{Name: []string{"managed-keys", "generate"}, Method: "POST", Path: "/api/v1/managed-keys", Body: bodyFile, Summary: "Generate a BYOK/HSM-resident managed key"},
-	{Name: []string{"managed-keys", "approve"}, Method: "POST", Path: "/api/v1/managed-keys/approvals", Body: bodyFile, Summary: "Approve an exact managed-key rotate, revoke, or zeroize action"},
+	{Name: []string{"managed-keys", "approve"}, Method: "POST", Path: "/api/v1/managed-keys/approvals", Body: bodyApprovalFile, Summary: "Approve an exact immutable managed-key request"},
 	{Name: []string{"managed-keys", "rotate"}, Method: "POST", Path: "/api/v1/managed-keys/rotate", Body: bodyFile, Summary: "Rotate a managed key (requires dual-control approval)"},
 	{Name: []string{"managed-keys", "revoke"}, Method: "POST", Path: "/api/v1/managed-keys/revoke", Body: bodyFile, Summary: "Revoke a managed key at the provider (requires dual-control approval)"},
 	{Name: []string{"managed-keys", "zeroize"}, Method: "POST", Path: "/api/v1/managed-keys/zeroize", Body: bodyFile, Summary: "Zeroize a managed key's material at the provider (requires dual-control approval)"},

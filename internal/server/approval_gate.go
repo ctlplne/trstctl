@@ -4,15 +4,14 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/bulkhead"
-	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/store"
@@ -40,8 +39,12 @@ type approvalOutbox interface {
 	EnqueueIfAbsent(context.Context, pgx.Tx, orchestrator.Entry) (bool, error)
 }
 
-func buildMutationGate(d Deps, bulk *bulkhead.Set, outbox approvalOutbox) (api.MutationGate, api.ApprovalRecorder, error) {
-	gate := api.MutationGate{}
+func buildMutationGate(d Deps, bulk *bulkhead.Set, outbox approvalOutbox, orch *orchestrator.Orchestrator) (api.MutationGate, api.ApprovalRecorder, error) {
+	// Profile selection is part of issuance authority even when neither OPA nor
+	// the ABAC overlay is enabled. Keeping it on the base gate lets the served
+	// handler resolve the configured revision, apply its requires_approval bit,
+	// and pin its TTL before any lifecycle event is appended.
+	gate := api.MutationGate{Profile: d.DefaultProfile}
 
 	if d.EnablePolicyGate {
 		var pool *bulkhead.Pool
@@ -60,7 +63,6 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set, outbox approvalOutbox) (api.M
 		// Feed the served-bound profile name into the policy input so a Rego rule can
 		// require a bound profile (the base policy denies issue/deploy with an empty
 		// profile). This ties the policy gate to PKIGOV-002's profile model.
-		gate.Profile = d.DefaultProfile
 	}
 	if d.EnableABAC {
 		var pool *bulkhead.Pool
@@ -77,7 +79,6 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set, outbox approvalOutbox) (api.M
 		}
 		gate.ABAC = eng
 		gate.ABACEnvironment = d.ABACEnvironment
-		gate.Profile = d.DefaultProfile
 	}
 
 	var recorder api.ApprovalRecorder
@@ -89,8 +90,11 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set, outbox approvalOutbox) (api.M
 		if required <= 0 {
 			required = defaultRequiredApprovals
 		}
-		gate.Checker = storeApprovalChecker{store: d.Store, outbox: outbox, required: required}
-		recorder = storeApprovalRecorder{store: d.Store, required: required}
+		if orch == nil {
+			return api.MutationGate{}, nil, fmt.Errorf("server: approval authority requires the event-sourced orchestrator")
+		}
+		gate.Checker = storeApprovalChecker{store: d.Store, orch: orch, required: required}
+		recorder = storeApprovalRecorder{store: d.Store, orch: orch}
 		if d.RequireApproval {
 			gate.RequireApproval = true
 		}
@@ -99,72 +103,117 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set, outbox approvalOutbox) (api.M
 	return gate, recorder, nil
 }
 
-// storeApprovalChecker implements api.ApprovalChecker over the store's issuance
-// approval tables. It is the predicate the gate consults for a privileged
-// (issue/revoke) transition: it records (idempotently) that the requester's action
-// awaits approval — capturing the requester so they can never count as their own
-// approver — and then reports whether `required` DISTINCT approvers (excluding the
-// requester) have approved. Tenant-scoped (AN-1); fail-closed (any store error or an
-// insufficient count denies).
+// storeApprovalChecker implements the exact event-sourced approval contract. The
+// legacy boolean method deliberately fails closed; AuthorizeApproval is the only
+// method that can return request/digest/version-bound candidate authority. The
+// eventual command projector must consume that authority atomically with the
+// protected mutation and outbox intent.
 type storeApprovalChecker struct {
 	store    *store.Store
-	outbox   approvalOutbox
+	orch     *orchestrator.Orchestrator
 	required int
 }
 
-// IsApproved reports whether the (tenant, resource, action) has the required number
-// of distinct-approver approvals, excluding the requester (so a self-approval can
-// never satisfy it). It first opens the approval request (idempotently) capturing
-// the requester, so a distinct approver's later approval is checked against them.
-func (c storeApprovalChecker) IsApproved(ctx context.Context, tenantID, resource, action, requester string) (bool, string) {
-	required := c.required
+// IsApproved is the legacy resource/action-only seam. It deliberately cannot
+// create or return authority: without request ID, digest, target version, and
+// evidence a caller could turn a standing boolean into a reusable grant.
+func (c storeApprovalChecker) IsApproved(context.Context, string, string, string, string) (bool, string) {
+	return false, "legacy approval checks cannot authorize; exact single-use authority is required"
+}
+
+// AuthorizeApproval creates (only from the requester-side operation attempt) or
+// reads the immutable request for this exact intent. It never records a review.
+// A returned authority is still only a candidate: the target command must embed
+// and consume it in its own event/projection/outbox transaction.
+func (c storeApprovalChecker) AuthorizeApproval(ctx context.Context, intent api.ApprovalIntent) (api.ApprovalAuthority, bool, string) {
+	required := intent.RequiredApprovals
+	if required <= 0 {
+		required = c.required
+	}
 	if required <= 0 {
 		required = defaultRequiredApprovals
 	}
-	if c.outbox == nil {
-		return false, "could not queue the approval notification"
-	}
-	binding := crypto.SHA256Hex([]byte(action + "\x00" + resource))
-	payload, err := json.Marshal(notify.Alert{
-		Kind:           notify.KindApprovalRequest,
-		TenantID:       tenantID,
-		OperationID:    "approval-" + binding,
-		RequestBinding: binding,
-		Subject:        resource,
-		Detail:         fmt.Sprintf("%s requested approval to %s this resource", requester, action),
-		Severity:       notify.AlertSeverityWarning,
+	request, err := c.orch.EnsureOperationApprovalRequest(ctx, intent.TenantID, orchestrator.OperationApprovalIntent{
+		ResourceKind: intent.ResourceKind, ResourceID: intent.ResourceID,
+		ResourceName: intent.ResourceName, Action: intent.Action, Requester: intent.Requester,
+		FromState: intent.FromState, ToState: intent.ToState, TargetVersion: intent.TargetVersion,
+		Reason: intent.Reason, EvidenceRefs: intent.EvidenceRefs,
+		RequiredApprovals: required, TTL: intent.TTL,
 	})
 	if err != nil {
-		return false, "could not encode the approval notification"
+		return api.ApprovalAuthority{}, false, "could not record the immutable approval request"
 	}
-	// Record the request and notification intent in one transaction. A request
-	// without its message, or a message without its request, cannot commit (AN-6).
-	// EnqueueIfAbsent gives retries one receiver command and rejects a changed
-	// requester/payload under the same durable approval identity.
-	err = c.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if err := c.store.OpenIssuanceApprovalRequestTx(ctx, tx, tenantID, resource, action, requester, required); err != nil {
-			return err
-		}
-		_, err := c.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-			TenantID:       tenantID,
-			Destination:    notify.DestinationApproval,
-			IdempotencyKey: "approval-request:" + binding,
-			Payload:        payload,
-			EffectLane:     notify.DestinationApproval + ":resource:" + binding,
-		})
-		return err
-	})
+	use, err := store.OperationApprovalUseFromRequest(request)
 	if err != nil {
-		return false, "could not record the approval request"
+		return api.ApprovalAuthority{}, false, "the immutable approval request has invalid issuance evidence"
 	}
-	ok, err := c.store.HasDistinctApproval(ctx, tenantID, resource, action, requester, required)
-	if err != nil {
-		return false, "could not evaluate approvals"
+	authority := api.ApprovalAuthority{
+		RequestID: request.ID, IntentDigest: request.IntentDigest,
+		Requester: request.Requester, ResourceKind: request.ResourceKind,
+		ResourceID: request.ResourceID, Action: request.Action,
+		FromState: request.FromState, ToState: request.ToState,
+		TargetVersion: request.TargetVersion, RequiredApprovals: request.RequiredApprovals,
+		Reason: request.Reason, EvidenceRefs: append([]string(nil), request.EvidenceRefs...),
+		Issuance:    use.Issuance,
+		Disposition: operationApprovalDisposition(request, time.Now().UTC()),
 	}
-	if !ok {
-		return false, "this action has not been approved by the required number of distinct approvers (the requester cannot self-approve)"
+	if reason := operationApprovalRequesterDenialReason(request, time.Now().UTC()); reason != "" {
+		return authority, false, reason
 	}
-	return true, ""
+	return authority, true, ""
+}
+
+func operationApprovalDisposition(request store.OperationApprovalRequest, now time.Time) api.ApprovalDisposition {
+	switch request.Status {
+	case store.ApprovalStatusConsumed:
+		return api.ApprovalDispositionConsumed
+	case store.ApprovalStatusSuperseded:
+		return api.ApprovalDispositionSuperseded
+	case store.ApprovalStatusDenied:
+		return api.ApprovalDispositionDenied
+	case store.ApprovalStatusExpired:
+		return api.ApprovalDispositionExpired
+	}
+	if !now.Before(request.ExpiresAt) {
+		return api.ApprovalDispositionExpired
+	}
+	if request.Status == store.ApprovalStatusApproved && request.ApprovalCount >= request.RequiredApprovals {
+		return api.ApprovalDispositionApproved
+	}
+	return api.ApprovalDispositionPending
+}
+
+// operationApprovalRequesterDenialReason preserves the store's terminal-state
+// vocabulary at the requester gate. Reviewers and command callers therefore see
+// whether waiting could help (pending) or whether they must create a new exact
+// intent (expired/superseded/denied/consumed). The request ID and digest make the
+// message traceable without revealing tenant or secret material.
+func operationApprovalRequesterDenialReason(request store.OperationApprovalRequest, now time.Time) string {
+	prefix := fmt.Sprintf("approval request %s (%s)", request.ID, request.IntentDigest)
+	switch request.Status {
+	case store.ApprovalStatusConsumed:
+		return prefix + " already consumed"
+	case store.ApprovalStatusSuperseded:
+		return prefix + " superseded because its target or immutable intent drifted"
+	case store.ApprovalStatusDenied:
+		return prefix + " denied"
+	case store.ApprovalStatusExpired:
+		return prefix + " expired"
+	}
+	if !now.Before(request.ExpiresAt) {
+		return prefix + " expired"
+	}
+	if request.Status == store.ApprovalStatusApproved && request.ApprovalCount >= request.RequiredApprovals {
+		return ""
+	}
+	remaining := request.RequiredApprovals - request.ApprovalCount
+	if remaining < 0 {
+		remaining = 0
+	}
+	if request.Status == store.ApprovalStatusPending || request.Status == store.ApprovalStatusApproved {
+		return fmt.Sprintf("%s awaits %d distinct approval(s)", prefix, remaining)
+	}
+	return fmt.Sprintf("%s cannot authorize while status is %s", prefix, request.Status)
 }
 
 // storeApprovalRecorder implements api.ApprovalRecorder over the store's issuance
@@ -173,27 +222,72 @@ func (c storeApprovalChecker) IsApproved(ctx context.Context, tenantID, resource
 // RA split). The store rejects a self-approval (approver == requester) and an
 // anonymous approver. Tenant-scoped (AN-1).
 type storeApprovalRecorder struct {
-	store    *store.Store
-	required int
+	store *store.Store
+	orch  *orchestrator.Orchestrator
 }
 
-// RecordApproval records approver's approval of action on resource and returns the
-// resulting distinct-approver count. It ensures an approval request exists for the
-// action (so an approval can be attributed even if the requester has not yet
-// attempted the transition); the requester on an auto-opened request is empty, which
-// imposes no self-approval constraint until the real requester attempts the gated
-// transition (at which point the request already records them).
-func (r storeApprovalRecorder) RecordApproval(ctx context.Context, tenantID, resource, action, approver string) (int, error) {
-	required := r.required
-	if required <= 0 {
-		required = defaultRequiredApprovals
+// ValidateApprovalRequest is the read-only HTTP preflight used before the API
+// reserves an idempotency key. RLS makes an absent and cross-tenant request the
+// same result, and a wrong digest is deliberately mapped to that same 404. The
+// orchestrator repeats these checks under locks before appending the decision.
+func (r storeApprovalRecorder) ValidateApprovalRequest(ctx context.Context, tenantID string, decision api.ApprovalDecisionCommand) (api.ApprovalRequestRecord, error) {
+	request, err := r.store.GetOperationApproval(ctx, tenantID, decision.RequestID)
+	if err != nil {
+		return api.ApprovalRequestRecord{}, err
 	}
-	// Ensure a request row exists so the approval has a parent (FK). If the requester
-	// already opened it (the common case once they attempt the transition), this is a
-	// no-op that preserves their identity; otherwise it opens an unattributed request
-	// that the requester's later gated attempt will not overwrite.
-	if err := r.store.OpenIssuanceApprovalRequest(ctx, tenantID, resource, action, "", required); err != nil {
-		return 0, err
+	if request.IntentDigest != decision.IntentDigest ||
+		decision.ExpectedResourceKind != "" && decision.ExpectedResourceKind != request.ResourceKind ||
+		decision.ExpectedResourceID != "" && decision.ExpectedResourceID != request.ResourceID ||
+		decision.ExpectedAction != "" && decision.ExpectedAction != request.Action {
+		return api.ApprovalRequestRecord{}, store.ErrApprovalDigestMismatch
 	}
-	return r.store.ApproveIssuance(ctx, tenantID, resource, action, approver)
+	return approvalRequestRecord(request), nil
+}
+
+// ListApprovalRequests returns only genuine event-projected request objects. Reviewer
+// actions never create a parent request; RecordApproval below can only decide an
+// already-existing exact request ID and digest.
+func (r storeApprovalRecorder) ListApprovalRequests(ctx context.Context, tenantID string, options api.ApprovalRequestListOptions) ([]api.ApprovalRequestRecord, error) {
+	rows, err := r.store.ListOperationApprovalsPage(ctx, tenantID, store.OperationApprovalListOptions{
+		Status: options.Status, AfterCreatedAt: options.AfterCreatedAt, AfterID: options.AfterID, Limit: options.Limit,
+		Visibility: store.OperationApprovalDomainVisibility{
+			CertificateOperations: options.CertificateOperations,
+			SecretOperations:      options.SecretOperations,
+			ManagedKeyOperations:  options.ManagedKeyOperations,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]api.ApprovalRequestRecord, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, approvalRequestRecord(row))
+	}
+	return out, nil
+}
+
+func (r storeApprovalRecorder) RecordApproval(ctx context.Context, tenantID string, decision api.ApprovalDecisionCommand) (api.ApprovalRequestRecord, error) {
+	row, err := r.orch.RecordOperationApprovalDecision(ctx, tenantID, orchestrator.OperationApprovalDecision{
+		RequestID: decision.RequestID, IntentDigest: decision.IntentDigest,
+		Approver: decision.Approver, Decision: decision.Decision, Reason: decision.Reason,
+		ExpectedResourceKind: decision.ExpectedResourceKind,
+		ExpectedResourceID:   decision.ExpectedResourceID, ExpectedAction: decision.ExpectedAction,
+	})
+	if err != nil {
+		return api.ApprovalRequestRecord{}, err
+	}
+	return approvalRequestRecord(row), nil
+}
+
+func approvalRequestRecord(row store.OperationApprovalRequest) api.ApprovalRequestRecord {
+	return api.ApprovalRequestRecord{
+		ID: row.ID, IntentDigest: row.IntentDigest, ResourceID: row.ResourceID,
+		ResourceName: row.ResourceName, ResourceKind: row.ResourceKind,
+		Action: row.Action, Requester: row.Requester, FromState: row.FromState,
+		ToState: row.ToState, TargetVersion: strconv.FormatUint(row.TargetVersion, 10),
+		Reason: row.Reason, EvidenceRefs: append([]string(nil), row.EvidenceRefs...),
+		ApprovalCount: row.ApprovalCount, RequiredApprovals: row.RequiredApprovals,
+		Status: row.Status, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano),
+		ExpiresAt: row.ExpiresAt.UTC().Format(time.RFC3339Nano),
+	}
 }

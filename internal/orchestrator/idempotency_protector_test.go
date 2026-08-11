@@ -5,14 +5,19 @@ package orchestrator_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // recordingResultProtector is a test double, not cryptography. It binds its
@@ -81,6 +86,227 @@ func requireWiped(t *testing.T, name string, value []byte) {
 	t.Helper()
 	if !bytes.Equal(value, make([]byte, len(value))) {
 		t.Fatalf("%s retained bytes: %x", name, value)
+	}
+}
+
+func TestPreparedDurableCompletedClaimVerifiesOpenedTerminalResultAUD113(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	protector := &recordingResultProtector{}
+	idem := orchestrator.NewIdempotency(st, orchestrator.WithResultProtector(protector))
+	const (
+		key     = "aud113-completed-verify"
+		binding = "sha256:aud113-completed-verify"
+	)
+	plaintext := []byte(`{"s":503,"b":{"system_error":"owned"},"h":"sha256:aud113-completed-verify"}`)
+	codec, protected, err := protector.Protect(ctx, tenantA, key, binding, plaintext)
+	if err != nil {
+		t.Fatalf("protect completed prepared result: %v", err)
+	}
+	wantErr := errors.New("terminal receiver rejected restored bytes")
+	verifyCalls := 0
+	result, err := idem.DoPreparedDurableEffectBound(
+		ctx, tenantA, key, binding,
+		func(context.Context, pgx.Tx) (orchestrator.PreparedDurableEffectClaim, error) {
+			return orchestrator.PreparedDurableEffectClaim{
+				Completed: true, ResultCodec: codec,
+				CompletedResult: append([]byte(nil), protected...),
+			}, nil
+		},
+		func(_ context.Context, tx pgx.Tx, got []byte) error {
+			verifyCalls++
+			if tx == nil || !bytes.Equal(got, plaintext) {
+				t.Fatalf("completed verifier tx=%v plaintext=%q, want transaction and %q", tx, got, plaintext)
+			}
+			return wantErr
+		},
+		func(context.Context) ([]byte, error) {
+			t.Fatal("completed prepared replay executed effect callback")
+			return nil, nil
+		},
+	)
+	if !errors.Is(err, wantErr) || len(result) != 0 || verifyCalls != 1 {
+		t.Fatalf("completed prepared replay result=%q err=%v verify_calls=%d, want empty/%v/1",
+			result, err, verifyCalls, wantErr)
+	}
+}
+
+func TestSchedulerPrivacyOuterResolverRekeysAndReprotectsInCallerTransaction(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	protector := &recordingResultProtector{}
+	idem := orchestrator.NewIdempotency(st, orchestrator.WithResultProtector(protector))
+	const (
+		rawKey     = "scheduler:alice:outer"
+		binding    = "sha256:scheduler-privacy-binding"
+		statusCode = 200
+	)
+	authorityRef := strings.Repeat("a", 64)
+	replacementKey := "privacy-scheduler:" + authorityRef
+	originalBody := json.RawMessage(`{"ran":1,"result":"unchanged"}`)
+	plaintext, err := json.Marshal(struct {
+		Status  int             `json:"s"`
+		Body    json.RawMessage `json:"b"`
+		Binding string          `json:"h,omitempty"`
+	}{Status: statusCode, Body: originalBody, Binding: binding})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, protected, err := protector.Protect(ctx, tenantA, rawKey, binding, plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO idempotency_keys
+			        (tenant_id, key, status, request_binding, result_codec, result, completed_at)
+			 VALUES ($1, $2, 'completed', $3, $4, $5, clock_timestamp())`,
+			tenantA, rawKey, binding, codec, protected)
+		return err
+	}); err != nil {
+		t.Fatalf("seed protected scheduler outer: %v", err)
+	}
+
+	requirement := store.SecretRotationSchedulePrivacyOuterRequirement{
+		AuthorityRef: authorityRef, RequestBinding: binding, Status: "completed",
+		ResultCodec: codec, ReplacementIdempotencyKey: replacementKey,
+		RawKeyTokenMatch: true, TerminalBodyMatch: false,
+		TerminalHTTPStatus: statusCode, OriginalTerminalBody: originalBody,
+	}
+	rollback := errors.New("simulate crash before privacy preparation commit")
+	err = st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		ack, err := idem.ResolveSecretRotationSchedulePrivacyOuter(
+			ctx, tx, tenantA, rawKey, requirement)
+		if err != nil {
+			return err
+		}
+		if ack.ResolvedIdempotencyKey != replacementKey ||
+			ack.ResolvedResultCodec != orchestrator.ResultCodecSealedRowV1 ||
+			len(ack.ProtectedResult) == 0 {
+			t.Fatalf("same-tx scheduler privacy acknowledgement = %+v", ack)
+		}
+		var oldExists, newExists bool
+		if err := tx.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM idempotency_keys WHERE tenant_id = $1 AND key = $2),
+			        EXISTS (SELECT 1 FROM idempotency_keys WHERE tenant_id = $1 AND key = $3)`,
+			tenantA, rawKey, replacementKey).Scan(&oldExists, &newExists); err != nil {
+			return err
+		}
+		if oldExists || !newExists {
+			t.Fatalf("same-tx rekey visibility old=%t new=%t", oldExists, newExists)
+		}
+		return rollback
+	})
+	if !errors.Is(err, rollback) {
+		t.Fatalf("rollback simulation error = %v", err)
+	}
+	var oldExists, newExists bool
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM idempotency_keys WHERE tenant_id = $1 AND key = $2),
+			        EXISTS (SELECT 1 FROM idempotency_keys WHERE tenant_id = $1 AND key = $3)`,
+			tenantA, rawKey, replacementKey).Scan(&oldExists, &newExists)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !oldExists || newExists {
+		t.Fatalf("rolled-back scheduler rekey old=%t new=%t", oldExists, newExists)
+	}
+
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := idem.ResolveSecretRotationSchedulePrivacyOuter(
+			ctx, tx, tenantA, rawKey, requirement)
+		return err
+	}); err != nil {
+		t.Fatalf("commit scheduler privacy outer rekey: %v", err)
+	}
+	var resolvedCodec string
+	var resolvedProtected []byte
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT result_codec, result FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2`, tenantA, replacementKey).Scan(
+			&resolvedCodec, &resolvedProtected)
+	}); err != nil {
+		t.Fatalf("load committed scheduler privacy outer: %v", err)
+	}
+	resolved, err := protector.Open(
+		ctx, tenantA, replacementKey, binding, resolvedCodec, resolvedProtected)
+	if err != nil {
+		t.Fatalf("open rekeyed scheduler result: %v", err)
+	}
+	var cached struct {
+		Status  int             `json:"s"`
+		Body    json.RawMessage `json:"b"`
+		Binding string          `json:"h,omitempty"`
+	}
+	if err := json.Unmarshal(resolved, &cached); err != nil {
+		t.Fatal(err)
+	}
+	if cached.Status != statusCode || cached.Binding != binding ||
+		!bytes.Equal(cached.Body, originalBody) {
+		t.Fatalf("re-protected scheduler response = %+v", cached)
+	}
+}
+
+func TestSchedulerPrivacyOuterResolverRekeysBoundReceiverWithoutInventingResult(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	idem := orchestrator.NewIdempotency(st, orchestrator.WithResultProtector(&recordingResultProtector{}))
+	const (
+		rawKey         = "scheduler:alice:bound-outer"
+		binding        = "sha256:scheduler-bound-privacy-binding"
+		authorityRef   = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		replacementKey = "privacy-scheduler:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	)
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO idempotency_keys
+			        (tenant_id, key, status, request_binding, result_codec)
+			 VALUES ($1, $2, 'bound', $3, $4)`,
+			tenantA, rawKey, binding, orchestrator.ResultCodecSealedRowV1)
+		return err
+	}); err != nil {
+		t.Fatalf("seed bound scheduler outer: %v", err)
+	}
+
+	var acknowledgement store.SecretRotationSchedulePrivacyOuterAcknowledgement
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		var err error
+		acknowledgement, err = idem.ResolveSecretRotationSchedulePrivacyOuter(
+			ctx, tx, tenantA, rawKey, store.SecretRotationSchedulePrivacyOuterRequirement{
+				AuthorityRef: authorityRef, RequestBinding: binding, Status: "bound",
+				ResultCodec:               orchestrator.ResultCodecSealedRowV1,
+				ReplacementIdempotencyKey: replacementKey, RawKeyTokenMatch: true,
+			})
+		return err
+	}); err != nil {
+		t.Fatalf("rekey bound scheduler privacy outer: %v", err)
+	}
+	if acknowledgement.ResolvedIdempotencyKey != replacementKey ||
+		acknowledgement.ResolvedResultCodec != orchestrator.ResultCodecSealedRowV1 ||
+		len(acknowledgement.ProtectedResult) != 0 {
+		t.Fatalf("bound scheduler privacy acknowledgement = %+v", acknowledgement)
+	}
+	var oldExists, newExists bool
+	var status, codec string
+	var result []byte
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			          SELECT 1 FROM idempotency_keys WHERE tenant_id = $1 AND key = $2
+			        ), status, result_codec, result
+			   FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $3`,
+			tenantA, rawKey, replacementKey).Scan(&oldExists, &status, &codec, &result)
+	}); err != nil {
+		t.Fatalf("load rekeyed bound scheduler outer: %v", err)
+	}
+	newExists = status != ""
+	if oldExists || !newExists || status != "bound" ||
+		codec != orchestrator.ResultCodecSealedRowV1 || len(result) != 0 {
+		t.Fatalf("bound scheduler privacy row old=%t new=%t status=%q codec=%q result=%x",
+			oldExists, newExists, status, codec, result)
 	}
 }
 

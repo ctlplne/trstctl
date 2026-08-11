@@ -136,21 +136,47 @@ func TestServedSelfServiceIssuancePortalCAPISS11(t *testing.T) {
 
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/transitions", issuer, "cap-iss-11-issue-before-approval", map[string]string{
 		"to":     "issued",
-		"reason": "RA issue before approval",
+		"reason": "CAP-ISS-11 approved self-service request",
 	})
 	if status != http.StatusForbidden {
 		t.Fatalf("issue before profile approval status = %d body %s, want 403", status, body)
 	}
 
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/approval-requests?status=pending", approver, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list genuine approval queue status = %d body %s", status, body)
+	}
+	var queue struct {
+		Items []struct {
+			ID           string `json:"id"`
+			IntentDigest string `json:"intent_digest"`
+			ResourceID   string `json:"resource_id"`
+			Action       string `json:"action"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &queue); err != nil {
+		t.Fatalf("decode genuine approval queue: %v body=%s", err, body)
+	}
+	var approvalRequestID, approvalIntentDigest string
+	for _, item := range queue.Items {
+		if item.ResourceID == identity.ID && item.Action == "issue" {
+			approvalRequestID, approvalIntentDigest = item.ID, item.IntentDigest
+			break
+		}
+	}
+	if approvalRequestID == "" || approvalIntentDigest == "" {
+		t.Fatalf("genuine approval queue omitted identity %s: %+v", identity.ID, queue.Items)
+	}
+
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/approvals", issuer, "cap-iss-11-ra-self-approval", map[string]string{
-		"action": "issue",
+		"action": "issue", "request_id": approvalRequestID, "intent_digest": approvalIntentDigest,
 	})
 	if status == http.StatusOK {
 		t.Fatalf("RA self-approval unexpectedly succeeded: body=%s", body)
 	}
 
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/approvals", approver, "cap-iss-11-distinct-approval", map[string]string{
-		"action": "issue",
+		"action": "issue", "request_id": approvalRequestID, "intent_digest": approvalIntentDigest,
 	})
 	if status != http.StatusOK {
 		t.Fatalf("distinct approval status = %d body %s, want 200", status, body)
@@ -168,7 +194,7 @@ func TestServedSelfServiceIssuancePortalCAPISS11(t *testing.T) {
 		t.Fatalf("approval response = %+v", approval)
 	}
 
-	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/transitions", issuer, "cap-iss-11-issued", map[string]string{
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/transitions", issuer, "cap-iss-11-issue-before-approval", map[string]string{
 		"to":     "issued",
 		"reason": "CAP-ISS-11 approved self-service request",
 	})
@@ -211,7 +237,8 @@ func TestServedSelfServiceIssuancePortalCAPISS11(t *testing.T) {
 		}
 	}
 	if !sawIssuedCert {
-		t.Fatalf("certificate inventory missing self-service issued leaf: %+v", certs.Items)
+		pending, pendingErr := h.srv.outbox.Pending(t.Context(), h.tenant)
+		t.Fatalf("certificate inventory missing self-service issued leaf: %+v; pending outbox=%+v err=%v", certs.Items, pending, pendingErr)
 	}
 	for _, eventType := range []string{"profile.created", "identity.created", "identity.issued", "certificate.recorded"} {
 		if !h.hasEvent(t, eventType) {

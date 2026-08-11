@@ -106,6 +106,9 @@ var projectionEventConstants = map[string]string{
 	projections.EventTenantKeyDomainSealed:                    "EventTenantKeyDomainSealed",
 	projections.EventTenantKeyDomainUnsealRequested:           "EventTenantKeyDomainUnsealRequested",
 	projections.EventTenantKeyDomainUnsealed:                  "EventTenantKeyDomainUnsealed",
+	projections.EventApprovalRequested:                        "EventApprovalRequested",
+	projections.EventApprovalDecisionRecorded:                 "EventApprovalDecisionRecorded",
+	projections.EventApprovalStatusChanged:                    "EventApprovalStatusChanged",
 }
 
 // TestEventLedgerConstantsMatchProjector asserts every event type the ledger
@@ -135,6 +138,18 @@ func TestEventLedgerEntriesNonEmpty(t *testing.T) {
 			if typ == "" {
 				t.Errorf("ledger row %s/%s has an empty event type", fe.FeatureID, fe.Action)
 			}
+		}
+	}
+}
+
+func TestOperationApprovalEventsAreCataloguedAUD77(t *testing.T) {
+	for _, typ := range []string{
+		projections.EventApprovalRequested,
+		projections.EventApprovalDecisionRecorded,
+		projections.EventApprovalStatusChanged,
+	} {
+		if !projections.LedgerHasEventType(typ) {
+			t.Errorf("AUD-77 operation approval event %q is missing from the event ledger", typ)
 		}
 	}
 }

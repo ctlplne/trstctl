@@ -82,7 +82,13 @@ func newStore(t *testing.T) *store.Store {
 	// Per-test isolation: the whole package shares one database, so reset the
 	// read model and the orchestrator's state/outbox tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits, audit_checkpoints,
+		`TRUNCATE approved_target_event_fences, application_secret_mutation_fences,
+		          application_secret_tenant_epochs, application_secret_mutation_receipts,
+		          secret_sync_jobs, dynamic_secret_leases,
+		          secret_store_versions, secret_store,
+		          privacy_subject_erasure_preparations,
+		          operation_approval_decisions, operation_approval_requests,
+		          tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits, audit_checkpoints,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
@@ -103,6 +109,15 @@ func newStore(t *testing.T) *store.Store {
 		        failed_at = NULL, updated_at = now()
 		  WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
+	}
+	// The recovery fence is a seeded deployment-wide singleton, just like the
+	// projection checkpoint. Reset its authority rather than truncating the row;
+	// Migrate does not re-run an already-recorded migration to recreate it.
+	if _, err := s.SystemPool().Exec(ctx,
+		`UPDATE secret_sync_recovery_authority
+		    SET receiver_io_authorized = true, reason = '', updated_at = now()
+		  WHERE singleton`); err != nil {
+		t.Fatalf("reset secret-sync recovery authority: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })
 	return s

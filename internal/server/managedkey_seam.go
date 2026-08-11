@@ -20,5 +20,5 @@ type ManagedKeyServiceDeps struct {
 	Store           *store.Store
 	Log             *events.Log
 	Idempotency     *orchestrator.Idempotency
-	ApprovalChecker api.ApprovalChecker
+	ApprovalChecker api.ExactApprovalChecker
 }

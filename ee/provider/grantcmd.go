@@ -60,7 +60,11 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	if err := st.Migrate(ctx); err != nil {
 		return fmt.Errorf("provider-grant: migrate database: %w", err)
 	}
-	log, err := events.Open(ctx, natsConfig,
+	// This offline command does not own the persistent audit signer required to
+	// rewrite history. Its constructor therefore installs the live v1 floor and
+	// refuses to replay until the central server has completed AUD-116 sanitation.
+	log, err := events.OpenRequiringSanitizedSchedulerHistory(ctx, natsConfig,
+		events.WithRequiredPrivacyEventPolicies(),
 		events.WithHistoryRewriteCoordinator(corestore.NewHistoryRewriteCoordinator(st)))
 	if err != nil {
 		return fmt.Errorf("provider-grant: open event log (run this offline when using embedded NATS): %w", err)

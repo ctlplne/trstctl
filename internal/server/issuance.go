@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ import (
 
 // leafTTL is the validity of a certificate issued by the assembled CA. It is
 // comfortably within the issuing CA's own validity so the leaf never outlives it.
-const leafTTL = 30 * 24 * time.Hour
+const leafTTL = orchestrator.DefaultIdentityIssuanceTTL
 
 // caNamespace is the fixed UUIDv5 namespace under which the served binary's
 // stable CA handles are turned into the ca_id used by the revocation tables. It
@@ -390,7 +391,9 @@ type transitionTrigger struct {
 	// present the dispatcher signs it and generates no subject key, so the
 	// private key stays wherever the caller made it. The JSON tag matches
 	// orchestrator's transitionPayload, which is where the field is written.
-	SubjectCSRPEM string `json:"subject_csr_pem,omitempty"`
+	SubjectCSRPEM string                                  `json:"subject_csr_pem,omitempty"`
+	Approval      *store.OperationApprovalUse             `json:"approval,omitempty"`
+	Issuance      *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
 }
 
 type sealedConnectorDeployPayload struct {
@@ -473,8 +476,12 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		}
 		if hostExecuted &&
 			strings.TrimSpace(p.SubjectCSRPEM) == "" && subjectCSRFromIdentity(ident) == "" {
+			binding, err := issuanceBindingForTrigger(p)
+			if err != nil {
+				return nil, err
+			}
 			if err := d.enqueueHostRenewal(ctx, m.TenantID, ident, target,
-				ident.Name, []string{ident.Name}, "", "host-issue:"+idemKey); err != nil {
+				ident.Name, []string{ident.Name}, "", binding, "host-issue:"+idemKey); err != nil {
 				return nil, err
 			}
 			d.recordAgentRenewalDispatch(ctx, m.TenantID, ident, target, []string{ident.Name})
@@ -592,7 +599,7 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 // plus a transient PEM credential bundle for a connector outbox payload. Callers
 // must wipe KeyPEM after encoding the deployment intent; the key is never written
 // to the event log or read model.
-func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string) (issuedLeafMaterial, error) {
+func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string, issuance ...*store.OperationApprovalIssuanceBinding) (issuedLeafMaterial, error) {
 	if d.issue == nil {
 		return issuedLeafMaterial{}, errors.New("server: issuing CA is unavailable")
 	}
@@ -623,11 +630,15 @@ func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantI
 	// this request against it BEFORE signing and emit the allow/deny decision as
 	// an issuance.profile_evaluated event. A violation rejects (fail closed) so an
 	// out-of-profile certificate is never minted on the served path.
-	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, leafTTL)
+	ttl, binding, err := approvedIssuanceTTL(issuance)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafPEM, err := d.issue(ctx, csrDER, leafTTL, leafProfile)
+	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, ttl, binding)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	leafPEM, err := d.issue(ctx, csrDER, ttl, leafProfile)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
@@ -818,32 +829,62 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 // violation so the mint is rejected before any signature. A configured-but-
 // unresolved profile fails closed: the platform must not silently mint outside a
 // declared governance model.
-func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, error) {
-	if d.defaultProfile == "" {
-		return d.leafProfile, nil
+func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration, issuance ...*store.OperationApprovalIssuanceBinding) (crypto.LeafProfile, error) {
+	if len(issuance) > 1 {
+		return crypto.LeafProfile{}, errors.New("server: multiple issuance approval bindings")
 	}
-	rec, err := d.store.GetActiveProfile(ctx, tenantID, d.defaultProfile)
-	if err != nil {
-		if store.IsNotFound(err) {
-			// Configured profile does not resolve: deny (fail closed) and record it.
-			msg := fmt.Sprintf("served default profile %q not found", d.defaultProfile)
-			if aerr := d.auditProfileDecision(ctx, tenantID, 0, "deny", msg); aerr != nil {
-				return crypto.LeafProfile{}, aerr
+	var (
+		rec         store.ProfileRecord
+		profileName string
+		err         error
+	)
+	if len(issuance) == 1 && issuance[0] != nil {
+		binding := issuance[0]
+		profileName = strings.TrimSpace(binding.ProfileName)
+		if profileName == "" {
+			if d.defaultProfile == "" {
+				return d.leafProfile, nil
 			}
-			return crypto.LeafProfile{}, fmt.Errorf("server: %s (fail closed)", msg)
+			return crypto.LeafProfile{}, errors.New("server: approved issuance did not pin the configured profile revision")
 		}
-		return crypto.LeafProfile{}, err
+		if binding.ProfileID == "" || binding.ProfileVersion <= 0 || binding.ProfileSpecDigest == "" {
+			return crypto.LeafProfile{}, fmt.Errorf("server: approved profile %q has no immutable revision binding", profileName)
+		}
+		rec, err = d.store.GetProfileVersion(ctx, tenantID, profileName, binding.ProfileVersion)
+		if err != nil {
+			return crypto.LeafProfile{}, fmt.Errorf("server: resolve approved profile %q version %d: %w", profileName, binding.ProfileVersion, err)
+		}
+		if rec.ID != binding.ProfileID || store.ProfileSpecDigest(rec.Spec) != binding.ProfileSpecDigest {
+			return crypto.LeafProfile{}, fmt.Errorf("server: approved profile %q revision evidence drifted", profileName)
+		}
+	} else {
+		profileName = d.defaultProfile
+		if profileName == "" {
+			return d.leafProfile, nil
+		}
+		rec, err = d.store.GetActiveProfile(ctx, tenantID, profileName)
+		if err != nil {
+			if store.IsNotFound(err) {
+				// Configured profile does not resolve: deny (fail closed) and record it.
+				msg := fmt.Sprintf("served default profile %q not found", profileName)
+				if aerr := d.auditProfileDecision(ctx, tenantID, profileName, 0, "deny", msg); aerr != nil {
+					return crypto.LeafProfile{}, aerr
+				}
+				return crypto.LeafProfile{}, fmt.Errorf("server: %s (fail closed)", msg)
+			}
+			return crypto.LeafProfile{}, err
+		}
 	}
 	var prof profile.CertificateProfile
 	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
-		return crypto.LeafProfile{}, fmt.Errorf("server: decode profile %q: %w", d.defaultProfile, err)
+		return crypto.LeafProfile{}, fmt.Errorf("server: decode profile %q: %w", profileName, err)
 	}
 	info, err := crypto.InspectCSR(csrDER)
 	if err != nil {
-		if aerr := d.auditProfileDecision(ctx, tenantID, rec.Version, "deny", "unparseable CSR"); aerr != nil {
+		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", "unparseable CSR"); aerr != nil {
 			return crypto.LeafProfile{}, aerr
 		}
-		return crypto.LeafProfile{}, fmt.Errorf("server: profile %q: unparseable CSR: %w", d.defaultProfile, err)
+		return crypto.LeafProfile{}, fmt.Errorf("server: profile %q: unparseable CSR: %w", profileName, err)
 	}
 	requestedEKUs := intendedProfileEKUs(info.RequestedEKUs, prof.AllowedEKUs)
 	preq := profile.Request{
@@ -858,22 +899,48 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 		Protocol:       "api",
 	}
 	if verr := prof.Validate(preq); verr != nil {
-		if aerr := d.auditProfileDecision(ctx, tenantID, rec.Version, "deny", verr.Error()); aerr != nil {
+		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", verr.Error()); aerr != nil {
 			return crypto.LeafProfile{}, aerr
 		}
 		return crypto.LeafProfile{}, verr
 	}
-	if err := d.auditProfileDecision(ctx, tenantID, rec.Version, "allow", ""); err != nil {
+	if err := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "allow", ""); err != nil {
 		return crypto.LeafProfile{}, err
 	}
 	return leafProfileForCertificateProfile(d.leafProfile, prof, requestedEKUs), nil
+}
+
+func approvedIssuanceTTL(bindings []*store.OperationApprovalIssuanceBinding) (time.Duration, *store.OperationApprovalIssuanceBinding, error) {
+	if len(bindings) == 0 || bindings[0] == nil {
+		return leafTTL, nil, nil
+	}
+	if len(bindings) > 1 {
+		return 0, nil, errors.New("server: multiple issuance approval bindings")
+	}
+	binding := bindings[0]
+	if binding.RequestedTTLSeconds <= 0 || binding.EffectiveTTLSeconds <= 0 ||
+		binding.EffectiveTTLSeconds > binding.RequestedTTLSeconds ||
+		binding.EffectiveTTLSeconds > math.MaxInt64/int64(time.Second) {
+		return 0, nil, errors.New("server: approved issuance TTL binding is invalid")
+	}
+	return time.Duration(binding.EffectiveTTLSeconds) * time.Second, binding, nil
+}
+
+func issuanceBindingForTrigger(trigger transitionTrigger) (*store.OperationApprovalIssuanceBinding, error) {
+	if trigger.Approval != nil && trigger.Issuance != nil {
+		return nil, errors.New("server: lifecycle trigger has multiple issuance authority sources")
+	}
+	if trigger.Approval != nil {
+		return trigger.Approval.Issuance, nil
+	}
+	return trigger.Issuance, nil
 }
 
 // auditProfileDecision emits the served profile-gated decision as an AN-2 event,
 // mirroring the IssuanceService's issuance.profile_evaluated record so the served
 // and library paths produce the same audit shape. A nil log is a no-op, but the
 // deny (the returned error in enforceProfile) still rejects the mint.
-func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID string, version int, decision, reason string) error {
+func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID, profileName string, version int, decision, reason string) error {
 	if d.log == nil {
 		return nil
 	}
@@ -883,7 +950,7 @@ func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID 
 		Decision string `json:"decision"`
 		Reason   string `json:"reason,omitempty"`
 		Protocol string `json:"protocol,omitempty"`
-	}{d.defaultProfile, version, decision, reason, "api"})
+	}{profileName, version, decision, reason, "api"})
 	if err != nil {
 		return err
 	}
@@ -1605,19 +1672,23 @@ func sansOf(info certinfo.Info) []string {
 // of their flows still hand key generation to the control plane before the path
 // is removed.
 func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenantID string, ident store.Identity, p transitionTrigger) (issuedLeafMaterial, error) {
+	binding, err := issuanceBindingForTrigger(p)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
 	// A CSR on the transition wins: it is the most specific statement of intent
 	// for this particular issuance.
 	if csr := strings.TrimSpace(p.SubjectCSRPEM); csr != "" {
-		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr))
+		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr), binding)
 	}
 	// Otherwise the request's own CSR, recorded when the identity was created.
 	// The CSR belongs to the requester, not to whoever approves them: an approver
 	// pressing "approve" should not have to re-supply key material they never had.
 	if csr := subjectCSRFromIdentity(ident); csr != "" {
-		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr))
+		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr), binding)
 	}
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
-	return d.mintServedLeafMaterial(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name})
+	return d.mintServedLeafMaterial(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name}, binding)
 }
 
 // mintServedLeafForRenewal mints a renewal leaf, honouring a recorded CSR.
@@ -1668,7 +1739,7 @@ func subjectCSRFromIdentity(ident store.Identity) string {
 // deploy path degrades to certificate-only for this identity, since the material
 // it would need is on the caller's side; host-executed renewal (epic B2) is what
 // closes that loop properly.
-func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID string, ident store.Identity, csrPEM []byte) (issuedLeafMaterial, error) {
+func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID string, ident store.Identity, csrPEM []byte, issuance ...*store.OperationApprovalIssuanceBinding) (issuedLeafMaterial, error) {
 	if d.issue == nil {
 		return issuedLeafMaterial{}, errors.New("server: issuing CA is unavailable")
 	}
@@ -1682,11 +1753,15 @@ func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID
 	// Same profile gate as the server-keygen path: the origin of the key does not
 	// change what the certificate may assert, and skipping it here would make
 	// "bring your own CSR" a way around policy.
-	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, leafTTL)
+	ttl, binding, err := approvedIssuanceTTL(issuance)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafPEM, err := d.issue(ctx, csrDER, leafTTL, leafProfile)
+	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, ttl, binding)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	leafPEM, err := d.issue(ctx, csrDER, ttl, leafProfile)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}

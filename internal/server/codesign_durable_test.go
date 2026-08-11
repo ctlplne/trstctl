@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
@@ -262,7 +264,7 @@ func TestCodeSigningRetryAfterAppendBeforeProjectionUsesCanonicalEvent(t *testin
 	}
 	defer secret.Wipe(plain)
 	requestHash := crypto.SHA256Hex(plain)
-	operationID := codeSigningOperationID(h.tenant, idempotencyKey)
+	operationID := projections.LegacyCodeSigningOperationID(h.tenant, idempotencyKey)
 	canonicalCiphertext, err := seal.Seal(h.srv.codeSign.kek, plain,
 		codeSigningCommandAAD(h.tenant, operationID, command.Mode, requestHash))
 	if err != nil {
@@ -347,6 +349,714 @@ func TestCodeSigningRetryAfterAppendBeforeProjectionUsesCanonicalEvent(t *testin
 	}
 	if eventCount != 1 {
 		t.Fatalf("durable command events = %d, want one deduplicated canonical event", eventCount)
+	}
+}
+
+func TestPrivacySafeCodeSigningRetryAfterAppendACKAndSQLFailureReprojectsCanonicalEvent(t *testing.T) {
+	inner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(inner.Destroy)
+	signer := &countingOperationSigner{DigestSigner: inner}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.CodeSigning = CodeSigningConfig{Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{
+			"release-key": signer,
+		}}}
+	})
+	const idempotencyKey = "codesign-v3-append-ack-sql-failure"
+	request := api.CodeSigningRequest{
+		Principal: "release-bot", KeyID: "release-key", ArtifactType: "blob",
+		Digest: crypto.SHA256Sum([]byte("v3 append ACK then SQL failure")),
+	}
+	untruncated := time.Date(2031, time.January, 2, 3, 4, 5, 987654321, time.FixedZone("test", -5*60*60))
+	h.srv.codeSign.now = func() time.Time { return untruncated }
+	crash := errors.New("simulated process death after command append ACK")
+	var appended events.Event
+	h.srv.codeSign.afterCommandAppend = func(event events.Event) error {
+		appended = event
+		return crash
+	}
+	if _, err := h.srv.codeSign.SignCode(context.Background(), h.tenant, idempotencyKey, request); !errors.Is(err, crash) {
+		t.Fatalf("first command error=%v, want append-ACK crash", err)
+	}
+	if appended.ID == "" || appended.SchemaVersion != projections.CodeSigningPrivacySafeEventSchemaVersion ||
+		!appended.Time.Equal(untruncated.UTC().Truncate(time.Microsecond)) ||
+		!appended.Time.Equal(appended.Time.UTC().Truncate(time.Microsecond)) {
+		t.Fatalf("canonical v3 envelope time/schema = %+v", appended)
+	}
+	if _, found, err := h.store.CodeSigningOperationByIdempotency(
+		context.Background(), h.tenant, idempotencyKey,
+	); err != nil || found {
+		t.Fatalf("simulated SQL failure left operation = found %t err=%v", found, err)
+	}
+
+	h.srv.codeSign.afterCommandAppend = nil
+	op := submitQueuedCodeSigning(t, h, idempotencyKey, func(ctx context.Context) error {
+		_, err := h.srv.codeSign.SignCode(ctx, h.tenant, idempotencyKey, request)
+		return err
+	})
+	var canonical projections.CodeSigningCommanded
+	if err := json.Unmarshal(appended.Data, &canonical); err != nil {
+		t.Fatal(err)
+	}
+	if op.OperationID != codeSigningOperationID(h.tenant, idempotencyKey) ||
+		op.IdempotencyKey != store.CodeSigningIdempotencyKeyRef(idempotencyKey) ||
+		!bytes.Equal(op.SealedCommand, canonical.SealedCommand) || signer.calls.Load() != 0 {
+		t.Fatalf("reprojected v3 command/provider calls differ: op=%+v calls=%d", op, signer.calls.Load())
+	}
+	var operationRows, outboxRows int
+	if err := h.store.SystemPool().QueryRow(context.Background(), `SELECT
+		(SELECT count(*) FROM code_signing_operations WHERE tenant_id = $1 AND operation_id = $2),
+		(SELECT count(*) FROM outbox WHERE tenant_id = $1 AND idempotency_key = $3)`,
+		h.tenant, op.OperationID, "codesign.command:"+op.OperationID).Scan(&operationRows, &outboxRows); err != nil {
+		t.Fatal(err)
+	}
+	eventCount := 0
+	if err := h.log.Replay(context.Background(), 0, func(event events.Event) error {
+		if event.ID == appended.ID {
+			eventCount++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if operationRows != 1 || outboxRows != 1 || eventCount != 1 {
+		t.Fatalf("canonical convergence operations/outbox/events=%d/%d/%d, want 1/1/1",
+			operationRows, outboxRows, eventCount)
+	}
+}
+
+func TestCodeSigningRetryRejectsRetainedV3AndLegacyCommandDisagreement(t *testing.T) {
+	inner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(inner.Destroy)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.CodeSigning = CodeSigningConfig{Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{
+			"release-key": testOperationDigestSigner{DigestSigner: inner},
+		}}}
+	})
+	const idempotencyKey = "retained-current-and-legacy-disagree"
+	command := codeSigningCommand{
+		Mode: "key", Principal: "release-bot", KeyID: "release-key",
+		ArtifactType: "blob", Digest: crypto.SHA256Sum([]byte("two retained identities")),
+	}
+	requestHash, err := codeSigningCommandHash(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v3Operation := codeSigningOperationID(h.tenant, idempotencyKey)
+	legacyOperation := projections.LegacyCodeSigningOperationID(h.tenant, idempotencyKey)
+	v3Payload, err := json.Marshal(projections.CodeSigningCommanded{
+		OperationID:       v3Operation,
+		IdempotencyKeyRef: store.CodeSigningIdempotencyKeyRef(idempotencyKey),
+		RequestBinding:    projections.CodeSigningRequestBinding(requestHash, idempotencyKey),
+		Mode:              command.Mode, RequestHash: requestHash, SealedCommand: []byte("v3-ciphertext"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyPayload, err := json.Marshal(projections.CodeSigningCommanded{
+		OperationID: legacyOperation, IdempotencyKey: idempotencyKey,
+		Mode: command.Mode, RequestHash: requestHash, SealedCommand: []byte("legacy-ciphertext"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []events.Event{
+		{
+			ID:   codeSigningEventID(h.tenant, projections.EventCodeSigningCommanded, v3Operation),
+			Type: projections.EventCodeSigningCommanded, TenantID: h.tenant,
+			Time:          time.Now().UTC().Truncate(time.Microsecond),
+			SchemaVersion: projections.CodeSigningPrivacySafeEventSchemaVersion, Data: v3Payload,
+		},
+		{
+			ID:   codeSigningEventID(h.tenant, projections.EventCodeSigningCommanded, legacyOperation),
+			Type: projections.EventCodeSigningCommanded, TenantID: h.tenant,
+			SchemaVersion: 1, Data: legacyPayload,
+		},
+	} {
+		if _, err := h.log.Append(context.Background(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = h.srv.codeSign.SignCode(context.Background(), h.tenant, idempotencyKey, api.CodeSigningRequest{
+		Principal: command.Principal, KeyID: command.KeyID,
+		ArtifactType: command.ArtifactType, Digest: command.Digest,
+	})
+	if !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("dual retained identity retry error=%v, want ErrIdempotencyConflict", err)
+	}
+	if _, found, err := h.store.CodeSigningOperationByIdempotency(
+		context.Background(), h.tenant, idempotencyKey,
+	); err != nil || found {
+		t.Fatalf("dual retained disagreement projected work = found %t err=%v", found, err)
+	}
+}
+
+func TestApprovedCodeSigningRetryAfterAppendAndSQLRollbackUsesDurableFirstCommand(t *testing.T) {
+	inner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(inner.Destroy)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.RequireApproval = true
+		d.RequiredApprovals = 1
+		d.CodeSigning = CodeSigningConfig{
+			Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{
+				"release-key": testOperationDigestSigner{DigestSigner: inner},
+			}},
+		}
+	})
+	ctx := context.Background()
+	const (
+		keySubject     = "alice.codesign@example.com"
+		idempotencyKey = "approved-codesign/" + keySubject + "/append-sql-rollback"
+	)
+	command := codeSigningCommand{
+		Mode: "key", Principal: "release-bot", KeyID: "release-key",
+		ArtifactType: "oci-image", Digest: crypto.SHA256Sum([]byte("approved first command")),
+	}
+	requesterToken := seedServedAPIToken(t, ctx, h.store, h.tenant, command.Principal, []string{
+		string(authz.KeysRead), string(authz.KeysWrite),
+	})
+	approverToken := seedServedAPIToken(t, ctx, h.store, h.tenant, "security-approver", []string{
+		string(authz.CertsIssue),
+	})
+	request := map[string]any{"key_id": command.KeyID, "artifact_type": command.ArtifactType, "digest": command.Digest}
+	statusCode, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/sign",
+		requesterToken, idempotencyKey, request)
+	if statusCode != http.StatusForbidden || !bytes.Contains(body, []byte("approval_required:codesign:")) {
+		t.Fatalf("create exact approval = %d body=%s", statusCode, body)
+	}
+	pending, err := h.store.ListOperationApprovals(ctx, h.tenant, store.ApprovalStatusPending, 10)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("pending exact approval = %+v err=%v", pending, err)
+	}
+	approval := pending[0]
+	statusCode, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/approval-requests/"+approval.ID+"/approvals",
+		approverToken, "approve-durable-first-command", map[string]string{"intent_digest": approval.IntentDigest})
+	if statusCode != http.StatusOK {
+		t.Fatalf("approve exact command = %d body=%s", statusCode, body)
+	}
+	approval, err = h.store.GetOperationApproval(ctx, h.tenant, approval.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	use, err := store.OperationApprovalUseFromRequest(approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestHash, err := codeSigningCommandHash(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operationID := codeSigningOperationID(h.tenant, idempotencyKey)
+	keyRef := store.CodeSigningIdempotencyKeyRef(idempotencyKey)
+	requestBinding := projections.CodeSigningRequestBinding(requestHash, idempotencyKey)
+	untruncated := time.Date(2032, time.February, 3, 4, 5, 6, 123456789, time.FixedZone("approval-test", 9*60*60))
+	h.srv.codeSign.now = func() time.Time { return untruncated }
+	rollback := errors.New("simulated crash after append ACK")
+	var event events.Event
+	h.srv.codeSign.afterCommandAppend = func(appended events.Event) error {
+		event = appended
+		return rollback
+	}
+	_, err = h.srv.codeSign.SignCode(ctx, h.tenant, idempotencyKey, api.CodeSigningRequest{
+		Principal: command.Principal, KeyID: command.KeyID,
+		ArtifactType: command.ArtifactType, Digest: command.Digest,
+	})
+	if !errors.Is(err, rollback) {
+		t.Fatalf("normal approved append crash = %v", err)
+	}
+	h.srv.codeSign.afterCommandAppend = nil
+	if event.ID != codeSigningApprovedEventID(h.tenant, operationID) ||
+		!event.Time.Equal(untruncated.UTC().Truncate(time.Microsecond)) ||
+		!event.Time.Equal(event.Time.UTC().Truncate(time.Microsecond)) {
+		t.Fatalf("normal approved event did not use PostgreSQL-exact time: %+v", event)
+	}
+	var commanded projections.CodeSigningCommanded
+	if err := json.Unmarshal(event.Data, &commanded); err != nil {
+		t.Fatal(err)
+	}
+	raw := event.Data
+	sealed := commanded.SealedCommand
+	rawBearing := commanded
+	rawBearing.IdempotencyKey = idempotencyKey
+	if _, err := projections.CodeSigningCommandSemanticDigest(event, rawBearing); err == nil {
+		t.Fatal("schema-v3 command accepted a raw idempotency key before append")
+	}
+	if commanded.OperationID != operationID || commanded.IdempotencyKeyRef != keyRef ||
+		commanded.RequestBinding != requestBinding || commanded.Approval == nil ||
+		commanded.Approval.RequestID != use.RequestID {
+		t.Fatalf("normal approved command identity = %+v", commanded)
+	}
+	fence, err := h.store.GetApprovedTargetFence(
+		ctx, h.tenant, store.ApprovedTargetCodeSigningCommand, operationID,
+	)
+	if err != nil {
+		t.Fatalf("load durable first command after crash: %v", err)
+	}
+	if bytes.Contains(raw, []byte(keySubject)) || bytes.Contains(fence.Payload, []byte(keySubject)) ||
+		bytes.Contains(raw, []byte(`"idempotency_key":`)) ||
+		bytes.Contains(fence.Payload, []byte(`"idempotency_key":`)) {
+		t.Fatalf("privacy-safe prepared command persisted raw idempotency subject %q: event=%s fence=%s",
+			keySubject, raw, fence.Payload)
+	}
+	if _, found, err := h.store.CodeSigningOperationByID(ctx, h.tenant, operationID); err != nil || found {
+		t.Fatalf("rolled-back command projection = found %t err=%v", found, err)
+	}
+	if _, err := h.store.GetApprovedTargetFence(ctx, h.tenant, fence.TargetKind, fence.CommandKey); err != nil {
+		t.Fatalf("rollback lost durable command fence: %v", err)
+	}
+	consumed, err := h.store.GetOperationApproval(ctx, h.tenant, approval.ID)
+	if err != nil || consumed.Status != store.ApprovalStatusConsumed || consumed.ConsumedEventID != event.ID {
+		t.Fatalf("post-crash terminal authority = %+v err=%v", consumed, err)
+	}
+	if _, err := h.store.SystemPool().Exec(ctx, `UPDATE approved_target_event_fences
+		SET created_at = created_at - interval '25 hours', updated_at = updated_at - interval '25 hours'
+		WHERE tenant_id = $1 AND target_kind = $2 AND command_key = $3`,
+		h.tenant, fence.TargetKind, fence.CommandKey); err != nil {
+		t.Fatal(err)
+	}
+
+	changed := api.CodeSigningRequest{
+		Principal: command.Principal, KeyID: command.KeyID, ArtifactType: command.ArtifactType,
+		Digest: crypto.SHA256Sum([]byte("changed request body")),
+	}
+	if _, err := h.srv.codeSign.SignCode(ctx, h.tenant, idempotencyKey, changed); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("changed-body retry = %v, want ErrIdempotencyConflict", err)
+	}
+	// A real process restart runs catch-up before serving and must heal the
+	// append-ACK/SQL-rollback fence even though code signing is not re-enabled in
+	// the replacement configuration. Recovery is authorization already granted,
+	// not a fresh feature-gate decision.
+	if _, err := Build(ctx, Deps{
+		Store: h.store, Log: h.log, Signer: h.signer,
+		SignAuthorizer: h.authz, CACertFile: h.caFile,
+	}); err != nil {
+		t.Fatalf("startup reconciliation of approved code-signing fence: %v", err)
+	}
+
+	retryCtx, cancel := context.WithCancel(ctx)
+	retryDone := make(chan error, 1)
+	go func() {
+		_, retryErr := h.srv.codeSign.SignCode(retryCtx, h.tenant, idempotencyKey, api.CodeSigningRequest{
+			Principal: command.Principal, KeyID: command.KeyID,
+			ArtifactType: command.ArtifactType, Digest: command.Digest,
+		})
+		retryDone <- retryErr
+	}()
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	var op store.CodeSigningOperation
+	for {
+		var found bool
+		op, found, err = h.store.CodeSigningOperationByID(ctx, h.tenant, operationID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if found {
+			break
+		}
+		select {
+		case retryErr := <-retryDone:
+			t.Fatalf("retry returned before recovery projection: %v", retryErr)
+		case <-deadline.C:
+			t.Fatal("timed out waiting for recovery projection")
+		case <-ticker.C:
+		}
+	}
+	cancel()
+	select {
+	case <-retryDone:
+	case <-time.After(time.Second):
+		t.Fatal("recovered request did not stop after cancellation")
+	}
+	if !bytes.Equal(op.SealedCommand, sealed) || op.SourceEventID != event.ID ||
+		op.ApprovalRequestID != approval.ID || op.ApprovalIntentDigest != approval.IntentDigest ||
+		op.IdempotencyKey != keyRef {
+		t.Fatalf("recovered operation differs from durable first command: %+v", op)
+	}
+	commandOutbox := loadCodeSigningOutboxMessage(t, h.store, h.tenant, op.CommandOutboxID)
+	if bytes.Contains(commandOutbox.Payload, []byte(keySubject)) ||
+		strings.Contains(commandOutbox.IdempotencyKey, keySubject) ||
+		strings.Contains(commandOutbox.EffectLane, keySubject) {
+		t.Fatalf("privacy-safe command outbox retained raw idempotency subject: %+v", commandOutbox)
+	}
+	if _, err := h.store.GetApprovedTargetFence(ctx, h.tenant, fence.TargetKind, fence.CommandKey); !store.IsNotFound(err) {
+		t.Fatalf("completed target fence remains: %v", err)
+	}
+	eventCount := 0
+	if err := h.log.Replay(ctx, 0, func(got events.Event) error {
+		if got.ID == event.ID {
+			eventCount++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if eventCount != 1 {
+		t.Fatalf("canonical approved command events = %d, want 1", eventCount)
+	}
+	if err := projections.New(h.store).Rebuild(ctx, h.log); err != nil {
+		t.Fatalf("cold rebuild after recovery: %v", err)
+	}
+	rebuilt, found, err := h.store.CodeSigningOperationByID(ctx, h.tenant, operationID)
+	if err != nil || !found || !bytes.Equal(rebuilt.SealedCommand, sealed) ||
+		rebuilt.SourceEventID != event.ID || rebuilt.IdempotencyKey != keyRef {
+		t.Fatalf("cold-rebuilt command = found %t op=%+v err=%v", found, rebuilt, err)
+	}
+}
+
+func TestLegacyApprovedCodeSigningRetainedNanosecondsRecoverAcrossPostgresFencePrecision(t *testing.T) {
+	inner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(inner.Destroy)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.CodeSigning = CodeSigningConfig{Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{
+			"release-key": testOperationDigestSigner{DigestSigner: inner},
+		}}}
+	})
+	ctx := context.Background()
+	const (
+		idempotencyKey = "legacy-approved-nanosecond-command"
+		requestID      = "77961000-0000-4000-8000-000000000001"
+		decisionID     = "77961000-0000-4000-8000-000000000002"
+		requestHash    = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	)
+	operationID := projections.LegacyCodeSigningOperationID(h.tenant, idempotencyKey)
+	resourceID := store.CodeSigningApprovalResourceID(requestHash, idempotencyKey)
+	base := time.Now().UTC().Truncate(time.Microsecond)
+	request := store.OperationApprovalRequest{
+		ID: requestID, TenantID: h.tenant, IntentDigest: "sha256:" + strings.Repeat("c", 64),
+		ResourceKind: "code_signing", ResourceID: resourceID, ResourceName: "release-key",
+		Action: "sign", Requester: "release-bot", RequiredApprovals: 1,
+		CreatedAt: base, ExpiresAt: base.Add(time.Hour), UpdatedAt: base,
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		if err := h.store.ApplyOperationApprovalRequestedTx(ctx, tx, request); err != nil {
+			return err
+		}
+		return h.store.ApplyOperationApprovalDecisionTx(ctx, tx, store.OperationApprovalDecision{
+			TenantID: h.tenant, RequestID: request.ID, IntentDigest: request.IntentDigest,
+			Approver: "security-approver", Decision: store.ApprovalDecisionApprove,
+			EventID: decisionID, DecidedAt: base.Add(time.Minute),
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	approved, err := h.store.GetOperationApproval(ctx, h.tenant, request.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	use, err := store.OperationApprovalUseFromRequest(approved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := projections.CodeSigningCommanded{
+		OperationID: operationID, IdempotencyKey: idempotencyKey, Mode: "key",
+		RequestHash: requestHash, SealedCommand: []byte("legacy-tenant-sealed-command"), Approval: &use,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	untruncated := base.Add(2*time.Minute + 789*time.Nanosecond)
+	event := events.Event{
+		ID:   codeSigningApprovedEventID(h.tenant, operationID),
+		Type: projections.EventCodeSigningCommanded, TenantID: h.tenant,
+		Time: untruncated, SchemaVersion: projections.CodeSigningApprovalEventSchemaVersion, Data: raw,
+	}
+	semantic, err := projections.LegacyCodeSigningHistoricalSemanticDigest(event, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fence, created, err := h.store.ClaimApprovedTargetFence(ctx, store.ApprovedTargetFence{
+		TenantID: h.tenant, TargetKind: store.ApprovedTargetCodeSigningCommand,
+		CommandKey: operationID, RequestBinding: projections.CodeSigningRequestBinding(requestHash, idempotencyKey),
+		EventID: event.ID, EventType: event.Type, SchemaVersion: event.SchemaVersion,
+		EventTime: event.Time, Payload: event.Data, SemanticDigest: semantic,
+	}, use)
+	if err != nil || !created {
+		t.Fatalf("claim legacy nanosecond fence = created %t err=%v", created, err)
+	}
+	if fence.EventTime.Equal(untruncated) ||
+		!fence.EventTime.Equal(untruncated.UTC().Truncate(time.Microsecond)) {
+		t.Fatalf("PostgreSQL fence time=%s, want rounded form of retained %s", fence.EventTime, untruncated)
+	}
+	retained, err := h.log.Append(ctx, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !retained.Time.Equal(untruncated) {
+		t.Fatalf("retained legacy timestamp=%s, want %s", retained.Time, untruncated)
+	}
+	if err := h.srv.codeSign.projectCodeSigningFence(ctx, h.tenant, fence); err != nil {
+		t.Fatalf("recover retained legacy nanosecond event: %v", err)
+	}
+	op, found, err := h.store.CodeSigningOperationByID(ctx, h.tenant, operationID)
+	if err != nil || !found || op.SourceEventID != event.ID ||
+		op.IdempotencyKey != store.LegacyCodeSigningStorageKey(operationID, idempotencyKey) {
+		t.Fatalf("legacy nanosecond recovery = found %t op=%+v err=%v", found, op, err)
+	}
+	if _, err := h.store.GetApprovedTargetFence(ctx, h.tenant, fence.TargetKind, fence.CommandKey); !store.IsNotFound(err) {
+		t.Fatalf("legacy nanosecond recovery left fence: %v", err)
+	}
+}
+
+func TestPrivacyRewrittenLegacyApprovedFenceWithoutRetainedEventRecoversExactNanosecondsOnRestart(t *testing.T) {
+	inner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(inner.Destroy)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.CodeSigning = CodeSigningConfig{Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{
+			"release-key": testOperationDigestSigner{DigestSigner: inner},
+		}}}
+	})
+	ctx := context.Background()
+	const (
+		subject        = "legacy-fence-owner@example.com"
+		idempotencyKey = "release/legacy-fence-owner@example.com/fence-before-append"
+		requestID      = "77961000-0000-4000-8000-000000000011"
+		decisionID     = "77961000-0000-4000-8000-000000000012"
+		requestHash    = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	)
+	operationID := projections.LegacyCodeSigningOperationID(h.tenant, idempotencyKey)
+	resourceID := store.CodeSigningApprovalResourceID(requestHash, idempotencyKey)
+	base := time.Now().UTC().Truncate(time.Microsecond)
+	request := store.OperationApprovalRequest{
+		ID: requestID, TenantID: h.tenant, IntentDigest: "sha256:" + strings.Repeat("d", 64),
+		ResourceKind: "code_signing", ResourceID: resourceID, ResourceName: "release-key",
+		Action: "sign", Requester: subject, RequiredApprovals: 1,
+		Reason: "release requested by " + subject, EvidenceRefs: []string{"ticket:" + subject},
+		CreatedAt: base, ExpiresAt: base.Add(time.Hour), UpdatedAt: base,
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		if err := h.store.ApplyOperationApprovalRequestedTx(ctx, tx, request); err != nil {
+			return err
+		}
+		return h.store.ApplyOperationApprovalDecisionTx(ctx, tx, store.OperationApprovalDecision{
+			TenantID: h.tenant, RequestID: request.ID, IntentDigest: request.IntentDigest,
+			Approver: "security-approver", Decision: store.ApprovalDecisionApprove,
+			EventID: decisionID, DecidedAt: base.Add(time.Minute),
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	approved, err := h.store.GetOperationApproval(ctx, h.tenant, request.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	use, err := store.OperationApprovalUseFromRequest(approved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := projections.CodeSigningCommanded{
+		OperationID: operationID, IdempotencyKey: idempotencyKey, Mode: "key",
+		RequestHash: requestHash, SealedCommand: []byte("legacy-fence-before-append"), Approval: &use,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalTime := base.Add(2*time.Minute + 613*time.Nanosecond)
+	event := events.Event{
+		ID:   codeSigningApprovedEventID(h.tenant, operationID),
+		Type: projections.EventCodeSigningCommanded, TenantID: h.tenant,
+		Time: originalTime, SchemaVersion: projections.CodeSigningApprovalEventSchemaVersion, Data: raw,
+		Actor: &events.Actor{Subject: subject, Roles: []string{"release"}},
+	}
+	historical, err := projections.LegacyCodeSigningHistoricalSemanticDigest(event, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fence, created, err := h.store.ClaimApprovedTargetFence(ctx, store.ApprovedTargetFence{
+		TenantID: h.tenant, TargetKind: store.ApprovedTargetCodeSigningCommand,
+		CommandKey: operationID, RequestBinding: projections.CodeSigningRequestBinding(requestHash, idempotencyKey),
+		EventID: event.ID, EventType: event.Type, SchemaVersion: event.SchemaVersion,
+		EventTime: event.Time, Actor: event.Actor, Payload: event.Data, SemanticDigest: historical,
+	}, use)
+	if err != nil || !created {
+		t.Fatalf("claim legacy fence-before-append = created %t err=%v", created, err)
+	}
+	if fence.EventTime.Equal(originalTime) ||
+		!fence.EventTime.Equal(originalTime.UTC().Truncate(time.Microsecond)) {
+		t.Fatalf("stored fence time=%s, want rounded form of %s", fence.EventTime, originalTime)
+	}
+	if _, found, err := h.log.EventByID(ctx, event.ID); err != nil || found {
+		t.Fatalf("pre-restart retained event = found %t err=%v", found, err)
+	}
+	if changed, err := h.store.PseudonymizeApprovedTargetFences(ctx, h.tenant, subject); err != nil || changed != 1 {
+		t.Fatalf("pseudonymize legacy fence-before-append = changed %d err=%v", changed, err)
+	}
+	placeholder := privacy.Placeholder(privacy.SubjectRef(h.tenant, subject))
+	if _, err := h.store.SystemPool().Exec(ctx, `UPDATE operation_approval_requests
+		SET requester = $3, reason = '', evidence_refs = '[]'::jsonb
+		WHERE tenant_id = $1 AND id = $2`, h.tenant, request.ID, placeholder); err != nil {
+		t.Fatal(err)
+	}
+	rewrittenFence, err := h.store.GetApprovedTargetFence(
+		ctx, h.tenant, store.ApprovedTargetCodeSigningCommand, operationID,
+	)
+	if err != nil || bytes.Contains(rewrittenFence.Payload, []byte(subject)) ||
+		rewrittenFence.SemanticDigest == historical {
+		t.Fatalf("privacy-rewritten legacy fence=%+v err=%v", rewrittenFence, err)
+	}
+	var rewrittenPayload projections.CodeSigningCommanded
+	if err := json.Unmarshal(rewrittenFence.Payload, &rewrittenPayload); err != nil {
+		t.Fatal(err)
+	}
+	rewrittenProof := event
+	rewrittenProof.Time = originalTime
+	rewrittenProof.Actor = rewrittenFence.Actor
+	rewrittenProof.Data = rewrittenFence.Payload
+	rewrittenHistorical, err := projections.LegacyCodeSigningHistoricalSemanticDigest(
+		rewrittenProof, rewrittenPayload,
+	)
+	if err != nil || rewrittenFence.SemanticDigest != rewrittenHistorical {
+		t.Fatalf("rewritten exact-time historical semantic=%q err=%v, want %q",
+			rewrittenFence.SemanticDigest, err, rewrittenHistorical)
+	}
+
+	if _, err := Build(ctx, Deps{
+		Store: h.store, Log: h.log, Signer: h.signer,
+		SignAuthorizer: h.authz, CACertFile: h.caFile,
+	}); err != nil {
+		t.Fatalf("restart reconciliation of legacy fence-before-append: %v", err)
+	}
+	retained, found, err := h.log.EventByID(ctx, event.ID)
+	if err != nil || !found || !retained.Time.Equal(originalTime) ||
+		bytes.Contains(retained.Data, []byte(subject)) || retained.Actor == nil ||
+		retained.Actor.Subject != placeholder {
+		t.Fatalf("recovered exact legacy event = found %t event=%+v err=%v", found, retained, err)
+	}
+	var retainedPayload projections.CodeSigningCommanded
+	if err := json.Unmarshal(retained.Data, &retainedPayload); err != nil {
+		t.Fatal(err)
+	}
+	if retainedPayload.IdempotencyKey != store.LegacyCodeSigningStorageKey(operationID, idempotencyKey) {
+		t.Fatalf("recovered legacy key=%q", retainedPayload.IdempotencyKey)
+	}
+	canonical, err := projections.CodeSigningCommandSemanticDigest(retained, retainedPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op, found, err := h.store.CodeSigningOperationByID(ctx, h.tenant, operationID)
+	if err != nil || !found || op.SourceEventID != event.ID || op.SemanticDigest != canonical ||
+		op.IdempotencyKey != store.LegacyCodeSigningStorageKey(operationID, idempotencyKey) {
+		t.Fatalf("restart-recovered legacy operation = found %t op=%+v err=%v", found, op, err)
+	}
+	if _, err := h.store.GetApprovedTargetFence(ctx, h.tenant,
+		store.ApprovedTargetCodeSigningCommand, operationID); !store.IsNotFound(err) {
+		t.Fatalf("restart recovery left legacy fence: %v", err)
+	}
+}
+
+func TestLegacyApprovedCodeSigningFenceWithoutRetainedEventRejectsSemanticDrift(t *testing.T) {
+	inner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(inner.Destroy)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.CodeSigning = CodeSigningConfig{Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{
+			"release-key": testOperationDigestSigner{DigestSigner: inner},
+		}}}
+	})
+	ctx := context.Background()
+	const (
+		idempotencyKey = "legacy-approved-corrupt-fence-before-append"
+		requestID      = "77961000-0000-4000-8000-000000000021"
+		decisionID     = "77961000-0000-4000-8000-000000000022"
+		requestHash    = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	)
+	operationID := projections.LegacyCodeSigningOperationID(h.tenant, idempotencyKey)
+	base := time.Now().UTC().Truncate(time.Microsecond)
+	request := store.OperationApprovalRequest{
+		ID: requestID, TenantID: h.tenant, IntentDigest: "sha256:" + strings.Repeat("e", 64),
+		ResourceKind: "code_signing",
+		ResourceID:   store.CodeSigningApprovalResourceID(requestHash, idempotencyKey),
+		ResourceName: "release-key", Action: "sign", Requester: "release-bot",
+		RequiredApprovals: 1, CreatedAt: base, ExpiresAt: base.Add(time.Hour), UpdatedAt: base,
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		if err := h.store.ApplyOperationApprovalRequestedTx(ctx, tx, request); err != nil {
+			return err
+		}
+		return h.store.ApplyOperationApprovalDecisionTx(ctx, tx, store.OperationApprovalDecision{
+			TenantID: h.tenant, RequestID: request.ID, IntentDigest: request.IntentDigest,
+			Approver: "security-approver", Decision: store.ApprovalDecisionApprove,
+			EventID: decisionID, DecidedAt: base.Add(time.Minute),
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	approved, err := h.store.GetOperationApproval(ctx, h.tenant, request.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	use, err := store.OperationApprovalUseFromRequest(approved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := projections.CodeSigningCommanded{
+		OperationID: operationID, IdempotencyKey: idempotencyKey, Mode: "key",
+		RequestHash: requestHash, SealedCommand: []byte("legacy-corrupt-fence"), Approval: &use,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := events.Event{
+		ID:   codeSigningApprovedEventID(h.tenant, operationID),
+		Type: projections.EventCodeSigningCommanded, TenantID: h.tenant,
+		Time:          base.Add(2*time.Minute + 457*time.Nanosecond),
+		SchemaVersion: projections.CodeSigningApprovalEventSchemaVersion, Data: raw,
+	}
+	historical, err := projections.LegacyCodeSigningHistoricalSemanticDigest(event, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrupt := []byte(historical)
+	if corrupt[0] == '0' {
+		corrupt[0] = '1'
+	} else {
+		corrupt[0] = '0'
+	}
+	if _, created, err := h.store.ClaimApprovedTargetFence(ctx, store.ApprovedTargetFence{
+		TenantID: h.tenant, TargetKind: store.ApprovedTargetCodeSigningCommand,
+		CommandKey: operationID, RequestBinding: projections.CodeSigningRequestBinding(requestHash, idempotencyKey),
+		EventID: event.ID, EventType: event.Type, SchemaVersion: event.SchemaVersion,
+		EventTime: event.Time, Payload: event.Data, SemanticDigest: string(corrupt),
+	}, use); err != nil || !created {
+		t.Fatalf("claim corrupt legacy fence = created %t err=%v", created, err)
+	}
+
+	if _, err := Build(ctx, Deps{
+		Store: h.store, Log: h.log, Signer: h.signer,
+		SignAuthorizer: h.authz, CACertFile: h.caFile,
+	}); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("restart with corrupt legacy semantic = %v, want ErrIdempotencyConflict", err)
+	}
+	if _, found, err := h.log.EventByID(ctx, event.ID); err != nil || found {
+		t.Fatalf("corrupt legacy fence appended event = found %t err=%v", found, err)
+	}
+	if _, found, err := h.store.CodeSigningOperationByID(ctx, h.tenant, operationID); err != nil || found {
+		t.Fatalf("corrupt legacy fence projected operation = found %t err=%v", found, err)
+	}
+	if _, err := h.store.GetApprovedTargetFence(ctx, h.tenant,
+		store.ApprovedTargetCodeSigningCommand, operationID); err != nil {
+		t.Fatalf("corrupt legacy fence was not preserved for inspection: %v", err)
 	}
 }
 
@@ -599,16 +1309,8 @@ allow if {
 		t.Fatal("production Build left the code-signing gate unwired")
 	}
 	allowed, reason := gate.MaySign(context.Background(), h.tenant, "release-bot", "release-key", digestHex)
-	if allowed || !strings.Contains(reason, "approval resource") {
-		t.Fatalf("unapproved production gate = allowed %v reason %q", allowed, reason)
-	}
-	resource := codeSigningApprovalResource("release-bot", "release-key", digestHex)
-	approval, err := h.store.GetIssuanceApproval(context.Background(), h.tenant, resource, codeSigningApprovalAction)
-	if err != nil {
-		t.Fatalf("load code-signing approval request: %v", err)
-	}
-	if approval.Requester != "release-bot" || approval.Required != 1 {
-		t.Fatalf("approval binding = %+v", approval)
+	if !allowed {
+		t.Fatalf("production policy gate denied the policy-authorized tuple before approval orchestration: %s", reason)
 	}
 	requesterToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "release-bot", []string{
 		string(authz.KeysRead), string(authz.KeysWrite),
@@ -620,24 +1322,155 @@ allow if {
 	request := map[string]any{"key_id": "release-key", "artifact_type": "oci-image", "digest": digest}
 	statusCode, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/sign",
 		requesterToken, "codesign-policy-approval-denied", request)
-	if statusCode != http.StatusForbidden || !bytes.Contains(body, []byte(resource)) {
-		t.Fatalf("served approval denial = %d body=%s, want 403 with resource %s", statusCode, body, resource)
+	if statusCode != http.StatusForbidden || !bytes.Contains(body, []byte("approval_required:codesign:")) {
+		t.Fatalf("served approval denial = %d body=%s, want exact approval request", statusCode, body)
 	}
-	statusCode, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/identities/"+resource+"/approvals",
-		approverToken, "codesign-policy-approval-grant", map[string]string{"action": codeSigningApprovalAction})
+	pending, err := h.store.ListOperationApprovals(context.Background(), h.tenant, store.ApprovalStatusPending, 10)
+	if err != nil {
+		t.Fatalf("list code-signing approval requests: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending code-signing approvals = %d, want 1: %+v", len(pending), pending)
+	}
+	approval := pending[0]
+	requestHash, err := codeSigningCommandHash(codeSigningCommand{
+		Mode: "key", Principal: "release-bot", KeyID: "release-key",
+		ArtifactType: "oci-image", Digest: digest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource := store.CodeSigningApprovalResourceID(requestHash, "codesign-policy-approval-denied")
+	idempotencyDigest := store.CodeSigningIdempotencyKeyDigest("codesign-policy-approval-denied")
+	if approval.ResourceKind != "code_signing" || approval.ResourceID != resource ||
+		approval.Action != codeSigningApprovalAction || approval.Requester != "release-bot" ||
+		approval.TargetVersion != 0 || approval.RequiredApprovals != 1 ||
+		!slices.Contains(approval.EvidenceRefs, "request-sha256:"+requestHash) ||
+		!slices.Contains(approval.EvidenceRefs, "idempotency-key-sha256:"+idempotencyDigest) ||
+		!slices.Contains(approval.EvidenceRefs, "artifact-sha256:"+digestHex) {
+		t.Fatalf("exact code-signing approval binding = %+v, want resource %s", approval, resource)
+	}
+	var operationRows, commandRows int
+	if err := h.store.SystemPool().QueryRow(context.Background(),
+		`SELECT count(*) FROM code_signing_operations WHERE tenant_id = $1`, h.tenant).Scan(&operationRows); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.SystemPool().QueryRow(context.Background(),
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = $2`,
+		h.tenant, store.CodeSigningCommandDestination).Scan(&commandRows); err != nil {
+		t.Fatal(err)
+	}
+	if operationRows != 0 || commandRows != 0 {
+		t.Fatalf("unapproved request persisted operation/outbox = %d/%d, want 0/0", operationRows, commandRows)
+	}
+
+	statusCode, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/approval-requests/"+approval.ID+"/approvals",
+		approverToken, "codesign-policy-approval-grant", map[string]string{"intent_digest": approval.IntentDigest})
 	if statusCode != http.StatusOK {
 		t.Fatalf("served code-signing approval = %d body=%s", statusCode, body)
 	}
 	statusCode, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/sign",
-		requesterToken, "codesign-policy-approval-allowed", request)
+		requesterToken, "codesign-policy-approval-denied", request)
 	if statusCode != http.StatusOK {
-		t.Fatalf("served approved code-signing = %d body=%s", statusCode, body)
+		_, directErr := h.srv.codeSign.SignCode(context.Background(), h.tenant,
+			"codesign-policy-approval-denied", api.CodeSigningRequest{
+				Principal: "release-bot", KeyID: "release-key", ArtifactType: "oci-image", Digest: digest,
+			})
+		t.Fatalf("served approved code-signing = %d body=%s direct retry error=%v", statusCode, body, directErr)
 	}
-	if allowed, reason = gate.MaySign(context.Background(), h.tenant, "release-bot", "release-key", digestHex); !allowed {
-		t.Fatalf("policy-approved, distinctly approved tuple denied: %s", reason)
+	consumed, err := h.store.GetOperationApproval(context.Background(), h.tenant, approval.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if consumed.Status != store.ApprovalStatusConsumed || consumed.ConsumedEventID == "" || consumed.ConsumedAt == nil {
+		t.Fatalf("executed code-signing authority was not consumed atomically: %+v", consumed)
+	}
+	if replayCode, replayBody := doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/sign",
+		requesterToken, "codesign-policy-approval-denied", request); replayCode != http.StatusOK || !bytes.Equal(replayBody, body) {
+		t.Fatalf("approved code-signing replay = %d body=%s, want exact 200 body=%s", replayCode, replayBody, body)
+	}
+	secondKey := "codesign-policy-approval-second-use"
+	secondResource := store.CodeSigningApprovalResourceID(requestHash, secondKey)
+	if statusCode, secondBody := doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/sign",
+		requesterToken, secondKey, request); statusCode != http.StatusForbidden ||
+		!bytes.Contains(secondBody, []byte("approval_required:"+secondResource)) {
+		t.Fatalf("fresh-key approval request = %d body=%s, want 403 for new %s", statusCode, secondBody, secondResource)
+	}
+	second, err := h.store.ListOperationApprovals(context.Background(), h.tenant, store.ApprovalStatusPending, 10)
+	if err != nil || len(second) != 1 || second[0].ResourceID != secondResource || second[0].ID == approval.ID {
+		t.Fatalf("fresh idempotency key did not create distinct exact approval: rows=%+v err=%v", second, err)
+	}
+	if err := h.store.SystemPool().QueryRow(context.Background(),
+		`SELECT count(*) FROM code_signing_operations WHERE tenant_id = $1`, h.tenant).Scan(&operationRows); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.SystemPool().QueryRow(context.Background(),
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = $2`,
+		h.tenant, store.CodeSigningCommandDestination).Scan(&commandRows); err != nil {
+		t.Fatal(err)
+	}
+	if operationRows != 1 || commandRows != 1 {
+		t.Fatalf("single-use approval persisted operation/outbox = %d/%d, want 1/1", operationRows, commandRows)
 	}
 	if allowed, _ = gate.MaySign(context.Background(), h.tenant, "release-bot", "release-key", fmt.Sprintf("%x", crypto.SHA256Sum([]byte("different")))); allowed {
 		t.Fatal("production policy gate allowed a different artifact digest")
+	}
+}
+
+func TestRequiredCodeSigningApprovalRefusesLegacyUnapprovedQueuedCommand(t *testing.T) {
+	inner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(inner.Destroy)
+	signer := &countingOperationSigner{DigestSigner: inner}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.RequireApproval = true
+		d.RequiredApprovals = 1
+		d.CodeSigning = CodeSigningConfig{
+			Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{"release-key": signer}},
+		}
+	})
+	const idempotencyKey = "codesign-legacy-unapproved-command"
+	command := codeSigningCommand{
+		Mode: "key", Principal: "release-bot", KeyID: "release-key",
+		ArtifactType: "oci-image", Digest: crypto.SHA256Sum([]byte("legacy queued artifact")),
+	}
+	plain, err := json.Marshal(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(plain)
+	requestHash := crypto.SHA256Hex(plain)
+	operationID := projections.LegacyCodeSigningOperationID(h.tenant, idempotencyKey)
+	sealed, err := sealTenantValue(context.Background(), h.srv.codeSign.crypto, h.srv.codeSign.kek,
+		h.tenant, plain, codeSigningCommandAAD(h.tenant, operationID, command.Mode, requestHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(sealed)
+	if err := h.srv.codeSign.appendAndProject(context.Background(), h.tenant,
+		projections.EventCodeSigningCommanded, operationID, projections.CodeSigningCommanded{
+			OperationID: operationID, IdempotencyKey: idempotencyKey,
+			Mode: command.Mode, RequestHash: requestHash, SealedCommand: sealed,
+		}); err != nil {
+		t.Fatalf("project legacy unapproved command: %v", err)
+	}
+	op, found, err := h.store.CodeSigningOperationByID(context.Background(), h.tenant, operationID)
+	if err != nil || !found {
+		t.Fatalf("load legacy queued command = found %v err %v", found, err)
+	}
+	message := loadCodeSigningOutboxMessage(t, h.store, h.tenant, op.CommandOutboxID)
+	if err := h.srv.codeSign.deliverCommand(context.Background(), message); err != nil {
+		t.Fatalf("deliver legacy unapproved command: %v", err)
+	}
+	op, found, err = h.store.CodeSigningOperationByID(context.Background(), h.tenant, operationID)
+	if err != nil || !found {
+		t.Fatalf("reload legacy queued command = found %v err %v", found, err)
+	}
+	if op.Status != "failed" || op.LastError != "policy_denied" || signer.calls.Load() != 0 {
+		t.Fatalf("legacy unapproved command = status %q error %q signer calls %d, want failed/policy_denied/0",
+			op.Status, op.LastError, signer.calls.Load())
 	}
 }
 

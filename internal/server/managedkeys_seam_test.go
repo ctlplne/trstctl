@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/store"
 )
 
 type fakeManagedKeyService struct{}
@@ -31,7 +32,7 @@ func (fakeManagedKeyService) Zeroize(context.Context, string, string, string, st
 }
 
 type dualControlManagedKeyService struct {
-	checker api.ApprovalChecker
+	checker api.ExactApprovalChecker
 	calls   map[string]int
 }
 
@@ -64,7 +65,20 @@ func (s *dualControlManagedKeyService) Zeroize(ctx context.Context, tenantID, ke
 }
 
 func (s *dualControlManagedKeyService) authorize(ctx context.Context, tenantID, keyID, action, requester string) error {
-	approved, reason := s.checker.IsApproved(ctx, tenantID, keyID, action, requester)
+	toState := "active"
+	switch action {
+	case api.ManagedKeyActionRevoke:
+		toState = "revoked"
+	case api.ManagedKeyActionZeroize:
+		toState = "zeroized"
+	}
+	_, approved, reason := s.checker.AuthorizeApproval(ctx, api.ApprovalIntent{
+		TenantID: tenantID, ResourceKind: "managed_key", ResourceID: keyID,
+		ResourceName: keyID, Action: action, Requester: requester,
+		FromState: "active", ToState: toState, TargetVersion: 1,
+		Reason:       "authorize one exact managed-key test command",
+		EvidenceRefs: []string{"test-command:" + action}, RequiredApprovals: 2,
+	})
 	if !approved {
 		return fmt.Errorf("%w: %s", api.ErrManagedKeyNotApproved, reason)
 	}
@@ -154,7 +168,25 @@ func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testin
 			t.Fatalf("%s reached provider before approval", action.name)
 		}
 
-		approvalBody := map[string]string{"key_id": key.KeyID, "action": action.name}
+		requests, err := h.store.ListOperationApprovals(context.Background(), h.tenant, store.ApprovalStatusPending, 100)
+		if err != nil {
+			t.Fatalf("list %s exact approval requests: %v", action.name, err)
+		}
+		var approval store.OperationApprovalRequest
+		for _, candidate := range requests {
+			if candidate.ResourceKind == "managed_key" && candidate.ResourceID == key.KeyID &&
+				candidate.Action == action.canonical && candidate.Requester == "managed-key-requester" {
+				approval = candidate
+				break
+			}
+		}
+		if approval.ID == "" || approval.IntentDigest == "" {
+			t.Fatalf("requester attempt did not create a genuine %s approval request: %+v", action.name, requests)
+		}
+		approvalBody := map[string]string{
+			"key_id": key.KeyID, "action": action.name,
+			"request_id": approval.ID, "intent_digest": approval.IntentDigest,
+		}
 		status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys/approvals", requester,
 			idempotencyKey+"-self-approval", approvalBody)
 		if status != http.StatusForbidden {

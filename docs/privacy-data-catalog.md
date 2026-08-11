@@ -19,6 +19,9 @@ export (below) returns every matching row for that location.
 | `ssh_keys.comment-location` | `ssh_keys.comment/location` | Clears orphaned, stale SSH key comment and location fields. |
 | `attestations.evidence` | `attestations.evidence` | Clears stale evidence JSON. |
 | `approvals.actors` | `issuance_approval_requests.requester / issuance_approvals.approver` | Pseudonymizes stale requester and approver subjects. Preserves resource/action evidence. |
+| `application_secret_mutation_fences.requester` | `application_secret_mutation_fences.requester_sealed/requester_ref` | `privacy.subject.erased` deletes every matching pre-finalization fence. If exact approval authority is already bound, its requester is atomically pseudonymized and pending/approved authority is superseded first. Approval binding/finalization clears both requester fields; target projection deletes a finalized fence. |
+| `application_secret_mutation_fences.actor` | `application_secret_mutation_fences.actor/actor_subject_ref` | The fence keeps the exact authenticated subject and role set needed to reproduce a crash-interrupted event. Erasure deletes matching commands before finalization. After finalization, the history-operation barrier atomically rewrites `actor.subject` and the exact approval requester to the tenant-bound placeholder, preserves roles, clears the selector, and lets target projection delete the fence. |
+| `read_model_snapshots.payload` | `read_model_snapshots.payload` | This disposable JSON cache can copy every personal-data field in the tenant read model. Durable erasure preparation deletes the target tenant row in the same SQL transaction as its crash marker and records the exact zero-or-one deletion count. An active marker blocks every replacement writer. |
 | `profiles.created-by` | `certificate_profiles.created_by` | Pseudonymizes stale profile author values. |
 | `agents.name` | `agents.name` | Pseudonymizes stale agent names. Preserves agent id/status/version. |
 | `agents.offboarding-evidence` | `agents.offboarded_by/offboard_reason` | Erasure pseudonymizes matching offboard actors and clears free-form reasons. Retention clears stale offboarding evidence, keeping agent id/status/version/offboarded_at. |
@@ -46,6 +49,16 @@ the 397-day operational evidence window unless an operator configures a
 shorter policy. OIDC pre-login metadata is ephemeral and expires after
 `10m`. Operators can override these classes via the
 `TRSTCTL_PRIVACY_RETENTION_*` settings (`docs/configuration.md`).
+
+## Read-model snapshot cache
+
+Read-model snapshots are accepted only as one complete capture generation. Every
+tenant row carries the same projection head, capture ID, expected tenant count,
+and digest of the exact sorted tenant IDs. A missing target row, mixed capture,
+legacy format, or crash-partial capture is ignored before any read-model table is
+truncated; a cold restore then starts from checkpoint zero and replays sanitized
+event history. After erasure completion, the periodic writer may create a new
+snapshot from the already-sanitized read model.
 
 ## In the console (`/privacy`)
 

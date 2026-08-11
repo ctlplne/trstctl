@@ -21,6 +21,7 @@ func TestPrivacyCatalogCoversSubjectErasurePIIFields(t *testing.T) {
 		"ssh_keys.comment-location",
 		"attestations.evidence",
 		"approvals.actors",
+		"application_secret_mutation_fences.actor",
 		"profiles.created-by",
 		"agents.name",
 		"agents.offboarding-evidence",
@@ -57,6 +58,14 @@ func TestPrivacyCatalogCoversServedSchemaPIIDenominator(t *testing.T) {
 		source  string
 		markers []string
 	}{
+		{
+			id:     "application_secret_mutation_fences.actor",
+			source: "../internal/store/migrations/0152_application_secret_fence_actor.sql",
+			markers: []string{
+				"ADD COLUMN actor JSONB",
+				"ADD COLUMN actor_subject_ref CHAR(64)",
+			},
+		},
 		{
 			id:     "agents.offboarding-evidence",
 			source: "../internal/store/migrations/0068_agent_offboarding.sql",

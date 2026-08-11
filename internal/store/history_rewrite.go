@@ -40,6 +40,7 @@ type PostgresHistoryRewriteCoordinator struct {
 }
 
 type historyReadGrantContextKey struct{}
+type historyCutoverGrantContextKey struct{}
 
 type historyReadLease struct {
 	coordinator *PostgresHistoryRewriteCoordinator
@@ -55,6 +56,7 @@ type historyReadGrant struct {
 }
 
 var _ events.HistoryRewriteCoordinator = (*PostgresHistoryRewriteCoordinator)(nil)
+var _ events.HistoryRewritePreparationResolver = (*PostgresHistoryRewriteCoordinator)(nil)
 
 func newHistoryReadLease(c *PostgresHistoryRewriteCoordinator) *historyReadLease {
 	lease := &historyReadLease{coordinator: c, active: true}
@@ -130,7 +132,24 @@ func (c *PostgresHistoryRewriteCoordinator) WithCutover(
 	ctx context.Context,
 	fn func(context.Context) error,
 ) error {
-	return c.withLock(ctx, HistoryRewriteBarrierAdvisoryLockKey, false, "history rewrite cutover", fn)
+	if fn == nil {
+		return errors.New("store: history rewrite cutover callback is nil")
+	}
+	return c.withLock(
+		ctx,
+		HistoryRewriteBarrierAdvisoryLockKey,
+		false,
+		"history rewrite cutover",
+		func(lockedCtx context.Context) error {
+			lease := newHistoryReadLease(c)
+			defer lease.revokeAndWait()
+			cutoverCtx := context.WithValue(lockedCtx, historyCutoverGrantContextKey{}, historyReadGrant{
+				lease: lease,
+				depth: 1,
+			})
+			return fn(cutoverCtx)
+		},
+	)
 }
 
 // WithRead holds the shared history-generation barrier for the complete read
@@ -142,6 +161,25 @@ func (c *PostgresHistoryRewriteCoordinator) WithRead(
 ) error {
 	if fn == nil {
 		return errors.New("store: history read view callback is nil")
+	}
+	cutoverGrant, nestedUnderCutover := ctx.Value(historyCutoverGrantContextKey{}).(historyReadGrant)
+	if nestedUnderCutover &&
+		cutoverGrant.lease != nil &&
+		cutoverGrant.lease.coordinator == c &&
+		cutoverGrant.lease.acquire() {
+		defer cutoverGrant.lease.release()
+		// The callback already owns this coordinator's stronger exclusive barrier.
+		// A nested replay/read needs no second pooled session or shared advisory
+		// lock. The private lease is revoked before the exclusive session is
+		// released, so a context escaping the cutover cannot reuse this authority.
+		if err := ctx.Err(); err != nil {
+			return context.Cause(ctx)
+		}
+		nestedCtx := context.WithValue(ctx, historyCutoverGrantContextKey{}, historyReadGrant{
+			lease: cutoverGrant.lease,
+			depth: cutoverGrant.depth + 1,
+		})
+		return fn(nestedCtx)
 	}
 	grant, nested := ctx.Value(historyReadGrantContextKey{}).(historyReadGrant)
 	if nested &&
@@ -179,6 +217,22 @@ func (c *PostgresHistoryRewriteCoordinator) WithRead(
 			})
 			return fn(readCtx)
 		},
+	)
+}
+
+// HistoryRewritePreparationActive binds event-generation recovery to the exact
+// PostgreSQL preparation that sanitized recoverable authority for this tenant.
+// It deliberately does not acquire another history-operation advisory lock: the
+// events layer already owns that lock while calling the resolver.
+func (c *PostgresHistoryRewriteCoordinator) HistoryRewritePreparationActive(
+	ctx context.Context,
+	tenantID, targetGeneration string,
+) (bool, error) {
+	if c == nil || c.store == nil {
+		return false, errors.New("store: history preparation resolver is not configured")
+	}
+	return c.store.PrivacySubjectErasurePreparationActiveForGeneration(
+		ctx, tenantID, targetGeneration,
 	)
 }
 
@@ -289,16 +343,17 @@ func releaseHistoryRewriteLock(conn *pgxpool.Conn, key int64, shared bool) error
 // PrepareTenantDataCutover is the production snapshot/backup wall passed to
 // events.WithTenantDataCutoverPreparation. The event layer calls it only while
 // holding the exclusive history barrier. This method then takes the independent
-// backup write fence, removes every reconstructible read-model snapshot, proves
-// the table is empty, and invokes activation exactly once before releasing that
-// fence.
+// backup write fence and invokes activation exactly once before releasing it.
 //
-// The report is part of the events contract and intentionally unused here:
-// snapshot invalidation is deployment-wide because every snapshot was built from
-// the one global event-history generation.
+// Generic rewrites invalidate every snapshot before activation, preserving their
+// original contract. Privacy erasure is stricter: its independently durable SQL
+// preparation must delete the target tenant's physical snapshot in the SAME
+// transaction that records the crash marker and exact count evidence. The private
+// event-layer context signal defers invalidation only for that path; the external
+// preparation runs inside proceed and before activation.
 func (s *Store) PrepareTenantDataCutover(
 	ctx context.Context,
-	_ events.TenantDataRewriteReport,
+	report events.TenantDataRewriteReport,
 	proceed func(context.Context) error,
 ) error {
 	if s == nil || s.pool == nil {
@@ -308,18 +363,33 @@ func (s *Store) PrepareTenantDataCutover(
 		return errors.New("store: tenant-data cutover proceed callback is nil")
 	}
 	return s.WithBackupWriteFence(ctx, func(fenceCtx context.Context) error {
-		if err := s.DeleteAllSnapshots(fenceCtx); err != nil {
-			return fmt.Errorf("store: invalidate snapshots before tenant-data cutover: %w", err)
-		}
-		remaining, err := s.SnapshotCount(fenceCtx)
-		if err != nil {
-			return fmt.Errorf("store: verify snapshot invalidation before tenant-data cutover: %w", err)
-		}
-		if remaining != 0 {
-			return fmt.Errorf("store: tenant-data cutover refused: %d read-model snapshots remain", remaining)
+		privacyPreparationOwnsSnapshot := events.TenantDataCutoverDefersSnapshotInvalidation(fenceCtx)
+		if !privacyPreparationOwnsSnapshot {
+			if err := s.DeleteAllSnapshots(fenceCtx); err != nil {
+				return fmt.Errorf("store: invalidate snapshots before tenant-data cutover: %w", err)
+			}
+			remaining, err := s.SnapshotCount(fenceCtx)
+			if err != nil {
+				return fmt.Errorf("store: verify snapshot invalidation before tenant-data cutover: %w", err)
+			}
+			if remaining != 0 {
+				return fmt.Errorf("store: tenant-data cutover refused: %d read-model snapshots remain", remaining)
+			}
 		}
 		if err := proceed(fenceCtx); err != nil {
 			return fmt.Errorf("store: activate tenant-data history generation: %w", err)
+		}
+		if privacyPreparationOwnsSnapshot {
+			remaining, err := s.tenantSnapshotCount(fenceCtx, report.TenantID)
+			if err != nil {
+				return fmt.Errorf("store: verify privacy preparation snapshot deletion: %w", err)
+			}
+			if remaining != 0 {
+				return fmt.Errorf(
+					"store: privacy cutover completed with %d target snapshots remaining",
+					remaining,
+				)
+			}
 		}
 		return nil
 	})

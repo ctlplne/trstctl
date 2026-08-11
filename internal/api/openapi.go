@@ -36,6 +36,7 @@ type PathItem map[string]*Operation
 type Operation struct {
 	OperationID        string                `json:"operationId"`
 	Summary            string                `json:"summary,omitempty"`
+	Deprecated         bool                  `json:"deprecated,omitempty"`
 	Parameters         []Parameter           `json:"parameters,omitempty"`
 	RequestBody        *RequestBody          `json:"requestBody,omitempty"`
 	Responses          map[string]Response   `json:"responses"`
@@ -43,6 +44,8 @@ type Operation struct {
 	XPermission        string                `json:"x-trstctl-permission,omitempty"`
 	XPublicRationale   string                `json:"x-trstctl-public-rationale,omitempty"`
 	XSensitiveResponse bool                  `json:"x-trstctl-sensitive-response,omitempty"`
+	XAvailability      string                `json:"x-trstctl-availability,omitempty"`
+	XUnavailableReason string                `json:"x-trstctl-unavailable-reason,omitempty"`
 }
 
 // Parameter is a path or query parameter.
@@ -89,13 +92,14 @@ type SecurityScheme struct {
 
 // Schema is a (deliberately small) JSON Schema: a $ref, or an inline type.
 type Schema struct {
-	Ref        string             `json:"$ref,omitempty"`
-	Type       string             `json:"type,omitempty"`
-	Format     string             `json:"format,omitempty"`
-	Items      *Schema            `json:"items,omitempty"`
-	Properties map[string]*Schema `json:"properties,omitempty"`
-	Required   []string           `json:"required,omitempty"`
-	Enum       []string           `json:"enum,omitempty"`
+	Ref         string             `json:"$ref,omitempty"`
+	Type        string             `json:"type,omitempty"`
+	Format      string             `json:"format,omitempty"`
+	Description string             `json:"description,omitempty"`
+	Items       *Schema            `json:"items,omitempty"`
+	Properties  map[string]*Schema `json:"properties,omitempty"`
+	Required    []string           `json:"required,omitempty"`
+	Enum        []string           `json:"enum,omitempty"`
 	// AdditionalProperties types free-key maps (e.g. principal -> scopes).
 	AdditionalProperties *Schema `json:"additionalProperties,omitempty"`
 }
@@ -151,7 +155,7 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 		Info: Info{
 			Title:       "trstctl API",
 			Version:     "v1",
-			Description: "Resource-oriented REST API for trstctl. Mutations require an Idempotency-Key; errors are RFC 7807 problem+json; lists use cursor pagination.",
+			Description: "Resource-oriented REST API for trstctl. Mutations require an Idempotency-Key; errors use RFC 7807 problem+json unless an operation documents a typed status receipt; lists use cursor pagination.",
 		},
 		Paths: map[string]PathItem{},
 		Components: Components{
@@ -210,17 +214,46 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 				"application/json": {Schema: ref(r.reqSchema)},
 			}}
 		}
-		success := Response{Description: "success"}
-		if r.resSchema != "" {
-			success.Content = map[string]MediaType{"application/json": {Schema: ref(r.resSchema)}}
-		}
-		op.Responses[r.successCode] = success
 		problemContent := map[string]MediaType{"application/problem+json": {Schema: ref("Problem")}}
+		if r.unavailableReason != "" {
+			op.Deprecated = true
+			op.XAvailability = "unavailable"
+			op.XUnavailableReason = r.unavailableReason
+			op.Responses["501"] = Response{Description: r.unavailableReason, Content: problemContent}
+		} else {
+			success := Response{Description: "success"}
+			if r.resSchema != "" {
+				success.Content = map[string]MediaType{"application/json": {Schema: ref(r.resSchema)}}
+			}
+			op.Responses[r.successCode] = success
+		}
 		op.Responses["4XX"] = Response{Description: "client error", Content: problemContent}
 		op.Responses["5XX"] = Response{Description: "server error", Content: problemContent}
+		for status, response := range r.responseOverrides {
+			op.Responses[status] = response
+		}
 		pi[strings.ToLower(r.method)] = op
 	}
 	return doc
+}
+
+func secretRotationDueRunUnavailableResponse() Response {
+	return Response{
+		Description: "The scheduler may return a cached typed fail-stop receipt after claiming this Idempotency-Key; pre-handler or disabled-subsystem failures remain RFC 7807 problems.",
+		Content: map[string]MediaType{
+			"application/json":         {Schema: ref("SecretRotationDueRun")},
+			"application/problem+json": {Schema: ref("Problem")},
+		},
+	}
+}
+
+func secretRotationUnavailableResponse() Response {
+	return Response{
+		Description: "Static and dynamic-lease provider rotation is unavailable until one durable worker owns every effect and compensation phase.",
+		Content: map[string]MediaType{
+			"application/problem+json": {Schema: ref("Problem")},
+		},
+	}
 }
 
 func schemaForParam(p param) *Schema {
@@ -531,20 +564,63 @@ func componentSchemas() map[string]*Schema {
 		"items":         {Type: "array", Items: ref("BulkRevokeItem")},
 	}, "total_matched", "total_revoked", "total_skipped", "total_failed", "items")
 
+	operationApprovalStatuses := []string{"pending", "approved", "denied", "expired", "superseded", "consumed"}
+	operationApprovalResourceKinds := []string{"identity", "secret", "managed_key", "code_signing", "ephemeral"}
+	operationApprovalActions := []string{
+		"issue", "create", "rotate", "revoke", "sign", "recover", "delete",
+		"managedkey:rotate", "managedkey:revoke", "managedkey:zeroize",
+	}
 	approvalReq := object(map[string]*Schema{
-		"action": {Type: "string", Enum: identityApprovalActions},
-	}, "action")
+		"action":        {Type: "string", Enum: identityApprovalActions},
+		"request_id":    uuid(),
+		"intent_digest": str(),
+	}, "action", "request_id", "intent_digest")
 	approval := object(map[string]*Schema{
-		"resource": str(), "action": {Type: "string", Enum: identityApprovalActions},
+		"id": uuid(), "intent_digest": str(), "resource": str(),
+		"action":   {Type: "string", Enum: identityApprovalActions},
 		"approver": str(), "approvals": {Type: "integer"},
-	}, "resource", "action", "approver", "approvals")
+		"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"},
+		"status": {Type: "string", Enum: operationApprovalStatuses},
+	}, "id", "intent_digest", "resource", "action", "approver", "approvals", "approval_count", "required_approvals", "status")
+	approvalRequestRecord := object(map[string]*Schema{
+		"id": uuid(), "intent_digest": str(), "resource_id": str(), "resource_name": str(),
+		"resource_kind": {Type: "string", Enum: operationApprovalResourceKinds},
+		"action":        {Type: "string", Enum: operationApprovalActions}, "requester": str(),
+		"from_state": str(), "to_state": str(), "target_version": str(), "reason": str(),
+		"evidence_refs":      {Type: "array", Items: str()},
+		"approval_count":     {Type: "integer"},
+		"required_approvals": {Type: "integer"},
+		"status":             {Type: "string", Enum: operationApprovalStatuses},
+		"created_at":         timestamp(), "expires_at": timestamp(),
+	}, "id", "intent_digest", "resource_id", "resource_name", "resource_kind", "action", "requester", "target_version", "evidence_refs", "approval_count", "required_approvals", "status", "created_at", "expires_at")
+	approvalRequestList := object(map[string]*Schema{
+		"items":       {Type: "array", Items: ref("PendingApprovalRequest")},
+		"next_cursor": str(),
+	}, "items")
+	approvalDecisionInput := object(map[string]*Schema{
+		"intent_digest": str(),
+	}, "intent_digest")
+	approvalDenialInput := object(map[string]*Schema{
+		"intent_digest": str(),
+		"reason":        str(),
+	}, "intent_digest", "reason")
+	approvalDecision := object(map[string]*Schema{
+		"id": uuid(), "intent_digest": str(), "resource": str(),
+		"action":   {Type: "string", Enum: operationApprovalActions},
+		"approver": str(), "approvals": {Type: "integer"},
+		"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"},
+		"status": {Type: "string", Enum: operationApprovalStatuses},
+	}, "id", "intent_digest", "resource", "action", "approver", "approvals", "approval_count", "required_approvals", "status")
 	secretApprovalReq := object(map[string]*Schema{
-		"action": {Type: "string", Enum: []string{"rotate", "recover", "delete"}},
-	}, "action")
+		"action":     {Type: "string", Enum: []string{"rotate", "recover", "delete"}},
+		"request_id": uuid(), "intent_digest": str(),
+	}, "action", "request_id", "intent_digest")
 	secretApproval := object(map[string]*Schema{
-		"resource": str(), "action": {Type: "string", Enum: []string{"rotate", "recover", "delete"}},
+		"id": uuid(), "intent_digest": str(), "resource": str(), "action": {Type: "string", Enum: []string{"rotate", "recover", "delete"}},
 		"approver": str(), "approvals": {Type: "integer"},
-	}, "resource", "action", "approver", "approvals")
+		"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"},
+		"status": {Type: "string", Enum: operationApprovalStatuses},
+	}, "id", "intent_digest", "resource", "action", "approver", "approvals", "approval_count", "required_approvals", "status")
 	breakglassBundle := object(map[string]*Schema{
 		"request_id": str(),
 		"subject":    str(),
@@ -3110,24 +3186,31 @@ func componentSchemas() map[string]*Schema {
 		"ttl_seconds":    {Type: "integer"},
 	}, "request_id", "method", "payload_base64", "public_key_pem")
 	ephemeralCredential := object(map[string]*Schema{
-		"state":              {Type: "string", Enum: []string{EphemeralStateAwaitingApproval, EphemeralStateIssued}},
-		"request_id":         str(),
-		"subject":            str(),
-		"credential_id":      str(),
-		"certificate_id":     uuid(),
-		"certificate_pem":    str(),
-		"required_approvals": {Type: "integer"},
-		"approvals":          {Type: "integer"},
-		"expires_at":         timestamp(),
-		"not_after":          timestamp(),
-		"attestation":        ref("Attestation"),
-	}, "state", "request_id", "subject", "required_approvals", "approvals", "expires_at", "attestation")
+		"state":               {Type: "string", Enum: []string{EphemeralStateAwaitingApproval, EphemeralStateIssued}},
+		"request_id":          str(),
+		"approval_request_id": uuid(),
+		"intent_digest":       str(),
+		"subject":             str(),
+		"credential_id":       str(),
+		"certificate_id":      uuid(),
+		"certificate_pem":     str(),
+		"required_approvals":  {Type: "integer"},
+		"approvals":           {Type: "integer"},
+		"expires_at":          timestamp(),
+		"not_after":           timestamp(),
+		"attestation":         ref("Attestation"),
+	}, "state", "request_id", "approval_request_id", "intent_digest", "subject", "required_approvals", "approvals", "expires_at", "attestation")
 	ephemeralApprovalReq := object(map[string]*Schema{
-		"action": {Type: "string", Enum: []string{"issue"}},
-	}, "action")
+		"action":     {Type: "string", Enum: []string{"issue"}},
+		"request_id": uuid(), "intent_digest": str(),
+	}, "action", "request_id", "intent_digest")
 	ephemeralApproval := object(map[string]*Schema{
-		"resource": str(), "action": str(), "approver": str(), "approvals": {Type: "integer"},
-	}, "resource", "action", "approver", "approvals")
+		"id": uuid(), "intent_digest": str(), "resource": str(),
+		"action":   {Type: "string", Enum: []string{"issue"}},
+		"approver": str(), "approvals": {Type: "integer"},
+		"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"},
+		"status": {Type: "string", Enum: operationApprovalStatuses},
+	}, "id", "intent_digest", "resource", "action", "approver", "approvals", "approval_count", "required_approvals", "status")
 	pamSessionReq := object(map[string]*Schema{
 		"target_type":    {Type: "string", Enum: []string{"postgres", "ssh"}},
 		"target_id":      str(),
@@ -3806,36 +3889,71 @@ func componentSchemas() map[string]*Schema {
 	dynamicLeaseReq := object(map[string]*Schema{
 		"provider": str(), "role": str(), "ttl_seconds": {Type: "integer"},
 	}, "provider", "role", "ttl_seconds")
+	rotationProvider := str()
+	rotationProvider.Description = "connector:<target> is the only executable mode. Static and dynamic-lease providers are unavailable and fail closed with 503 before effects."
+	rotationTTL := &Schema{Type: "integer"}
+	rotationTTL.Description = "Compatibility input only. Connector requests reject any supplied ttl_seconds with 400. Static and dynamic-lease providers remain unavailable with 503 regardless of this field."
 	secretRotationReq := object(map[string]*Schema{
-		"provider": str(), "key": str(), "old_ref": str(),
-		"target": str(), "remote_key": str(), "ttl_seconds": {Type: "integer"},
+		"provider": rotationProvider, "key": str(), "old_ref": str(),
+		"target": str(), "remote_key": str(), "ttl_seconds": rotationTTL,
 	}, "provider", "key", "old_ref")
 	secretRotation := object(map[string]*Schema{
 		"key": str(), "old_ref": str(), "new_ref": str(),
-		"completed": {Type: "boolean"}, "rolled_back": {Type: "boolean"},
+		"completed": {Type: "boolean"}, "queued": {Type: "boolean"}, "rolled_back": {Type: "boolean"},
 		"rollback_attempted": {Type: "boolean"}, "rollback_failed": {Type: "boolean"},
 		"rollback_error": str(), "failed_phase": str(), "error": str(),
-	}, "key", "old_ref", "new_ref", "completed", "rolled_back", "rollback_attempted", "rollback_failed")
+	}, "key", "old_ref", "new_ref", "completed", "queued", "rolled_back", "rollback_attempted", "rollback_failed")
+	secretRotationScheduleProvider := str()
+	secretRotationScheduleProvider.Description = "connector:<target> only. Static and dynamic-lease schedules fail closed with 503 before persistence because their provider phases do not yet have a durable worker command."
 	secretRotationScheduleReq := object(map[string]*Schema{
-		"name": str(), "provider": str(), "key": str(), "old_ref": str(),
+		"name": str(), "provider": secretRotationScheduleProvider, "key": str(), "old_ref": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"next_run_at": timestamp(),
 	}, "name", "provider", "key", "old_ref", "interval_seconds")
+	secretRotationRunStatuses := []string{
+		"completed", "queued", "failed", "rolled_back", "rollback_failed", "retire_pending", "delivery_failed", "unsupported",
+	}
+	secretRotationScheduleLastRunStatus := str()
+	secretRotationScheduleLastRunStatus.Enum = append([]string{""}, secretRotationRunStatuses...)
+	secretRotationScheduleLastRunStatus.Description = "Empty means never run. delivery_failed proves the connector's canonical local successor committed. unsupported marks and disables a historical non-connector schedule without invoking its provider. retire_pending is retained compatibility evidence from pre-durable static histories. Generic failed does not advance old_ref."
 	secretRotationSchedule := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "name": str(), "provider": str(),
 		"key": str(), "old_ref": str(), "interval_seconds": {Type: "integer"},
 		"enabled": {Type: "boolean"}, "next_run_at": timestamp(),
-		"last_run_id": uuid(), "last_run_at": timestamp(), "last_run_status": str(),
+		"last_run_id": uuid(), "last_run_at": timestamp(), "last_run_status": secretRotationScheduleLastRunStatus,
 		"last_new_ref": str(), "last_error": str(),
 		"created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "name", "provider", "key", "old_ref", "interval_seconds", "enabled", "next_run_at", "last_run_status", "created_at", "updated_at")
+	secretRotationScheduleRunStatus := str()
+	secretRotationScheduleRunStatus.Enum = secretRotationRunStatuses
+	secretRotationScheduleRunStatus.Description = "delivery_failed has explicit committed-successor authority. unsupported proves a historical non-connector row was disabled with zero provider calls. retire_pending is compatibility evidence from older static histories; generic failed carries no successor authority."
 	secretRotationScheduleRun := object(map[string]*Schema{
-		"schedule_id": uuid(), "run_id": uuid(), "status": str(),
+		"schedule_id": uuid(), "run_id": uuid(), "due_at": timestamp(), "status": secretRotationScheduleRunStatus,
 		"rotation": ref("SecretRotation"), "error": str(), "ran_at": timestamp(),
-	}, "schedule_id", "run_id", "status", "rotation", "ran_at")
+		"reconciled": {Type: "boolean", Description: "True when this response was reconstructed from the retained deterministic terminal event without re-running the child command."},
+	}, "schedule_id", "run_id", "due_at", "status", "rotation", "ran_at", "reconciled")
+	secretRotationDeferredReason := str()
+	secretRotationDeferredReason.Enum = []string{"approval_pending", "command_in_flight", "command_claimed", "config_revision_unanchored"}
+	secretRotationDeferredReason.Description = "Row-local retry state. The exact due edge and command identity remain unchanged for a later tick. config_revision_unanchored means a pre-evidence schedule was scanned and diagnosed without creating a child command or invoking a provider."
+	secretRotationScheduleDeferred := object(map[string]*Schema{
+		"schedule_id": uuid(), "reason": secretRotationDeferredReason, "due_at": timestamp(),
+		"error": {Type: "string", Description: "Non-secret reason detail for this exact deferred due edge."},
+	}, "schedule_id", "reason", "due_at")
+	secretRotationDueRan := &Schema{Type: "integer", Description: "Durable run records written in this tick, including terminal row-local failures; maximum 50."}
+	secretRotationDueScanned := &Schema{Type: "integer", Description: "Due schedule rows inspected from the durable fair UUID ring in this tick; maximum 500."}
+	secretRotationRunLimitReached := &Schema{Type: "boolean", Description: "True when the full 50-run budget was consumed. The captured due ring was not proven exhausted, so another tick with a new Idempotency-Key may be required."}
+	secretRotationScanLimitReached := &Schema{Type: "boolean", Description: "True when the full 500-row scan budget was consumed. The captured due ring was not proven exhausted, so another tick with a new Idempotency-Key may be required."}
+	secretRotationDueComplete := &Schema{Type: "boolean", Description: "True only when the fixed PostgreSQL due-through UUID ring was proven exhausted without a subsystem/store/event/custody failure. False when either safety budget was consumed or a system failure stopped the tick."}
+	secretRotationDuePartial := &Schema{Type: "boolean", Description: "True when at least one run or deferred row was recorded before a subsystem failure stopped this tick."}
 	secretRotationDueRun := object(map[string]*Schema{
-		"ran": {Type: "integer"}, "runs": {Type: "array", Items: ref("SecretRotationScheduleRun")},
-	}, "ran", "runs")
+		"ran": secretRotationDueRan, "scanned": secretRotationDueScanned,
+		"runs":              {Type: "array", Items: ref("SecretRotationScheduleRun")},
+		"deferred":          {Type: "array", Items: ref("SecretRotationScheduleDeferred")},
+		"run_limit_reached": secretRotationRunLimitReached, "scan_limit_reached": secretRotationScanLimitReached,
+		"complete": secretRotationDueComplete, "partial": secretRotationDuePartial,
+		"failed_schedule_id": {Type: "string", Format: "uuid", Description: "Due schedule at which a subsystem failure stopped the batch; omitted for scan/retention failures."},
+		"system_error":       {Type: "string", Description: "Non-secret fail-stop detail. A 503 envelope is cached by the outer Idempotency-Key; retry with the same key is byte-identical and executes no child again. Use a new key to continue after repair."},
+	}, "ran", "scanned", "runs", "deferred", "run_limit_reached", "scan_limit_reached", "complete", "partial")
 	secretSyncReq := object(map[string]*Schema{
 		"name": str(), "target": str(), "remote_key": str(),
 	}, "name", "target")
@@ -4234,7 +4352,8 @@ func componentSchemas() map[string]*Schema {
 	}, "key_id")
 	managedKeyApprovalReq := object(map[string]*Schema{
 		"key_id": str(), "action": {Type: "string", Enum: managedKeyApprovalActions},
-	}, "key_id", "action")
+		"request_id": uuid(), "intent_digest": str(),
+	}, "key_id", "action", "request_id", "intent_digest")
 	managedKeyApproval := object(map[string]*Schema{
 		"resource": str(), "action": {Type: "string", Enum: managedKeyCanonicalApprovalActions},
 		"approver": str(), "approvals": {Type: "integer"},
@@ -4800,6 +4919,11 @@ func componentSchemas() map[string]*Schema {
 		"BulkRevokeResult":                         bulkRevokeResult,
 		"ApprovalRequest":                          approvalReq,
 		"Approval":                                 approval,
+		"PendingApprovalRequest":                   approvalRequestRecord,
+		"ApprovalRequestList":                      approvalRequestList,
+		"ApprovalDecisionInput":                    approvalDecisionInput,
+		"ApprovalDenialInput":                      approvalDenialInput,
+		"ApprovalDecision":                         approvalDecision,
 		"SecretApprovalRequest":                    secretApprovalReq,
 		"SecretApproval":                           secretApproval,
 		"BreakglassBundle":                         breakglassBundle,
@@ -4859,6 +4983,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretRotationSchedule":            secretRotationSchedule,
 		"SecretRotationScheduleList":        list("SecretRotationSchedule"),
 		"SecretRotationScheduleRun":         secretRotationScheduleRun,
+		"SecretRotationScheduleDeferred":    secretRotationScheduleDeferred,
 		"SecretRotationDueRun":              secretRotationDueRun,
 		"SecretSyncRequest":                 secretSyncReq,
 		"SecretSync":                        secretSync,

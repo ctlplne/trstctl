@@ -847,6 +847,206 @@ func TestIssuanceDispatcherServedProfileControlsLeafEKUs(t *testing.T) {
 	}
 }
 
+func TestIssuanceDispatcherUsesCommittedApprovalProfileRevisionAfterLaterUpdate(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	profileName := "approval-pinned-dispatch"
+	v1Spec, err := json.Marshal(profile.CertificateProfile{
+		Name: profileName, RequiresApproval: true,
+		AllowedEKUs: []string{"serverAuth"}, MaxValidity: profile.Duration(12 * time.Hour),
+		AllowedProtocols: []string{"api"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.store.CreateProfileVersion(ctx, store.ProfileRecord{
+		TenantID: h.tenant, Name: profileName, Spec: v1Spec, CreatedBy: "alice",
+	}); err != nil {
+		t.Fatalf("create profile v1: %v", err)
+	}
+	owner, err := h.orch.CreateOwner(ctx, h.tenant, "service", "pinned-dispatch-owner", "")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	ident, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{
+		Kind: store.KindX509Certificate, Name: "pinned-dispatch.example.test", OwnerID: owner.ID,
+		Attributes: json.RawMessage(`{"profile_name":"approval-pinned-dispatch"}`),
+	})
+	if err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+	requirement, err := h.orch.ProfileApprovalRequirement(ctx, h.tenant, ident.ID)
+	if err != nil {
+		t.Fatalf("resolve profile requirement: %v", err)
+	}
+	evidence, err := requirement.IssuanceBinding().EvidenceRefs()
+	if err != nil {
+		t.Fatalf("build issuance evidence: %v", err)
+	}
+	evidence = append(evidence,
+		"idempotency-key-sha256:"+crypto.SHA256Hex([]byte("pinned-dispatch")))
+	request, err := h.orch.EnsureOperationApprovalRequest(ctx, h.tenant, orchestrator.OperationApprovalIntent{
+		ResourceKind: "identity", ResourceID: ident.ID, ResourceName: ident.Name,
+		Action: "issue", Requester: "alice", FromState: string(orchestrator.StateRequested),
+		ToState: string(orchestrator.StateIssued), TargetVersion: 0,
+		Reason: "pin the reviewed profile", EvidenceRefs: evidence,
+		RequiredApprovals: 1, TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("ensure approval request: %v", err)
+	}
+	request, err = h.orch.RecordOperationApprovalDecision(ctx, h.tenant, orchestrator.OperationApprovalDecision{
+		RequestID: request.ID, IntentDigest: request.IntentDigest,
+		Approver: "bob", Decision: store.ApprovalDecisionApprove,
+	})
+	if err != nil {
+		t.Fatalf("approve request: %v", err)
+	}
+	use, err := store.OperationApprovalUseFromRequest(request)
+	if err != nil {
+		t.Fatalf("build approved use: %v", err)
+	}
+	if err := h.orch.TransitionWithSubjectCSRAndApproval(ctx, h.tenant, ident.ID,
+		orchestrator.StateIssued, "pin the reviewed profile", "pinned-dispatch", "", use); err != nil {
+		t.Fatalf("commit approved lifecycle event: %v", err)
+	}
+	issue := pendingOutboxByDestination(t, h, "ca.issue")
+
+	// The command is committed under v1. A later same-name v2 deliberately
+	// rejects API issuance and the approved 30-day TTL. Delivery must still use
+	// v1 from the immutable outbox payload, not today's active profile.
+	v2Spec, err := json.Marshal(profile.CertificateProfile{
+		Name: profileName, RequiresApproval: true,
+		AllowedEKUs: []string{"clientAuth"}, MaxValidity: profile.Duration(time.Hour),
+		AllowedProtocols: []string{"acme"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.store.CreateProfileVersion(ctx, store.ProfileRecord{
+		TenantID: h.tenant, Name: profileName, Spec: v2Spec, CreatedBy: "carol",
+	}); err != nil {
+		t.Fatalf("create profile v2: %v", err)
+	}
+	h.handler.defaultProfile = profileName
+	baseIssue := h.handler.issue
+	var gotTTL time.Duration
+	h.handler.issue = func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+		gotTTL = ttl
+		return baseIssue(ctx, csrDER, ttl, leafProfile)
+	}
+	if err := h.handler.Deliver(ctx, orchestrator.Message{
+		TenantID: h.tenant, Destination: issue.Destination,
+		Payload: issue.Payload, IdempotencyKey: issue.IdempotencyKey,
+	}); err != nil {
+		t.Fatalf("deliver committed approved issuance after profile update: %v", err)
+	}
+	if gotTTL != 12*time.Hour {
+		t.Fatalf("signer TTL = %s, want profile-clamped %s", gotTTL, 12*time.Hour)
+	}
+	if certs := dispatcherCertificates(t, h); len(certs) != 1 {
+		t.Fatalf("certificates after pinned delivery = %d, want 1", len(certs))
+	}
+}
+
+func TestIssuanceDispatcherRejectsChangedSpecAtPinnedProfileIdentity(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	profileName := "approval-spec-integrity"
+	v1Spec, err := json.Marshal(profile.CertificateProfile{
+		Name: profileName, AllowedEKUs: []string{"serverAuth"},
+		MaxValidity: profile.Duration(365 * 24 * time.Hour), AllowedProtocols: []string{"api"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := h.store.CreateProfileVersion(ctx, store.ProfileRecord{
+		TenantID: h.tenant, Name: profileName, Spec: v1Spec, CreatedBy: "alice",
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	stored, err := h.store.GetProfileVersion(ctx, h.tenant, profileName, rec.Version)
+	if err != nil {
+		t.Fatalf("load profile: %v", err)
+	}
+	binding := &store.OperationApprovalIssuanceBinding{
+		ProfileName: profileName, ProfileID: stored.ID, ProfileVersion: stored.Version,
+		ProfileSpecDigest:   store.ProfileSpecDigest(stored.Spec),
+		RequestedTTLSeconds: int64(orchestrator.DefaultIdentityIssuanceTTL / time.Second),
+		EffectiveTTLSeconds: int64(orchestrator.DefaultIdentityIssuanceTTL / time.Second),
+	}
+	changedSpec, err := json.Marshal(profile.CertificateProfile{
+		Name: profileName, AllowedEKUs: []string{"clientAuth"},
+		MaxValidity: profile.Duration(time.Hour), AllowedProtocols: []string{"acme"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, updateErr := tx.Exec(ctx, `
+			UPDATE certificate_profiles SET spec = $4::jsonb
+			 WHERE tenant_id = $1 AND name = $2 AND version = $3`,
+			h.tenant, profileName, stored.Version, changedSpec)
+		return updateErr
+	}); err != nil {
+		t.Fatalf("simulate changed spec at same profile identity: %v", err)
+	}
+	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) ([]byte, error) {
+		t.Fatal("signing must not be reached after pinned profile spec drift")
+		return nil, nil
+	}
+	_, err = h.handler.mintServedLeafMaterial(ctx, h.tenant, "owner", "spec-integrity.example.test",
+		[]string{"spec-integrity.example.test"}, binding)
+	if err == nil || !strings.Contains(err.Error(), "revision evidence drifted") {
+		t.Fatalf("same-ID/version changed-spec result = %v, want fail-closed digest mismatch", err)
+	}
+}
+
+func TestIssuanceDispatcherAuditsThePinnedIdentityProfile(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	const profileName = "identity-bound-audit-profile"
+	storeServerTestProfile(t, h.store, h.tenant, profileName, profile.CertificateProfile{
+		Name: profileName, AllowedEKUs: []string{"serverAuth"},
+		MaxValidity: profile.Duration(8 * time.Hour), AllowedProtocols: []string{"api"},
+	})
+	record, err := h.store.GetActiveProfile(ctx, h.tenant, profileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := &store.OperationApprovalIssuanceBinding{
+		ProfileName: profileName, ProfileID: record.ID, ProfileVersion: record.Version,
+		ProfileSpecDigest:   store.ProfileSpecDigest(record.Spec),
+		RequestedTTLSeconds: int64(orchestrator.DefaultIdentityIssuanceTTL / time.Second),
+		EffectiveTTLSeconds: int64((8 * time.Hour) / time.Second),
+	}
+	// A different configured default models an identity-level profile override.
+	// The audit event must describe the revision actually evaluated, not this
+	// unrelated composition-root label.
+	h.handler.defaultProfile = "unrelated-served-default"
+	if _, err := h.handler.mintServedLeafMaterial(ctx, h.tenant, "owner-audit",
+		"identity-bound-audit.example.test", []string{"identity-bound-audit.example.test"}, binding); err != nil {
+		t.Fatalf("mint under pinned identity profile: %v", err)
+	}
+	var audit struct {
+		Profile  string `json:"profile"`
+		Version  int    `json:"version"`
+		Decision string `json:"decision"`
+	}
+	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type == "issuance.profile_evaluated" {
+			return json.Unmarshal(event.Data, &audit)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if audit.Profile != profileName || audit.Version != record.Version || audit.Decision != "allow" {
+		t.Fatalf("profile audit = %+v, want pinned %s v%d allow", audit, profileName, record.Version)
+	}
+}
+
 func TestIssuanceDispatcherRejectsExcludedCSRRequestedEKUBeforeSigning(t *testing.T) {
 	h := newIssuanceDispatcherHarness(t)
 	ctx := context.Background()

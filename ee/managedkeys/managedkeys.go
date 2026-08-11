@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-// Package managedkeys is the served BYOK/HSM managed-key lifecycle (CRYPTO-005 /
-// EXC-CRYPTO-01). The crypto.RemoteKeyLifecycle primitives — generate, rotate,
-// revoke, zeroize for a key whose private material lives in a cloud KMS or a
-// networked HSM and never enters this process — were previously library-tier:
-// implemented and tested (internal/kms/*) but reachable from no served route. This
-// package is the control-plane service that drives them on behalf of an
-// authenticated operator, so the running binary, not just a test, manages a
-// remote-custody key's lifecycle.
+// Package managedkeys contains the durable served BYOK/HSM managed-key lifecycle
+// (durable.go) plus the older in-memory compatibility helper in this file. The
+// private material lives in a cloud KMS or network HSM and never enters the control
+// plane.
 //
 // Every operation is:
 //   - tenant-scoped (AN-1): the tenant is taken from the authenticated request and
@@ -18,11 +14,10 @@
 //     payload (for a remote key it is never even in this address space);
 //   - idempotent (AN-5): a replay of the same Idempotency-Key returns the original
 //     result without performing the provider operation again;
-//   - dual-controlled (AN-4 spirit / four-eyes): the destructive transitions on
-//     CA/KEK-class material (rotate, revoke, zeroize) require a recorded approval by
-//     a principal DISTINCT from the requester before the provider is called. The
-//     gate reuses the same distinct-approver contract the served issuance gate uses
-//     (internal/api MutationGate / ApprovalChecker).
+//   - dual-controlled on the durable served path: rotate/revoke/zeroize embed an
+//     exact OperationApprovalUse and its projector consumes it in the same
+//     transaction as the provider-command outbox. The legacy helper cannot do that;
+//     configuring its old boolean gate therefore denies destructive work.
 //
 // The package depends only on the crypto boundary (crypto.RemoteKeyLifecycle,
 // crypto.KeyRef, crypto.Algorithm) and the byok event vocabulary; it imports no
@@ -54,12 +49,11 @@ type Lifecycle = crypto.RemoteKeyLifecycle
 // vocabulary and one projection.
 type EventSink = byok.EventSink
 
-// ApprovalGate reports whether a destructive managed-key transition has a recorded
-// approval by a principal DISTINCT from the requester (dual control). It mirrors the
-// served issuance gate's ApprovalChecker contract so the same event-store-backed
-// implementation satisfies both. A nil gate disables dual control (single-operator
-// mode); a configured gate is fail-closed — an unapproved or self-approved request
-// is refused before the provider is ever called.
+// ApprovalGate is the pre-AUD-77 compatibility seam for this in-memory service.
+// Its boolean answer cannot identify or atomically consume an exact approval, so a
+// configured gate now always fails destructive actions closed. The served durable
+// service uses api.ExactApprovalChecker and consumes OperationApprovalUse beside
+// its operation/outbox projection instead.
 type ApprovalGate interface {
 	// IsApproved reports whether the (tenant, key, action) destructive action has a
 	// distinct-approver approval on record. action is one of ActionRotate,
@@ -120,7 +114,8 @@ type record struct {
 	pub     crypto.PublicKey
 }
 
-// Service is the served managed-key lifecycle. Construct it with New.
+// Service is the legacy in-memory managed-key helper. The production composition
+// uses NewDurableFactory. Construct this compatibility helper with New.
 type Service struct {
 	backend Lifecycle
 	sink    EventSink
@@ -139,7 +134,9 @@ type Config struct {
 	// Sink receives the AN-2 lifecycle events. Required (a dropped event would make
 	// the key history unrebuildable, so the service fails closed on emit error).
 	Sink EventSink
-	// Gate enforces dual control on destructive transitions. Nil disables it.
+	// Gate is legacy. When non-nil, destructive transitions fail closed because a
+	// boolean answer cannot be atomically consumed. Use NewDurableFactory for served
+	// dual control. Nil retains the explicit ungated compatibility mode.
 	Gate ApprovalGate
 	// Idem makes operations replay-safe (AN-5). Nil disables deduping.
 	Idem Idempotency
@@ -263,12 +260,12 @@ func (s *Service) destructive(ctx context.Context, tenantID, keyID, requester, i
 		return Result{}, ErrKeyRefRequired
 	}
 	return s.dedupe(ctx, tenantID, idempotencyKey, func(ctx context.Context) (Result, error) {
-		// Dual control FIRST, before any provider side effect (fail-closed).
+		// A boolean approval is a standing permission, not a one-shot capability.
+		// This in-memory path has no PostgreSQL transaction in which it could consume
+		// the exact grant beside a durable operation/outbox row, so it must never
+		// treat true as authority (AUD-77).
 		if s.gate != nil {
-			approved, reason := s.gate.IsApproved(ctx, tenantID, keyID, action, requester)
-			if !approved {
-				return Result{}, fmt.Errorf("%w: %s", ErrNotApproved, reason)
-			}
+			return Result{}, fmt.Errorf("%w: legacy boolean approval cannot be consumed atomically", ErrNotApproved)
 		}
 		s.mu.Lock()
 		rec, ok := s.keys[mapKey(tenantID, keyID)]

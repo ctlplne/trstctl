@@ -35,6 +35,17 @@ func TestNoTransactionMigration(t *testing.T) {
 	if len(createdIndexes) == 0 {
 		t.Fatal("expected no-transaction migrations to create at least one concurrent index")
 	}
+	const schedulerIndexMigration = "0157_secret_rotation_schedule_scan_index_no_transaction.sql"
+	foundSchedulerMigration := false
+	for _, name := range noTx {
+		if name == schedulerIndexMigration {
+			foundSchedulerMigration = true
+			break
+		}
+	}
+	if !foundSchedulerMigration {
+		t.Fatalf("%s is not classified as a no-transaction concurrent-index migration: %v", schedulerIndexMigration, noTx)
+	}
 
 	dsn := createFreshMigrationDatabase(t)
 	s, err := store.Open(ctx, dsn)
@@ -76,6 +87,73 @@ func TestNoTransactionMigration(t *testing.T) {
 	// ledger rows exist, a second runner must observe them and do no destructive work.
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("second Migrate after no-transaction ledger rows: %v", err)
+	}
+}
+
+func TestApplicationSecretRequesterRefIndexMigrationRepairsInterruptedInvalidIndex(t *testing.T) {
+	ctx := context.Background()
+	dsn := createFreshMigrationDatabase(t)
+	s, err := store.Open(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open fresh migration database: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatalf("initial Migrate: %v", err)
+	}
+
+	const indexName = "application_secret_mutation_fences_requester_ref_idx"
+	if _, err := s.SystemPool().Exec(ctx, `DELETE FROM schema_migrations WHERE version = 150`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SystemPool().Exec(ctx, `DROP INDEX CONCURRENTLY IF EXISTS `+indexName); err != nil {
+		t.Fatal(err)
+	}
+	ref := strings.Repeat("a", 64)
+	for i := 1; i <= 2; i++ {
+		if _, err := s.SystemPool().Exec(ctx, `
+			INSERT INTO application_secret_mutation_fences
+			       (tenant_id, secret_name, operation, event_id, event_type, schema_version,
+			        approval_required, requester_sealed, requester_ref, request_binding,
+			        command_payload, payload_sha256)
+			VALUES ('11111111-1111-1111-1111-111111111111', $1, 'rotate', $2,
+			        'secret.rotated', 2, true, '\x01', $3, $4, '\x02', $5)`,
+			fmt.Sprintf("invalid-index-%d", i), fmt.Sprintf("77920000-0000-4000-8000-%012d", i),
+			ref, strings.Repeat(fmt.Sprintf("%x", i), 64), strings.Repeat(fmt.Sprintf("%x", i+2), 64)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A failed concurrent UNIQUE build is PostgreSQL's real interrupted-build
+	// shape: the same-name catalog row remains present but indisvalid=false.
+	if _, err := s.SystemPool().Exec(ctx, `CREATE UNIQUE INDEX CONCURRENTLY `+indexName+`
+		ON application_secret_mutation_fences (tenant_id, requester_ref)
+		WHERE requester_ref IS NOT NULL`); err == nil {
+		t.Fatal("duplicate fixture unexpectedly produced a valid unique index")
+	}
+	var valid bool
+	if err := s.SystemPool().QueryRow(ctx, `
+		SELECT i.indisvalid
+		  FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+		 WHERE c.relname = $1`, indexName).Scan(&valid); err != nil {
+		t.Fatalf("load interrupted index state: %v", err)
+	}
+	if valid {
+		t.Fatal("failed concurrent build did not leave an invalid same-name index")
+	}
+
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatalf("retry migration over invalid same-name index: %v", err)
+	}
+	var applied bool
+	if err := s.SystemPool().QueryRow(ctx, `
+		SELECT i.indisready AND i.indisvalid,
+		       EXISTS (SELECT 1 FROM schema_migrations WHERE version = 150)
+		  FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+		 WHERE c.relname = $1`, indexName).Scan(&valid, &applied); err != nil {
+		t.Fatalf("load repaired index/ledger state: %v", err)
+	}
+	if !valid || !applied {
+		t.Fatalf("migration ledgered invalid requester-ref index: valid=%t applied=%t", valid, applied)
 	}
 }
 

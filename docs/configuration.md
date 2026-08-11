@@ -835,6 +835,7 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID` | unset | Stable non-secret ID for one operator-provisioned local tenant-domain wrapper. Both this variable and the file variable below are required together. The database stores this ID, never the path or wrapper key. |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE` | unset | Existing local wrapper-key file for the ID above. trstctl does **not** create it or fall back to the deployment KEK when it is missing/wrong. Configure multiple wrappers with `secrets.tenant_seal_local_wrappers` in JSON/YAML. |
 | `TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY` | `false` | Operator assertion that **every** process writing this PostgreSQL database understands `sealed-row-v1` and durable indeterminate claims. After the legacy drain, startup installs a sealed-only PostgreSQL default/constraint. Never enable it while an older writer is running; the ratchet is deliberately incompatible and is not inferred from one node seeing zero rows. |
+| `TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY` | `false` | Operator assertion that every older process able to read, export, or write schema-v1 `secret.rotation_schedule.ran` events is stopped. When retained unsafe error details exist, startup stays unready until this is true; it then performs the signed, deterministic live-generation sanitation and installs the v1 write floor. This is a one-way fleet compatibility decision, not a per-pod readiness guess. |
 | `TRSTCTL_SECRETS_ENABLE_API` | `false` | Enables the served `/api/v1/secrets/*` surface, including store, dynamic leases, sharing, PKI secret issuance, machine login, sync, and Gitleaks scans. It also enables the Vault/OpenBao-compatible common aliases under `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, and `/v1/pki/issue/*`. |
 | `TRSTCTL_SECRETS_AUTH_SECRET_FILE` | unset | Optional HMAC key file for machine-login token credentials. When unset, the login method fails closed while other secrets routes continue to work. |
 | `TRSTCTL_SECRETS_GITLEAKS_BIN` | auto-detect | Path to the pinned Gitleaks `v8.27.2` binary used by `POST /api/v1/secrets/scans`. Empty resolves `TRSTCTL_GITLEAKS_BIN`, `tools/bin/gitleaks`, then `PATH`. Run `tools/gitleaks/install.sh` during image build or host provisioning to install the supported checksum-verified release tarball. A missing binary makes scan requests fail closed with `503`. |
@@ -856,6 +857,17 @@ fleet-ready assertion is set, startup also locks the table, proves every
 completed row is a CSL sealed container, changes the database default, and
 validates a permanent sealed-only constraint before readiness. This is a
 one-way compatibility decision: drain or stop all old writers first.
+
+Schema-v1 scheduled-rotation terminal events from older releases could retain an
+arbitrary provider error string. A current binary scans the complete retained
+history before projection catch-up, audit search/retention, or backup export. If
+unsafe bytes exist and the fleet assertion above is false, startup fails with one
+fixed sanitation-required error. After the old fleet is stopped and the assertion
+is true, startup switches to a signed replacement generation that changes only the
+JSON `error` token to the status-specific closed vocabulary. Every other stored
+envelope byte and sequence stays fixed; normal append/import then rejects v1
+scheduler runs permanently. The operation does not and cannot rewrite backup,
+export, or WORM/archive copies made before the switch.
 
 ```json
 {

@@ -103,7 +103,8 @@ func newStore(t *testing.T) *store.Store {
 	}
 	// The package shares one database; reset the spine tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE tenants, idempotency_keys, outbox,
+		`TRUNCATE secret_rotation_schedule_commands, secret_rotation_schedules,
+		          tenants, idempotency_keys, outbox,
 		          owners, issuers, identities, identity_transitions, deployment_targets, certificates,
 		          connector_delivery_receipts, lifecycle_rotation_runs
 		 RESTART IDENTITY CASCADE`); err != nil {
@@ -125,8 +126,12 @@ func newStore(t *testing.T) *store.Store {
 }
 
 func openLog(t *testing.T) *events.Log {
+	return openLogWithOptions(t)
+}
+
+func openLogWithOptions(t *testing.T, opts ...events.OpenOption) *events.Log {
 	t.Helper()
-	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, opts...)
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}

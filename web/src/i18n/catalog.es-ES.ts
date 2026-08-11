@@ -129,6 +129,41 @@ const esESCatalog = {
   "secrets.sessions.empty": "Aún no se han emitido sesiones.",
   "secrets.sessions.unavailable": "Libro de sesiones no disponible en este despliegue.",
   "secrets.sessions.failedTitle": "La revocación de la sesión falló",
+  // Traducciones creadas por máquina para AUD-106/AUD-107 — REQUIEREN REVISIÓN HUMANA ANTES DEL LANZAMIENTO.
+  "secrets.rotation.scopeDescription":
+    "La rotación manual del almacén nativo reemplaza un valor guardado cada vez. La rotación de proveedor acepta actualmente solo connector:<destino> y pone la entrega en la cola del trabajador. Los proveedores estáticos y de arrendamientos dinámicos, además de la entrada de TTL, siguen sin estar disponibles hasta que toda la cadena de efectos y reversión pertenezca a un trabajador duradero. Las rotaciones programadas se ejecutan abajo y la sincronización posterior está en la sección de sincronización.",
+  "secrets.rotation.scheduleDescription":
+    "Programe una rotación de secreto de aplicación respaldada por un conector. La entrega se pone en la cola del trabajador; solo se guardan metadatos de clave y referencia. Los programas estáticos y de arrendamiento dinámico no están disponibles hasta que sus cadenas completas de fases tengan trabajadores duraderos.",
+  "secrets.rotation.scheduleStateMessage":
+    "Cree un programa connector:<destino>; la entrega se pone en la cola del trabajador y puede reanudarse tras un fallo.",
+  "secrets.rotation.connectorOnly":
+    "La rotación manual de proveedor requiere actualmente connector:<destino>. Los proveedores estáticos y de arrendamientos dinámicos siguen sin estar disponibles hasta que un trabajador duradero controle cada fase de efecto y reversión.",
+  "secrets.rotation.scheduleConnectorOnly":
+    "La rotación programada requiere actualmente un proveedor connector:<destino>. Los proveedores estáticos y de arrendamientos dinámicos siguen sin estar disponibles.",
+  "secrets.rotation.scheduleProviderPlaceholder": "connector:ci",
+  "secrets.rotation.queued": "Rotación en cola para entrega",
+  "secrets.rotation.completed": "Rotación completada",
+  "secrets.rotation.failed": "La rotación falló",
+  "secrets.rotation.dueNotice": "Se ejecutaron {ran} rotaciones vencidas; se aplazaron {deferred} de {scanned} programas examinados.",
+  // AUD-106 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "secrets.rotation.limitNoticeLabel": "Aviso de continuación de rotaciones programadas",
+  "secrets.rotation.runLimitNotice":
+    "Se consumió el presupuesto completo de 50 ejecuciones. Vuelva a ejecutar las rotaciones vencidas para continuar desde el cursor justo y duradero.",
+  "secrets.rotation.scanLimitNotice":
+    "Se consumió el presupuesto completo de análisis de 500 programas. Vuelva a ejecutar las rotaciones vencidas para continuar de forma justa desde el cursor duradero.",
+  "secrets.rotation.deferredSummary":
+    "{count} programas vencidos siguen aplazados; cada vencimiento exacto aparece abajo y aun así se examinó el trabajo posterior vencido.",
+  "secrets.rotation.deferredListLabel": "Evidencia de programas de rotación aplazados",
+  "secrets.rotation.deferredDueAt": "Vence {time}",
+  "secrets.rotation.deferredReason.approvalPending": "Aprobación pendiente",
+  "secrets.rotation.deferredReason.commandInFlight": "Comando de secreto en curso",
+  "secrets.rotation.deferredReason.commandClaimed": "Vencimiento reclamado por otro ejecutor",
+  // AUD-77 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "secrets.import.unavailableTitle": "Importación masiva de secretos",
+  "secrets.import.unavailableDescription": "No disponible hasta que se implementen comandos por lotes atómicos con origen en eventos",
+  "secrets.import.unavailableBody":
+    "La importación masiva está deshabilitada para que un lote nunca omita el registro inmutable de eventos ni se aplique parcialmente. Cree cada secreto con su propia clave de idempotencia.",
+  "secrets.import.unavailableAction": "Importación no disponible",
   "secrets.tabs.store": "Almacén",
   "secrets.tabs.access": "Acceso",
   "secrets.tabs.sharing": "Compartir",
@@ -2211,17 +2246,17 @@ const esESCatalog = {
   "parity.recordedPlaybookRunsWithTheirConnector_bffffe":
     "Ejecuciones de playbook registradas con sus recibos de entrega del conector y una instantánea de la cola de remediación de propietarios.",
   "parity.recurringRollbackSafeRotationsRunBy_06c343":
-    "Rotaciones recurrentes con reversión segura ejecutadas por el programador. «Ejecutar vencidas» ejecuta cada programación habilitada cuya próxima ejecución ya está vencida.",
+    "El programador ejecuta como máximo 50 rotaciones por ciclo y examina como máximo 500 programas habilitados vencidos. Los comandos pendientes de aprobación o ya en curso se indican como aplazados; aun así se examinan las filas vencidas posteriores.",
   "parity.remediationEvidence_5174c6": "Evidencia de remediación",
   "parity.remoteKeyOptional_b6dff8": "Clave remota (opcional)",
   "parity.req7c2f9a_03dd4e": "req-7c2f9a",
   "parity.requestAttestationGatedEphemeralCredential_4ce3ce": "Solicitar credencial efímera con atestación",
   "parity.requestId_63aa59": "ID de solicitud",
   "parity.revokeCertificate_338ad7": "Revocar certificado",
-  "parity.rollbackSafeRotationFailed_5f1a57": "Error en la rotación con reversión segura",
-  "parity.rollbackSafeRotation_267d4a": "Rotación con reversión segura",
+  "parity.rollbackSafeRotationFailed_5f1a57": "Error en la rotación del secreto",
+  "parity.rollbackSafeRotation_267d4a": "Rotación de conector",
   "parity.rotateAProviderBackedCredentialBy_ec7a8f":
-    "Rota una credencial respaldada por un proveedor mediante referencia. Si una fase falla, la ejecución revierte a la referencia anterior y el resultado a continuación informa el resultado exacto. Ningún valor secreto pasa por este formulario.",
+    "Pone en cola la entrega del conector para una referencia de credencial. Los proveedores estáticos y de arrendamientos dinámicos se rechazan antes de producir efectos hasta que sus cadenas completas de fases sean duraderas. Ningún valor secreto pasa por este formulario.",
   "parity.rotateChallenge_99fc02": "Rotar desafío",
   "parity.rotationMintsFreshChallengeMaterialAnd_0aec47":
     "La rotación genera material de desafío nuevo y registra evidencia de rotación: la versión de rotación se incrementa y la marca de tiempo se conserva para auditoría. Los perfiles que distribuyen el desafío anterior dejan de validar nuevas inscripciones.",
@@ -2229,7 +2264,7 @@ const esESCatalog = {
   "parity.routing_7d15dd": "Enrutamiento",
   "parity.runDueRotationsFailed_b9c511": "Error al ejecutar rotaciones vencidas",
   "parity.runModes_6fced8": "Modos de ejecución",
-  "parity.runRollbackSafeRotation_5a7f2d": "Ejecutar rotación con reversión segura",
+  "parity.runRollbackSafeRotation_5a7f2d": "Ejecutar rotación de conector",
   "parity.saveConfig_64e1de": "Guardar configuración",
   "parity.saveOwner_b67638": "Guardar propietario",
   "parity.savePolicy_77d67c": "Guardar política",

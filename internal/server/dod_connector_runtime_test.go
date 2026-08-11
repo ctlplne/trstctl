@@ -641,9 +641,7 @@ func dodSeedConnectorSecrets(t *testing.T, st *store.Store, kek seal.KeyWrapper)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := st.PutSecret(context.Background(), dodConnectorTenant, name, sealed); err != nil {
-			t.Fatal(err)
-		}
+		seedApplicationSecretFixture(t, st, dodConnectorTenant, name, sealed)
 	}
 }
 

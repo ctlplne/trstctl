@@ -556,7 +556,11 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 	"adcs_ca_databases",
 	// I4: projected from enrollment.diagnostic.observed. Counts and retention
 	// rebuild from the immutable observation stream.
-	"enrollment_diagnostic_observations", "enrollment_diagnostics"}
+	"enrollment_diagnostic_observations", "enrollment_diagnostics",
+	// AUD-77: projected from the immutable operation-approval event family. The
+	// legacy issuance_approval_* tables remain independent PostgreSQL history
+	// because old rows have no reconstructible request ID or intent digest.
+	"operation_approval_requests", "operation_approval_decisions"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly
@@ -564,6 +568,9 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "certificates"
 // read models with independent rebuild paths are kept out of this list until they
 // become event-sourced.
 func (s *Store) TruncateReadModel(ctx context.Context) error {
+	if err := s.AssertNoPrivacySubjectErasurePreparations(ctx); err != nil {
+		return err
+	}
 	_, err := s.pool.Exec(ctx,
 		`TRUNCATE `+strings.Join(ReadModelTables, ", ")+` CASCADE`)
 	return err
@@ -584,6 +591,9 @@ func (s *Store) TruncateReadModel(ctx context.Context) error {
 // tenant. The session's trstctl.tenant_id GUC is set per event by the caller via
 // SetTenantGUCTx so any tenant-scoped logic still sees the right tenant.
 func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
+	if err := s.AssertNoPrivacySubjectErasurePreparations(ctx); err != nil {
+		return err
+	}
 	tx, err := s.begin(ctx)
 	if err != nil {
 		return err
@@ -613,6 +623,9 @@ func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) er
 // and apply carries tenant_id explicitly on every write, so AN-1 holds with RLS
 // bypassed for this trusted system operation.
 func (s *Store) RestoreReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
+	if err := s.AssertNoPrivacySubjectErasurePreparations(ctx); err != nil {
+		return err
+	}
 	tx, err := s.begin(ctx)
 	if err != nil {
 		return err
@@ -638,16 +651,53 @@ func (s *Store) SetTenantGUCTx(ctx context.Context, tx pgx.Tx, tenantID string) 
 	return err
 }
 
-// UpsertTenantTx inserts or updates a tenant row on the caller's transaction, for
-// the atomic rebuild path (RESIL-003) where the tenant projection must share the
-// rebuild's single transaction. It is a system (cross-tenant) write, like
-// UpsertTenant.
+// UpsertTenantTx applies retained registration history on the caller's
+// transaction. Rebuild deliberately preserves the legacy upsert semantics:
+// older logs may contain multiple live tenant.registered rename events.
 func (s *Store) UpsertTenantTx(ctx context.Context, tx pgx.Tx, t Tenant) error {
+	if t.TenantID == "" {
+		return fmt.Errorf("store: tenant registration requires a tenant id")
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO tenants (tenant_id, name, event_seq) VALUES ($1, $2, $3)
 		 ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name, event_seq = EXCLUDED.event_seq`,
 		t.TenantID, t.Name, int64(t.EventSeq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
+}
+
+// RegisterTenantTx is the live command-side CAS. Unlike rebuild compatibility,
+// a new registration may insert an absent UUID or replay the exact same retained
+// event; it may never rename or replace a live registration.
+func (s *Store) RegisterTenantTx(ctx context.Context, tx pgx.Tx, t Tenant) error {
+	if t.TenantID == "" {
+		return fmt.Errorf("store: tenant registration requires a tenant id")
+	}
+	if err := lockTenantLifecycleExclusiveTx(ctx, tx, t.TenantID); err != nil {
+		return err
+	}
+	eventSequence := int64(t.EventSeq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO tenants (tenant_id, name, event_seq) VALUES ($1, $2, $3)
+		 ON CONFLICT (tenant_id) DO NOTHING`,
+		t.TenantID, t.Name, eventSequence)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	var exact bool
+	if err := tx.QueryRow(ctx, `
+		SELECT name = $2 AND event_seq = $3
+		  FROM tenants
+		 WHERE tenant_id = $1
+		 FOR UPDATE`, t.TenantID, t.Name, eventSequence).Scan(&exact); err != nil {
+		return err
+	}
+	if !exact {
+		return fmt.Errorf("%w: %s", ErrTenantRegistrationConflict, t.TenantID)
+	}
+	return nil
 }
 
 // DeleteTenantReadModelTx deletes one tenant's rows from the event-sourced read

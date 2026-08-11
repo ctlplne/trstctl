@@ -18,7 +18,7 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 | What | Why | How |
 | --- | --- | --- |
 | **Event log** (NATS JetStream) | The **source of truth**. Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
-| **PostgreSQL independent state and restore receivers** | The read model is rebuildable from the log, but **independently retained operational state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, outstanding one-time secret-share rows, policy bindings, federation peer import cursors, queued outbox work, and durable privacy-erasure idempotency evidence. The paired artifact also carries logical audit checkpoints so restore can prove every hidden tenant prefix still exists in the event artifact before mutation; `audit.archived` v2 can reconstruct those checkpoint rows during an event-only projection rebuild. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
+| **PostgreSQL independent state and restore receivers** | The read model is rebuildable from the log, but **independently retained operational state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, outstanding one-time secret-share rows, policy bindings, federation peer import cursors, queued outbox work, durable scheduled-rotation tick/cursor authority and due-edge commands, and durable privacy-erasure idempotency evidence. The paired artifact also carries logical audit checkpoints so restore can prove every hidden tenant prefix still exists in the event artifact before mutation; `audit.archived` v2 can reconstruct those checkpoint rows during an event-only projection rebuild. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The key is a purpose-constrained `audit-export` handle inside the signer's sealed key store, captured with that store below. `TRSTCTL_AUDIT_SIGNING_KEY_FILE` names only the one-time legacy PEM migration path; new backups do not copy a separate plaintext key artifact. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
 | **Tenant-domain wrapper files** | Independently custodied roots that can unseal opted-in tenant domains without granting authority over neighboring domains. They are intentionally not captured inside the application backup they protect. | Back up every file named by `secrets.tenant_seal_local_wrappers` under separate operator custody. Restore the exact wrapper ID-to-file mapping before starting a tenant-domain restore; missing or wrong material fails only that tenant closed and never falls back to the deployment KEK. |
@@ -68,6 +68,18 @@ that head and writes `postgres-state.jsonl` from the pinned snapshot with the sa
 event-cut sequence in its header and trailer. Mutations after that cut are
 intentionally absent from both artifacts and are captured by a later backup.
 
+A subject erasure can briefly have sanitized replacement history ready while its
+final PostgreSQL projection is still recoverable from a durable preparation row.
+Every PostgreSQL-state export checks for that row inside the pinned snapshot and
+refuses before writing artifact bytes. Standalone PostgreSQL-state exports hold the
+shared cutover fence for their complete transaction. A full backup begins and pins
+the snapshot while its session owns the exclusive consistency fence, then atomically
+downgrades that same session to a transaction-scoped shared fence before streaming;
+the preparation check reads that pinned view before any artifact byte. Retry after
+startup has autonomously completed the preparation. The preparation table is still
+classified as independent PostgreSQL recovery authority, so restore tooling never
+silently drops a crash marker from an older or externally produced artifact.
+
 **Full-backup encryption.** Full backups contain operational secrets,
 so the production path requires `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` (or the
 equivalent `--backup-encryption-key-file`). The file is raw operator-held key
@@ -97,6 +109,10 @@ cannot switch the authoritative JetStream generation between the first and last
 record. Event-only backup therefore fails closed unless both
 `TRSTCTL_POSTGRES_MODE=external` / `TRSTCTL_POSTGRES_DSN` and
 `TRSTCTL_NATS_MODE=external` / `TRSTCTL_NATS_URL` identify the live deployment.
+The exporter preflights the entire pinned cut before writing even the JSONL
+header. A malformed or unsanitized schema-v1 scheduled-rotation event therefore
+fails with a fixed sanitation-required error and leaves a zero-byte destination;
+filtering, a retention checkpoint, or a small result limit cannot hide it.
 
 The backup is **newline-delimited JSON** — a self-describing, versioned header
 followed by one record per event (id, type, tenant, time, data, and the recorded
@@ -113,6 +129,18 @@ deployment so an attacker who can rewrite the file cannot forge a matching
 trailer. All hashing/MAC routes through the single crypto boundary; the
 signer is not involved and no signing private key enters the control-plane
 process. Restore the same KEK before verifying a keyed backup.
+
+Restore now requires that deployment KEK. After the artifact HMAC verifies, the
+recovery composition derives a second domain-separated authorization bound to the
+exact event cut, artifact SHA-256, and a canonical digest of every sequence, gap,
+subject, message ID, and stored envelope the restore will consume. The event log
+accepts only an opaque Go capability whose MAC verifies under a key held in locked
+memory; an ordinary caller cannot manufacture that capability from a digest or a
+byte slice. It first validates the supplied history into a private disk spool,
+recomputes the bound digest, and then restores only from that spool. This prevents
+a callback from swapping a different history between authorization and mutation.
+A nonempty digest, direct `Append`/`Import`, or a transplanted capability is not
+restore authority.
 
 Restore verification is streaming: `--restore` rolls the SHA-256/HMAC over each
 line, writes validated event records to a temporary spool file, verifies the
@@ -145,6 +173,33 @@ independent rows that reference rebuilt state resolve normally. The final rebuil
 runs only after the PostgreSQL artifact has finished replacing independent state, so
 an event that survived an append-ACK/projection-failure crash can recreate its
 durable receiver instead of having that healed row erased by the later import.
+Secret-sync receiver start counts and frozen failure evidence are independent
+PostgreSQL authority, so current artifacts restore them exactly before the final
+replay. For a pre-0153 artifact, unrelated outbox rows receive only the neutral
+receiver tuple. A legacy `secret.sync.*` row must match an exact job already rebuilt
+from the paired event cut; that job supplies causal order and terminal evidence,
+while old claim attempts are conservatively retained as possible receiver starts.
+A missing, partial, or mismatched pair aborts the restore instead of guessing from a
+SQL allocation id. The restore exception is owner-only and transaction-local, so a
+normal or application-role insert cannot forge receiver authority afterward.
+Scheduled-rotation command receivers deliberately have no foreign key to their
+rebuildable schedule projection and restore before the final replay. The
+version-2 terminal event carries the exact due-edge tuple, so replay advances
+from `due_at` even when producer clocks move backward, without recreating or
+re-executing an old edge. A schedule-CAS miss rolls back terminalization.
+Retention removes an older terminal
+receiver only when that exact event is still retained, the schedule is already
+beyond the edge, and a newer command exists; the newest command remains as the
+finite lineage fence, while claimed or ambiguous commands are never eligible.
+The scheduler's outer idempotency row, tenant scan cursor, aggregate tick, and
+child command are restored in that dependency order. The tick keeps the immutable
+database cutoff, start/current cursor, wrap marker, row-started snapshot, ordered
+partial receipt, and remaining 50/500 budgets. Its composite foreign key prevents
+the bound outer idempotency row from being collected while recovery authority is
+still live. Restore preserves byte-exact terminal `200`/`503` bodies; it does not
+turn an interrupted tick into success or advance its cursor. An expired different
+key can later freeze that tick as indeterminate, while the original key can replay
+the retained receipt exactly.
 Before writing any restored file or touching either datastore, a read-only preflight
 fully verifies both state streams and requires their `event_cut_sequence` values to
 match. Two individually valid artifacts from different backup cuts are not one
@@ -162,8 +217,30 @@ the same integrity-checked backup stream. Only then does it rebuild projections
 and continue to `postgres-state.jsonl`. A different backup stream still fails
 closed instead of being treated as a resume.
 
-The event-log-only command is still available for a projection-only recovery or a
-manual datastore restore:
+The same rule covers a process stop in the middle of exact event ingestion. The
+target keeps a durable binding to the authenticated artifact digest and declared
+cut. A retry with that same HMAC-verified artifact resumes and verifies the raw
+prefix before scheduled-rotation sanitation runs; a different artifact is
+rejected without advancing the prefix. Serving, backup, ordinary rebuild, and
+sanitation refuse a target carrying this incomplete-restore binding. After the
+exact cut is complete, restore clears the binding, sanitizes legacy scheduler
+history, and only then rebuilds or exposes the recovered generation.
+
+One bounded exception handles an authenticated pre-upgrade artifact whose first
+restore completed and whose live generation was then sanitized before the retry.
+Generic resume remains byte-exact. The exception requires the original artifact's
+HMAC, exactly the deterministic scheduler error-token changes, one cryptographically
+verified profiled receipt per affected tenant, recomputed envelope/mapping/target
+content roots for every intermediate generation, a continuous operation/generation
+chain, and a final target identity equal to the pinned active stream. A receipt
+copied from another run with the same tenant, changed count, and cut is rejected.
+
+The live rewrite never mutates older `events.jsonl` files or signed/WORM audit
+archives. Those copies may still contain the source bytes and remain subject to
+their original access, retention, legal-hold, and destruction controls.
+
+The event-log-only command is still available for projection recovery or as the
+first half of a manually coordinated datastore restore:
 
 Restore into a **fresh, empty** event store and a PostgreSQL instance, then rebuild:
 
@@ -176,7 +253,22 @@ trstctl --restore=/backups/trstctl-events-2026-05-31.jsonl
 `--restore` re-appends every event in order (preserving ids, timestamps, and
 actors) and then **rebuilds the relational read model purely from the restored
 log** (the rebuild-from-log path). It refuses a non-empty event store so a
-misdirected restore can never duplicate the stream.
+misdirected restore can never duplicate the stream. It deliberately leaves the
+deployment-wide secret-sync recovery light red: events can recreate a queued or
+terminal command, but cannot prove how many worker generations had already crossed
+the external receiver boundary. Ordinary startup/readiness and the last receiver
+start both refuse secret-sync I/O while that light is red. Do not clear the row by
+SQL. Restore the paired PostgreSQL artifact with `--full-restore-dir`; its private
+offline bootstrap imports exact receiver authority, performs a final replay, and
+only then turns the light green before readiness is evaluated.
+
+Full restore associates each retained `secret.sync.*` outbox row with its rebuilt
+job by tenant, receiver idempotency key, destination, exact sealed payload, and
+causal target order. It never treats the auto-increment outbox id as command
+identity. This matters when concurrent source projections allocated SQL ids in the
+opposite order from event history: the recovery database may allocate them in
+event order during its first replay, then safely remap them to the artifact ids
+without swapping jobs or receiver authority.
 
 A backup → restore → rebuild drill is exercised in CI
 (`TestBackupRestoreDRDrillReproducesState`): it asserts the recovered inventory
@@ -277,20 +369,33 @@ control-plane replica **safe**:
   signer that started first reloads it from the shared store on demand (reload-on-miss)
   rather than reporting it missing. Run an RWX-capable StorageClass (NFS/EFS/Filestore/
   Azure Files); set both back to `ReadWriteOnce` for a single-replica eval.
-- **Constant-time boot via snapshots.** The leader periodically writes a
-  per-tenant read-model snapshot at the current projection checkpoint
-  (`ha.snapshotInterval`, default ~5m). On a cold boot / DR restore the read model is
-  rehydrated from the latest snapshot and only the **tail** after it is replayed, so
-  startup is `O(events-since-snapshot)`, not a full-log replay. The event log remains
-  the source of truth: a snapshot is reproducible by a full rebuild, and a
-  corrupt or missing snapshot falls back to a full replay automatically. Snapshot
-  format 20 carries discovery finding payload-ID aliases and tenant-scoped outbox
-  reconciliation conflicts, so a rebuilt canonical
-  finding still accepts a historical triage event that named the other ID from an
-  older at-least-once scan attempt, and an operator never loses visibility of a
-  receiver command that startup quarantined after detecting semantic-key reuse.
-  Older snapshot formats are ignored and rebuilt; they are never restored past a
-  checkpoint that would skip those aliases or quarantine evidence.
+- **Constant-time boot via snapshots.** The leader periodically writes one
+  **complete all-tenant snapshot generation** at the current projection checkpoint
+  (`ha.snapshotInterval`, default ~5m). Every format-22 tenant row repeats the same
+  random generation ID, covered event sequence, tenant count, and SHA-256 digest of
+  the sorted tenant-ID set. On cold boot, restore recomputes the count and digest
+  from the rows physically present and accepts the cache only when every row names
+  that exact generation and checkpoint. A missing tenant, a partial write, mixed
+  generation IDs, different covered sequences, a bad count/digest, or any legacy
+  format makes the whole cache unusable and boot replays from event sequence zero.
+  A valid generation rehydrates the read model and replays only the **tail**, so the
+  fast path is `O(events-since-snapshot)` while the event log remains the AN-2
+  source of truth.
+
+  Privacy preparation deletes the erased tenant's snapshot row in the same
+  PostgreSQL transaction that records its durable crash marker and sanitized
+  evidence. That deletion makes every surviving neighbor fail the format-22
+  count/digest proof, so recovery falls back to already-sanitized event history
+  instead of skipping past it. After cutover completes, the worker may publish a
+  new complete sanitized generation. Upgrade migration 0160 truncates disposable
+  pre-v22 blobs and installs a database `format_version >= 22` floor, so a rolling
+  old leader cannot repopulate the cache. Every later startup locks the snapshot
+  table and, if any legacy row exists, `TRUNCATE`s the whole mixed relation before
+  repairing a missing, unvalidated, or mismatched floor. It preserves v22 rows
+  only when every row in the relation is already v22; PostgreSQL-state restore
+  also truncates the ephemeral snapshot table.
+  Legacy raw-erasure bytes are therefore removed rather than merely ignored by
+  the decoder.
 
   If startup finds one idempotency key bound to two different receiver commands,
   it preserves the historical command, records a tenant-scoped quarantine, and

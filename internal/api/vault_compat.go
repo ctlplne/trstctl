@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -414,21 +415,46 @@ func (a *API) vaultKVWrite(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req vaultKVWriteRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+	var req vaultKVWriteRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	defer secret.Wipe(req.Data)
+	defer func() {
+		for key, raw := range req.Options {
+			secret.Wipe(raw)
+			delete(req.Options, key)
 		}
-		if !rawJSONObject(req.Data) {
-			return 0, nil, errStatus(http.StatusBadRequest, "data must be a JSON object")
+	}()
+	if !rawJSONObject(req.Data) {
+		a.writeError(w, errStatus(http.StatusBadRequest, "data must be a JSON object"))
+		return
+	}
+	value := append([]byte(nil), req.Data...)
+	defer secret.Wipe(value)
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	bindingTenantID, ok := a.tenant(r)
+	if !ok {
+		writeVaultError(w, http.StatusForbidden, "permission denied")
+		return
+	}
+	keyDigest, requestBinding, err := a.applicationSecretRequestBinding(
+		bindingTenantID, idempotencyKey, principal, r.Method, r.URL.EscapedPath(), "write", "vault", name, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+		if tenantID != bindingTenantID {
+			return 0, nil, errors.New("api: application-secret binding tenant changed")
 		}
-		value := append([]byte(nil), req.Data...)
-		defer secret.Wipe(value)
-		sealed, err := a.secrets.seal(ctx, tenantID, value, sealAAD(tenantID, name))
-		if err != nil {
-			return 0, nil, err
-		}
-		rec, err := a.upsertVaultKVSecret(ctx, tenantID, name, sealed)
+		rec, err := a.upsertVaultKVSecret(
+			ctx, tenantID, name, value, idempotencyKey, keyDigest, requestBinding)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -442,31 +468,107 @@ func (a *API) vaultKVWrite(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) upsertVaultKVSecret(ctx context.Context, tenantID, name string, sealed []byte) (store.Secret, error) {
-	if _, err := a.secrets.be.Store.GetSecret(ctx, tenantID, name); err != nil {
-		if !errors.Is(err, store.ErrSecretNotFound) {
-			return store.Secret{}, err
-		}
-		rec, putErr := a.secrets.be.Store.PutSecret(ctx, tenantID, name, sealed)
-		if putErr != nil {
-			if errors.Is(putErr, store.ErrSecretExists) {
-				return a.upsertVaultKVSecret(ctx, tenantID, name, sealed)
-			}
-			return store.Secret{}, putErr
-		}
-		a.auditSecretVersion(ctx, tenantID, rec, nil)
-		a.auditSecret(ctx, "secret.created", tenantID, rec.Name, rec.Version)
-		return rec, nil
-	}
-	if err := a.requireSecretApproval(ctx, tenantID, name, "rotate"); err != nil {
-		return store.Secret{}, err
-	}
-	rec, err := a.secrets.be.Store.RotateSecret(ctx, tenantID, name, sealed)
+func (a *API) upsertVaultKVSecret(
+	ctx context.Context,
+	tenantID, name string,
+	plaintext []byte,
+	idempotencyKey, keyDigest, requestBinding string,
+) (store.Secret, error) {
+	const operation = "vault-write"
+	tenantEpoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
 	if err != nil {
 		return store.Secret{}, err
 	}
+	eventID := applicationSecretMutationEventID(tenantID, tenantEpoch, name, operation, keyDigest)
+	if receipt, ok, err := a.applicationSecretMaterializedResult(
+		ctx, tenantID, eventID, requestBinding, name, "create", "rotate"); err != nil {
+		return store.Secret{}, applicationSecretMutationError(err)
+	} else if ok {
+		return store.Secret{
+			TenantID: receipt.TenantID, Name: receipt.Name, Version: receipt.ResultVersion,
+			CreatedAt: receipt.ResultCreatedAt, UpdatedAt: receipt.ResultUpdatedAt,
+		}, nil
+	}
+	fence, payload, prepared, err := a.applicationSecretMutationFence(
+		ctx, tenantID, name, operation, eventID, requestBinding)
+	if err != nil {
+		return store.Secret{}, applicationSecretMutationError(err)
+	}
+	var current store.Secret
+	if !prepared {
+		current, err = a.secrets.be.Store.GetSecret(ctx, tenantID, name)
+		action, expectedVersion, resultVersion, eventType := "rotate", 0, 1, projections.EventApplicationSecretRotated
+		if errors.Is(err, store.ErrSecretNotFound) {
+			action, eventType = "create", projections.EventApplicationSecretCreated
+		} else if err != nil {
+			return store.Secret{}, err
+		} else {
+			expectedVersion, resultVersion = current.Version, current.Version+1
+		}
+		commandKeyDigest, commandEvidence, commandErr := a.applicationSecretCommandEvidence(tenantID, idempotencyKey, canonicalApplicationSecretCommand{
+			Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: tenantEpoch, Action: action,
+			Name: name, Surface: "vault", ExpectedVersion: expectedVersion,
+			ResultVersion: resultVersion, Value: plaintext,
+		})
+		if commandErr != nil {
+			return store.Secret{}, commandErr
+		}
+		if commandKeyDigest != keyDigest {
+			return store.Secret{}, errors.New("api: application-secret idempotency digest changed")
+		}
+		sealed, sealErr := a.secrets.seal(ctx, tenantID, plaintext, sealAAD(tenantID, name))
+		if sealErr != nil {
+			return store.Secret{}, sealErr
+		}
+		payload = projections.ApplicationSecretMutation{
+			TenantEpoch: tenantEpoch, Action: action, Name: name, ExpectedVersion: expectedVersion,
+			ResultVersion: resultVersion, Sealed: sealed,
+			IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
+			CommandEvidence: commandEvidence, Surface: "vault",
+		}
+		fence, payload, err = a.claimApplicationSecretMutationFence(ctx, tenantID, name,
+			operation, eventID, eventType, requestBinding, payload)
+		if err != nil {
+			return store.Secret{}, applicationSecretMutationError(err)
+		}
+	}
+	if payload.Action == "create" {
+		if fence.EventTime.IsZero() {
+			fence, err = a.secrets.be.Store.FinalizeApplicationSecretMutationFence(
+				ctx, tenantID, name, eventID, nil, time.Now().UTC())
+			if err != nil {
+				return store.Secret{}, applicationSecretMutationError(err)
+			}
+		}
+		if _, _, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload); err != nil {
+			return store.Secret{}, applicationSecretMutationError(err)
+		}
+		rec, getErr := a.secrets.be.Store.GetSecret(ctx, tenantID, name)
+		if getErr != nil {
+			return store.Secret{}, getErr
+		}
+		a.auditSecretVersion(ctx, tenantID, rec, nil)
+		return rec, nil
+	}
+	if payload.Action != "rotate" {
+		return store.Secret{}, fmt.Errorf("%w: Vault write fence action differs", store.ErrIdempotencyConflict)
+	}
+	if current.Name == "" {
+		current, err = a.secrets.be.Store.GetSecret(ctx, tenantID, name)
+		if err != nil {
+			return store.Secret{}, err
+		}
+	}
+	fence, payload, err = a.finalizeApplicationSecretMutationFence(ctx, tenantID, fence, payload)
+	if err != nil {
+		return store.Secret{}, applicationSecretMutationError(err)
+	}
+	event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload)
+	if err != nil {
+		return store.Secret{}, applicationSecretMutationError(err)
+	}
+	rec := applicationSecretResultMeta(current, event, canonical)
 	a.auditSecretVersion(ctx, tenantID, rec, nil)
-	a.auditSecret(ctx, "secret.rotated", tenantID, rec.Name, rec.Version)
 	return rec, nil
 }
 

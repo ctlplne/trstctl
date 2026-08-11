@@ -18,6 +18,7 @@ const { apiMock } = vi.hoisted(() => ({
     identities: vi.fn(),
     profiles: vi.fn(),
     createIdentity: vi.fn(),
+    approvalRequests: vi.fn(),
     approveIdentityAction: vi.fn(),
   },
 }));
@@ -179,14 +180,22 @@ describe("POL-03 polish fixes", () => {
   });
 
   it("labels the approval count column in user language with a tooltip", async () => {
-    apiMock.identities.mockResolvedValue([
+    apiMock.approvalRequests.mockResolvedValue([
       {
-        id: "jit-1",
-        name: "jit-db",
-        kind: "x509_certificate",
-        owner_id: "owner-1",
-        status: "requested",
-        attributes: { requester: "ops@example.test", approvals: "1/2", grant_expires_at: "2026-06-19T18:00:00Z" },
+        id: "019fec49-6641-7131-ae7f-17f7ea4b5e0e",
+        intent_digest: "sha256:jit-db",
+        resource_id: "jit-1",
+        resource_name: "jit-db",
+        resource_kind: "identity",
+        action: "issue",
+        requester: "ops@example.test",
+        target_version: "transition:0",
+        evidence_refs: [],
+        approval_count: 1,
+        required_approvals: 2,
+        status: "pending",
+        created_at: "2026-06-19T17:00:00Z",
+        expires_at: "2026-06-19T18:00:00Z",
       },
     ]);
     renderAt("/approvals");

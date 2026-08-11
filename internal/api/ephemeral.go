@@ -5,15 +5,22 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	googleuuid "github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const (
@@ -35,7 +42,8 @@ var (
 // event-sourced certificate record.
 type EphemeralIssuerService interface {
 	IssueEphemeralCredential(ctx context.Context, tenantID, idempotencyKey, requester string, req EphemeralCredentialRequest) (EphemeralCredential, error)
-	ApproveEphemeralCredential(ctx context.Context, tenantID, requestID, approver string) (EphemeralApproval, error)
+	ValidateEphemeralApprovalRequest(ctx context.Context, tenantID, requestID, intentDigest string) error
+	ApproveEphemeralCredential(ctx context.Context, tenantID, requestID, intentDigest, approver string) (EphemeralApproval, error)
 }
 
 // WithEphemeralIssuer wires the served ephemeral/JIT issuer. When unset, the
@@ -63,6 +71,8 @@ type ephemeralCredentialJSON struct {
 type EphemeralCredential struct {
 	State             string             `json:"state"`
 	RequestID         string             `json:"request_id"`
+	ApprovalRequestID string             `json:"approval_request_id"`
+	IntentDigest      string             `json:"intent_digest"`
 	Subject           string             `json:"subject"`
 	CredentialID      string             `json:"credential_id,omitempty"`
 	CertificateID     string             `json:"certificate_id,omitempty"`
@@ -75,14 +85,21 @@ type EphemeralCredential struct {
 }
 
 type ephemeralApprovalJSON struct {
-	Action string `json:"action"`
+	Action       string `json:"action"`
+	RequestID    string `json:"request_id"`
+	IntentDigest string `json:"intent_digest"`
 }
 
 type EphemeralApproval struct {
-	Resource  string `json:"resource"`
-	Action    string `json:"action"`
-	Approver  string `json:"approver"`
-	Approvals int    `json:"approvals"`
+	ID                string `json:"id"`
+	IntentDigest      string `json:"intent_digest"`
+	Resource          string `json:"resource"`
+	Action            string `json:"action"`
+	Approver          string `json:"approver"`
+	Approvals         int    `json:"approvals"`
+	ApprovalCount     int    `json:"approval_count"`
+	RequiredApprovals int    `json:"required_approvals"`
+	Status            string `json:"status"`
 }
 
 type ephemeralAPIKeyJSON struct {
@@ -152,54 +169,58 @@ func (a *API) issueEphemeralAPIKey(w http.ResponseWriter, r *http.Request) {
 //trstctl:mutation
 func (a *API) issueEphemeralCredential(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	if a.ephemeral == nil {
+		a.writeError(w, ErrEphemeralUnavailable)
+		return
+	}
+	var wire ephemeralCredentialJSON
+	if err := decodeJSON(r, &wire); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	requestID := strings.TrimSpace(wire.RequestID)
+	method := strings.TrimSpace(wire.Method)
+	if requestID == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "request_id is required"))
+		return
+	}
+	if method == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "method is required"))
+		return
+	}
+	payload, err := base64.StdEncoding.DecodeString(wire.PayloadBase64)
+	if err != nil || len(payload) == 0 {
+		a.writeError(w, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64"))
+		return
+	}
+	defer secret.Wipe(payload)
+	block, _ := pem.Decode([]byte(wire.PublicKeyPEM))
+	if block == nil || block.Type != "PUBLIC KEY" || len(block.Bytes) == 0 {
+		a.writeError(w, errStatus(http.StatusBadRequest, "public_key_pem must contain one PUBLIC KEY PEM block"))
+		return
+	}
+	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	if principal.Subject == "" {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "an authenticated requester is required"))
+		return
+	}
+	command := EphemeralCredentialRequest{
+		RequestID: requestID, Method: method, Payload: payload,
+		PublicKeyDER: append([]byte(nil), block.Bytes...), TTLSeconds: wire.TTLSeconds,
+	}
+	binding, err := ephemeralIssueRequestBinding(idempotencyKey, principal.Subject, command)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		start := time.Now()
 		var opErr error
 		defer func() { a.observeFeature("ephemeral", "issue_jit", start, opErr) }()
-		if a.ephemeral == nil {
-			opErr = ErrEphemeralUnavailable
-			return 0, nil, ErrEphemeralUnavailable
-		}
-		var req ephemeralCredentialJSON
-		if err := decodeJSON(r, &req); err != nil {
-			opErr = err
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		requestID := strings.TrimSpace(req.RequestID)
-		method := strings.TrimSpace(req.Method)
-		if requestID == "" {
-			opErr = errors.New("request_id is required")
-			return 0, nil, errStatus(http.StatusBadRequest, "request_id is required")
-		}
-		if method == "" {
-			opErr = errors.New("method is required")
-			return 0, nil, errStatus(http.StatusBadRequest, "method is required")
-		}
-		payload, err := base64.StdEncoding.DecodeString(req.PayloadBase64)
-		if err != nil || len(payload) == 0 {
-			opErr = errors.New("payload_base64 must be non-empty standard base64")
-			return 0, nil, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
-		}
-		block, _ := pem.Decode([]byte(req.PublicKeyPEM))
-		if block == nil || block.Type != "PUBLIC KEY" || len(block.Bytes) == 0 {
-			opErr = errors.New("public_key_pem must contain one PUBLIC KEY PEM block")
-			return 0, nil, errStatus(http.StatusBadRequest, "public_key_pem must contain one PUBLIC KEY PEM block")
-		}
-		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if principal.Subject == "" {
-			opErr = errors.New("an authenticated requester is required")
-			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated requester is required")
-		}
-		issued, err := a.ephemeral.IssueEphemeralCredential(ctx, tenantID, idempotencyKey, principal.Subject, EphemeralCredentialRequest{
-			RequestID:    requestID,
-			Method:       method,
-			Payload:      payload,
-			PublicKeyDER: block.Bytes,
-			TTLSeconds:   req.TTLSeconds,
-		})
+		issued, err := a.ephemeral.IssueEphemeralCredential(ctx, tenantID, idempotencyKey, principal.Subject, command)
 		if err != nil {
-			opErr = err
-			return 0, nil, err
+			opErr = approvalAPIError(err)
+			return 0, nil, opErr
 		}
 		if issued.State == EphemeralStateAwaitingApproval {
 			return http.StatusAccepted, issued, nil
@@ -216,30 +237,75 @@ func (a *API) issueEphemeralCredential(w http.ResponseWriter, r *http.Request) {
 func (a *API) approveEphemeralCredential(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	requestID := strings.TrimSpace(r.PathValue("id"))
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		if a.ephemeral == nil {
-			return 0, nil, ErrEphemeralUnavailable
-		}
-		if requestID == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "request id is required")
-		}
-		var req ephemeralApprovalJSON
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		if req.Action != "issue" {
-			return 0, nil, errStatus(http.StatusBadRequest, `action must be "issue"`)
-		}
-		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if principal.Subject == "" {
-			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated approver is required")
-		}
-		approval, err := a.ephemeral.ApproveEphemeralCredential(ctx, tenantID, requestID, principal.Subject)
+	if a.ephemeral == nil {
+		a.writeError(w, ErrEphemeralUnavailable)
+		return
+	}
+	var req ephemeralApprovalJSON
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if req.Action != "issue" {
+		a.writeError(w, errStatus(http.StatusBadRequest, `action must be "issue"`))
+		return
+	}
+	if requestID == "" || strings.TrimSpace(req.RequestID) != requestID || strings.TrimSpace(req.IntentDigest) == "" {
+		a.writeError(w, approvalAPIError(store.ErrApprovalRequestNotFound))
+		return
+	}
+	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	if principal.Subject == "" {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "an authenticated approver is required"))
+		return
+	}
+	if _, err := googleuuid.Parse(requestID); err != nil {
+		a.writeError(w, approvalAPIError(store.ErrApprovalRequestNotFound))
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "missing or invalid tenant"))
+		return
+	}
+	if err := a.ephemeral.ValidateEphemeralApprovalRequest(r.Context(), tenantID, requestID, strings.TrimSpace(req.IntentDigest)); err != nil {
+		a.writeError(w, approvalAPIError(err))
+		return
+	}
+	command := ApprovalDecisionCommand{
+		RequestID: requestID, IntentDigest: strings.TrimSpace(req.IntentDigest),
+		Approver: principal.Subject, Decision: store.ApprovalDecisionApprove,
+		ExpectedResourceKind: "ephemeral", ExpectedAction: "issue",
+	}
+	binding, err := approvalDecisionBinding(command)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		approval, err := a.ephemeral.ApproveEphemeralCredential(ctx, tenantID, requestID, command.IntentDigest, principal.Subject)
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, approvalAPIError(err)
 		}
 		return http.StatusOK, approval, nil
 	})
+}
+
+func ephemeralIssueRequestBinding(idempotencyKey, requester string, req EphemeralCredentialRequest) (string, error) {
+	raw, err := json.Marshal(struct {
+		Domain    string                     `json:"domain"`
+		Requester string                     `json:"requester"`
+		Request   EphemeralCredentialRequest `json:"request"`
+	}{Domain: "trstctl.api.ephemeral-issue.v1", Requester: requester, Request: req})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(raw)
+	key := []byte(idempotencyKey)
+	defer secret.Wipe(key)
+	mac := crypto.HMACSHA256(key, raw)
+	defer secret.Wipe(mac)
+	return hex.EncodeToString(mac), nil
 }
 
 func (a *API) writeEphemeralError(w http.ResponseWriter, err error) bool {

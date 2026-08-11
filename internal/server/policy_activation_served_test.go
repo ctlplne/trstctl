@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -18,6 +20,10 @@ func TestServedPolicyVersionActivationAndRollbackTRACE006(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.EnablePolicyGate = true
 		d.DefaultProfile = "tls-server"
+	})
+	storeServerTestProfile(t, h.store, h.tenant, "tls-server", profile.CertificateProfile{
+		Name: "tls-server", AllowedEKUs: []string{"serverAuth"},
+		MaxValidity: profile.Duration(365 * 24 * time.Hour), AllowedProtocols: []string{"api"},
 	})
 	policyTok := seedScopedTokenSubject(t, h.store, h.tenant, "policy-author@example.test", "policy:read", "policy:write")
 	issuerTok := seedScopedTokenSubject(t, h.store, h.tenant, "issuer@example.test", "owners:write", "identities:write", "certs:issue")

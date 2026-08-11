@@ -9,16 +9,26 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -52,29 +62,68 @@ func TestServedEphemeralJITIssuesAfterAttestationAndApproval(t *testing.T) {
 	}
 
 	pending := servedEphemeralIssue(t, h, requester, "nhi-04-request", body, http.StatusAccepted)
-	if pending.State != "awaiting_approval" || pending.RequestID != "jit-agent-7" || pending.RequiredApprovals != 1 {
+	if pending.State != "awaiting_approval" || pending.RequestID != "jit-agent-7" || pending.RequiredApprovals != 1 ||
+		pending.ApprovalRequestID == "" || pending.IntentDigest == "" {
 		t.Fatalf("pending JIT response = %+v", pending)
 	}
 	if pending.CertificatePEM != "" || pending.ExpiresAt.IsZero() || !pending.ExpiresAt.After(time.Now()) {
 		t.Fatalf("pending JIT response leaked credential or has no approval expiry: %+v", pending)
 	}
-	if got := ephemeralApprovalOutboxCount(t, h, "ephemeral-approval:jit-agent-7"); got != 1 {
+	if got := ephemeralApprovalOutboxCount(t, h, "approval-request:"+pending.ApprovalRequestID); got != 1 {
 		t.Fatalf("approval outbox rows = %d, want 1", got)
+	}
+	request, err := h.store.GetOperationApproval(context.Background(), h.tenant, pending.ApprovalRequestID)
+	if err != nil {
+		t.Fatalf("load exact ephemeral approval request: %v", err)
+	}
+	expectedEvidencePrefixes := []string{
+		"attestation-method:",
+		"attestation-selectors-sha256:",
+		"attestation-subject-sha256:",
+		"client-request-id-sha256:",
+		"command-sha256:",
+		"ephemeral-ca-certificate-sha256:",
+		"ephemeral-ca-id:",
+		"not-before-backdate-seconds:",
+		"public-key-sha256:",
+		"spiffe-id-sha256:",
+		"ttl-seconds:",
+	}
+	if request.IntentDigest != pending.IntentDigest || request.ResourceKind != "ephemeral" ||
+		request.ResourceID != "ephemeral:jit-agent-7" || request.Action != "issue" ||
+		request.Requester != "jit-requester" || request.FromState != "attested" ||
+		!strings.HasPrefix(request.ToState, "issued:sha256:") || request.Status != store.ApprovalStatusPending ||
+		len(request.EvidenceRefs) != len(expectedEvidencePrefixes) {
+		t.Fatalf("exact ephemeral approval request = %+v", request)
+	}
+	for _, prefix := range expectedEvidencePrefixes {
+		if !slices.ContainsFunc(request.EvidenceRefs, func(ref string) bool { return strings.HasPrefix(ref, prefix) }) {
+			t.Fatalf("exact ephemeral approval request is missing %q: %+v", prefix, request)
+		}
+	}
+	if got := legacyEphemeralApprovalRequestCount(t, h, "jit-agent-7"); got != 0 {
+		t.Fatalf("legacy inferred ephemeral approval rows = %d, want 0", got)
 	}
 
 	replayPending := servedEphemeralIssue(t, h, requester, "nhi-04-request", body, http.StatusAccepted)
-	if replayPending.RequestID != pending.RequestID || !replayPending.ExpiresAt.Equal(pending.ExpiresAt) {
+	if replayPending.RequestID != pending.RequestID || replayPending.ApprovalRequestID != pending.ApprovalRequestID ||
+		replayPending.IntentDigest != pending.IntentDigest || !replayPending.ExpiresAt.Equal(pending.ExpiresAt) {
 		t.Fatalf("idempotent pending replay changed: first=%+v replay=%+v", pending, replayPending)
 	}
 
-	approval := servedEphemeralApprove(t, h, approver, "nhi-04-approve", "jit-agent-7", http.StatusOK)
-	if approval.Resource != "jit-agent-7" || approval.Action != "issue" || approval.Approvals != 1 {
+	approval := servedEphemeralApprove(t, h, approver, "nhi-04-approve", pending.ApprovalRequestID, pending.IntentDigest, http.StatusOK)
+	if approval.ID != pending.ApprovalRequestID || approval.IntentDigest != pending.IntentDigest ||
+		approval.Resource != "ephemeral:jit-agent-7" || approval.Action != "issue" ||
+		approval.Approvals != 1 || approval.Status != store.ApprovalStatusApproved {
 		t.Fatalf("approval response = %+v", approval)
 	}
 
 	issued := servedEphemeralIssue(t, h, requester, "nhi-04-issue", body, http.StatusCreated)
 	if issued.State != "issued" || issued.CredentialID == "" || issued.CertificateID == "" || issued.CertificatePEM == "" {
 		t.Fatalf("issued JIT response = %+v", issued)
+	}
+	if issued.ApprovalRequestID != pending.ApprovalRequestID || issued.IntentDigest != pending.IntentDigest {
+		t.Fatalf("issued JIT authority changed: pending=%+v issued=%+v", pending, issued)
 	}
 	if issued.Subject != "jit-agent-7" || issued.Attestation.Method != "stub_ephemeral" {
 		t.Fatalf("issued JIT attestation = %+v", issued)
@@ -87,11 +136,255 @@ func TestServedEphemeralJITIssuesAfterAttestationAndApproval(t *testing.T) {
 	if replayIssued.CertificatePEM != issued.CertificatePEM || replayIssued.CredentialID != issued.CredentialID {
 		t.Fatalf("idempotent issued replay changed: first=%+v replay=%+v", issued, replayIssued)
 	}
+	consumed, err := h.store.GetOperationApproval(context.Background(), h.tenant, pending.ApprovalRequestID)
+	if err != nil {
+		t.Fatalf("load consumed ephemeral approval: %v", err)
+	}
+	if consumed.Status != store.ApprovalStatusConsumed || consumed.ConsumedEventID == "" {
+		t.Fatalf("ephemeral approval was not atomically consumed: %+v", consumed)
+	}
 
-	for _, eventType := range []string{"attestation.verified", "attestation.bound", "ephemeral.approval.requested", "ephemeral.approval.granted", "ephemeral.issued", "certificate.recorded"} {
+	for _, eventType := range []string{"attestation.verified", "attestation.bound", "approval.requested", "approval.decision.recorded", "ephemeral.issued", "certificate.recorded"} {
 		if !h.hasEvent(t, eventType) {
 			t.Fatalf("served ephemeral JIT did not emit %s", eventType)
 		}
+	}
+}
+
+func TestApprovedEphemeralRetryAfterAppendAndSQLRollbackNeverResigns(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.EphemeralIssuance = EphemeralIssuanceConfig{
+			Enabled: true, TrustDomain: "served.test", DefaultTTL: 5 * time.Second,
+			MaxTTL: 5 * time.Second, ApprovalTTL: time.Minute, RequiredApprovals: 1,
+			Attestors: []attest.Attestor{servedEphemeralAttestor{}},
+		}
+	})
+	ctx := context.Background()
+	const (
+		requestID = "jit-crash-agent"
+		requester = "jit-crash-requester"
+	)
+	requesterToken := seedScopedTokenSubject(t, h.store, h.tenant, requester, "certs:request", "certs:read")
+	approverToken := seedScopedTokenSubject(t, h.store, h.tenant, "jit-crash-approver", "certs:issue", "certs:read")
+	publicKeyPEM := servedAttestedPublicKeyPEM(t)
+	body := map[string]any{
+		"request_id": requestID, "method": "stub_ephemeral",
+		"payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
+		"public_key_pem": publicKeyPEM, "ttl_seconds": 5,
+	}
+	pending := servedEphemeralIssue(t, h, requesterToken, "jit-crash-request", body, http.StatusAccepted)
+	servedEphemeralApprove(t, h, approverToken, "jit-crash-approve",
+		pending.ApprovalRequestID, pending.IntentDigest, http.StatusOK)
+	approval, err := h.store.GetOperationApproval(ctx, h.tenant, pending.ApprovalRequestID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	use, err := store.OperationApprovalUseFromRequest(approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, err := crypto.ParsePublicKeyPEM([]byte(publicKeyPEM))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := api.EphemeralCredentialRequest{
+		RequestID: requestID, Method: "stub_ephemeral", Payload: []byte("genuine"),
+		PublicKeyDER: publicKey.DER, TTLSeconds: 5,
+	}
+	verifier, err := attest.NewVerifier(attest.Config{
+		TenantID: h.tenant, Attestors: h.srv.ephemeralIssuer.attestors,
+		Audit: h.srv.ephemeralIssuer.audit,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attestation, err := verifier.Verify(ctx, req.Method, req.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := h.srv.ephemeralIssuer.ephemeralApprovalBinding(req, attestation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestBinding, err := ephemeralApprovedRequestBinding(requester, req, attestation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	countedSigner := &countingEphemeralDigestSigner{DigestSigner: h.srv.ephemeralIssuer.caSigner}
+	h.srv.ephemeralIssuer.caSigner = countedSigner
+	certificateDER, err := h.srv.ephemeralIssuer.sign()(ctx, attestation, req.PublicKeyDER, h.srv.ephemeralIssuer.ttl(req.TTLSeconds))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countedSigner.calls.Load() != 1 {
+		t.Fatalf("first certificate signatures = %d, want 1", countedSigner.calls.Load())
+	}
+	info, err := certinfo.Inspect(certificateDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notBefore, notAfter := info.NotBefore, info.NotAfter
+	payload := projections.CertificateRecorded{
+		ID: projections.CertificateApprovalRowID(h.tenant, use), CAID: h.srv.ephemeralIssuer.caID,
+		Subject: info.Subject, SANs: sansOf(info), Issuer: info.Issuer,
+		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
+		NotBefore: &notBefore, NotAfter: &notAfter, Source: "ephemeral:" + attestation.Method,
+		CertificateDER: certificateDER, IssuanceIdempotencyKey: "ephemeral-issue:" + approval.ID,
+		KeyOrigin: string(custody.OriginRequester), Approval: &use, ApprovalBinding: &binding,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := events.Event{
+		ID: orchestrator.CertificateApprovalEventID(h.tenant, use), Type: projections.EventCertificateRecorded,
+		TenantID: h.tenant, Time: time.Now().UTC(),
+		SchemaVersion: projections.CertificateApprovalEventSchemaVersion, Data: raw,
+	}
+	if err := projections.ValidateApprovedCertificatePayload(event, payload); err != nil {
+		t.Fatal(err)
+	}
+	semantic, err := projections.ApprovedCertificateSemanticDigest(event, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fence, created, err := h.store.ClaimApprovedTargetFence(ctx, store.ApprovedTargetFence{
+		TenantID: h.tenant, TargetKind: store.ApprovedTargetEphemeralCertificate,
+		CommandKey: binding.ClientRequestIDSHA256, RequestBinding: requestBinding,
+		EventID: event.ID, EventType: event.Type, SchemaVersion: event.SchemaVersion,
+		EventTime: event.Time, Payload: raw, SemanticDigest: semantic,
+	}, use)
+	if err != nil || !created {
+		t.Fatalf("claim canonical certificate = created %t err=%v", created, err)
+	}
+	appended, err := h.log.Append(ctx, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollback := errors.New("simulated certificate projection rollback")
+	err = h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		if err := projections.New(h.store).ApplyTx(ctx, tx, appended); err != nil {
+			return err
+		}
+		return rollback
+	})
+	if !errors.Is(err, rollback) {
+		t.Fatalf("simulate append-success/SQL-rollback = %v", err)
+	}
+	if _, err := h.store.GetCertificate(ctx, h.tenant, payload.ID); !store.IsNotFound(err) {
+		t.Fatalf("rolled-back certificate projection = %v", err)
+	}
+	if _, err := h.store.GetApprovedTargetFence(ctx, h.tenant, fence.TargetKind, fence.CommandKey); err != nil {
+		t.Fatalf("rollback lost certificate fence: %v", err)
+	}
+	if _, err := h.store.SystemPool().Exec(ctx, `UPDATE approved_target_event_fences
+		SET created_at = created_at - interval '25 hours', updated_at = updated_at - interval '25 hours'
+		WHERE tenant_id = $1 AND target_kind = $2 AND command_key = $3`,
+		h.tenant, fence.TargetKind, fence.CommandKey); err != nil {
+		t.Fatal(err)
+	}
+	changed := req
+	changed.TTLSeconds = 4
+	if _, err := h.srv.ephemeralIssuer.IssueEphemeralCredential(ctx, h.tenant, "jit-crash-changed", requester, changed); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("changed-body retry = %v, want ErrIdempotencyConflict", err)
+	}
+	if _, err := Build(ctx, Deps{
+		Store: h.store, Log: h.log, Signer: h.signer,
+		SignAuthorizer: h.authz, CACertFile: h.caFile,
+	}); err != nil {
+		t.Fatalf("startup reconciliation of approved certificate fence: %v", err)
+	}
+	issued, err := h.srv.ephemeralIssuer.IssueEphemeralCredential(ctx, h.tenant, "jit-crash-retry", requester, req)
+	if err != nil {
+		t.Fatalf("recover canonical certificate: %v", err)
+	}
+	if countedSigner.calls.Load() != 1 {
+		t.Fatalf("recovery re-signed certificate: signatures=%d, want 1", countedSigner.calls.Load())
+	}
+	if issued.CertificateID != payload.ID || !bytes.Contains([]byte(issued.CertificatePEM), []byte("BEGIN CERTIFICATE")) {
+		t.Fatalf("recovered response differs: %+v", issued)
+	}
+	recovered, err := h.store.GetCertificate(ctx, h.tenant, payload.ID)
+	if err != nil || !bytes.Equal(recovered.CertificateDER, certificateDER) {
+		t.Fatalf("recovered certificate = %+v err=%v", recovered, err)
+	}
+	if _, err := h.store.GetApprovedTargetFence(ctx, h.tenant, fence.TargetKind, fence.CommandKey); !store.IsNotFound(err) {
+		t.Fatalf("completed certificate fence remains: %v", err)
+	}
+	eventCount := 0
+	if err := h.log.Replay(ctx, 0, func(got events.Event) error {
+		if got.ID == event.ID {
+			eventCount++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if eventCount != 1 {
+		t.Fatalf("canonical certificate events = %d, want 1", eventCount)
+	}
+	if err := projections.New(h.store).Rebuild(ctx, h.log); err != nil {
+		t.Fatalf("cold rebuild approved certificate: %v", err)
+	}
+	rebuilt, err := h.store.GetCertificate(ctx, h.tenant, payload.ID)
+	if err != nil || !bytes.Equal(rebuilt.CertificateDER, certificateDER) || rebuilt.Fingerprint != payload.Fingerprint {
+		t.Fatalf("cold-rebuilt certificate = %+v err=%v", rebuilt, err)
+	}
+}
+
+func TestServedEphemeralApprovalUnknownRequestLeavesZeroState(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.EphemeralIssuance = EphemeralIssuanceConfig{
+			Enabled: true, TrustDomain: "served.test", ApprovalTTL: time.Minute,
+			RequiredApprovals: 1, Attestors: []attest.Attestor{servedEphemeralAttestor{}},
+		}
+	})
+	approver := seedScopedTokenSubject(t, h.store, h.tenant, "jit-preflight-approver", "certs:issue")
+	const unknownDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	for _, tc := range []struct {
+		name      string
+		requestID string
+		key       string
+	}{
+		{name: "malformed UUID", requestID: "not-a-request-uuid", key: "ephemeral-malformed-request-id"},
+		{name: "valid unknown UUID", requestID: "77000000-0000-4000-8000-000000000799", key: "ephemeral-unknown-request-id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			headBefore, err := h.log.LastSequence(t.Context())
+			if err != nil {
+				t.Fatalf("read event head before refusal: %v", err)
+			}
+			status, body := secretsReqKey(t, h, http.MethodPost,
+				"/api/v1/ephemeral/"+tc.requestID+"/approvals", approver, tc.key,
+				map[string]any{"action": "issue", "request_id": tc.requestID, "intent_digest": unknownDigest})
+			if status != http.StatusNotFound {
+				t.Errorf("approve unknown ephemeral request: status %d body %s, want tenant-safe 404", status, body)
+			} else {
+				var problem struct {
+					Status int    `json:"status"`
+					Detail string `json:"detail"`
+				}
+				if err := json.Unmarshal(body, &problem); err != nil {
+					t.Errorf("decode unknown-request problem: %v body=%s", err, body)
+				} else if problem.Status != http.StatusNotFound || problem.Detail != "resource not found" {
+					t.Errorf("unknown-request problem = %+v, want generic resource-not-found response", problem)
+				}
+				for _, leaked := range []string{h.tenant, tc.requestID, unknownDigest, "operation_approval_requests"} {
+					if strings.Contains(string(body), leaked) {
+						t.Errorf("tenant-safe ephemeral 404 leaked %q in body %s", leaked, body)
+					}
+				}
+			}
+			requests, decisions, idempotency := ephemeralApprovalRefusalState(t, h, tc.key)
+			if requests != 0 || decisions != 0 || idempotency != 0 {
+				t.Errorf("refused ephemeral approval persisted requests=%d decisions=%d idempotency=%d, want 0/0/0",
+					requests, decisions, idempotency)
+			}
+			if headAfter, err := h.log.LastSequence(t.Context()); err != nil || headAfter != headBefore {
+				t.Errorf("refused ephemeral approval event head = (%d, %v), want %d", headAfter, err, headBefore)
+			}
+		})
 	}
 }
 
@@ -188,9 +481,21 @@ func (servedEphemeralAttestor) Attest(_ context.Context, p []byte) (attest.Attes
 
 var errServedEphemeralForgery = errors.New("forged ephemeral proof")
 
+type countingEphemeralDigestSigner struct {
+	crypto.DigestSigner
+	calls atomic.Int32
+}
+
+func (s *countingEphemeralDigestSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	s.calls.Add(1)
+	return s.DigestSigner.SignDigest(digest, opts)
+}
+
 type servedEphemeralResponse struct {
 	State             string             `json:"state"`
 	RequestID         string             `json:"request_id"`
+	ApprovalRequestID string             `json:"approval_request_id"`
+	IntentDigest      string             `json:"intent_digest"`
 	Subject           string             `json:"subject"`
 	CredentialID      string             `json:"credential_id"`
 	CertificateID     string             `json:"certificate_id"`
@@ -203,10 +508,15 @@ type servedEphemeralResponse struct {
 }
 
 type servedEphemeralApprovalResponse struct {
-	Resource  string `json:"resource"`
-	Action    string `json:"action"`
-	Approver  string `json:"approver"`
-	Approvals int    `json:"approvals"`
+	ID                string `json:"id"`
+	IntentDigest      string `json:"intent_digest"`
+	Resource          string `json:"resource"`
+	Action            string `json:"action"`
+	Approver          string `json:"approver"`
+	Approvals         int    `json:"approvals"`
+	ApprovalCount     int    `json:"approval_count"`
+	RequiredApprovals int    `json:"required_approvals"`
+	Status            string `json:"status"`
 }
 
 func servedEphemeralIssue(t *testing.T, h *servedHarness, token, idemKey string, req map[string]any, want int) servedEphemeralResponse {
@@ -222,9 +532,11 @@ func servedEphemeralIssue(t *testing.T, h *servedHarness, token, idemKey string,
 	return out
 }
 
-func servedEphemeralApprove(t *testing.T, h *servedHarness, token, idemKey, requestID string, want int) servedEphemeralApprovalResponse {
+func servedEphemeralApprove(t *testing.T, h *servedHarness, token, idemKey, requestID, intentDigest string, want int) servedEphemeralApprovalResponse {
 	t.Helper()
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/"+requestID+"/approvals", token, idemKey, map[string]any{"action": "issue"})
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/"+requestID+"/approvals", token, idemKey, map[string]any{
+		"action": "issue", "request_id": requestID, "intent_digest": intentDigest,
+	})
 	if status != want {
 		t.Fatalf("ephemeral approve status = %d, want %d; body=%s", status, want, body)
 	}
@@ -242,12 +554,45 @@ func ephemeralApprovalOutboxCount(t *testing.T, h *servedHarness, key string) in
 		return tx.QueryRow(context.Background(), `
 			SELECT count(*)
 			FROM outbox
-			WHERE destination = 'ephemeral.approval'
+			WHERE destination = $2
 			  AND idempotency_key = $1
-		`, key).Scan(&count)
+		`, key, notify.DestinationApproval).Scan(&count)
 	})
 	if err != nil {
 		t.Fatalf("count ephemeral.approval outbox rows: %v", err)
+	}
+	return count
+}
+
+func ephemeralApprovalRefusalState(t *testing.T, h *servedHarness, idempotencyKey string) (requests, decisions, idempotency int) {
+	t.Helper()
+	err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(), `
+			SELECT
+			  (SELECT count(*) FROM operation_approval_requests WHERE tenant_id = $1)
+			    + (SELECT count(*) FROM issuance_approval_requests WHERE tenant_id = $1),
+			  (SELECT count(*) FROM operation_approval_decisions WHERE tenant_id = $1)
+			    + (SELECT count(*) FROM issuance_approvals WHERE tenant_id = $1),
+			  (SELECT count(*) FROM idempotency_keys WHERE tenant_id = $1 AND key = $2)
+		`, h.tenant, idempotencyKey).Scan(&requests, &decisions, &idempotency)
+	})
+	if err != nil {
+		t.Fatalf("count ephemeral approval refusal state: %v", err)
+	}
+	return requests, decisions, idempotency
+}
+
+func legacyEphemeralApprovalRequestCount(t *testing.T, h *servedHarness, resource string) int {
+	t.Helper()
+	var count int
+	err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(), `
+			SELECT count(*) FROM issuance_approval_requests
+			 WHERE tenant_id = $1 AND resource = $2 AND action = 'issue'
+		`, h.tenant, resource).Scan(&count)
+	})
+	if err != nil {
+		t.Fatalf("count legacy ephemeral approval requests: %v", err)
 	}
 	return count
 }

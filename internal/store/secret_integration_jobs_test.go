@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,52 @@ func resetSecretIntegrationTables(t *testing.T, s *store.Store) {
 	if _, err := s.SystemPool().Exec(context.Background(),
 		`TRUNCATE dynamic_secret_operations, dynamic_secret_leases, secret_sync_jobs`); err != nil {
 		t.Fatalf("truncate secret integration projections: %v", err)
+	}
+}
+
+func TestSecretSyncEventOnlyRecoveryFenceIsDurableAndNotApplicationWritableAUD109(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	if err := s.AuthorizeSecretSyncReceiverRecovery(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FenceSecretSyncReceiverRecovery(ctx, "event_only_restore_test"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := s.AuthorizeSecretSyncReceiverRecovery(context.Background()); err != nil {
+			t.Errorf("restore secret-sync recovery authority after test: %v", err)
+		}
+	})
+	if err := s.RequireSecretSyncReceiverRecoveryAuthorized(ctx); !errors.Is(err, store.ErrSecretSyncReceiverRecoveryFenced) {
+		t.Fatalf("fenced recovery authority = %v, want durable receiver refusal", err)
+	}
+
+	// WithTenant runs as trstctl_app. A forged tenant GUC therefore cannot turn
+	// the deployment-wide restore light green or even read its non-tenant row.
+	err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			UPDATE secret_sync_recovery_authority
+			   SET receiver_io_authorized = true, reason = ''
+			 WHERE singleton`)
+		return err
+	})
+	if err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("application-role recovery-authority update = %v, want permission refusal", err)
+	}
+	if err := s.RequireSecretSyncReceiverRecoveryAuthorized(ctx); !errors.Is(err, store.ErrSecretSyncReceiverRecoveryFenced) {
+		t.Fatalf("application-role attempt changed recovery fence: %v", err)
+	}
+
+	// The light is a PostgreSQL fact, not process memory. A separately opened
+	// Store sees the same red state after the original caller could have crashed.
+	reopened, err := store.Open(ctx, testDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if err := reopened.RequireSecretSyncReceiverRecoveryAuthorized(ctx); !errors.Is(err, store.ErrSecretSyncReceiverRecoveryFenced) {
+		t.Fatalf("reopened store recovery authority = %v, want durable receiver refusal", err)
 	}
 }
 
@@ -135,11 +182,325 @@ func projectDynamicSecretLease(t *testing.T, s *store.Store, tenantID string, le
 
 func projectSecretSyncJob(t *testing.T, s *store.Store, tenantID string, job store.SecretSyncJob) {
 	t.Helper()
+	if job.TenantEpoch == "" {
+		epoch, err := s.ApplicationSecretTenantEpoch(context.Background(), tenantID)
+		if err != nil {
+			t.Fatalf("resolve secret-sync tenant epoch: %v", err)
+		}
+		job.TenantEpoch = epoch
+	}
+	if job.TargetOrder == 0 {
+		job.TargetOrder = job.OutboxID
+	}
 	err := s.WithTenant(context.Background(), tenantID, func(tx pgx.Tx) error {
 		return s.ApplySecretSyncJobQueuedTx(context.Background(), tx, job)
 	})
 	if err != nil {
 		t.Fatalf("ApplySecretSyncJobQueuedTx(%s/%s): %v", tenantID, job.ID, err)
+	}
+}
+
+func mustSecretSyncTenantEpoch(t *testing.T, s *store.Store, tenantID string) string {
+	t.Helper()
+	epoch, err := s.ApplicationSecretTenantEpoch(context.Background(), tenantID)
+	if err != nil {
+		t.Fatalf("resolve secret-sync tenant epoch: %v", err)
+	}
+	return epoch
+}
+
+func applySecretSyncIntentFixture(t *testing.T, s *store.Store, job store.SecretSyncJob, payload []byte) store.SecretSyncJob {
+	t.Helper()
+	ctx := context.Background()
+	if job.TenantEpoch == "" {
+		epoch, err := s.ApplicationSecretTenantEpoch(ctx, job.TenantID)
+		if err != nil {
+			t.Fatalf("resolve secret-sync tenant epoch: %v", err)
+		}
+		job.TenantEpoch = epoch
+	}
+	if err := s.WithTenant(ctx, job.TenantID, func(tx pgx.Tx) error {
+		return s.ApplySecretSyncIntentTx(ctx, tx, job, "secret.sync."+job.Target, payload)
+	}); err != nil {
+		t.Fatalf("ApplySecretSyncIntentTx(%s/%s): %v", job.TenantID, job.ID, err)
+	}
+	got, err := s.GetSecretSyncJob(ctx, job.TenantID, job.ID)
+	if err != nil {
+		t.Fatalf("GetSecretSyncJob(%s/%s): %v", job.TenantID, job.ID, err)
+	}
+	return got
+}
+
+func applySecretSyncTerminalFixture(
+	t *testing.T,
+	s *store.Store,
+	tenantID, jobID string,
+	status store.SecretSyncJobStatus,
+	attempts int,
+	remoteVersion, lastError string,
+	at time.Time,
+) error {
+	t.Helper()
+	job, err := s.GetSecretSyncJob(context.Background(), tenantID, jobID)
+	if err != nil {
+		return err
+	}
+	eventType := "secret.sync.delivered"
+	eventID := store.SecretSyncDeliveredEventID(tenantID, jobID)
+	if status == store.SecretSyncJobFailed {
+		eventType = "secret.sync.failed"
+		eventID = store.SecretSyncFailedEventID(tenantID, jobID)
+	}
+	return s.WithTenantProjection(context.Background(), tenantID, func(tx pgx.Tx) error {
+		return s.ApplySecretSyncTerminalEventTx(context.Background(), tx, store.SecretSyncTerminalEvent{
+			TenantID: tenantID, TenantEpoch: job.TenantEpoch, JobID: jobID,
+			Status: status, Attempts: attempts, RemoteVersion: remoteVersion, LastError: lastError,
+			OccurredAt: at, EventID: eventID, EventType: eventType,
+			EventSequence: job.TargetOrder + 1000000, PayloadDigest: strings.Repeat("a", 64),
+			FailureDefinitelyNoEffect: status == store.SecretSyncJobFailed,
+		})
+	})
+}
+
+func TestSecretSyncOlderNonterminalFenceUsesOutboxOrderAndTenantTargetScope(t *testing.T) {
+	s := newStore(t)
+	resetSecretIntegrationTables(t, s)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	base := time.Date(2026, 8, 10, 13, 0, 0, 0, time.UTC)
+	nextOrder := int64(100)
+	enqueue := func(tenantID, id, remoteKey string, requestedAt time.Time) store.SecretSyncJob {
+		order := nextOrder
+		nextOrder++
+		job := store.SecretSyncJob{
+			ID: id, TenantID: tenantID, SecretName: "production/database",
+			SecretVersion: 1, Target: "github-actions", RemoteKey: remoteKey,
+			ValueDigest: strings.Repeat("b", 64), IdempotencyKey: "secret.sync.github-actions:" + id,
+			TargetOrder: order,
+			RequestedAt: requestedAt, UpdatedAt: requestedAt,
+		}
+		payload := []byte(fmt.Sprintf(`{"id":%q,"key":%q,"target":"github-actions","sealed":"c2VhbGVk"}`, id, remoteKey))
+		return applySecretSyncIntentFixture(t, s, job, payload)
+	}
+
+	// Timestamps deliberately disagree with AN-2 event order. The immutable event
+	// sequence, not a mutable clock field or outbox id, defines which is older.
+	older := enqueue(tenantA, "sync-order-older", "DATABASE_URL", base.Add(time.Hour))
+	newer := enqueue(tenantA, "sync-order-newer", "DATABASE_URL", base)
+	unrelatedKey := enqueue(tenantA, "sync-order-unrelated", "ANOTHER_URL", base)
+	otherTenant := enqueue(tenantB, "sync-order-other-tenant", "DATABASE_URL", base)
+	if !(older.TargetOrder > 0 && older.TargetOrder < newer.TargetOrder) {
+		t.Fatalf("fixture target order older=%d newer=%d", older.TargetOrder, newer.TargetOrder)
+	}
+
+	assertBlocked := func(job store.SecretSyncJob, want bool) {
+		t.Helper()
+		got, err := s.SecretSyncHasOlderNonterminal(ctx, job.TenantID, job.Target, job.OutboxID)
+		if err != nil || got != want {
+			t.Fatalf("older nonterminal fence for %s=(%t,%v), want %t", job.ID, got, err, want)
+		}
+	}
+	assertBlocked(newer, true)
+	assertBlocked(unrelatedKey, true)
+	assertBlocked(otherTenant, false)
+
+	// A far-future retry remains a barrier, and an actively leased row remains a
+	// barrier too. Neither state permits a newer value to overtake it.
+	if _, err := s.SystemPool().Exec(ctx,
+		`UPDATE outbox SET next_attempt_at = $3 WHERE tenant_id = $1 AND id = $2`,
+		tenantA, older.OutboxID, base.Add(24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	assertBlocked(newer, true)
+	if _, err := s.SystemPool().Exec(ctx,
+		`UPDATE projection_checkpoint SET applied_seq = $1, updated_at = now() WHERE id = 1`,
+		nextOrder); err != nil {
+		t.Fatal(err)
+	}
+	if tag, err := s.SystemPool().Exec(ctx,
+		`UPDATE outbox SET status = 'processing', worker_id = 'older-worker', lease_until = $3
+		  WHERE tenant_id = $1 AND id = $2`,
+		tenantA, older.OutboxID, base.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	} else if tag.RowsAffected() != 1 {
+		t.Fatalf("claim older secret-sync fixture rows=%d, want 1", tag.RowsAffected())
+	}
+	assertBlocked(newer, true)
+
+	if err := applySecretSyncTerminalFixture(t, s, tenantA, older.ID, store.SecretSyncJobFailed,
+		1, "", "terminal fixture", base.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SystemPool().Exec(ctx,
+		`UPDATE outbox
+		    SET status = 'failed', worker_id = NULL, lease_until = NULL
+		  WHERE tenant_id = $1 AND id = $2`, tenantA, older.OutboxID); err != nil {
+		t.Fatal(err)
+	}
+	assertBlocked(newer, false)
+	deleteTx, err := s.SystemPool().Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deleteTx.Exec(ctx,
+		`DELETE FROM outbox WHERE tenant_id = $1 AND id = $2`, tenantA, older.OutboxID); err != nil {
+		_ = deleteTx.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if err := deleteTx.Commit(ctx); err == nil {
+		t.Fatal("failed secret-sync outbox deletion erased retained FIFO/history evidence")
+	}
+	for _, changedStatus := range []string{"pending", "processing", "delivered"} {
+		if _, err := s.SystemPool().Exec(ctx,
+			`UPDATE outbox SET status = $3 WHERE tenant_id = $1 AND id = $2`,
+			tenantA, older.OutboxID, changedStatus); err == nil {
+			t.Fatalf("terminal secret-sync outbox status change to %s was accepted", changedStatus)
+		}
+	}
+}
+
+func TestSecretSyncJobDirectDeleteCannotEraseActiveFIFOBarrierAUD109(t *testing.T) {
+	s := newStore(t)
+	resetSecretIntegrationTables(t, s)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	job := applySecretSyncIntentFixture(t, s, store.SecretSyncJob{
+		ID: "sync-delete-attack", TenantID: tenantA, SecretName: "production/database",
+		SecretVersion: 1, Target: "github-actions", RemoteKey: "DATABASE_URL",
+		ValueDigest: strings.Repeat("e", 64), IdempotencyKey: "secret.sync.github-actions:sync-delete-attack",
+		TargetOrder: 109, RequestedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}, []byte(`{"id":"sync-delete-attack","key":"DATABASE_URL","target":"github-actions","sealed":"c2VhbGVk"}`))
+
+	attempt := func(name string, appRole bool) {
+		t.Helper()
+		tx, err := s.SystemPool().Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if appRole {
+			if _, err := tx.Exec(ctx, `SET LOCAL ROLE trstctl_app`); err != nil {
+				_ = tx.Rollback(ctx)
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id', $1, true)`, tenantA); err != nil {
+				_ = tx.Rollback(ctx)
+				t.Fatal(err)
+			}
+		}
+		_, deleteErr := tx.Exec(ctx, `DELETE FROM secret_sync_jobs WHERE tenant_id = $1 AND id = $2`, tenantA, job.ID)
+		if deleteErr == nil {
+			deleteErr = tx.Commit(ctx)
+		} else {
+			_ = tx.Rollback(ctx)
+		}
+		if deleteErr == nil {
+			t.Fatalf("%s direct job delete committed and erased the FIFO barrier", name)
+		}
+		if _, err := s.GetSecretSyncJob(ctx, tenantA, job.ID); err != nil {
+			t.Fatalf("%s delete attack removed job despite rejection: %v", name, err)
+		}
+		var retainedOutbox int
+		if err := s.SystemPool().QueryRow(ctx,
+			`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND id = $2`,
+			tenantA, job.OutboxID).Scan(&retainedOutbox); err != nil {
+			t.Fatal(err)
+		}
+		if retainedOutbox != 1 {
+			t.Fatalf("%s delete attack changed predecessor outbox count=%d, want one", name, retainedOutbox)
+		}
+	}
+	attempt("owner", false)
+	attempt("application role", true)
+}
+
+func TestSecretSyncEventOrderDoesNotDependOnDatabaseCommitSerialization(t *testing.T) {
+	s := newStore(t)
+	resetSecretIntegrationTables(t, s)
+	seedTwoTenants(t, s)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	now := time.Date(2026, 8, 10, 14, 0, 0, 0, time.UTC)
+	command := func(tenantID, id, target, remoteKey string, targetOrder int64) (store.SecretSyncJob, []byte) {
+		job := store.SecretSyncJob{
+			ID: id, TenantID: tenantID, TenantEpoch: mustSecretSyncTenantEpoch(t, s, tenantID), SecretName: "production/database",
+			SecretVersion: 1, Target: target, RemoteKey: remoteKey,
+			ValueDigest: strings.Repeat("c", 64), IdempotencyKey: "secret.sync." + target + ":" + id,
+			TargetOrder: targetOrder,
+			RequestedAt: now, UpdatedAt: now,
+		}
+		payload := []byte(fmt.Sprintf(`{"id":%q,"key":%q,"target":%q,"sealed":"c2VhbGVk"}`, id, remoteKey, target))
+		return job, payload
+	}
+	first, firstPayload := command(tenantA, "sync-serialized-first", "github-actions", "DATABASE_URL", 200)
+	second, secondPayload := command(tenantA, "sync-serialized-second", "github-actions", "ANOTHER_URL", 201)
+	unrelated, unrelatedPayload := command(tenantA, "sync-serialized-unrelated", "gitlab-ci", "DATABASE_URL", 202)
+	otherTenant, otherTenantPayload := command(tenantB, "sync-serialized-other-tenant", "github-actions", "DATABASE_URL", 200)
+
+	firstReady := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			if err := s.ApplySecretSyncIntentTx(ctx, tx, first, "secret.sync.github-actions", firstPayload); err != nil {
+				return err
+			}
+			close(firstReady)
+			select {
+			case <-releaseFirst:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		})
+	}()
+	select {
+	case <-firstReady:
+	case <-ctx.Done():
+		t.Fatalf("first receiver-order transaction did not reach hold point: %v", ctx.Err())
+	}
+
+	secondDone := make(chan error, 1)
+	go func() {
+		secondDone <- s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplySecretSyncIntentTx(ctx, tx, second, "secret.sync.github-actions", secondPayload)
+		})
+	}()
+	select {
+	case err := <-secondDone:
+		if err != nil {
+			t.Fatalf("commit same-target successor first: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("same-target successor incorrectly waited for DB commit order: %v", ctx.Err())
+	}
+
+	// Event order is data, not a target-wide transaction lock. Different targets
+	// and tenants remain independent too.
+	for _, candidate := range []struct {
+		job     store.SecretSyncJob
+		payload []byte
+	}{{unrelated, unrelatedPayload}, {otherTenant, otherTenantPayload}} {
+		if err := s.WithTenant(ctx, candidate.job.TenantID, func(tx pgx.Tx) error {
+			return s.ApplySecretSyncIntentTx(ctx, tx, candidate.job, "secret.sync."+candidate.job.Target, candidate.payload)
+		}); err != nil {
+			t.Fatalf("independent receiver scope was blocked: %v", err)
+		}
+	}
+
+	close(releaseFirst)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("commit first receiver command: %v", err)
+	}
+	firstStored, err := s.GetSecretSyncJob(ctx, tenantA, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondStored, err := s.GetSecretSyncJob(ctx, tenantA, second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstStored.TargetOrder <= 0 || firstStored.TargetOrder >= secondStored.TargetOrder {
+		t.Fatalf("immutable event target order first=%d second=%d", firstStored.TargetOrder, secondStored.TargetOrder)
 	}
 }
 
@@ -156,12 +517,14 @@ func TestSecretIntegrationOutboxIsAtomicAcrossConcurrentTransactions(t *testing.
 	job := store.SecretSyncJob{
 		ID:             "sync-concurrent",
 		TenantID:       tenantA,
+		TenantEpoch:    mustSecretSyncTenantEpoch(t, s, tenantA),
 		SecretName:     "production/database",
 		SecretVersion:  9,
 		Target:         "github-actions",
 		RemoteKey:      "DATABASE_URL",
 		ValueDigest:    strings.Repeat("c", 64),
 		IdempotencyKey: "sync-concurrent-key",
+		TargetOrder:    300,
 		RequestedAt:    now,
 		UpdatedAt:      now,
 	}
@@ -227,9 +590,10 @@ func TestSecretSyncIntentRejectsConcurrentChangedCommandWithoutSecondOutbox(t *t
 	defer cancel()
 	now := time.Date(2026, 7, 11, 16, 0, 0, 0, time.UTC)
 	first := store.SecretSyncJob{
-		ID: "sync-collision", TenantID: tenantA, SecretName: "production/database",
+		ID: "sync-collision", TenantID: tenantA, TenantEpoch: mustSecretSyncTenantEpoch(t, s, tenantA), SecretName: "production/database",
 		SecretVersion: 4, Target: "github-actions", RemoteKey: "DATABASE_URL",
 		ValueDigest: strings.Repeat("a", 64), IdempotencyKey: "secret.sync.github-actions:raw-collision",
+		TargetOrder: 400,
 		RequestedAt: now, UpdatedAt: now,
 	}
 	changed := first
@@ -237,6 +601,7 @@ func TestSecretSyncIntentRejectsConcurrentChangedCommandWithoutSecondOutbox(t *t
 	changed.RemoteKey = "CHANGED_DATABASE_URL"
 	changed.ValueDigest = strings.Repeat("b", 64)
 	changed.IdempotencyKey = "secret.sync.gitlab-ci:raw-collision"
+	changed.TargetOrder = 401
 	firstPayload := []byte(`{"id":"sync-collision","key":"DATABASE_URL","target":"github-actions","sealed":"Zmlyc3QtY2lwaGVydGV4dA=="}`)
 	changedPayload := []byte(`{"id":"sync-collision","key":"CHANGED_DATABASE_URL","target":"gitlab-ci","sealed":"Y2hhbmdlZC1jaXBoZXJ0ZXh0"}`)
 
@@ -301,9 +666,10 @@ func TestSecretSyncIntentExactReplayKeepsOriginalPayloadAndRejectsDrift(t *testi
 	ctx := context.Background()
 	now := time.Date(2026, 7, 11, 17, 0, 0, 0, time.UTC)
 	job := store.SecretSyncJob{
-		ID: "sync-replay-binding", TenantID: tenantA, SecretName: "production/api",
+		ID: "sync-replay-binding", TenantID: tenantA, TenantEpoch: mustSecretSyncTenantEpoch(t, s, tenantA), SecretName: "production/api",
 		SecretVersion: 8, Target: "github-actions", RemoteKey: "API_TOKEN",
 		ValueDigest: strings.Repeat("d", 64), IdempotencyKey: "secret.sync.github-actions:replay-binding",
+		TargetOrder: 500,
 		RequestedAt: now, UpdatedAt: now,
 	}
 	firstPayload := []byte(`{"id":"sync-replay-binding","key":"API_TOKEN","target":"github-actions","sealed":"Zmlyc3QtY2lwaGVydGV4dA=="}`)
@@ -343,6 +709,52 @@ func TestSecretSyncIntentExactReplayKeepsOriginalPayloadAndRejectsDrift(t *testi
 	}
 	if jobOutboxID != storedOutboxID || !bytes.Equal(stored, firstPayload) {
 		t.Fatalf("replay changed durable pair: job outbox=%d row=%d payload=%s", jobOutboxID, storedOutboxID, stored)
+	}
+}
+
+func TestSecretSyncRebuildReattachIgnoresGenericOutboxKeyCollision(t *testing.T) {
+	s := newStore(t)
+	resetSecretIntegrationTables(t, s)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	epoch := mustSecretSyncTenantEpoch(t, s, tenantA)
+	job := store.SecretSyncJob{
+		ID: "sync-generic-key-collision", TenantID: tenantA, TenantEpoch: epoch,
+		SecretName: "production/api", SecretVersion: 9, Target: "github-actions",
+		RemoteKey: "API_TOKEN", ValueDigest: strings.Repeat("9", 64),
+		IdempotencyKey: "shared-cross-subsystem-key", TargetOrder: 900,
+		RequestedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	payload := []byte(`{"id":"sync-generic-key-collision","key":"API_TOKEN","target":"github-actions","sealed":"c2VhbGVk"}`)
+	if _, err := s.SystemPool().Exec(ctx, `
+		INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
+		VALUES ($1, 'notification.email', '{}'::bytea, $2)`, tenantA, job.IdempotencyKey); err != nil {
+		t.Fatal(err)
+	}
+	original := applySecretSyncIntentFixture(t, s, job, payload)
+	if _, err := s.SystemPool().Exec(ctx, `TRUNCATE secret_sync_jobs`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplySecretSyncIntentTx(ctx, tx, job, "secret.sync.github-actions", payload)
+	}); err != nil {
+		t.Fatalf("reattach with lower generic same-key row: %v", err)
+	}
+	rebuilt, err := s.GetSecretSyncJob(ctx, tenantA, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rebuilt.OutboxID != original.OutboxID {
+		t.Fatalf("reattached outbox id=%d, want exact secret-sync row %d", rebuilt.OutboxID, original.OutboxID)
+	}
+	var rows int
+	if err := s.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+		tenantA, job.IdempotencyKey).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 2 {
+		t.Fatalf("same-key cross-subsystem outbox rows=%d, want generic + secret-sync", rows)
 	}
 }
 
@@ -438,11 +850,12 @@ func TestDynamicSecretLeaseProjectionIsRestartSafeAndTenantScoped(t *testing.T) 
 	wrongRequest := failed
 	wrongRequest.IdempotencyKey = "lease-request-a-wrong"
 	wrongRequest.BackendRef = "must-not-activate"
+	wrongRequest.SealedCredential = []byte("sealed-wrong-request")
 	err = s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		return s.ApplyDynamicSecretLeaseIssuedTx(ctx, tx, wrongRequest)
 	})
-	if !store.IsNotFound(err) {
-		t.Fatalf("different idempotency key claimed pending lease: err=%v, want store.IsNotFound", err)
+	if !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("different idempotency key claimed pending lease: err=%v, want idempotency conflict", err)
 	}
 
 	// The expiry scheduler reads durable rows, so a process restart cannot lose a
@@ -512,8 +925,8 @@ func TestDynamicSecretLeaseProjectionIsRestartSafeAndTenantScoped(t *testing.T) 
 	// credential was already deleted.
 	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		return s.ApplyDynamicSecretLeaseRevocationFailedTx(ctx, tx, tenantA, leaseA.ID, "stale timeout", completedAt.Add(time.Second))
-	}); err != nil {
-		t.Fatalf("replay stale revocation failure: %v", err)
+	}); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("replay stale revocation failure error = %v, want idempotency conflict", err)
 	}
 	gotA, err = s.GetDynamicSecretLease(ctx, tenantA, leaseA.ID)
 	if err != nil {
@@ -534,8 +947,8 @@ func TestDynamicSecretLeaseProjectionIsRestartSafeAndTenantScoped(t *testing.T) 
 		t.Fatalf("filtered lease list = %+v, want only %s", list, leaseA.ID)
 	}
 
-	// WITH CHECK rejects a projection carrying tenant B while the transaction is
-	// bound to tenant A; an explicit query predicate is not the only defense.
+	// The epoch lookup is itself RLS-scoped, so tenant A cannot even acquire the
+	// registration authority needed to reach tenant B's INSERT/WITH CHECK path.
 	crossTenant := leaseA
 	crossTenant.ID = "lease-cross-tenant"
 	crossTenant.TenantID = tenantB
@@ -544,8 +957,8 @@ func TestDynamicSecretLeaseProjectionIsRestartSafeAndTenantScoped(t *testing.T) 
 	err = s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		return s.ApplyDynamicSecretLeasePendingTx(ctx, tx, crossTenant)
 	})
-	if err == nil || !isRLSViolation(err) {
-		t.Fatalf("cross-tenant lease projection err=%v, want RLS policy denial", err)
+	if !errors.Is(err, store.ErrDynamicSecretTenantEpochMismatch) {
+		t.Fatalf("cross-tenant lease projection err=%v, want lifecycle mismatch hidden by RLS", err)
 	}
 }
 
@@ -599,24 +1012,44 @@ func TestSecretSyncJobProjectionTracksOutboxWithoutSecretMaterial(t *testing.T) 
 	}
 
 	deliveredAt := requestedAt.Add(time.Second)
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		return s.ApplySecretSyncJobDeliveredTx(ctx, tx, tenantA, jobA.ID, 1, "github-etag-7", deliveredAt)
-	}); err != nil {
+	if err := applySecretSyncTerminalFixture(t, s, tenantA, jobA.ID, store.SecretSyncJobDelivered,
+		1, "github-etag-7", "", deliveredAt); err != nil {
 		t.Fatalf("deliver secret sync job: %v", err)
 	}
 	// Replaying queue and then a stale failure must not regress delivered state.
 	projectSecretSyncJob(t, s, tenantA, jobA)
-	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		return s.ApplySecretSyncJobFailedTx(ctx, tx, tenantA, jobA.ID, 2, "stale failure", deliveredAt.Add(time.Second))
-	}); err != nil {
-		t.Fatalf("replay stale sync failure: %v", err)
+	if err := applySecretSyncTerminalFixture(t, s, tenantA, jobA.ID, store.SecretSyncJobFailed,
+		2, "", "stale failure", deliveredAt.Add(time.Second)); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("opposite stale sync failure error=%v, want ErrIdempotencyConflict", err)
 	}
 	gotA, err = s.GetSecretSyncJob(ctx, tenantA, jobA.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gotA.Status != store.SecretSyncJobDelivered || gotA.DeliveredAt == nil || gotA.RemoteVersion != "github-etag-7" {
+	if gotA.Status != store.SecretSyncJobDelivered || gotA.DeliveredAt == nil || gotA.RemoteVersion != "github-etag-7" || gotA.Attempts != 1 || gotA.LastError != "" {
 		t.Fatalf("delivered evidence regressed: %+v", gotA)
+	}
+
+	failed := jobA
+	failed.ID = "sync-terminal-failed"
+	failed.OutboxID = 805
+	failed.TargetOrder = 805
+	failed.IdempotencyKey = "sync-request-terminal-failed"
+	projectSecretSyncJob(t, s, tenantA, failed)
+	if err := applySecretSyncTerminalFixture(t, s, tenantA, failed.ID, store.SecretSyncJobFailed,
+		1, "", "canonical failure", deliveredAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := applySecretSyncTerminalFixture(t, s, tenantA, failed.ID, store.SecretSyncJobDelivered,
+		2, "late-etag", "", deliveredAt.Add(time.Second)); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("late delivered evidence error=%v, want ErrIdempotencyConflict", err)
+	}
+	failedStored, err := s.GetSecretSyncJob(ctx, tenantA, failed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failedStored.Status != store.SecretSyncJobFailed || failedStored.Attempts != 1 || failedStored.LastError != "canonical failure" || failedStored.RemoteVersion != "" {
+		t.Fatalf("failed evidence regressed after later delivered event: %+v", failedStored)
 	}
 
 	newer := jobA
@@ -649,6 +1082,7 @@ func TestSecretSyncJobProjectionTracksOutboxWithoutSecretMaterial(t *testing.T) 
 	duplicateRequest := newer
 	duplicateRequest.ID = "sync-duplicate-idempotency"
 	duplicateRequest.OutboxID = 803
+	duplicateRequest.TargetOrder = 803
 	err = s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		return s.ApplySecretSyncJobQueuedTx(ctx, tx, duplicateRequest)
 	})
@@ -660,6 +1094,7 @@ func TestSecretSyncJobProjectionTracksOutboxWithoutSecretMaterial(t *testing.T) 
 	crossTenant.ID = "sync-cross-tenant"
 	crossTenant.TenantID = tenantB
 	crossTenant.OutboxID = 804
+	crossTenant.TargetOrder = 804
 	crossTenant.IdempotencyKey = "sync-request-cross"
 	err = s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		return s.ApplySecretSyncJobQueuedTx(ctx, tx, crossTenant)

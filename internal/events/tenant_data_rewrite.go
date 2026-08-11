@@ -27,25 +27,28 @@ const (
 	activeStreamProbeSubject = "events.__trstctl_route_probe"
 	rewriteStreamPrefix      = "TRSTCTL_EVENTS_G_"
 
-	rewriteMetadataOperation  = "trstctl.rewrite.operation"
-	rewriteMetadataRole       = "trstctl.rewrite.role"
-	rewriteMetadataPhase      = "trstctl.rewrite.phase"
-	rewriteMetadataSource     = "trstctl.rewrite.source"
-	rewriteMetadataTarget     = "trstctl.rewrite.target"
-	rewriteMetadataTenant     = "trstctl.rewrite.tenant"
-	rewriteMetadataGeneration = "trstctl.generation"
-	rewriteMetadataConfigHash = "trstctl.rewrite.config_sha256"
-	rewriteMetadataReceiptSeq = "trstctl.rewrite.receipt_sequence"
-	rewriteMetadataReceiptID  = "trstctl.rewrite.receipt_id"
-	rewriteMetadataReceiptSum = "trstctl.rewrite.receipt_sha256"
-	rewriteMetadataReport     = "trstctl.rewrite.report_base64"
-	rewriteMetadataReportSum  = "trstctl.rewrite.report_sha256"
-	rewriteMetadataRestore    = "trstctl.rewrite.source_restore_base64"
-	rewriteMetadataRestoreSum = "trstctl.rewrite.source_restore_sha256"
+	rewriteMetadataOperation           = "trstctl.rewrite.operation"
+	rewriteMetadataRole                = "trstctl.rewrite.role"
+	rewriteMetadataPhase               = "trstctl.rewrite.phase"
+	rewriteMetadataSource              = "trstctl.rewrite.source"
+	rewriteMetadataTarget              = "trstctl.rewrite.target"
+	rewriteMetadataTenant              = "trstctl.rewrite.tenant"
+	rewriteMetadataGeneration          = "trstctl.generation"
+	rewriteMetadataConfigHash          = "trstctl.rewrite.config_sha256"
+	rewriteMetadataReceiptSeq          = "trstctl.rewrite.receipt_sequence"
+	rewriteMetadataReceiptID           = "trstctl.rewrite.receipt_id"
+	rewriteMetadataReceiptSum          = "trstctl.rewrite.receipt_sha256"
+	rewriteMetadataReport              = "trstctl.rewrite.report_base64"
+	rewriteMetadataReportSum           = "trstctl.rewrite.report_sha256"
+	rewriteMetadataRestore             = "trstctl.rewrite.source_restore_base64"
+	rewriteMetadataRestoreSum          = "trstctl.rewrite.source_restore_sha256"
+	rewriteMetadataExternalPreparation = "trstctl.rewrite.external_preparation"
 
 	rewriteRoleSource = "source"
 	rewriteRoleTarget = "target"
 	rewriteRoleActive = "active"
+
+	rewriteExternalPreparationPrivacySubjectErasure = "privacy_subject_erasure"
 )
 
 // ErrGenerationChanged reports that a read view crossed a generation cutover.
@@ -63,6 +66,18 @@ type HistoryRewriteCoordinator interface {
 	WithRead(context.Context, func(context.Context) error) error
 }
 
+// HistoryRewritePreparationResolver is the optional cross-store recovery seam
+// for a target that was fully staged and signed before an external PostgreSQL
+// preparation committed. A coordinator backed by that same PostgreSQL deployment
+// can prove the non-PII operation/target marker after a process crash; the events
+// layer then activates without needing the erased plaintext again.
+type HistoryRewritePreparationResolver interface {
+	HistoryRewritePreparationActive(
+		ctx context.Context,
+		tenantID, targetGeneration string,
+	) (bool, error)
+}
+
 type localHistoryRewriteCoordinator struct {
 	operation sync.Mutex
 	barrier   sync.RWMutex
@@ -75,6 +90,55 @@ type localHistoryReadToken struct {
 
 type localHistoryReadContextKey struct{}
 
+type localHistoryExclusiveGrant struct {
+	coordinator *localHistoryRewriteCoordinator
+	active      *atomic.Bool
+}
+
+type localHistoryExclusiveGrantContextKey struct{}
+
+// historyGenerationReadView is a private route valid only while one cutover owns
+// the exclusive history barrier. External privacy preparation needs to inspect
+// the pre-rewrite facts after the source route is frozen, but that authority must
+// not escape into a later generation. Every read receives a revocable lease; the
+// cutover stops admitting new leases and waits for all admitted reads before it
+// activates the target or deletes the source.
+type historyGenerationReadView struct {
+	log       *Log
+	name      string
+	stream    jetstream.Stream
+	mu        sync.Mutex
+	drained   *sync.Cond
+	accepting bool
+	readers   int
+}
+
+type historyGenerationReadGrant struct {
+	view *historyGenerationReadView
+}
+
+type historyGenerationReadGrantContextKey struct{}
+
+type historyGenerationReadLease struct {
+	view   *historyGenerationReadView
+	active bool
+}
+
+type historyGenerationReadLeaseContextKey struct{}
+
+// detachedHistoryGenerationContext preserves only cancellation and deadline
+// behavior after a private generation view expires. In particular it drops a
+// coordinator's package-private cutover grant: otherwise an escaped preparation
+// context could make WithRead believe it still owned the outer exclusive lock
+// during the short interval before that callback returns. The stale caller then
+// reacquires the ordinary barrier and resolves whichever generation is actually
+// authoritative after the cutover.
+type detachedHistoryGenerationContext struct {
+	context.Context
+}
+
+func (detachedHistoryGenerationContext) Value(any) any { return nil }
+
 type historyOperationToken struct {
 	log    *Log
 	active *atomic.Bool
@@ -86,6 +150,84 @@ func newLocalHistoryRewriteCoordinator() *localHistoryRewriteCoordinator {
 	return &localHistoryRewriteCoordinator{}
 }
 
+func newHistoryGenerationReadView(
+	log *Log,
+	name string,
+	stream jetstream.Stream,
+) *historyGenerationReadView {
+	view := &historyGenerationReadView{
+		log: log, name: name, stream: stream, accepting: true,
+	}
+	view.drained = sync.NewCond(&view.mu)
+	return view
+}
+
+func (v *historyGenerationReadView) acquire(
+	log *Log,
+	parent *historyGenerationReadLease,
+) *historyGenerationReadLease {
+	if v == nil {
+		return nil
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.log != log {
+		return nil
+	}
+	if parent == nil {
+		if !v.accepting {
+			return nil
+		}
+	} else if parent.view != v || !parent.active {
+		return nil
+	}
+	v.readers++
+	return &historyGenerationReadLease{view: v, active: true}
+}
+
+func (v *historyGenerationReadView) release(lease *historyGenerationReadLease) {
+	if v == nil || lease == nil {
+		return
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if lease.view != v || !lease.active {
+		return
+	}
+	lease.active = false
+	v.readers--
+	if v.readers == 0 {
+		v.drained.Broadcast()
+	}
+}
+
+func (v *historyGenerationReadView) revokeAndWait() {
+	if v == nil {
+		return
+	}
+	v.mu.Lock()
+	v.accepting = false
+	for v.readers > 0 {
+		v.drained.Wait()
+	}
+	v.mu.Unlock()
+}
+
+func (v *historyGenerationReadView) route(
+	log *Log,
+	lease *historyGenerationReadLease,
+) (string, jetstream.Stream, bool) {
+	if v == nil || lease == nil {
+		return "", nil, false
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.log != log || lease.view != v || !lease.active {
+		return "", nil, false
+	}
+	return v.name, v.stream, true
+}
+
 func (c *localHistoryRewriteCoordinator) WithRewriteOperation(ctx context.Context, fn func(context.Context) error) error {
 	c.operation.Lock()
 	defer c.operation.Unlock()
@@ -95,10 +237,21 @@ func (c *localHistoryRewriteCoordinator) WithRewriteOperation(ctx context.Contex
 func (c *localHistoryRewriteCoordinator) WithCutover(ctx context.Context, fn func(context.Context) error) error {
 	c.barrier.Lock()
 	defer c.barrier.Unlock()
-	return fn(ctx)
+	active := &atomic.Bool{}
+	active.Store(true)
+	defer active.Store(false)
+	cutoverCtx := context.WithValue(ctx, localHistoryExclusiveGrantContextKey{}, localHistoryExclusiveGrant{
+		coordinator: c,
+		active:      active,
+	})
+	return fn(cutoverCtx)
 }
 
 func (c *localHistoryRewriteCoordinator) WithRead(ctx context.Context, fn func(context.Context) error) error {
+	if grant, ok := ctx.Value(localHistoryExclusiveGrantContextKey{}).(localHistoryExclusiveGrant); ok &&
+		grant.coordinator == c && grant.active != nil && grant.active.Load() {
+		return fn(ctx)
+	}
 	if token, ok := ctx.Value(localHistoryReadContextKey{}).(localHistoryReadToken); ok &&
 		token.coordinator == c && token.active != nil && token.active.Load() {
 		return fn(ctx)
@@ -134,10 +287,14 @@ type storedEventPairValidator func(before, after storedEvent) error
 // target generation before that generation can become authoritative.
 type TenantDataContinuity func(context.Context, TenantDataRewriteReport) (Event, error)
 
-// TenantDataCutoverPreparation must acquire the backup write fence and delete
-// every read-model snapshot before invoking proceed. RewriteTenantData calls it
-// while its exclusive history cutover barrier is held; activation is refused if
-// proceed is not invoked.
+// TenantDataCutoverPreparation must acquire the backup write fence and invalidate
+// recoverable read-model snapshots before activation. Generic rewrites delete the
+// full snapshot cache before invoking proceed. The privacy external preparation
+// instead deletes its target tenant's snapshot inside the same SQL transaction as
+// its durable marker; TenantDataCutoverDefersSnapshotInvalidation is the private
+// context proof for that one exception. RewriteTenantData calls this callback while
+// its exclusive history cutover barrier is held, and refuses activation unless
+// proceed is invoked.
 type TenantDataCutoverPreparation func(
 	context.Context,
 	TenantDataRewriteReport,
@@ -204,10 +361,41 @@ type TenantDataContinuityEvidence struct {
 type TenantDataContinuityVerifier func(context.Context, TenantDataContinuityEvidence) error
 
 type tenantDataRewriteOptions struct {
-	validate   TenantDataPairValidator
-	continuity TenantDataContinuity
-	prepare    TenantDataCutoverPreparation
-	audit      TenantDataAuditContinuityProvider
+	validate            TenantDataPairValidator
+	continuity          TenantDataContinuity
+	prepare             TenantDataCutoverPreparation
+	audit               TenantDataAuditContinuityProvider
+	profile             string
+	externalPreparation func(context.Context, TenantDataRewriteReport) error
+	externalKind        string
+}
+
+type tenantDataSnapshotInvalidationContextKey struct{}
+
+// TenantDataCutoverDefersSnapshotInvalidation reports whether the cutover's
+// independently durable SQL preparation owns target-snapshot deletion. It is a
+// narrow store-facing signal, not caller-supplied policy: only the privacy
+// rewrite path can install it, and only while its exact external preparation is
+// about to run before activation. Generic rewrites continue to invalidate their
+// snapshots in the cutover wrapper before proceeding.
+func TenantDataCutoverDefersSnapshotInvalidation(ctx context.Context) bool {
+	kind, _ := ctx.Value(tenantDataSnapshotInvalidationContextKey{}).(string)
+	return kind == rewriteExternalPreparationPrivacySubjectErasure
+}
+
+func tenantDataCutoverPreparationContext(
+	ctx context.Context,
+	opts tenantDataRewriteOptions,
+) context.Context {
+	if opts.externalPreparation == nil ||
+		opts.externalKind != rewriteExternalPreparationPrivacySubjectErasure {
+		return ctx
+	}
+	return context.WithValue(
+		ctx,
+		tenantDataSnapshotInvalidationContextKey{},
+		opts.externalKind,
+	)
 }
 
 // TenantDataRewriteOption configures the mandatory proof walls for a rewrite.
@@ -232,6 +420,14 @@ func WithTenantDataCutoverPreparation(prepare TenantDataCutoverPreparation) Tena
 // WithTenantDataAuditContinuity wires audit-chain divergence evidence.
 func WithTenantDataAuditContinuity(audit TenantDataAuditContinuityProvider) TenantDataRewriteOption {
 	return func(options *tenantDataRewriteOptions) { options.audit = audit }
+}
+
+// WithTenantDataRewriteProfile binds a closed transform identity into the
+// signed continuity report. Generic historical rewrites may leave it empty;
+// recovery and artifact-resume paths that authorize one exact deterministic
+// rewrite require their profile explicitly.
+func WithTenantDataRewriteProfile(profile string) TenantDataRewriteOption {
+	return func(options *tenantDataRewriteOptions) { options.profile = strings.TrimSpace(profile) }
 }
 
 // ValidateTenantDataRewriteOptions checks the externally supplied proof walls
@@ -284,6 +480,7 @@ func (l *Log) HistoryRewriteReady() error {
 // plaintext or key material is included.
 type TenantDataRewriteReport struct {
 	OperationID         string                    `json:"operation_id"`
+	Profile             string                    `json:"profile,omitempty"`
 	TenantID            string                    `json:"tenant_id"`
 	SourceStream        string                    `json:"source_stream"`
 	SourceGeneration    string                    `json:"source_generation"`
@@ -320,6 +517,8 @@ type rewritePhase string
 const (
 	rewritePhaseStaging   rewritePhase = "staging"
 	rewritePhaseFrozen    rewritePhase = "frozen"
+	rewritePhaseReady     rewritePhase = "ready_for_external_preparation"
+	rewritePhasePrepared  rewritePhase = "prepared"
 	rewritePhaseActivated rewritePhase = "active_pending_scrub"
 	rewritePhaseScrubbing rewritePhase = "scrubbing"
 	rewritePhaseComplete  rewritePhase = "active"
@@ -412,9 +611,37 @@ func (l *Log) withRewriteOperation(
 	ctx context.Context,
 	fn func(context.Context) error,
 ) error {
+	return l.withRewriteOperationPolicy(ctx, false, fn)
+}
+
+// withBackupRestoreOperation is the single exception to the ordinary rewrite
+// floor. It serializes with every generation rewrite but lets the exact artifact
+// whose durable binding is already present resume and clear that binding.
+func (l *Log) withBackupRestoreOperation(
+	ctx context.Context,
+	fn func(context.Context) error,
+) error {
+	return l.withRewriteOperationPolicy(ctx, true, fn)
+}
+
+func (l *Log) withRewriteOperationPolicy(
+	ctx context.Context,
+	allowPendingBackupRestore bool,
+	fn func(context.Context) error,
+) error {
 	return l.withHistoryOperationLock(ctx, func(ctx context.Context) error {
+		if !allowPendingBackupRestore {
+			if err := l.requireNoPendingBackupRestoreBeforeRecovery(ctx); err != nil {
+				return err
+			}
+		}
 		if err := l.recoverUnfinishedRewriteWithCutover(ctx); err != nil {
 			return fmt.Errorf("events: recover unfinished rewrite before new operation: %w", err)
+		}
+		if !allowPendingBackupRestore {
+			if err := l.requireNoPendingBackupRestoreForOperation(ctx); err != nil {
+				return err
+			}
 		}
 		return fn(ctx)
 	})
@@ -435,11 +662,40 @@ func (l *Log) WithHistoryOperation(
 		return errors.New("events: history operation requires a history coordinator")
 	}
 	return l.withHistoryOperationLock(ctx, func(ctx context.Context) error {
+		if err := l.requireNoPendingBackupRestoreBeforeRecovery(ctx); err != nil {
+			return err
+		}
 		if err := l.recoverUnfinishedRewriteWithCutover(ctx); err != nil {
 			return fmt.Errorf("events: recover unfinished rewrite before history operation: %w", err)
 		}
+		if err := l.requireNoPendingBackupRestoreForOperation(ctx); err != nil {
+			return err
+		}
 		return fn(ctx)
 	})
+}
+
+func (l *Log) requireNoPendingBackupRestoreBeforeRecovery(ctx context.Context) error {
+	_, _, found, err := l.pendingBackupRestoreStream(ctx)
+	if err != nil {
+		return err
+	}
+	if found {
+		return ErrBackupRestoreIncomplete
+	}
+	return nil
+}
+
+// requireNoPendingBackupRestoreForOperation runs while the caller owns the
+// deployment-wide history-operation lease. Exact restore owns that same lease,
+// so the binding cannot appear between this metadata read and the callback; no
+// shared history grant (and no backup-fence lock-order edge) is needed.
+func (l *Log) requireNoPendingBackupRestoreForOperation(ctx context.Context) error {
+	_, stream, err := l.resolveActiveStream(ctx)
+	if err != nil {
+		return fmt.Errorf("events: resolve history operation restore state: %w", err)
+	}
+	return l.requireNoPendingBackupRestoreStream(ctx, stream)
 }
 
 func (l *Log) withHistoryOperationLock(
@@ -561,11 +817,13 @@ func (l *Log) rewriteStoredGeneration(
 	}
 
 	activated := false
+	externallyPrepared := false
+	sourceRestored := false
 	cleanupBeforeActivation := func(cause error) error {
 		if errors.Is(cause, errRewriteTestCrash) {
 			return cause
 		}
-		if activated {
+		if activated || externallyPrepared || sourceRestored {
 			return cause
 		}
 		restoreErr := l.restoreSourceAndDiscardTarget(context.Background(), sourceName, targetName)
@@ -623,91 +881,189 @@ func (l *Log) rewriteStoredGeneration(
 		if err != nil {
 			return err
 		}
+		report.Profile = opts.profile
 		changed = report.ChangedEvents
 		if report.ChangedEvents == 0 {
-			if err := l.restoreSourceAndDiscardTarget(ctx, sourceName, targetName); err != nil {
-				return fmt.Errorf("events: restore no-op rewrite source: %w", err)
+			proceeded := false
+			err = opts.prepare(
+				tenantDataCutoverPreparationContext(ctx, opts),
+				report,
+				func(ctx context.Context) error {
+					if proceeded {
+						return errors.New("events: no-op cutover preparation invoked completion more than once")
+					}
+					proceeded = true
+					if err := l.restoreSourceAndDiscardTarget(ctx, sourceName, targetName); err != nil {
+						return fmt.Errorf("events: restore no-op rewrite source: %w", err)
+					}
+					sourceRestored = true
+					if opts.externalPreparation == nil {
+						return nil
+					}
+					// The staged target is intentionally discarded because no retained
+					// source record contained the subject. Bind the SQL marker to the
+					// still-authoritative source generation so startup can prove that
+					// history did not move before publishing deterministic completion.
+					report.TargetStream = sourceName
+					report.TargetGeneration = sourceGeneration
+					if err := opts.externalPreparation(ctx, report); err != nil {
+						return fmt.Errorf("events: external no-op rewrite preparation: %w", err)
+					}
+					externallyPrepared = true
+					return nil
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("events: prepare no-op rewrite completion: %w", err)
+			}
+			if !proceeded {
+				return errors.New("events: no-op cutover preparation returned without invalidating snapshots and invoking completion")
 			}
 			return nil
 		}
 		proceeded := false
-		err = opts.prepare(ctx, report, func(ctx context.Context) error {
-			if proceeded {
-				return errors.New("events: cutover preparation invoked activation more than once")
-			}
-			proceeded = true
-			auditView := TenantDataAuditView{
-				Report: report, source: source, target: target,
-			}
-			checkpoint, err := opts.audit(ctx, auditView)
-			if err != nil {
-				return fmt.Errorf("events: read frozen audit checkpoint seed: %w", err)
-			}
-			auditEvidence, err := deriveAuditContinuity(ctx, auditView, checkpoint)
-			if err != nil {
-				return fmt.Errorf("events: compute frozen audit continuity: %w", err)
-			}
-			if err := validateAuditContinuity(report, auditEvidence); err != nil {
-				return err
-			}
-			report.AuditCheckpoint = auditEvidence.Checkpoint
-			report.SourceAuditHead = auditEvidence.SourcePreCutChainHead
-			report.TargetAuditHead = auditEvidence.TargetPreReceiptHead
+		err = opts.prepare(
+			tenantDataCutoverPreparationContext(ctx, opts),
+			report,
+			func(ctx context.Context) error {
+				if proceeded {
+					return errors.New("events: cutover preparation invoked activation more than once")
+				}
+				proceeded = true
+				auditView := TenantDataAuditView{
+					Report: report, source: source, target: target,
+				}
+				checkpoint, err := opts.audit(ctx, auditView)
+				if err != nil {
+					return fmt.Errorf("events: read frozen audit checkpoint seed: %w", err)
+				}
+				auditEvidence, err := deriveAuditContinuity(ctx, auditView, checkpoint)
+				if err != nil {
+					return fmt.Errorf("events: compute frozen audit continuity: %w", err)
+				}
+				if err := validateAuditContinuity(report, auditEvidence); err != nil {
+					return err
+				}
+				report.AuditCheckpoint = auditEvidence.Checkpoint
+				report.SourceAuditHead = auditEvidence.SourcePreCutChainHead
+				report.TargetAuditHead = auditEvidence.TargetPreReceiptHead
 
-			receipt, err := opts.continuity(ctx, report)
-			if err != nil {
-				return fmt.Errorf("events: create signed rewrite continuity: %w", err)
-			}
-			receiptSum, err := l.appendRewriteReceipt(ctx, target, operationID, report, receipt)
-			if err != nil {
-				return err
-			}
-			evidence := TenantDataContinuityEvidence{
-				OperationID: operationID, TenantID: tenantID,
-				SourceStream: sourceName, TargetStream: targetName,
-				ReceiptSequence: report.ReceiptSequence, Receipt: receipt, Report: report,
-			}
-			if err := l.continuityVerifier(ctx, evidence); err != nil {
-				return fmt.Errorf("events: verify signed rewrite continuity: %w", err)
-			}
+				receipt, err := opts.continuity(ctx, report)
+				if err != nil {
+					return fmt.Errorf("events: create signed rewrite continuity: %w", err)
+				}
+				receiptSum, err := l.appendRewriteReceipt(ctx, target, operationID, report, receipt)
+				if err != nil {
+					return err
+				}
+				evidence := TenantDataContinuityEvidence{
+					OperationID: operationID, TenantID: tenantID,
+					SourceStream: sourceName, TargetStream: targetName,
+					ReceiptSequence: report.ReceiptSequence, Receipt: receipt, Report: report,
+				}
+				if err := l.continuityVerifier(ctx, evidence); err != nil {
+					return fmt.Errorf("events: verify signed rewrite continuity: %w", err)
+				}
 
-			targetInfo, err := l.infoForStream(ctx, target)
-			if err != nil {
-				return fmt.Errorf("events: rewrite target info before activation: %w", err)
-			}
-			activeCfg := cloneStreamConfig(targetInfo.Config)
-			activeCfg.Subjects = []string{subjectFilter}
-			activeCfg.SubjectTransform = nil
-			activeCfg.Metadata = rewriteMetadata(
-				activeCfg.Metadata, operationID, rewriteRoleTarget, rewritePhaseActivated,
-				sourceName, targetName, tenantID, operationID,
-			)
-			activeCfg.Metadata[rewriteMetadataReceiptSeq] = strconv.FormatUint(report.ReceiptSequence, 10)
-			activeCfg.Metadata[rewriteMetadataReceiptID] = receipt.ID
-			activeCfg.Metadata[rewriteMetadataReceiptSum] = receiptSum
-			reportPayload, err := json.Marshal(report)
-			if err != nil {
-				return fmt.Errorf("events: encode rewrite report metadata: %w", err)
-			}
-			activeCfg.Metadata[rewriteMetadataReport] = base64.RawStdEncoding.EncodeToString(reportPayload)
-			activeCfg.Metadata[rewriteMetadataReportSum] = crypto.SHA256Hex(reportPayload)
-			target, err = l.js.UpdateStream(ctx, activeCfg)
-			if err != nil {
-				return fmt.Errorf("events: activate rewrite target: %w", err)
-			}
-			activated = true
-			l.setActiveStreamNamed(targetName, target)
-			if err := l.callRewriteTestHook(rewritePhaseActivated); err != nil {
-				return err
-			}
-			if err := l.scrubAndDeleteSource(ctx, source, target); err != nil {
-				return fmt.Errorf("events: scrub frozen rewrite source: %w", err)
-			}
-			if err := l.clearRewriteMetadata(ctx, target); err != nil {
-				return fmt.Errorf("events: clear activated rewrite metadata: %w", err)
-			}
-			return l.callRewriteTestHook(rewritePhaseComplete)
-		})
+				targetInfo, err := l.infoForStream(ctx, target)
+				if err != nil {
+					return fmt.Errorf("events: rewrite target info before activation: %w", err)
+				}
+				proofCfg := cloneStreamConfig(targetInfo.Config)
+				proofCfg.Metadata = rewriteMetadata(
+					proofCfg.Metadata, operationID, rewriteRoleTarget, rewritePhaseStaging,
+					sourceName, targetName, tenantID, operationID,
+				)
+				proofCfg.Metadata[rewriteMetadataReceiptSeq] = strconv.FormatUint(report.ReceiptSequence, 10)
+				proofCfg.Metadata[rewriteMetadataReceiptID] = receipt.ID
+				proofCfg.Metadata[rewriteMetadataReceiptSum] = receiptSum
+				reportPayload, err := json.Marshal(report)
+				if err != nil {
+					return fmt.Errorf("events: encode rewrite report metadata: %w", err)
+				}
+				proofCfg.Metadata[rewriteMetadataReport] = base64.RawStdEncoding.EncodeToString(reportPayload)
+				proofCfg.Metadata[rewriteMetadataReportSum] = crypto.SHA256Hex(reportPayload)
+
+				if opts.externalPreparation != nil {
+					proofCfg.Metadata[rewriteMetadataPhase] = string(rewritePhaseReady)
+					proofCfg.Metadata[rewriteMetadataExternalPreparation] = opts.externalKind
+					target, err = l.js.UpdateStream(ctx, proofCfg)
+					if err != nil {
+						return fmt.Errorf("events: persist externally preparable rewrite target: %w", err)
+					}
+					preparationErr := l.withFrozenGenerationReadView(
+						ctx, sourceName, source,
+						func(preparationCtx context.Context) error {
+							return opts.externalPreparation(preparationCtx, report)
+						},
+					)
+					if preparationErr != nil {
+						resolver, ok := l.history.(HistoryRewritePreparationResolver)
+						if !ok {
+							// Without the independent authority store we cannot distinguish
+							// a validation failure from a committed transaction whose ACK was
+							// lost. Preserve the target; only an authoritative false below is
+							// permission to roll it back.
+							externallyPrepared = true
+							return fmt.Errorf("events: external rewrite preparation: %w", preparationErr)
+						}
+						active, resolveErr := resolver.HistoryRewritePreparationActive(
+							ctx, tenantID, report.TargetGeneration,
+						)
+						if resolveErr != nil {
+							// A commit acknowledgement can be lost. If PostgreSQL cannot
+							// prove the transaction absent, preserve the signed target;
+							// deleting it could strand an already-committed marker.
+							externallyPrepared = true
+							return errors.Join(
+								fmt.Errorf("events: external rewrite preparation: %w", preparationErr),
+								fmt.Errorf("events: resolve ambiguous external preparation: %w", resolveErr),
+							)
+						}
+						if active {
+							externallyPrepared = true
+						}
+						return fmt.Errorf("events: external rewrite preparation: %w", preparationErr)
+					}
+					externallyPrepared = true
+					// This hook is deliberately after the independent SQL commit and
+					// before the target advertises "prepared". Both an ordinary error
+					// and a simulated process crash must leave the ready target intact.
+					if err := l.callRewriteTestHook(rewritePhasePrepared); err != nil {
+						return err
+					}
+					proofCfg.Metadata[rewriteMetadataPhase] = string(rewritePhasePrepared)
+					target, err = l.js.UpdateStream(ctx, proofCfg)
+					if err != nil {
+						return fmt.Errorf("events: mark externally prepared rewrite target: %w", err)
+					}
+				}
+
+				activeCfg := cloneStreamConfig(proofCfg)
+				activeCfg.Subjects = []string{subjectFilter}
+				activeCfg.SubjectTransform = nil
+				activeCfg.Metadata = rewriteMetadata(
+					activeCfg.Metadata, operationID, rewriteRoleTarget, rewritePhaseActivated,
+					sourceName, targetName, tenantID, operationID,
+				)
+				target, err = l.js.UpdateStream(ctx, activeCfg)
+				if err != nil {
+					return fmt.Errorf("events: activate rewrite target: %w", err)
+				}
+				activated = true
+				l.setActiveStreamNamed(targetName, target)
+				if err := l.callRewriteTestHook(rewritePhaseActivated); err != nil {
+					return err
+				}
+				if err := l.scrubAndDeleteSource(ctx, source, target); err != nil {
+					return fmt.Errorf("events: scrub frozen rewrite source: %w", err)
+				}
+				if err := l.clearRewriteMetadata(ctx, target); err != nil {
+					return fmt.Errorf("events: clear activated rewrite metadata: %w", err)
+				}
+				return l.callRewriteTestHook(rewritePhaseComplete)
+			},
+		)
 		if err != nil {
 			return fmt.Errorf("events: prepare rewrite cutover: %w", err)
 		}
@@ -802,9 +1158,18 @@ func (l *Log) copyRewriteMessage(
 		if err := validate(sourceEvent, targetEvent); err != nil {
 			return false, fmt.Errorf("events: validate transformed event %q: %w", sourceEvent.ID, err)
 		}
-		targetData, err = json.Marshal(targetEvent)
+		if actorsEqual(sourceEvent.Actor, targetEvent.Actor) {
+			targetData, err = RewriteStoredEnvelopeDataExact(
+				sourceRaw.Data, sourceEvent.Data, targetEvent.Data,
+			)
+		} else {
+			// Subject erasure may intentionally change both actor and data. AUD-116's
+			// scheduler profile never changes actor, so it always takes the exact
+			// one-token branch above.
+			targetData, err = json.Marshal(targetEvent)
+		}
 		if err != nil {
-			return false, fmt.Errorf("events: marshal transformed event %q: %w", sourceEvent.ID, err)
+			return false, fmt.Errorf("events: rewrite transformed event %q envelope: %w", sourceEvent.ID, err)
 		}
 	}
 
@@ -934,7 +1299,8 @@ func (l *Log) reconcileAndReport(
 			}{
 				Sequence: seq, EventID: before.ID,
 				Before: crypto.SHA256Hex(sourceRaw.Data), After: crypto.SHA256Hex(targetRaw.Data),
-			})
+			},
+			)
 			changed++
 		}
 	}
@@ -1040,6 +1406,18 @@ func validateRewritePair(
 	}
 	if err := validate(before, after); err != nil {
 		return false, fmt.Errorf("events: validate staged pair event %q: %w", before.ID, err)
+	}
+	if actorsEqual(before.Actor, after.Actor) {
+		exact, err := RewriteStoredEnvelopeDataExact(sourceRaw.Data, before.Data, after.Data)
+		if err != nil {
+			return false, fmt.Errorf("events: reconstruct exact staged pair event %q: %w", before.ID, err)
+		}
+		if !bytes.Equal(exact, targetRaw.Data) {
+			return false, fmt.Errorf(
+				"events: rewrite changed bytes outside data token at seq %d",
+				sourceRaw.Sequence,
+			)
+		}
 	}
 	return true, nil
 }
@@ -1495,7 +1873,39 @@ func (l *Log) scrubAndDeleteSource(ctx context.Context, source, target jetstream
 }
 
 func (l *Log) recoverOrCreateActiveStream(ctx context.Context, desired jetstream.StreamConfig) (jetstream.Stream, error) {
-	resolveOrCreate := func(ctx context.Context) (jetstream.Stream, error) {
+	resolveOrCreate := func(ctx context.Context, mayUpgradeLegacyRestore bool) (jetstream.Stream, error) {
+		pendingName, pending, found, err := l.pendingBackupRestoreStream(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			activeName, activeErr := l.activeStreamName(ctx)
+			switch {
+			case activeErr == nil && activeName != pendingName:
+				return nil, fmt.Errorf(
+					"events: pending backup restore generation %q conflicts with active generation %q",
+					pendingName, activeName,
+				)
+			case activeErr != nil && !errors.Is(activeErr, jetstream.ErrStreamNotFound):
+				return nil, activeErr
+			}
+			info, err := l.infoForStream(ctx, pending)
+			if err != nil {
+				return nil, fmt.Errorf("events: inspect pending backup restore recovery: %w", err)
+			}
+			if backupRestoreRouteNeedsUpgrade(info.Config) {
+				if !mayUpgradeLegacyRestore {
+					return nil, errors.New(
+						"events: legacy pending backup restore requires a history coordinator",
+					)
+				}
+				pending, err = l.freezeLegacyBackupRestoreRoute(ctx, pendingName, pending, info)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return pending, nil
+		}
 		state, err := l.findRewriteStreams(ctx)
 		if err != nil {
 			return nil, err
@@ -1539,7 +1949,7 @@ func (l *Log) recoverOrCreateActiveStream(ctx context.Context, desired jetstream
 		if state != nil {
 			return nil, errors.New("unfinished event rewrite requires a history coordinator for recovery")
 		}
-		return resolveOrCreate(ctx)
+		return resolveOrCreate(ctx, false)
 	}
 	var stream jetstream.Stream
 	err := l.history.WithRewriteOperation(ctx, func(ctx context.Context) error {
@@ -1547,7 +1957,7 @@ func (l *Log) recoverOrCreateActiveStream(ctx context.Context, desired jetstream
 			var err error
 			// Re-scan only after both locks are held. Another replica may have
 			// completed recovery while this opener waited for the operation wall.
-			stream, err = resolveOrCreate(ctx)
+			stream, err = resolveOrCreate(ctx, true)
 			return err
 		})
 	})
@@ -1744,6 +2154,12 @@ func (l *Log) recoverRewriteStreams(ctx context.Context, state rewriteStreams) e
 		l.setActiveStreamNamed(targetName, target)
 		return nil
 	case errors.Is(activeErr, jetstream.ErrStreamNotFound) && state.source != nil:
+		if state.target != nil {
+			phase := rewritePhase(state.target.Config.Metadata[rewriteMetadataPhase])
+			if phase == rewritePhaseReady || phase == rewritePhasePrepared {
+				return l.recoverExternallyPreparedRewrite(ctx, state, phase)
+			}
+		}
 		// Freeze completed but target activation did not. Source has never been
 		// scrubbed before activation, so restoring its subject is a lossless rollback.
 		return l.restoreSourceAndDiscardTarget(ctx, sourceName, targetName)
@@ -1753,6 +2169,83 @@ func (l *Log) recoverRewriteStreams(ctx context.Context, state rewriteStreams) e
 			state.operation, activeName, sourceName, targetName,
 		)
 	}
+}
+
+func (l *Log) recoverExternallyPreparedRewrite(
+	ctx context.Context,
+	state rewriteStreams,
+	phase rewritePhase,
+) error {
+	if state.source == nil || state.target == nil {
+		return errors.New("events: externally prepared rewrite lacks source or target")
+	}
+	metadata := state.target.Config.Metadata
+	if metadata[rewriteMetadataExternalPreparation] != rewriteExternalPreparationPrivacySubjectErasure {
+		return fmt.Errorf(
+			"events: prepared rewrite has unsupported external preparation kind %q",
+			metadata[rewriteMetadataExternalPreparation],
+		)
+	}
+	resolver, ok := l.history.(HistoryRewritePreparationResolver)
+	if !ok {
+		return errors.New("events: prepared rewrite recovery requires an external preparation resolver")
+	}
+	active, err := resolver.HistoryRewritePreparationActive(
+		ctx,
+		metadata[rewriteMetadataTenant],
+		metadata[rewriteMetadataGeneration],
+	)
+	if err != nil {
+		return fmt.Errorf("events: resolve prepared rewrite marker: %w", err)
+	}
+	if !active {
+		// The external transaction is authoritatively absent. The source was not
+		// scrubbed before activation, so rolling back is complete and lossless.
+		return l.restoreSourceAndDiscardTarget(
+			ctx, state.source.Config.Name, state.target.Config.Name,
+		)
+	}
+	target, err := l.js.Stream(ctx, state.target.Config.Name)
+	if err != nil {
+		return err
+	}
+	if err := l.verifyTargetContinuity(ctx, target, phase); err != nil {
+		return err
+	}
+
+	info, err := l.infoForStream(ctx, target)
+	if err != nil {
+		return err
+	}
+	activeCfg := cloneStreamConfig(info.Config)
+	activeCfg.Subjects = []string{subjectFilter}
+	activeCfg.SubjectTransform = nil
+	activeCfg.Metadata = rewriteMetadata(
+		activeCfg.Metadata,
+		metadata[rewriteMetadataOperation],
+		rewriteRoleTarget,
+		rewritePhaseActivated,
+		state.source.Config.Name,
+		state.target.Config.Name,
+		metadata[rewriteMetadataTenant],
+		metadata[rewriteMetadataGeneration],
+	)
+	target, err = l.js.UpdateStream(ctx, activeCfg)
+	if err != nil {
+		return fmt.Errorf("events: activate recovered externally prepared target: %w", err)
+	}
+	l.setActiveStreamNamed(state.target.Config.Name, target)
+	source, err := l.js.Stream(ctx, state.source.Config.Name)
+	if err != nil {
+		return err
+	}
+	if err := l.scrubAndDeleteSource(ctx, source, target); err != nil {
+		return fmt.Errorf("events: scrub recovered externally prepared source: %w", err)
+	}
+	if err := l.clearRewriteMetadata(ctx, target); err != nil {
+		return fmt.Errorf("events: clear recovered externally prepared metadata: %w", err)
+	}
+	return nil
 }
 
 func (l *Log) verifyActivatedTargetContinuity(ctx context.Context, target jetstream.Stream) error {
@@ -1931,6 +2424,7 @@ func validateRecoveredRewriteReport(
 	delete(stagedConfig.Metadata, rewriteMetadataReceiptSum)
 	delete(stagedConfig.Metadata, rewriteMetadataReport)
 	delete(stagedConfig.Metadata, rewriteMetadataReportSum)
+	delete(stagedConfig.Metadata, rewriteMetadataExternalPreparation)
 	digest, err := rewriteAuthorizedConfigDigest(stagedConfig)
 	if err != nil {
 		return fmt.Errorf("events: digest recovered target config: %w", err)
@@ -2086,14 +2580,90 @@ func (l *Log) WithHistoryRead(ctx context.Context, fn func(context.Context) erro
 	if fn == nil {
 		return errors.New("events: history read callback is required")
 	}
-	return l.withHistoryRead(ctx, fn)
+	return l.withHistoryRead(ctx, func(readCtx context.Context) error {
+		_, stream, err := l.resolveActiveStream(readCtx)
+		if err != nil {
+			return fmt.Errorf("events: resolve history read restore state: %w", err)
+		}
+		if err := l.requireNoPendingBackupRestoreStream(readCtx, stream); err != nil {
+			return err
+		}
+		return fn(readCtx)
+	})
+}
+
+func (l *Log) withFrozenGenerationReadView(
+	ctx context.Context,
+	name string,
+	stream jetstream.Stream,
+	fn func(context.Context) error,
+) error {
+	view := newHistoryGenerationReadView(l, name, stream)
+	// The caller already owns the exclusive barrier. Hide its coordinator grant
+	// from escaped preparation contexts: only a live generation lease may bypass
+	// the barrier, and an expired context must reacquire the ordinary read wall.
+	viewCtx := context.WithValue(
+		ctx,
+		localHistoryExclusiveGrantContextKey{},
+		localHistoryExclusiveGrant{},
+	)
+	viewCtx = context.WithValue(
+		viewCtx,
+		historyGenerationReadGrantContextKey{},
+		historyGenerationReadGrant{view: view},
+	)
+	defer view.revokeAndWait()
+	return fn(viewCtx)
 }
 
 func (l *Log) withHistoryRead(ctx context.Context, fn func(context.Context) error) error {
+	if lease, ok := ctx.Value(historyGenerationReadLeaseContextKey{}).(*historyGenerationReadLease); ok &&
+		lease != nil && lease.view != nil {
+		if nested := lease.view.acquire(l, lease); nested != nil {
+			return l.withHistoryGenerationReadLease(ctx, nested, fn)
+		}
+		ctx = detachedHistoryGenerationContext{Context: ctx}
+	}
+	if grant, ok := ctx.Value(historyGenerationReadGrantContextKey{}).(historyGenerationReadGrant); ok &&
+		grant.view != nil {
+		if lease := grant.view.acquire(l, nil); lease != nil {
+			return l.withHistoryGenerationReadLease(ctx, lease, fn)
+		}
+		ctx = detachedHistoryGenerationContext{Context: ctx}
+	}
 	if l.history == nil {
 		return fn(ctx)
 	}
 	return l.history.WithRead(ctx, fn)
+}
+
+func (l *Log) withHistoryGenerationReadLease(
+	ctx context.Context,
+	lease *historyGenerationReadLease,
+	fn func(context.Context) error,
+) error {
+	leaseCtx := context.WithValue(
+		ctx,
+		historyGenerationReadGrantContextKey{},
+		historyGenerationReadGrant{},
+	)
+	leaseCtx = context.WithValue(
+		leaseCtx,
+		historyGenerationReadLeaseContextKey{},
+		lease,
+	)
+	defer lease.view.release(lease)
+	return fn(leaseCtx)
+}
+
+func (l *Log) historyGenerationReadRoute(
+	ctx context.Context,
+) (string, jetstream.Stream, bool) {
+	lease, _ := ctx.Value(historyGenerationReadLeaseContextKey{}).(*historyGenerationReadLease)
+	if lease == nil || lease.view == nil {
+		return "", nil, false
+	}
+	return lease.view.route(l, lease)
 }
 
 func (l *Log) infoForStream(ctx context.Context, stream jetstream.Stream) (*jetstream.StreamInfo, error) {
@@ -2103,13 +2673,53 @@ func (l *Log) infoForStream(ctx context.Context, stream jetstream.Stream) (*jets
 }
 
 func (l *Log) activeStreamName(ctx context.Context) (string, error) {
+	if name, _, ok := l.historyGenerationReadRoute(ctx); ok {
+		return name, nil
+	}
 	return l.js.StreamNameBySubject(ctx, activeStreamProbeSubject)
 }
 
+// ActiveGeneration returns the durable identity of the generation that owns
+// events.>. Startup privacy recovery uses it to prove that PostgreSQL's prepared
+// completion marker names the history generation recovered during Log.Open.
+func (l *Log) ActiveGeneration(ctx context.Context) (string, error) {
+	var generation string
+	err := l.withHistoryRead(ctx, func(ctx context.Context) error {
+		_, stream, err := l.resolveActiveStream(ctx)
+		if err != nil {
+			return err
+		}
+		info, err := l.infoForStream(ctx, stream)
+		if err != nil {
+			return err
+		}
+		generation = streamGeneration(info)
+		if generation == "" {
+			return errors.New("events: active stream has no generation identity")
+		}
+		return nil
+	})
+	return generation, err
+}
+
 func (l *Log) resolveActiveStream(ctx context.Context) (string, jetstream.Stream, error) {
+	if name, stream, ok := l.historyGenerationReadRoute(ctx); ok {
+		return name, stream, nil
+	}
 	name, err := l.activeStreamName(ctx)
 	if err != nil {
-		return "", nil, err
+		if !errors.Is(err, jetstream.ErrStreamNotFound) {
+			return "", nil, err
+		}
+		pendingName, pending, found, pendingErr := l.pendingBackupRestoreStream(ctx)
+		if pendingErr != nil {
+			return "", nil, pendingErr
+		}
+		if !found {
+			return "", nil, err
+		}
+		l.setActiveStreamNamed(pendingName, pending)
+		return pendingName, pending, nil
 	}
 	l.activeMu.RLock()
 	if l.activeName == name && l.stream != nil {
@@ -2150,28 +2760,43 @@ func (l *Log) publishToActive(
 	const attempts = 8
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
+		// This hook announces an attempted cross-cutover append. Keep it before
+		// resolving the current broker route so rewrite concurrency tests can
+		// observe the exact no-owner/expected-stream retry window.
 		if l.publishAttemptTestHook != nil {
 			l.publishAttemptTestHook()
 		}
-		name, _, err := l.resolveActiveStream(ctx)
-		if err != nil {
-			lastErr = err
-		} else {
-			opts := append([]jetstream.PublishOpt{}, options...)
-			opts = append(opts, jetstream.WithExpectStream(name))
-			ack, publishErr := l.js.Publish(ctx, subject, payload, opts...)
-			if publishErr == nil {
-				if stream, streamErr := l.js.Stream(ctx, ack.Stream); streamErr == nil {
-					l.setActiveStreamNamed(ack.Stream, stream)
+		name, stream, err := l.resolveActiveStream(ctx)
+		if err == nil {
+			// The metadata check gives ordinary retries the fixed fail-closed
+			// error. The broker route installed in the same UpdateStream as the
+			// binding is the race-free authority: if another replica binds after
+			// this check, JetStream no longer accepts subject events.> into name.
+			if err = l.requireNoPendingBackupRestoreStream(ctx, stream); err == nil {
+				if l.publishAfterRestoreCheckTestHook != nil {
+					l.publishAfterRestoreCheckTestHook()
 				}
-				return ack, nil
+				opts := append([]jetstream.PublishOpt{}, options...)
+				opts = append(opts, jetstream.WithExpectStream(name))
+				ack, publishErr := l.js.Publish(ctx, subject, payload, opts...)
+				if publishErr == nil {
+					if active, streamErr := l.js.Stream(ctx, ack.Stream); streamErr == nil {
+						l.setActiveStreamNamed(ack.Stream, active)
+					}
+					return ack, nil
+				}
+				err = publishErr
 			}
-			lastErr = publishErr
-			l.activeMu.Lock()
-			l.activeName = ""
-			l.stream = nil
-			l.activeMu.Unlock()
+			if errors.Is(err, ErrBackupRestoreIncomplete) {
+				return nil, err
+			}
 		}
+		lastErr = err
+		l.activeMu.Lock()
+		l.activeName = ""
+		l.stream = nil
+		l.activeMu.Unlock()
+
 		timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
 		select {
 		case <-ctx.Done():

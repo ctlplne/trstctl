@@ -4,6 +4,7 @@ package events_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,7 +13,9 @@ import (
 	natsserver "github.com/nats-io/nats-server/v2/server"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 )
 
 func embeddedCfg(t *testing.T) config.NATS {
@@ -66,6 +69,78 @@ func TestAppendAssignsSequenceAndTime(t *testing.T) {
 	}
 	if e2.Sequence != 2 {
 		t.Errorf("second append Sequence = %d, want 2 (monotonic)", e2.Sequence)
+	}
+}
+
+func TestJetStreamDuplicateMemoryReallyExpires(t *testing.T) {
+	const duplicateWindow = 100 * time.Millisecond // JetStream's supported minimum.
+	log, err := events.Open(context.Background(), embeddedCfg(t),
+		events.WithDuplicateWindowForTesting(duplicateWindow))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	event := events.Event{
+		ID: "finite-dedup-window", Type: "test.finite.dedupe", TenantID: "tenant-a",
+		Time: time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC), Data: []byte("same bytes"),
+	}
+	first, err := log.Append(context.Background(), event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(4 * duplicateWindow)
+	second, err := log.Append(context.Background(), event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Sequence == first.Sequence {
+		t.Fatalf("JetStream still deduplicated after %s: both sequence %d", duplicateWindow, first.Sequence)
+	}
+	if got := len(collect(t, log, 0)); got != 2 {
+		t.Fatalf("retained events after duplicate-memory expiry = %d, want 2", got)
+	}
+}
+
+func TestEventByIDAcceptsExactRetainedDuplicatesAndRejectsConflicts(t *testing.T) {
+	const duplicateWindow = 100 * time.Millisecond
+	log, err := events.Open(context.Background(), embeddedCfg(t),
+		events.WithDuplicateWindowForTesting(duplicateWindow))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	ctx := context.Background()
+	event := events.Event{
+		ID: "event-by-id-finite-dedupe", Type: "test.event-by-id", TenantID: "tenant-a",
+		Time: time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC), Data: []byte("canonical"),
+		Actor: &events.Actor{Subject: "producer-a", Roles: []string{"operator"}},
+	}
+	first, err := log.Append(ctx, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(4 * duplicateWindow)
+	second, err := log.Append(ctx, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Sequence == first.Sequence {
+		t.Fatalf("exact duplicate remained inside finite broker window at sequence %d", first.Sequence)
+	}
+	canonical, found, err := log.EventByID(ctx, event.ID)
+	if err != nil || !found || canonical.Sequence != first.Sequence ||
+		!reflect.DeepEqual(canonical.Actor, event.Actor) || !reflect.DeepEqual(canonical.Data, event.Data) {
+		t.Fatalf("exact retained duplicate lookup = (found=%t err=%v event=%+v)", found, err, canonical)
+	}
+
+	time.Sleep(4 * duplicateWindow)
+	conflict := event
+	conflict.Data = []byte("changed-command")
+	if _, err := log.Append(ctx, conflict); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := log.EventByID(ctx, event.ID); !found || !errors.Is(err, events.ErrConflictingEventIdentity) {
+		t.Fatalf("conflicting retained duplicate lookup = (found=%t err=%v), want ErrConflictingEventIdentity", found, err)
 	}
 }
 
@@ -418,5 +493,195 @@ func TestLegacyEnvelopeReadsAsDefaultVersion(t *testing.T) {
 	}
 	if got[0].SchemaVersion != events.DefaultSchemaVersion {
 		t.Errorf("legacy (no-v) envelope replayed as version %d, want %d", got[0].SchemaVersion, events.DefaultSchemaVersion)
+	}
+}
+
+func TestLegacySchedulerWriteFloorRequiresUnforgeableRestoreAuthority(t *testing.T) {
+	key := []byte("scheduler-history-restore-authority-key")
+	authorizer, err := crypto.NewBackupRestoreAuthorizer(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(authorizer.Destroy)
+	log, err := events.Open(
+		context.Background(), embeddedCfg(t),
+		events.WithBackupRestoreAuthorizer(authorizer),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	log.EnforceLegacySchedulerWriteFloor()
+	event := events.Event{
+		ID: "legacy-scheduler-event", Type: schedulerhistory.EventType,
+		TenantID: "11111111-1111-1111-1111-111111111111", SchemaVersion: 1,
+		Time: time.Now().UTC(),
+		Data: []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"provider secret"}`),
+	}
+	if _, err := log.Append(context.Background(), event); !errors.Is(err, schedulerhistory.ErrSanitationRequired) {
+		t.Fatalf("Append error = %v, want sanitation-required", err)
+	}
+	if _, err := log.Import(context.Background(), event); !errors.Is(err, schedulerhistory.ErrSanitationRequired) {
+		t.Fatalf("Import error = %v, want sanitation-required", err)
+	}
+	history, err := events.LegacyBackupHistoryRecord(context.Background(), 1, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifactDigest := crypto.SHA256Hex([]byte("verified backup artifact"))
+	source := func(yield func(events.BackupHistoryRecord) error) error { return yield(history) }
+	if _, err := log.RestoreBackupHistory(context.Background(), 1, artifactDigest,
+		func(yield func(events.BackupHistoryRecord) error) error { return yield(history) }); !errors.Is(err, events.ErrBackupRestoreAuthorizationRequired) {
+		t.Fatalf("unguarded restore error = %v, want authorization-required", err)
+	}
+	historyDigest, err := events.BackupHistoryDigest(context.Background(), 1, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	intent := crypto.BackupRestoreIntent{
+		EventCutSequence: 1,
+		ArtifactSHA256:   artifactDigest,
+		HistorySHA256:    historyDigest,
+	}
+	grant, err := crypto.BackupRestoreAuthorization(key, intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(grant.Destroy)
+	wrongGrant, err := crypto.BackupRestoreAuthorization(
+		[]byte("wrong-scheduler-history-authority"), intent,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(wrongGrant.Destroy)
+	if _, err := log.RestoreAuthorizedBackupHistory(
+		context.Background(), 1, intent.ArtifactSHA256, wrongGrant, source,
+	); !errors.Is(err, events.ErrBackupRestoreAuthorizationRequired) {
+		t.Fatalf("wrong-key restore grant error = %v, want authorization-required", err)
+	}
+	transplantedEvent := event
+	transplantedEvent.ID = "transplanted-legacy-scheduler-event"
+	transplantedEvent.Data = []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"different provider secret"}`)
+	transplantedHistory, err := events.LegacyBackupHistoryRecord(
+		context.Background(), 1, transplantedEvent,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.RestoreAuthorizedBackupHistory(
+		context.Background(), 1, intent.ArtifactSHA256, grant,
+		func(yield func(events.BackupHistoryRecord) error) error { return yield(transplantedHistory) },
+	); !errors.Is(err, events.ErrBackupRestoreAuthorizationRequired) {
+		t.Fatalf("transplanted restore source error = %v, want authorization-required", err)
+	}
+	if pristine, err := log.BackupHistoryPristine(context.Background()); err != nil || !pristine {
+		t.Fatalf("rejected restore mutated target: pristine=%t err=%v", pristine, err)
+	}
+	if _, err := log.RestoreAuthorizedBackupHistory(
+		context.Background(), 1, intent.ArtifactSHA256, grant, source,
+	); err != nil {
+		t.Fatalf("authorized exact restore rejected historical event: %v", err)
+	}
+}
+
+func TestEventByIDNeverReturnsUnsafeLegacySchedulerPayload(t *testing.T) {
+	for _, data := range [][]byte{
+		[]byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"provider secret"}`),
+		[]byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":7}`),
+	} {
+		log := openEmbedded(t)
+		appended, err := log.Append(context.Background(), events.Event{
+			Type: schedulerhistory.EventType, TenantID: "11111111-1111-1111-1111-111111111111",
+			SchemaVersion: 1, Data: data,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, found, err := log.EventByID(context.Background(), appended.ID)
+		if !errors.Is(err, schedulerhistory.ErrSanitationRequired) {
+			t.Fatalf("EventByID error = %v, want sanitation-required", err)
+		}
+		if found || len(got.Data) != 0 {
+			t.Fatalf("EventByID returned unsafe envelope: found=%v event=%#v", found, got)
+		}
+	}
+}
+
+func TestEventByIDUnsafeLegacyPayloadWinsOverDuplicateConflict(t *testing.T) {
+	const duplicateWindow = 100 * time.Millisecond
+	log, err := events.Open(
+		context.Background(), embeddedCfg(t),
+		events.WithDuplicateWindowForTesting(duplicateWindow),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	secret := "provider-credential-in-conflicting-history"
+	event := events.Event{
+		ID: "unsafe-conflicting-scheduler-event", Type: schedulerhistory.EventType,
+		TenantID: "11111111-1111-1111-1111-111111111111", SchemaVersion: 1,
+		Time: time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC),
+		Data: []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"` + secret + `"}`),
+	}
+	if _, err := log.Append(context.Background(), event); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(4 * duplicateWindow)
+	conflict := event
+	conflict.Data = []byte(`{"schedule_id":"schedule-1","run_id":"run-2","status":"failed","error":"different provider detail"}`)
+	if _, err := log.Append(context.Background(), conflict); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := log.EventByID(context.Background(), event.ID)
+	if !errors.Is(err, schedulerhistory.ErrSanitationRequired) ||
+		!errors.Is(err, events.ErrConflictingEventIdentity) {
+		t.Fatalf("EventByID conflict error = %v, want sanitation and conflict sentinels", err)
+	}
+	if found || len(got.Data) != 0 || strings.Contains(err.Error(), secret) {
+		t.Fatalf("EventByID disclosed unsafe conflict: found=%v event=%#v err=%v", found, got, err)
+	}
+}
+
+func TestLegacySchedulerReadFloorPreflightsReplayAndExportBeforeCallbacks(t *testing.T) {
+	log := openEmbedded(t)
+	secret := "provider-credential-late-in-history"
+	if _, err := log.Append(context.Background(), events.Event{
+		Type: "unrelated.event", TenantID: "11111111-1111-1111-1111-111111111111",
+		Data: []byte(`{"safe":true}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	unsafe, err := log.Append(context.Background(), events.Event{
+		Type: schedulerhistory.EventType, TenantID: "11111111-1111-1111-1111-111111111111",
+		SchemaVersion: 1,
+		Data:          []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"` + secret + `"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.EnforceLegacySchedulerWriteFloor()
+
+	replayed := 0
+	err = log.Replay(context.Background(), unsafe.Sequence+1, func(events.Event) error {
+		replayed++
+		return nil
+	})
+	if !errors.Is(err, schedulerhistory.ErrSanitationRequired) || replayed != 0 ||
+		strings.Contains(err.Error(), secret) {
+		t.Fatalf("Replay floor = callbacks:%d err:%v", replayed, err)
+	}
+	exported := 0
+	err = log.ExportBackupHistoryThrough(
+		context.Background(), unsafe.Sequence,
+		func(events.BackupHistoryRecord) error {
+			exported++
+			return nil
+		},
+	)
+	if !errors.Is(err, schedulerhistory.ErrSanitationRequired) || exported != 0 ||
+		strings.Contains(err.Error(), secret) {
+		t.Fatalf("Export floor = callbacks:%d err:%v", exported, err)
 	}
 }

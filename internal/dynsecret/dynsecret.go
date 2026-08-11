@@ -87,9 +87,10 @@ type Lease struct {
 
 // RevokeItem is a queued backend revocation.
 type RevokeItem struct {
-	LeaseID    string
-	Provider   string
-	BackendRef string
+	TenantEpoch string `json:"tenant_epoch,omitempty"`
+	LeaseID     string
+	Provider    string
+	BackendRef  string
 }
 
 // RevokeQueue is the durable revocation outbox (AN-6): a revocation enqueued here

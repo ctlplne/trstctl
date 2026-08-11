@@ -173,8 +173,13 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// row: ingesting an AD CS CA database is lifecycle visibility, not issuance.
 	// AUD-104's `incidents outbox-reconciliation-conflicts list` raises it to
 	// 358 and maps the AUD-97 quarantine onto the incident-response row.
-	if len(out) != 358 {
-		t.Fatalf("CLI commands = %d, want 358", len(out))
+	// AUD-77's three `approval-requests` commands raise it to 361 and map the
+	// genuine immutable request list plus exact request-ID/digest approve and deny
+	// decisions onto the JIT approval-flow feature row. AUD-105 removes the
+	// application-secret bulk-import command because that compatibility route is
+	// explicitly unavailable, leaving 360 commands.
+	if len(out) != 360 {
+		t.Fatalf("CLI commands = %d, want 360", len(out))
 	}
 	return out
 }

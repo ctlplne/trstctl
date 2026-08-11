@@ -51,7 +51,7 @@ func TestDynamicSecretPairWritersTakeTheOperationLockFirst(t *testing.T) {
 			"request-side intent: claims the idempotency key, then writes the leases row"},
 		{"dynamic_secret_lease.go", "ApplyDynamicSecretLeaseIssuedTx",
 			"worker-side result: updates the leases row, then completes the operation"},
-		{"dynamic_secret_lease.go", "ApplyDynamicSecretLeaseIssuanceFailedTx",
+		{"dynamic_secret_lease.go", "ApplyDynamicSecretLeaseIssuanceFailedForEpochTx",
 			"worker-side terminal failure: same leases -> operations walk"},
 	} {
 		body, ok := funcBody(t, w.file, w.fn)
@@ -92,12 +92,26 @@ func TestDynamicSecretOperationLockKeyIsShared(t *testing.T) {
 	if !strings.Contains(body, "dynamic-secret-operation") {
 		t.Error("AN5-LOCKORDER: the lock key must stay namespaced to dynamic-secret-operation so it cannot collide with another advisory-lock family")
 	}
-	// tenant + idempotency key: per-command scope. Tenant-only would serialize every
-	// concurrent issuance for a tenant; key-only would collide across tenants (AN-1).
-	for _, part := range []string{"tenantID", "idempotencyKey"} {
-		if !strings.Contains(body, part) {
-			t.Errorf("AN5-LOCKORDER: the lock key must include %s -- tenant-only serializes unrelated issuances, key-only crosses the tenant boundary (AN-1)", part)
-		}
+	// Inspect the constructed key, not merely the parameter list. A parameter can
+	// remain validated yet accidentally disappear from the actual advisory lane.
+	const exactKey = `"dynamic-secret-operation\x1f"+tenantID+"\x1f"+tenantEpoch+"\x1f"+idempotencyKey`
+	if !strings.Contains(strings.ReplaceAll(body, " ", ""), exactKey) {
+		t.Error("AN5-LOCKORDER: the advisory key must concatenate tenant, registration epoch, and idempotency key in that order")
+	}
+}
+
+func TestDynamicSecretIssuanceFailureValidatesEpochBeforePairLock(t *testing.T) {
+	body, ok := funcBody(t, "dynamic_secret_lease.go", "ApplyDynamicSecretLeaseIssuanceFailedForEpochTx")
+	if !ok {
+		t.Fatal("AUD108-LOCKORDER: epoch-scoped issuance failure projector is missing")
+	}
+	validateAt := strings.Index(body, "ValidateDynamicSecretTenantEpochTx(")
+	lockAt := strings.Index(body, "lockDynamicSecretOperationTx(")
+	leaseWriteAt := strings.Index(body, "UPDATE dynamic_secret_leases")
+	if validateAt < 0 || lockAt < 0 || leaseWriteAt < 0 ||
+		validateAt > lockAt || lockAt > leaseWriteAt {
+		t.Errorf("AUD108-LOCKORDER: want tenant epoch validation -> operation advisory lock -> lease write; offsets validation=%d lock=%d write=%d",
+			validateAt, lockAt, leaseWriteAt)
 	}
 }
 

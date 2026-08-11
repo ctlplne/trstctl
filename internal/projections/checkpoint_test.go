@@ -4,10 +4,17 @@ package projections_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestProjectCatchUpReplaysOnlyAfterCheckpoint is the SPINE-007 acceptance: boot
@@ -66,6 +73,74 @@ func TestProjectCatchUpReplaysOnlyAfterCheckpoint(t *testing.T) {
 	cp2, _ := s.ProjectionCheckpoint(ctx)
 	if cp2 != newHead {
 		t.Fatalf("checkpoint = %d after second catch-up, want new head %d", cp2, newHead)
+	}
+}
+
+func TestProjectCatchUpConcurrentReplicasRefuseActivePrivacyPreparationAUD109(t *testing.T) {
+	ctx := context.Background()
+	primary := newStore(t)
+	replica, err := store.Open(ctx, testDSN)
+	if err != nil {
+		t.Fatalf("open replica store: %v", err)
+	}
+	t.Cleanup(func() { replica.Close() })
+	log := openLog(t)
+
+	const subject = "catch-up-race@example.com"
+	const operationID = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	t.Cleanup(func() {
+		_, _ = primary.SystemPool().Exec(context.Background(), `
+			DELETE FROM privacy_subject_erasure_preparations
+			 WHERE tenant_id = $1 AND operation_id = $2`, tenantA, operationID)
+	})
+	preparedAt := time.Now().UTC().Round(0)
+	_, err = primary.PreparePrivacySubjectErasure(ctx, tenantA, subject,
+		store.PrivacySubjectErasurePreparation{
+			PrivacySubjectErasure: store.PrivacySubjectErasure{
+				TenantID: tenantA, SubjectRef: privacy.SubjectRef(tenantA, subject),
+				Reason: "catch-up barrier proof", ErasedAt: preparedAt,
+			},
+			OperationID:        operationID,
+			RequestBinding:     strings.Repeat("2", 64),
+			EventID:            "sha256:" + strings.Repeat("3", 64),
+			RewriteOperationID: "catch-up-rewrite-operation",
+			TargetGeneration:   "catch-up-rewrite-generation",
+		})
+	if err != nil {
+		t.Fatalf("prepare privacy erasure: %v", err)
+	}
+	mustAppend(t, log, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		Data: tenantRegistered("must-not-project"),
+	})
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, projector := range []*projections.Projector{
+		projections.New(primary), projections.New(replica),
+	} {
+		projector := projector
+		go func() {
+			<-start
+			results <- projector.ProjectCatchUp(ctx, log)
+		}()
+	}
+	close(start)
+	for range 2 {
+		if err := <-results; !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
+			t.Fatalf("concurrent catch-up error = %v, want active-preparation refusal", err)
+		}
+	}
+
+	checkpoint, err := primary.ProjectionCheckpoint(ctx)
+	if err != nil {
+		t.Fatalf("read checkpoint: %v", err)
+	}
+	if checkpoint != 0 {
+		t.Fatalf("checkpoint advanced across active privacy preparation: got %d, want 0", checkpoint)
+	}
+	if _, err := primary.GetTenant(ctx, tenantA); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("tenant projection crossed active privacy preparation: %v", err)
 	}
 }
 

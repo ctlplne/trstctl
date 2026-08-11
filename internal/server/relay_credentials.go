@@ -301,6 +301,10 @@ type RelayDeployIntent struct {
 	//
 	// Empty on a first issuance, which genuinely replaces nothing.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
+	// Issuance is present on an approval-gated first issuance. The agent does
+	// not interpret it; the control plane re-reads this original job payload
+	// when the CSR returns and enforces the exact reviewed profile revision/TTL.
+	Issuance *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
 }
 
 // verifyAddressKey and verifyServerNameKey are the deployment-target config

@@ -54,3 +54,41 @@ To reset the demo to a fresh seed:
 docker compose -f deploy/demo/docker-compose.yml down --volumes
 docker compose -f deploy/demo/docker-compose.yml up --build
 ```
+
+## Prove bootstrap custody across containers and restarts
+
+The seed image is also the demo's reusable admin image. It does not start its own
+signer or create a second credential-encryption key: `docker compose run` gives it
+the running deployment's signer socket plus read-only views of the deployment KEK,
+signer authorization secret, and audit data. A separate admin service would only
+duplicate that security-sensitive wiring.
+
+Run the assembled custody proof from the repository root:
+
+```bash
+bash deploy/demo/aud68-custody-proof.sh
+```
+
+Prerequisites are Bash, `curl`, `jq`, `cmp`, a locally reachable Docker Engine, and
+Docker Compose v2 with `wait`, `up --wait`, and `--wait-timeout`. Host ports 9443
+and 19081 must be free for the disposable stack. The script checks the commands,
+Compose features, daemon, and Docker-name collisions before it builds anything.
+
+The script derives a genuinely unique Compose project from an exclusively created
+temporary directory. Its cleanup trap can run `down --volumes` only for that exact,
+validated project name, so it never addresses the normal `trstctl-demo` project or
+its containers and volumes. The proof also overrides the ordinary demo's local
+image tags with two project-unique tags, refuses exact container/network/volume/image
+name collisions even when an object lacks Compose labels, and removes only those
+proof-owned image tags after its containers are down.
+
+The seed, running control image, and a distinct admin container all replay the same
+fixed tenant-registration receipt. Narrow tokens are kept only in mode-0600 files;
+the proof rejects any token file containing bytes beyond the one minted token, and
+token values are neither printed nor placed in process arguments. Both control and
+admin tokens authenticate a tenant-local certificate read before and after the
+control/signer restart. Each read must return at least one seeded certificate whose
+identifier, tenant, subject, fingerprint, and status match the served schema. With
+normal appenders stopped, wrong and missing custody runs must fail with empty stdout
+while exact PostgreSQL tenant/token/registration authority and JetStream event-head
+snapshots remain unchanged.

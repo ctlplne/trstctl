@@ -26,7 +26,7 @@ func TestProfileRequirementTurnsOnDualControl(t *testing.T) {
 		ProfileName:      "prod",
 		RequiresApproval: true,
 	})
-	err := gate.check(context.Background(), principal, gateTenant, "identity-1", orchestrator.StateIssued, nil)
+	_, err := gate.checkWithApproval(context.Background(), principal, gateTenant, "identity-1", orchestrator.StateIssued, nil, testGateApprovalIntent())
 	ge := asGateErr(t, err)
 	if ge.status != http.StatusForbidden || !strings.Contains(ge.detail, "dual control") {
 		t.Fatalf("profile-gated issuance err = %v, want dual-control 403", err)
@@ -36,7 +36,7 @@ func TestProfileRequirementTurnsOnDualControl(t *testing.T) {
 	}
 
 	checker.approved = true
-	if err := gate.check(context.Background(), principal, gateTenant, "identity-1", orchestrator.StateIssued, nil); err != nil {
+	if _, err := gate.checkWithApproval(context.Background(), principal, gateTenant, "identity-1", orchestrator.StateIssued, nil, testGateApprovalIntent()); err != nil {
 		t.Fatalf("approved profile-gated issuance denied: %v", err)
 	}
 

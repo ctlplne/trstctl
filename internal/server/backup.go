@@ -15,8 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
@@ -25,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/historycontinuity"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -118,7 +117,9 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 		return 0, err
 	}
 	defer signerRuntime.Close()
-	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
+	log, err := openSanitizedHistoryAwareEventLog(
+		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
@@ -260,14 +261,16 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		return backup.FullManifest{}, err
 	}
 	defer signerRuntime.Close()
-	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
+	log, err := openSanitizedHistoryAwareEventLog(
+		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
+	)
 	if err != nil {
 		return backup.FullManifest{}, fmt.Errorf("open event log for full backup: %w", err)
 	}
 	defer func() { _ = log.Close() }()
 
 	var (
-		tx            pgx.Tx
+		tx            *backup.PostgresStateSnapshot
 		eventCut      uint64
 		eventArtifact backup.Artifact
 	)
@@ -429,6 +432,9 @@ func restoreEventLog(
 		return 0, err
 	}
 	defer secret.Wipe(key)
+	if len(key) == 0 {
+		return 0, errors.New("restore requires the deployment KEK so the HMAC-verified artifact can authorize the restore-only event ingress")
+	}
 	preflight, err := backup.VerifyEventLogBackupWithKey(f, key)
 	if err != nil {
 		return 0, fmt.Errorf("restore event-log preflight: %w", err)
@@ -457,27 +463,55 @@ func restoreEventLog(
 		return 0, err
 	}
 	defer signerRuntime.Close()
-	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
+	restoreAuthorizer, err := crypto.NewBackupRestoreAuthorizer(key)
+	if err != nil {
+		return 0, fmt.Errorf("configure authenticated backup restore authority: %w", err)
+	}
+	defer restoreAuthorizer.Destroy()
+	log, err := openHistoryAwareEventLog(
+		ctx, cfg.NATS, st, auditKey,
+		events.WithBackupRestoreAuthorizer(restoreAuthorizer),
+	)
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
 	defer func() { _ = log.Close() }()
+	// Restore is the only production ingress allowed to see an artifact-bound
+	// raw prefix. Install the live floor immediately, but do not sanitize that
+	// prefix: its exact bytes are the durable resume proof for the HMAC-bound
+	// artifact. Successful exact restore clears the binding before sanitation.
+	log.EnforceLegacySchedulerWriteFloor()
+	if head, err := log.LastSequence(ctx); err != nil {
+		return 0, fmt.Errorf("inspect restore event target: %w", err)
+	} else if head != 0 && !resumeIfMatching {
+		return 0, backup.ErrRestoreTargetNotEmpty
+	}
+	// Event history rebuilds the command, but not the exact PostgreSQL fact that
+	// says how many worker generations may already have reached its receiver.
+	// Turn the deployment-wide receiver light red before the first append. A
+	// successful full restore clears it only after importing PostgreSQL authority
+	// and completing the final bounded replay; event-only restore leaves it red.
+	if err := st.FenceSecretSyncReceiverRecovery(ctx, "event_log_restore_requires_paired_postgres_receiver_authority"); err != nil {
+		return 0, fmt.Errorf("fence secret-sync receiver I/O before event restore: %w", err)
+	}
 
-	// Verify integrity before appending anything (OPS-006). The SHA-256 trailer is
-	// always enforced; when this recovery host already holds the deployment's audit
-	// signing key we additionally require the backup's HMAC to verify under it.
-	// (On a bare recovery host without the key yet, the checksum still guards
-	// against truncation/bit-flips so a corrupt artifact is rejected.)
+	// Verify integrity before appending anything (OPS-006). Restore requires the
+	// separately custodied deployment KEK and therefore the artifact HMAC; its
+	// derived key also authorizes the restore-only event ingress above. SHA-256
+	// remains the public corruption check, but is never restore authority by itself.
 	rebuild := func(label string) error {
 		options, optionsErr := recoveryProjectionOptions(ctx, cfg, st, log, factories)
 		if optionsErr != nil {
 			return optionsErr
 		}
-		if rebuildErr := projections.New(st, options...).Rebuild(ctx, log); rebuildErr != nil {
+		restoreOptions := append([]projections.Option(nil), options...)
+		restoreOptions = append(restoreOptions, projections.WithSecretSyncRecoveryBootstrap())
+		if rebuildErr := projections.New(st, restoreOptions...).Rebuild(ctx, log); rebuildErr != nil {
 			return fmt.Errorf("%s: %w", label, rebuildErr)
 		}
 		return nil
 	}
+	rebuildLabel := "rebuild read model from restored log"
 	n, err := backup.RestoreLogWithKey(ctx, log, f, key)
 	if err != nil {
 		if resumeIfMatching && errors.Is(err, backup.ErrRestoreTargetNotEmpty) {
@@ -486,16 +520,36 @@ func restoreEventLog(
 			}
 			n, err = backup.VerifyLogMatchesWithKey(ctx, log, f, key)
 			if err != nil {
-				return n, fmt.Errorf("resume full restore event log: %w", err)
+				if !cfg.Secrets.SecretRotationHistoryFleetReady {
+					return n, fmt.Errorf("resume full restore event log: %w", err)
+				}
+				if _, seekErr := f.Seek(0, 0); seekErr != nil {
+					return n, fmt.Errorf("rewind backup file for scheduler sanitation resume verification: %w", seekErr)
+				}
+				n, err = backup.VerifyLogMatchesSanitizedSchedulerHistoryWithKey(
+					ctx, log, f, key,
+					func(_ context.Context, receipt events.Event) (events.TenantDataRewriteReport, error) {
+						return historycontinuity.VerifyReceipt(auditKey, receipt)
+					},
+				)
+				if err != nil {
+					return n, fmt.Errorf("resume full restore sanitized event log: %w", err)
+				}
 			}
-			if err := rebuild("rebuild read model from resumed log"); err != nil {
-				return n, err
-			}
-			return n, nil
+			rebuildLabel = "rebuild read model from resumed log"
+		} else {
+			return n, err
 		}
-		return n, err
 	}
-	if err := rebuild("rebuild read model from restored log"); err != nil {
+	if err := log.RequireNoPendingBackupRestore(ctx); err != nil {
+		return n, fmt.Errorf("complete authenticated event restore before sanitation: %w", err)
+	}
+	if err := ensureLegacySchedulerHistorySanitized(
+		ctx, log, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
+	); err != nil {
+		return n, fmt.Errorf("sanitize restored scheduler history before rebuild: %w", err)
+	}
+	if err := rebuild(rebuildLabel); err != nil {
 		return n, err
 	}
 	return n, nil
@@ -634,7 +688,9 @@ func runFullRestore(
 		return result, fmt.Errorf("audit signing key for final full-restore rebuild: %w", err)
 	}
 	defer signerRuntime.Close()
-	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
+	log, err := openSanitizedHistoryAwareEventLog(
+		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
+	)
 	if err != nil {
 		return result, fmt.Errorf("open event log for final full-restore rebuild: %w", err)
 	}
@@ -643,8 +699,13 @@ func runFullRestore(
 	if err != nil {
 		return result, err
 	}
-	if err := projections.New(st, options...).Rebuild(ctx, log); err != nil {
+	restoreOptions := append([]projections.Option(nil), options...)
+	restoreOptions = append(restoreOptions, projections.WithSecretSyncRecoveryBootstrap())
+	if err := projections.New(st, restoreOptions...).Rebuild(ctx, log); err != nil {
 		return result, fmt.Errorf("final read-model rebuild after postgres state restore: %w", err)
+	}
+	if err := st.AuthorizeSecretSyncReceiverRecovery(ctx); err != nil {
+		return result, fmt.Errorf("authorize secret-sync receiver I/O after full restore: %w", err)
 	}
 	for _, artifact := range manifest.Artifacts {
 		if artifact.Required && artifact.Captured {
@@ -798,7 +859,9 @@ func RunRebuild(ctx context.Context, cfg *config.Config, factories ...EditionPro
 		return 0, err
 	}
 	defer signerRuntime.Close()
-	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
+	log, err := openSanitizedHistoryAwareEventLog(
+		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}

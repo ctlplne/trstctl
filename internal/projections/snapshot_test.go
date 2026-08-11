@@ -5,6 +5,7 @@ package projections_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -457,6 +459,147 @@ func TestSnapshotRestoreIsTenantScoped(t *testing.T) {
 	if aIDs["00000000-0000-0000-0000-0000000bb001"] || aIDs["00000000-0000-0000-0000-0000000bb002"] {
 		t.Fatalf("tenant A's restored read model contains tenant B's owners (AN-1 violation): %v", aIDs)
 	}
+}
+
+// TestSnapshotRestoreRejectsASetMissingThePrivacyTarget proves a surviving
+// neighbor snapshot cannot lend its positive covered offset to a tenant whose
+// physical cache row was deleted by erasure preparation. The cold path declines
+// the incomplete accelerator before truncation, then ordinary catch-up starts at
+// checkpoint zero and reconstructs the target from sanitized event history.
+func TestSnapshotRestoreRejectsASetMissingThePrivacyTarget(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	p := projections.New(s)
+	const rawSubject = "snapshot-erased-person@example.test"
+	subjectRef := privacy.SubjectRef(tenantA, rawSubject)
+	sanitized := privacy.Placeholder(subjectRef)
+	ownerA := "00000000-0000-0000-0000-0000000cc001"
+	ownerB := "00000000-0000-0000-0000-0000000cc002"
+
+	mustAppend(t, log, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		Data: tenantRegistered("sanitized-a"),
+	})
+	mustAppend(t, log, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantB,
+		Data: tenantRegistered("sanitized-b"),
+	})
+	mustAppend(t, log, events.Event{
+		Type: projections.EventOwnerCreated, TenantID: tenantA,
+		Data: ownerCreated(ownerA, sanitized),
+	})
+	mustAppend(t, log, events.Event{
+		Type: projections.EventOwnerCreated, TenantID: tenantB,
+		Data: ownerCreated(ownerB, "neighbor"),
+	})
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("project sanitized source history: %v", err)
+	}
+	if n, err := p.Snapshot(ctx); err != nil || n != 2 {
+		t.Fatalf("capture complete two-tenant set = (%d,%v)", n, err)
+	}
+
+	// Model the pre-fix target blob directly: the event source is already
+	// sanitized, but the disposable snapshot still contains the old spelling.
+	if _, err := s.SystemPool().Exec(ctx, `UPDATE read_model_snapshots
+		SET payload = jsonb_set(payload, '{owners,0,name}', to_jsonb($2::text), false)
+		WHERE tenant_id = $1`, tenantA, rawSubject); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SystemPool().Exec(ctx,
+		`DELETE FROM read_model_snapshots WHERE tenant_id = $1`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	var neighborRows int
+	if err := s.SystemPool().QueryRow(ctx, `SELECT count(*) FROM read_model_snapshots
+		WHERE tenant_id = $1`, tenantB).Scan(&neighborRows); err != nil || neighborRows != 1 {
+		t.Fatalf("neighbor snapshot count=%d err=%v, want 1", neighborRows, err)
+	}
+	if _, err := s.LatestSnapshotOffset(ctx); !errors.Is(err, store.ErrNoSnapshot) {
+		t.Fatalf("missing-target set offset error=%v, want ErrNoSnapshot", err)
+	}
+
+	truncateReadModelAndCheckpoint(t, s)
+	restored, err := p.RestoreFromSnapshot(ctx, log)
+	if err != nil || restored {
+		t.Fatalf("incomplete snapshot restore=(%t,%v), want (false,nil)", restored, err)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("sanitized from-zero fallback: %v", err)
+	}
+	if got := ownerName(t, s, tenantA, ownerA); got != sanitized || strings.Contains(got, rawSubject) {
+		t.Fatalf("target owner after fallback=%q, want sanitized %q", got, sanitized)
+	}
+	if got := ownerName(t, s, tenantB, ownerB); got != "neighbor" {
+		t.Fatalf("neighbor owner after fallback=%q", got)
+	}
+}
+
+// TestLegacySnapshotsNeverAdvanceAnUnprovenColdRestore pins the v21 upgrade
+// boundary. Legacy rows have no exact capture-set proof, so even a positive
+// covered_seq is ignored and the zero checkpoint drives a full history replay.
+func TestLegacySnapshotsNeverAdvanceAnUnprovenColdRestore(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	p := projections.New(s)
+	ownerID := "00000000-0000-0000-0000-0000000dd001"
+
+	mustAppend(t, log, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantA,
+		Data: tenantRegistered("legacy-fallback"),
+	})
+	mustAppend(t, log, events.Event{
+		Type: projections.EventOwnerCreated, TenantID: tenantA,
+		Data: ownerCreated(ownerID, "history-wins"),
+	})
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := p.Snapshot(ctx); err != nil || n != 1 {
+		t.Fatalf("capture v22 source = (%d,%v)", n, err)
+	}
+	// Migration 0160 prevents a rolling old worker from writing v21. Drop that
+	// floor only inside this corruption fixture so restore still proves that an
+	// externally supplied legacy row cannot advance the checkpoint.
+	if _, err := s.SystemPool().Exec(ctx, `ALTER TABLE read_model_snapshots
+		DROP CONSTRAINT IF EXISTS read_model_snapshots_format_floor_v22`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SystemPool().Exec(ctx, `UPDATE read_model_snapshots
+		SET format_version = 21,
+		    payload = jsonb_set(payload, '{owners,0,name}', to_jsonb('stale-legacy'::text), false)
+		WHERE tenant_id = $1`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+
+	truncateReadModelAndCheckpoint(t, s)
+	restored, err := p.RestoreFromSnapshot(ctx, log)
+	if err != nil || restored {
+		t.Fatalf("legacy snapshot restore=(%t,%v), want (false,nil)", restored, err)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	if got := ownerName(t, s, tenantA, ownerID); got != "history-wins" {
+		t.Fatalf("legacy fallback owner=%q, want history-wins", got)
+	}
+}
+
+func ownerName(t *testing.T, s *store.Store, tenantID, ownerID string) string {
+	t.Helper()
+	ctx := context.Background()
+	var name string
+	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT name FROM owners WHERE tenant_id = $1 AND id = $2`,
+			tenantID, ownerID,
+		).Scan(&name)
+	}); err != nil {
+		t.Fatalf("owner name %s/%s: %v", tenantID, ownerID, err)
+	}
+	return name
 }
 
 // ownerIDs returns the set of owner ids visible for tenantID under its RLS context.

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
@@ -18,6 +19,8 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
@@ -40,6 +43,10 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "acme"}); err != nil {
 		t.Fatalf("seed tenant: %v", err)
 	}
+	storeServerTestProfile(t, st, tenantID, "tls-server", profile.CertificateProfile{
+		Name: "tls-server", AllowedEKUs: []string{"serverAuth"},
+		MaxValidity: profile.Duration(365 * 24 * time.Hour), AllowedProtocols: []string{"api"},
+	})
 	owner, err := st.CreateOwner(ctx, store.Owner{TenantID: tenantID, Kind: store.OwnerWorkload, Name: "payments"})
 	if err != nil {
 		t.Fatalf("seed owner: %v", err)
@@ -51,7 +58,11 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 		string(authz.CertsRequest), string(authz.CertsIssue),
 	})
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	log, err := events.Open(
+		ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		events.WithRequiredPrivacyEventPolicies(),
+	)
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
@@ -87,6 +98,7 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	}
 
 	upsertMember(t, ts, adminToken, "requester", []string{"ra-officer"})
+	assertAccessMemberEvidenceOrderAUD68(t, ctx, log, tenantID, "requester")
 	upsertMember(t, ts, adminToken, "issuer", []string{"operator"})
 	upsertMember(t, ts, adminToken, "approver-one", []string{"operator"})
 	upsertMember(t, ts, adminToken, "approver-two", []string{"operator"})
@@ -100,13 +112,14 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	if code, body := transitionIdentityWithToken(t, ts, issuerToken, identID, "issued", "issuer-first-attempt"); code != http.StatusForbidden {
 		t.Fatalf("issue before distinct approvals = %d, want 403; body=%s", code, body)
 	}
-	if code, body := approveIdentityWithToken(t, ts, approverOneToken, identID, "approve-one"); code != http.StatusOK {
+	approval := approvalForIdentityWithToken(t, ts, approverOneToken, identID, "issue")
+	if code, body := approveIdentityWithToken(t, ts, approverOneToken, identID, "approve-one", approval); code != http.StatusOK {
 		t.Fatalf("first distinct approval = %d, want 200; body=%s", code, body)
 	}
-	if code, body := approveIdentityWithToken(t, ts, approverTwoToken, identID, "approve-two"); code != http.StatusOK {
+	if code, body := approveIdentityWithToken(t, ts, approverTwoToken, identID, "approve-two", approval); code != http.StatusOK {
 		t.Fatalf("second distinct approval = %d, want 200; body=%s", code, body)
 	}
-	if code, body := transitionIdentityWithToken(t, ts, issuerToken, identID, "issued", "issuer-approved"); code != http.StatusOK {
+	if code, body := transitionIdentityWithToken(t, ts, issuerToken, identID, "issued", "issuer-first-attempt"); code != http.StatusOK {
 		t.Fatalf("issue after distinct approvals = %d, want 200; body=%s", code, body)
 	}
 
@@ -134,6 +147,49 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	}
 	if !sawOffboard {
 		t.Fatal("tenant.member.offboarded event for approver-one was not recorded")
+	}
+}
+
+func assertAccessMemberEvidenceOrderAUD68(
+	t *testing.T,
+	ctx context.Context,
+	log *events.Log,
+	tenantID, subject string,
+) {
+	t.Helper()
+	decisionSequence := uint64(0)
+	memberSequence := uint64(0)
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.TenantID != tenantID {
+			return nil
+		}
+		switch event.Type {
+		case orchestrator.EventAuthzDecision:
+			var payload orchestrator.AuthzDecision
+			if err := json.Unmarshal(event.Data, &payload); err != nil {
+				return err
+			}
+			if payload.Target == subject {
+				decisionSequence = event.Sequence
+			}
+		case projections.EventTenantMemberUpserted:
+			var payload projections.TenantMemberUpserted
+			if err := json.Unmarshal(event.Data, &payload); err != nil {
+				return err
+			}
+			if payload.Subject == subject {
+				memberSequence = event.Sequence
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay access-member evidence: %v", err)
+	}
+	if decisionSequence == 0 || memberSequence == 0 || decisionSequence >= memberSequence {
+		t.Fatalf(
+			"access-member evidence sequence: authz=%d member=%d, want retained decision before member",
+			decisionSequence, memberSequence,
+		)
 	}
 }
 
@@ -200,9 +256,39 @@ func transitionIdentityWithToken(t *testing.T, ts *httptest.Server, token, ident
 	return doBearer(t, ts, http.MethodPost, "/api/v1/identities/"+identityID+"/transitions", token, idem, map[string]string{"to": to, "reason": "journey acceptance"})
 }
 
-func approveIdentityWithToken(t *testing.T, ts *httptest.Server, token, identityID, idem string) (int, []byte) {
+type servedApprovalRef struct {
+	ID           string `json:"id"`
+	IntentDigest string `json:"intent_digest"`
+	ResourceID   string `json:"resource_id"`
+	Action       string `json:"action"`
+}
+
+func approvalForIdentityWithToken(t *testing.T, ts *httptest.Server, token, identityID, action string) servedApprovalRef {
 	t.Helper()
-	return doBearer(t, ts, http.MethodPost, "/api/v1/identities/"+identityID+"/approvals", token, idem, map[string]string{"action": "issue"})
+	code, body := doBearer(t, ts, http.MethodGet, "/api/v1/approval-requests?status=pending", token, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("list genuine approval queue = %d, want 200; body=%s", code, body)
+	}
+	var queue struct {
+		Items []servedApprovalRef `json:"items"`
+	}
+	if err := json.Unmarshal(body, &queue); err != nil {
+		t.Fatalf("decode genuine approval queue: %v; body=%s", err, body)
+	}
+	for _, item := range queue.Items {
+		if item.ResourceID == identityID && item.Action == action {
+			return item
+		}
+	}
+	t.Fatalf("genuine approval queue omitted %s/%s: %+v", identityID, action, queue.Items)
+	return servedApprovalRef{}
+}
+
+func approveIdentityWithToken(t *testing.T, ts *httptest.Server, token, identityID, idem string, approval servedApprovalRef) (int, []byte) {
+	t.Helper()
+	return doBearer(t, ts, http.MethodPost, "/api/v1/identities/"+identityID+"/approvals", token, idem, map[string]string{
+		"action": "issue", "request_id": approval.ID, "intent_digest": approval.IntentDigest,
+	})
 }
 
 func doBearer(t *testing.T, ts *httptest.Server, method, path, token, idem string, body any) (int, []byte) {

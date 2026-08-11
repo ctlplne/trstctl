@@ -137,12 +137,20 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 // of hanging (OPS-TIMEOUTS-001). The bound covers only BEGIN; statement
 // execution stays governed by the caller context + statement_timeout.
 func (s *Store) begin(ctx context.Context) (pgx.Tx, error) {
+	return s.beginTx(ctx, pgx.TxOptions{})
+}
+
+// beginTx is begin with explicit PostgreSQL transaction options. Callers that
+// need a stable statement set (for example an idempotency bind plus an immutable
+// scheduler work snapshot) must choose the isolation level at BEGIN; PostgreSQL
+// rejects SET TRANSACTION after the backup-fence statement has already run.
+func (s *Store) beginTx(ctx context.Context, options pgx.TxOptions) (pgx.Tx, error) {
 	if s.acquireTimeout <= 0 {
-		return s.pool.Begin(ctx)
+		return s.pool.BeginTx(ctx, options)
 	}
 	boundedCtx, cancel := context.WithTimeoutCause(ctx, s.acquireTimeout, ErrDatastoreBusy)
 	defer cancel()
-	tx, err := s.pool.Begin(boundedCtx)
+	tx, err := s.pool.BeginTx(boundedCtx, options)
 	if err != nil {
 		if cause := context.Cause(boundedCtx); errors.Is(cause, ErrDatastoreBusy) && ctx.Err() == nil {
 			return nil, fmt.Errorf("%w (acquire window %v)", ErrDatastoreBusy, s.acquireTimeout)
@@ -241,6 +249,73 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 	}
 	if _, err := tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID); err != nil {
 		return fmt.Errorf("store: set tenant: %w", err)
+	}
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// WithTenantProjection runs trusted event-derived state maintenance under the
+// table-owner role while still pinning the tenant GUC/search path and backup
+// fence. It exists for receipt columns that trstctl_app is deliberately forbidden
+// to mutate. Event projectors and narrowly verified retention methods may call it;
+// every SQL statement still carries tenant_id.
+func (s *Store) WithTenantProjection(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error {
+	return s.withTenantProjectionTxOptions(ctx, tenantID, pgx.TxOptions{}, fn)
+}
+
+// WithTenantProjectionRepeatableRead is the narrow owner-role transaction used
+// when several SQL statements together define one immutable receiver snapshot.
+// The isolation level is selected at BEGIN, before the shared backup fence is
+// acquired, so later concurrent commits cannot appear halfway through the bind.
+func (s *Store) WithTenantProjectionRepeatableRead(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error {
+	return s.withTenantProjectionTxOptions(ctx, tenantID, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, fn)
+}
+
+func (s *Store) withTenantProjectionTxOptions(
+	ctx context.Context,
+	tenantID string,
+	options pgx.TxOptions,
+	fn func(pgx.Tx) error,
+) error {
+	fenceLease, ownsExclusiveFence := backupWriteFenceLeaseFromContext(ctx, s)
+	if ownsExclusiveFence {
+		defer fenceLease.releaseUse()
+	}
+	var (
+		tx  pgx.Tx
+		err error
+	)
+	if ownsExclusiveFence {
+		tx, err = fenceLease.conn.BeginTx(ctx, options)
+	} else {
+		tx, err = s.beginTx(ctx, options)
+	}
+	if err != nil {
+		return err
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = tx.Rollback(rollbackCtx)
+		cancel()
+	}()
+	if !ownsExclusiveFence {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared($1)", BackupWriteFenceAdvisoryLockKey); err != nil {
+			return fmt.Errorf("store: acquire backup write fence for projection: %w", err)
+		}
+	}
+	schema, err := tenancy.PostgresSchema(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("store: resolve tenant projection route: %w", err)
+	}
+	if schema != "" {
+		if _, err := tx.Exec(ctx, "SET LOCAL search_path TO "+pgx.Identifier{schema}.Sanitize()+", public"); err != nil {
+			return fmt.Errorf("store: set tenant projection search_path: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID); err != nil {
+		return fmt.Errorf("store: set tenant projection: %w", err)
 	}
 	if err := fn(tx); err != nil {
 		return err

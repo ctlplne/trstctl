@@ -13,6 +13,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -77,17 +78,62 @@ func WritePostgresState(ctx context.Context, st *store.Store, w io.Writer) (Post
 // snapshot used for PostgreSQL state export. Full backups call this while holding
 // the backup write fence after capturing the paired event-log cut, so no tenant
 // mutation can land between the event boundary and the PostgreSQL snapshot.
-func BeginPostgresStateSnapshot(ctx context.Context, st *store.Store) (pgx.Tx, error) {
-	tx, err := st.SystemPool().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+// PostgresStateSnapshot is an attested PostgreSQL-state export transaction.
+// Its transaction is deliberately private: callers can stream only snapshots
+// that BeginPostgresStateSnapshot pinned under the backup/privacy fence.
+type PostgresStateSnapshot struct {
+	tx pgx.Tx
+}
+
+func (s *PostgresStateSnapshot) Commit(ctx context.Context) error {
+	if s == nil || s.tx == nil {
+		return errors.New("backup: postgres-state snapshot is not active")
+	}
+	err := s.tx.Commit(ctx)
+	s.tx = nil
+	return err
+}
+
+func (s *PostgresStateSnapshot) Rollback(ctx context.Context) error {
+	if s == nil || s.tx == nil {
+		return errors.New("backup: postgres-state snapshot is not active")
+	}
+	err := s.tx.Rollback(ctx)
+	s.tx = nil
+	return err
+}
+
+func (s *PostgresStateSnapshot) transaction() (pgx.Tx, error) {
+	if s == nil || s.tx == nil {
+		return nil, errors.New("backup: postgres-state snapshot is not active")
+	}
+	return s.tx, nil
+}
+
+func BeginPostgresStateSnapshot(ctx context.Context, st *store.Store) (*PostgresStateSnapshot, error) {
+	tx, err := st.BeginPostgresStateSnapshotTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("backup: begin postgres state snapshot: %w", err)
 	}
-	var pinned int
-	if err := tx.QueryRow(ctx, `SELECT 1`).Scan(&pinned); err != nil {
+	if err := guardPostgresStateSnapshotTx(ctx, tx); err != nil {
 		_ = tx.Rollback(ctx)
-		return nil, fmt.Errorf("backup: pin postgres state snapshot: %w", err)
+		return nil, err
 	}
-	return tx, nil
+	return &PostgresStateSnapshot{tx: tx}, nil
+}
+
+func guardPostgresStateSnapshotTx(ctx context.Context, tx pgx.Tx) error {
+	var activePrivacyPreparation bool
+	//trstctl:system-query — a PostgreSQL-state artifact spans every tenant by design; this boolean preflight reveals no tenant, subject, selector, actor, or payload and prevents pairing sanitized event history with unfinished pre-erasure SQL (AN-1 exemption).
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM privacy_subject_erasure_preparations)`,
+	).Scan(&activePrivacyPreparation); err != nil {
+		return fmt.Errorf("backup: inspect privacy erasure preparations in pinned snapshot: %w", err)
+	}
+	if activePrivacyPreparation {
+		return store.ErrPrivacySubjectErasurePreparationActive
+	}
+	return nil
 }
 
 // WritePostgresStateAtCut writes PostgreSQL state and records the event-log cut
@@ -109,10 +155,28 @@ func WritePostgresStateAtCut(ctx context.Context, st *store.Store, w io.Writer, 
 	return summary, nil
 }
 
-// WritePostgresStateTx writes PostgreSQL state from the caller's read-only
-// repeatable-read transaction. Full backup uses a transaction pinned under the
-// backup write fence, paired with the event-log cut in the artifact header.
-func WritePostgresStateTx(ctx context.Context, tx pgx.Tx, w io.Writer, eventCut uint64) (PostgresStateSummary, error) {
+// WritePostgresStateTx writes PostgreSQL state from an attested read-only,
+// repeatable-read snapshot. Full backup uses a snapshot pinned under the backup
+// write fence, paired with the event-log cut in the artifact header.
+func WritePostgresStateTx(ctx context.Context, snapshot *PostgresStateSnapshot, w io.Writer, eventCut uint64) (PostgresStateSummary, error) {
+	// WritePostgresStateTx is exported for the full-backup coordinator, so defend
+	// it with an attested snapshot that external callers cannot construct around
+	// a transaction pinned before the fence. Reassert the transaction-scoped
+	// shared grant before the first artifact byte (the safe Begin path already
+	// holds it) and inspect preparation state in this exact snapshot.
+	tx, err := snapshot.transaction()
+	if err != nil {
+		return PostgresStateSummary{}, err
+	}
+	if _, err := tx.Exec(ctx,
+		"SELECT pg_advisory_xact_lock_shared($1)",
+		store.BackupWriteFenceAdvisoryLockKey,
+	); err != nil {
+		return PostgresStateSummary{}, fmt.Errorf("backup: acquire postgres-state export fence: %w", err)
+	}
+	if err := guardPostgresStateSnapshotTx(ctx, tx); err != nil {
+		return PostgresStateSummary{}, err
+	}
 	tables := postgresStateTables()
 	bw := bufio.NewWriter(w)
 	dig := newDigest(nil)
@@ -261,7 +325,9 @@ func latestAuditCheckpointBoundaries(rows []json.RawMessage) ([]AuditCheckpointB
 }
 
 // RestorePostgresState restores the independent PostgreSQL state artifact into a
-// migrated database whose event-sourced read model has already been rebuilt.
+// migrated database whose event-sourced read model has already been rebuilt once.
+// The caller must run the private final event rebuild before serving: commands
+// absent at the PostgreSQL cut intentionally remain detached until that replay.
 func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (PostgresStateSummary, error) {
 	rowsByTable, summary, err := readVerifiedPostgresState(r)
 	if err != nil {
@@ -273,6 +339,40 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 		return summary, fmt.Errorf("backup: begin postgres state restore: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// Migration 0153 gives secret-sync outbox rows monotonic receiver-effect
+	// authority that cannot be reconstructed from event replay. Its insert guard
+	// accepts non-initial authority only inside this owner-role, transaction-local
+	// restore window; the application role cannot turn this custom GUC into a forge
+	// path.
+	if _, err := tx.Exec(ctx, `SET LOCAL trstctl.postgres_state_restore = 'true'`); err != nil {
+		return summary, fmt.Errorf("backup: mark postgres state restore transaction: %w", err)
+	}
+	// Snapshot blobs are an ephemeral copy of the read model and are never part
+	// of this independent-state artifact. Remove them in the SAME restore
+	// transaction so a migrated target cannot retain (or appear to import) a
+	// pre-v22 payload containing a raw privacy-erased subject. The event log is
+	// the source of truth and the snapshot worker will publish a fresh complete
+	// all-tenant generation after recovery.
+	if _, err := tx.Exec(ctx, `TRUNCATE TABLE read_model_snapshots`); err != nil {
+		return summary, fmt.Errorf("backup: purge read-model snapshots before postgres state restore: %w", err)
+	}
+
+	// Match every restored secret-sync command to the first event-log rebuild by
+	// stable command identity while both halves still exist. SQL allocation ids
+	// may be reversed on the recovery host, so they are deliberately excluded
+	// from this association decision.
+	outboxRows, err := normalizePostgresStateRows("outbox", rowsByTable["outbox"])
+	if err != nil {
+		return summary, err
+	}
+	outboxRows, secretSyncAssociations, err := reconcileSecretSyncOutboxRows(ctx, tx, outboxRows)
+	if err != nil {
+		return summary, err
+	}
+	rowsByTable["outbox"] = outboxRows
+	if err := detachSecretSyncJobsForOutboxRestore(ctx, tx); err != nil {
+		return summary, err
+	}
 
 	truncateList, err := joinQuotedTables(postgresStateTables())
 	if err != nil {
@@ -290,9 +390,11 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 		if len(rows) == 0 {
 			continue
 		}
-		rows, err = normalizePostgresStateRows(table, rows)
-		if err != nil {
-			return summary, err
+		if table != "outbox" {
+			rows, err = normalizePostgresStateRows(table, rows)
+			if err != nil {
+				return summary, err
+			}
 		}
 		payload, err := json.Marshal(rows)
 		if err != nil {
@@ -310,6 +412,9 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 			return summary, fmt.Errorf("backup: restore %s: %w", table, err)
 		}
 	}
+	if err := reattachSecretSyncJobsAfterOutboxRestore(ctx, tx, secretSyncAssociations); err != nil {
+		return summary, err
+	}
 	if _, err := tx.Exec(ctx,
 		`SELECT setval(pg_get_serial_sequence('outbox', 'id'),
 		        COALESCE((SELECT max(id) FROM outbox), 0) + 1,
@@ -325,9 +430,13 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 // normalizePostgresStateRows upgrades rows from an older artifact to the
 // current table shape after the artifact digest has been verified but before
 // jsonb_populate_recordset types it. PostgreSQL fills a missing JSON field with
-// NULL, not the column default, so a pre-result_codec idempotency row would
-// otherwise violate the new NOT NULL wall during restore.
+// NULL, not the column default. Fill only values whose historical meaning is
+// deterministic; secret-sync authority is reconciled separately against rebuilt
+// AN-2 state instead of being invented from a generic SQL row.
 func normalizePostgresStateRows(table string, rows []json.RawMessage) ([]json.RawMessage, error) {
+	if table == "outbox" {
+		return normalizeLegacyNonSecretOutboxRows(rows)
+	}
 	if table != "idempotency_keys" {
 		return rows, nil
 	}
@@ -355,6 +464,398 @@ func normalizePostgresStateRows(table string, rows []json.RawMessage) ([]json.Ra
 		normalized = append(normalized, encoded)
 	}
 	return normalized, nil
+}
+
+var secretSyncOutboxAuthorityFields = []string{
+	"secret_sync_target_order",
+	"secret_sync_order_from_event",
+	"secret_sync_receiver_effect_state",
+	"secret_sync_receiver_io_starts",
+	"secret_sync_failure_detail",
+	"secret_sync_failure_attempts",
+}
+
+// normalizeLegacyNonSecretOutboxRows supplies the neutral 0153 receiver tuple for
+// old artifacts whose unrelated outbox rows predate those NOT NULL columns. A
+// secret-sync row is deliberately left incomplete here: its causal order and
+// receiver authority must be joined to the already-rebuilt command below.
+func normalizeLegacyNonSecretOutboxRows(rows []json.RawMessage) ([]json.RawMessage, error) {
+	normalized := make([]json.RawMessage, 0, len(rows))
+	for index, raw := range rows {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return nil, fmt.Errorf("backup: normalize outbox row %d: %w", index+1, err)
+		}
+		if fields == nil {
+			return nil, fmt.Errorf("backup: normalize outbox row %d: row must be a JSON object", index+1)
+		}
+		var destination string
+		if err := json.Unmarshal(fields["destination"], &destination); err != nil || destination == "" {
+			return nil, fmt.Errorf("backup: normalize outbox row %d: destination is invalid", index+1)
+		}
+		if strings.HasPrefix(destination, "secret.sync.") {
+			normalized = append(normalized, raw)
+			continue
+		}
+		setDefault := func(name string, value any) error {
+			if existing, ok := fields[name]; ok && !bytes.Equal(bytes.TrimSpace(existing), []byte("null")) {
+				return nil
+			}
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return err
+			}
+			fields[name] = encoded
+			return nil
+		}
+		if err := setDefault("secret_sync_target_order", nil); err != nil {
+			return nil, err
+		}
+		if err := setDefault("secret_sync_order_from_event", nil); err != nil {
+			return nil, err
+		}
+		if err := setDefault("secret_sync_receiver_effect_state", "none"); err != nil {
+			return nil, err
+		}
+		if err := setDefault("secret_sync_receiver_io_starts", 0); err != nil {
+			return nil, err
+		}
+		if err := setDefault("secret_sync_failure_detail", ""); err != nil {
+			return nil, err
+		}
+		if err := setDefault("secret_sync_failure_attempts", 0); err != nil {
+			return nil, err
+		}
+		encoded, err := json.Marshal(fields)
+		if err != nil {
+			return nil, fmt.Errorf("backup: encode normalized outbox row %d: %w", index+1, err)
+		}
+		normalized = append(normalized, encoded)
+	}
+	return normalized, nil
+}
+
+type secretSyncOutboxRestoreAssociation struct {
+	tenantID       string
+	jobID          string
+	idempotencyKey string
+	destination    string
+	payload        []byte
+	targetOrder    int64
+	orderFromEvent bool
+}
+
+// reconcileSecretSyncOutboxRows binds both current and pre-0153 artifact rows
+// to the first event-log rebuild by tenant + receiver idempotency key + exact
+// destination/payload/order. The artifact's SQL id is preserved for unrelated
+// PostgreSQL references, but it is never used to decide which job owns the row.
+// Missing/partial authority fails before any retained outbox row is replaced.
+func reconcileSecretSyncOutboxRows(
+	ctx context.Context,
+	tx pgx.Tx,
+	rows []json.RawMessage,
+) ([]json.RawMessage, []secretSyncOutboxRestoreAssociation, error) {
+	normalized := make([]json.RawMessage, 0, len(rows))
+	associations := make([]secretSyncOutboxRestoreAssociation, 0)
+	seenStableKeys := make(map[string]struct{})
+	for index, raw := range rows {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return nil, nil, fmt.Errorf("backup: reconcile outbox row %d: %w", index+1, err)
+		}
+		var row struct {
+			ID                  int64           `json:"id"`
+			TenantID            string          `json:"tenant_id"`
+			Destination         string          `json:"destination"`
+			EffectLane          string          `json:"effect_lane"`
+			Payload             json.RawMessage `json:"payload"`
+			IdempotencyKey      string          `json:"idempotency_key"`
+			Status              string          `json:"status"`
+			Attempts            int             `json:"attempts"`
+			TargetOrder         *int64          `json:"secret_sync_target_order"`
+			OrderFromEvent      *bool           `json:"secret_sync_order_from_event"`
+			ReceiverEffectState *string         `json:"secret_sync_receiver_effect_state"`
+			ReceiverIOStarts    *int64          `json:"secret_sync_receiver_io_starts"`
+			FailureDetail       *string         `json:"secret_sync_failure_detail"`
+			FailureAttempts     *int            `json:"secret_sync_failure_attempts"`
+		}
+		if err := json.Unmarshal(raw, &row); err != nil {
+			return nil, nil, fmt.Errorf("backup: decode outbox row %d: %w", index+1, err)
+		}
+		if !strings.HasPrefix(row.Destination, "secret.sync.") {
+			normalized = append(normalized, raw)
+			continue
+		}
+		payload, err := decodePostgresJSONBytea(row.Payload)
+		if err != nil {
+			return nil, nil, fmt.Errorf("backup: decode secret-sync outbox row %d payload: %w", index+1, err)
+		}
+		if row.ID <= 0 || row.TenantID == "" || row.IdempotencyKey == "" ||
+			len(payload) == 0 || row.Attempts < 0 {
+			return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d identity is incomplete", index+1)
+		}
+		stableKey := row.TenantID + "\x1f" + row.IdempotencyKey
+		if _, duplicate := seenStableKeys[stableKey]; duplicate {
+			return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d duplicates a tenant receiver identity", index+1)
+		}
+		seenStableKeys[stableKey] = struct{}{}
+
+		var rebuilt struct {
+			jobID, target, remoteKey, requestBinding string
+			targetOrder                              int64
+			jobStatus                                string
+			jobAttempts                              int
+			lastError                                string
+			terminalFromEvent                        *bool
+			destination, effectLane, idempotencyKey  string
+			payload                                  []byte
+			outboxTargetOrder                        int64
+			outboxOrderFromEvent                     bool
+		}
+		//trstctl:system-query — full restore joins one tenant-scoped receiver key to its exact event-rebuilt job/outbox tuple before cross-tenant independent state is replaced (AN-1 exemption).
+		err = tx.QueryRow(ctx, `
+			SELECT job.id, job.target, job.remote_key, job.request_binding,
+			       job.target_order, job.status, job.attempts, job.last_error,
+			       job.terminal_event_from_event,
+			       queued.destination, queued.effect_lane, queued.idempotency_key,
+			       queued.payload, queued.secret_sync_target_order,
+			       queued.secret_sync_order_from_event
+			  FROM secret_sync_jobs AS job
+			  JOIN outbox AS queued
+			    ON queued.tenant_id = job.tenant_id
+			   AND queued.id = job.outbox_id
+			 WHERE job.tenant_id = $1
+			   AND job.idempotency_key = $2
+			 FOR KEY SHARE OF job, queued`, row.TenantID, row.IdempotencyKey).Scan(
+			&rebuilt.jobID, &rebuilt.target, &rebuilt.remoteKey, &rebuilt.requestBinding,
+			&rebuilt.targetOrder, &rebuilt.jobStatus, &rebuilt.jobAttempts, &rebuilt.lastError,
+			&rebuilt.terminalFromEvent,
+			&rebuilt.destination, &rebuilt.effectLane, &rebuilt.idempotencyKey,
+			&rebuilt.payload, &rebuilt.outboxTargetOrder, &rebuilt.outboxOrderFromEvent,
+		)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d has no exact rebuilt job/event authority", index+1)
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("backup: reconcile secret-sync outbox row %d: %w", index+1, err)
+		}
+		expectedDestination := "secret.sync." + rebuilt.target
+		expectedLane := "secret.sync:" + rebuilt.target
+		if rebuilt.targetOrder == 0 || rebuilt.outboxTargetOrder != rebuilt.targetOrder ||
+			rebuilt.destination != expectedDestination || rebuilt.effectLane != expectedLane ||
+			rebuilt.idempotencyKey != row.IdempotencyKey ||
+			row.Destination != expectedDestination ||
+			(row.EffectLane != "" && row.EffectLane != expectedLane) ||
+			!bytes.Equal(payload, rebuilt.payload) {
+			return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d differs from rebuilt command identity", index+1)
+		}
+		var binding struct {
+			ID             string `json:"id"`
+			Key            string `json:"key"`
+			Target         string `json:"target"`
+			RequestBinding string `json:"request_binding,omitempty"`
+			Sealed         []byte `json:"sealed"`
+		}
+		if err := json.Unmarshal(payload, &binding); err != nil || binding.ID != rebuilt.jobID ||
+			binding.Key != rebuilt.remoteKey || binding.Target != rebuilt.target ||
+			binding.RequestBinding != rebuilt.requestBinding || len(binding.Sealed) == 0 {
+			return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d payload differs from rebuilt command identity", index+1)
+		}
+		associationTargetOrder := rebuilt.targetOrder
+		associationOrderFromEvent := rebuilt.outboxOrderFromEvent
+		reattachBeforeFinalRebuild := true
+		present := 0
+		for _, name := range secretSyncOutboxAuthorityFields {
+			if value, ok := fields[name]; ok && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				present++
+			}
+		}
+		if present == len(secretSyncOutboxAuthorityFields) {
+			if row.TargetOrder == nil || row.OrderFromEvent == nil ||
+				row.ReceiverEffectState == nil || row.ReceiverIOStarts == nil ||
+				row.FailureDetail == nil || row.FailureAttempts == nil ||
+				*row.TargetOrder == 0 ||
+				(*row.OrderFromEvent && (*row.TargetOrder < 0 ||
+					!rebuilt.outboxOrderFromEvent || *row.TargetOrder != rebuilt.targetOrder)) ||
+				(!*row.OrderFromEvent && *row.TargetOrder > 0) {
+				return nil, nil, fmt.Errorf("backup: secret-sync outbox row %d order authority differs from rebuilt command", index+1)
+			}
+			associationTargetOrder = *row.TargetOrder
+			associationOrderFromEvent = *row.OrderFromEvent
+			// A migration-derived negative order is PostgreSQL authority that an
+			// event-only first rebuild cannot know. Import it now, leave the positive
+			// temporary job detached, and let the private final rebuild reattach and
+			// recreate the job with that exact negative order.
+			reattachBeforeFinalRebuild = *row.TargetOrder == rebuilt.targetOrder &&
+				*row.OrderFromEvent == rebuilt.outboxOrderFromEvent
+		} else if present != 0 {
+			return nil, nil, fmt.Errorf("backup: legacy secret-sync outbox row %d has partial receiver authority", index+1)
+		} else {
+			effectState := "none"
+			receiverStarts := 0
+			failureDetail := ""
+			failureAttempts := 0
+			switch rebuilt.jobStatus {
+			case "pending":
+				if row.Status != "pending" && row.Status != "processing" {
+					return nil, nil, fmt.Errorf("backup: legacy secret-sync outbox row %d pending state differs from rebuilt job", index+1)
+				}
+				if row.Status == "processing" && row.Attempts == 0 {
+					return nil, nil, fmt.Errorf("backup: legacy secret-sync outbox row %d processing state has no claim attempt", index+1)
+				}
+				if row.Attempts > 0 {
+					effectState = "effect_possible"
+					receiverStarts = row.Attempts
+				}
+			case "delivered":
+				// A terminal event is projected before generic outbox finalization. Pending
+				// or processing is therefore the recognized append/project-before-finalize
+				// crash shape; the rebuilt terminal receipt makes resumed receiver I/O inert.
+				if rebuilt.terminalFromEvent == nil || !*rebuilt.terminalFromEvent || rebuilt.jobAttempts < 1 ||
+					(row.Status != "pending" && row.Status != "processing" && row.Status != "delivered") {
+					return nil, nil, fmt.Errorf("backup: legacy secret-sync outbox row %d delivered state lacks rebuilt terminal authority", index+1)
+				}
+				effectState = "effect_possible"
+				receiverStarts = max(row.Attempts, rebuilt.jobAttempts, 1)
+			case "failed":
+				if rebuilt.terminalFromEvent == nil || !*rebuilt.terminalFromEvent || rebuilt.jobAttempts < 1 || rebuilt.lastError == "" ||
+					(row.Status != "pending" && row.Status != "processing" && row.Status != "failed" && row.Status != "delivered") {
+					return nil, nil, fmt.Errorf("backup: legacy secret-sync outbox row %d failed state lacks rebuilt terminal authority", index+1)
+				}
+				// A pre-0153 artifact cannot prove whether the old generic failure
+				// happened before or after receiver I/O. Keep every observed attempt
+				// sticky and never manufacture current typed no-network authority.
+				effectState = "effect_possible"
+				receiverStarts = max(row.Attempts, rebuilt.jobAttempts, 1)
+			default:
+				return nil, nil, fmt.Errorf("backup: legacy secret-sync outbox row %d has invalid rebuilt job status %q", index+1, rebuilt.jobStatus)
+			}
+
+			set := func(name string, value any) error {
+				encoded, err := json.Marshal(value)
+				if err != nil {
+					return err
+				}
+				fields[name] = encoded
+				return nil
+			}
+			for name, value := range map[string]any{
+				"secret_sync_target_order":          rebuilt.targetOrder,
+				"secret_sync_order_from_event":      rebuilt.outboxOrderFromEvent,
+				"secret_sync_receiver_effect_state": effectState,
+				"secret_sync_receiver_io_starts":    receiverStarts,
+				"secret_sync_failure_detail":        failureDetail,
+				"secret_sync_failure_attempts":      failureAttempts,
+			} {
+				if err := set(name, value); err != nil {
+					return nil, nil, fmt.Errorf("backup: encode legacy secret-sync outbox row %d field %s: %w", index+1, name, err)
+				}
+			}
+		}
+		encoded, err := json.Marshal(fields)
+		if err != nil {
+			return nil, nil, fmt.Errorf("backup: encode reconciled secret-sync outbox row %d: %w", index+1, err)
+		}
+		normalized = append(normalized, encoded)
+		if reattachBeforeFinalRebuild {
+			associations = append(associations, secretSyncOutboxRestoreAssociation{
+				tenantID: row.TenantID, jobID: rebuilt.jobID,
+				idempotencyKey: row.IdempotencyKey, destination: row.Destination,
+				payload: append([]byte(nil), payload...), targetOrder: associationTargetOrder,
+				orderFromEvent: associationOrderFromEvent,
+			})
+		}
+	}
+	return normalized, associations, nil
+}
+
+// decodePostgresJSONBytea decodes the exact text representation emitted by
+// PostgreSQL's to_jsonb for a bytea column. It is hex prefixed with "\\x"; it is
+// not encoding/json's base64 representation for a Go []byte. Keeping this
+// decoder strict prevents an artifact from smuggling a second interpretation of
+// the receiver command payload into restore-time authority matching.
+func decodePostgresJSONBytea(raw json.RawMessage) ([]byte, error) {
+	var encoded string
+	if err := json.Unmarshal(raw, &encoded); err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(encoded, `\x`) || len(encoded) <= 2 {
+		return nil, errors.New("PostgreSQL bytea value is not nonempty hex")
+	}
+	decoded, err := hex.DecodeString(encoded[2:])
+	if err != nil || len(decoded) == 0 {
+		return nil, errors.New("PostgreSQL bytea value has invalid hex")
+	}
+	return decoded, nil
+}
+
+// detachSecretSyncJobsForOutboxRestore removes SQL-id associations before the
+// retained outbox table is replaced. Every job receives a unique negative
+// transaction-local placeholder; the final event replay rebuilds jobs whose
+// command was legitimately absent at the PostgreSQL backup cut.
+func detachSecretSyncJobsForOutboxRestore(ctx context.Context, tx pgx.Tx) error {
+	//trstctl:system-query — full restore stages every tenant's event-derived secret-sync job before replacing the cross-tenant outbox artifact; no row data leaves PostgreSQL (AN-1 exemption).
+	if _, err := tx.Exec(ctx, `
+		WITH floor AS (
+			SELECT LEAST(COALESCE(min(outbox_id), 0), 0) AS outbox_id
+			  FROM secret_sync_jobs
+		), staged AS (
+			SELECT tenant_id, id,
+			       floor.outbox_id - (row_number() OVER (ORDER BY tenant_id, id))::bigint AS outbox_id
+			  FROM secret_sync_jobs
+			 CROSS JOIN floor
+		)
+		UPDATE secret_sync_jobs AS job
+		   SET outbox_id = staged.outbox_id
+		  FROM staged
+		 WHERE job.tenant_id = staged.tenant_id
+		   AND job.id = staged.id`); err != nil {
+		return fmt.Errorf("backup: detach rebuilt secret-sync jobs before outbox restore: %w", err)
+	}
+	return nil
+}
+
+func reattachSecretSyncJobsAfterOutboxRestore(
+	ctx context.Context,
+	tx pgx.Tx,
+	associations []secretSyncOutboxRestoreAssociation,
+) error {
+	for index, association := range associations {
+		var restoredOutboxID int64
+		// Association is selected by the stable command tuple. queued.id is only
+		// the value assigned after that match, never an input to the decision.
+		err := tx.QueryRow(ctx, `
+			UPDATE secret_sync_jobs AS job
+			   SET outbox_id = queued.id
+			  FROM outbox AS queued
+			 WHERE job.tenant_id = $1
+			   AND job.id = $2
+			   AND job.outbox_id < 0
+			   AND job.idempotency_key = $3
+			   AND job.target_order = $6
+			   AND queued.tenant_id = job.tenant_id
+			   AND queued.idempotency_key = $3
+			   AND queued.destination = $4
+			   AND queued.destination = 'secret.sync.' || job.target
+			   AND queued.payload = $5
+			   AND queued.secret_sync_target_order = $6
+			   AND queued.secret_sync_order_from_event = $7
+			 RETURNING queued.id`,
+			association.tenantID, association.jobID, association.idempotencyKey,
+			association.destination, association.payload, association.targetOrder,
+			association.orderFromEvent,
+		).Scan(&restoredOutboxID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("backup: restored secret-sync association %d has no exact tenant/idempotency/destination/payload/order match", index+1)
+		}
+		if err != nil {
+			return fmt.Errorf("backup: reattach restored secret-sync association %d: %w", index+1, err)
+		}
+		if restoredOutboxID <= 0 {
+			return fmt.Errorf("backup: restored secret-sync association %d resolved an invalid outbox id", index+1)
+		}
+	}
+	return nil
 }
 
 func readAndVerifyPostgresState(r io.Reader) (postgresStateHeader, map[string][]json.RawMessage, postgresStateTrailer, error) {
@@ -477,10 +978,35 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"notification_routing_policies",
 		"outbox",
 		"policy_bindings",
+		// The non-PII preparation is the durable cross-store crash bridge. It is
+		// normally absent because capture refuses an active row, but classifying
+		// and restoring it prevents an older/external artifact from silently
+		// discarding the recovery instruction.
+		"privacy_subject_erasure_preparations",
 		"privacy_subject_erasure_operations",
 		"secret_shares",
+		"approved_target_event_fences",
+		"application_secret_mutation_fences",
+		"application_secret_tenant_epochs",
+		// AUD-106: the fair-scan cursor is one bounded operational row per
+		// tenant. Restore it with the exact due-edge commands so a recovered
+		// scheduler continues the UUID ring instead of starving its tail again.
+		"secret_rotation_schedule_scan_cursors",
+		// AUD-113: restore the bound outer key above before its tick receiver
+		// (composite FK), then restore the tick before child due-edge commands.
+		// This preserves row_started recovery and exact terminal response bytes.
+		"secret_rotation_schedule_ticks",
+		// Child snapshot rows reference their parent tick and therefore restore
+		// immediately after it, before any resumed due-edge command can inspect an
+		// ordinal.
+		"secret_rotation_schedule_tick_rows",
+		// AUD-106: exact scheduled-rotation due-edge commands are independent
+		// crash receivers. They deliberately have no FK to the rebuildable
+		// schedule projection, so they can restore before that projection exists.
+		"secret_rotation_schedule_commands",
 		"secret_store",
 		"secret_store_versions",
+		"application_secret_mutation_receipts",
 		"ssh_keys",
 		"tenant_branding",
 		"tenant_silos",

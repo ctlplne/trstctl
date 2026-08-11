@@ -155,9 +155,7 @@ func seedSealedRelayJob(t *testing.T, ctx context.Context, h *roleHarness) int64
 	if err != nil {
 		t.Fatalf("seal tenant secret: %v", err)
 	}
-	if _, err := h.store.PutSecret(ctx, h.tenant, secretName, sealedSecret); err != nil {
-		t.Fatalf("put tenant secret: %v", err)
-	}
+	seedApplicationSecretFixture(t, h.store, h.tenant, secretName, sealedSecret)
 
 	targetConfig, cfgErr := json.Marshal(map[string]any{
 		"base_url": "https://f5.example.internal",

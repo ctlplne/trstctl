@@ -69,6 +69,7 @@ exhaustive subcommand list:
 | `acme`                             | ACME ARI publication/scheduler posture plus DNS-01 provider coverage, secret-referenced provider configs, and propagation/CAA/wildcard preflight (`ari posture` · `dns-01 providers` · `dns-01 provider-configs` · `dns-01 preflight`) |
 | `agents`                           | In-network agent inventory, enrollment tokens, cert revocation, offboarding (`list` · `enroll-token` · `revoke-cert` · `offboard`)                          |
 | `ai`                               | AI assistant status, question answering, root-cause analysis (`status` · `query` · `rca`)                                                                   |
+| `approval-requests`                | Review immutable certificate, secret, and managed-key operation requests within the caller's real permission domains (`list` · `approve` · `deny`)            |
 | `audit`                            | Query and export the signed audit log (`events` · `export`)                                                                                                 |
 | `breakglass`                       | Ceremony-gated online break-glass issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`) |
 | `broker agent-identities`          | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                         |
@@ -114,10 +115,10 @@ exhaustive subcommand list:
 | `risk`                             | Rank credentials by risk score, with blast-radius-aware prioritization (`credentials` · `contextual-priorities`)                                             |
 | `run`                              | Local wrapper: run a child process with fetched secrets injected into its environment                                                                        |
 | `scale`                            | High-volume orchestration and multi-region HA issuance posture (`orchestration` · `ha-issuance`)                                                             |
-| `secrets store`                    | Stored secrets: put, list, import, get, history, recover, update, delete (`put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete`)   |
+| `secrets store`                    | Stored secrets: put, list, get, history, recover, update, delete (`put` · `list` · `get` · `history` · `recover` · `update` · `delete`); bulk import is unavailable until an atomic event-sourced batch command exists |
 | `secrets leases`                   | Dynamic secret leases: issue, get, renew, revoke (`issue` · `get` · `renew` · `revoke`)                                                                      |
-| `secrets rotations`                | Run a rollback-safe static/connector/dynamic-lease secret rotation (`run`)                                                                                   |
-| `secrets rotation-schedules`       | Scheduled dual-phase secret rotations (`create` · `list` · `run-due`)                                                                                        |
+| `secrets rotations`                | Queue worker-owned connector rotation; static and dynamic provider modes fail closed before effects (`run`)                                                   |
+| `secrets rotation-schedules`       | Scheduled connector rotations with bounded durable due-run receipts (`create` · `list` · `run-due`)                                                          |
 | `secrets syncs`                    | Push a stored secret to an external sync target (`run` · `targets`)                                                                                          |
 | `secrets scans`                    | Gitleaks scanning: CI runs, repository/third-party webhooks, local pre-commit and staged-diff (`run` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `staged-diff` · `pre-commit install`) |
 | `secrets shares`                   | Create and redeem a secret share (`create` · `redeem`)                                                                                                       |
@@ -172,6 +173,23 @@ trstctl-cli --idempotency-key approve-web-issue identities approve issue 1111111
 trstctl-cli --idempotency-key approve-web-rotate identities approve rotate 11111111-1111-1111-1111-111111111111
 trstctl-cli --idempotency-key approve-web-revoke identities approve revoke 11111111-1111-1111-1111-111111111111
 ```
+
+The cross-resource review queue is permission-filtered: `certs:issue` can review
+certificate operations, `secrets:write` can review secret operations, and
+`keys:approve` can review managed-key operations. It does not grant a new standalone
+approval permission. The list command uses an opaque newest-first cursor, so callers
+can continue beyond the first page without skipping requests that share a timestamp:
+
+```bash
+trstctl-cli approval-requests list --status pending --limit 100
+trstctl-cli approval-requests list --status pending --limit 100 --cursor '<next_cursor>'
+trstctl-cli --idempotency-key approve-request-42 approval-requests approve <request-id> <sha256>
+trstctl-cli --idempotency-key deny-request-42 approval-requests deny <request-id> <sha256> 'change window closed'
+```
+
+Approve and deny bind to the request's exact kind, action, resource, and intent
+digest. A denial is an immutable terminal decision on the request; it never revokes,
+retires, deletes, or otherwise mutates the target resource.
 
 ## Access-change approvals
 
@@ -529,23 +547,20 @@ printf '{"key_id":"<rotated-key-id>","action":"zeroize"}' | trstctl-cli --idempo
 printf '{"key_id":"<rotated-key-id>","action":"zeroize"}' | trstctl-cli --idempotency-key kms-key-1-zeroize-approve-b managed-keys approve -f -
 printf '{"key_id":"<rotated-key-id>"}' | trstctl-cli --idempotency-key kms-key-1-zeroize managed-keys zeroize -f - --force
 
-# Run rollback-safe static, connector-backed, or dynamic-lease rotation.
-cat > static-rotation.json <<'JSON'
-{"provider":"postgresql","key":"db/reporting","old_ref":"sec05_old"}
-JSON
-trstctl-cli --idempotency-key static-rotation-1 secrets rotations run -f static-rotation.json
+# Run worker-queued connector rotation.
 printf '{"provider":"connector:ci","key":"db/password","old_ref":"version:2","remote_key":"DB_PASSWORD"}' \
   | trstctl-cli --idempotency-key connector-rotation-1 secrets rotations run -f -
-printf '{"provider":"dynamic-lease:postgresql","key":"readonly","old_ref":"lease-abc","target":"ci","remote_key":"DB_READONLY_DSN","ttl_seconds":600}' \
-  | trstctl-cli --idempotency-key dynamic-rotation-1 secrets rotations run -f -
 
-# Schedule the same dual-phase rotation and run due schedules from the served path.
-cat > static-rotation-schedule.json <<'JSON'
-{"name":"reporting-hourly","provider":"postgresql","key":"db/reporting","old_ref":"sec05_old","interval_seconds":3600}
+# Static-provider and dynamic-lease rotation both fail closed before effects until
+# their complete phase chains have one crash-recoverable worker receiver.
+
+# Schedule connector rotation and run due schedules from the served path.
+cat > connector-rotation-schedule.json <<'JSON'
+{"name":"reporting-hourly","provider":"connector:ci","key":"db/password","old_ref":"version:2","interval_seconds":3600}
 JSON
-trstctl-cli --idempotency-key static-rotation-schedule-1 secrets rotation-schedules create -f static-rotation-schedule.json
+trstctl-cli --idempotency-key connector-rotation-schedule-1 secrets rotation-schedules create -f connector-rotation-schedule.json
 trstctl-cli secrets rotation-schedules list
-trstctl-cli --idempotency-key static-rotation-due-1 secrets rotation-schedules run-due
+trstctl-cli --idempotency-key connector-rotation-due-1 secrets rotation-schedules run-due
 
 # Push a stored secret to a configured external sync target. The response contains
 # metadata only; the secret value is never echoed back.

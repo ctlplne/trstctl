@@ -140,6 +140,14 @@ time). One denial is terminal. When the quorum is met, trstctl issues and transi
 terminal, so a retry never double-acts, and every step is recorded as an immutable event
 (`approval.requested/approved/denied/issued/expired/refused`).
 
+The generic operation-review surface keeps those domains separate: certificate
+review requires `certs:issue`, secret review requires `secrets:write`, and managed-key
+review requires `keys:approve`. List responses contain only the caller's authorized
+domains and paginate with an opaque composite cursor. Approve and deny re-check the
+request's exact kind, action, resource, and intent digest while the request row is
+locked. A denial closes only the immutable request; it does not mutate the requested
+resource.
+
 For privileged-access management, the same JIT model opens short-lived sessions instead
 of standing database or shell access. `POST /api/v1/access/sessions` verifies an
 attestation, grants a scoped Postgres login role or signs an OpenSSH user certificate
@@ -157,7 +165,9 @@ self-approval of privileged issue, rotate, or revoke actions, accepts a distinct
 approval, then mints through the signer-backed issuance outbox and records certificate
 inventory evidence.
 Ephemeral/JIT credential issuance is served when configured through `POST /api/v1/ephemeral` plus
-`POST /api/v1/ephemeral/{request_id}/approvals`, and PAM-lite sessions are served
+`POST /api/v1/ephemeral/{id}/approvals`, where `{id}` is the genuine
+`approval_request_id` and the body carries the same UUID as `request_id` plus its
+matching `intent_digest`; PAM-lite sessions are served
 through `POST /api/v1/access/sessions`, `GET /api/v1/access/sessions`, and
 `GET /api/v1/access/sessions/{id}`. The ephemeral path verifies the attestation first,
 writes the approval request and outbox notification intent in the same tenant

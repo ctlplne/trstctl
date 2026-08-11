@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -16,6 +17,9 @@ import (
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/privacy"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -77,7 +81,10 @@ func newStore(t *testing.T) *store.Store {
 	// Per-test isolation: the package shares one database, so reset every
 	// tenant-scoped table (and the operational tables) between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits,
+		`TRUNCATE approved_target_event_fences, application_secret_mutation_fences,
+		          application_secret_tenant_epochs, application_secret_mutation_receipts,
+		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
+		          secret_rotation_schedule_ticks, tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits,
 		          enrollment_diagnostic_observations, enrollment_diagnostics,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
@@ -89,7 +96,8 @@ func newStore(t *testing.T) *store.Store {
 			          crypto_assets, credentials, audit_checkpoints, certificate_profiles, secret_sync_workload_identity_sources, workload_attester_trust_sources,
 			          notification_routing_policies,
 			          connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs, incident_fleet_reissuance_runs,
-			          secret_store, read_model_snapshots,
+		          secret_store_versions, secret_store, secret_rotation_schedule_scan_cursors, secret_rotation_schedule_commands, secret_rotation_schedules, read_model_snapshots,
+			          operation_approval_decisions, operation_approval_requests,
 			          issuance_approval_requests, issuance_approvals,
 			          access_change_requests, access_change_request_decisions, compliance_report_schedules
 			 RESTART IDENTITY CASCADE`); err != nil {
@@ -152,6 +160,12 @@ func seedTenant(t *testing.T, s *store.Store, tenantID string) {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
+			`INSERT INTO idempotency_keys (tenant_id, key, status, request_binding)
+			 VALUES ($1, 'offboard-scheduler-tick', 'bound', 'offboard-scheduler-binding')`,
+			tenantID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
 			`INSERT INTO ssh_keys (id, tenant_id, fingerprint) VALUES ($1,$2,$3)`,
 			uuid(tenantID, 5), tenantID, "ssh-"+tenantID); err != nil {
 			return err
@@ -178,6 +192,26 @@ func seedTenant(t *testing.T, s *store.Store, tenantID string) {
 	}); err != nil {
 		t.Fatalf("seed tenant %s: %v", tenantID, err)
 	}
+	terminalTickBody := []byte(`{"ran":0,"scanned":0,"runs":[],"deferred":[],"run_limit_reached":false,"scan_limit_reached":false,"complete":true,"partial":false}`)
+	if err := s.WithTenantProjection(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO secret_rotation_schedule_scan_cursors (tenant_id) VALUES ($1)`, tenantID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx,
+			`INSERT INTO secret_rotation_schedule_ticks
+			        (tenant_id, idempotency_key, request_binding, due_through,
+			         start_schedule_id, after_schedule_id, phase, receipt,
+			         owner_token, owner_generation, terminal_http_status,
+			         terminal_body, created_at, updated_at, completed_at)
+			 VALUES ($1, 'offboard-scheduler-tick', 'offboard-scheduler-binding', now(),
+			         $2, $2, 'terminal', $3::jsonb, '', 1, 200,
+			         $4, now(), now(), now())`,
+			tenantID, uuid(tenantID, 7), terminalTickBody, terminalTickBody)
+		return err
+	}); err != nil {
+		t.Fatalf("seed protected scheduler authority for tenant %s: %v", tenantID, err)
+	}
 }
 
 // countTenantRows returns the number of rows visible for tenantID across the
@@ -186,7 +220,7 @@ func countTenantRows(t *testing.T, s *store.Store, tenantID string) int {
 	t.Helper()
 	ctx := context.Background()
 	total := 0
-	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs", "kubernetes_controller_posture"}
+	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "secret_rotation_schedule_ticks", "secret_rotation_schedule_scan_cursors", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs", "kubernetes_controller_posture"}
 	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, tbl := range tables {
 			var n int
@@ -237,7 +271,7 @@ func TestOffboardTenantErasesOnlyThatTenant(t *testing.T) {
 		t.Errorf("attestation reports residue after erase: %v", att.Residue)
 	}
 	// Every seeded table must have a recorded delete count (the deletion proof).
-	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs", "kubernetes_controller_posture", "tenants"} {
+	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "secret_rotation_schedule_ticks", "secret_rotation_schedule_scan_cursors", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs", "kubernetes_controller_posture", "tenants"} {
 		if _, ok := att.Deleted[tbl]; !ok {
 			t.Errorf("attestation missing a delete count for %s", tbl)
 		}
@@ -257,6 +291,47 @@ func TestOffboardTenantErasesOnlyThatTenant(t *testing.T) {
 	}
 	if _, err := s.GetTenant(ctx, tenantB); err != nil {
 		t.Errorf("tenant B's row must survive A's offboarding: %v", err)
+	}
+}
+
+func TestOffboardTenantErasesOnlyItsApplicationSecretActorFence(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	for _, tenant := range []string{tenantA, tenantB} {
+		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenant, Name: "actor-fence-tenant"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	actorA := &events.Actor{Subject: "offboard-alice", Roles: []string{"operator"}}
+	actorB := &events.Actor{Subject: "neighbor-bob", Roles: []string{"auditor", "operator"}}
+	for index, fixture := range []struct {
+		tenant string
+		actor  *events.Actor
+	}{
+		{tenant: tenantA, actor: actorA},
+		{tenant: tenantB, actor: actorB},
+	} {
+		if _, err := s.ClaimApplicationSecretMutationFence(ctx, store.ApplicationSecretMutationFence{
+			TenantID: fixture.tenant, Name: "offboard/pending", Operation: "create",
+			EventID:        fmt.Sprintf("77960000-0000-4000-8000-%012d", index+1),
+			EventType:      projections.EventApplicationSecretCreated,
+			SchemaVersion:  projections.ApplicationSecretMutationSchemaVersion,
+			RequestBinding: strings.Repeat(fmt.Sprintf("%x", index+1), 64),
+			Payload:        []byte(`{"action":"create"}`), Actor: fixture.actor,
+		}); err != nil {
+			t.Fatalf("claim tenant %s actor fence: %v", fixture.tenant, err)
+		}
+	}
+	if _, err := s.OffboardTenant(ctx, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetApplicationSecretMutationFence(ctx, tenantA, "offboard/pending"); !store.IsNotFound(err) {
+		t.Fatalf("offboarded tenant actor fence survived: %v", err)
+	}
+	neighbor, err := s.GetApplicationSecretMutationFence(ctx, tenantB, "offboard/pending")
+	if err != nil || !reflect.DeepEqual(neighbor.Actor, actorB) ||
+		neighbor.ActorSubjectRef != privacy.SubjectRef(tenantB, actorB.Subject) {
+		t.Fatalf("neighbor tenant actor fence changed: %+v err=%v", neighbor, err)
 	}
 }
 

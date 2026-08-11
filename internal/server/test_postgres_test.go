@@ -11,11 +11,46 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/store"
 )
 
 var sourceTreeSignerAuthSecret = filepath.Join("data", "signer", "sign-auth.bin")
+
+// seedApplicationSecretFixture is a test-only direct database fixture. Production
+// code intentionally exposes no Store mutator that can bypass the authoritative
+// application-secret event projector.
+func seedApplicationSecretFixture(
+	t *testing.T,
+	s *store.Store,
+	tenantID, name string,
+	sealed []byte,
+) store.Secret {
+	t.Helper()
+	ctx := context.Background()
+	var out store.Secret
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO secret_store (tenant_id, name, sealed, version)
+			VALUES ($1, $2, $3, 1)
+			RETURNING id::text, tenant_id::text, name, version, created_at, updated_at`,
+			tenantID, name, sealed).Scan(
+			&out.ID, &out.TenantID, &out.Name, &out.Version, &out.CreatedAt, &out.UpdatedAt); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `
+			INSERT INTO secret_store_versions (tenant_id, name, version, sealed, written_at)
+			VALUES ($1, $2, 1, $3, $4)`, tenantID, name, sealed, out.UpdatedAt)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("seed application-secret fixture %s: %v", name, err)
+	}
+	out.Sealed = append([]byte(nil), sealed...)
+	return out
+}
 
 func assertNoSourceTreeSignerAuthSecret(t *testing.T, phase string) {
 	t.Helper()
@@ -126,9 +161,12 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          outbox_reconciliation_conflicts, incident_executions, incident_fleet_reissuance_runs,
 		          pam_sessions, nhi_access_review_campaigns, nhi_access_review_items,
 		          access_change_requests, access_change_request_decisions, compliance_report_schedules,
+		          privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          privacy_subject_erasures, privacy_retention_runs, privacy_archive_erasure_attestations,
-		          secret_shares, secret_store, dynamic_secret_operations, dynamic_secret_leases, secret_sync_jobs, read_model_snapshots,
-		          code_signing_operations,
+		          secret_shares, secret_store, secret_rotation_schedule_ticks, secret_rotation_schedule_scan_cursors, secret_rotation_schedule_commands, secret_rotation_schedules, approved_target_event_fences, application_secret_mutation_fences, application_secret_tenant_epochs, application_secret_mutation_receipts,
+		          dynamic_secret_operations, dynamic_secret_leases, secret_sync_jobs, read_model_snapshots,
+		          managed_key_operations, managed_keys, code_signing_operations,
+		          operation_approval_decisions, operation_approval_requests,
 		          issuance_approval_requests, issuance_approvals,
 		          agent_job_credential_redemptions, agent_job_receipts, adcs_template_posture,
 		          cmdb_reconcile_schedules, owner_ownership_conflicts, issuance_requests,

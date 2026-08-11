@@ -16,17 +16,28 @@ import (
 
 type captureApprovalRecorder struct {
 	tenantID string
-	resource string
-	action   string
-	approver string
+	command  ApprovalDecisionCommand
 }
 
-func (r *captureApprovalRecorder) RecordApproval(_ context.Context, tenantID, resource, action, approver string) (int, error) {
+func (r *captureApprovalRecorder) ValidateApprovalRequest(_ context.Context, tenantID string, command ApprovalDecisionCommand) (ApprovalRequestRecord, error) {
 	r.tenantID = tenantID
-	r.resource = resource
-	r.action = action
-	r.approver = approver
-	return 2, nil
+	r.command = command
+	return ApprovalRequestRecord{
+		ID: command.RequestID, IntentDigest: command.IntentDigest,
+		ResourceID: command.ExpectedResourceID, ResourceKind: command.ExpectedResourceKind,
+		Action: command.ExpectedAction, RequiredApprovals: 2, Status: "pending",
+	}, nil
+}
+
+func (r *captureApprovalRecorder) RecordApproval(_ context.Context, tenantID string, command ApprovalDecisionCommand) (ApprovalRequestRecord, error) {
+	r.tenantID = tenantID
+	r.command = command
+	return ApprovalRequestRecord{
+		ID: command.RequestID, IntentDigest: command.IntentDigest,
+		ResourceID: command.ExpectedResourceID, ResourceKind: command.ExpectedResourceKind,
+		Action: command.ExpectedAction, ApprovalCount: 2, RequiredApprovals: 2,
+		Status: "approved",
+	}, nil
 }
 
 func TestApprovalIdentityActionAcceptsRotate(t *testing.T) {
@@ -34,7 +45,7 @@ func TestApprovalIdentityActionAcceptsRotate(t *testing.T) {
 	recorder := &captureApprovalRecorder{}
 	handler := New(nil, orchestrator.NewMemoryIdempotency(), nil, WithInsecureHeaderResolver(), WithRoles(role), WithApprovals(recorder))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/identities/identity-rotate-1/approvals", strings.NewReader(`{"action":"rotate"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/identities/identity-rotate-1/approvals", strings.NewReader(`{"action":"rotate","request_id":"11111111-1111-1111-1111-111111111111","intent_digest":"sha256:test"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", "approve-rotate-1")
 	req.Header.Set("X-Tenant-ID", "tenant-rotate")
@@ -47,8 +58,8 @@ func TestApprovalIdentityActionAcceptsRotate(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("approve rotate status = %d, want 200: %s", rr.Code, rr.Body.String())
 	}
-	if recorder.tenantID != "tenant-rotate" || recorder.resource != "identity-rotate-1" || recorder.action != "rotate" || recorder.approver != "ra-approver" {
-		t.Fatalf("recorded approval = tenant:%q resource:%q action:%q approver:%q", recorder.tenantID, recorder.resource, recorder.action, recorder.approver)
+	if recorder.tenantID != "tenant-rotate" || recorder.command.ExpectedResourceID != "identity-rotate-1" || recorder.command.ExpectedAction != "rotate" || recorder.command.Approver != "ra-approver" {
+		t.Fatalf("recorded approval = tenant:%q command:%+v", recorder.tenantID, recorder.command)
 	}
 	var body approvalResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {

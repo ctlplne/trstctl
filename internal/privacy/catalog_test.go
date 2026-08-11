@@ -71,6 +71,14 @@ func TestPrivacyCatalogCoversSchemaAndRuntimePII(t *testing.T) {
 				"UserAgent    string",
 			},
 		},
+		{
+			id:     "application_secret_mutation_fences.actor",
+			source: "../store/migrations/0152_application_secret_fence_actor.sql",
+			markers: []string{
+				"ADD COLUMN actor JSONB",
+				"ADD COLUMN actor_subject_ref CHAR(64)",
+			},
+		},
 	}
 
 	seen := map[string]CatalogEntry{}

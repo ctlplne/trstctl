@@ -13,7 +13,12 @@ const { apiMock } = vi.hoisted(() => ({
     getSecret: vi.fn(),
     getSecretWithToken: vi.fn(),
     rotateSecret: vi.fn(),
+    runSecretRotation: vi.fn(),
+    createSecretRotationSchedule: vi.fn(),
+    secretRotationSchedules: vi.fn(),
+    runDueSecretRotations: vi.fn(),
     deleteSecret: vi.fn(),
+    approvalRequests: vi.fn(),
     approveSecretChange: vi.fn(),
     issuePKISecret: vi.fn(),
     machineLogin: vi.fn(),
@@ -70,6 +75,29 @@ function renderSecrets(path = "/secrets") {
   );
 }
 
+function scheduledRunFixture(index: number) {
+  const suffix = String(index + 1).padStart(12, "0");
+  return {
+    schedule_id: `88888888-8888-4888-8888-${suffix}`,
+    run_id: `11111111-1111-4111-8111-${suffix}`,
+    status: "failed",
+    rotation: {
+      key: index === 0 ? "app/partial/password" : `app/partial/${index}`,
+      old_ref: "version:3",
+      new_ref: "",
+      completed: false,
+      queued: false,
+      rolled_back: false,
+      rollback_attempted: false,
+      rollback_failed: false,
+      error: "provider failed before a successor became authoritative",
+    },
+    error: "provider failed before a successor became authoritative",
+    ran_at: "2026-06-19T10:01:00Z",
+    reconciled: false,
+  };
+}
+
 function primeSecretsMocks() {
   localStorage.clear();
   sessionStorage.clear();
@@ -89,7 +117,47 @@ function primeSecretsMocks() {
   apiMock.getSecret.mockResolvedValue({ name: "app/db/password", value: "SUPER-SECRET", version: 3 });
   apiMock.getSecretWithToken.mockResolvedValue({ name: "app/db/password", value: "WORKLOAD-SECRET", version: 3 });
   apiMock.rotateSecret.mockResolvedValue({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
+  apiMock.runSecretRotation.mockResolvedValue({
+    key: "app/db/password",
+    old_ref: "version:3",
+    new_ref: "version:4",
+    completed: false,
+    queued: true,
+    rolled_back: false,
+    rollback_attempted: false,
+    rollback_failed: false,
+  });
+  apiMock.createSecretRotationSchedule.mockResolvedValue({
+    id: "77777777-7777-7777-7777-777777777777",
+    name: "daily",
+    provider: "connector:ci",
+    key: "app/db/password",
+    old_ref: "version:3",
+    interval_seconds: 86400,
+    enabled: true,
+    next_run_at: "2026-06-20T10:00:00Z",
+    last_run_status: "",
+  });
+  apiMock.secretRotationSchedules.mockResolvedValue({ items: [] });
+  apiMock.runDueSecretRotations.mockResolvedValue({
+		ran: 50,
+		scanned: 51,
+		runs: Array.from({ length: 50 }, (_, index) => scheduledRunFixture(index)),
+    deferred: [
+      {
+        schedule_id: "77777777-7777-7777-7777-777777777777",
+        reason: "approval_pending",
+        due_at: "2026-06-19T10:00:00Z",
+        error: "approval request still needs one distinct reviewer",
+      },
+    ],
+		run_limit_reached: true,
+		scan_limit_reached: false,
+		complete: false,
+    partial: false,
+  });
   apiMock.deleteSecret.mockResolvedValue(undefined);
+  apiMock.approvalRequests.mockResolvedValue([]);
   apiMock.approveSecretChange.mockResolvedValue({
     resource: "secret:app/db/password",
     action: "rotate",
@@ -622,7 +690,7 @@ describe("secrets surface", () => {
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
     expect(screen.getByText("native store")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
-    expect(screen.getByRole("form", { name: "Run rollback-safe rotation" })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "Run connector rotation" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Scheduled rotations" })).toBeInTheDocument();
     expect(screen.queryByText("Scheduled rotation and downstream sync aren't in the console yet")).not.toBeInTheDocument();
     expect(screen.getByText("Secret-change approvals")).toBeInTheDocument();
@@ -716,6 +784,154 @@ describe("secrets surface", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
+  it("keeps manual and scheduled rotation scope truthful and clears stale deferred evidence", async () => {
+    const user = userEvent.setup();
+    renderSecrets();
+    await screen.findByText("app/db/password");
+
+    const rotationForm = within(screen.getByRole("form", { name: "Run connector rotation" }));
+    expect(rotationForm.queryByLabelText("TTL seconds")).not.toBeInTheDocument();
+    await user.type(rotationForm.getByLabelText("Key"), "app/db/password");
+    await user.type(rotationForm.getByLabelText("Old reference"), "version:3");
+    await user.type(rotationForm.getByLabelText("Provider"), "dynamic-lease:postgresql");
+    await user.click(rotationForm.getByRole("button", { name: /run rotation/i }));
+    expect(await screen.findByText(/manual provider rotation currently requires connector:<target>/i)).toBeInTheDocument();
+    expect(apiMock.runSecretRotation).not.toHaveBeenCalled();
+
+    await user.clear(rotationForm.getByLabelText("Provider"));
+    await user.type(rotationForm.getByLabelText("Provider"), "postgresql");
+    await user.click(rotationForm.getByRole("button", { name: /run rotation/i }));
+    expect(await screen.findByText(/static and dynamic-lease providers stay unavailable/i)).toBeInTheDocument();
+    expect(apiMock.runSecretRotation).not.toHaveBeenCalled();
+
+    await user.clear(rotationForm.getByLabelText("Provider"));
+    await user.type(rotationForm.getByLabelText("Provider"), "connector:ci");
+    await user.type(rotationForm.getByLabelText("Sync target (optional)"), "ci");
+    await user.type(rotationForm.getByLabelText("Remote key (optional)"), "DATABASE_PASSWORD");
+    await user.click(rotationForm.getByRole("button", { name: /run rotation/i }));
+    await waitFor(() =>
+      expect(apiMock.runSecretRotation).toHaveBeenCalledWith({
+        key: "app/db/password",
+        old_ref: "version:3",
+        provider: "connector:ci",
+        target: "ci",
+        remote_key: "DATABASE_PASSWORD",
+      }),
+    );
+    expect(await screen.findByText("Rotation queued for delivery")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /new schedule/i }));
+    const scheduleForm = within(screen.getByRole("form", { name: "Create rotation schedule" }));
+    await user.type(scheduleForm.getByLabelText("Schedule name"), "daily-ci");
+    await user.type(scheduleForm.getByLabelText("Key"), "app/db/password");
+    await user.type(scheduleForm.getByLabelText("Old reference"), "version:3");
+    await user.type(scheduleForm.getByLabelText("Provider"), "postgresql");
+    await user.click(scheduleForm.getByRole("button", { name: /create schedule/i }));
+    expect(await scheduleForm.findByText(/scheduled rotation currently requires a connector:<target> provider/i)).toBeInTheDocument();
+    expect(apiMock.createSecretRotationSchedule).not.toHaveBeenCalled();
+
+    await user.clear(scheduleForm.getByLabelText("Provider"));
+    await user.type(scheduleForm.getByLabelText("Provider"), "connector:ci");
+    await user.click(scheduleForm.getByRole("button", { name: /create schedule/i }));
+    await waitFor(() =>
+      expect(apiMock.createSecretRotationSchedule).toHaveBeenCalledWith({
+        name: "daily-ci",
+        key: "app/db/password",
+        old_ref: "version:3",
+        provider: "connector:ci",
+        interval_seconds: 86400,
+        enabled: true,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Run due now" }));
+    await waitFor(() => expect(apiMock.runDueSecretRotations).toHaveBeenCalledTimes(1));
+		expect(await screen.findByText("Ran 50 due rotations; deferred 1 of 51 scanned schedules.")).toBeInTheDocument();
+		expect(screen.getByText(/full 50-run budget was consumed/i)).toBeInTheDocument();
+		expect(screen.queryByText(/full 500-schedule scan budget was consumed/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/1 due schedules remain deferred; each exact due edge is listed below/i)).toBeInTheDocument();
+    const deferredList = screen.getByRole("list", { name: "Deferred rotation schedule evidence" });
+    const deferredRow = within(deferredList).getByRole("listitem");
+    expect(within(deferredRow).getByText("77777777-7777-7777-7777-777777777777")).toBeInTheDocument();
+    expect(within(deferredRow).getByText("Approval pending")).toBeInTheDocument();
+    expect(within(deferredRow).getByText("Due Jun 19, 2026, 10:00 AM")).toBeInTheDocument();
+    expect(within(deferredRow).getByText("approval request still needs one distinct reviewer")).toBeInTheDocument();
+
+    apiMock.runDueSecretRotations.mockRejectedValueOnce(
+      new ApiError(
+        503,
+        JSON.stringify({
+          ran: 1,
+		  scanned: 500,
+		        runs: [scheduledRunFixture(0)],
+          deferred: [
+            {
+              schedule_id: "99999999-9999-4999-8999-999999999999",
+              reason: "command_claimed",
+              due_at: "2026-06-19T10:02:00Z",
+              error: "another runner still owns this exact due edge",
+            },
+          ],
+		        run_limit_reached: false,
+		        scan_limit_reached: true,
+          complete: false,
+          partial: true,
+          failed_schedule_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          system_error: "event store unavailable after durable partial progress",
+        }),
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Run due now" }));
+    await waitFor(() => expect(apiMock.runDueSecretRotations).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("event store unavailable after durable partial progress")).toBeInTheDocument();
+    expect(screen.getByText("app/partial/password")).toBeInTheDocument();
+    const partialDeferredList = screen.getByRole("list", { name: "Deferred rotation schedule evidence" });
+    expect(within(partialDeferredList).getByText("99999999-9999-4999-8999-999999999999")).toBeInTheDocument();
+    expect(within(partialDeferredList).getByText("Due edge claimed by another runner")).toBeInTheDocument();
+		expect(within(partialDeferredList).getByText("another runner still owns this exact due edge")).toBeInTheDocument();
+		expect(screen.getByText(/full 500-schedule scan budget was consumed/i)).toBeInTheDocument();
+		expect(screen.queryByText(/full 50-run budget was consumed/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("77777777-7777-7777-7777-777777777777")).not.toBeInTheDocument();
+
+		apiMock.runDueSecretRotations.mockRejectedValueOnce(
+		  new ApiError(
+		    503,
+		    JSON.stringify({
+		      detail: "malformed scheduler receipt",
+		      ran: 0,
+		      scanned: 2,
+		      runs: [],
+		      deferred: [
+		        {
+		          schedule_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		          reason: "constructor",
+		          due_at: "2026-06-19T10:03:00Z",
+		        },
+		        {
+		          schedule_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		          reason: "toString",
+		          due_at: "2026-06-19T10:04:00Z",
+		        },
+		      ],
+		      run_limit_reached: false,
+		      scan_limit_reached: false,
+		      complete: false,
+		      partial: true,
+		      system_error: "must not render inherited prototype keys as a deferred reason",
+		    }),
+		  ),
+		);
+		await user.click(screen.getByRole("button", { name: "Run due now" }));
+		expect(await screen.findByText("malformed scheduler receipt")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.runDueSecretRotations).toHaveBeenCalledTimes(3));
+    expect(screen.queryByRole("list", { name: "Deferred rotation schedule evidence" })).not.toBeInTheDocument();
+    expect(screen.queryByText("77777777-7777-7777-7777-777777777777")).not.toBeInTheDocument();
+    expect(screen.queryByText("Approval pending")).not.toBeInTheDocument();
+    expect(screen.queryByText("99999999-9999-4999-8999-999999999999")).not.toBeInTheDocument();
+		expect(screen.queryByText("app/partial/password")).not.toBeInTheDocument();
+		expect(screen.queryByRole("status", { name: "Scheduled rotation continuation notice" })).not.toBeInTheDocument();
+  });
+
   it("queues denied secret changes for distinct approval and retry completion", async () => {
     const user = userEvent.setup();
     apiMock.rotateSecret
@@ -731,6 +947,40 @@ describe("secrets surface", () => {
     apiMock.approveSecretChange
       .mockResolvedValueOnce({ resource: "secret:app/db/password", action: "rotate", approver: "bob", approvals: 2 })
       .mockResolvedValueOnce({ resource: "secret:app/db/password", action: "delete", approver: "carol", approvals: 2 });
+    apiMock.approvalRequests.mockResolvedValue([
+      {
+        id: "019fec49-6641-7131-ae7f-17f7ea4b5e01",
+        intent_digest: "sha256:secret-rotate",
+        resource_id: "secret:app/db/password",
+        resource_name: "app/db/password",
+        resource_kind: "secret",
+        action: "rotate",
+        requester: "alice",
+        target_version: "secret:3",
+        evidence_refs: [],
+        approval_count: 1,
+        required_approvals: 2,
+        status: "pending",
+        created_at: "2026-06-19T10:00:00Z",
+        expires_at: "2026-06-19T11:00:00Z",
+      },
+      {
+        id: "019fec49-6641-7131-ae7f-17f7ea4b5e02",
+        intent_digest: "sha256:secret-delete",
+        resource_id: "secret:app/db/password",
+        resource_name: "app/db/password",
+        resource_kind: "secret",
+        action: "delete",
+        requester: "alice",
+        target_version: "secret:3",
+        evidence_refs: [],
+        approval_count: 1,
+        required_approvals: 2,
+        status: "pending",
+        created_at: "2026-06-19T10:00:00Z",
+        expires_at: "2026-06-19T11:00:00Z",
+      },
+    ]);
 
     renderSecrets();
     await screen.findByText("app/db/password");
@@ -751,7 +1001,13 @@ describe("secrets surface", () => {
 
     let approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
     await user.click(within(approvalList).getByRole("button", { name: /approve rotate\/update for app\/db\/password/i }));
-    await waitFor(() => expect(apiMock.approveSecretChange).toHaveBeenNthCalledWith(1, "app/db/password", "rotate"));
+    await waitFor(() =>
+      expect(apiMock.approveSecretChange).toHaveBeenNthCalledWith(1, "app/db/password", {
+        action: "rotate",
+        request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e01",
+        intent_digest: "sha256:secret-rotate",
+      }),
+    );
     expect(await screen.findByText(/bob approved Rotate\/update for app\/db\/password/i)).toBeInTheDocument();
 
     approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
@@ -775,7 +1031,13 @@ describe("secrets surface", () => {
 
     approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
     await user.click(within(approvalList).getByRole("button", { name: /approve delete for app\/db\/password/i }));
-    await waitFor(() => expect(apiMock.approveSecretChange).toHaveBeenNthCalledWith(2, "app/db/password", "delete"));
+    await waitFor(() =>
+      expect(apiMock.approveSecretChange).toHaveBeenNthCalledWith(2, "app/db/password", {
+        action: "delete",
+        request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e02",
+        intent_digest: "sha256:secret-delete",
+      }),
+    );
     expect(await screen.findByText(/carol approved Delete for app\/db\/password/i)).toBeInTheDocument();
 
     approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });

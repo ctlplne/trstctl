@@ -237,14 +237,66 @@ func (s *Store) GetManagedKeyOperation(ctx context.Context, tenantID, operationI
 func (s *Store) GetManagedKey(ctx context.Context, tenantID, provider, keyID string) (ManagedKey, error) {
 	var key ManagedKey
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
-			`SELECT tenant_id, provider, key_id, algorithm, version, state,
-			        public_der, created_at, updated_at
-			   FROM managed_keys
-			  WHERE tenant_id = $1 AND provider = $2 AND key_id = $3`,
-			tenantID, provider, keyID).Scan(
-			&key.TenantID, &key.Provider, &key.KeyID, &key.Algorithm, &key.Version,
-			&key.State, &key.PublicDER, &key.CreatedAt, &key.UpdatedAt)
+		var err error
+		key, err = s.ManagedKeyApprovalTargetTx(ctx, tx, tenantID, provider, keyID, false)
+		return err
 	})
 	return key, err
+}
+
+// ManagedKeyApprovalTargetTx reads the exact event-projected target generation.
+// The command path requests a row lock so the state/version approved by reviewers
+// cannot change between authority validation and requested-event projection.
+func (s *Store) ManagedKeyApprovalTargetTx(ctx context.Context, tx pgx.Tx, tenantID, provider, keyID string, lock bool) (ManagedKey, error) {
+	locking := ""
+	if lock {
+		locking = " FOR UPDATE"
+	}
+	var key ManagedKey
+	err := tx.QueryRow(ctx,
+		`SELECT tenant_id, provider, key_id, algorithm, version, state,
+		        public_der, created_at, updated_at
+		   FROM managed_keys
+		  WHERE tenant_id = $1 AND provider = $2 AND key_id = $3`+locking,
+		tenantID, provider, keyID).Scan(
+		&key.TenantID, &key.Provider, &key.KeyID, &key.Algorithm, &key.Version,
+		&key.State, &key.PublicDER, &key.CreatedAt, &key.UpdatedAt)
+	if err != nil {
+		return ManagedKey{}, err
+	}
+	if key.Version < 0 {
+		return ManagedKey{}, fmt.Errorf("store: managed-key version is negative")
+	}
+	return key, nil
+}
+
+// ValidateManagedKeyApprovalCommandTx joins the generic one-shot authority to
+// managed-key-only intent fields not repeated in OperationApprovalUse. The digest
+// still identifies the whole immutable request; this comparison proves the event
+// carries the same reviewer-visible key name and non-secret command evidence.
+// Readiness and consumption are deliberately left to the generic approval APIs.
+func (s *Store) ValidateManagedKeyApprovalCommandTx(ctx context.Context, tx pgx.Tx, tenantID string, use OperationApprovalUse, resourceName string, evidenceRefs []string) (OperationApprovalRequest, error) {
+	request, err := s.getOperationApprovalTx(ctx, tx, tenantID, use.RequestID, true)
+	if err != nil {
+		return OperationApprovalRequest{}, err
+	}
+	if err := validateOperationApprovalUseBinding(request, use); err != nil {
+		return OperationApprovalRequest{}, err
+	}
+	if request.ResourceName != resourceName || !sameManagedKeyApprovalEvidence(request.EvidenceRefs, evidenceRefs) {
+		return OperationApprovalRequest{}, ErrApprovalDrifted
+	}
+	return request, nil
+}
+
+func sameManagedKeyApprovalEvidence(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -751,9 +751,47 @@ Approval = TypedDict(
     'Approval',
     {
         'action': str,
+        'approval_count': int,
         'approvals': int,
         'approver': str,
+        'id': str,
+        'intent_digest': str,
+        'required_approvals': int,
         'resource': str,
+        'status': str,
+    },
+    total=False,
+)
+
+ApprovalDecision = TypedDict(
+    'ApprovalDecision',
+    {
+        'action': str,
+        'approval_count': int,
+        'approvals': int,
+        'approver': str,
+        'id': str,
+        'intent_digest': str,
+        'required_approvals': int,
+        'resource': str,
+        'status': str,
+    },
+    total=False,
+)
+
+ApprovalDecisionInput = TypedDict(
+    'ApprovalDecisionInput',
+    {
+        'intent_digest': str,
+    },
+    total=False,
+)
+
+ApprovalDenialInput = TypedDict(
+    'ApprovalDenialInput',
+    {
+        'intent_digest': str,
+        'reason': str,
     },
     total=False,
 )
@@ -762,6 +800,17 @@ ApprovalRequest = TypedDict(
     'ApprovalRequest',
     {
         'action': str,
+        'intent_digest': str,
+        'request_id': str,
+    },
+    total=False,
+)
+
+ApprovalRequestList = TypedDict(
+    'ApprovalRequestList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
     },
     total=False,
 )
@@ -3148,9 +3197,14 @@ EphemeralApproval = TypedDict(
     'EphemeralApproval',
     {
         'action': str,
+        'approval_count': int,
         'approvals': int,
         'approver': str,
+        'id': str,
+        'intent_digest': str,
+        'required_approvals': int,
         'resource': str,
+        'status': str,
     },
     total=False,
 )
@@ -3159,6 +3213,8 @@ EphemeralApprovalRequest = TypedDict(
     'EphemeralApprovalRequest',
     {
         'action': str,
+        'intent_digest': str,
+        'request_id': str,
     },
     total=False,
 )
@@ -3166,12 +3222,14 @@ EphemeralApprovalRequest = TypedDict(
 EphemeralCredential = TypedDict(
     'EphemeralCredential',
     {
+        'approval_request_id': str,
         'approvals': int,
         'attestation': dict[str, Any],
         'certificate_id': str,
         'certificate_pem': str,
         'credential_id': str,
         'expires_at': str,
+        'intent_digest': str,
         'not_after': str,
         'request_id': str,
         'required_approvals': int,
@@ -4233,7 +4291,9 @@ ManagedKeyApprovalRequest = TypedDict(
     'ManagedKeyApprovalRequest',
     {
         'action': str,
+        'intent_digest': str,
         'key_id': str,
+        'request_id': str,
     },
     total=False,
 )
@@ -5693,6 +5753,30 @@ PQCMigrationFindingDispositionRequest = TypedDict(
     total=False,
 )
 
+PendingApprovalRequest = TypedDict(
+    'PendingApprovalRequest',
+    {
+        'action': str,
+        'approval_count': int,
+        'created_at': str,
+        'evidence_refs': list[str],
+        'expires_at': str,
+        'from_state': str,
+        'id': str,
+        'intent_digest': str,
+        'reason': str,
+        'requester': str,
+        'required_approvals': int,
+        'resource_id': str,
+        'resource_kind': str,
+        'resource_name': str,
+        'status': str,
+        'target_version': str,
+        'to_state': str,
+    },
+    total=False,
+)
+
 PlatformAirGap = TypedDict(
     'PlatformAirGap',
     {
@@ -6802,9 +6886,14 @@ SecretApproval = TypedDict(
     'SecretApproval',
     {
         'action': str,
+        'approval_count': int,
         'approvals': int,
         'approver': str,
+        'id': str,
+        'intent_digest': str,
+        'required_approvals': int,
         'resource': str,
+        'status': str,
     },
     total=False,
 )
@@ -6813,6 +6902,8 @@ SecretApprovalRequest = TypedDict(
     'SecretApprovalRequest',
     {
         'action': str,
+        'intent_digest': str,
+        'request_id': str,
     },
     total=False,
 )
@@ -6951,6 +7042,7 @@ SecretRotation = TypedDict(
         'key': str,
         'new_ref': str,
         'old_ref': str,
+        'queued': bool,
         'rollback_attempted': bool,
         'rollback_error': str,
         'rollback_failed': bool,
@@ -6962,8 +7054,16 @@ SecretRotation = TypedDict(
 SecretRotationDueRun = TypedDict(
     'SecretRotationDueRun',
     {
+        'complete': bool,
+        'deferred': list[dict[str, Any]],
+        'failed_schedule_id': str,
+        'partial': bool,
         'ran': int,
+        'run_limit_reached': bool,
         'runs': list[dict[str, Any]],
+        'scan_limit_reached': bool,
+        'scanned': int,
+        'system_error': str,
     },
     total=False,
 )
@@ -7004,6 +7104,17 @@ SecretRotationSchedule = TypedDict(
     total=False,
 )
 
+SecretRotationScheduleDeferred = TypedDict(
+    'SecretRotationScheduleDeferred',
+    {
+        'due_at': str,
+        'error': str,
+        'reason': str,
+        'schedule_id': str,
+    },
+    total=False,
+)
+
 SecretRotationScheduleList = TypedDict(
     'SecretRotationScheduleList',
     {
@@ -7030,8 +7141,10 @@ SecretRotationScheduleRequest = TypedDict(
 SecretRotationScheduleRun = TypedDict(
     'SecretRotationScheduleRun',
     {
+        'due_at': str,
         'error': str,
         'ran_at': str,
+        'reconciled': bool,
         'rotation': dict[str, Any],
         'run_id': str,
         'schedule_id': str,

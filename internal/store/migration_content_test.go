@@ -26,6 +26,9 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	161: true,
+	156: true,
+	153: true,
 	140: true,
 	137: true,
 	136: true,
@@ -158,10 +161,143 @@ func TestMigrationsPreserveSeededContent(t *testing.T) {
 	assertColumnDefault(t, ctx, pool, "certificates", "issuance_response", "")
 }
 
+func TestMigration0157BuildsSchedulerScanIndexWithoutChangingPopulatedRows(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 157)
+	if !target.noTx || target.name != "0157_secret_rotation_schedule_scan_index_no_transaction.sql" {
+		t.Fatalf("migration 0157 classification = name:%q no_tx:%t, want the scheduler no-transaction index migration", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh 0157 content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	for index, tenantID := range []string{tenantA, tenantB} {
+		for row := 1; row <= 3; row++ {
+			id := fmt.Sprintf("15700000-0000-4000-800%d-%012d", index, row)
+			if _, err := pool.Exec(ctx, `
+				INSERT INTO secret_rotation_schedules
+				       (id, tenant_id, name, provider, secret_key, old_ref,
+				        interval_seconds, enabled, next_run_at, created_at, updated_at)
+				VALUES ($1, $2, $3, 'connector:ci', $4, 'version:1', 3600,
+				        $5, '2026-08-11T12:00:00Z',
+				        '2026-08-11T11:00:00Z', '2026-08-11T11:00:00Z')`,
+				id, tenantID, fmt.Sprintf("scan-index-%d-%d", index, row),
+				fmt.Sprintf("rotation/index/%d/%d", index, row), row%2 == 1); err != nil {
+				t.Fatalf("seed pre-0157 schedule %s: %v", id, err)
+			}
+		}
+	}
+	stable := `
+		SELECT tenant_id::text, id::text, name, provider, secret_key, old_ref,
+		       interval_seconds::text, enabled::text, next_run_at::text,
+		       created_at::text, updated_at::text
+		  FROM secret_rotation_schedules
+		 ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 6 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0157 changed populated schedule content: before=%d/%s after=%d/%s", beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	assertIndexReady(t, ctx, pool, "secret_rotation_schedules_tenant_scan_idx")
+	var definition string
+	if err := pool.QueryRow(ctx,
+		`SELECT pg_get_indexdef(indexrelid)
+		   FROM pg_index
+		  WHERE indexrelid = 'secret_rotation_schedules_tenant_scan_idx'::regclass`).Scan(&definition); err != nil {
+		t.Fatalf("read 0157 scheduler index definition: %v", err)
+	}
+	normalizedDefinition := strings.ToLower(strings.Join(strings.Fields(definition), " "))
+	if !strings.Contains(normalizedDefinition, "(tenant_id, id, next_run_at)") ||
+		!strings.Contains(normalizedDefinition, "where enabled") {
+		t.Fatalf("0157 scheduler index definition = %q, want UUID-ring order with enabled predicate", definition)
+	}
+}
+
+func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRowsAUD110(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 163)
+	if !target.noTx || target.name != "0163_outbox_tenant_effective_lane_capacity.sql" {
+		t.Fatalf("migration 0163 classification = name:%q no_tx:%t, want the tenant-lane no-transaction index migration", target.name, target.noTx)
+	}
+	assertMigrationUsesConcurrentIndex(t, 163,
+		"CREATE INDEX CONCURRENTLY outbox_tenant_effective_lane_processing_idx")
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh 0163 content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	type fixture struct {
+		tenantID string
+		lane     string
+		status   string
+	}
+	for row, item := range []fixture{
+		{tenantID: tenantA, lane: "connector.deploy:shared", status: "processing"},
+		{tenantID: tenantB, lane: "connector.deploy:shared", status: "processing"},
+		{tenantID: tenantA, lane: "", status: "pending"},
+		{tenantID: tenantB, lane: "", status: "pending"},
+	} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO outbox
+			       (tenant_id, destination, effect_lane, payload, idempotency_key,
+			        status, attempts, next_attempt_at, created_at, worker_id, lease_until)
+			VALUES ($1, 'connector.deploy', $2, $3, $4, $5, $6,
+			        '2026-08-11T12:00:00Z'::timestamptz,
+			        '2026-08-11T11:59:00Z'::timestamptz,
+			        CASE WHEN $5 = 'processing' THEN 'aud110-worker' END,
+			        CASE WHEN $5 = 'processing' THEN '2026-08-11T12:05:00Z'::timestamptz END)`,
+			item.tenantID, item.lane, []byte(fmt.Sprintf("aud110-payload-%d", row)),
+			fmt.Sprintf("aud110-migration-%d", row), item.status, row+1); err != nil {
+			t.Fatalf("seed pre-0163 outbox row %d: %v", row, err)
+		}
+	}
+	stable := `
+		SELECT id::text, tenant_id::text, destination, effect_lane,
+		       encode(payload, 'hex'), idempotency_key, status, attempts::text,
+		       next_attempt_at::text, created_at::text, COALESCE(worker_id, ''),
+		       COALESCE(lease_until::text, '')
+		  FROM outbox
+		 ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 4 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0163 changed populated outbox content: before=%d/%s after=%d/%s",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+
+	assertIndexReady(t, ctx, pool, "outbox_tenant_effective_lane_processing_idx")
+	assertIndexReady(t, ctx, pool, "outbox_effect_lane_processing_idx")
+	var definition string
+	if err := pool.QueryRow(ctx,
+		`SELECT pg_get_indexdef(indexrelid)
+		   FROM pg_index
+		  WHERE indexrelid = 'outbox_tenant_effective_lane_processing_idx'::regclass`).Scan(&definition); err != nil {
+		t.Fatalf("read 0163 tenant-lane index definition: %v", err)
+	}
+	normalizedDefinition := strings.ToLower(strings.Join(strings.Fields(definition), " "))
+	for _, fragment := range []string{
+		"tenant_id", "coalesce(nullif(effect_lane", "destination", "lease_until", "status = 'processing'",
+	} {
+		if !strings.Contains(normalizedDefinition, fragment) {
+			t.Fatalf("0163 tenant-lane index definition = %q, missing %q", definition, fragment)
+		}
+	}
+}
+
 // TestMigrationDataContentBackfills is the SCHEMA-002 acceptance: migrations that
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0153_secret_sync_target_order", testMigration0153SecretSyncTargetOrder)
 	t.Run("0143_lifecycle_rotation_event_order", func(t *testing.T) {
 		ctx := context.Background()
 		prefix, target := splitMigrationsAtVersion(t, 143)
@@ -946,6 +1082,725 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	t.Run("0094_crypto_asset_projection_order_defaults", testMigration0094CryptoAssetProjectionOrderDefaults)
 	t.Run("0136_fleet_reissuance_cursor_defaults", testMigration0136FleetReissuanceCursorDefaults)
 	t.Run("0137_relay_external_pollers", testMigration0137RelayExternalPollers)
+}
+
+func testMigration0153SecretSyncTargetOrder(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 153)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh 0153 content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	type row struct {
+		tenant, id, target, remoteKey, status string
+	}
+	rows := []row{
+		{tenantA, "sync-a-ci-first", "ci", "/TOKEN/", "failed"},
+		{tenantA, "sync-a-ci-second", "ci", "TOKEN", "failed"},
+		{tenantA, "sync-a-vault", "vault", "TOKEN", "failed"},
+		{tenantB, "sync-b-ci", "ci", "TOKEN", "failed"},
+	}
+	outboxIDs := make(map[string]int64, len(rows))
+	for index, candidate := range rows {
+		var outboxID int64
+		if err := pool.QueryRow(ctx, `
+			INSERT INTO outbox
+			       (tenant_id, destination, effect_lane, payload, idempotency_key,
+			        status, attempts, last_error)
+			VALUES ($1, $2, $3, $4, $5, $6, 1, 'legacy receiver failure')
+			RETURNING id`, candidate.tenant, "secret.sync."+candidate.target,
+			"secret.sync:"+candidate.target,
+			migration0153SecretSyncPayload(candidate.id, candidate.target, candidate.remoteKey, "binding:"+candidate.id),
+			"migration-0153:"+candidate.id, candidate.status).Scan(&outboxID); err != nil {
+			t.Fatalf("seed 0153 outbox %s: %v", candidate.id, err)
+		}
+		outboxIDs[candidate.id] = outboxID
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO secret_sync_jobs
+			       (tenant_id, id, secret_name, secret_version, target, remote_key,
+			        value_digest, status, outbox_id, attempts, last_error,
+			        idempotency_key, request_binding,
+			        requested_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1,
+			        'legacy receiver failure', $10, $11,
+			        '2026-08-10T12:00:00Z', '2026-08-10T12:00:00Z')`,
+			candidate.tenant, candidate.id, "migration/secret", index+1,
+			candidate.target, candidate.remoteKey, strings.Repeat("a", 64), candidate.status,
+			outboxID, "migration-0153:"+candidate.id, "binding:"+candidate.id); err != nil {
+			t.Fatalf("seed 0153 job %s: %v", candidate.id, err)
+		}
+	}
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	wantOrders := map[string]int64{
+		"sync-a-ci-first": -1, "sync-a-ci-second": -2,
+		"sync-a-vault": -1, "sync-b-ci": -1,
+	}
+	for id, want := range wantOrders {
+		var got int64
+		if err := pool.QueryRow(ctx,
+			`SELECT target_order FROM secret_sync_jobs WHERE id = $1`, id).Scan(&got); err != nil {
+			t.Fatalf("read 0153 target order %s: %v", id, err)
+		}
+		if got != want {
+			t.Fatalf("0153 target order %s=%d, want %d", id, got, want)
+		}
+		var outboxOrder int64
+		var fromEvent bool
+		var effectState, failureDetail string
+		var receiverStarts int64
+		var failureAttempts int
+		if err := pool.QueryRow(ctx,
+			`SELECT secret_sync_target_order, secret_sync_order_from_event,
+			        secret_sync_receiver_effect_state, secret_sync_receiver_io_starts,
+			        secret_sync_failure_detail, secret_sync_failure_attempts
+			   FROM outbox WHERE id = $1`, outboxIDs[id]).Scan(
+			&outboxOrder, &fromEvent, &effectState, &receiverStarts, &failureDetail, &failureAttempts); err != nil {
+			t.Fatalf("read 0153 outbox order %s: %v", id, err)
+		}
+		if outboxOrder != want || fromEvent || effectState != "effect_possible" ||
+			receiverStarts != 1 || failureDetail != "" || failureAttempts != 0 {
+			t.Fatalf("0153 outbox authority %s=(order:%d,event:%t,state:%q,starts:%d,detail:%q,failure-attempts:%d), want conservative legacy failed ambiguity",
+				id, outboxOrder, fromEvent, effectState, receiverStarts, failureDetail, failureAttempts)
+		}
+		var receiptType, receiptDigest string
+		var receiptSequence int64
+		var receiptFromEvent bool
+		if err := pool.QueryRow(ctx, `
+			SELECT terminal_event_type, terminal_event_sequence,
+			       terminal_event_digest, terminal_event_from_event
+			  FROM secret_sync_jobs WHERE id = $1`, id).Scan(
+			&receiptType, &receiptSequence, &receiptDigest, &receiptFromEvent); err != nil {
+			t.Fatalf("read 0153 terminal receipt %s: %v", id, err)
+		}
+		if receiptType != "legacy.secret.sync.failed" || receiptSequence != -want ||
+			len(receiptDigest) != 64 || receiptFromEvent {
+			t.Fatalf("0153 terminal receipt %s=(%q,%d,%q,event:%t), want synthetic legacy receipt",
+				id, receiptType, receiptSequence, receiptDigest, receiptFromEvent)
+		}
+	}
+
+	var uniqueReady, rlsEnabled, rlsForced bool
+	if err := pool.QueryRow(ctx, `
+		SELECT i.indisunique AND i.indisready AND i.indisvalid,
+		       c.relrowsecurity, c.relforcerowsecurity
+		  FROM pg_class c
+		  JOIN pg_index i ON i.indrelid = c.oid
+		  JOIN pg_class idx ON idx.oid = i.indexrelid
+		 WHERE c.relname = 'secret_sync_jobs'
+		   AND idx.relname = 'secret_sync_jobs_target_order_idx'`).Scan(&uniqueReady, &rlsEnabled, &rlsForced); err != nil {
+		t.Fatalf("inspect 0153 index/RLS: %v", err)
+	}
+	if !uniqueReady || !rlsEnabled || !rlsForced {
+		t.Fatalf("0153 index/RLS unique_ready=%t enabled=%t forced=%t", uniqueReady, rlsEnabled, rlsForced)
+	}
+	assertIndexReady(t, ctx, pool, "outbox_secret_sync_idempotency_idx")
+
+	// An old writer omits the event order and now fails closed. A new writer copies
+	// one exact AN-2 sequence into both halves; direct rewrites are rejected.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key)
+		VALUES ($1, 'secret.sync.ci', 'secret.sync:ci', $2, 'migration-0153:old-writer')`,
+		tenantA, []byte(`{"sealed":"old"}`)); err == nil {
+		t.Fatal("0153 accepted an old secret-sync writer without event target order")
+	}
+	spoofRestoreTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := spoofRestoreTx.Exec(ctx, `SET LOCAL ROLE trstctl_app`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := spoofRestoreTx.Exec(ctx, `SELECT set_config('trstctl.tenant_id', $1, true)`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := spoofRestoreTx.Exec(ctx, `SET LOCAL trstctl.postgres_state_restore = 'true'`); err != nil {
+		t.Fatal(err)
+	}
+	_, spoofRestoreErr := spoofRestoreTx.Exec(ctx, `
+		INSERT INTO outbox
+		       (tenant_id, destination, effect_lane, payload, idempotency_key,
+		        secret_sync_target_order, secret_sync_order_from_event,
+		        secret_sync_receiver_effect_state, secret_sync_receiver_io_starts)
+		VALUES ($1, 'secret.sync.ci', 'secret.sync:ci', $2,
+		        'migration-0153:spoofed-restore', 99, true, 'effect_possible', 2)`,
+		tenantA, migration0153SecretSyncPayload("sync-a-ci-spoofed-restore", "ci", "SPOOF", "binding:spoofed-restore"))
+	_ = spoofRestoreTx.Rollback(ctx)
+	if spoofRestoreErr == nil || !strings.Contains(spoofRestoreErr.Error(), "new secret-sync outbox rows require a positive AN-2 event order") {
+		t.Fatalf("0153 application-role restore-marker spoof error=%v, want receiver-authority insert rejection", spoofRestoreErr)
+	}
+	var thirdOutbox int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO outbox
+		       (tenant_id, destination, effect_lane, payload, idempotency_key,
+		        secret_sync_target_order, secret_sync_order_from_event)
+		VALUES ($1, 'secret.sync.fresh', 'secret.sync:fresh', $2, 'migration-0153:third', 100, true)
+		RETURNING id`, tenantA,
+		migration0153SecretSyncPayload("sync-a-ci-third", "fresh", "OTHER", "binding:third")).Scan(&thirdOutbox); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO secret_sync_jobs
+		       (tenant_id, tenant_epoch, id, secret_name, secret_version, target, remote_key,
+		        value_digest, status, outbox_id, target_order, idempotency_key, request_binding,
+		        requested_at, updated_at)
+		VALUES ($1, (SELECT epoch_id::text FROM application_secret_tenant_epochs WHERE tenant_id = $1),
+		        'sync-a-ci-third', 'migration/secret', 3, 'fresh', 'OTHER', $2,
+		        'pending', $3, 100, 'migration-0153:third', 'binding:third', now(), now())`,
+		tenantA, strings.Repeat("b", 64), thirdOutbox); err != nil {
+		t.Fatalf("old-writer insert after 0153: %v", err)
+	}
+	var thirdOrder int64
+	if err := pool.QueryRow(ctx,
+		`SELECT target_order FROM secret_sync_jobs WHERE tenant_id = $1 AND id = 'sync-a-ci-third'`, tenantA).Scan(&thirdOrder); err != nil {
+		t.Fatal(err)
+	}
+	if thirdOrder != 100 {
+		t.Fatalf("event target order=%d, want 100", thirdOrder)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE secret_sync_jobs SET target_order = 99 WHERE tenant_id = $1 AND id = 'sync-a-ci-third'`, tenantA); err == nil {
+		t.Fatal("0153 allowed target-order mutation")
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE outbox SET secret_sync_target_order = 99 WHERE id = $1`, thirdOutbox); err == nil {
+		t.Fatal("0153 allowed retained outbox target-order mutation")
+	}
+	var fourthOutbox int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO outbox
+		       (tenant_id, destination, effect_lane, payload, idempotency_key,
+		        secret_sync_target_order, secret_sync_order_from_event)
+		VALUES ($1, 'secret.sync.fresh', 'secret.sync:fresh', $2, 'migration-0153:fourth', 101, true)
+		RETURNING id`, tenantA,
+		migration0153SecretSyncPayload("sync-a-ci-fourth", "fresh", "FINAL", "binding:fourth")).Scan(&fourthOutbox); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO secret_sync_jobs
+		       (tenant_id, tenant_epoch, id, secret_name, secret_version, target, remote_key,
+		        value_digest, status, outbox_id, target_order, idempotency_key,
+		        request_binding, requested_at, updated_at)
+		VALUES ($1, (SELECT epoch_id::text FROM application_secret_tenant_epochs WHERE tenant_id = $1),
+		        'sync-a-ci-fourth', 'migration/secret', 4, 'fresh', 'FINAL', $2,
+		        'pending', $3, 101, 'migration-0153:fourth', 'binding:fourth', now(), now())`,
+		tenantA, strings.Repeat("c", 64), fourthOutbox); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE projection_checkpoint SET applied_seq = 101, updated_at = now() WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+
+	// This is the old worker's claim shape: it knows nothing about target_order.
+	// The DB trigger skips a successor while its predecessor is pending, but lets
+	// another target progress.
+	claim := func(id int64) int64 {
+		t.Helper()
+		tag, err := pool.Exec(ctx,
+			`UPDATE outbox SET status = 'processing', worker_id = 'old-worker', lease_until = now() + interval '1 minute'
+			  WHERE id = $1 AND status = 'pending'`, id)
+		if err != nil {
+			t.Fatalf("old-style claim %d: %v", id, err)
+		}
+		return tag.RowsAffected()
+	}
+	if got := claim(fourthOutbox); got != 0 {
+		t.Fatalf("old worker claimed blocked same-target successor: rows=%d", got)
+	}
+	var blockedAttempts int
+	if err := pool.QueryRow(ctx, `SELECT attempts FROM outbox WHERE id = $1`, fourthOutbox).Scan(&blockedAttempts); err != nil {
+		t.Fatal(err)
+	}
+	if blockedAttempts != 0 {
+		t.Fatalf("blocked old-style claim consumed attempts=%d, want 0", blockedAttempts)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE outbox SET status = 'failed' WHERE id = $1`, thirdOutbox); err == nil {
+		t.Fatal("0153 retired a pending outbox before its domain job became terminal")
+	}
+	forgedTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := forgedTx.Exec(ctx, `SET LOCAL ROLE trstctl_app`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := forgedTx.Exec(ctx, `SELECT set_config('trstctl.tenant_id', $1, true)`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	_, forgedErr := forgedTx.Exec(ctx, `
+		UPDATE secret_sync_jobs
+		   SET status = 'failed', attempts = 1, last_error = 'forged', updated_at = now(),
+		       terminal_event_id = 'secret-sync-forged',
+		       terminal_event_type = 'secret.sync.failed', terminal_event_sequence = 999,
+		       terminal_event_digest = $2, terminal_event_from_event = true
+		 WHERE tenant_id = $1 AND id = 'sync-a-ci-third'`, tenantA, strings.Repeat("e", 64))
+	_ = forgedTx.Rollback(ctx)
+	if forgedErr == nil {
+		t.Fatal("0153 let the application role forge terminal event evidence with a custom tenant GUC")
+	}
+	authorityTx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authorityTx.Exec(ctx, `
+		UPDATE outbox
+		   SET secret_sync_receiver_effect_state = 'effect_possible',
+		       secret_sync_receiver_io_starts = 1
+		 WHERE id = $1`, thirdOutbox); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authorityTx.Exec(ctx, `
+		UPDATE outbox SET secret_sync_receiver_io_starts = 2 WHERE id = $1`, thirdOutbox); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authorityTx.Exec(ctx, `
+		UPDATE outbox
+		   SET secret_sync_receiver_effect_state = 'failure_authorized',
+		       secret_sync_failure_detail = 'unsafe multi-generation failure',
+		       secret_sync_failure_attempts = 2
+		 WHERE id = $1`, thirdOutbox); err == nil {
+		t.Fatal("0153 allowed effect_possible count 2 to authorize failure")
+	}
+	_ = authorityTx.Rollback(ctx)
+	if _, err := pool.Exec(ctx, `
+		UPDATE outbox
+		   SET secret_sync_receiver_effect_state = 'failure_authorized',
+		       secret_sync_failure_detail = 'terminal fixture',
+		       secret_sync_failure_attempts = 1
+		 WHERE id = $1`, thirdOutbox); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE secret_sync_jobs
+		    SET status = 'failed', attempts = 1, last_error = 'terminal fixture',
+		        updated_at = now(),
+		        terminal_event_id = 'secret-sync-failed-fixture',
+		        terminal_event_type = 'secret.sync.failed',
+		        terminal_event_sequence = 1000,
+		        terminal_event_digest = $2,
+		        terminal_event_from_event = true
+		  WHERE tenant_id = $1 AND id = 'sync-a-ci-third'`, tenantA, strings.Repeat("f", 64)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE outbox SET status = 'failed' WHERE id = $1`, thirdOutbox); err != nil {
+		t.Fatal(err)
+	}
+	if got := claim(fourthOutbox); got != 1 {
+		t.Fatalf("terminal predecessor did not release successor: rows=%d", got)
+	}
+	for _, changedStatus := range []string{"pending", "processing", "delivered"} {
+		if _, err := pool.Exec(ctx,
+			`UPDATE outbox SET status = $2 WHERE id = $1`, thirdOutbox, changedStatus); err == nil {
+			t.Fatalf("0153 allowed terminal secret-sync outbox status change to %s", changedStatus)
+		}
+	}
+	for _, changedStatus := range []string{"pending", "delivered"} {
+		if _, err := pool.Exec(ctx,
+			`UPDATE secret_sync_jobs SET status = $2 WHERE tenant_id = $1 AND id = 'sync-a-ci-first'`,
+			tenantA, changedStatus); err == nil {
+			t.Fatalf("0153 allowed failed secret-sync job status change to %s", changedStatus)
+		}
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE secret_sync_jobs SET status = 'failed' WHERE tenant_id = $1 AND id = 'sync-a-ci-first'`, tenantA); err != nil {
+		t.Fatalf("0153 rejected same-status failed job update: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE secret_sync_jobs SET attempts = attempts + 1
+		  WHERE tenant_id = $1 AND id = 'sync-a-ci-first'`, tenantA); err == nil {
+		t.Fatal("0153 allowed terminal secret-sync evidence mutation")
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE secret_sync_jobs SET terminal_event_digest = $2
+		  WHERE tenant_id = $1 AND id = 'sync-a-ci-first'`, tenantA, strings.Repeat("0", 64)); err == nil {
+		t.Fatal("0153 allowed terminal secret-sync receipt mutation")
+	}
+}
+
+func migration0153SecretSyncPayload(id, target, key, binding string) []byte {
+	return []byte(fmt.Sprintf(
+		`{"id":%q,"key":%q,"target":%q,"request_binding":%q,"sealed":"c2VhbGVk"}`,
+		id, key, target, binding,
+	))
+}
+
+func TestMigration0153RefusesPreexistingSecretSyncClaim(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 153)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh 0153 claim database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO outbox
+		       (tenant_id, destination, payload, idempotency_key, status, worker_id, lease_until)
+		VALUES ($1, 'secret.sync.ci', $2, 'migration-0153-processing', 'processing',
+		        'pre-migration-worker', now() + interval '1 minute')`,
+		tenantA, []byte(`{"sealed":"ambiguous"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, target.body); err == nil || !strings.Contains(err.Error(), "zero runnable pending or processing secret.sync outbox rows") {
+		t.Fatalf("0153 processing-row migration error=%v, want explicit fail-closed refusal", err)
+	}
+	var exists bool
+	if err := pool.QueryRow(ctx, `
+		SELECT EXISTS (
+		    SELECT 1 FROM information_schema.columns
+		     WHERE table_name = 'secret_sync_jobs' AND column_name = 'target_order'
+		)`).Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		t.Fatal("failed 0153 migration committed a partial target_order schema")
+	}
+}
+
+func seedMigration0153SecretSyncPair(t *testing.T, ctx context.Context, pool *pgxpool.Pool,
+	id, target, jobStatus, outboxStatus string, attempts int,
+) int64 {
+	t.Helper()
+	var outboxID int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO outbox
+		       (tenant_id, destination, effect_lane, payload, idempotency_key,
+		        status, attempts, delivered_at)
+		VALUES ($1, 'secret.sync.' || $2, 'secret.sync:' || $2, $3, $4, $5, $6,
+		        CASE WHEN $5 = 'delivered' THEN now() ELSE NULL END)
+		RETURNING id`, tenantA, target,
+		migration0153SecretSyncPayload(id, target, "TOKEN", "binding:"+id),
+		"migration-0153:"+id, outboxStatus, attempts).Scan(&outboxID); err != nil {
+		t.Fatalf("seed 0153 outbox %s: %v", id, err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO secret_sync_jobs
+		       (tenant_id, id, secret_name, secret_version, target, remote_key,
+		        value_digest, status, outbox_id, attempts, idempotency_key,
+		        request_binding, requested_at, updated_at, delivered_at, last_error)
+		VALUES ($1, $2, 'migration/secret', 1, $3, 'TOKEN', $4, $5, $6, $7,
+		        $8, $9, now(), now(), CASE WHEN $5 = 'delivered' THEN now() ELSE NULL END,
+		        CASE WHEN $5 = 'failed' THEN 'legacy receiver failure' ELSE '' END)`,
+		tenantA, id, target, strings.Repeat("d", 64), jobStatus, outboxID, attempts,
+		"migration-0153:"+id, "binding:"+id); err != nil {
+		t.Fatalf("seed 0153 job %s: %v", id, err)
+	}
+	return outboxID
+}
+
+func TestMigration0153RefusesUnsafeInheritedSecretSyncState(t *testing.T) {
+	cases := []struct {
+		name    string
+		want    string
+		prepare func(*testing.T, context.Context, *pgxpool.Pool)
+	}{
+		{
+			name: "multiple runnable commands",
+			want: "zero runnable pending or processing secret.sync outbox rows",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				seedMigration0153SecretSyncPair(t, ctx, pool, "multiple-first", "ci", "pending", "pending", 0)
+				seedMigration0153SecretSyncPair(t, ctx, pool, "multiple-second", "ci", "pending", "pending", 0)
+			},
+		},
+		{
+			name: "runnable command already overtaken",
+			want: "zero runnable pending or processing secret.sync outbox rows",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				seedMigration0153SecretSyncPair(t, ctx, pool, "inversion-older", "ci", "pending", "pending", 0)
+				seedMigration0153SecretSyncPair(t, ctx, pool, "inversion-newer", "ci", "delivered", "delivered", 1)
+			},
+		},
+		{
+			name: "higher-id runnable may precede lower-id delivery",
+			want: "zero runnable pending or processing secret.sync outbox rows",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				seedMigration0153SecretSyncPair(t, ctx, pool, "ambiguous-lower", "ci", "delivered", "delivered", 1)
+				seedMigration0153SecretSyncPair(t, ctx, pool, "ambiguous-higher", "ci", "pending", "pending", 0)
+			},
+		},
+		{
+			name: "active compatibility row has no job",
+			want: "zero runnable pending or processing secret.sync outbox rows",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
+					VALUES ($1, 'secret.sync.ci', $2, 'migration-0153-orphan')`,
+					tenantA, []byte(`{"sealed":"orphan"}`)); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "terminal compatibility row has no job",
+			want: "outbox row without a projected job",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO outbox
+					       (tenant_id, destination, payload, idempotency_key, status, attempts, delivered_at)
+					VALUES ($1, 'secret.sync.ci', $2, 'migration-0153-terminal-orphan',
+					        'delivered', 1, now())`,
+					tenantA, []byte(`{"sealed":"orphan"}`)); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "pending job has terminal outbox",
+			want: "zero pending secret-sync commands",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				seedMigration0153SecretSyncPair(t, ctx, pool, "mismatch", "ci", "pending", "delivered", 1)
+			},
+		},
+		{
+			name: "terminal job lost retained outbox",
+			want: "job/outbox state mismatch",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				outboxID := seedMigration0153SecretSyncPair(t, ctx, pool, "missing-outbox", "ci", "delivered", "delivered", 1)
+				if _, err := pool.Exec(ctx, `DELETE FROM outbox WHERE id = $1`, outboxID); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "outbox receiver key differs from job",
+			want: "malformed or job-mismatched outbox command",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				outboxID := seedMigration0153SecretSyncPair(t, ctx, pool, "key-drift", "ci", "failed", "failed", 1)
+				if _, err := pool.Exec(ctx,
+					`UPDATE outbox SET idempotency_key = 'migration-0153:different' WHERE id = $1`, outboxID); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "payload binding differs from job",
+			want: "malformed or job-mismatched outbox command",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				outboxID := seedMigration0153SecretSyncPair(t, ctx, pool, "payload-drift", "ci", "failed", "failed", 1)
+				if _, err := pool.Exec(ctx, `UPDATE outbox SET payload = $2 WHERE id = $1`, outboxID,
+					migration0153SecretSyncPayload("wrong-id", "ci", "TOKEN", "binding:payload-drift")); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "payload is malformed",
+			want: "malformed or job-mismatched outbox command",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				outboxID := seedMigration0153SecretSyncPair(t, ctx, pool, "malformed", "ci", "failed", "failed", 1)
+				if _, err := pool.Exec(ctx, `UPDATE outbox SET payload = $2 WHERE id = $1`, outboxID, []byte("not-json")); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "duplicate receiver idempotency key",
+			want: "duplicate secret-sync outbox receiver key",
+			prepare: func(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+				for _, target := range []string{"ci", "vault"} {
+					id := "duplicate-" + target
+					outboxID := seedMigration0153SecretSyncPair(
+						t, ctx, pool, id, target, "delivered", "delivered", 1)
+					if _, err := pool.Exec(ctx, `
+						UPDATE outbox
+						   SET idempotency_key = 'migration-0153:duplicate'
+						 WHERE id = $1`, outboxID); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := pool.Exec(ctx, `
+						UPDATE secret_sync_jobs
+						   SET idempotency_key = 'migration-0153:duplicate'
+						 WHERE tenant_id = $1 AND id = $2`, tenantA, id); err != nil {
+						t.Fatal(err)
+					}
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			prefix, target := splitMigrationsAtVersion(t, 153)
+			dsn := createFreshMigrationDatabase(t)
+			pool, err := pgxpool.New(ctx, dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(pool.Close)
+			applyMigrationFiles(t, ctx, pool, prefix)
+			tc.prepare(t, ctx, pool)
+			if _, err := pool.Exec(ctx, target.body); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("0153 error=%v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestMigration0153AcceptsTerminalRowsAndBlocksAmbiguousPredecessor(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 153)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	singleStartOutbox := seedMigration0153SecretSyncPair(t, ctx, pool,
+		"single-start-delivered", "ci", "delivered", "delivered", 1)
+	multiStartOutbox := seedMigration0153SecretSyncPair(t, ctx, pool,
+		"multi-start-delivered", "vault", "delivered", "delivered", 2)
+	failedOutbox := seedMigration0153SecretSyncPair(t, ctx, pool,
+		"offline-disabled-handler-complete", "airgap", "failed", "delivered", 1)
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	for _, check := range []struct {
+		name       string
+		outboxID   int64
+		wantStarts int64
+	}{
+		{name: "single-start delivered", outboxID: singleStartOutbox, wantStarts: 1},
+		{name: "multi-start delivered", outboxID: multiStartOutbox, wantStarts: 2},
+		{name: "failed", outboxID: failedOutbox, wantStarts: 1},
+	} {
+		var state, detail string
+		var starts int64
+		var failureAttempts int
+		if err := pool.QueryRow(ctx, `
+			SELECT secret_sync_receiver_effect_state, secret_sync_receiver_io_starts,
+			       secret_sync_failure_detail, secret_sync_failure_attempts
+			  FROM outbox WHERE id = $1`, check.outboxID).Scan(
+			&state, &starts, &detail, &failureAttempts); err != nil {
+			t.Fatalf("read %s receiver authority: %v", check.name, err)
+		}
+		if state != "effect_possible" || starts != check.wantStarts || detail != "" || failureAttempts != 0 {
+			t.Fatalf("%s receiver authority=(%q,%d,%q,%d), want conservative effect_possible/%d",
+				check.name, state, starts, detail, failureAttempts, check.wantStarts)
+		}
+	}
+
+	type successor struct {
+		id        string
+		target    string
+		order     int64
+		wantClaim int64
+	}
+	for _, candidate := range []successor{
+		{id: "after-single-start", target: "ci", order: 200, wantClaim: 1},
+		{id: "after-multi-start", target: "vault", order: 201, wantClaim: 0},
+		{id: "after-failed", target: "airgap", order: 202, wantClaim: 0},
+	} {
+		var outboxID int64
+		if err := pool.QueryRow(ctx, `
+			INSERT INTO outbox
+			       (tenant_id, destination, effect_lane, payload, idempotency_key,
+			        secret_sync_target_order, secret_sync_order_from_event)
+			VALUES ($1, 'secret.sync.' || $2, 'secret.sync:' || $2, $3, $4, $5, true)
+			RETURNING id`, tenantA, candidate.target,
+			migration0153SecretSyncPayload(candidate.id, candidate.target, "TOKEN", "binding:"+candidate.id),
+			"migration-0153:"+candidate.id, candidate.order).Scan(&outboxID); err != nil {
+			t.Fatalf("insert %s outbox: %v", candidate.id, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO secret_sync_jobs
+			       (tenant_id, tenant_epoch, id, secret_name, secret_version, target, remote_key,
+			        value_digest, status, outbox_id, target_order, idempotency_key,
+			        request_binding, requested_at, updated_at)
+			VALUES ($1, (SELECT epoch_id::text FROM application_secret_tenant_epochs WHERE tenant_id = $1),
+			        $2, 'migration/secret', 2, $3, 'TOKEN', $4, 'pending', $5, $6, $7,
+			        $8, now(), now())`, tenantA, candidate.id, candidate.target,
+			strings.Repeat("e", 64), outboxID, candidate.order,
+			"migration-0153:"+candidate.id, "binding:"+candidate.id); err != nil {
+			t.Fatalf("insert %s job: %v", candidate.id, err)
+		}
+		if _, err := pool.Exec(ctx,
+			`UPDATE projection_checkpoint SET applied_seq = GREATEST(applied_seq, $1), updated_at = now() WHERE id = 1`,
+			candidate.order); err != nil {
+			t.Fatal(err)
+		}
+		tag, err := pool.Exec(ctx, `
+			UPDATE outbox
+			   SET status = 'processing', worker_id = 'migration-claim',
+			       lease_until = now() + interval '1 minute'
+			 WHERE id = $1 AND status = 'pending'`, outboxID)
+		if err != nil {
+			t.Fatalf("claim %s: %v", candidate.id, err)
+		}
+		if tag.RowsAffected() != candidate.wantClaim {
+			t.Fatalf("claim %s rows=%d, want %d", candidate.id, tag.RowsAffected(), candidate.wantClaim)
+		}
+	}
+}
+
+func TestMigration0153AcceptsAndRetiresTerminalCleanupCrashRowsAUD109(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 153)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	// Both rows have immutable terminal domain evidence, but the old process died
+	// before its generic outbox finalizer changed pending to delivered. They share
+	// one target so cleanup of either row also proves that zero-I/O retirement does
+	// not wait behind the other row's intentionally conservative FIFO ambiguity.
+	first := seedMigration0153SecretSyncPair(t, ctx, pool,
+		"terminal-cleanup-first", "airgap", "failed", "pending", 1)
+	second := seedMigration0153SecretSyncPair(t, ctx, pool,
+		"terminal-cleanup-second", "airgap", "failed", "pending", 1)
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	for _, outboxID := range []int64{first, second} {
+		tag, err := pool.Exec(ctx, `
+			UPDATE outbox
+			   SET status = 'processing', attempts = attempts + 1,
+			       worker_id = 'migration-cleanup', lease_until = now() + interval '1 minute'
+			 WHERE id = $1 AND status = 'pending'`, outboxID)
+		if err != nil || tag.RowsAffected() != 1 {
+			t.Fatalf("claim terminal cleanup %d = (%d, %v), want one zero-I/O claim",
+				outboxID, tag.RowsAffected(), err)
+		}
+		tag, err = pool.Exec(ctx, `
+			UPDATE outbox
+			   SET status = 'delivered', delivered_at = now(),
+			       worker_id = NULL, lease_until = NULL
+			 WHERE id = $1 AND status = 'processing' AND worker_id = 'migration-cleanup'`, outboxID)
+		if err != nil || tag.RowsAffected() != 1 {
+			t.Fatalf("retire terminal cleanup %d = (%d, %v), want one zero-I/O finalization",
+				outboxID, tag.RowsAffected(), err)
+		}
+		var status, effectState, failureDetail string
+		var starts int64
+		var failureAttempts int
+		if err := pool.QueryRow(ctx, `
+			SELECT status, secret_sync_receiver_effect_state,
+			       secret_sync_receiver_io_starts, secret_sync_failure_detail,
+			       secret_sync_failure_attempts
+			  FROM outbox WHERE id = $1`, outboxID).Scan(
+			&status, &effectState, &starts, &failureDetail, &failureAttempts); err != nil {
+			t.Fatal(err)
+		}
+		if status != "delivered" || effectState != "effect_possible" ||
+			starts != 1 || failureDetail != "" || failureAttempts != 0 {
+			t.Fatalf("terminal cleanup %d authority=(%q,%q,%d,%q,%d), want retired but ambiguous legacy evidence",
+				outboxID, status, effectState, starts, failureDetail, failureAttempts)
+		}
+	}
 }
 
 func testMigration0137RelayExternalPollers(t *testing.T) {

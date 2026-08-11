@@ -80,6 +80,170 @@ describe("api error handling (SURFACE-007)", () => {
   });
 });
 
+describe("approval request contract (AUD-77)", () => {
+  it("lists pending intents and approves by immutable request id plus digest", async () => {
+    document.cookie = "trstctl_csrf=csrf-approval; path=/";
+    mockFetchSequence([
+      {
+        status: 200,
+        body: JSON.stringify({
+          items: [
+            {
+              id: "approval/request-1",
+              intent_digest: "sha256:8ec59a9c",
+              resource_id: "identity-1",
+              resource_name: "payments-api",
+              resource_kind: "identity",
+              action: "issue",
+              requester: "requester@example.test",
+              target_version: "transition:0",
+              evidence_refs: [],
+              approval_count: 0,
+              required_approvals: 2,
+              status: "pending",
+              created_at: "2026-08-10T12:00:00Z",
+              expires_at: "2026-08-10T12:15:00Z",
+            },
+          ],
+        }),
+      },
+      {
+        status: 200,
+        body: JSON.stringify({ id: "approval/request-1", status: "pending", approval_count: 1, required_approvals: 2 }),
+      },
+    ]);
+
+    const requests = await api.approvalRequests();
+    await api.approveApprovalRequest(requests[0].id, requests[0].intent_digest);
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls[0][0]).toBe("/api/v1/approval-requests?status=pending&limit=100");
+    expect(calls[1][0]).toBe("/api/v1/approval-requests/approval%2Frequest-1/approvals");
+    expect(calls[1][1]?.method).toBe("POST");
+    expect(JSON.parse(calls[1][1]?.body as string)).toEqual({ intent_digest: "sha256:8ec59a9c" });
+    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeTruthy();
+  });
+
+  it("follows every approval queue cursor and posts immutable denials", async () => {
+    document.cookie = "trstctl_csrf=csrf-approval; path=/";
+    mockFetchSequence([
+      {
+        status: 200,
+        body: JSON.stringify({
+          items: [{ id: "request-1", intent_digest: "sha256:1", status: "pending" }],
+          next_cursor: "page-2",
+        }),
+      },
+      {
+        status: 200,
+        body: JSON.stringify({
+          items: [{ id: "request-2", intent_digest: "sha256:2", status: "pending" }],
+        }),
+      },
+      {
+        status: 200,
+        body: JSON.stringify({ id: "request-2", status: "denied", approval_count: 0, required_approvals: 2 }),
+      },
+    ]);
+
+    const requests = await api.approvalRequests();
+    await api.denyApprovalRequest(requests[1].id, requests[1].intent_digest, "unsafe rollout window");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls[0][0]).toBe("/api/v1/approval-requests?status=pending&limit=100");
+    expect(calls[1][0]).toBe("/api/v1/approval-requests?status=pending&limit=100&cursor=page-2");
+    expect(calls[2][0]).toBe("/api/v1/approval-requests/request-2/denials");
+    expect(calls[2][1]?.method).toBe("POST");
+    expect(JSON.parse(calls[2][1]?.body as string)).toEqual({
+      intent_digest: "sha256:2",
+      reason: "unsafe rollout window",
+    });
+  });
+
+  it("keeps legacy secret and ephemeral decisions bound to an exact served request", async () => {
+    document.cookie = "trstctl_csrf=csrf-approval; path=/";
+    mockFetchSequence([
+      { status: 200, body: JSON.stringify({ resource: "secret:app/db", action: "rotate", approver: "ra", approvals: 1 }) },
+      {
+        status: 200,
+        body: JSON.stringify({
+          id: "019fec49-6641-7131-ae7f-17f7ea4b5e02",
+          intent_digest: "sha256:ephemeral-issue",
+          resource: "ephemeral-1",
+          action: "issue",
+          approver: "ra",
+          approvals: 1,
+          approval_count: 1,
+          required_approvals: 1,
+          status: "approved",
+        }),
+      },
+    ]);
+
+    await api.approveSecretChange("app/db", {
+      action: "rotate",
+      request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e01",
+      intent_digest: "sha256:secret-rotate",
+    });
+    await api.approveEphemeralCredential("019fec49-6641-7131-ae7f-17f7ea4b5e02", {
+      action: "issue",
+      request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e02",
+      intent_digest: "sha256:ephemeral-issue",
+    });
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls[0][0]).toBe("/api/v1/secrets/store/approvals/app%2Fdb");
+    expect(JSON.parse(calls[0][1]?.body as string)).toEqual({
+      action: "rotate",
+      request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e01",
+      intent_digest: "sha256:secret-rotate",
+    });
+    expect(calls[1][0]).toBe("/api/v1/ephemeral/019fec49-6641-7131-ae7f-17f7ea4b5e02/approvals");
+    expect(JSON.parse(calls[1][1]?.body as string)).toEqual({
+      action: "issue",
+      request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e02",
+      intent_digest: "sha256:ephemeral-issue",
+    });
+  });
+
+  it("keeps the identity compatibility decision bound to the reviewed request", async () => {
+    document.cookie = "trstctl_csrf=csrf-approval; path=/";
+    mockFetch(
+      200,
+      JSON.stringify({
+        id: "019fec49-6641-7131-ae7f-17f7ea4b5e03",
+        intent_digest: "sha256:identity-rotate",
+        resource: "identity-1",
+        action: "rotate",
+        approver: "ra",
+        approvals: 1,
+        approval_count: 1,
+        required_approvals: 2,
+        status: "pending",
+      }),
+    );
+
+    await api.approveIdentityAction(
+      "identity-1",
+      {
+        action: "rotate",
+        request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e03",
+        intent_digest: "sha256:identity-rotate",
+      },
+    );
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("/api/v1/identities/identity-1/approvals");
+    expect(call[1]?.method).toBe("POST");
+    expect(JSON.parse(call[1]?.body as string)).toEqual({
+      action: "rotate",
+      request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e03",
+      intent_digest: "sha256:identity-rotate",
+    });
+    expect((call[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeTruthy();
+  });
+});
+
 describe("exported API surface census", () => {
   it("drives every operation through the bounded same-origin transport and preserves mutation idempotency", async () => {
     document.cookie = "trstctl_csrf=csrf-census; path=/";
@@ -815,33 +979,6 @@ describe("secrets contract", () => {
     expect(call[0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
     expect(call[1]?.credentials).toBe("omit");
     expect((call[1]?.headers as Record<string, string>).Authorization).toBe("Bearer trst_workload_reveal_once");
-  });
-
-  it("imports a secret tree as an idempotent mutation", async () => {
-    document.cookie = "trstctl_csrf=csrf-secret-import; path=/";
-    mockFetch(
-      201,
-      JSON.stringify({
-        items: [
-          { name: "imported/api/token", version: 1 },
-          { name: "imported/api/url", version: 1 },
-        ],
-      }),
-    );
-
-    const page = await api.importSecrets({
-      prefix: "imported",
-      values: {
-        "api/token": "tok-1",
-        "api/url": "https://svc.internal?token=${secret.imported/api/token}",
-      },
-    });
-
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/import");
-    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
-    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-secret-import");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
-    expect(JSON.stringify(page)).not.toContain("tok-1");
   });
 
   it("reads cloud secret-manager integration posture without mutation headers", async () => {
@@ -1829,9 +1966,14 @@ describe("CLI-parity client methods (S3.3)", () => {
     },
     {
       name: "approveEphemeralCredential",
-      call: () => api.approveEphemeralCredential("req1", { action: "issue" }),
+      call: () =>
+        api.approveEphemeralCredential("019fec49-6641-7131-ae7f-17f7ea4b5e0e", {
+          action: "issue",
+          request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e0e",
+          intent_digest: "sha256:ephemeral",
+        }),
       method: "POST",
-      path: "/api/v1/ephemeral/req1/approvals",
+      path: "/api/v1/ephemeral/019fec49-6641-7131-ae7f-17f7ea4b5e0e/approvals",
     },
     { name: "issuer", call: () => api.issuer("iss1"), method: "GET", path: "/api/v1/issuers/iss1" },
     { name: "rotationRuns", call: () => api.rotationRuns({ limit: 10 }), method: "GET", path: "/api/v1/lifecycle/rotation-runs?limit=10" },
@@ -1873,13 +2015,13 @@ describe("CLI-parity client methods (S3.3)", () => {
     { name: "remediationOwnerActionsUnscoped", call: () => api.remediationOwnerActions(), method: "GET", path: "/api/v1/remediation/owner-actions" },
     {
       name: "runSecretRotation",
-      call: () => api.runSecretRotation({ key: "db/pass", old_ref: "v1", provider: "aws" }),
+      call: () => api.runSecretRotation({ key: "db/pass", old_ref: "version:1", provider: "connector:ci", remote_key: "DB_PASS" }),
       method: "POST",
       path: "/api/v1/secrets/rotations",
     },
     {
       name: "createSecretRotationSchedule",
-      call: () => api.createSecretRotationSchedule({ interval_seconds: 3600, key: "db/pass", name: "hourly", old_ref: "v1", provider: "aws" }),
+      call: () => api.createSecretRotationSchedule({ interval_seconds: 3600, key: "db/pass", name: "hourly", old_ref: "version:1", provider: "connector:ci" }),
       method: "POST",
       path: "/api/v1/secrets/rotation-schedules",
       status: 201,

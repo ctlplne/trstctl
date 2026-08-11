@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // ProfileRecord is a stored certificate-profile version (S8.1). Spec is the
@@ -22,6 +24,13 @@ type ProfileRecord struct {
 	Active    bool
 	CreatedBy string
 	CreatedAt time.Time
+}
+
+// ProfileSpecDigest is the stable digest used by approval evidence and lifecycle
+// commands. Profile specs are read from PostgreSQL jsonb first, so the bytes are
+// the same canonical representation during authorization, dispatch, and rebuild.
+func ProfileSpecDigest(spec json.RawMessage) string {
+	return "sha256:" + crypto.SHA256Hex(spec)
 }
 
 // NextProfileVersion returns the next version number for tenant/name. The
@@ -95,6 +104,31 @@ func (s *Store) GetProfileVersion(ctx context.Context, tenantID, name string, ve
 			tenantID, name, version), &r)
 	})
 	return r, err
+}
+
+// ValidateActiveProfileApprovalBindingTx locks the currently active profile row
+// and proves it is still the exact revision reviewers authorized. The shared row
+// lock serializes against deactivation by a concurrent same-name profile update.
+func (s *Store) ValidateActiveProfileApprovalBindingTx(ctx context.Context, tx pgx.Tx, tenantID string, binding OperationApprovalIssuanceBinding) error {
+	if binding.ProfileName == "" || binding.ProfileID == "" || binding.ProfileVersion <= 0 || binding.ProfileSpecDigest == "" {
+		return ErrApprovalDrifted
+	}
+	var r ProfileRecord
+	if err := scanProfile(tx.QueryRow(ctx,
+		`SELECT id::text, tenant_id::text, name, version, spec, active, created_by, created_at
+		   FROM certificate_profiles
+		  WHERE tenant_id = $1 AND name = $2 AND active
+		  FOR SHARE`, tenantID, binding.ProfileName), &r); err != nil {
+		if err == pgx.ErrNoRows {
+			return ErrApprovalDrifted
+		}
+		return err
+	}
+	if r.ID != binding.ProfileID || r.Version != binding.ProfileVersion ||
+		ProfileSpecDigest(r.Spec) != binding.ProfileSpecDigest {
+		return ErrApprovalDrifted
+	}
+	return nil
 }
 
 // ListProfiles returns the active profiles for a tenant (one row per name).

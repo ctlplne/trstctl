@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
@@ -172,34 +173,45 @@ func (a *API) redeemShare(w http.ResponseWriter, r *http.Request) {
 //trstctl:mutation
 func (a *API) approveSecretChange(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		if a.approvals == nil {
-			return 0, nil, errStatus(http.StatusNotImplemented, "dual-control approval is not enabled on this deployment")
-		}
-		var req approvalRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		if !isSecretApprovalAction(req.Action) {
-			return 0, nil, errStatus(http.StatusBadRequest, `action must be "rotate", "recover", or "delete"`)
-		}
-		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if principal.Subject == "" {
-			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated approver is required")
-		}
-		resource := secretApprovalResource(name)
-		count, err := a.approvals.RecordApproval(ctx, tenantID, resource, req.Action, principal.Subject)
+	if a.approvals == nil {
+		a.writeError(w, errStatus(http.StatusNotImplemented, "dual-control approval is not enabled on this deployment"))
+		return
+	}
+	var req approvalRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if !isSecretApprovalAction(req.Action) {
+		a.writeError(w, errStatus(http.StatusBadRequest, `action must be "rotate", "recover", or "delete"`))
+		return
+	}
+	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	if principal.Subject == "" {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "an authenticated approver is required"))
+		return
+	}
+	resource := secretApprovalResource(name)
+	command := ApprovalDecisionCommand{
+		RequestID: strings.TrimSpace(req.RequestID), IntentDigest: strings.TrimSpace(req.IntentDigest),
+		Approver: principal.Subject, Decision: store.ApprovalDecisionApprove,
+		ExpectedResourceKind: "secret", ExpectedResourceID: resource, ExpectedAction: req.Action,
+	}
+	if _, err := a.preflightApprovalDecision(r, command); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, err := approvalDecisionBinding(command)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, r.Header.Get("Idempotency-Key"), binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		record, err := a.approvals.RecordApproval(ctx, tenantID, command)
 		if err != nil {
-			if errors.Is(err, store.ErrSelfIssuanceApproval) {
-				return 0, nil, errStatus(http.StatusForbidden, "the requester cannot approve their own secret change")
-			}
-			if errors.Is(err, store.ErrAnonymousIssuanceApproval) {
-				return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated approver is required")
-			}
-			return 0, nil, err
+			return 0, nil, approvalAPIError(err)
 		}
-		return http.StatusOK, approvalResponse{Resource: resource, Action: req.Action, Approver: principal.Subject, Approvals: count}, nil
+		return http.StatusOK, approvalResponseFor(record, principal.Subject), nil
 	})
 }
 
@@ -842,27 +854,6 @@ func (s *secretsService) authManager(ctx context.Context, tenantID string) (*aut
 		Audit:    s.be.Audit,
 		TTL:      ttl,
 	})
-}
-
-func (a *API) requireSecretApproval(ctx context.Context, tenantID, name, action string) error {
-	if !a.gate.RequireApproval {
-		return nil
-	}
-	if a.gate.Checker == nil {
-		return errStatus(http.StatusForbidden, "dual control required but no approval store is configured")
-	}
-	principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-	if principal.Subject == "" {
-		return errStatus(http.StatusUnauthorized, "an authenticated requester is required")
-	}
-	approved, reason := a.gate.Checker.IsApproved(ctx, tenantID, secretApprovalResource(name), action, principal.Subject)
-	if approved {
-		return nil
-	}
-	if reason == "" {
-		reason = "this secret change has not been approved by the required number of distinct approvers"
-	}
-	return errStatus(http.StatusForbidden, "dual control: "+reason)
 }
 
 // auditSecret records a secret/share/pki event (AN-2) carrying ONLY non-secret

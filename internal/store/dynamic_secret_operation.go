@@ -22,6 +22,7 @@ const (
 // issued credential bytes remain envelope-sealed on DynamicSecretLease.
 type DynamicSecretOperation struct {
 	TenantID       string
+	TenantEpoch    string
 	OperationID    string
 	IdempotencyKey string
 	RequestBinding string
@@ -47,13 +48,13 @@ type DynamicSecretOperation struct {
 // INVARIANT: every writer of that table pair takes this lock first, before it
 // touches either table.  ApplySecretSyncIntentTx documents the same discipline
 // for the sync job/outbox pair.
-func lockDynamicSecretOperationTx(ctx context.Context, tx pgx.Tx, tenantID, idempotencyKey string) error {
-	if tenantID == "" || idempotencyKey == "" {
+func lockDynamicSecretOperationTx(ctx context.Context, tx pgx.Tx, tenantID, tenantEpoch, idempotencyKey string) error {
+	if tenantID == "" || tenantEpoch == "" || idempotencyKey == "" {
 		return fmt.Errorf("store: dynamic-secret operation lock identity is incomplete")
 	}
 	if _, err := tx.Exec(ctx,
 		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-		"dynamic-secret-operation\x1f"+tenantID+"\x1f"+idempotencyKey); err != nil {
+		"dynamic-secret-operation\x1f"+tenantID+"\x1f"+tenantEpoch+"\x1f"+idempotencyKey); err != nil {
 		return fmt.Errorf("store: lock dynamic-secret operation: %w", err)
 	}
 	return nil
@@ -79,22 +80,32 @@ func (s *Store) ApplyDynamicSecretOperationRequestedTx(ctx context.Context, tx p
 	if op.UpdatedAt.IsZero() {
 		op.UpdatedAt = op.CreatedAt
 	}
-	if err := lockDynamicSecretOperationTx(ctx, tx, op.TenantID, op.IdempotencyKey); err != nil {
+	if op.CreatedAt.IsZero() || op.UpdatedAt.IsZero() {
+		return fmt.Errorf("store: dynamic-secret operation timestamp is empty")
+	}
+	var err error
+	op.TenantEpoch, err = s.resolveDynamicSecretWriteEpochTx(ctx, tx, op.TenantID, op.TenantEpoch)
+	if err != nil {
+		return err
+	}
+	if err := lockDynamicSecretOperationTx(ctx, tx, op.TenantID, op.TenantEpoch, op.IdempotencyKey); err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO dynamic_secret_operations
-		        (tenant_id, operation_id, idempotency_key, request_binding, action,
+		        (tenant_id, tenant_epoch, operation_id, idempotency_key, request_binding, action,
 		         lease_id, response, status, last_error, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'pending', '', $8, $9)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'pending', '', $9, $10)
 		 ON CONFLICT (tenant_id, idempotency_key) DO UPDATE
 		    SET operation_id = dynamic_secret_operations.operation_id
-		  WHERE dynamic_secret_operations.operation_id = EXCLUDED.operation_id
+		  WHERE dynamic_secret_operations.tenant_epoch = EXCLUDED.tenant_epoch
+		    AND dynamic_secret_operations.operation_id = EXCLUDED.operation_id
 		    AND dynamic_secret_operations.request_binding = EXCLUDED.request_binding
 		    AND dynamic_secret_operations.action = EXCLUDED.action
 		    AND dynamic_secret_operations.lease_id = EXCLUDED.lease_id
-		    AND dynamic_secret_operations.response = EXCLUDED.response`,
-		op.TenantID, op.OperationID, op.IdempotencyKey, op.RequestBinding, op.Action,
+		    AND dynamic_secret_operations.response = EXCLUDED.response
+		    AND dynamic_secret_operations.created_at = EXCLUDED.created_at`,
+		op.TenantID, op.TenantEpoch, op.OperationID, op.IdempotencyKey, op.RequestBinding, op.Action,
 		op.LeaseID, op.Response, op.CreatedAt, op.UpdatedAt)
 	if err != nil {
 		return err
@@ -106,12 +117,37 @@ func (s *Store) ApplyDynamicSecretOperationRequestedTx(ctx context.Context, tx p
 }
 
 func (s *Store) ApplyDynamicSecretOperationCompletedTx(ctx context.Context, tx pgx.Tx, tenantID, operationID, requestBinding, action, leaseID string, completedAt time.Time) error {
+	return s.ApplyDynamicSecretOperationCompletedForEpochTx(ctx, tx, tenantID, "", operationID, requestBinding, action, leaseID, completedAt)
+}
+
+func (s *Store) ApplyDynamicSecretOperationCompletedForEpochTx(ctx context.Context, tx pgx.Tx, tenantID, tenantEpoch, operationID, requestBinding, action, leaseID string, completedAt time.Time) error {
+	if tenantID == "" || operationID == "" || requestBinding == "" || leaseID == "" ||
+		(action != "issue" && action != "renew" && action != "revoke") || completedAt.IsZero() {
+		return fmt.Errorf("store: dynamic-secret operation completion is incomplete")
+	}
+	var err error
+	tenantEpoch, err = s.resolveDynamicSecretWriteEpochTx(ctx, tx, tenantID, tenantEpoch)
+	if err != nil {
+		return err
+	}
+	return applyDynamicSecretOperationCompletedForValidatedEpochTx(
+		ctx, tx, tenantID, tenantEpoch, operationID, requestBinding,
+		action, leaseID, completedAt)
+}
+
+func applyDynamicSecretOperationCompletedForValidatedEpochTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, tenantEpoch, operationID, requestBinding, action, leaseID string,
+	completedAt time.Time,
+) error {
 	tag, err := tx.Exec(ctx,
 		`UPDATE dynamic_secret_operations
 		    SET status = 'completed', last_error = '', updated_at = GREATEST(updated_at, $6)
-		  WHERE tenant_id = $1 AND operation_id = $2 AND request_binding = $3
+		  WHERE tenant_id = $1 AND tenant_epoch = $7
+		    AND operation_id = $2 AND request_binding = $3
 		    AND action = $4 AND lease_id = $5 AND status IN ('pending', 'completed')`,
-		tenantID, operationID, requestBinding, action, leaseID, completedAt)
+		tenantID, operationID, requestBinding, action, leaseID, completedAt, tenantEpoch)
 	if err != nil {
 		return err
 	}
@@ -124,13 +160,33 @@ func (s *Store) ApplyDynamicSecretOperationCompletedTx(ctx context.Context, tx p
 // ApplyDynamicSecretIssueOperationFailedTx makes only the issue command for the
 // named lease terminal. A stale failure replay cannot overwrite completion.
 func (s *Store) ApplyDynamicSecretIssueOperationFailedTx(ctx context.Context, tx pgx.Tx, tenantID, leaseID, lastError string, failedAt time.Time) error {
+	return s.ApplyDynamicSecretIssueOperationFailedForEpochTx(ctx, tx, tenantID, "", leaseID, lastError, failedAt)
+}
+
+func (s *Store) ApplyDynamicSecretIssueOperationFailedForEpochTx(ctx context.Context, tx pgx.Tx, tenantID, tenantEpoch, leaseID, lastError string, failedAt time.Time) error {
+	var err error
+	tenantEpoch, err = s.resolveDynamicSecretWriteEpochTx(ctx, tx, tenantID, tenantEpoch)
+	if err != nil {
+		return err
+	}
+	return applyDynamicSecretIssueOperationFailedForValidatedEpochTx(
+		ctx, tx, tenantID, tenantEpoch, leaseID, lastError, failedAt)
+}
+
+func applyDynamicSecretIssueOperationFailedForValidatedEpochTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, tenantEpoch, leaseID, lastError string,
+	failedAt time.Time,
+) error {
 	tag, err := tx.Exec(ctx,
 		`UPDATE dynamic_secret_operations
 		    SET status = CASE WHEN status = 'completed' THEN status ELSE 'failed' END,
 		        last_error = CASE WHEN status = 'completed' THEN last_error ELSE $3 END,
 		        updated_at = GREATEST(updated_at, $4)
-		  WHERE tenant_id = $1 AND lease_id = $2 AND action = 'issue'`,
-		tenantID, leaseID, lastError, failedAt)
+		  WHERE tenant_id = $1 AND tenant_epoch = $5
+		    AND lease_id = $2 AND action = 'issue'`,
+		tenantID, leaseID, lastError, failedAt, tenantEpoch)
 	if err != nil {
 		return err
 	}
@@ -144,7 +200,7 @@ func (s *Store) GetDynamicSecretOperationByIdempotencyKey(ctx context.Context, t
 	var op DynamicSecretOperation
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanDynamicSecretOperation(tx.QueryRow(ctx,
-			`SELECT tenant_id::text, operation_id, idempotency_key, request_binding,
+			`SELECT tenant_id::text, tenant_epoch, operation_id, idempotency_key, request_binding,
 			        action, lease_id, response, status, last_error, created_at, updated_at
 			   FROM dynamic_secret_operations
 			  WHERE tenant_id = $1 AND idempotency_key = $2`,
@@ -157,7 +213,7 @@ func (s *Store) GetDynamicSecretOperation(ctx context.Context, tenantID, operati
 	var op DynamicSecretOperation
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanDynamicSecretOperation(tx.QueryRow(ctx,
-			`SELECT tenant_id::text, operation_id, idempotency_key, request_binding,
+			`SELECT tenant_id::text, tenant_epoch, operation_id, idempotency_key, request_binding,
 			        action, lease_id, response, status, last_error, created_at, updated_at
 			   FROM dynamic_secret_operations
 			  WHERE tenant_id = $1 AND operation_id = $2`,
@@ -168,7 +224,7 @@ func (s *Store) GetDynamicSecretOperation(ctx context.Context, tenantID, operati
 
 func scanDynamicSecretOperation(row rowScanner, op *DynamicSecretOperation) error {
 	return row.Scan(
-		&op.TenantID, &op.OperationID, &op.IdempotencyKey, &op.RequestBinding,
+		&op.TenantID, &op.TenantEpoch, &op.OperationID, &op.IdempotencyKey, &op.RequestBinding,
 		&op.Action, &op.LeaseID, &op.Response, &op.Status, &op.LastError,
 		&op.CreatedAt, &op.UpdatedAt,
 	)

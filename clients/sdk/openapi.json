@@ -2033,21 +2033,140 @@
             ],
             "type": "string"
           },
+          "approval_count": {
+            "type": "integer"
+          },
           "approvals": {
             "type": "integer"
           },
           "approver": {
             "type": "string"
           },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
           "resource": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "superseded",
+              "consumed"
+            ],
             "type": "string"
           }
         },
         "required": [
+          "id",
+          "intent_digest",
           "resource",
           "action",
           "approver",
-          "approvals"
+          "approvals",
+          "approval_count",
+          "required_approvals",
+          "status"
+        ],
+        "type": "object"
+      },
+      "ApprovalDecision": {
+        "properties": {
+          "action": {
+            "enum": [
+              "issue",
+              "create",
+              "rotate",
+              "revoke",
+              "sign",
+              "recover",
+              "delete",
+              "managedkey:rotate",
+              "managedkey:revoke",
+              "managedkey:zeroize"
+            ],
+            "type": "string"
+          },
+          "approval_count": {
+            "type": "integer"
+          },
+          "approvals": {
+            "type": "integer"
+          },
+          "approver": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "superseded",
+              "consumed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "intent_digest",
+          "resource",
+          "action",
+          "approver",
+          "approvals",
+          "approval_count",
+          "required_approvals",
+          "status"
+        ],
+        "type": "object"
+      },
+      "ApprovalDecisionInput": {
+        "properties": {
+          "intent_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intent_digest"
+        ],
+        "type": "object"
+      },
+      "ApprovalDenialInput": {
+        "properties": {
+          "intent_digest": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intent_digest",
+          "reason"
         ],
         "type": "object"
       },
@@ -2061,10 +2180,36 @@
               "sign"
             ],
             "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
           }
         },
         "required": [
-          "action"
+          "action",
+          "request_id",
+          "intent_digest"
+        ],
+        "type": "object"
+      },
+      "ApprovalRequestList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PendingApprovalRequest"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -8535,7 +8680,13 @@
       "EphemeralApproval": {
         "properties": {
           "action": {
+            "enum": [
+              "issue"
+            ],
             "type": "string"
+          },
+          "approval_count": {
+            "type": "integer"
           },
           "approvals": {
             "type": "integer"
@@ -8543,15 +8694,41 @@
           "approver": {
             "type": "string"
           },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
           "resource": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "superseded",
+              "consumed"
+            ],
             "type": "string"
           }
         },
         "required": [
+          "id",
+          "intent_digest",
           "resource",
           "action",
           "approver",
-          "approvals"
+          "approvals",
+          "approval_count",
+          "required_approvals",
+          "status"
         ],
         "type": "object"
       },
@@ -8562,15 +8739,28 @@
               "issue"
             ],
             "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
           }
         },
         "required": [
-          "action"
+          "action",
+          "request_id",
+          "intent_digest"
         ],
         "type": "object"
       },
       "EphemeralCredential": {
         "properties": {
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "approvals": {
             "type": "integer"
           },
@@ -8589,6 +8779,9 @@
           },
           "expires_at": {
             "format": "date-time",
+            "type": "string"
+          },
+          "intent_digest": {
             "type": "string"
           },
           "not_after": {
@@ -8615,6 +8808,8 @@
         "required": [
           "state",
           "request_id",
+          "approval_request_id",
+          "intent_digest",
           "subject",
           "required_approvals",
           "approvals",
@@ -11508,13 +11703,22 @@
             ],
             "type": "string"
           },
+          "intent_digest": {
+            "type": "string"
+          },
           "key_id": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
             "type": "string"
           }
         },
         "required": [
           "key_id",
-          "action"
+          "action",
+          "request_id",
+          "intent_digest"
         ],
         "type": "object"
       },
@@ -15735,6 +15939,111 @@
         ],
         "type": "object"
       },
+      "PendingApprovalRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "issue",
+              "create",
+              "rotate",
+              "revoke",
+              "sign",
+              "recover",
+              "delete",
+              "managedkey:rotate",
+              "managedkey:revoke",
+              "managedkey:zeroize"
+            ],
+            "type": "string"
+          },
+          "approval_count": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "from_state": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "enum": [
+              "identity",
+              "secret",
+              "managed_key",
+              "code_signing",
+              "ephemeral"
+            ],
+            "type": "string"
+          },
+          "resource_name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "superseded",
+              "consumed"
+            ],
+            "type": "string"
+          },
+          "target_version": {
+            "type": "string"
+          },
+          "to_state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "intent_digest",
+          "resource_id",
+          "resource_name",
+          "resource_kind",
+          "action",
+          "requester",
+          "target_version",
+          "evidence_refs",
+          "approval_count",
+          "required_approvals",
+          "status",
+          "created_at",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "PlatformAirGap": {
         "properties": {
           "buyer_evidence_receipts": {
@@ -18774,21 +19083,50 @@
             ],
             "type": "string"
           },
+          "approval_count": {
+            "type": "integer"
+          },
           "approvals": {
             "type": "integer"
           },
           "approver": {
             "type": "string"
           },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
           "resource": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "superseded",
+              "consumed"
+            ],
             "type": "string"
           }
         },
         "required": [
+          "id",
+          "intent_digest",
           "resource",
           "action",
           "approver",
-          "approvals"
+          "approvals",
+          "approval_count",
+          "required_approvals",
+          "status"
         ],
         "type": "object"
       },
@@ -18801,10 +19139,19 @@
               "delete"
             ],
             "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
           }
         },
         "required": [
-          "action"
+          "action",
+          "request_id",
+          "intent_digest"
         ],
         "type": "object"
       },
@@ -19146,6 +19493,9 @@
           "old_ref": {
             "type": "string"
           },
+          "queued": {
+            "type": "boolean"
+          },
           "rollback_attempted": {
             "type": "boolean"
           },
@@ -19164,6 +19514,7 @@
           "old_ref",
           "new_ref",
           "completed",
+          "queued",
           "rolled_back",
           "rollback_attempted",
           "rollback_failed"
@@ -19172,19 +19523,61 @@
       },
       "SecretRotationDueRun": {
         "properties": {
+          "complete": {
+            "description": "True only when the fixed PostgreSQL due-through UUID ring was proven exhausted without a subsystem/store/event/custody failure. False when either safety budget was consumed or a system failure stopped the tick.",
+            "type": "boolean"
+          },
+          "deferred": {
+            "items": {
+              "$ref": "#/components/schemas/SecretRotationScheduleDeferred"
+            },
+            "type": "array"
+          },
+          "failed_schedule_id": {
+            "description": "Due schedule at which a subsystem failure stopped the batch; omitted for scan/retention failures.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "partial": {
+            "description": "True when at least one run or deferred row was recorded before a subsystem failure stopped this tick.",
+            "type": "boolean"
+          },
           "ran": {
+            "description": "Durable run records written in this tick, including terminal row-local failures; maximum 50.",
             "type": "integer"
+          },
+          "run_limit_reached": {
+            "description": "True when the full 50-run budget was consumed. The captured due ring was not proven exhausted, so another tick with a new Idempotency-Key may be required.",
+            "type": "boolean"
           },
           "runs": {
             "items": {
               "$ref": "#/components/schemas/SecretRotationScheduleRun"
             },
             "type": "array"
+          },
+          "scan_limit_reached": {
+            "description": "True when the full 500-row scan budget was consumed. The captured due ring was not proven exhausted, so another tick with a new Idempotency-Key may be required.",
+            "type": "boolean"
+          },
+          "scanned": {
+            "description": "Due schedule rows inspected from the durable fair UUID ring in this tick; maximum 500.",
+            "type": "integer"
+          },
+          "system_error": {
+            "description": "Non-secret fail-stop detail. A 503 envelope is cached by the outer Idempotency-Key; retry with the same key is byte-identical and executes no child again. Use a new key to continue after repair.",
+            "type": "string"
           }
         },
         "required": [
           "ran",
-          "runs"
+          "scanned",
+          "runs",
+          "deferred",
+          "run_limit_reached",
+          "scan_limit_reached",
+          "complete",
+          "partial"
         ],
         "type": "object"
       },
@@ -19197,6 +19590,7 @@
             "type": "string"
           },
           "provider": {
+            "description": "connector:\u003ctarget\u003e is the only executable mode. Static and dynamic-lease providers are unavailable and fail closed with 503 before effects.",
             "type": "string"
           },
           "remote_key": {
@@ -19206,6 +19600,7 @@
             "type": "string"
           },
           "ttl_seconds": {
+            "description": "Compatibility input only. Connector requests reject any supplied ttl_seconds with 400. Static and dynamic-lease providers remain unavailable with 503 regardless of this field.",
             "type": "integer"
           }
         },
@@ -19250,6 +19645,18 @@
             "type": "string"
           },
           "last_run_status": {
+            "description": "Empty means never run. delivery_failed proves the connector's canonical local successor committed. unsupported marks and disables a historical non-connector schedule without invoking its provider. retire_pending is retained compatibility evidence from pre-durable static histories. Generic failed does not advance old_ref.",
+            "enum": [
+              "",
+              "completed",
+              "queued",
+              "failed",
+              "rolled_back",
+              "rollback_failed",
+              "retire_pending",
+              "delivery_failed",
+              "unsupported"
+            ],
             "type": "string"
           },
           "name": {
@@ -19287,6 +19694,38 @@
           "last_run_status",
           "created_at",
           "updated_at"
+        ],
+        "type": "object"
+      },
+      "SecretRotationScheduleDeferred": {
+        "properties": {
+          "due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "description": "Non-secret reason detail for this exact deferred due edge.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Row-local retry state. The exact due edge and command identity remain unchanged for a later tick. config_revision_unanchored means a pre-evidence schedule was scanned and diagnosed without creating a child command or invoking a provider.",
+            "enum": [
+              "approval_pending",
+              "command_in_flight",
+              "command_claimed",
+              "config_revision_unanchored"
+            ],
+            "type": "string"
+          },
+          "schedule_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schedule_id",
+          "reason",
+          "due_at"
         ],
         "type": "object"
       },
@@ -19329,6 +19768,7 @@
             "type": "string"
           },
           "provider": {
+            "description": "connector:\u003ctarget\u003e only. Static and dynamic-lease schedules fail closed with 503 before persistence because their provider phases do not yet have a durable worker command.",
             "type": "string"
           }
         },
@@ -19343,12 +19783,20 @@
       },
       "SecretRotationScheduleRun": {
         "properties": {
+          "due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "error": {
             "type": "string"
           },
           "ran_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "reconciled": {
+            "description": "True when this response was reconstructed from the retained deterministic terminal event without re-running the child command.",
+            "type": "boolean"
           },
           "rotation": {
             "$ref": "#/components/schemas/SecretRotation"
@@ -19362,15 +19810,28 @@
             "type": "string"
           },
           "status": {
+            "description": "delivery_failed has explicit committed-successor authority. unsupported proves a historical non-connector row was disabled with zero provider calls. retire_pending is compatibility evidence from older static histories; generic failed carries no successor authority.",
+            "enum": [
+              "completed",
+              "queued",
+              "failed",
+              "rolled_back",
+              "rollback_failed",
+              "retire_pending",
+              "delivery_failed",
+              "unsupported"
+            ],
             "type": "string"
           }
         },
         "required": [
           "schedule_id",
           "run_id",
+          "due_at",
           "status",
           "rotation",
-          "ran_at"
+          "ran_at",
+          "reconciled"
         ],
         "type": "object"
       },
@@ -21449,7 +21910,7 @@
     }
   },
   "info": {
-    "description": "Resource-oriented REST API for trstctl. Mutations require an Idempotency-Key; errors are RFC 7807 problem+json; lists use cursor pagination.",
+    "description": "Resource-oriented REST API for trstctl. Mutations require an Idempotency-Key; errors use RFC 7807 problem+json unless an operation documents a typed status receipt; lists use cursor pagination.",
     "title": "trstctl API",
     "version": "v1"
   },
@@ -24280,6 +24741,233 @@
         ],
         "summary": "Report the served AI runtime/model posture without leaking model endpoint secrets",
         "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/approval-requests": {
+      "get": {
+        "operationId": "listApprovalRequests",
+        "parameters": [
+          {
+            "description": "request status filter: pending, approved, denied, expired, superseded, or consumed",
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque newest-first pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequestList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List immutable operation approval requests in authorized review domains",
+        "x-trstctl-permission": "approvals:review"
+      }
+    },
+    "/api/v1/approval-requests/{id}/approvals": {
+      "post": {
+        "operationId": "approveApprovalRequest",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalDecisionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecision"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Approve one exact immutable operation request",
+        "x-trstctl-permission": "approvals:review"
+      }
+    },
+    "/api/v1/approval-requests/{id}/denials": {
+      "post": {
+        "operationId": "denyApprovalRequest",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalDenialInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecision"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Deny one exact immutable operation request without mutating its target",
+        "x-trstctl-permission": "approvals:review"
       }
     },
     "/api/v1/audit/events": {
@@ -29869,11 +30557,11 @@
             }
           },
           {
-            "description": "ephemeral JIT request id",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -39669,7 +40357,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Create a scheduled zero-downtime dual-phase secret rotation",
+        "summary": "Create a scheduled connector:\u003ctarget\u003e secret rotation",
         "x-trstctl-permission": "secrets:write"
       }
     },
@@ -39707,6 +40395,21 @@
               }
             },
             "description": "client error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRotationDueRun"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The scheduler may return a cached typed fail-stop receipt after claiming this Idempotency-Key; pre-handler or disabled-subsystem failures remain RFC 7807 problems."
           },
           "5XX": {
             "content": {
@@ -39776,6 +40479,16 @@
             },
             "description": "client error"
           },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Static and dynamic-lease provider rotation is unavailable until one durable worker owns every effect and compensation phase."
+          },
           "5XX": {
             "content": {
               "application/problem+json": {
@@ -39795,7 +40508,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Run a rollback-safe static, connector, or dynamic-lease secret rotation",
+        "summary": "Queue connector secret rotation; refuse non-durable provider modes",
         "x-trstctl-permission": "secrets:write"
       }
     },
@@ -40654,6 +41367,7 @@
     },
     "/api/v1/secrets/store/import": {
       "post": {
+        "deprecated": true,
         "operationId": "importSecrets",
         "parameters": [
           {
@@ -40677,16 +41391,6 @@
           "required": true
         },
         "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SecretMetaList"
-                }
-              }
-            },
-            "description": "success"
-          },
           "4XX": {
             "content": {
               "application/problem+json": {
@@ -40696,6 +41400,16 @@
               }
             },
             "description": "client error"
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Event-sourced atomic batch import is not implemented; use one idempotent create request per secret."
           },
           "5XX": {
             "content": {
@@ -40716,8 +41430,10 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Import a tree of application secrets (sealed at rest)",
-        "x-trstctl-permission": "secrets:write"
+        "summary": "Bulk application-secret import is unavailable (fails closed without writing)",
+        "x-trstctl-availability": "unavailable",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-unavailable-reason": "Event-sourced atomic batch import is not implemented; use one idempotent create request per secret."
       }
     },
     "/api/v1/secrets/store/recover/{name}": {

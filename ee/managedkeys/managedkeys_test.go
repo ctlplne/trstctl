@@ -92,17 +92,15 @@ func (g *fourEyesGate) IsApproved(_ context.Context, tenantID, keyID, action, re
 	return true, ""
 }
 
-// TestManagedKeyLifecycleEndToEnd drives the served managed-key lifecycle through a
-// fake KMS: generate -> rotate -> revoke -> zeroize, with dual control on the
-// destructive steps, asserting AN-1/AN-2/AN-5 and the provider-side state. This is
-// the served E2E proof for CRYPTO-005 (the primitives were previously reachable
-// from no served caller).
+// TestManagedKeyLifecycleEndToEnd drives the legacy in-memory lifecycle through a
+// fake KMS: generate -> rotate -> revoke -> zeroize, asserting its AN-1/AN-2/AN-5
+// bookkeeping. Served dual control is proved on durable.go, where approval use can
+// share the operation/outbox transaction; this helper deliberately has no gate.
 func TestManagedKeyLifecycleEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	kms := managedkeysfake.New()
 	sink := &memSink{}
-	gate := newFourEyesGate()
-	svc, err := managedkeys.New(managedkeys.Config{Backend: kms, Sink: sink, Gate: gate, Idem: newMemIdem()})
+	svc, err := managedkeys.New(managedkeys.Config{Backend: kms, Sink: sink, Idem: newMemIdem()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,17 +122,7 @@ func TestManagedKeyLifecycleEndToEnd(t *testing.T) {
 		t.Fatalf("provider key %q is not active after generate", gen.KeyID)
 	}
 
-	// ROTATE without an approval must fail closed (dual control), and must NOT touch
-	// the provider.
-	if _, err := svc.Rotate(ctx, tenant, gen.KeyID, "alice", "idem-rot-deny"); err == nil {
-		t.Fatal("rotate succeeded without a distinct-approver approval (dual control bypassed)")
-	}
-	if !kms.Active(gen.KeyID) {
-		t.Fatal("a denied rotate changed provider state")
-	}
-
-	// ROTATE with a distinct approver: mints a successor, emits byok.key.rotated.
-	gate.approve(tenant, gen.KeyID, managedkeys.ActionRotate, "bob")
+	// ROTATE mints a successor and emits byok.key.rotated.
 	rot, err := svc.Rotate(ctx, tenant, gen.KeyID, "alice", "idem-rot-1")
 	if err != nil {
 		t.Fatalf("rotate (approved): %v", err)
@@ -146,8 +134,7 @@ func TestManagedKeyLifecycleEndToEnd(t *testing.T) {
 		t.Fatal("rotate did not mint a successor key id")
 	}
 
-	// REVOKE the (now current) key with a distinct approver: provider disables it.
-	gate.approve(tenant, rot.KeyID, managedkeys.ActionRevoke, "bob")
+	// REVOKE the (now current) key: provider disables it.
 	rev, err := svc.Revoke(ctx, tenant, rot.KeyID, "alice", "idem-rev-1")
 	if err != nil {
 		t.Fatalf("revoke: %v", err)
@@ -159,8 +146,7 @@ func TestManagedKeyLifecycleEndToEnd(t *testing.T) {
 		t.Fatalf("provider key %q is not disabled after revoke", rot.KeyID)
 	}
 
-	// ZEROIZE with a distinct approver: provider destroys the material.
-	gate.approve(tenant, rot.KeyID, managedkeys.ActionZeroize, "bob")
+	// ZEROIZE destroys the material.
 	zer, err := svc.Zeroize(ctx, tenant, rot.KeyID, "alice", "idem-zer-1")
 	if err != nil {
 		t.Fatalf("zeroize: %v", err)
@@ -239,7 +225,8 @@ func TestManagedKeyTenantIsolation(t *testing.T) {
 func TestManagedKeyDualControlRequiredForEveryDestructiveAction(t *testing.T) {
 	ctx := context.Background()
 	gate := newFourEyesGate()
-	svc, err := managedkeys.New(managedkeys.Config{Backend: managedkeysfake.New(), Sink: &memSink{}, Gate: gate})
+	backend := managedkeysfake.New()
+	svc, err := managedkeys.New(managedkeys.Config{Backend: backend, Sink: &memSink{}, Gate: gate})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,5 +245,14 @@ func TestManagedKeyDualControlRequiredForEveryDestructiveAction(t *testing.T) {
 	}
 	if _, err := svc.Zeroize(ctx, "t1", gen.KeyID, "alice", ""); err == nil {
 		t.Fatal("zeroize allowed with no approval")
+	}
+	// Even a true answer from the old boolean seam cannot be accepted: there is
+	// no transaction in this service that can consume it exactly once.
+	gate.approve("t1", gen.KeyID, managedkeys.ActionRotate, "bob")
+	if _, err := svc.Rotate(ctx, "t1", gen.KeyID, "alice", ""); err == nil {
+		t.Fatal("legacy boolean approval authorized a non-atomic rotate")
+	}
+	if !backend.Active(gen.KeyID) {
+		t.Fatal("legacy boolean approval reached the provider before failing closed")
 	}
 }

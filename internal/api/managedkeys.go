@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
@@ -87,8 +88,10 @@ type managedKeyActionRequest struct {
 }
 
 type managedKeyApprovalRequest struct {
-	KeyID  string `json:"key_id"`
-	Action string `json:"action"`
+	KeyID        string `json:"key_id"`
+	Action       string `json:"action"`
+	RequestID    string `json:"request_id"`
+	IntentDigest string `json:"intent_digest"`
 }
 
 type managedKeyApprovalResponse struct {
@@ -296,25 +299,28 @@ func (a *API) approveManagedKeyAction(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	command := ApprovalDecisionCommand{
+		RequestID: strings.TrimSpace(req.RequestID), IntentDigest: strings.TrimSpace(req.IntentDigest),
+		Approver: approver, Decision: store.ApprovalDecisionApprove,
+		ExpectedResourceKind: "managed_key", ExpectedResourceID: req.KeyID,
+		ExpectedAction: canonicalAction,
+	}
+	if _, err := a.preflightApprovalDecision(r, command); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	binding, err := managedKeyRequestBinding("approve:"+canonicalAction, approver, req)
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
 	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
-		count, recordErr := a.approvals.RecordApproval(ctx, tenantID, req.KeyID, canonicalAction, approver)
+		record, recordErr := a.approvals.RecordApproval(ctx, tenantID, command)
 		if recordErr != nil {
-			switch {
-			case errors.Is(recordErr, store.ErrSelfIssuanceApproval):
-				return 0, nil, errStatus(http.StatusForbidden, "the managed-key requester cannot approve their own destructive action")
-			case errors.Is(recordErr, store.ErrAnonymousIssuanceApproval):
-				return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated managed-key approver is required")
-			default:
-				return 0, nil, recordErr
-			}
+			return 0, nil, approvalAPIError(recordErr)
 		}
 		return http.StatusOK, managedKeyApprovalResponse{
-			Resource: req.KeyID, Action: canonicalAction, Approver: approver, Approvals: count,
+			Resource: req.KeyID, Action: canonicalAction, Approver: approver, Approvals: record.ApprovalCount,
 		}, nil
 	}, false)
 }

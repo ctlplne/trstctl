@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // EXC-WIRE-03 — the served mutation gate. Until now the OPA/Rego default-deny
@@ -47,22 +48,84 @@ type ABACDenyEvaluator interface {
 	EvaluateDeny(ctx context.Context, in policy.ABACInput) (policy.ABACDecision, error)
 }
 
-// ApprovalChecker reports whether a privileged action has a recorded approval by a
-// principal DISTINCT from the requester (dual control). It returns approved=false
-// with a human reason when the action is not yet approved, when the only approval
-// is the requester's own (self-approval is rejected — the RED-004 / SEC-002
-// defense), or when the approver is not permitted. The served implementation is
-// event-store backed and tenant-scoped (AN-1); a nil checker disables dual control
-// (the policy + RA-scope checks still apply).
+// ApprovalChecker is the retired resource/action-only compatibility seam. It cannot
+// identify one immutable request, intent digest, target version, or evidence set, so
+// production implementations must fail closed. New mutation paths use
+// ExactApprovalChecker. It remains here only so older edition adapters fail safely
+// instead of silently treating a standing boolean as reusable authority.
 type ApprovalChecker interface {
-	// IsApproved reports whether the (tenant, resource, action) privileged action has
-	// the required number of approvals by principals DISTINCT from the requester. The
-	// action is the policy action ("issue"/"revoke"); requester is the principal
-	// driving the mutation, and an approval by the requester themselves never counts.
-	// The served implementation also records (idempotently) that this requester's
-	// action awaits approval, so a distinct approver can be checked against them — and
-	// so the requester can never be counted as their own approver.
+	// IsApproved must not authorize a mutation. The production implementation always
+	// returns false and directs callers to the exact one-shot authority contract.
 	IsApproved(ctx context.Context, tenantID, resource, action, requester string) (approved bool, reason string)
+}
+
+// ApprovalIntent is the complete immutable context for one reviewer decision.
+// TargetVersion is the current event-projected revision, not a caller-controlled
+// counter. EvidenceRefs contain identifiers/digests only, never secret values.
+type ApprovalIntent struct {
+	TenantID          string
+	ResourceKind      string
+	ResourceID        string
+	ResourceName      string
+	Action            string
+	Requester         string
+	FromState         string
+	ToState           string
+	TargetVersion     uint64
+	Reason            string
+	EvidenceRefs      []string
+	RequiredApprovals int
+	TTL               time.Duration
+}
+
+type ApprovalAuthority struct {
+	RequestID         string
+	IntentDigest      string
+	Requester         string
+	ResourceKind      string
+	ResourceID        string
+	Action            string
+	FromState         string
+	ToState           string
+	TargetVersion     uint64
+	RequiredApprovals int
+	Reason            string
+	EvidenceRefs      []string
+	Issuance          *store.OperationApprovalIssuanceBinding
+	Disposition       ApprovalDisposition
+}
+
+// ApprovalDisposition is the closed-set requester-side state of an exact
+// approval authority. Callers use it to distinguish an approval that can still
+// make progress from a terminal authority that requires a new command identity.
+type ApprovalDisposition string
+
+const (
+	ApprovalDispositionPending    ApprovalDisposition = "pending"
+	ApprovalDispositionApproved   ApprovalDisposition = "approved"
+	ApprovalDispositionDenied     ApprovalDisposition = "denied"
+	ApprovalDispositionExpired    ApprovalDisposition = "expired"
+	ApprovalDispositionSuperseded ApprovalDisposition = "superseded"
+	ApprovalDispositionConsumed   ApprovalDisposition = "consumed"
+	ApprovalDispositionDrifted    ApprovalDisposition = "drifted"
+)
+
+func (d ApprovalDisposition) Terminal() bool {
+	switch d {
+	case ApprovalDispositionDenied, ApprovalDispositionExpired,
+		ApprovalDispositionSuperseded, ApprovalDispositionConsumed,
+		ApprovalDispositionDrifted:
+		return true
+	default:
+		return false
+	}
+}
+
+// ExactApprovalChecker is the production event-sourced request/digest/version-bound
+// contract. Returning approved only permits the caller to attempt the command; the
+// command event projector must atomically consume the returned authority.
+type ExactApprovalChecker interface {
+	AuthorizeApproval(context.Context, ApprovalIntent) (ApprovalAuthority, bool, string)
 }
 
 // MutationGate enforces the served policy + RA-separation + dual-control checks on
@@ -145,11 +208,16 @@ func (e *gateError) Error() string { return e.detail }
 //  2. Policy — the default-deny OPA/Rego gate must explicitly allow the action.
 //  3. Dual control — when enabled, a distinct-approver approval must be on record.
 func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, identityID string, to orchestrator.State, resource map[string]string) error {
+	_, err := g.checkWithApproval(ctx, p, tenantID, identityID, to, resource, nil)
+	return err
+}
+
+func (g MutationGate) checkWithApproval(ctx context.Context, p authz.Principal, tenantID, identityID string, to orchestrator.State, resource map[string]string, intent *ApprovalIntent) (*ApprovalAuthority, error) {
 	action, privileged, ok := privilegedActionFor(to)
 	if !ok {
 		// Not an issue/deploy/revoke transition — out of this gate's scope; the
 		// orchestrator's state machine still validates the edge.
-		return nil
+		return nil, nil
 	}
 
 	target := authz.Scope{TenantID: tenantID}
@@ -159,7 +227,7 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 	// scope (certs:request) is deliberately insufficient — a requester cannot
 	// self-issue (SEC-002, RED-004).
 	if privileged && !p.Can(authz.CertsIssue, target) {
-		return &gateError{status: http.StatusForbidden,
+		return nil, &gateError{status: http.StatusForbidden,
 			detail: "forbidden: a privileged " + string(action) + " requires the " + string(authz.CertsIssue) + " authority (the requester scope cannot self-issue)"}
 	}
 
@@ -170,15 +238,15 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 		d, err := g.ABAC.EvaluateDeny(ctx, in)
 		switch {
 		case errors.Is(err, bulkhead.ErrRejected):
-			return &gateError{status: http.StatusServiceUnavailable, detail: "ABAC engine busy; retry"}
+			return nil, &gateError{status: http.StatusServiceUnavailable, detail: "ABAC engine busy; retry"}
 		case err != nil:
-			return &gateError{status: http.StatusForbidden, detail: "denied by ABAC (evaluation error)"}
+			return nil, &gateError{status: http.StatusForbidden, detail: "denied by ABAC (evaluation error)"}
 		case d.Deny:
 			reason := d.Reason
 			if reason == "" {
 				reason = "denied by ABAC"
 			}
-			return &gateError{status: http.StatusForbidden, detail: "denied by ABAC: " + reason}
+			return nil, &gateError{status: http.StatusForbidden, detail: "denied by ABAC: " + reason}
 		}
 	}
 
@@ -196,16 +264,16 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 		switch {
 		case errors.Is(err, bulkhead.ErrRejected):
 			// AN-7: the policy pool shed — fail closed with a retryable status.
-			return &gateError{status: http.StatusServiceUnavailable, detail: "policy engine busy; retry"}
+			return nil, &gateError{status: http.StatusServiceUnavailable, detail: "policy engine busy; retry"}
 		case err != nil:
 			// Any evaluation error denies (fail closed); the engine already audited it.
-			return &gateError{status: http.StatusForbidden, detail: "denied by policy (evaluation error)"}
+			return nil, &gateError{status: http.StatusForbidden, detail: "denied by policy (evaluation error)"}
 		case !d.Allow:
 			reason := d.Reason
 			if reason == "" {
 				reason = "denied by policy"
 			}
-			return &gateError{status: http.StatusForbidden, detail: "denied by policy: " + reason}
+			return nil, &gateError{status: http.StatusForbidden, detail: "denied by policy: " + reason}
 		}
 	}
 
@@ -213,18 +281,29 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 	if privileged && g.RequireApproval {
 		if g.Checker == nil {
 			// Misconfiguration must fail closed, never silently allow a privileged mint.
-			return &gateError{status: http.StatusForbidden, detail: "dual control required but no approval store is configured"}
+			return nil, &gateError{status: http.StatusForbidden, detail: "dual control required but no approval store is configured"}
 		}
-		approved, reason := g.Checker.IsApproved(ctx, tenantID, identityID, string(action), p.Subject)
+		exact, ok := g.Checker.(ExactApprovalChecker)
+		if !ok || intent == nil {
+			return nil, &gateError{status: http.StatusForbidden,
+				detail: "dual control: exact request ID, intent digest, target version, and evidence are required"}
+		}
+		bound := *intent
+		bound.TenantID = tenantID
+		bound.ResourceID = identityID
+		bound.Action = string(action)
+		bound.Requester = p.Subject
+		authority, approved, reason := exact.AuthorizeApproval(ctx, bound)
 		if !approved {
 			if reason == "" {
 				reason = "a distinct approver must approve this " + string(action) + " (dual control)"
 			}
-			return &gateError{status: http.StatusForbidden, detail: "dual control: " + reason}
+			return nil, &gateError{status: http.StatusForbidden, detail: "dual control: " + reason}
 		}
+		return &authority, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func gateWithProfileApproval(g MutationGate, req orchestrator.ProfileApprovalRequirement) MutationGate {

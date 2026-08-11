@@ -314,7 +314,6 @@ func (a *API) revokeDynamicLease(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, dynamicLeaseError(err)
 		}
-		_, _ = engine.RunRevocations(ctx)
 		return http.StatusOK, toDynamicLeaseResponse(lease, nil), nil
 	})
 }

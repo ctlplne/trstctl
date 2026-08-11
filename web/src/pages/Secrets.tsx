@@ -53,6 +53,7 @@ import {
 import {
   DynamicLeaseMetadata,
   MachineSession,
+  parseSecretRotationPartialReceipt,
   RepositoryScanPosture,
   RevealPanel,
   RotationHealthBadges,
@@ -67,7 +68,10 @@ import {
   parseScopeList,
   secretApprovalActionLabel,
   secretApprovalQueueID,
+  secretRotationDeferredReasonKeys,
   type SecretApprovalQueueItem,
+  type SecretRotationDeferredEvidence,
+  type SecretRotationDueEvidence,
 } from "./secrets/SecretsPageParts";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
@@ -99,6 +103,12 @@ const secretsRouteTitleKeys = {
   scanning: "secrets.tabs.scanning",
   sync: "secrets.route.sync",
 } as const;
+
+// The served schema exposes queued connector delivery. Keep this guard while
+// generated clients are refreshed from OpenAPI so source tests remain type-safe.
+function secretRotationQueued(rotation: SecretRotation): boolean {
+  return "queued" in rotation && rotation.queued === true;
+}
 
 export function Secrets() {
   const { t } = useTranslation();
@@ -250,7 +260,6 @@ export function Secrets() {
   const [rotationRunProvider, setRotationRunProvider] = useState("");
   const [rotationRunTarget, setRotationRunTarget] = useState("");
   const [rotationRunRemoteKey, setRotationRunRemoteKey] = useState("");
-  const [rotationRunTTL, setRotationRunTTL] = useState("");
   const [rotationRunBusy, setRotationRunBusy] = useState(false);
   const [rotationRunError, setRotationRunError] = useState<string | null>(null);
   const [rotationRun, setRotationRun] = useState<SecretRotation | null>(null);
@@ -269,6 +278,8 @@ export function Secrets() {
   const [runDueBusy, setRunDueBusy] = useState(false);
   const [runDueError, setRunDueError] = useState<string | null>(null);
   const [dueRuns, setDueRuns] = useState<SecretRotationScheduleRun[] | null>(null);
+  const [dueDeferred, setDueDeferred] = useState<SecretRotationDeferredEvidence[]>([]);
+  const [dueLimits, setDueLimits] = useState<{ run: boolean; scan: boolean } | null>(null);
 
   const [credentialRequestID, setCredentialRequestID] = useState("");
   const [credentialMethod, setCredentialMethod] = useState("");
@@ -473,7 +484,17 @@ export function Secrets() {
     const busyKey = `${item.id}:approve`;
     setApprovalBusy(busyKey);
     try {
-      const approval = await api.approveSecretChange(item.name, item.action);
+      const requests = await api.approvalRequests();
+      const exactRequest = requests.find(
+        (request) =>
+          request.resource_kind === "secret" && request.resource_id === `secret:${item.name}` && request.action === item.action && request.status === "pending",
+      );
+      if (!exactRequest) throw new Error(t("source.no.pending.approvals.261de9be5f"));
+      const approval = await api.approveSecretChange(item.name, {
+        action: item.action,
+        request_id: exactRequest.id,
+        intent_digest: exactRequest.intent_digest,
+      });
       updateApprovalQueueItem(item.id, {
         status: "approved",
         approvals: approval.approvals,
@@ -1049,8 +1070,9 @@ export function Secrets() {
       if (!key) throw new Error("Key is required");
       if (!oldRef) throw new Error("Old reference is required");
       if (!provider) throw new Error("Provider is required");
-      const ttl = Number(rotationRunTTL);
-      if (rotationRunTTL.trim() && (!Number.isFinite(ttl) || ttl <= 0)) throw new Error("TTL seconds must be a positive number");
+      if (!provider.startsWith("connector:") || provider.slice("connector:".length).trim() === "") {
+        throw new Error(t("secrets.rotation.connectorOnly"));
+      }
       setRotationRun(
         await api.runSecretRotation({
           key,
@@ -1058,11 +1080,10 @@ export function Secrets() {
           provider,
           ...(rotationRunTarget.trim() ? { target: rotationRunTarget.trim() } : {}),
           ...(rotationRunRemoteKey.trim() ? { remote_key: rotationRunRemoteKey.trim() } : {}),
-          ...(rotationRunTTL.trim() ? { ttl_seconds: Math.round(ttl) } : {}),
         }),
       );
     } catch (err) {
-      setRotationRunError(apiProblemMessage(err, "Could not run rollback-safe rotation"));
+      setRotationRunError(apiProblemMessage(err, "Could not run secret rotation"));
     } finally {
       setRotationRunBusy(false);
     }
@@ -1086,6 +1107,9 @@ export function Secrets() {
       if (!key) throw new Error("Key is required");
       if (!oldRef) throw new Error("Old reference is required");
       if (!provider) throw new Error("Provider is required");
+      if (!provider.startsWith("connector:") || provider.slice("connector:".length).trim() === "") {
+        throw new Error(t("secrets.rotation.scheduleConnectorOnly"));
+      }
       const interval = Number(scheduleInterval);
       if (!Number.isFinite(interval) || interval <= 0) throw new Error("Interval seconds must be a positive number");
       let nextRunAt: string | undefined;
@@ -1120,14 +1144,42 @@ export function Secrets() {
   async function runDueRotationsNow() {
     setRunDueError(null);
     setNotice(null);
+    setDueRuns(null);
+    setDueDeferred([]);
+    setDueLimits(null);
     setRunDueBusy(true);
     try {
-      const result = await api.runDueSecretRotations();
+      const result = (await api.runDueSecretRotations()) as SecretRotationDueEvidence;
       setDueRuns(result.runs ?? []);
-      setNotice(`Ran ${result.ran} due rotations.`);
+      setDueDeferred(result.deferred ?? []);
+      setDueLimits({ run: result.run_limit_reached === true, scan: result.scan_limit_reached === true });
+      setNotice(
+        t("secrets.rotation.dueNotice", {
+          ran: String(result.ran),
+          deferred: String(result.deferred?.length ?? 0),
+          scanned: String(result.scanned ?? result.ran),
+        }),
+      );
       await refreshRotationSchedules();
     } catch (err) {
-      setRunDueError(apiProblemMessage(err, "Could not run due rotations"));
+      const partialReceipt = parseSecretRotationPartialReceipt(err);
+      if (partialReceipt) {
+        // The scheduler's cached 503 body is itself the immutable receipt for
+        // this tick. Keep only its fresh evidence; a same-key replay returns
+        // these exact rows without executing any child command again.
+        setDueRuns(partialReceipt.runs);
+        setDueDeferred(partialReceipt.deferred);
+        setDueLimits({ run: partialReceipt.run_limit_reached, scan: partialReceipt.scan_limit_reached });
+        setRunDueError(partialReceipt.system_error);
+        await refreshRotationSchedules();
+      } else {
+        // Generic and malformed failures carry no fresh scheduler receipt.
+        // Clear the last tick so stale evidence cannot be mistaken for now.
+        setDueRuns(null);
+        setDueDeferred([]);
+        setDueLimits(null);
+        setRunDueError(apiProblemMessage(err, "Could not run due rotations"));
+      }
     } finally {
       setRunDueBusy(false);
     }
@@ -1228,7 +1280,7 @@ export function Secrets() {
             <EnvDiffPanel secrets={items} />
           </div>
 
-          <SecretImport onImported={() => void load()} />
+          <SecretImport />
 
           <section aria-labelledby="store-heading" className="grid gap-4 border-y border-border py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1363,10 +1415,7 @@ export function Secrets() {
               <h2 id="rotate-heading" className="text-title font-semibold">
                 {translateNow("source.manual.rotation.and.delete.1aee4da261")}
               </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Manual native-store rotation replaces one stored value at a time. Rollback-safe provider rotation and scheduled rotations run from the panels
-                below; downstream sync lives in the sync section.
-              </p>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.rotation.scopeDescription")}</p>
             </div>
             <div className="ui-panel grid gap-3 p-comfortable">
               <div>
@@ -1402,18 +1451,12 @@ export function Secrets() {
                   {translateNow("source.provider.472590ae97")}
                   <input
                     className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    list="secret-rotation-provider-options"
                     value={rotationRunProvider}
                     onChange={(event) => setRotationRunProvider(event.target.value)}
-                    placeholder={t("parity.postgresql_519968")}
+                    placeholder={t("secrets.rotation.scheduleProviderPlaceholder")}
                     required
                   />
                 </label>
-                <datalist id="secret-rotation-provider-options">
-                  {(cloudManagers?.providers ?? []).map((provider) => (
-                    <option key={provider.id} value={provider.id} label={provider.name} />
-                  ))}
-                </datalist>
                 <label className="grid gap-1 text-body font-medium">
                   {t("parity.syncTargetOptional_189fc7")}
                   <input
@@ -1432,16 +1475,6 @@ export function Secrets() {
                     placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
                   />
                 </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {t("parity.ttlSecondsOptional_68f1c5")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    type="number"
-                    min="60"
-                    value={rotationRunTTL}
-                    onChange={(event) => setRotationRunTTL(event.target.value)}
-                  />
-                </label>
                 <div className="md:col-span-2 xl:col-span-3">
                   <Button type="submit" disabled={rotationRunBusy || Boolean(loadError)}>
                     {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
@@ -1455,13 +1488,19 @@ export function Secrets() {
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       vocabulary="lifecycle"
-                      value={rotationRun.completed ? "completed" : "failed"}
-                      label={rotationRun.completed ? "Rotation completed" : "Rotation failed"}
-                      tone={rotationRun.completed ? "success" : "critical"}
+                      value={secretRotationQueued(rotationRun) ? "pending" : rotationRun.completed ? "completed" : "failed"}
+                      label={
+                        secretRotationQueued(rotationRun)
+                          ? t("secrets.rotation.queued")
+                          : rotationRun.completed
+                            ? t("secrets.rotation.completed")
+                            : t("secrets.rotation.failed")
+                      }
+                      tone={secretRotationQueued(rotationRun) ? "warning" : rotationRun.completed ? "success" : "critical"}
                     />
                     <span className="break-all font-mono text-xs">{rotationRun.key}</span>
                   </div>
-                  {rotationRun.completed ? (
+                  {rotationRun.completed || secretRotationQueued(rotationRun) ? (
                     <p className="break-all font-mono text-xs">
                       {rotationRun.old_ref} → {rotationRun.new_ref}
                     </p>
@@ -1512,6 +1551,16 @@ export function Secrets() {
                 </div>
               </div>
               {runDueError && <ErrorState title={t("parity.runDueRotationsFailed_b9c511")}>{runDueError}</ErrorState>}
+              {dueLimits && (dueLimits.run || dueLimits.scan) && (
+                <div
+                  role="status"
+                  aria-label={t("secrets.rotation.limitNoticeLabel")}
+                  className="grid gap-1 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning"
+                >
+                  {dueLimits.run && <p>{t("secrets.rotation.runLimitNotice")}</p>}
+                  {dueLimits.scan && <p>{t("secrets.rotation.scanLimitNotice")}</p>}
+                </div>
+              )}
               {rotationSchedules && (
                 <DataGrid
                   ariaLabel="Scheduled secret rotations"
@@ -1520,8 +1569,29 @@ export function Secrets() {
                   getRowId={(item) => item.id}
                   state={rotationSchedules.length === 0 ? "empty" : "ready"}
                   stateTitle="No rotation schedules"
-                  stateMessage="Create a schedule to run rollback-safe rotation on an interval."
+                  stateMessage={t("secrets.rotation.scheduleStateMessage")}
                 />
+              )}
+              {dueDeferred.length > 0 && (
+                <div
+                  role="status"
+                  className="grid gap-2 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning"
+                >
+                  <p>{t("secrets.rotation.deferredSummary", { count: String(dueDeferred.length) })}</p>
+                  <ul aria-label={t("secrets.rotation.deferredListLabel")} className="grid gap-1">
+                    {dueDeferred.map((deferred) => (
+                      <li
+                        key={`${deferred.schedule_id}:${deferred.due_at}`}
+                        className="grid gap-1 rounded-control border border-status-warning/20 px-2 py-1 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center md:gap-3"
+                      >
+                        <span className="break-all font-mono text-xs">{deferred.schedule_id}</span>
+                        <span>{t(secretRotationDeferredReasonKeys[deferred.reason])}</span>
+                        <span>{t("secrets.rotation.deferredDueAt", { time: formatDate(deferred.due_at) })}</span>
+                        {deferred.error && <span className="md:col-span-3 text-xs">{deferred.error}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {dueRuns && dueRuns.length > 0 && (
                 <ul aria-label={t("parity.latestDueRotationRuns_ac4710")} className="grid gap-2">
@@ -3098,7 +3168,7 @@ export function Secrets() {
               {t("parity.newRotationSchedule_0d2b93")}
             </h2>
             <p id="rotation-schedule-description" className="mt-1 text-sm text-muted-foreground">
-              Schedule a rollback-safe rotation to repeat on an interval. Only key and reference metadata are stored; no secret values pass through this form.
+              {t("secrets.rotation.scheduleDescription")}
             </p>
           </header>
           <form aria-label={t("parity.createRotationSchedule_6a80bd")} className="grid gap-4 p-5" onSubmit={(event) => void submitRotationSchedule(event)}>
@@ -3139,7 +3209,7 @@ export function Secrets() {
                 list="secret-rotation-provider-options"
                 value={scheduleProvider}
                 onChange={(event) => setScheduleProvider(event.target.value)}
-                placeholder={t("parity.postgresql_519968")}
+                placeholder={t("secrets.rotation.scheduleProviderPlaceholder")}
                 required
               />
             </label>

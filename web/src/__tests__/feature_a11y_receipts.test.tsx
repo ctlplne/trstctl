@@ -118,6 +118,8 @@ const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
         return [{ id: "cert-1", subject: "api.example.test", status: "active", fingerprint: "SHA256:abc" }];
       case "identities":
         return [{ id: "id-1", name: "payments-api", kind: "workload_identity", status: "issued", tenant_id: "tenant-1" }];
+      case "approvalRequests":
+        return [];
       case "risk":
         return [{ id: "risk-1", credential_id: "risk-1", subject: "payments-api", kind: "workload_identity", score: 91, level: "high", owner: "platform" }];
       case "contextualRiskPriorities":

@@ -25,12 +25,20 @@ type Rotator interface {
 	Rollback(ctx context.Context, key, oldRef string) error           // revert consumers to the old version
 }
 
+// queuedCutover is implemented by rotators whose Cutover durably queues the
+// external effect instead of performing it inline. The worker owns verification
+// and retirement for those commands, so the request must stop after enqueue.
+type queuedCutover interface {
+	CutoverQueued() bool
+}
+
 // Report summarizes a rotation.
 type Report struct {
 	Key               string
 	OldRef            string
 	NewRef            string
 	Completed         bool
+	Queued            bool
 	RolledBack        bool
 	RollbackAttempted bool
 	RollbackFailed    bool
@@ -69,6 +77,11 @@ func (e *Engine) Rotate(ctx context.Context, key, oldRef string) (Report, error)
 
 	if err := e.rotator.Cutover(ctx, key, newRef); err != nil {
 		return e.rollback(ctx, rep, key, oldRef, "cutover", err)
+	}
+	if queued, ok := e.rotator.(queuedCutover); ok && queued.CutoverQueued() {
+		rep.Queued = true
+		e.emit(ctx, "rotation.queued", key, "cutover")
+		return rep, nil
 	}
 	if err := e.rotator.Verify(ctx, key); err != nil {
 		return e.rollback(ctx, rep, key, oldRef, "verify", err)

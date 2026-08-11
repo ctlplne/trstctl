@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,12 +22,13 @@ var errBackupRestoreTestCrash = errors.New("events: simulated backup restore cra
 func TestExactBackupRestoreResumesAfterFirstLiveAcknowledgement(t *testing.T) {
 	ctx := context.Background()
 	log := openBackupHistoryTestLog(t)
+	artifactDigest := strings.Repeat("a", 64)
 	history := []BackupHistoryRecord{
 		backupHistoryEvent(t, 1, "resume-one", "owner.created"),
 		{Sequence: 2, GapThrough: 2},
 		backupHistoryEvent(t, 3, "resume-three", "owner.updated"),
 	}
-	_, err := log.RestoreBackupHistory(ctx, 3, "artifact-resume", func(yield func(BackupHistoryRecord) error) error {
+	_, err := log.RestoreBackupHistory(ctx, 3, artifactDigest, func(yield func(BackupHistoryRecord) error) error {
 		if err := yield(history[0]); err != nil {
 			return err
 		}
@@ -43,7 +45,7 @@ func TestExactBackupRestoreResumesAfterFirstLiveAcknowledgement(t *testing.T) {
 		t.Fatalf("partial restore head = %d, want acknowledged prefix 1", head)
 	}
 
-	n, err := log.RestoreBackupHistory(ctx, 3, "artifact-resume", backupHistorySource(history))
+	n, err := log.RestoreBackupHistory(ctx, 3, artifactDigest, backupHistorySource(history))
 	if err != nil {
 		t.Fatalf("resume exact restore: %v", err)
 	}
@@ -56,8 +58,10 @@ func TestExactBackupRestoreResumesAfterFirstLiveAcknowledgement(t *testing.T) {
 func TestExactBackupRestoreRejectsDifferentBackupAgainstPartialPrefix(t *testing.T) {
 	ctx := context.Background()
 	log := openBackupHistoryTestLog(t)
+	originalDigest := strings.Repeat("b", 64)
+	differentDigest := strings.Repeat("c", 64)
 	original := backupHistoryEvent(t, 1, "partial-original", "owner.created")
-	_, err := log.RestoreBackupHistory(ctx, 2, "artifact-original", func(yield func(BackupHistoryRecord) error) error {
+	_, err := log.RestoreBackupHistory(ctx, 2, originalDigest, func(yield func(BackupHistoryRecord) error) error {
 		if err := yield(original); err != nil {
 			return err
 		}
@@ -67,7 +71,7 @@ func TestExactBackupRestoreRejectsDifferentBackupAgainstPartialPrefix(t *testing
 		t.Fatalf("first restore error = %v, want simulated crash", err)
 	}
 
-	_, err = log.RestoreBackupHistory(ctx, 2, "artifact-different", backupHistorySource([]BackupHistoryRecord{
+	_, err = log.RestoreBackupHistory(ctx, 2, differentDigest, backupHistorySource([]BackupHistoryRecord{
 		original,
 		{Sequence: 2, GapThrough: 2},
 	}))
@@ -86,6 +90,7 @@ func TestExactBackupRestoreRejectsDifferentBackupAgainstPartialPrefix(t *testing
 func TestExactBackupRestoreReopenRecoversPublishedGapMarker(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	artifactDigest := strings.Repeat("d", 64)
 	log, err := Open(ctx, cfg)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -99,14 +104,18 @@ func TestExactBackupRestoreReopenRecoversPublishedGapMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	stream, _, err = log.bindBackupRestoreIdentity(
-		ctx, name, stream, info, 2, "artifact-gap-reopen",
+		ctx, name, stream, info, 2, artifactDigest,
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreSubject, err := backupRestorePublishSubject(artifactDigest, backupGapSubject)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ack, err := log.js.Publish(
 		ctx,
-		backupGapSubject,
+		restoreSubject,
 		nil,
 		jetstream.WithMsgID(backupGapMessageID(1)),
 		jetstream.WithExpectLastSequence(0),
@@ -131,7 +140,7 @@ func TestExactBackupRestoreReopenRecoversPublishedGapMarker(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
 	event := backupHistoryEvent(t, 2, "after-leading-gap", "owner.created")
-	n, err := reopened.RestoreBackupHistory(ctx, 2, "artifact-gap-reopen", backupHistorySource([]BackupHistoryRecord{
+	n, err := reopened.RestoreBackupHistory(ctx, 2, artifactDigest, backupHistorySource([]BackupHistoryRecord{
 		{Sequence: 1, GapThrough: 1},
 		event,
 	}))
@@ -160,8 +169,9 @@ func TestExactBackupRestoreReopenRecoversPublishedGapMarker(t *testing.T) {
 func TestExactBackupRestoreAllGapBoundsKeepNextSequence(t *testing.T) {
 	ctx := context.Background()
 	log := openBackupHistoryTestLog(t)
+	artifactDigest := strings.Repeat("e", 64)
 	history := []BackupHistoryRecord{{Sequence: 1, GapThrough: 3}}
-	n, err := log.RestoreBackupHistory(ctx, 3, "artifact-all-gap", backupHistorySource(history))
+	n, err := log.RestoreBackupHistory(ctx, 3, artifactDigest, backupHistorySource(history))
 	if err != nil {
 		t.Fatalf("RestoreBackupHistory all-gap: %v", err)
 	}
@@ -169,7 +179,7 @@ func TestExactBackupRestoreAllGapBoundsKeepNextSequence(t *testing.T) {
 		t.Fatalf("all-gap restore records = %d, want 0", n)
 	}
 	assertBackupHistory(t, log, 3, history)
-	n, err = log.RestoreBackupHistory(ctx, 3, "artifact-all-gap", backupHistorySource(history))
+	n, err = log.RestoreBackupHistory(ctx, 3, artifactDigest, backupHistorySource(history))
 	if err != nil {
 		t.Fatalf("markerless completed all-gap retry: %v", err)
 	}

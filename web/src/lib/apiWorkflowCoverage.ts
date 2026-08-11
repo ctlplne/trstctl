@@ -272,8 +272,8 @@ export const apiWorkflowCoverage = [
     route: "/secrets",
     owner: "SURFACE/secrets",
     kind: "console-flow",
-    workflow: "Rollback-safe secret rotation",
-    rationale: "The Secrets rotation section runs rollback-safe rotations inline and renders phase, rollback outcome, and the old-to-new reference handoff.",
+    workflow: "Worker-queued connector secret rotation",
+    rationale: "The Secrets rotation section accepts only connector:<target>, queues the durable delivery command, and renders queued plus old-to-new reference evidence; static and dynamic providers fail closed before effects.",
   },
   {
     path: "/api/v1/secrets/scans/repositories",

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,9 +19,15 @@ import (
 	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/connector"
+	cryptoboundary "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
+	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/ownership"
+	"trstctl.com/trstctl/internal/privacyref"
+	"trstctl.com/trstctl/internal/rotationcommand"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -81,20 +88,26 @@ const (
 	// A5: a staged agent-upgrade campaign and every state change on it. The
 	// halt is the product, so it is an event: an automatic halt that lived only
 	// in a mutable column could not be audited after the fact.
-	EventAgentUpgradeCampaignOpened               = "agent.upgrade.campaign.opened"
-	EventAgentUpgradeCampaignAdvanced             = "agent.upgrade.campaign.advanced"
-	EventAgentUpgradeRingAssigned                 = "agent.upgrade.ring.assigned"
-	EventAgentUpgradeRingDispatched               = "agent.upgrade.ring.dispatched"
-	EventOwnerDeleted                             = "owner.deleted"
-	EventIssuerCreated                            = "issuer.created"
-	EventIdentityCreated                          = "identity.created"
-	EventIdentityIssued                           = "identity.issued"
-	EventIdentityDeployed                         = "identity.deployed"
-	EventIdentityRevoked                          = "identity.revoked"
-	EventIdentityRenewing                         = "identity.renewing"
-	EventIdentityRenewed                          = "identity.renewed"
-	EventIdentityRetired                          = "identity.retired"
-	EventCertificateRecorded                      = "certificate.recorded"
+	EventAgentUpgradeCampaignOpened   = "agent.upgrade.campaign.opened"
+	EventAgentUpgradeCampaignAdvanced = "agent.upgrade.campaign.advanced"
+	EventAgentUpgradeRingAssigned     = "agent.upgrade.ring.assigned"
+	EventAgentUpgradeRingDispatched   = "agent.upgrade.ring.dispatched"
+	EventOwnerDeleted                 = "owner.deleted"
+	EventIssuerCreated                = "issuer.created"
+	EventIdentityCreated              = "identity.created"
+	EventIdentityIssued               = "identity.issued"
+	EventIdentityDeployed             = "identity.deployed"
+	EventIdentityRevoked              = "identity.revoked"
+	EventIdentityRenewing             = "identity.renewing"
+	EventIdentityRenewed              = "identity.renewed"
+	EventIdentityRetired              = "identity.retired"
+	EventCertificateRecorded          = "certificate.recorded"
+	// CertificateApprovalEventSchemaVersion adds both the exact one-shot
+	// approval and the privacy-stable command binding recomputed from the issued
+	// certificate. Version 1 remains replayable for ordinary inventory and
+	// historical issuance events. The incomplete draft v2 shape is deliberately
+	// not accepted because it could attach authority A to certificate B.
+	CertificateApprovalEventSchemaVersion         = 3
 	EventCertificateRevoked                       = "certificate.revoked"
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCAIssuedCertificate                      = "ca.certificate.issued"
@@ -225,15 +238,33 @@ const LifecycleEventSchemaVersion = 2
 // metadata-only fallback.
 const LifecycleSideEffectEventSchemaVersion = 3
 
+// LifecycleApprovalEventSchemaVersion carries the exact one-shot approval use.
+// Rebuild consumes the same request while applying the lifecycle event, so the
+// live path and a zero-state replay produce identical authority state.
+const LifecycleApprovalEventSchemaVersion = 4
+
+// LifecycleIssuanceEventSchemaVersion carries the exact profile revision and
+// clamped TTL for an issuance that does not require an approval. Like v4, its
+// outbox body is derived from the canonical outer event instead of being copied
+// into side_effect.payload.
+const LifecycleIssuanceEventSchemaVersion = 5
+
 // CAAuthorityCreatedEventSchemaVersion is the first CA create/import event shape
 // that carries the full ca_authorities row. Version 1 events were audit-only
 // breadcrumbs and cannot rebuild the authority read model.
 const CAAuthorityCreatedEventSchemaVersion = 2
 
-// PrivacySubjectErasedEventSchemaVersion is the first privacy.subject.erased
-// shape that binds the durable operation and canonical authenticated command.
-// Version 1 events remain replayable but cannot act as an AN-5 receiver.
-const PrivacySubjectErasedEventSchemaVersion = 2
+// PrivacySubjectErasedOperationEventSchemaVersion is the first
+// privacy.subject.erased shape that binds the durable operation and canonical
+// authenticated command. Version 1 events remain replayable but cannot act as
+// an AN-5 receiver.
+const PrivacySubjectErasedOperationEventSchemaVersion = 2
+
+// PrivacySubjectErasedEventSchemaVersion is the current privacy.subject.erased
+// shape. Version 3 adds the closed, non-PII disposition of every append-recovery
+// fence changed by the SQL preparation, so cold history proves why no raw
+// command can be resurrected after erasure.
+const PrivacySubjectErasedEventSchemaVersion = 3
 
 // Payloads. Each carries everything needed to reconstruct the read-model row
 // (the surrogate id included), so a replay is deterministic. created_at is NOT a
@@ -614,6 +645,11 @@ type CertificateRecorded struct {
 	IssuanceResponse       []byte     `json:"issuance_response,omitempty"`
 	IssuanceIdempotencyKey string     `json:"issuance_idempotency_key,omitempty"`
 	IssuanceRequestBinding string     `json:"issuance_request_binding,omitempty"`
+	// Approval and ApprovalBinding are present only on schema v3. The projector
+	// recomputes the binding from the public certificate before consuming the
+	// exact request/digest in the same PostgreSQL transaction as the row.
+	Approval        *store.OperationApprovalUse   `json:"approval,omitempty"`
+	ApprovalBinding *ephemerallib.ApprovalBinding `json:"approval_binding,omitempty"`
 	// KeyOrigin records whose process generated this certificate's private key
 	// (epic B5's vocabulary, internal/custody).
 	//
@@ -641,6 +677,231 @@ type CertificateRecorded struct {
 	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
 }
 
+// CertificateApprovalEventID is the only target-event identity allowed to
+// spend one approved certificate command. It is derived from the request and
+// intent digest, so a second retained event cannot choose another identity to
+// reuse the same capability.
+func CertificateApprovalEventID(tenantID string, approval store.OperationApprovalUse) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("approved-certificate-event\x00"+tenantID+"\x00"+
+		approval.RequestID+"\x00"+approval.IntentDigest)).String()
+}
+
+// CertificateApprovalRowID gives the approved command one stable inventory row
+// across request retries, tail replay, and a cold rebuild.
+func CertificateApprovalRowID(tenantID string, approval store.OperationApprovalUse) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("approved-certificate-row\x00"+tenantID+"\x00"+
+		approval.RequestID+"\x00"+approval.IntentDigest)).String()
+}
+
+// ValidateApprovedCertificatePayload performs the command-side-safe half of the
+// v3 projection checks. Producers call it before appending, and the projector
+// repeats it for retained events and cold rebuilds.
+func ValidateApprovedCertificatePayload(event events.Event, payload CertificateRecorded) error {
+	use := payload.Approval
+	binding := payload.ApprovalBinding
+	if use == nil || binding == nil {
+		return fmt.Errorf("%w: approved certificate has no exact authority", store.ErrApprovalNotReady)
+	}
+	if use.ResourceKind != "ephemeral" || use.Action != "issue" ||
+		use.FromState != "attested" || use.TargetVersion != 0 ||
+		!strings.HasPrefix(use.ResourceID, "ephemeral:") ||
+		strings.TrimPrefix(use.ResourceID, "ephemeral:") == "" {
+		return fmt.Errorf("%w: approved certificate resource is not an ephemeral issuance", store.ErrApprovalDrifted)
+	}
+	toState, err := binding.ToState()
+	if err != nil {
+		return fmt.Errorf("%w: %v", store.ErrApprovalDrifted, err)
+	}
+	if use.ToState != toState || event.ID != CertificateApprovalEventID(event.TenantID, *use) ||
+		payload.ID != CertificateApprovalRowID(event.TenantID, *use) ||
+		payload.IssuanceIdempotencyKey != "ephemeral-issue:"+use.RequestID ||
+		payload.CAID != binding.CAID {
+		return fmt.Errorf("%w: approved certificate command identity changed", store.ErrApprovalDrifted)
+	}
+	info, err := binding.ValidateCertificate(payload.CertificateDER, payload.Source, event.Time)
+	if err != nil {
+		if errors.Is(err, ephemerallib.ErrApprovalCertificateLifetime) {
+			return fmt.Errorf("%w: %w", store.ErrApprovalDrifted, err)
+		}
+		return fmt.Errorf("%w: %v", store.ErrApprovalDrifted, err)
+	}
+	if payload.Fingerprint != info.SHA256Fingerprint || payload.Serial != info.SerialNumber ||
+		payload.KeyAlgorithm != info.KeyAlgorithm || payload.NotBefore == nil || payload.NotAfter == nil ||
+		!payload.NotBefore.Equal(info.NotBefore) || !payload.NotAfter.Equal(info.NotAfter) {
+		return fmt.Errorf("%w: approved certificate projection metadata differs from DER", store.ErrApprovalDrifted)
+	}
+	if !approvedCertificateTextMetadataMatches(event.TenantID, payload, info) {
+		return fmt.Errorf("%w: approved certificate subject, issuer, or SAN metadata differs from DER", store.ErrApprovalDrifted)
+	}
+	if payload.OwnerID != nil || payload.DeploymentLocation != "" || payload.ReplacesID != nil ||
+		len(payload.CertificatePEM) != 0 || len(payload.IssuanceResponse) != 0 ||
+		payload.IssuanceRequestBinding != "" || payload.KeyOrigin != string(custody.OriginRequester) ||
+		payload.KeyStorage != "" || payload.KeyExportable != "" || payload.KeyGeneratedBy != "" {
+		return fmt.Errorf("%w: approved ephemeral certificate carries unsupported projection metadata", store.ErrApprovalDrifted)
+	}
+	return nil
+}
+
+// ApprovedCertificateSemanticDigest is the immutable target-event identity kept
+// beside the first-command fence. It includes the DER and every non-erasable
+// envelope/payload field. Requester and certificate text columns are normalized:
+// privacy erasure may pseudonymize those spellings, while the DER, approval
+// command digest, public key, CA, lifetime, and event time remain unchanged.
+func ApprovedCertificateSemanticDigest(event events.Event, payload CertificateRecorded) (string, error) {
+	if payload.Approval == nil || payload.ApprovalBinding == nil {
+		return "", errors.New("projections: approved certificate semantic digest lacks authority")
+	}
+	info, err := payload.ApprovalBinding.ValidateCertificate(payload.CertificateDER, payload.Source, event.Time)
+	if err != nil {
+		return "", err
+	}
+	normalized := payload
+	if payload.Approval != nil {
+		use := *payload.Approval
+		use.Requester = ""
+		use.Reason = ""
+		use.EvidenceRefs = nil
+		normalized.Approval = &use
+	}
+	normalized.Subject = info.Subject
+	normalized.Issuer = info.Issuer
+	normalized.SANs = certificateInfoSANs(info)
+	var actor *events.Actor
+	if event.Actor != nil {
+		copyActor := *event.Actor
+		copyActor.Subject = ""
+		copyActor.Roles = append([]string(nil), event.Actor.Roles...)
+		actor = &copyActor
+	}
+	basis := struct {
+		ID            string              `json:"id"`
+		Type          string              `json:"type"`
+		TenantID      string              `json:"tenant_id"`
+		Time          time.Time           `json:"time"`
+		SchemaVersion int                 `json:"schema_version"`
+		Actor         *events.Actor       `json:"actor,omitempty"`
+		Payload       CertificateRecorded `json:"payload"`
+	}{event.ID, event.Type, event.TenantID, event.Time.UTC(), schemaVersionOf(event), actor, normalized}
+	raw, err := json.Marshal(basis)
+	if err != nil {
+		return "", err
+	}
+	return cryptoboundary.SHA256Hex(append([]byte("trstctl:approved-certificate-event:v1\x00"), raw...)), nil
+}
+
+func certificateInfoSANs(info certinfo.Info) []string {
+	sans := make([]string, 0, len(info.DNSNames)+len(info.IPAddresses)+len(info.EmailAddresses)+len(info.URIs))
+	sans = append(sans, info.DNSNames...)
+	sans = append(sans, info.IPAddresses...)
+	sans = append(sans, info.EmailAddresses...)
+	sans = append(sans, info.URIs...)
+	return sans
+}
+
+func (p *Projector) validateApprovedCertificateTx(ctx context.Context, tx pgx.Tx, event events.Event, payload CertificateRecorded) error {
+	if err := ValidateApprovedCertificatePayload(event, payload); err != nil {
+		return err
+	}
+	request, err := p.store.GetOperationApprovalForUpdateTx(ctx, tx, event.TenantID, payload.Approval.RequestID)
+	if err != nil {
+		return err
+	}
+	expectedEvidence, err := payload.ApprovalBinding.EvidenceRefs()
+	if err != nil {
+		return fmt.Errorf("%w: %v", store.ErrApprovalDrifted, err)
+	}
+	// A rewritten history may intentionally clear old evidence before a
+	// zero-state rebuild sees this target. In that case ToState still carries the
+	// same command digest checked against Binding + DER above. When evidence is
+	// retained, require exact parity as an additional corruption check.
+	if len(request.EvidenceRefs) != 0 && !sameCertificateApprovalStrings(request.EvidenceRefs, expectedEvidence) {
+		return fmt.Errorf("%w: approved certificate evidence changed", store.ErrApprovalDrifted)
+	}
+	return nil
+}
+
+func (p *Projector) resolveApprovedCertificateFenceUseTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	event events.Event,
+	payload *CertificateRecorded,
+) error {
+	fence, currentUse, privacyRewritten, err := p.store.LockApprovedTargetFenceTx(ctx, tx,
+		event.TenantID, store.ApprovedTargetEphemeralCertificate,
+		payload.ApprovalBinding.ClientRequestIDSHA256)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	semantic, err := ApprovedCertificateSemanticDigest(event, *payload)
+	if err != nil || semantic != fence.SemanticDigest {
+		if err == nil {
+			err = store.ErrIdempotencyConflict
+		}
+		return fmt.Errorf("%w: retained approved certificate differs from durable fence", err)
+	}
+	if !privacyRewritten {
+		if !reflect.DeepEqual(event.Actor, fence.Actor) {
+			return fmt.Errorf("%w: retained approved certificate actor differs from durable fence", store.ErrIdempotencyConflict)
+		}
+		return nil
+	}
+	if err := store.ValidateApprovedTargetActorPrivacyRewrite(event.TenantID,
+		fence.Actor, currentUse.Requester, event.Actor); err != nil {
+		return fmt.Errorf("%w: approved certificate actor privacy recovery differs", err)
+	}
+	var original CertificateRecorded
+	if err := json.Unmarshal(fence.Payload, &original); err != nil {
+		return fmt.Errorf("projections: decode approved certificate fence: %w", err)
+	}
+	if original.Approval == nil || payload.Approval == nil {
+		return fmt.Errorf("%w: approved certificate privacy recovery lacks authority", store.ErrApprovalDrifted)
+	}
+	if err := store.ValidateApprovedTargetPrivacyRewrite(event.TenantID,
+		*original.Approval, currentUse, *payload.Approval); err != nil {
+		return fmt.Errorf("%w: approved certificate privacy recovery differs", err)
+	}
+	payload.Approval = &currentUse
+	return nil
+}
+
+func approvedCertificateTextMetadataMatches(tenantID string, payload CertificateRecorded, info certinfo.Info) bool {
+	wantSANs := certificateInfoSANs(info)
+	if payload.Subject == info.Subject && payload.Issuer == info.Issuer &&
+		sameCertificateApprovalStrings(payload.SANs, wantSANs) {
+		return true
+	}
+	if len(info.URIs) != 1 {
+		return false
+	}
+	subject, err := ephemerallib.SubjectFromSPIFFEID(info.URIs[0])
+	if err != nil {
+		return false
+	}
+	placeholder := privacyref.Placeholder(privacyref.SubjectRef(tenantID, subject))
+	redact := func(value string) string { return strings.ReplaceAll(value, subject, placeholder) }
+	redactedSANs := make([]string, len(wantSANs))
+	for i := range wantSANs {
+		redactedSANs[i] = redact(wantSANs[i])
+	}
+	return payload.Subject == redact(info.Subject) && payload.Issuer == redact(info.Issuer) &&
+		sameCertificateApprovalStrings(payload.SANs, redactedSANs)
+}
+
+func sameCertificateApprovalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // CertificateRevoked is the payload of a certificate.revoked event. The
 // inventoried certificate is keyed by fingerprint; the projector sets its status
 // to revoked with the reason and time. Driving the status change through an event
@@ -659,13 +920,61 @@ type CertificateRevoked struct {
 // carries only tenant-bound subject references and stable row selectors, never
 // the raw subject value being erased.
 type PrivacySubjectErased struct {
-	OperationID    string                        `json:"operation_id,omitempty"`
-	RequestBinding string                        `json:"request_binding,omitempty"`
-	SubjectRef     string                        `json:"subject_ref"`
-	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
-	Reason         string                        `json:"reason,omitempty"`
-	Selectors      store.PrivacyErasureSelectors `json:"selectors"`
-	Counts         map[string]int                `json:"counts,omitempty"`
+	OperationID           string                                           `json:"operation_id,omitempty"`
+	RequestBinding        string                                           `json:"request_binding,omitempty"`
+	SubjectRef            string                                           `json:"subject_ref"`
+	RequestedByRef        string                                           `json:"requested_by_ref,omitempty"`
+	Reason                string                                           `json:"reason,omitempty"`
+	Selectors             store.PrivacyErasureSelectors                    `json:"selectors"`
+	Counts                map[string]int                                   `json:"counts,omitempty"`
+	RecoveryFences        []store.PrivacyRecoveryFenceDisposition          `json:"recovery_fences"`
+	SchedulerDispositions []store.SecretRotationSchedulePrivacyDisposition `json:"scheduler_dispositions"`
+}
+
+// ValidatePrivacySubjectErasedPayload applies the versioned privacy payload
+// contract before any projection or idempotent recovery trusts its selectors.
+// v1/v2 remain replayable; every newly emitted v3 payload is restricted to
+// schema-proven row keys, bounded count labels, and closed fence evidence.
+func ValidatePrivacySubjectErasedPayload(e events.Event, payload PrivacySubjectErased) error {
+	version := schemaVersionOf(e)
+	if version >= PrivacySubjectErasedEventSchemaVersion {
+		if !store.IsPrivacyReference(payload.SubjectRef) {
+			return fmt.Errorf("projections: %s v%d requires a one-way subject_ref", e.Type, version)
+		}
+		if payload.RequestedByRef != "" && !store.IsPrivacyReference(payload.RequestedByRef) {
+			return fmt.Errorf("projections: %s v%d requested_by_ref is not a one-way reference", e.Type, version)
+		}
+	} else if payload.SubjectRef == "" {
+		return fmt.Errorf("projections: %s requires subject_ref", e.Type)
+	}
+	if version >= PrivacySubjectErasedOperationEventSchemaVersion &&
+		(payload.OperationID == "" || payload.RequestBinding == "") {
+		return fmt.Errorf("projections: %s v%d requires operation_id and request_binding", e.Type, version)
+	}
+	if version < PrivacySubjectErasedEventSchemaVersion {
+		return nil
+	}
+	if payload.RecoveryFences == nil {
+		return fmt.Errorf("projections: %s v%d requires recovery_fences", e.Type, version)
+	}
+	if payload.SchedulerDispositions == nil {
+		return fmt.Errorf("projections: %s v%d requires scheduler_dispositions", e.Type, version)
+	}
+	if err := store.ValidatePrivacyErasureSelectorsV3(payload.Selectors); err != nil {
+		return fmt.Errorf("projections: %s v%d selectors: %w", e.Type, version, err)
+	}
+	if err := store.ValidatePrivacyErasureCountsV3(payload.Counts); err != nil {
+		return fmt.Errorf("projections: %s v%d counts: %w", e.Type, version, err)
+	}
+	if err := store.ValidatePrivacyRecoveryFenceDispositionsV3(payload.RecoveryFences); err != nil {
+		return fmt.Errorf("projections: %s v%d recovery fences: %w", e.Type, version, err)
+	}
+	if err := store.ValidateSecretRotationSchedulePrivacyEvidenceV3(
+		payload.Counts, payload.SchedulerDispositions,
+	); err != nil {
+		return fmt.Errorf("projections: %s v%d scheduler dispositions: %w", e.Type, version, err)
+	}
+	return nil
 }
 
 // PrivacyRetentionEnforced is the payload of a privacy.retention.enforced event.
@@ -1351,14 +1660,30 @@ type SecretRotationScheduleUpserted struct {
 	NextRunAt       time.Time `json:"next_run_at,omitempty"`
 }
 
+// SecretRotationScheduleRanEventSchemaVersion adds the exact immutable due-edge
+// tuple. Version 1 used event wall time as cadence authority and remains readable
+// only for pre-command-table history.
+const SecretRotationScheduleRanEventSchemaVersion = rotationcommand.EventSchemaVersion
+
 // SecretRotationScheduleRan is the payload of secret.rotation_schedule.ran.
-// It records run metadata and backend references, never credential values.
+// Version 2 records the exact due edge. Version 3 also names the canonical
+// tenant.registered event so a reused tenant UUID has a disjoint command history.
 type SecretRotationScheduleRan struct {
-	ScheduleID string `json:"schedule_id"`
-	RunID      string `json:"run_id"`
-	Status     string `json:"status"`
-	NewRef     string `json:"new_ref,omitempty"`
-	Error      string `json:"error,omitempty"`
+	ScheduleID                      string    `json:"schedule_id"`
+	RunID                           string    `json:"run_id"`
+	TenantRegistrationEventID       string    `json:"tenant_registration_event_id,omitempty"`
+	TenantRegistrationEventSequence uint64    `json:"tenant_registration_event_sequence,omitempty"`
+	DueAt                           time.Time `json:"due_at,omitempty"`
+	Provider                        string    `json:"provider,omitempty"`
+	Key                             string    `json:"key,omitempty"`
+	OldRef                          string    `json:"old_ref,omitempty"`
+	IntervalSeconds                 int       `json:"interval_seconds,omitempty"`
+	ConfigEventSequence             uint64    `json:"config_event_sequence,omitempty"`
+	CommandKey                      string    `json:"command_key,omitempty"`
+	RequestBinding                  string    `json:"request_binding,omitempty"`
+	Status                          string    `json:"status"`
+	NewRef                          string    `json:"new_ref,omitempty"`
+	Error                           string    `json:"error,omitempty"`
 }
 
 // NotificationThresholdDelivered is the payload of
@@ -1787,18 +2112,35 @@ type ResponseIntegrationDispatchedDestination struct {
 // read an indexed, tenant-scoped projection instead of replaying the whole log.
 // (The contract is the JSON, so the projector does not import the orchestrator.)
 type identityTransition struct {
-	IdentityID string `json:"identity_id"`
-	From       string `json:"from"`
-	To         string `json:"to"`
-	Reason     string `json:"reason,omitempty"`
+	IdentityID     string                                  `json:"identity_id"`
+	From           string                                  `json:"from"`
+	To             string                                  `json:"to"`
+	Reason         string                                  `json:"reason,omitempty"`
+	IdempotencyKey string                                  `json:"idempotency_key,omitempty"`
+	SubjectCSRPEM  string                                  `json:"subject_csr_pem,omitempty"`
+	SideEffect     *identityTransitionEffect               `json:"side_effect,omitempty"`
+	Approval       *store.OperationApprovalUse             `json:"approval,omitempty"`
+	Issuance       *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
+}
+
+// identityTransitionEffect mirrors the lifecycle event's durable AN-6 intent
+// without importing the orchestrator package (which already imports projections).
+// Approval schema v4 deliberately carries no nested Payload: its outbox body is
+// derived by removing SideEffect from the one canonical outer event.
+type identityTransitionEffect struct {
+	Destination       string `json:"destination"`
+	IdempotencyKey    string `json:"idempotency_key"`
+	Payload           []byte `json:"payload,omitempty"`
+	RequiredAgentRole string `json:"required_agent_role,omitempty"`
 }
 
 // Projector derives PostgreSQL read models from the event stream (AN-2). The
 // read model is always a projection of the log; nothing writes the served
 // domain read model except through here.
 type Projector struct {
-	store            *store.Store
-	eventProjections []EventProjection
+	store                            *store.Store
+	eventProjections                 []EventProjection
+	allowSecretSyncRecoveryBootstrap bool
 }
 
 // Option customizes the generic projector without coupling MPL core to any
@@ -1833,6 +2175,32 @@ type TransactionalEventProjection interface {
 	ApplyTx(context.Context, pgx.Tx, eventspec.Event) error
 }
 
+// TransactionalTenantLifecycleProjection is the explicit opt-in for an
+// extension that materializes tenant.registered or tenant.offboarded. Those two
+// events change whether the tenant exists, so their extension state must join
+// the SAME short lifecycle-fenced transaction as the core tenants row. ApplyTx
+// must therefore be rollback-safe: it may change state through tx, but it must
+// not advance an in-memory watermark (or expose any other irreversible state)
+// before the caller commits.
+//
+// Boot catch-up is different: extension state is rebuilt from sequence zero
+// while the durable core read model may already be at a later checkpoint.
+// ReplayTenantLifecycleTx is that explicit extension-only replay path. It must
+// derive only the extension's state from event and tx; it must not inspect or
+// mutate core tables as though they represented this historical sequence.
+// Keeping the methods separate prevents a historical registration from being
+// handed to live ApplyTx while the core tenants row still represents a later
+// offboard or re-registration.
+//
+// Extensions that do not implement this marker never receive tenant lifecycle
+// events from the live command path. In particular, they are not called through
+// Apply after the lifecycle fence has been released.
+type TransactionalTenantLifecycleProjection interface {
+	TransactionalEventProjection
+	ProjectsTenantLifecycle()
+	ReplayTenantLifecycleTx(context.Context, pgx.Tx, eventspec.Event) error
+}
+
 // WithEventProjection registers an additional event-stream projection. Nil
 // projections are ignored so callers can assemble optional licensed components
 // without branching in core.
@@ -1841,6 +2209,19 @@ func WithEventProjection(proj EventProjection) Option {
 		if proj != nil {
 			p.eventProjections = append(p.eventProjections, proj)
 		}
+	}
+}
+
+// WithSecretSyncRecoveryBootstrap permits only the offline restore coordinator
+// to rebuild projections while the durable secret-sync receiver fence is red.
+// It also lets that destructive rebuild discard the temporary job/outbox joins
+// created between the event and PostgreSQL phases; the rebuilt result still runs
+// the complete retained-history validation. It never authorizes receiver I/O;
+// the store repeats that check immediately before every external-call start.
+// Ordinary startup must not use this option.
+func WithSecretSyncRecoveryBootstrap() Option {
+	return func(p *Projector) {
+		p.allowSecretSyncRecoveryBootstrap = true
 	}
 }
 
@@ -1964,6 +2345,12 @@ type MachineAuthMethodOverride struct {
 // transaction. It is exported so the command side can project an event live,
 // right after appending it, using the same logic a rebuild uses.
 func (p *Projector) Apply(ctx context.Context, e events.Event) error {
+	if isTenantLifecycleEventType(e.Type) && len(p.eventProjections) != 0 {
+		return fmt.Errorf(
+			"projections: %s requires transactional tenant lifecycle dispatch",
+			e.Type,
+		)
+	}
 	if err := p.applyCore(ctx, e); err != nil {
 		return err
 	}
@@ -2001,10 +2388,16 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 		// the log. OffboardTenant is idempotent on an already-erased tenant (every
 		// per-table count is 0 and the verify pass still passes), so replaying the
 		// event after the rows are gone is a safe no-op.
-		if _, err := p.store.OffboardTenant(ctx, e.TenantID); err != nil {
+		if _, err := p.store.ProjectTenantOffboard(ctx, e.TenantID); err != nil {
 			return fmt.Errorf("projections: apply %s: %w", e.Type, err)
 		}
 		return nil
+	}
+	if e.Type == EventSecretSyncDelivered || e.Type == EventSecretSyncFailed ||
+		e.Type == EventSecretRotationScheduleRan {
+		return p.store.WithTenantProjection(ctx, e.TenantID, func(tx pgx.Tx) error {
+			return p.ApplyTx(ctx, tx, e)
+		})
 	}
 	// Domain entity events apply under the tenant's RLS context.
 	return p.store.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
@@ -2025,6 +2418,100 @@ func (p *Projector) applyEventProjections(ctx context.Context, e events.Event) e
 		}
 	}
 	return nil
+}
+
+// ApplyEventProjections applies only the configured non-core projections. Tenant
+// lifecycle command paths must use ApplyTenantLifecycleTx instead: dispatching a
+// registration or offboard here would let a late extension resurrect or erase a
+// newer lifecycle after the exclusive fence was released.
+func (p *Projector) ApplyEventProjections(ctx context.Context, e events.Event) error {
+	if isTenantLifecycleEventType(e.Type) {
+		return fmt.Errorf("projections: %s extensions require ApplyTenantLifecycleTx", e.Type)
+	}
+	return p.applyEventProjections(ctx, e)
+}
+
+func isTenantLifecycleEventType(eventType string) bool {
+	return eventType == EventTenantRegistered || eventType == EventTenantOffboarded
+}
+
+// ApplyTenantLifecycleTx applies the core tenant existence change and every
+// explicitly lifecycle-aware extension on the caller's one transaction. It is
+// the only live projection entry point for tenant.registered/offboarded.
+func (p *Projector) ApplyTenantLifecycleTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	event events.Event,
+) error {
+	if p == nil || tx == nil || !isTenantLifecycleEventType(event.Type) {
+		return errors.New("projections: transactional tenant lifecycle projection is incomplete")
+	}
+	if err := p.ApplyTx(ctx, tx, event); err != nil {
+		return err
+	}
+	return p.applyTenantLifecycleEventProjectionsTx(ctx, tx, event)
+}
+
+func (p *Projector) applyTenantLifecycleEventProjectionsTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	event events.Event,
+) error {
+	for _, proj := range p.eventProjections {
+		lifecycle, ok := proj.(TransactionalTenantLifecycleProjection)
+		if !ok || lifecycle == nil {
+			continue
+		}
+		if err := lifecycle.ApplyTx(ctx, tx, event); err != nil {
+			return fmt.Errorf(
+				"projections: transactionally apply tenant lifecycle extension %s seq %d: %w",
+				proj.Name(), event.Sequence, err,
+			)
+		}
+	}
+	return nil
+}
+
+func (p *Projector) replayRetainedTenantLifecycleEventProjections(
+	ctx context.Context,
+	event events.Event,
+) error {
+	if p == nil || p.store == nil || !isTenantLifecycleEventType(event.Type) {
+		return errors.New("projections: retained tenant lifecycle extension replay is incomplete")
+	}
+	return p.store.WithTenantRegistrationFence(ctx, event.TenantID, func(tx pgx.Tx) error {
+		for _, proj := range p.eventProjections {
+			lifecycle, ok := proj.(TransactionalTenantLifecycleProjection)
+			if !ok || lifecycle == nil {
+				continue
+			}
+			if err := lifecycle.ReplayTenantLifecycleTx(ctx, tx, event); err != nil {
+				return fmt.Errorf(
+					"projections: replay tenant lifecycle extension %s seq %d: %w",
+					proj.Name(), event.Sequence, err,
+				)
+			}
+		}
+		return nil
+	})
+}
+
+// ApplyRetainedTenantLifecycle is the replay/tail entry point for a lifecycle
+// event already fixed by a history read. It opens one short tenant transaction;
+// core and explicitly opted-in extensions commit or roll back together while the
+// missing-row-capable lifecycle fence is held.
+func (p *Projector) ApplyRetainedTenantLifecycle(ctx context.Context, event events.Event) error {
+	if p == nil || p.store == nil || !isTenantLifecycleEventType(event.Type) {
+		return errors.New("projections: retained tenant lifecycle projection is incomplete")
+	}
+	if event.Type == EventTenantRegistered {
+		return p.store.WithTenantRegistrationFence(ctx, event.TenantID, func(tx pgx.Tx) error {
+			return p.ApplyTenantLifecycleTx(ctx, tx, event)
+		})
+	}
+	return p.store.WithTenant(ctx, event.TenantID, func(tx pgx.Tx) error {
+		return p.ApplyTenantLifecycleTx(ctx, tx, event)
+	})
 }
 
 func (p *Projector) resetEventProjections(ctx context.Context) error {
@@ -2058,6 +2545,9 @@ func (p *Projector) resetEventProjectionsTx(ctx context.Context, tx pgx.Tx) erro
 }
 
 func (p *Projector) applyEventProjectionsTx(ctx context.Context, tx pgx.Tx, event events.Event) error {
+	if isTenantLifecycleEventType(event.Type) {
+		return p.applyTenantLifecycleEventProjectionsTx(ctx, tx, event)
+	}
 	for _, proj := range p.eventProjections {
 		if proj == nil {
 			continue
@@ -2075,14 +2565,24 @@ func (p *Projector) applyEventProjectionsTx(ctx context.Context, tx pgx.Tx, even
 	return nil
 }
 
-func (p *Projector) rebuildEventProjections(ctx context.Context, log *events.Log) error {
+func (p *Projector) rebuildEventProjectionsThrough(
+	ctx context.Context,
+	log *events.Log,
+	replayHead uint64,
+) error {
 	if len(p.eventProjections) == 0 {
 		return nil
 	}
 	if err := p.resetEventProjections(ctx); err != nil {
 		return err
 	}
-	return log.Replay(ctx, 0, func(e events.Event) error {
+	if replayHead == 0 {
+		return nil
+	}
+	return log.ReplayThrough(ctx, 0, replayHead, func(e events.Event) error {
+		if isTenantLifecycleEventType(e.Type) {
+			return p.replayRetainedTenantLifecycleEventProjections(ctx, e)
+		}
 		for _, proj := range p.eventProjections {
 			if proj == nil {
 				continue
@@ -2115,6 +2615,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCMDBScheduleConfigured:                   {1: true},
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
+	EventApprovalRequested:                        {1: true},
+	EventApprovalDecisionRecorded:                 {1: true},
+	EventApprovalStatusChanged:                    {1: true},
 	EventTicketIntakeConfigured:                   {1: true},
 	EventEnrollmentDiagnosticObserved:             {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
@@ -2132,13 +2635,13 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventOwnerDeleted:                             {1: true},
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
-	EventIdentityIssued:                           {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityRenewing:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
-	EventCertificateRecorded:                      {1: true},
+	EventIdentityIssued:                           {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true},
+	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventIdentityRenewing:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true},
 	EventCertificateRevoked:                       {1: true},
 	EventCertificateSuperseded:                    {1: true},
 	EventCAIssuedCertificate:                      {1: true},
@@ -2187,7 +2690,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventWorkloadAttesterTrustSourceDeleted:       {1: true},
 	EventComplianceReportScheduleUpserted:         {1: true},
 	EventSecretRotationScheduleUpserted:           {1: true},
-	EventSecretRotationScheduleRan:                {1: true},
+	EventSecretRotationScheduleRan:                {1: true, rotationcommand.LegacyBoundEventSchemaVersion: true, SecretRotationScheduleRanEventSchemaVersion: true},
 	EventNotificationRead:                         {1: true},
 	EventNotificationChannelUpserted:              {1: true},
 	EventNotificationChannelDeleted:               {1: true},
@@ -2207,7 +2710,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIncidentFleetReissuanceRecorded:          {1: true},
 	EventRemediationPlaybookRunRecorded:           {1: true},
 	EventResponseIntegrationDispatched:            {1: true},
-	EventPrivacySubjectErased:                     {1: true, PrivacySubjectErasedEventSchemaVersion: true},
+	EventPrivacySubjectErased:                     {1: true, PrivacySubjectErasedOperationEventSchemaVersion: true, PrivacySubjectErasedEventSchemaVersion: true},
 	EventHistoryTenantDataRewriteContinuity:       {1: true},
 	EventPrivacyRetentionEnforced:                 {1: true},
 	EventPrivacyArchiveErasureAttested:            {1: true},
@@ -2302,6 +2805,31 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 	// schema version must be one it knows. An unrecognized version fails closed
 	// rather than being decoded against the wrong struct.
 	if err := ValidateSchemaVersion(e); err != nil {
+		return err
+	}
+	switch e.Type {
+	case EventTenantRegistered:
+		var payload tenantRegistered
+		if err := json.Unmarshal(e.Data, &payload); err != nil {
+			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
+		}
+		return p.store.RegisterTenantTx(ctx, tx, store.Tenant{
+			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence,
+		})
+	case EventTenantOffboarded:
+		var payload tenantOffboarded
+		if err := json.Unmarshal(e.Data, &payload); err != nil {
+			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
+		}
+		if _, err := p.store.OffboardTenantTx(ctx, tx, e.TenantID); err != nil {
+			return fmt.Errorf("projections: apply %s: %w", e.Type, err)
+		}
+		return nil
+	}
+	if handled, err := p.applyOperationApprovalTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyApplicationSecretTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applySecretIntegrationTx(ctx, tx, e); handled {
@@ -2601,6 +3129,21 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		approvedSchema := schemaVersionOf(e) == CertificateApprovalEventSchemaVersion
+		if (pl.Approval != nil) != approvedSchema || (pl.ApprovalBinding != nil) != approvedSchema {
+			return fmt.Errorf("projections: %s approval payload/schema mismatch", e.Type)
+		}
+		if approvedSchema {
+			if err := p.resolveApprovedCertificateFenceUseTx(ctx, tx, e, &pl); err != nil {
+				return err
+			}
+			if err := p.validateApprovedCertificateTx(ctx, tx, e, pl); err != nil {
+				return err
+			}
+			if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, *pl.Approval, e.ID, e.Time); err != nil {
+				return err
+			}
+		}
 		if err := p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
 			ID: pl.ID, TenantID: e.TenantID, CAID: pl.CAID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
@@ -2619,10 +3162,21 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}); err != nil {
 			return err
 		}
-		if pl.CAID == "" || pl.Serial == "" {
-			return nil
+		if pl.CAID != "" && pl.Serial != "" {
+			if err := p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, e.Time); err != nil {
+				return err
+			}
 		}
-		return p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, e.Time)
+		if approvedSchema {
+			semanticDigest, err := ApprovedCertificateSemanticDigest(e, pl)
+			if err != nil {
+				return err
+			}
+			return p.store.CompleteApprovedTargetFenceTx(ctx, tx, e.TenantID,
+				store.ApprovedTargetEphemeralCertificate, pl.ApprovalBinding.ClientRequestIDSHA256,
+				e.ID, e.Type, schemaVersionOf(e), e.Time, []byte(semanticDigest))
+		}
+		return nil
 	case EventCertificateRevoked:
 		var pl CertificateRevoked
 		if err := decode(e, &pl); err != nil {
@@ -3234,7 +3788,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.ApplySecretRotationScheduleUpsertedTx(ctx, tx, store.SecretRotationSchedule{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Provider: pl.Provider,
 			Key: pl.Key, OldRef: pl.OldRef, IntervalSeconds: pl.IntervalSeconds,
-			Enabled: pl.Enabled, NextRunAt: nextRunAt, CreatedAt: e.Time, UpdatedAt: e.Time,
+			ConfigEventSequence: e.Sequence, Enabled: pl.Enabled, NextRunAt: nextRunAt,
+			CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
 	case EventSecretRotationScheduleRan:
 		var pl SecretRotationScheduleRan
@@ -3244,9 +3799,37 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if pl.ScheduleID == "" || pl.RunID == "" || pl.Status == "" {
 			return fmt.Errorf("projections: %s requires schedule_id, run_id, and status", e.Type)
 		}
+		switch schemaVersionOf(e) {
+		case rotationcommand.LegacyBoundEventSchemaVersion:
+			if pl.Provider == "" || pl.Key == "" || pl.OldRef == "" || pl.IntervalSeconds <= 0 ||
+				pl.ConfigEventSequence == 0 || pl.RequestBinding == "" ||
+				e.Actor == nil || e.Actor.Subject != "secret-rotation-schedule:"+pl.ScheduleID ||
+				!rotationcommand.LegacyMatches(e.TenantID, pl.ScheduleID, pl.RunID,
+					pl.DueAt, pl.CommandKey, e.ID) {
+				return fmt.Errorf("projections: %s v%d requires one exact deterministic due-edge tuple", e.Type, schemaVersionOf(e))
+			}
+		case SecretRotationScheduleRanEventSchemaVersion:
+			if pl.Provider == "" || pl.Key == "" || pl.OldRef == "" || pl.IntervalSeconds <= 0 ||
+				pl.ConfigEventSequence == 0 || pl.RequestBinding == "" ||
+				pl.TenantRegistrationEventID == "" || pl.TenantRegistrationEventSequence == 0 ||
+				e.Actor == nil || e.Actor.Subject != "secret-rotation-schedule:"+pl.ScheduleID ||
+				!rotationcommand.Matches(e.TenantID, pl.TenantRegistrationEventSequence,
+					pl.ScheduleID, pl.RunID, pl.DueAt, pl.CommandKey, e.ID) {
+				return fmt.Errorf("projections: %s v%d requires one exact deterministic due-edge tuple", e.Type, schemaVersionOf(e))
+			}
+		}
 		return p.store.ApplySecretRotationScheduleRunTx(ctx, tx, store.SecretRotationScheduleRun{
-			TenantID: e.TenantID, ScheduleID: pl.ScheduleID, RunID: pl.RunID,
-			Status: pl.Status, NewRef: pl.NewRef, Error: pl.Error, RanAt: e.Time,
+			TenantID: e.TenantID, IdentityVersion: schemaVersionOf(e),
+			TenantRegistrationEventID:       pl.TenantRegistrationEventID,
+			TenantRegistrationEventSequence: pl.TenantRegistrationEventSequence,
+			ScheduleID:                      pl.ScheduleID, RunID: pl.RunID,
+			SchemaVersion: schemaVersionOf(e), DueAt: pl.DueAt, Provider: pl.Provider,
+			Key: pl.Key, OldRef: pl.OldRef, IntervalSeconds: pl.IntervalSeconds,
+			ConfigEventSequence: pl.ConfigEventSequence, CommandKey: pl.CommandKey,
+			RequestBinding: pl.RequestBinding, Status: pl.Status,
+			NewRef: pl.NewRef, Error: pl.Error, RanAt: e.Time,
+			EventID: e.ID, EventType: e.Type, EventSequence: e.Sequence,
+			EventDigest: cryptoboundary.SHA256Hex(e.Data),
 		})
 	case EventNotificationTestQueued:
 		var pl NotificationTestQueued
@@ -3615,13 +4198,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.SubjectRef == "" {
-			return fmt.Errorf("projections: %s requires subject_ref", e.Type)
-		}
-		if schemaVersionOf(e) >= PrivacySubjectErasedEventSchemaVersion &&
-			(pl.OperationID == "" || pl.RequestBinding == "") {
-			return fmt.Errorf("projections: %s v%d requires operation_id and request_binding",
-				e.Type, schemaVersionOf(e))
+		if err := ValidatePrivacySubjectErasedPayload(e, pl); err != nil {
+			return err
 		}
 		erasure := store.PrivacySubjectErasure{
 			TenantID:       e.TenantID,
@@ -3632,7 +4210,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Counts:         pl.Counts,
 			ErasedAt:       e.Time,
 		}
-		if schemaVersionOf(e) >= PrivacySubjectErasedEventSchemaVersion {
+		if schemaVersionOf(e) >= PrivacySubjectErasedOperationEventSchemaVersion {
 			return p.store.ApplyPrivacySubjectErasureOperationTx(ctx, tx, store.PrivacySubjectErasureOperation{
 				PrivacySubjectErasure: erasure,
 				OperationID:           pl.OperationID,
@@ -4067,6 +4645,39 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			if err := decode(e, &pl); err != nil {
 				return err
 			}
+			if err := validateLifecycleApprovalShape(e, pl); err != nil {
+				return err
+			}
+			if pl.Approval != nil {
+				request, err := p.store.GetOperationApprovalForUpdateTx(ctx, tx, e.TenantID, pl.Approval.RequestID)
+				if err != nil {
+					return err
+				}
+				identity, version, err := p.store.IdentityApprovalTargetTx(ctx, tx, e.TenantID, pl.IdentityID, true)
+				if err != nil {
+					return err
+				}
+				if err := validateLifecycleApprovalAuthority(e, pl, request, identity, version); err != nil {
+					return err
+				}
+				if request.Status != store.ApprovalStatusConsumed && pl.Approval.Issuance != nil &&
+					pl.Approval.Issuance.ProfileID != "" {
+					if err := p.store.ValidateActiveProfileApprovalBindingTx(ctx, tx, e.TenantID, *pl.Approval.Issuance); err != nil {
+						return err
+					}
+				}
+				if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, *pl.Approval, e.ID, e.Time); err != nil {
+					return err
+				}
+			}
+			if pl.Issuance != nil && pl.Issuance.ProfileID != "" {
+				// A v5 non-approval issuance is still pinned to one active profile
+				// revision. Rebuild checks the same revision at this exact log
+				// position, so warm state and zero-state replay cannot disagree.
+				if err := p.store.ValidateActiveProfileApprovalBindingTx(ctx, tx, e.TenantID, *pl.Issuance); err != nil {
+					return err
+				}
+			}
 			if err := p.store.SetIdentityStatusTx(ctx, tx, e.TenantID, pl.IdentityID, pl.To); err != nil {
 				return err
 			}
@@ -4077,6 +4688,208 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return nil
 	}
+}
+
+// validateLifecycleApprovalShape checks the immutable event bytes before any
+// authority is consumed or identity/read-history row is changed. V4 means the
+// payload carries one exact approval use. V5 means an issuance without approval
+// carries one exact profile/TTL binding. Older schemas predate both capabilities
+// and must never gain either through permissive JSON decoding. This check runs
+// even when consumed_event_id already equals e.ID: JetStream duplicate
+// suppression expires, so a later same-ID publish cannot retarget another row.
+func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error {
+	hasApproval := pl.Approval != nil
+	hasIssuance := pl.Issuance != nil
+	schemaVersion := schemaVersionOf(e)
+	switch schemaVersion {
+	case LifecycleApprovalEventSchemaVersion:
+		if !hasApproval || hasIssuance {
+			return fmt.Errorf("projections: %s approval payload/schema mismatch", e.Type)
+		}
+	case LifecycleIssuanceEventSchemaVersion:
+		if hasApproval || !hasIssuance {
+			return fmt.Errorf("projections: %s issuance payload/schema mismatch", e.Type)
+		}
+	default:
+		if hasApproval {
+			return fmt.Errorf("projections: %s approval payload/schema mismatch", e.Type)
+		}
+		if hasIssuance {
+			return fmt.Errorf("projections: %s issuance payload/schema mismatch", e.Type)
+		}
+		return nil
+	}
+	if hasIssuance {
+		if _, err := pl.Issuance.EvidenceRefs(); err != nil {
+			return fmt.Errorf("projections: %s issuance binding is invalid: %w", e.Type, err)
+		}
+		expectedType, _, destination, ok := lifecycleApprovalEdge(pl.From, pl.To)
+		if !ok || expectedType != EventIdentityIssued || e.Type != expectedType ||
+			pl.From != "requested" || pl.To != "issued" {
+			return fmt.Errorf("projections: %s issuance binding is on a non-issuance transition", e.Type)
+		}
+		if pl.SideEffect == nil || pl.SideEffect.Destination != destination ||
+			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) ||
+			len(pl.SideEffect.Payload) != 0 {
+			return fmt.Errorf("projections: %s issuance side-effect is not derived from the outer lifecycle event", e.Type)
+		}
+		return nil
+	}
+	approval := pl.Approval
+	if approval.ResourceKind != "identity" || approval.ResourceID != pl.IdentityID ||
+		approval.FromState != pl.From || approval.ToState != pl.To {
+		return fmt.Errorf("projections: %s approval target mismatch", e.Type)
+	}
+	expectedType, expectedAction, destination, ok := lifecycleApprovalEdge(pl.From, pl.To)
+	if !ok || e.Type != expectedType || approval.Action != expectedAction {
+		return fmt.Errorf("projections: %s approval edge/action mismatch", e.Type)
+	}
+	if e.ID != LifecycleApprovalEventID(e.TenantID, *approval) {
+		return fmt.Errorf("projections: %s approval event identity mismatch", e.Type)
+	}
+	if approval.Issuance != nil && (approval.Action != "issue" || pl.To != "issued") {
+		return fmt.Errorf("projections: %s approval issuance binding is on a non-issuance transition", e.Type)
+	}
+	if pl.SideEffect == nil || pl.SideEffect.Destination != destination ||
+		pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) ||
+		len(pl.SideEffect.Payload) != 0 {
+		return fmt.Errorf("projections: %s approval side-effect is not derived from the outer lifecycle event", e.Type)
+	}
+	return nil
+}
+
+// ValidateLifecycleApprovalEvent validates the self-contained v4 approval and v5
+// non-approval issuance envelopes without touching a projection. The historical
+// name stays source-compatible; boot reconciliation uses it before deriving an
+// outbox command from retained history.
+func ValidateLifecycleApprovalEvent(e events.Event) error {
+	if schemaVersionOf(e) != LifecycleApprovalEventSchemaVersion &&
+		schemaVersionOf(e) != LifecycleIssuanceEventSchemaVersion {
+		return nil
+	}
+	var payload identityTransition
+	if err := decode(e, &payload); err != nil {
+		return err
+	}
+	return validateLifecycleApprovalShape(e, payload)
+}
+
+// LifecycleApprovalEventID is the sole immutable event identity allowed to spend
+// one lifecycle approval. It is public so the command side and projector cannot
+// drift into different replay identities.
+func LifecycleApprovalEventID(tenantID string, approval store.OperationApprovalUse) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("approval-execution\x00"+tenantID+"\x00"+
+		approval.RequestID+"\x00"+approval.IntentDigest)).String()
+}
+
+func lifecycleApprovalEdge(from, to string) (eventType, action, destination string, ok bool) {
+	switch {
+	case from == "requested" && to == "issued":
+		return EventIdentityIssued, "issue", "ca.issue", true
+	case from == "issued" && to == "revoked":
+		return EventIdentityRevoked, "revoke", "revocation.publish", true
+	case from == "deployed" && to == "revoked":
+		return EventIdentityRevoked, "revoke", "revocation.publish", true
+	case from == "renewing" && to == "revoked":
+		return EventIdentityRevoked, "revoke", "revocation.publish", true
+	default:
+		return "", "", "", false
+	}
+}
+
+func lifecycleApprovalOutboxKey(eventID, requestKey string) string {
+	requestKey = strings.TrimSpace(requestKey)
+	if requestKey == "" {
+		return eventID
+	}
+	return "transition:" + requestKey
+}
+
+func validateLifecycleApprovalAuthority(
+	e events.Event,
+	pl identityTransition,
+	request store.OperationApprovalRequest,
+	identity store.Identity,
+	version uint64,
+) error {
+	approval := pl.Approval
+	if approval == nil {
+		return store.ErrApprovalNotReady
+	}
+	if request.ID != approval.RequestID || request.IntentDigest != approval.IntentDigest ||
+		request.Reason != pl.Reason || approval.EvidenceRefs == nil ||
+		approval.Reason != request.Reason || !sameLifecycleEvidence(approval.EvidenceRefs, request.EvidenceRefs) {
+		return store.ErrApprovalDrifted
+	}
+	if err := ValidateLifecycleApprovalAttemptEvidence(request.EvidenceRefs, pl.IdempotencyKey, pl.SubjectCSRPEM); err != nil {
+		return err
+	}
+
+	// A fresh projection must still see the exact reviewed state/version. An
+	// at-least-once replay is allowed only when this same event is the consumed
+	// authority and is the identity's current lifecycle version. A physically new
+	// same-ID event after the broker dedup window therefore cannot retarget state.
+	switch request.Status {
+	case store.ApprovalStatusConsumed:
+		if request.ConsumedEventID != e.ID || identity.Status != pl.To || version != e.Sequence {
+			return store.ErrApprovalDrifted
+		}
+	default:
+		if identity.Status != pl.From || version != approval.TargetVersion {
+			return store.ErrApprovalDrifted
+		}
+	}
+	return nil
+}
+
+func sameLifecycleEvidence(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidateLifecycleApprovalAttemptEvidence proves that the exact HTTP retry key
+// and CSR carried by a lifecycle command are the values reviewers saw as
+// non-secret digests. It is also used by receiver-commit replay validation.
+func ValidateLifecycleApprovalAttemptEvidence(refs []string, idempotencyKey, csrPEM string) error {
+	if strings.TrimSpace(idempotencyKey) == "" {
+		return fmt.Errorf("%w: approved lifecycle command has no idempotency key", store.ErrApprovalDrifted)
+	}
+	expectedKey := "idempotency-key-sha256:" + cryptoboundary.SHA256Hex([]byte(strings.TrimSpace(idempotencyKey)))
+	if !hasOnlyExpectedLifecycleEvidence(refs, "idempotency-key-sha256:", expectedKey) {
+		return fmt.Errorf("%w: approved lifecycle idempotency evidence changed", store.ErrApprovalDrifted)
+	}
+	expectedCSR := ""
+	if csrPEM = strings.TrimSpace(csrPEM); csrPEM != "" {
+		expectedCSR = "csr-sha256:" + cryptoboundary.SHA256Hex([]byte(csrPEM))
+	}
+	if !hasOnlyExpectedLifecycleEvidence(refs, "csr-sha256:", expectedCSR) {
+		return fmt.Errorf("%w: approved lifecycle CSR evidence changed", store.ErrApprovalDrifted)
+	}
+	return nil
+}
+
+func hasOnlyExpectedLifecycleEvidence(refs []string, prefix, expected string) bool {
+	count := 0
+	for _, ref := range refs {
+		if !strings.HasPrefix(ref, prefix) {
+			continue
+		}
+		count++
+		if ref != expected {
+			return false
+		}
+	}
+	if expected == "" {
+		return count == 0
+	}
+	return count == 1
 }
 
 func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapshot) error {
@@ -4303,12 +5116,44 @@ func decode(e events.Event, v any) error {
 // from sequence 0; ProjectCatchUp is the bounded boot path. Project remains for
 // tests and for an explicit "apply everything from scratch" caller.
 func (p *Projector) Project(ctx context.Context, log *events.Log) error {
+	if err := p.validateSecretSyncRetainedHistory(ctx, log, false, false); err != nil {
+		return err
+	}
+	secretAuthority, err := classifySecretSyncLifecycle(ctx, log)
+	if err != nil {
+		return err
+	}
+	dynamicSecretAuthority, err := classifyDynamicSecretLifecycle(ctx, log)
+	if err != nil {
+		return err
+	}
 	if err := p.resetEventProjections(ctx); err != nil {
 		return err
 	}
-	return log.Replay(ctx, 0, func(e events.Event) error {
+	if err := log.Replay(ctx, 0, func(e events.Event) error {
+		skip, err := secretAuthority.skip(e)
+		if err != nil {
+			return err
+		}
+		skipDynamicSecret, err := dynamicSecretAuthority.skip(e)
+		if err != nil {
+			return err
+		}
+		skip = skip || skipDynamicSecret
+		if skip {
+			if err := ValidateSchemaVersion(e); err != nil {
+				return err
+			}
+			return p.applyEventProjections(ctx, e)
+		}
+		if isTenantLifecycleEventType(e.Type) {
+			return p.ApplyRetainedTenantLifecycle(ctx, e)
+		}
 		return p.Apply(ctx, e)
-	})
+	}); err != nil {
+		return err
+	}
+	return p.validateSecretSyncRetainedHistory(ctx, log, true, false)
 }
 
 // ProjectCatchUp brings the read model up to the head of the log by replaying
@@ -4326,45 +5171,98 @@ func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 // stays the source of truth (AN-2); an explicit Rebuild still re-derives from
 // sequence 0 and resets the checkpoint.
 func (p *Projector) ProjectCatchUp(ctx context.Context, log *events.Log) error {
-	if err := p.rebuildEventProjections(ctx, log); err != nil {
+	// The privacy operation grant is deliberately outermost. It closes the live
+	// race where another replica prepares SQL erasure authority after validation
+	// but before this replica replaces extension state, and preserves the global
+	// order: privacy operation -> projection -> event history.
+	return p.store.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
+		return p.projectCatchUpWithPrivacyBarrier(barrierCtx, log)
+	})
+}
+
+func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *events.Log) error {
+	if err := p.validateSecretSyncRetainedHistory(ctx, log, true, true); err != nil {
 		return err
 	}
 	// Serialize the catch-up across replicas under the projection advisory lock
 	// (RESIL-004): N replicas booting at once each run this, and without
-	// coordination they would replay into the same read-model tables concurrently.
-	// The lock makes the second replica wait, then resume from the advanced
-	// checkpoint with little or nothing left to apply, so a non-idempotent apply
-	// ordering cannot interleave between two projectors.
-	return p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
-		from, err := p.store.ProjectionCheckpoint(ctx)
-		if err != nil {
-			return fmt.Errorf("projections: read checkpoint: %w", err)
-		}
-		var last uint64
-		sinceCheckpoint := 0
-		if err := log.Replay(ctx, from+1, func(e events.Event) error {
-			if err := p.applyCore(ctx, e); err != nil {
+	// coordination they would reset/replay extension state and replay into the
+	// same core read-model tables concurrently. Inside that lock, one history
+	// generation and inclusive head cover BOTH passes. An event appended while
+	// extensions rebuild is therefore either in both passes or beyond the saved
+	// checkpoint for the next catch-up/tailer; it can never land in core alone.
+	if err := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		return log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+			replayHead, err := log.LastSequence(readCtx)
+			if err != nil {
+				return fmt.Errorf("projections: capture catch-up history head: %w", err)
+			}
+			secretAuthority, err := classifySecretSyncLifecycleThrough(readCtx, log, replayHead)
+			if err != nil {
+				return fmt.Errorf("projections: classify catch-up secret-sync lifecycle: %w", err)
+			}
+			dynamicSecretAuthority, err := classifyDynamicSecretLifecycleThrough(readCtx, log, replayHead)
+			if err != nil {
+				return fmt.Errorf("projections: classify catch-up dynamic-secret lifecycle: %w", err)
+			}
+			if err := p.rebuildEventProjectionsThrough(readCtx, log, replayHead); err != nil {
 				return err
 			}
-			last = e.Sequence
-			sinceCheckpoint++
-			if sinceCheckpoint >= checkpointEvery {
-				if err := p.store.AdvanceProjectionCheckpoint(ctx, last); err != nil {
+			from, err := p.store.ProjectionCheckpoint(readCtx)
+			if err != nil {
+				return fmt.Errorf("projections: read checkpoint: %w", err)
+			}
+			if from > replayHead {
+				return fmt.Errorf(
+					"projections: checkpoint %d is beyond event history head %d",
+					from, replayHead,
+				)
+			}
+			var last uint64
+			sinceCheckpoint := 0
+			if from < replayHead {
+				err = log.ReplayThrough(readCtx, from+1, replayHead, func(e events.Event) error {
+					skip, err := secretAuthority.skip(e)
+					if err != nil {
+						return err
+					}
+					skipDynamicSecret, err := dynamicSecretAuthority.skip(e)
+					if err != nil {
+						return err
+					}
+					skip = skip || skipDynamicSecret
+					if !skip {
+						err = p.applyCore(readCtx, e)
+					}
+					if err != nil {
+						return err
+					}
+					last = e.Sequence
+					sinceCheckpoint++
+					if sinceCheckpoint < checkpointEvery {
+						return nil
+					}
+					if err := p.store.AdvanceProjectionCheckpoint(readCtx, last); err != nil {
+						return err
+					}
+					sinceCheckpoint = 0
+					return nil
+				})
+				if err != nil {
 					return err
 				}
-				sinceCheckpoint = 0
+			}
+			if replayHead > 0 {
+				if err := p.store.AdvanceProjectionCheckpoint(readCtx, replayHead); err != nil {
+					return fmt.Errorf("projections: advance checkpoint: %w", err)
+				}
 			}
 			return nil
-		}); err != nil {
-			return err
-		}
-		if last > 0 {
-			if err := p.store.AdvanceProjectionCheckpoint(ctx, last); err != nil {
-				return fmt.Errorf("projections: advance checkpoint: %w", err)
-			}
-		}
-		return nil
-	})
+		})
+	}); err != nil {
+		return err
+	}
+	return p.validateSecretSyncRetainedHistory(ctx, log, true, false)
 }
 
 // checkpointEvery is how many events ProjectCatchUp applies between watermark
@@ -4393,12 +5291,34 @@ func (p *Projector) AdvanceCheckpoint(ctx context.Context, seq uint64) error {
 // carries its tenant_id explicitly, so AN-1 holds even with RLS bypassed for this
 // trusted system operation.
 func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
+	if !p.allowSecretSyncRecoveryBootstrap {
+		if err := p.validateSecretSyncRetainedHistory(ctx, log, false, false); err != nil {
+			return err
+		}
+	}
+	if err := p.store.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
+		return p.rebuildWithPrivacyBarrier(barrierCtx, log)
+	}); err != nil {
+		return err
+	}
+	return p.validateSecretSyncRetainedHistory(ctx, log, true, false)
+}
+
+func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.Log) error {
 	return log.WithHistoryRead(ctx, func(readCtx context.Context) error {
 		replayHead, err := log.LastSequence(readCtx)
 		if err != nil {
 			return fmt.Errorf("projections: capture rebuild history head: %w", err)
 		}
 		eventCheckpoints := map[string]audit.Checkpoint{}
+		secretAuthority, err := classifySecretSyncLifecycleThrough(readCtx, log, replayHead)
+		if err != nil {
+			return fmt.Errorf("projections: preflight secret-sync lifecycle: %w", err)
+		}
+		dynamicSecretAuthority, err := classifyDynamicSecretLifecycleThrough(readCtx, log, replayHead)
+		if err != nil {
+			return fmt.Errorf("projections: preflight dynamic-secret lifecycle: %w", err)
+		}
 		if err := log.ReplayThrough(readCtx, 1, replayHead, func(event events.Event) error {
 			if event.Type != audit.EventTypeArchived {
 				return nil
@@ -4476,8 +5396,20 @@ func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
 				return err
 			}
 			if err := log.ReplayThrough(readCtx, 0, replayHead, func(e events.Event) error {
-				if err := p.applyForRebuild(readCtx, tx, e); err != nil {
-					return err
+				// The preflight authority marks exactly the secret-bearing source and
+				// terminal sequences erased by an offboarded lifecycle. A later
+				// registration of the same tenant UUID is classified independently.
+				_, skipOffboardedSecretTarget := secretAuthority.skipSequences[e.Sequence]
+				_, skipOffboardedDynamicSecret := dynamicSecretAuthority.skipSequences[e.Sequence]
+				if skipOffboardedSecretTarget || skipOffboardedDynamicSecret {
+					if err := ValidateSchemaVersion(e); err != nil {
+						return err
+					}
+				} else if err := p.applyForRebuild(readCtx, tx, e); err != nil {
+					return fmt.Errorf(
+						"projections: rebuild apply %s event %s at sequence %d: %w",
+						e.Type, e.ID, e.Sequence, err,
+					)
 				}
 				return p.applyEventProjectionsTx(readCtx, tx, e)
 			}); err != nil {
@@ -4497,34 +5429,17 @@ func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
 //
 // The snapshot is purely an optimization (AN-2): the log stays the source of truth,
 // a snapshot is reproducible by Rebuild from sequence 0, and a corrupt/missing one is
-// ignored on boot in favor of a full replay. Snapshot takes the projection advisory
-// lock so it cannot race a concurrent catch-up on a multi-replica deployment — the
-// checkpoint and the captured rows are read consistently (RESIL-004), and only the
-// leader runs the periodic snapshot worker anyway.
+// ignored on boot in favor of a full replay. Store.WriteReadModelSnapshots owns the
+// complete cross-replica lock order: shared privacy history operation, durable
+// unfinished-preparation check, projection lock, then PostgreSQL capture. That keeps
+// a snapshot writer out of both the live SQL-prepared cutover window and a crashed
+// marker's recovery window.
 //
 // Per-tenant capture is tenant-scoped under RLS (AN-1): WriteTenantSnapshot runs in
 // the tenant's RLS context, so a tenant's snapshot can only ever hold that tenant's
 // rows. It returns the number of tenants snapshotted.
 func (p *Projector) Snapshot(ctx context.Context) (int, error) {
-	var n int
-	err := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
-		covered, err := p.store.ProjectionCheckpoint(ctx)
-		if err != nil {
-			return fmt.Errorf("projections: read checkpoint for snapshot: %w", err)
-		}
-		tenants, err := p.store.ListTenants(ctx)
-		if err != nil {
-			return fmt.Errorf("projections: list tenants for snapshot: %w", err)
-		}
-		for _, t := range tenants {
-			if err := p.store.WriteTenantSnapshot(ctx, t.TenantID, covered); err != nil {
-				return err
-			}
-			n++
-		}
-		return nil
-	})
-	return n, err
+	return p.store.WriteReadModelSnapshots(ctx)
 }
 
 // RestoreFromSnapshot rehydrates the read model from the latest snapshots and then
@@ -4543,6 +5458,24 @@ func (p *Projector) Snapshot(ctx context.Context) (int, error) {
 // wrong — at worst it costs a one-time full replay. It takes the projection advisory
 // lock so concurrent replica boots serialize (RESIL-004).
 func (p *Projector) RestoreFromSnapshot(ctx context.Context, log *events.Log) (restored bool, err error) {
+	if err := p.validateSecretSyncRetainedHistory(ctx, log, false, false); err != nil {
+		return false, err
+	}
+	err = p.store.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
+		var restoreErr error
+		restored, restoreErr = p.restoreFromSnapshotWithPrivacyBarrier(barrierCtx, log)
+		return restoreErr
+	})
+	if err != nil || !restored {
+		return restored, err
+	}
+	return true, p.validateSecretSyncRetainedHistory(ctx, log, true, false)
+}
+
+func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
+	ctx context.Context,
+	log *events.Log,
+) (restored bool, err error) {
 	var handled bool
 	lockErr := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
 		from, err := p.store.LatestSnapshotOffset(ctx)
@@ -4577,6 +5510,14 @@ func (p *Projector) RestoreFromSnapshot(ctx context.Context, log *events.Log) (r
 			if herr != nil {
 				return fmt.Errorf("projections: capture snapshot-tail history head: %w", herr)
 			}
+			secretAuthority, herr := classifySecretSyncLifecycleThrough(readCtx, log, replayHead)
+			if herr != nil {
+				return fmt.Errorf("projections: classify snapshot-tail secret-sync lifecycle: %w", herr)
+			}
+			dynamicSecretAuthority, herr := classifyDynamicSecretLifecycleThrough(readCtx, log, replayHead)
+			if herr != nil {
+				return fmt.Errorf("projections: classify snapshot-tail dynamic-secret lifecycle: %w", herr)
+			}
 			if replayHead < from {
 				return fmt.Errorf(
 					"projections: snapshot offset %d is beyond event history head %d",
@@ -4591,6 +5532,11 @@ func (p *Projector) RestoreFromSnapshot(ctx context.Context, log *events.Log) (r
 					return serr
 				}
 				if rerr := log.ReplayThrough(readCtx, from+1, replayHead, func(e events.Event) error {
+					_, skipSecretSync := secretAuthority.skipSequences[e.Sequence]
+					_, skipDynamicSecret := dynamicSecretAuthority.skipSequences[e.Sequence]
+					if skipSecretSync || skipDynamicSecret {
+						return ValidateSchemaVersion(e)
+					}
 					return p.applyForRebuild(readCtx, tx, e)
 				}); rerr != nil {
 					return rerr
@@ -4605,7 +5551,7 @@ func (p *Projector) RestoreFromSnapshot(ctx context.Context, log *events.Log) (r
 			// truth, so fall back to a full rebuild from sequence 0 rather than serving a
 			// partially-restored read model. Rebuild is itself atomic and resets the
 			// checkpoint; we keep handled == true so the caller does not double-catch-up.
-			return p.Rebuild(ctx, log)
+			return p.rebuildWithPrivacyBarrier(ctx, log)
 		}
 		return nil
 	})

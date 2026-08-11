@@ -1406,28 +1406,65 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 	}
 	approvalGate := read(t, "../internal/server/approval_gate.go")
 	for _, want := range []string{
-		"OpenIssuanceApprovalRequest",
-		"HasDistinctApproval",
-		"requester cannot self-approve",
+		"func (c storeApprovalChecker) AuthorizeApproval(",
+		"c.orch.EnsureOperationApprovalRequest(",
+		"func (r storeApprovalRecorder) RecordApproval(",
+		"r.orch.RecordOperationApprovalDecision(",
+		"legacy approval checks cannot authorize; exact single-use authority is required",
 		"api.ApprovalRecorder",
 	} {
 		if !strings.Contains(approvalGate, want) {
-			t.Errorf("PKIGOV-105: approval_gate.go no longer contains %q; served RA dual-control gate weakened", want)
+			t.Errorf("PKIGOV-105: approval_gate.go no longer contains %q; exact event-sourced RA dual-control gate weakened", want)
 		}
 	}
-	approvals := read(t, "../internal/store/approvals.go")
+	managedKeyDurable := read(t, "../ee/managedkeys/durable.go")
 	for _, want := range []string{
+		"approvals     api.ExactApprovalChecker",
+		"if d.ApprovalChecker == nil",
+		"s.store.ValidateManagedKeyApprovalCommandTx(",
+		"s.store.ValidateOperationApprovalUseTx(",
+		"s.store.ManagedKeyApprovalTargetTx(",
+		"projections.New(s.store).ApplyTx(ctx, tx, event)",
+	} {
+		if !strings.Contains(managedKeyDurable, want) {
+			t.Errorf("PKIGOV-105: ee/managedkeys/durable.go no longer contains %q; exact managed-key approval consumption may have drifted", want)
+		}
+	}
+	approvals := read(t, "../internal/store/operation_approvals.go")
+	for _, want := range []string{
+		"func (s *Store) ValidateOperationApprovalUseTx(",
+		"func (s *Store) ConsumeOperationApprovalTx(",
+		"s.getOperationApprovalTx(ctx, tx, tenantID, use.RequestID, true)",
+		"WHERE tenant_id = $1 AND id = $2 AND intent_digest = $3",
+		"tenantID, use.RequestID, use.IntentDigest, eventID, at",
+		"r.ConsumedEventID == eventID",
 		"ErrAnonymousIssuanceApproval",
-		"ErrSelfIssuanceApproval",
-		"approver <> $4",
-		"WHERE tenant_id = $1",
+		"ErrApprovalSelfDecision",
 	} {
 		if !strings.Contains(approvals, want) {
-			t.Errorf("PKIGOV-105: approvals.go no longer contains %q; requester exclusion or tenant scoping weakened", want)
+			t.Errorf("PKIGOV-105: operation_approvals.go no longer contains %q; exact request/digest binding, one-shot consumption, requester exclusion, or tenant scoping weakened", want)
 		}
 	}
-	if !anyTestDeclaresUnder(t, "../internal/server", "TestServedIssuanceGateEnforced") {
-		t.Error("PKIGOV-105: internal/server no longer declares TestServedIssuanceGateEnforced; served RA split and dual-control proof weakened")
+	for path, testNames := range map[string][]string{
+		"../internal/server": {
+			"TestServedIssuanceGateEnforced",
+			"TestServedApprovalRequiresExistingRequestAUD77",
+		},
+		"../internal/orchestrator": {
+			"TestEnsureOperationApprovalRequestSerializesCompetingIntentsAndRebuilds",
+			"TestOperationApprovalOrchestratorCanonicalRequestDecisionReplayAndQuorum",
+			"TestOperationApprovalOrchestratorLifecycleUseConsumesAndRebuildsOnce",
+		},
+		"../internal/store": {
+			"TestOperationApprovalAuthorityDecisionReplayAndQuorumAreExact",
+			"TestOperationApprovalAuthorityUseValidationAndConsumptionAreExact",
+		},
+	} {
+		for _, testName := range testNames {
+			if !anyTestDeclaresUnder(t, path, testName) {
+				t.Errorf("PKIGOV-105: %s no longer declares %s; exact event-sourced dual-control proof weakened", path, testName)
+			}
+		}
 	}
 }
 
@@ -1965,8 +2002,9 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 	}
 	compactProjectionsGo := strings.Join(strings.Fields(projectionsGo), " ")
 	for _, want := range []string{
-		"EventIdentityIssued: {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true}",
-		"EventIdentityRetired: {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true}",
+		"EventIdentityIssued: {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true}",
+		"EventIdentityRetired: {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true}",
+		"EventCertificateRecorded: {1: true, CertificateApprovalEventSchemaVersion: true}",
 		"EventDiscoverySourceUpserted: {1: true}",
 		"EventDiscoveryScheduleUpserted: {1: true}",
 		"EventDiscoveryRunQueued: {1: true}",
@@ -2199,7 +2237,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/backup/backup.go", []string{"trstctl-event-log-backup", "version    = 1", "unsupported backup version"}},
 		{"../internal/backup/full_manifest.go", []string{"trstctl-full-backup", "fullVersion      = 1", "unsupported full backup manifest version"}},
 		{"../internal/backup/postgres_state.go", []string{"trstctl-postgres-state-backup", "postgresStateVersion    = 1", "unsupported postgres-state backup version"}},
-		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 20", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
+		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 22", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
 	} {
 		body := read(t, file.path)
 		for _, want := range file.want {
@@ -2980,7 +3018,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	}
 	snapshotGo := read(t, "../internal/store/snapshot.go")
 	for _, want := range []string{
-		"const SnapshotFormatVersion = 20",
+		"const SnapshotFormatVersion = 22",
 		"func (s *Store) WriteTenantSnapshot(",
 		"func (s *Store) LatestSnapshotOffset(",
 		"func (s *Store) RestoreSnapshotsTx(",

@@ -68,6 +68,13 @@ func statusError(status Status, cause error) error {
 	return &AccessError{status: status, cause: cause}
 }
 
+// CustodyUnavailable wraps an adapter/backend failure in the stable public
+// fail-closed status used by request guards, recovery workers, and readiness.
+// It deliberately carries no tenant, wrapper, key, ciphertext, or AAD detail.
+func CustodyUnavailable(cause error) error {
+	return statusError(StatusCustodyUnavailable, cause)
+}
+
 // Cipher is valid only during its Access.WithTenant callback. Implementations
 // route to exactly one already-resolved wrapper and never parse AAD to select a
 // tenant, domain, or wrapper.

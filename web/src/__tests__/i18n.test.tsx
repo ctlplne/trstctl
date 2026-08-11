@@ -547,8 +547,18 @@ describe("i18n boundary", () => {
       // “Unbound” and “Unknown” must retain their absence semantics so a legacy
       // pack cannot render as tenant-bound or complete. Machine-authored es/de
       // translations — FLAG FOR HUMAN TRANSLATION REVIEW.
-      "es-ES": "46190f61a94bab1b7440c428ee6ea607c029ff30922a8ebb9d65000ba4ab2ee1",
-      "de-DE": "792a6e0becd9e7754893fcadb3d9e81ef963ab62c65aa58d4d2d3a1eadba75b7",
+      // AUD-77 import-unavailable re-pin: four secrets.import.* keys explain
+      // why bulk import stays fail-closed and direct operators to individually
+      // idempotent creates. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      // AUD-106/AUD-107 scheduler-truth re-pin: the rotation scope, schedule
+      // limits, queued/completed/failed outcomes, and exact deferred-edge
+      // reasons now stay distinct in every locale. In particular, queued must
+      // not read as completed, and approval-pending/claimed work must not read
+      // as a failed rotation. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "40b5270b9ed01f55385af3d4058ba5a737a44b7ad28494d858de201a8ccaf13d",
+      "de-DE": "c97a410d607055e5f92c7359104902c8acf7981a3bbe81335b45e332699d749b",
     });
   });
 

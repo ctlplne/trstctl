@@ -229,7 +229,9 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    > `/api/v1/workloads/attester-trust-sources`, direct ephemeral X.509-SVID issuance
    > is served through `POST /api/v1/workloads/attested-issuance`; approval-gated JIT
    > ephemeral issuance is served through `POST /api/v1/ephemeral` plus
-   > `/api/v1/ephemeral/{request_id}/approvals`; and the AI-agent broker is served
+   > `/api/v1/ephemeral/{id}/approvals`, where `{id}` is the genuine queue
+   > `approval_request_id` and the body repeats it with its matching
+   > `intent_digest`; and the AI-agent broker is served
    > through `POST /api/v1/broker/agent-identities` when its attestors, policy, trust
    > domain, and signer-backed issuing CA are configured. See
    > [Current limitations](../limitations.md) for configuration and compatibility

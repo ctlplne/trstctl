@@ -30,6 +30,9 @@ func TestEveryAPIOperationHasACLICommand(t *testing.T) {
 		if r.Path == "/api/v1/openapi.json" {
 			continue // the spec endpoint is not a core operation
 		}
+		if r.UnavailableReason != "" {
+			continue // explicitly unavailable compatibility routes must not look callable in the CLI
+		}
 		if !have[r.Method+" "+r.Path] {
 			t.Errorf("no CLI command for API operation %s %s", r.Method, r.Path)
 		}
@@ -392,13 +395,13 @@ func TestEphemeralCommandsSendBodiesAndIdempotencyKeys(t *testing.T) {
 	}
 
 	var approveCap capture
-	approveSrv := mockServer(t, 200, `{"resource":"jit-agent-7","action":"issue","approver":"ra-1","approvals":1}`, &approveCap)
-	approveBody := `{"action":"issue"}`
-	code, _, _ = run(t, []string{"ephemeral", "approve", "jit-agent-7", "-f", "-"}, cli.Env{Server: approveSrv.URL, HTTPClient: approveSrv.Client()}, approveBody)
+	approveSrv := mockServer(t, 200, `{"id":"019fec49-6641-7131-ae7f-17f7ea4b5e0e","intent_digest":"sha256:ephemeral","resource":"jit-agent-7","action":"issue","approver":"ra-1","approvals":1,"approval_count":1,"required_approvals":1,"status":"approved"}`, &approveCap)
+	approveBody := `{"action":"issue","request_id":"019fec49-6641-7131-ae7f-17f7ea4b5e0e","intent_digest":"sha256:ephemeral"}`
+	code, _, _ = run(t, []string{"ephemeral", "approve", "019fec49-6641-7131-ae7f-17f7ea4b5e0e", "-f", "-"}, cli.Env{Server: approveSrv.URL, HTTPClient: approveSrv.Client()}, approveBody)
 	if code != 0 {
 		t.Fatalf("approve exit = %d", code)
 	}
-	if approveCap.Method != "POST" || approveCap.Path != "/api/v1/ephemeral/jit-agent-7/approvals" {
+	if approveCap.Method != "POST" || approveCap.Path != "/api/v1/ephemeral/019fec49-6641-7131-ae7f-17f7ea4b5e0e/approvals" {
 		t.Errorf("approve request = %s %s", approveCap.Method, approveCap.Path)
 	}
 	if strings.TrimSpace(string(approveCap.Body)) != approveBody {
@@ -723,10 +726,10 @@ func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	}
 }
 
-func TestStaticRotationCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+func TestConnectorRotationCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
-	srv := mockServer(t, 200, `{"key":"db/reporting","old_ref":"old","new_ref":"new","completed":true}`, &cap)
-	body := `{"provider":"postgresql","key":"db/reporting","old_ref":"old"}`
+	srv := mockServer(t, 200, `{"key":"db/reporting","old_ref":"version:1","new_ref":"version:2","completed":false,"queued":true}`, &cap)
+	body := `{"provider":"connector:ci","key":"db/reporting","old_ref":"version:1","remote_key":"DB_PASSWORD"}`
 	code, _, _ := run(t, []string{"secrets", "rotations", "run", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
@@ -741,14 +744,14 @@ func TestStaticRotationCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 		t.Errorf("Content-Type = %q", ct)
 	}
 	if cap.Header.Get("Idempotency-Key") == "" {
-		t.Error("static rotation mutation should send an Idempotency-Key")
+		t.Error("connector rotation mutation should send an Idempotency-Key")
 	}
 }
 
 func TestSecretRotationScheduleCommandsSendPathsAndIdempotencyKeys(t *testing.T) {
 	var createCap capture
-	srv := mockServer(t, 201, `{"id":"11111111-1111-1111-1111-111111111111","name":"reporting-hourly","provider":"postgresql","key":"db/reporting","old_ref":"old","interval_seconds":3600,"enabled":true,"next_run_at":"2026-07-01T00:00:00Z","last_run_status":"","created_at":"2026-07-01T00:00:00Z","updated_at":"2026-07-01T00:00:00Z"}`, &createCap)
-	body := `{"name":"reporting-hourly","provider":"postgresql","key":"db/reporting","old_ref":"old","interval_seconds":3600}`
+	srv := mockServer(t, 201, `{"id":"11111111-1111-1111-1111-111111111111","name":"reporting-hourly","provider":"connector:ci","key":"db/reporting","old_ref":"version:1","interval_seconds":3600,"enabled":true,"next_run_at":"2026-07-01T00:00:00Z","last_run_status":"","created_at":"2026-07-01T00:00:00Z","updated_at":"2026-07-01T00:00:00Z"}`, &createCap)
+	body := `{"name":"reporting-hourly","provider":"connector:ci","key":"db/reporting","old_ref":"version:1","interval_seconds":3600}`
 	code, _, _ := run(t, []string{"secrets", "rotation-schedules", "create", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
 	if code != 0 {
 		t.Fatalf("create exit = %d", code)

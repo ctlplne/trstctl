@@ -34,12 +34,13 @@ type EvidencePredicate struct {
 }
 
 var (
-	eventProjectionPredicate = predicate(evidenceEventProjection, "an immutable tenant event was appended and this value was rebuilt by its named projection")
-	workflowPredicate        = predicate(evidenceWorkflow, "the named production workflow recorded this exact lifecycle value; the value does not imply external verification unless its surface registry says so")
-	observationPredicate     = predicate(evidenceObservation, "the named production observer derived this value from a target response or durable observation, with absence represented separately")
-	configurationPredicate   = predicate(evidenceConfiguration, "the named production configuration evaluator derived this value without claiming that it contacted or changed an external target")
-	protocolPredicate        = predicate(evidenceProtocol, "the named protocol handler recorded this value from the accepted or rejected protocol exchange")
-	attestationPredicate     = predicate(evidenceAttestation, "the named evidence writer recorded this value with actor/source attribution; it is an attestation unless a stronger surface-specific predicate says otherwise")
+	eventProjectionPredicate   = predicate(evidenceEventProjection, "an immutable tenant event was appended and this value was rebuilt by its named projection")
+	operationApprovalPredicate = predicate(evidenceEventProjection, "the value is copied from the tenant-scoped operation-approval read model rebuilt from immutable approval request, decision, status-change, and consumption events; no inventory row or reviewer input can manufacture it")
+	workflowPredicate          = predicate(evidenceWorkflow, "the named production workflow recorded this exact lifecycle value; the value does not imply external verification unless its surface registry says so")
+	observationPredicate       = predicate(evidenceObservation, "the named production observer derived this value from a target response or durable observation, with absence represented separately")
+	configurationPredicate     = predicate(evidenceConfiguration, "the named production configuration evaluator derived this value without claiming that it contacted or changed an external target")
+	protocolPredicate          = predicate(evidenceProtocol, "the named protocol handler recorded this value from the accepted or rejected protocol exchange")
+	attestationPredicate       = predicate(evidenceAttestation, "the named evidence writer recorded this value with actor/source attribution; it is an attestation unless a stronger surface-specific predicate says otherwise")
 )
 
 func predicate(class EvidenceClass, requirement string) EvidencePredicate {
@@ -58,6 +59,8 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("AccessChangeRequest", "status", eventProjectionPredicate, "internal/orchestrator/access_change_request.go:Orchestrator.CreateAccessChangeRequest"),
 	evidence("Agent", "status", observationPredicate, "internal/api/agents.go:toAgentResponse"),
 	evidence("AgentUpgradeCampaign", "status", eventProjectionPredicate, "internal/orchestrator/agent_upgrade.go:Orchestrator.OpenAgentUpgradeCampaign"),
+	evidence("Approval", "status", operationApprovalPredicate, "internal/api/approvals.go:approvalResponseFor"),
+	evidence("ApprovalDecision", "status", operationApprovalPredicate, "internal/api/approvals.go:approvalResponseFor"),
 	evidence("BreakglassCeremony", "status", eventProjectionPredicate, "internal/api/breakglass.go:API.startBreakglassIssueCeremony"),
 	evidence("BulkRevokeItem", "status", workflowPredicate, "internal/api/bulk_revoke.go:API.bulkRevoke"),
 	evidence("BulkRevokeRequest", "status", workflowPredicate, "internal/api/bulk_revoke.go:API.bulkRevoke"),
@@ -75,6 +78,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("DiscoverySegmentCoverage", "status", observationPredicate, "internal/api/discovery.go:API.getDiscoveryCoverage"),
 	evidence("EdgeDelegation", "status", eventProjectionPredicate, "internal/api/edge_delegation.go:API.listEdgeDelegations"),
 	evidence("EndpointVerification", "status", predicate(evidenceObservation, "verified/diverged require a live listener handshake receipt; unreachable/not_checked explicitly carry no positive verdict"), "internal/api/endpoint_verification.go:endpointVerificationStatus"),
+	evidence("EphemeralApproval", "status", operationApprovalPredicate, "internal/server/ephemeral.go:ephemeralIssuerService.ApproveEphemeralCredential"),
 	evidence("ExternalCA", "status", observationPredicate, "internal/api/external_ca.go:API.listExternalCAs"),
 	evidence("FIPSCustodyValidationCertificate", "status", attestationPredicate, "internal/compliance/fips.go:FIPSCustodyValidationCertificates"),
 	evidence("FleetReissuanceBatch", "health_gate", predicate(evidenceObservation, "the verdict is computed only from this batch's endpoint-verification receipts whose matching agent signature was accepted; missing or unsigned evidence remains not_evaluated"), "internal/store/connector_lifecycle.go:Store.SummarizeFleetVerification"),
@@ -105,6 +109,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("OwnerRemediationQueue", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:ownerRemediationSummaryFor"),
 	evidence("OwnerRemediationRun", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:API.acceptedOwnerRemediationRuns"),
 	evidence("PAMSession", "status", observationPredicate, "internal/api/pam.go:API.listPAMSessions"),
+	evidence("PendingApprovalRequest", "status", operationApprovalPredicate, "internal/server/approval_gate.go:approvalRequestRecord"),
 	evidence("PQCMigrationCampaign", "status", eventProjectionPredicate, "ee/pqcmigration/server.go:pqcMigrationService.Progress"),
 	evidence("PQCMigrationCampaignReadinessRequest", "status", observationPredicate, "ee/pqcmigration/server.go:pqcMigrationService.PlanPreview"),
 	evidence("PolicyVersion", "status", eventProjectionPredicate, "internal/api/policy_versions.go:API.policyVersions"),
@@ -119,6 +124,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("SSHHostRetirement", "status", eventProjectionPredicate, "internal/api/ssh_workflow.go:API.retireSSHHost"),
 	evidence("SSHTrustRollout", "status", eventProjectionPredicate, "internal/api/ssh_workflow.go:API.getSSHStatus"),
 	evidence("SSHTrustRolloutRequest", "status", workflowPredicate, "internal/api/ssh_workflow.go:API.recordSSHTrustRollout"),
+	evidence("SecretApproval", "status", operationApprovalPredicate, "internal/api/approvals.go:approvalResponseFor"),
 	evidence("SecretRepositoryWebhookReceipt", "status", protocolPredicate, "internal/api/secrets_scanning.go:API.receiveSecretRepoWebhook"),
 	evidence("SecretRotationScheduleRun", "status", eventProjectionPredicate, "internal/orchestrator/secret_rotation.go:Orchestrator.RecordSecretRotationScheduleRun"),
 	evidence("SecretSyncWorkloadIdentitySource", "status", observationPredicate, "internal/api/secret_sync_workload_identity.go:toSecretSyncWorkloadIdentitySourceResponse"),

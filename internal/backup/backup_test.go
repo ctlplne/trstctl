@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 )
 
 const drTenant = "11111111-1111-1111-1111-111111111111"
@@ -89,6 +90,30 @@ func TestBackupRestoreRoundTrip(t *testing.T) {
 	}
 	if got[1].Actor != nil {
 		t.Errorf("event 1 should remain unattributed, got %+v", got[1].Actor)
+	}
+}
+
+func TestWriteLogPreflightsUnsafeLegacySchedulerHistoryBeforeOutput(t *testing.T) {
+	ctx := context.Background()
+	log := openLog(t)
+	secret := "provider-token-must-not-leave-history"
+	if _, err := log.Append(ctx, events.Event{
+		Type: schedulerhistory.EventType, TenantID: drTenant,
+		SchemaVersion: schedulerhistory.LegacySchemaVersion,
+		Data:          []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"` + secret + `"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	_, err := backup.WriteLogWithKey(ctx, log, &output, []byte("test-integrity-key"))
+	if !errors.Is(err, schedulerhistory.ErrSanitationRequired) {
+		t.Fatalf("WriteLogWithKey error = %v, want sanitation-required", err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("backup emitted %d bytes before failing closed", output.Len())
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatal("backup error disclosed unsafe scheduler data")
 	}
 }
 
@@ -275,6 +300,12 @@ func TestKeyedBackupRequiresValidMAC(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "integrity") {
 			t.Errorf("wrong-key rejection should be an integrity error, got: %v", err)
+		}
+		if pristine, inspectErr := dst.BackupHistoryPristine(ctx); inspectErr != nil || !pristine {
+			t.Fatalf(
+				"wrong-key restore mutated target: pristine=%t inspect_err=%v",
+				pristine, inspectErr,
+			)
 		}
 	}
 

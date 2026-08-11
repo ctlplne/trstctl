@@ -696,7 +696,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/secrets"],
     component: "Secrets",
     kind: "operate",
-    evidence: "manual native-store rotate/delete plus rollback-safe static rotation",
+    evidence: "manual native-store rotate/delete plus worker-queued connector rotation; static and dynamic provider rotation fails closed before effects",
   },
   {
     featureId: "F38",

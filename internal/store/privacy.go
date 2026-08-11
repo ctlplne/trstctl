@@ -5,6 +5,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,8 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/codesigningref"
 	"trstctl.com/trstctl/internal/privacy"
 )
 
@@ -22,6 +25,7 @@ import (
 type PrivacyErasureSelectors struct {
 	OwnerIDs                []string                   `json:"owner_ids,omitempty"`
 	IdentityIDs             []string                   `json:"identity_ids,omitempty"`
+	CertificateRefs         []string                   `json:"certificate_refs,omitempty"`
 	CertificateFingerprints []string                   `json:"certificate_fingerprints,omitempty"`
 	SSHKeyIDs               []string                   `json:"ssh_key_ids,omitempty"`
 	AttestationIDs          []string                   `json:"attestation_ids,omitempty"`
@@ -31,14 +35,19 @@ type PrivacyErasureSelectors struct {
 	AgentIDs                []string                   `json:"agent_ids,omitempty"`
 	AgentOffboardActorIDs   []string                   `json:"agent_offboard_actor_ids,omitempty"`
 	AgentOffboardReasonIDs  []string                   `json:"agent_offboard_reason_ids,omitempty"`
+	CodeSigningOperationIDs []string                   `json:"code_signing_operation_ids,omitempty"`
 	ReadModels              []PrivacyReadModelSelector `json:"read_models,omitempty"`
 }
 
 // PrivacyApprovalSelector is the non-PII row key for one dual-control actor tie.
 // The raw requester/approver is deliberately excluded from privacy events.
 type PrivacyApprovalSelector struct {
-	Resource string `json:"resource"`
-	Action   string `json:"action"`
+	// BindingRef is a tenant-bound one-way reference to resource+action. New
+	// privacy events use only this field because both legacy key components are
+	// arbitrary text and may themselves contain the erased subject.
+	BindingRef string `json:"binding_ref,omitempty"`
+	Resource   string `json:"resource,omitempty"`
+	Action     string `json:"action,omitempty"`
 }
 
 // PrivacyReadModelSelector is a non-PII row key for newer operational read models.
@@ -49,6 +58,128 @@ type PrivacyReadModelSelector struct {
 	ID            string `json:"id,omitempty"`
 	ParentID      string `json:"parent_id,omitempty"`
 	ThresholdDays int    `json:"threshold_days,omitempty"`
+}
+
+var privacyReadModelSelectorTables = map[string]struct{}{
+	"operation_approval_requests": {}, "operation_approval_decisions": {},
+	"pam_sessions": {}, "discovery_sources": {}, "discovery_findings": {},
+	"notification_threshold_deliveries": {}, "incident_executions": {},
+	"nhi_access_review_campaigns": {}, "nhi_access_review_items": {},
+	"access_change_requests": {}, "access_change_request_decisions": {},
+	"discovery_runs": {}, "notification_routing_policies": {},
+	"remediation_playbook_runs": {}, "compliance_report_schedules": {},
+	"incident_fleet_reissuance_runs": {},
+}
+
+// ValidatePrivacyErasureSelectorsV3 proves that every selector emitted by the
+// current producer is a UUID or a tenant-bound one-way reference. Legacy v1/v2
+// composite approval keys and raw certificate fingerprints remain replayable,
+// but a v3 event may never carry them back into sanitized history.
+func ValidatePrivacyErasureSelectorsV3(selectors PrivacyErasureSelectors) error {
+	if len(selectors.CertificateFingerprints) != 0 {
+		return errors.New("store: privacy v3 selectors contain legacy raw certificate fingerprints")
+	}
+	for _, ref := range selectors.CertificateRefs {
+		if !IsPrivacyReference(ref) {
+			return errors.New("store: privacy v3 certificate selector is not a one-way reference")
+		}
+	}
+	for _, group := range [][]string{
+		selectors.OwnerIDs, selectors.IdentityIDs, selectors.SSHKeyIDs,
+		selectors.AttestationIDs, selectors.ProfileIDs, selectors.AgentIDs,
+		selectors.AgentOffboardActorIDs, selectors.AgentOffboardReasonIDs,
+	} {
+		for _, id := range group {
+			if !validPrivacyUUID(id) {
+				return errors.New("store: privacy v3 selector contains a non-UUID row key")
+			}
+		}
+	}
+	for _, operationID := range selectors.CodeSigningOperationIDs {
+		if !validCodeSigningOperationID(operationID) {
+			return errors.New("store: privacy v3 code-signing selector is not a canonical operation id")
+		}
+	}
+	for _, selector := range append(
+		append([]PrivacyApprovalSelector(nil), selectors.ApprovalRequests...),
+		selectors.Approvals...,
+	) {
+		if selector.Resource != "" || selector.Action != "" ||
+			!IsPrivacyReference(selector.BindingRef) {
+			return errors.New("store: privacy v3 approval selector contains a raw or invalid composite key")
+		}
+	}
+	for _, selector := range selectors.ReadModels {
+		if _, ok := privacyReadModelSelectorTables[selector.Table]; !ok {
+			return fmt.Errorf("store: privacy v3 selector table %q is unsupported", selector.Table)
+		}
+		for _, id := range []string{selector.ID, selector.ParentID} {
+			if id == "" {
+				continue
+			}
+			if !validPrivacyUUID(id) {
+				return fmt.Errorf("store: privacy v3 %s selector contains a non-UUID row key", selector.Table)
+			}
+		}
+		if selector.Table == "notification_threshold_deliveries" {
+			if selector.ID != "" || selector.ParentID != "" || selector.ThresholdDays <= 0 {
+				return errors.New("store: privacy v3 notification threshold selector is malformed")
+			}
+		} else if selector.ID == "" || selector.ThresholdDays != 0 {
+			return fmt.Errorf("store: privacy v3 %s selector is incomplete", selector.Table)
+		}
+	}
+	return nil
+}
+
+func validPrivacyUUID(value string) bool {
+	parsed, err := uuid.Parse(value)
+	return err == nil && parsed.String() == value
+}
+
+func validCodeSigningOperationID(value string) bool {
+	const prefix = "codesign-"
+	if !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	return validPrivacyUUID(strings.TrimPrefix(value, prefix))
+}
+
+// IsPrivacyReference reports whether a value is the canonical lowercase
+// SHA-256 shape emitted by privacy.SubjectRef. It validates only the opaque
+// storage shape; the tenant/raw-subject binding is proved by the producer.
+func IsPrivacyReference(ref string) bool {
+	if len(ref) != 64 {
+		return false
+	}
+	decoded, err := hex.DecodeString(ref)
+	return err == nil && len(decoded) == 32 && strings.ToLower(ref) == ref
+}
+
+// ValidatePrivacyErasureCountsV3 rejects arbitrary map keys that could smuggle
+// subject text into the v3 event. Values are aggregate row counts only.
+func ValidatePrivacyErasureCountsV3(counts map[string]int) error {
+	allowed := map[string]struct{}{
+		"owners": {}, "identities": {}, "certificates": {}, "ssh_keys": {},
+		"attestations": {}, "approval_requests": {}, "approvals": {},
+		"profiles": {}, "agents": {}, "agent_offboard_actors": {},
+		"agent_offboard_reasons": {}, "api_tokens": {}, "tenant_members": {},
+		"read_models": {}, "application_secret_mutation_fences": {},
+		"approved_target_event_fences": {}, "code_signing_operations": {},
+		"read_model_snapshots": {}, "secret_rotation_schedule_ticks": {},
+		"secret_rotation_schedule_tick_rows":         {},
+		"secret_rotation_schedule_commands":          {},
+		"secret_rotation_schedule_outer_resolutions": {},
+	}
+	for table := range privacyReadModelSelectorTables {
+		allowed[table] = struct{}{}
+	}
+	for key, count := range counts {
+		if _, ok := allowed[key]; !ok || count < 0 {
+			return fmt.Errorf("store: privacy v3 count %q is unsupported or negative", key)
+		}
+	}
+	return nil
 }
 
 // PrivacySubjectErasure is the projected evidence for one subject erasure.
@@ -80,11 +211,12 @@ type PrivacySubjectErasureOperation struct {
 // the subject can see — the inverse capability. SelectPrivacySubjectExport collects
 // every subject-linked record across the privacy catalog (owners, identities,
 // certificates, SSH keys, attestations, tenant members, API tokens, dual-control
-// approvals) for one tenant under RLS (AN-1). It is a pure READ: it carries no
-// secret material (API-token hashes are never selected; only the principal subject
-// and non-secret metadata), so the result is safe to hand to the subject or an
-// auditor. It is the served basis for export; rectify/erase reuse the existing
-// event-sourced erasure/retention machinery.
+// approvals, including exact operation-approval authority) for one tenant under
+// RLS (AN-1). It is a pure READ: it carries no secret material (API-token hashes
+// are never selected; only the principal subject and non-secret metadata), so the
+// result is safe to hand to the subject or an auditor. It is the served basis for
+// export; rectify/erase reuse the existing event-sourced erasure/retention
+// machinery.
 
 // PrivacyOwnerRecord is one owner row linked to the subject.
 type PrivacyOwnerRecord struct {
@@ -486,112 +618,275 @@ func (s *Store) SelectPrivacySubjectErasure(ctx context.Context, tenantID, subje
 	if subject == "" {
 		return PrivacySubjectErasure{}, fmt.Errorf("store: privacy erasure requires a subject")
 	}
-	out := PrivacySubjectErasure{
+	var out PrivacySubjectErasure
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return s.selectPrivacySubjectErasureTx(ctx, tx, tenantID, subject, &out)
+	})
+	return out, err
+}
+
+// selectPrivacySubjectErasureTx captures every stable selector on the caller's
+// transaction. Privacy rewrite preparation uses this form so no SQL recovery
+// fence or approval authority can change between selection and its pre-cutover
+// pseudonymization.
+func (s *Store) selectPrivacySubjectErasureTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, subject string,
+	out *PrivacySubjectErasure,
+) error {
+	if out == nil {
+		return errors.New("store: privacy erasure selector output is nil")
+	}
+	*out = PrivacySubjectErasure{
 		TenantID:   tenantID,
 		SubjectRef: privacy.SubjectRef(tenantID, subject),
 		Counts:     map[string]int{},
 	}
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		var err error
-		if out.Selectors.OwnerIDs, err = selectStrings(ctx, tx,
-			`SELECT id::text FROM owners
+	var err error
+	if out.Selectors.OwnerIDs, err = selectStrings(ctx, tx,
+		`SELECT id::text FROM owners
 			  WHERE tenant_id = $1 AND (email = $2 OR name = $2)
 			  ORDER BY id`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.IdentityIDs, err = selectStrings(ctx, tx,
-			`SELECT id::text FROM identities
+		return err
+	}
+	if out.Selectors.IdentityIDs, err = selectStrings(ctx, tx,
+		`SELECT id::text FROM identities
 			  WHERE tenant_id = $1 AND (name = $2 OR position($2 in attributes::text) > 0)
 			  ORDER BY id`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.CertificateFingerprints, err = selectStrings(ctx, tx,
-			`SELECT fingerprint FROM certificates
-				  WHERE tenant_id = $1
-				    AND (subject = $2 OR subject = 'CN=' || $2 OR $2 = ANY(sans) OR deployment_location = $2 OR source = $2)
-				  ORDER BY fingerprint`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.SSHKeyIDs, err = selectStrings(ctx, tx,
-			`SELECT id::text FROM ssh_keys
+		return err
+	}
+	certificateFingerprints, err := selectStrings(ctx, tx,
+		`SELECT fingerprint FROM certificates
+			  WHERE tenant_id = $1
+			    AND (subject = $2 OR subject = 'CN=' || $2 OR $2 = ANY(sans) OR deployment_location = $2 OR source = $2)
+			  ORDER BY fingerprint`, tenantID, subject)
+	if err != nil {
+		return err
+	}
+	for _, fingerprint := range certificateFingerprints {
+		out.Selectors.CertificateRefs = append(out.Selectors.CertificateRefs,
+			privacyCertificateRef(tenantID, fingerprint))
+	}
+	if out.Selectors.SSHKeyIDs, err = selectStrings(ctx, tx,
+		`SELECT id::text FROM ssh_keys
 			  WHERE tenant_id = $1 AND (comment = $2 OR location = $2)
 			  ORDER BY id`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.AttestationIDs, err = selectStrings(ctx, tx,
-			`SELECT id::text FROM attestations
+		return err
+	}
+	if out.Selectors.AttestationIDs, err = selectStrings(ctx, tx,
+		`SELECT id::text FROM attestations
 			  WHERE tenant_id = $1 AND position($2 in evidence::text) > 0
 			  ORDER BY id`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.ApprovalRequests, err = selectPrivacyApprovalSelectors(ctx, tx,
-			`SELECT resource, action
+		return err
+	}
+	if out.Selectors.ApprovalRequests, err = selectPrivacyApprovalSelectors(ctx, tx, tenantID,
+		`SELECT resource, action
 			   FROM issuance_approval_requests
 			  WHERE tenant_id = $1 AND requester = $2
 			  ORDER BY resource, action`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.Approvals, err = selectPrivacyApprovalSelectors(ctx, tx,
-			`SELECT resource, action
+		return err
+	}
+	if out.Selectors.Approvals, err = selectPrivacyApprovalSelectors(ctx, tx, tenantID,
+		`SELECT resource, action
 			   FROM issuance_approvals
 			  WHERE tenant_id = $1 AND approver = $2
 			  ORDER BY resource, action`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.ProfileIDs, err = selectStrings(ctx, tx,
-			`SELECT id::text FROM certificate_profiles
+		return err
+	}
+	if out.Selectors.ProfileIDs, err = selectStrings(ctx, tx,
+		`SELECT id::text FROM certificate_profiles
 			  WHERE tenant_id = $1 AND created_by = $2
 			  ORDER BY id`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.AgentIDs, err = selectStrings(ctx, tx,
-			`SELECT id::text FROM agents
+		return err
+	}
+	if out.Selectors.AgentIDs, err = selectStrings(ctx, tx,
+		`SELECT id::text FROM agents
 				  WHERE tenant_id = $1 AND name = $2
 				  ORDER BY id`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.AgentOffboardActorIDs, err = selectStrings(ctx, tx,
-			`SELECT id::text FROM agents
+		return err
+	}
+	if out.Selectors.AgentOffboardActorIDs, err = selectStrings(ctx, tx,
+		`SELECT id::text FROM agents
 			  WHERE tenant_id = $1 AND COALESCE(offboarded_by, '') = $2
 			  ORDER BY id`, tenantID, subject); err != nil {
-			return err
-		}
-		if out.Selectors.AgentOffboardReasonIDs, err = selectStrings(ctx, tx,
-			`SELECT id::text FROM agents
+		return err
+	}
+	if out.Selectors.AgentOffboardReasonIDs, err = selectStrings(ctx, tx,
+		`SELECT id::text FROM agents
 			  WHERE tenant_id = $1 AND position($2 in COALESCE(offboard_reason, '')) > 0
 			  ORDER BY id`, tenantID, subject); err != nil {
-			return err
-		}
-		for _, q := range privacyReadModelSelectorQueries(tenantID, subject) {
-			if err := appendPrivacyReadModelSelectors(ctx, tx, &out.Selectors.ReadModels, q.table, q.sql, q.args...); err != nil {
-				return err
-			}
-		}
-		memberCount, err := selectCount(ctx, tx,
-			`SELECT count(*) FROM tenant_members WHERE tenant_id = $1 AND subject_ref = $2`,
-			tenantID, out.SubjectRef)
-		if err != nil {
-			return err
-		}
-		tokenCount, err := selectCount(ctx, tx,
-			`SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject_ref = $2`,
-			tenantID, out.SubjectRef)
-		if err != nil {
-			return err
-		}
-		out.Counts["tenant_members"] = memberCount
-		out.Counts["api_tokens"] = tokenCount
-		return nil
-	})
-	if err != nil {
-		return PrivacySubjectErasure{}, err
+		return err
 	}
+	for _, q := range privacyReadModelSelectorQueries(tenantID, subject) {
+		if err := appendPrivacyReadModelSelectors(ctx, tx, &out.Selectors.ReadModels, q.table, q.sql, q.args...); err != nil {
+			return err
+		}
+	}
+	if out.Selectors.CodeSigningOperationIDs, err = selectLegacyCodeSigningOperationsForSubject(
+		ctx, tx, tenantID, subject,
+	); err != nil {
+		return err
+	}
+	memberCount, err := selectCount(ctx, tx,
+		`SELECT count(*) FROM tenant_members WHERE tenant_id = $1 AND subject_ref = $2`,
+		tenantID, out.SubjectRef)
+	if err != nil {
+		return err
+	}
+	tokenCount, err := selectCount(ctx, tx,
+		`SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject_ref = $2`,
+		tenantID, out.SubjectRef)
+	if err != nil {
+		return err
+	}
+	out.Counts["tenant_members"] = memberCount
+	out.Counts["api_tokens"] = tokenCount
+	fenceCount, err := selectCount(ctx, tx,
+		`SELECT count(*) FROM application_secret_mutation_fences
+			  WHERE tenant_id = $1
+			    AND ((requester_ref = $2 AND event_time IS NULL AND approval IS NULL)
+			         OR actor_subject_ref = $2)`, tenantID, out.SubjectRef)
+	if err != nil {
+		return err
+	}
+	out.Counts["application_secret_mutation_fences"] = fenceCount
 	for k, v := range countsForPrivacySelectors(out.Selectors) {
 		if _, ok := out.Counts[k]; !ok {
 			out.Counts[k] = v
 		}
 	}
-	return out, nil
+	return nil
+}
+
+// selectLegacyCodeSigningOperationsForSubject keeps the raw mutation key inside
+// the selecting transaction. Only rows whose historical v1/v2 UUID derivation
+// proves that the stored value is the original key become event selectors; a v3
+// digest that happens to contain the subject text is never misclassified.
+func selectLegacyCodeSigningOperationsForSubject(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, subject string,
+) ([]string, error) {
+	rows, err := tx.Query(ctx, `SELECT operation_id, idempotency_key
+		FROM code_signing_operations
+		WHERE tenant_id = $1 AND position($2 in idempotency_key) > 0
+		ORDER BY operation_id`, tenantID, subject)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var operationIDs []string
+	for rows.Next() {
+		var operationID, idempotencyKey string
+		if err := rows.Scan(&operationID, &idempotencyKey); err != nil {
+			return nil, err
+		}
+		if LegacyCodeSigningOperationID(tenantID, idempotencyKey) == operationID {
+			operationIDs = append(operationIDs, operationID)
+		}
+	}
+	return operationIDs, rows.Err()
+}
+
+// pseudonymizeLegacyCodeSigningOperationKeysTx converges a warm row with the
+// privacy-rewritten v1/v2 event representation. The exact operation selector is
+// the durable mapping: raw legacy keys are accepted only when they derive that
+// historical UUID, and current v3 identities can never cross this branch.
+func pseudonymizeLegacyCodeSigningOperationKeysTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	operationIDs []string,
+) error {
+	if len(operationIDs) == 0 {
+		return nil
+	}
+	type operation struct {
+		operationID, idempotencyKey, mode, requestHash string
+		sealedCommand                                  []byte
+		createdAt                                      time.Time
+		sourceEventID, approvalRequestID               string
+		approvalIntentDigest, semanticDigest           string
+	}
+	rows, err := tx.Query(ctx, `SELECT operation_id, idempotency_key, mode, request_hash,
+		sealed_command, created_at, COALESCE(source_event_id::text, ''),
+		COALESCE(approval_request_id::text, ''), COALESCE(approval_intent_digest, ''),
+		COALESCE(command_semantic_sha256, '')
+		FROM code_signing_operations
+		WHERE tenant_id = $1 AND operation_id = ANY($2::text[])
+		ORDER BY operation_id FOR UPDATE`, tenantID, operationIDs)
+	if err != nil {
+		return err
+	}
+	operations := make(map[string]operation, len(operationIDs))
+	for rows.Next() {
+		var item operation
+		if err := rows.Scan(&item.operationID, &item.idempotencyKey, &item.mode,
+			&item.requestHash, &item.sealedCommand, &item.createdAt, &item.sourceEventID,
+			&item.approvalRequestID, &item.approvalIntentDigest, &item.semanticDigest); err != nil {
+			rows.Close()
+			return err
+		}
+		operations[item.operationID] = item
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, operationID := range operationIDs {
+		item, ok := operations[operationID]
+		if !ok {
+			return fmt.Errorf("%w: selected code-signing operation disappeared", ErrIdempotencyConflict)
+		}
+		mapped := item.idempotencyKey
+		keyDigest, alreadyMapped := LegacyCodeSigningStorageKeyDigest(item.idempotencyKey, operationID)
+		if !alreadyMapped {
+			if codesigningref.IsLegacyStorageKey(item.idempotencyKey) ||
+				LegacyCodeSigningOperationID(tenantID, item.idempotencyKey) != operationID {
+				return fmt.Errorf("%w: selected code-signing operation is not a legacy raw-key row", ErrIdempotencyConflict)
+			}
+			keyDigest = CodeSigningIdempotencyKeyDigest(item.idempotencyKey)
+			mapped = LegacyCodeSigningStorageKey(operationID, item.idempotencyKey)
+		}
+		semanticDigest := item.semanticDigest
+		switch {
+		case item.sourceEventID == "":
+			if item.approvalRequestID != "" || item.approvalIntentDigest != "" || item.semanticDigest != "" {
+				return fmt.Errorf("%w: unapproved legacy code-signing operation carries approval identity", ErrIdempotencyConflict)
+			}
+		case item.approvalRequestID == "" || item.approvalIntentDigest == "":
+			return fmt.Errorf("%w: approved legacy code-signing operation lacks approval identity", ErrIdempotencyConflict)
+		default:
+			var err error
+			semanticDigest, err = codesigningref.LegacyApprovedCommandSemanticDigest(
+				codesigningref.LegacyApprovedCommandSemanticBasis{
+					EventID: item.sourceEventID, TenantID: tenantID, EventTime: item.createdAt,
+					OperationID: operationID, KeyDigest: keyDigest, Mode: item.mode,
+					RequestHash: item.requestHash, SealedCommand: item.sealedCommand,
+					ApprovalRequestID:    item.approvalRequestID,
+					ApprovalIntentDigest: item.approvalIntentDigest,
+				})
+			if err != nil {
+				return err
+			}
+		}
+		if !alreadyMapped && LegacyCodeSigningOperationID(tenantID, item.idempotencyKey) != operationID {
+			return fmt.Errorf("%w: selected code-signing operation is not a legacy raw-key row", ErrIdempotencyConflict)
+		}
+		tag, err := tx.Exec(ctx, `UPDATE code_signing_operations
+			SET idempotency_key = $3, command_semantic_sha256 = NULLIF($4, '')
+			WHERE tenant_id = $1 AND operation_id = $2 AND idempotency_key = $5`,
+			tenantID, operationID, mapped, semanticDigest, item.idempotencyKey)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return fmt.Errorf("%w: selected code-signing operation changed during privacy erasure", ErrIdempotencyConflict)
+		}
+	}
+	return nil
 }
 
 // SelectPrivacyRetention counts terminal/stale personal-data rows for one tenant.
@@ -671,6 +966,11 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		return err
 	}
 	placeholder := privacy.Placeholder(e.SubjectRef)
+	if err := pseudonymizeLegacyCodeSigningOperationKeysTx(
+		ctx, tx, e.TenantID, e.Selectors.CodeSigningOperationIDs,
+	); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE tenant_members
 		    SET subject = $3,
@@ -709,6 +1009,12 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		e.TenantID, e.Selectors.IdentityIDs); err != nil {
 		return err
 	}
+	certificateFingerprints, err := resolvePrivacyCertificateFingerprints(
+		ctx, tx, e.TenantID, e.Selectors,
+	)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE certificates
 			    SET subject = 'erased:' || left(fingerprint, 12),
@@ -716,7 +1022,7 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 			        deployment_location = '',
 			        source = ''
 			  WHERE tenant_id = $1 AND fingerprint = ANY($2::text[])`,
-		e.TenantID, e.Selectors.CertificateFingerprints); err != nil {
+		e.TenantID, certificateFingerprints); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx,
@@ -737,6 +1043,29 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		return err
 	}
 	if err := eraseApprovalActors(ctx, tx, e.TenantID, e.SubjectRef, placeholder, e.Selectors.Approvals); err != nil {
+		return err
+	}
+	// A command has not crossed its point of no return until event_time is durable.
+	// Delete every earlier state, including a bound approval: keeping it would let
+	// restart publish an event for the erased actor. The selected approval request
+	// is independently pseudonymized and superseded above.
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM application_secret_mutation_fences
+		  WHERE tenant_id = $1
+		    AND (requester_ref = $2 OR actor_subject_ref = $2)
+		    AND event_time IS NULL`, e.TenantID, e.SubjectRef); err != nil {
+		return err
+	}
+	// A bound/finalized command is already the durable point of no return. Keep
+	// its recoverable audit envelope, but replace only the raw actor subject with
+	// the same tenant-bound placeholder used by event-history erasure. Roles are
+	// authorization metadata, not PII, and remain byte-for-byte exact.
+	if _, err := tx.Exec(ctx,
+		`UPDATE application_secret_mutation_fences
+		    SET actor = jsonb_set(actor, '{subject}', to_jsonb($3::text), false),
+		        actor_subject_ref = NULL
+		  WHERE tenant_id = $1 AND actor_subject_ref = $2`,
+		e.TenantID, e.SubjectRef, placeholder); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx,
@@ -818,7 +1147,10 @@ func (s *Store) ApplyPrivacySubjectErasureOperationTx(
 	}
 	if tag.RowsAffected() == 1 {
 		op.Counts = counts
-		return s.ApplyPrivacySubjectErasedTx(ctx, tx, op.PrivacySubjectErasure)
+		if err := s.ApplyPrivacySubjectErasedTx(ctx, tx, op.PrivacySubjectErasure); err != nil {
+			return err
+		}
+		return s.completePrivacySubjectErasurePreparationTx(ctx, tx, op)
 	}
 
 	existing, err := scanPrivacySubjectErasureOperation(tx.QueryRow(ctx,
@@ -849,7 +1181,26 @@ func (s *Store) ApplyPrivacySubjectErasureOperationTx(
 	// subject aggregate. Reapplying the exact event must therefore still rebuild
 	// that aggregate; replay order ensures a later subject operation wins again.
 	op.Counts = counts
-	return s.ApplyPrivacySubjectErasedTx(ctx, tx, op.PrivacySubjectErasure)
+	if err := s.ApplyPrivacySubjectErasedTx(ctx, tx, op.PrivacySubjectErasure); err != nil {
+		return err
+	}
+	return s.completePrivacySubjectErasurePreparationTx(ctx, tx, op)
+}
+
+func (s *Store) completePrivacySubjectErasurePreparationTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	op PrivacySubjectErasureOperation,
+) error {
+	// Missing is valid during cold replay and DR: the preparation is independent
+	// crash state, not an event-sourced read model. If it is present, delete only
+	// the exact operation/binding/event/subject tuple after every erasure write in
+	// this same transaction has succeeded.
+	_, err := tx.Exec(ctx, `DELETE FROM privacy_subject_erasure_preparations
+		WHERE tenant_id = $1 AND operation_id = $2 AND request_binding = $3
+		  AND event_id = $4 AND subject_ref = $5`,
+		op.TenantID, op.OperationID, op.RequestBinding, op.EventID, op.SubjectRef)
+	return err
 }
 
 // GetPrivacySubjectErasureOperationByEventID resolves the raw-key-derived event
@@ -986,6 +1337,47 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 		    AND approved_at < $2
 		    AND approver <> ''
 		    AND approver NOT LIKE 'retained:%'`,
+		r.TenantID, r.Cutoffs.ApprovalActorBefore); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE operation_approval_requests AS r
+		    SET requester = CASE
+		          WHEN requester LIKE 'retained:%' OR requester LIKE 'erased:%' THEN requester
+		          ELSE 'retained:' || left(md5($1::text || ':' || requester), 12)
+		        END,
+		        reason = '',
+		        evidence_refs = '[]'::jsonb
+		  WHERE r.tenant_id = $1
+		    AND (
+		          (status IN ('denied', 'expired', 'superseded', 'consumed') AND updated_at < $2)
+		       OR (status IN ('pending', 'approved') AND expires_at < $2)
+		    )
+		    AND (
+		          (requester NOT LIKE 'retained:%' AND requester NOT LIKE 'erased:%')
+		       OR reason <> ''
+		       OR evidence_refs <> '[]'::jsonb
+		    )
+		    AND NOT EXISTS (
+		          SELECT 1 FROM approved_target_event_fences f
+		           WHERE f.tenant_id = r.tenant_id AND f.approval_request_id = r.id
+		    )`,
+		r.TenantID, r.Cutoffs.ApprovalActorBefore); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE operation_approval_decisions
+		    SET approver = CASE
+		          WHEN approver LIKE 'retained:%' OR approver LIKE 'erased:%' THEN approver
+		          ELSE 'retained:' || left(md5($1::text || ':' || approver), 12)
+		        END,
+		        reason = ''
+		  WHERE tenant_id = $1
+		    AND decided_at < $2
+		    AND (
+		          (approver NOT LIKE 'retained:%' AND approver NOT LIKE 'erased:%')
+		       OR reason <> ''
+		    )`,
 		r.TenantID, r.Cutoffs.ApprovalActorBefore); err != nil {
 		return err
 	}
@@ -1563,6 +1955,28 @@ func discoveryPrivacyJSONHasRetainablePII(column string) string {
 func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQuery {
 	return []privacyReadModelQuery{
 		{
+			table: "operation_approval_requests",
+			sql: `SELECT id::text, ''::text,
+			             jsonb_build_object('intent_digest', intent_digest, 'resource_kind', resource_kind, 'resource_id', resource_id, 'resource_name', resource_name, 'action', action, 'requester', requester, 'from_state', from_state, 'to_state', to_state, 'target_version', target_version, 'reason', reason, 'evidence_refs', evidence_refs, 'required_approvals', required_approvals, 'status', status, 'created_at', created_at, 'expires_at', expires_at, 'updated_at', updated_at, 'consumed_at', consumed_at, 'consumed_event_id', consumed_event_id)::text,
+			             created_at
+			        FROM operation_approval_requests
+			       WHERE tenant_id = $1
+			         AND (requester = $2 OR position($2 in reason) > 0 OR position($2 in evidence_refs::text) > 0)
+			       ORDER BY id`,
+			args: []any{tenantID, subject},
+		},
+		{
+			table: "operation_approval_decisions",
+			sql: `SELECT event_id::text, request_id::text,
+			             jsonb_build_object('intent_digest', intent_digest, 'approver', approver, 'decision', decision, 'reason', reason, 'event_id', event_id, 'decided_at', decided_at)::text,
+			             decided_at
+			        FROM operation_approval_decisions
+			       WHERE tenant_id = $1
+			         AND (approver = $2 OR position($2 in reason) > 0)
+			       ORDER BY request_id, event_id`,
+			args: []any{tenantID, subject},
+		},
+		{
 			table: "pam_sessions",
 			sql: `SELECT id::text, ''::text,
 			             jsonb_build_object('target_type', target_type, 'target_id', target_id, 'role', role, 'status', status, 'subject', subject, 'requested_by', requested_by, 'reason', reason, 'audit', audit, 'started_at', started_at, 'expires_at', expires_at, 'ended_at', ended_at)::text,
@@ -1719,6 +2133,29 @@ func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQ
 
 func privacyReadModelSelectorQueries(tenantID, subject string) []privacyReadModelQuery {
 	return []privacyReadModelQuery{
+		{table: "operation_approval_requests", sql: `SELECT id::text, ''::text, 0 FROM operation_approval_requests WHERE tenant_id = $1 AND (requester = $2 OR position($2 in resource_kind) > 0 OR position($2 in resource_id) > 0 OR position($2 in resource_name) > 0 OR position($2 in action) > 0 OR position($2 in from_state) > 0 OR position($2 in to_state) > 0 OR position($2 in reason) > 0 OR position($2 in evidence_refs::text) > 0) ORDER BY id`, args: []any{tenantID, subject}},
+		{
+			table: "operation_approval_decisions",
+			sql: `SELECT d.event_id::text, d.request_id::text, 0
+			        FROM operation_approval_decisions d
+			        JOIN operation_approval_requests r
+			          ON r.tenant_id = d.tenant_id AND r.id = d.request_id
+			       WHERE d.tenant_id = $1
+			         AND (
+			               d.approver = $2 OR position($2 in d.reason) > 0
+			            OR r.requester = $2
+			            OR position($2 in r.resource_kind) > 0
+			            OR position($2 in r.resource_id) > 0
+			            OR position($2 in r.resource_name) > 0
+			            OR position($2 in r.action) > 0
+			            OR position($2 in r.from_state) > 0
+			            OR position($2 in r.to_state) > 0
+			            OR position($2 in r.reason) > 0
+			            OR position($2 in r.evidence_refs::text) > 0
+			         )
+			       ORDER BY d.request_id, d.event_id`,
+			args: []any{tenantID, subject},
+		},
 		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_sources", sql: `SELECT id::text, ''::text, 0 FROM discovery_sources WHERE tenant_id = $1 AND ` + discoveryPrivacyJSONStringMatch("config", "$2") + ` ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_findings", sql: `SELECT id::text, ''::text, 0 FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `) ORDER BY id`, args: []any{tenantID, subject}},
@@ -1785,7 +2222,12 @@ func selectStrings(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]s
 	return out, rows.Err()
 }
 
-func selectPrivacyApprovalSelectors(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]PrivacyApprovalSelector, error) {
+func selectPrivacyApprovalSelectors(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, sql string,
+	args ...any,
+) ([]PrivacyApprovalSelector, error) {
 	rows, err := tx.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
@@ -1793,17 +2235,74 @@ func selectPrivacyApprovalSelectors(ctx context.Context, tx pgx.Tx, sql string, 
 	defer rows.Close()
 	var out []PrivacyApprovalSelector
 	for rows.Next() {
-		var v PrivacyApprovalSelector
-		if err := rows.Scan(&v.Resource, &v.Action); err != nil {
+		var resource, action string
+		if err := rows.Scan(&resource, &action); err != nil {
 			return nil, err
 		}
-		out = append(out, v)
+		out = append(out, PrivacyApprovalSelector{
+			BindingRef: privacyApprovalBindingRef(tenantID, resource, action),
+		})
 	}
 	return out, rows.Err()
 }
 
+func privacyApprovalBindingRef(tenantID, resource, action string) string {
+	return privacy.SubjectRef(tenantID, "issuance-approval\x00"+resource+"\x00"+action)
+}
+
+func privacyCertificateRef(tenantID, fingerprint string) string {
+	return privacy.SubjectRef(tenantID, "certificate-fingerprint\x00"+fingerprint)
+}
+
+func resolvePrivacyCertificateFingerprints(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	selectors PrivacyErasureSelectors,
+) ([]string, error) {
+	fingerprints := append([]string(nil), selectors.CertificateFingerprints...)
+	if len(selectors.CertificateRefs) == 0 {
+		return fingerprints, nil
+	}
+	wanted := make(map[string]struct{}, len(selectors.CertificateRefs))
+	for _, ref := range selectors.CertificateRefs {
+		wanted[ref] = struct{}{}
+	}
+	rows, err := tx.Query(ctx, `SELECT fingerprint FROM certificates
+		WHERE tenant_id = $1 ORDER BY fingerprint`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	seen := make(map[string]struct{}, len(wanted))
+	for rows.Next() {
+		var fingerprint string
+		if err := rows.Scan(&fingerprint); err != nil {
+			return nil, err
+		}
+		ref := privacyCertificateRef(tenantID, fingerprint)
+		if _, ok := wanted[ref]; !ok {
+			continue
+		}
+		if _, duplicate := seen[ref]; duplicate {
+			return nil, fmt.Errorf("%w: privacy certificate reference collision", ErrIdempotencyConflict)
+		}
+		seen[ref] = struct{}{}
+		fingerprints = append(fingerprints, fingerprint)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return fingerprints, nil
+}
+
 func eraseApprovalRequestActors(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyApprovalSelector) error {
-	for _, sel := range selectors {
+	keys, err := resolvePrivacyApprovalSelectorKeys(ctx, tx, tenantID,
+		"issuance_approval_requests", selectors)
+	if err != nil {
+		return err
+	}
+	for _, sel := range keys {
 		var requester string
 		err := tx.QueryRow(ctx,
 			`SELECT requester
@@ -1831,7 +2330,12 @@ func eraseApprovalRequestActors(ctx context.Context, tx pgx.Tx, tenantID, subjec
 }
 
 func eraseApprovalActors(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyApprovalSelector) error {
-	for _, sel := range selectors {
+	keys, err := resolvePrivacyApprovalSelectorKeys(ctx, tx, tenantID,
+		"issuance_approvals", selectors)
+	if err != nil {
+		return err
+	}
+	for _, sel := range keys {
 		rows, err := tx.Query(ctx,
 			`SELECT approver
 			   FROM issuance_approvals
@@ -1869,11 +2373,68 @@ func eraseApprovalActors(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, p
 	return nil
 }
 
+func resolvePrivacyApprovalSelectorKeys(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, table string,
+	selectors []PrivacyApprovalSelector,
+) ([]PrivacyApprovalSelector, error) {
+	if len(selectors) == 0 {
+		return nil, nil
+	}
+	byRef := make(map[string]struct{}, len(selectors))
+	keys := make([]PrivacyApprovalSelector, 0, len(selectors))
+	for _, selector := range selectors {
+		if selector.BindingRef != "" {
+			byRef[selector.BindingRef] = struct{}{}
+			continue
+		}
+		// v1/v2 compatibility: historical events carried the raw composite key.
+		if selector.Resource != "" || selector.Action != "" {
+			keys = append(keys, selector)
+		}
+	}
+	if len(byRef) == 0 {
+		return keys, nil
+	}
+	if table != "issuance_approval_requests" && table != "issuance_approvals" {
+		return nil, errors.New("store: unsupported privacy approval selector table")
+	}
+	rows, err := tx.Query(ctx, `SELECT DISTINCT resource, action FROM `+table+`
+		WHERE tenant_id = $1 ORDER BY resource, action`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	seen := make(map[string]struct{}, len(byRef))
+	for rows.Next() {
+		var resource, action string
+		if err := rows.Scan(&resource, &action); err != nil {
+			return nil, err
+		}
+		ref := privacyApprovalBindingRef(tenantID, resource, action)
+		if _, wanted := byRef[ref]; !wanted {
+			continue
+		}
+		if _, duplicate := seen[ref]; duplicate {
+			return nil, fmt.Errorf("%w: privacy approval binding reference collision", ErrIdempotencyConflict)
+		}
+		seen[ref] = struct{}{}
+		keys = append(keys, PrivacyApprovalSelector{Resource: resource, Action: action})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
 func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
 	if len(selectors) == 0 {
 		return nil
 	}
 	for _, fn := range []func(context.Context, pgx.Tx, string, string, string, []PrivacyReadModelSelector) error{
+		eraseOperationApprovalDecisionPrivacyRows,
+		eraseOperationApprovalRequestPrivacyRows,
 		erasePAMSessionPrivacyRows,
 		eraseDiscoverySourcePrivacyRows,
 		eraseDiscoveryFindingPrivacyRows,
@@ -1892,6 +2453,151 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 		if err := fn(ctx, tx, tenantID, subjectRef, placeholder, selectors); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func operationApprovalRequesterIDsMatchingSubjectRef(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, subjectRef string,
+	ids []string,
+) ([]string, error) {
+	rows, err := tx.Query(ctx, `SELECT id::text, requester
+		FROM operation_approval_requests
+		WHERE tenant_id = $1 AND id::text = ANY($2::text[])
+		ORDER BY id
+		FOR UPDATE`, tenantID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	matches := make([]string, 0, len(ids))
+	seen := 0
+	for rows.Next() {
+		var id, requester string
+		if err := rows.Scan(&id, &requester); err != nil {
+			return nil, err
+		}
+		seen++
+		if subjectValueMatches(tenantID, subjectRef, requester) {
+			matches = append(matches, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if seen != len(ids) {
+		return nil, fmt.Errorf("%w: selected operation approval request is missing", ErrIdempotencyConflict)
+	}
+	return matches, nil
+}
+
+func operationApprovalDecisionIDsMatchingSubjectRef(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, subjectRef string,
+	ids []string,
+) ([]string, error) {
+	rows, err := tx.Query(ctx, `SELECT event_id::text, approver
+		FROM operation_approval_decisions
+		WHERE tenant_id = $1 AND event_id::text = ANY($2::text[])
+		ORDER BY event_id
+		FOR UPDATE`, tenantID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	matches := make([]string, 0, len(ids))
+	seen := 0
+	for rows.Next() {
+		var id, approver string
+		if err := rows.Scan(&id, &approver); err != nil {
+			return nil, err
+		}
+		seen++
+		if subjectValueMatches(tenantID, subjectRef, approver) {
+			matches = append(matches, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if seen != len(ids) {
+		return nil, fmt.Errorf("%w: selected operation approval decision is missing", ErrIdempotencyConflict)
+	}
+	return matches, nil
+}
+
+func eraseOperationApprovalRequestPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	ids := readModelIDs(selectors, "operation_approval_requests")
+	if len(ids) == 0 {
+		return nil
+	}
+	directRequesterIDs, err := operationApprovalRequesterIDsMatchingSubjectRef(
+		ctx, tx, tenantID, subjectRef, ids,
+	)
+	if err != nil {
+		return err
+	}
+	// Requester, reason, and evidence are part of the immutable intent digest. A
+	// privacy projection may pseudonymize those fields, but it must first revoke
+	// any still-live authority. Otherwise the altered row could remain approved
+	// even though it no longer describes the command reviewers saw.
+	tag, err := tx.Exec(ctx,
+		`UPDATE operation_approval_requests
+		    SET resource_kind = $3, resource_id = $3, resource_name = $3,
+		        action = $3,
+		        requester = CASE WHEN id::text = ANY($4::text[]) THEN $3 ELSE requester END,
+		        from_state = $3, to_state = $3,
+		        reason = '', evidence_refs = '[]'::jsonb,
+		        status = CASE WHEN status IN ('pending', 'approved') THEN 'superseded' ELSE status END
+		  WHERE tenant_id = $1 AND id::text = ANY($2::text[])`,
+		tenantID, ids, placeholder, directRequesterIDs)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != int64(len(ids)) {
+		return fmt.Errorf("%w: selected operation approval request is missing", ErrIdempotencyConflict)
+	}
+	return nil
+}
+
+func eraseOperationApprovalDecisionPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	ids := readModelIDs(selectors, "operation_approval_decisions")
+	if len(ids) == 0 {
+		return nil
+	}
+	directApproverIDs, err := operationApprovalDecisionIDsMatchingSubjectRef(
+		ctx, tx, tenantID, subjectRef, ids,
+	)
+	if err != nil {
+		return err
+	}
+	// An approver identity is part of the quorum proof. Supersede every live
+	// parent before pseudonymizing a selected decision so erasure cannot turn a
+	// modified quorum into reusable authority.
+	if _, err := tx.Exec(ctx,
+		`UPDATE operation_approval_requests r
+		    SET status = 'superseded'
+		  WHERE r.tenant_id = $1 AND r.status IN ('pending', 'approved')
+		    AND EXISTS (
+		          SELECT 1 FROM operation_approval_decisions d
+		           WHERE d.tenant_id = r.tenant_id AND d.request_id = r.id
+		             AND d.event_id::text = ANY($2::text[])
+		        )`, tenantID, ids); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `UPDATE operation_approval_decisions
+		SET approver = CASE WHEN event_id::text = ANY($4::text[]) THEN $3 ELSE approver END,
+		    reason = ''
+		WHERE tenant_id = $1 AND event_id::text = ANY($2::text[])`,
+		tenantID, ids, placeholder, directApproverIDs)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != int64(len(ids)) {
+		return fmt.Errorf("%w: selected operation approval decision is missing", ErrIdempotencyConflict)
 	}
 	return nil
 }
@@ -2726,6 +3432,34 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 			         AND approver NOT LIKE 'retained:%'`,
 			args: []any{tenantID, c.ApprovalActorBefore},
 		},
+		"operation_approval_requests": {
+			sql: `SELECT count(*) FROM operation_approval_requests r
+			       WHERE r.tenant_id = $1
+			         AND (
+			               (status IN ('denied', 'expired', 'superseded', 'consumed') AND updated_at < $2)
+			            OR (status IN ('pending', 'approved') AND expires_at < $2)
+			         )
+			         AND (
+			               (requester NOT LIKE 'retained:%' AND requester NOT LIKE 'erased:%')
+			            OR reason <> ''
+			            OR evidence_refs <> '[]'::jsonb
+			         )
+			         AND NOT EXISTS (
+			               SELECT 1 FROM approved_target_event_fences f
+			                WHERE f.tenant_id = r.tenant_id AND f.approval_request_id = r.id
+			         )`,
+			args: []any{tenantID, c.ApprovalActorBefore},
+		},
+		"operation_approval_decisions": {
+			sql: `SELECT count(*) FROM operation_approval_decisions
+			       WHERE tenant_id = $1
+			         AND decided_at < $2
+			         AND (
+			               (approver NOT LIKE 'retained:%' AND approver NOT LIKE 'erased:%')
+			            OR reason <> ''
+			         )`,
+			args: []any{tenantID, c.ApprovalActorBefore},
+		},
 		"profiles": {
 			sql: `SELECT count(*) FROM certificate_profiles
 			       WHERE tenant_id = $1
@@ -2909,20 +3643,21 @@ func selectCount(ctx context.Context, tx pgx.Tx, sql string, args ...any) (int, 
 
 func countsForPrivacySelectors(sel PrivacyErasureSelectors) map[string]int {
 	out := map[string]int{
-		"owners":                 len(sel.OwnerIDs),
-		"identities":             len(sel.IdentityIDs),
-		"certificates":           len(sel.CertificateFingerprints),
-		"ssh_keys":               len(sel.SSHKeyIDs),
-		"attestations":           len(sel.AttestationIDs),
-		"approval_requests":      len(sel.ApprovalRequests),
-		"approvals":              len(sel.Approvals),
-		"profiles":               len(sel.ProfileIDs),
-		"agents":                 len(sel.AgentIDs),
-		"agent_offboard_actors":  len(sel.AgentOffboardActorIDs),
-		"agent_offboard_reasons": len(sel.AgentOffboardReasonIDs),
-		"api_tokens":             0, // filled by subject_ref update at projection time; rows are not enumerated in the event.
-		"tenant_members":         0,
-		"read_models":            len(sel.ReadModels),
+		"owners":                  len(sel.OwnerIDs),
+		"identities":              len(sel.IdentityIDs),
+		"certificates":            len(sel.CertificateFingerprints) + len(sel.CertificateRefs),
+		"ssh_keys":                len(sel.SSHKeyIDs),
+		"attestations":            len(sel.AttestationIDs),
+		"approval_requests":       len(sel.ApprovalRequests),
+		"approvals":               len(sel.Approvals),
+		"profiles":                len(sel.ProfileIDs),
+		"agents":                  len(sel.AgentIDs),
+		"agent_offboard_actors":   len(sel.AgentOffboardActorIDs),
+		"agent_offboard_reasons":  len(sel.AgentOffboardReasonIDs),
+		"api_tokens":              0, // filled by subject_ref update at projection time; rows are not enumerated in the event.
+		"tenant_members":          0,
+		"code_signing_operations": len(sel.CodeSigningOperationIDs),
+		"read_models":             len(sel.ReadModels),
 	}
 	for _, rm := range sel.ReadModels {
 		out[rm.Table]++

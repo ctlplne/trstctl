@@ -3,12 +3,15 @@
 package events
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
@@ -17,7 +20,9 @@ import (
 	"github.com/nats-io/nuid"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 	"trstctl.com/trstctl/internal/tenancy"
 )
 
@@ -30,6 +35,11 @@ const (
 	eventDedupWindow   = 24 * time.Hour
 	importMissingField = "events: import requires source event id and time"
 )
+
+// ErrConflictingEventIdentity means retained source history contains one event
+// ID with more than one immutable envelope. Recovery must fail closed because no
+// caller can safely choose which command the producer identity means.
+var ErrConflictingEventIdentity = errors.New("events: conflicting event identity")
 
 // DefaultSchemaVersion is defined in internal/eventspec (a NATS-free leaf) and
 // re-exported here so existing events.DefaultSchemaVersion references keep working.
@@ -97,6 +107,9 @@ type Log struct {
 	// the observed JetStream stream config so an under-replicated external stream
 	// fails visible instead of serving with a weaker RPO than operators asked for.
 	desiredReplicas int
+	// duplicateWindow is normally the production safety window. Tests may shorten
+	// it to prove recovery does not mistake broker memory for durable authority.
+	duplicateWindow time.Duration
 	// infoMu serializes stream.Info() calls. The JetStream client caches the result
 	// in the shared stream handle without locking, so two concurrent Info() callers
 	// race on that cache (data race in (*stream).Info). LastSequence is now called
@@ -111,6 +124,20 @@ type Log struct {
 	// continuityVerifier validates the signed receipt both during activation and
 	// during crash recovery before a frozen source may be scrubbed.
 	continuityVerifier TenantDataContinuityVerifier
+	// requirePrivacyEventPolicies closes the production append vocabulary. A new
+	// event type or payload version cannot enter tenant history until its exact
+	// privacy disposition has been registered, so a later subject erasure never
+	// discovers an unsupported schema only after the mutation was accepted.
+	requirePrivacyEventPolicies bool
+	// rejectLegacySchedulerRuns is installed only after startup sanitation. It
+	// closes every normal live/federated ingress path while the restore-only path
+	// remains able to stage an authenticated pre-patch artifact for sanitation.
+	rejectLegacySchedulerRuns atomic.Bool
+	// backupRestoreAuthorizer is installed only by the recovery composition. Its
+	// locked deployment key verifies an opaque capability bound to one
+	// HMAC-verified artifact cut/digest and its exact staged history source before
+	// RestoreBackupHistory may cross the live schema floor.
+	backupRestoreAuthorizer *crypto.BackupRestoreAuthorizer
 
 	// rewriteTestHook is deliberately unexported. Tests use it to leave a durable
 	// stream state at a crash boundary and prove Open recovers by authority, not by
@@ -120,6 +147,10 @@ type Log struct {
 	// no-owner/expected-stream retry window without putting Append behind the
 	// history barrier and inverting the backup-fence lock order.
 	publishAttemptTestHook func()
+	// publishAfterRestoreCheckTestHook pauses an ordinary publish after it has
+	// observed no pending exact restore. Tests use the pause to bind a restore on
+	// another replica and prove the broker route fence closes that TOCTOU window.
+	publishAfterRestoreCheckTestHook func()
 	// createRewriteTargetTestHook injects a target-create failure after the
 	// source has been durably marked. It proves that this otherwise narrow
 	// failure window restores the exact pre-operation source config.
@@ -158,6 +189,33 @@ func WithHistoryRewriteContinuityVerifier(verifier TenantDataContinuityVerifier)
 	return func(log *Log) { log.continuityVerifier = verifier }
 }
 
+// WithBackupRestoreAuthorizer installs the verify-only capability gate for the
+// restore ingress. The caller owns and must destroy authorizer after Log.Close.
+func WithBackupRestoreAuthorizer(authorizer *crypto.BackupRestoreAuthorizer) OpenOption {
+	return func(log *Log) { log.backupRestoreAuthorizer = authorizer }
+}
+
+// WithRequiredPrivacyEventPolicies makes the event log reject any append/import
+// whose exact (type, schema version) lacks a registered privacy policy. Production
+// composition enables this after all core/projector/edition package init hooks have
+// loaded their deterministic catalogs. Focused event-log tests may omit the option
+// when intentionally exercising arbitrary synthetic event names.
+func WithRequiredPrivacyEventPolicies() OpenOption {
+	return func(log *Log) { log.requirePrivacyEventPolicies = true }
+}
+
+// WithDuplicateWindowForTesting shortens JetStream's finite message-ID memory so
+// crash-recovery tests can cross the real broker boundary without sleeping for a
+// day. Production callers must rely on the default configured below; correctness
+// may never rely on this window being long enough.
+func WithDuplicateWindowForTesting(window time.Duration) OpenOption {
+	return func(log *Log) {
+		if window > 0 {
+			log.duplicateWindow = window
+		}
+	}
+}
+
 // Open opens the event log according to cfg and ensures one active generation
 // owns events.>. opts is variadic to keep existing callers source-compatible.
 func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error) {
@@ -186,16 +244,18 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: jetstream: %w", err)
 	}
-	scfg := streamConfig(cfg)
-	if cfg.Mode == config.NATSExternal && scfg.Replicas == 1 && !cfg.AllowSingleReplica {
-		shutdown(srv, nc)
-		return nil, errors.New("events: external JetStream with one replica requires TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true (evaluation only)")
-	}
-	l := &Log{srv: srv, nc: nc, js: js, mode: cfg.Mode, desiredReplicas: scfg.Replicas}
+	l := &Log{srv: srv, nc: nc, js: js, mode: cfg.Mode, duplicateWindow: eventDedupWindow}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(l)
 		}
+	}
+	scfg := streamConfig(cfg)
+	scfg.Duplicates = l.duplicateWindow
+	l.desiredReplicas = scfg.Replicas
+	if cfg.Mode == config.NATSExternal && scfg.Replicas == 1 && !cfg.AllowSingleReplica {
+		shutdown(srv, nc)
+		return nil, errors.New("events: external JetStream with one replica requires TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true (evaluation only)")
 	}
 	if l.history == nil && cfg.Mode == config.NATSEmbedded {
 		l.history = newLocalHistoryRewriteCoordinator()
@@ -355,6 +415,15 @@ func (l *Log) Import(ctx context.Context, e Event) (Event, error) {
 	return l.append(ctx, e, true)
 }
 
+// EnforceLegacySchedulerWriteFloor permanently rejects schema-v1 scheduler runs
+// on this Log instance. Production calls it only after the active generation has
+// passed sanitation.
+func (l *Log) EnforceLegacySchedulerWriteFloor() {
+	if l != nil {
+		l.rejectLegacySchedulerRuns.Store(true)
+	}
+}
+
 func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (Event, error) {
 	if e.Type == "" {
 		return Event{}, errors.New("events: event type is required")
@@ -376,6 +445,15 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	// sets the next version explicitly so the projector can dispatch on it.
 	if e.SchemaVersion == 0 {
 		e.SchemaVersion = DefaultSchemaVersion
+	}
+	if l.rejectLegacySchedulerRuns.Load() &&
+		e.Type == schedulerhistory.EventType && e.SchemaVersion <= schedulerhistory.LegacySchemaVersion {
+		return Event{}, schedulerhistory.ErrSanitationRequired
+	}
+	if l.requirePrivacyEventPolicies {
+		if err := validateRegisteredPrivacyEventPayload(e.Data, e.Type, e.SchemaVersion); err != nil {
+			return Event{}, err
+		}
 	}
 	// Attribute the event to the authenticated caller carried in ctx (R2.1),
 	// unless the caller set the actor explicitly. A background/system append with
@@ -402,9 +480,9 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 		return Event{}, fmt.Errorf("events: append: %w", err)
 	}
 	if ack.Duplicate {
-		// The acknowledged source may finish cutover before this canonical
-		// read. Sequence preservation lets the read fall forward to the active
-		// target without placing Append behind the history/backup lock wall.
+		// The acknowledged source may finish cutover after the bounded publish
+		// view releases but before this canonical read. Sequence preservation lets
+		// the read fall forward to the active target.
 		canonicalStream, streamErr := l.js.Stream(ctx, ack.Stream)
 		if streamErr != nil {
 			_, canonicalStream, streamErr = l.resolveActiveStream(ctx)
@@ -429,12 +507,119 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	return e, nil
 }
 
+// EventByID scans retained source-of-truth history for one producer identity.
+// JetStream remembers message IDs only for its finite duplicate window, so crash
+// reconciliation cannot use a fresh Publish ACK to decide whether an older event
+// already exists. If corrupted history contains the same ID with different bytes,
+// fail closed instead of silently selecting one canonical meaning.
+func (l *Log) EventByID(ctx context.Context, eventID string) (Event, bool, error) {
+	if strings.TrimSpace(eventID) == "" {
+		return Event{}, false, errors.New("events: event id lookup is empty")
+	}
+	var (
+		canonical Event
+		found     bool
+		unsafe    bool
+	)
+	err := l.Replay(ctx, 0, func(event Event) error {
+		if event.ID != eventID {
+			return nil
+		}
+		requiresSanitation, inspectErr := schedulerhistory.RequiresSanitation(
+			event.Type, event.SchemaVersion, event.Data,
+		)
+		if inspectErr != nil || requiresSanitation {
+			unsafe = true
+		}
+		if !found {
+			canonical = event
+			found = true
+			return nil
+		}
+		if canonical.Type != event.Type || canonical.TenantID != event.TenantID ||
+			!canonical.Time.Equal(event.Time) || canonical.SchemaVersion != event.SchemaVersion ||
+			!bytes.Equal(canonical.Data, event.Data) || !reflect.DeepEqual(canonical.Actor, event.Actor) {
+			return fmt.Errorf("%w: event id %q has conflicting retained envelopes at sequences %d and %d",
+				ErrConflictingEventIdentity,
+				eventID, canonical.Sequence, event.Sequence)
+		}
+		return nil
+	})
+	if unsafe {
+		if err != nil {
+			return Event{}, false, errors.Join(schedulerhistory.ErrSanitationRequired, err)
+		}
+		return Event{}, false, schedulerhistory.ErrSanitationRequired
+	}
+	return canonical, found, err
+}
+
+// EventAtSequence reads one exact immutable envelope without replaying the
+// prefix before it. Sparse command-side indexes use this after they have already
+// selected an authoritative sequence under WithHistoryRead.
+func (l *Log) EventAtSequence(ctx context.Context, sequence uint64) (Event, bool, error) {
+	if sequence == 0 {
+		return Event{}, false, errors.New("events: event sequence lookup is zero")
+	}
+	var (
+		event Event
+		found bool
+	)
+	err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
+		name, stream, head, err := l.resolveReplayStream(readCtx)
+		if err != nil {
+			return err
+		}
+		if sequence > head {
+			return nil
+		}
+		raw, err := stream.GetMsg(readCtx, sequence)
+		if errors.Is(err, jetstream.ErrMsgNotFound) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("events: get seq %d: %w", sequence, err)
+		}
+		event, err = decodeStored(raw.Data, raw.Sequence)
+		if err != nil {
+			return err
+		}
+		unsafe, inspectErr := schedulerhistory.RequiresSanitation(
+			event.Type, event.SchemaVersion, event.Data,
+		)
+		if inspectErr != nil || unsafe {
+			event = Event{}
+			return schedulerhistory.ErrSanitationRequired
+		}
+		current, err := l.activeStreamName(readCtx)
+		if err != nil {
+			return fmt.Errorf("events: verify sequence lookup generation: %w", err)
+		}
+		if current != name {
+			return fmt.Errorf("%w: sequence lookup started on %s and ended on %s",
+				ErrGenerationChanged, name, current)
+		}
+		found = true
+		return nil
+	})
+	return event, found, err
+}
+
 // Replay invokes fn for every event with sequence >= from (1 means from the
 // beginning), in append order. It is deterministic: replaying the same log
 // twice yields the same events.
 func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) error {
 	return l.withHistoryRead(ctx, func(ctx context.Context) error {
-		return l.replayActive(ctx, from, fn)
+		name, stream, head, err := l.resolveReplayStream(ctx)
+		if err != nil {
+			return err
+		}
+		if l.rejectLegacySchedulerRuns.Load() {
+			if err := l.preflightLegacySchedulerHistory(ctx, stream, head); err != nil {
+				return err
+			}
+		}
+		return l.replayResolved(ctx, name, stream, from, head, fn)
 	})
 }
 
@@ -459,8 +644,40 @@ func (l *Log) ReplayThrough(
 				through, head,
 			)
 		}
+		if l.rejectLegacySchedulerRuns.Load() {
+			if err := l.preflightLegacySchedulerHistory(ctx, stream, through); err != nil {
+				return err
+			}
+		}
 		return l.replayResolved(ctx, name, stream, from, through, fn)
 	})
+}
+
+func (l *Log) preflightLegacySchedulerHistory(
+	ctx context.Context,
+	stream jetstream.Stream,
+	through uint64,
+) error {
+	for sequence := uint64(1); sequence <= through; sequence++ {
+		raw, err := stream.GetMsg(ctx, sequence)
+		if errors.Is(err, jetstream.ErrMsgNotFound) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("events: inspect scheduler history seq %d: %w", sequence, err)
+		}
+		event, err := decodeStored(raw.Data, raw.Sequence)
+		if err != nil {
+			return err
+		}
+		unsafe, inspectErr := schedulerhistory.RequiresSanitation(
+			event.Type, event.SchemaVersion, event.Data,
+		)
+		if inspectErr != nil || unsafe {
+			return schedulerhistory.ErrSanitationRequired
+		}
+	}
+	return nil
 }
 
 func (l *Log) replayActive(ctx context.Context, from uint64, fn func(Event) error) error {
@@ -481,6 +698,9 @@ func (l *Log) resolveReplayStream(
 	info, err := l.infoForStream(ctx, stream)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("events: stream info: %w", err)
+	}
+	if backupRestoreMetadataPending(info.Config.Metadata) {
+		return "", nil, 0, ErrBackupRestoreIncomplete
 	}
 	return name, stream, info.State.LastSeq, nil
 }
@@ -542,6 +762,9 @@ func (l *Log) Delete(ctx context.Context, seq uint64) error {
 	}
 	return l.withHistoryOperationLock(ctx, func(ctx context.Context) error {
 		return l.history.WithCutover(ctx, func(ctx context.Context) error {
+			if err := l.requireNoPendingBackupRestoreBeforeRecovery(ctx); err != nil {
+				return err
+			}
 			state, err := l.findRewriteStreams(ctx)
 			if err != nil {
 				return err
@@ -554,6 +777,9 @@ func (l *Log) Delete(ctx context.Context, seq uint64) error {
 			_, stream, err := l.resolveActiveStream(ctx)
 			if err != nil {
 				return fmt.Errorf("events: resolve delete stream: %w", err)
+			}
+			if err := l.requireNoPendingBackupRestoreStream(ctx, stream); err != nil {
+				return err
 			}
 			if err := stream.DeleteMsg(ctx, seq); err != nil {
 				return fmt.Errorf("events: delete seq %d: %w", seq, err)
@@ -588,6 +814,9 @@ func (l *Log) PruneTenantThroughCheckpoint(
 	}
 	return l.withHistoryOperationLock(ctx, func(ctx context.Context) error {
 		return l.history.WithCutover(ctx, func(ctx context.Context) error {
+			if err := l.requireNoPendingBackupRestoreBeforeRecovery(ctx); err != nil {
+				return err
+			}
 			state, err := l.findRewriteStreams(ctx)
 			if err != nil {
 				return err
@@ -600,6 +829,9 @@ func (l *Log) PruneTenantThroughCheckpoint(
 			_, stream, err := l.resolveActiveStream(ctx)
 			if err != nil {
 				return fmt.Errorf("events: resolve retention stream: %w", err)
+			}
+			if err := l.requireNoPendingBackupRestoreStream(ctx, stream); err != nil {
+				return err
 			}
 			info, err := l.infoForStream(ctx, stream)
 			if err != nil {
@@ -661,10 +893,16 @@ func (l *Log) Ping(ctx context.Context) error {
 	if l.nc != nil && !l.nc.IsConnected() {
 		return errors.New("events: nats connection is down")
 	}
-	if _, _, err := l.resolveActiveStream(ctx); err != nil {
-		return fmt.Errorf("events: resolve readiness stream: %w", err)
-	}
-	return l.checkDurability(ctx)
+	return l.withHistoryRead(ctx, func(readCtx context.Context) error {
+		_, stream, err := l.resolveActiveStream(readCtx)
+		if err != nil {
+			return fmt.Errorf("events: resolve readiness stream: %w", err)
+		}
+		if err := l.requireNoPendingBackupRestoreStream(readCtx, stream); err != nil {
+			return err
+		}
+		return l.checkDurability(readCtx)
+	})
 }
 
 // StreamReplicas returns the source-of-truth event stream's configured replication
@@ -829,6 +1067,15 @@ func (l *Log) tailFrom(
 			if err != nil {
 				return fmt.Errorf("events: resolve tail generation: %w", err)
 			}
+			// Exact restore binds the existing active stream before publishing its
+			// first envelope. A long-lived tailer may already have a consumer for
+			// that same stream, so checking only during consumer construction would
+			// let it apply an artifact-bound partial prefix. Recheck inside every
+			// shared history view before fetching; the restore's exclusive cutover
+			// cannot install or clear the binding between this check and the fetch.
+			if err := l.requireNoPendingBackupRestoreStream(readCtx, stream); err != nil {
+				return err
+			}
 			if consumer == nil || consumerGeneration != name {
 				consumer = nil
 				consumerGeneration = name
@@ -891,6 +1138,15 @@ func (l *Log) tailFrom(
 				if decodeErr != nil {
 					_ = msg.Nak()
 					return decodeErr
+				}
+				if l.rejectLegacySchedulerRuns.Load() {
+					unsafe, inspectErr := schedulerhistory.RequiresSanitation(
+						ev.Type, ev.SchemaVersion, ev.Data,
+					)
+					if inspectErr != nil || unsafe {
+						_ = msg.Nak()
+						return schedulerhistory.ErrSanitationRequired
+					}
 				}
 				if applyErr := fn(ev); applyErr != nil {
 					_ = msg.Nak()

@@ -138,6 +138,41 @@ const deDECatalog = {
   "secrets.sessions.empty": "Noch keine Sitzungen ausgestellt.",
   "secrets.sessions.unavailable": "Sitzungsverzeichnis in dieser Bereitstellung nicht verfügbar.",
   "secrets.sessions.failedTitle": "Sitzungswiderruf fehlgeschlagen",
+  // AUD-106/AUD-107 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "secrets.rotation.scopeDescription":
+    "Die manuelle Rotation im nativen Speicher ersetzt jeweils einen gespeicherten Wert. Die Provider-Rotation akzeptiert derzeit nur connector:<ziel> und stellt die Zustellung in die Worker-Warteschlange. Statische und Dynamic-Lease-Provider sowie eine Rotations-TTL-Eingabe bleiben nicht verfügbar, bis die gesamte Effekt- und Rollback-Kette dauerhaft einem Worker gehört. Geplante Rotationen werden unten ausgeführt; die nachgelagerte Synchronisierung befindet sich im Bereich Synchronisierung.",
+  "secrets.rotation.scheduleDescription":
+    "Planen Sie eine Connector-gestützte Rotation eines Anwendungs-Secrets. Die Zustellung erfolgt über die Worker-Warteschlange; gespeichert werden nur Schlüssel- und Referenzmetadaten. Zeitpläne für statische Provider und Dynamic Leases sind nicht verfügbar, bis ihre vollständigen Phasenketten dauerhafte Worker besitzen.",
+  "secrets.rotation.scheduleStateMessage":
+    "Erstellen Sie einen Zeitplan mit connector:<ziel>; die Zustellung erfolgt über die Worker-Warteschlange und kann nach einem Absturz fortgesetzt werden.",
+  "secrets.rotation.connectorOnly":
+    "Die manuelle Provider-Rotation erfordert derzeit connector:<ziel>. Statische und Dynamic-Lease-Provider bleiben nicht verfügbar, bis ein dauerhafter Worker jede Effekt- und Rollback-Phase übernimmt.",
+  "secrets.rotation.scheduleConnectorOnly":
+    "Geplante Rotation erfordert derzeit einen Provider im Format connector:<ziel>. Statische und Dynamic-Lease-Provider bleiben nicht verfügbar.",
+  "secrets.rotation.scheduleProviderPlaceholder": "connector:ci",
+  "secrets.rotation.queued": "Rotation zur Zustellung eingeplant",
+  "secrets.rotation.completed": "Rotation abgeschlossen",
+  "secrets.rotation.failed": "Rotation fehlgeschlagen",
+  "secrets.rotation.dueNotice": "{ran} fällige Rotationen ausgeführt; {deferred} von {scanned} geprüften Zeitplänen zurückgestellt.",
+  // AUD-106 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "secrets.rotation.limitNoticeLabel": "Hinweis zur Fortsetzung geplanter Rotationen",
+  "secrets.rotation.runLimitNotice":
+    "Das vollständige Budget von 50 Ausführungen wurde verbraucht. Führen Sie die fälligen Rotationen erneut aus, um am dauerhaften fairen Cursor fortzufahren.",
+  "secrets.rotation.scanLimitNotice":
+    "Das vollständige Prüfbudget von 500 Zeitplänen wurde verbraucht. Führen Sie die fälligen Rotationen erneut aus, um fair am dauerhaften Cursor fortzufahren.",
+  "secrets.rotation.deferredSummary":
+    "{count} fällige Zeitpläne bleiben zurückgestellt; jede genaue Fälligkeitskante ist unten aufgeführt und spätere fällige Arbeit wurde trotzdem geprüft.",
+  "secrets.rotation.deferredListLabel": "Nachweise zurückgestellter Rotationszeitpläne",
+  "secrets.rotation.deferredDueAt": "Fällig {time}",
+  "secrets.rotation.deferredReason.approvalPending": "Genehmigung ausstehend",
+  "secrets.rotation.deferredReason.commandInFlight": "Secret-Befehl wird ausgeführt",
+  "secrets.rotation.deferredReason.commandClaimed": "Fälligkeitskante von einem anderen Runner beansprucht",
+  // AUD-77 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "secrets.import.unavailableTitle": "Massenimport von Secrets",
+  "secrets.import.unavailableDescription": "Nicht verfügbar, bis atomare ereignisbasierte Batch-Befehle implementiert sind",
+  "secrets.import.unavailableBody":
+    "Der Massenimport ist deaktiviert, damit ein Batch niemals das unveränderliche Ereignisprotokoll umgeht oder nur teilweise angewendet wird. Erstellen Sie jedes Secret mit einem eigenen Idempotenzschlüssel.",
+  "secrets.import.unavailableAction": "Import nicht verfügbar",
   "secrets.tabs.store": "Speicher",
   "secrets.tabs.access": "Zugriff",
   "secrets.tabs.sharing": "Teilen",
@@ -2218,17 +2253,17 @@ const deDECatalog = {
   "parity.recordedPlaybookRunsWithTheirConnector_bffffe":
     "Aufgezeichnete Playbook-Läufe mit ihren Connector-Zustellbelegen und der Momentaufnahme der Eigentümerbehebungswarteschlange.",
   "parity.recurringRollbackSafeRotationsRunBy_06c343":
-    "Wiederkehrende rollbacksichere Rotationen, ausgeführt vom Scheduler. 'Fällige jetzt ausführen' führt jeden aktivierten Zeitplan aus, dessen nächster Lauf bereits fällig ist.",
+    "Der Scheduler führt pro Lauf höchstens 50 Rotationen aus und prüft höchstens 500 aktivierte fällige Zeitpläne. Befehle mit ausstehender Genehmigung oder bereits laufende Befehle werden als zurückgestellt gemeldet; spätere fällige Zeilen werden trotzdem geprüft.",
   "parity.remediationEvidence_5174c6": "Behebungsevidenz",
   "parity.remoteKeyOptional_b6dff8": "Remote-Schlüssel (optional)",
   "parity.req7c2f9a_03dd4e": "req-7c2f9a",
   "parity.requestAttestationGatedEphemeralCredential_4ce3ce": "Attestierungsgebundene ephemere Credential anfordern",
   "parity.requestId_63aa59": "Anfrage-ID",
   "parity.revokeCertificate_338ad7": "Zertifikat widerrufen",
-  "parity.rollbackSafeRotationFailed_5f1a57": "Rollbacksichere Rotation fehlgeschlagen",
-  "parity.rollbackSafeRotation_267d4a": "Rollbacksichere Rotation",
+  "parity.rollbackSafeRotationFailed_5f1a57": "Secret-Rotation fehlgeschlagen",
+  "parity.rollbackSafeRotation_267d4a": "Connector-Rotation",
   "parity.rotateAProviderBackedCredentialBy_ec7a8f":
-    "Anbietergestützte Credential per Referenz rotieren. Schlägt eine Phase fehl, rollt der Lauf zur alten Referenz zurück, und das Ergebnis unten meldet den genauen Ausgang. Keine Secret-Werte passieren dieses Formular.",
+    "Connector-Zustellung für eine Credential-Referenz einplanen. Statische und Dynamic-Lease-Provider werden vor Effekten abgelehnt, bis ihre vollständigen Phasenketten dauerhaft sind. Keine Secret-Werte passieren dieses Formular.",
   "parity.rotateChallenge_99fc02": "Challenge rotieren",
   "parity.rotationMintsFreshChallengeMaterialAnd_0aec47":
     "Die Rotation erzeugt frisches Challenge-Material und protokolliert Rotationsevidenz — die Rotationsversion erhöht sich und der Rotationszeitstempel wird fürs Audit persistiert. Profile, die die vorige Challenge verteilen, validieren neue Enrollments nicht mehr.",
@@ -2236,7 +2271,7 @@ const deDECatalog = {
   "parity.routing_7d15dd": "Routing",
   "parity.runDueRotationsFailed_b9c511": "Ausführen fälliger Rotationen fehlgeschlagen",
   "parity.runModes_6fced8": "Betriebsmodi",
-  "parity.runRollbackSafeRotation_5a7f2d": "Rollbacksichere Rotation ausführen",
+  "parity.runRollbackSafeRotation_5a7f2d": "Connector-Rotation ausführen",
   "parity.saveConfig_64e1de": "Konfiguration speichern",
   "parity.saveOwner_b67638": "Eigentümer speichern",
   "parity.savePolicy_77d67c": "Richtlinie speichern",

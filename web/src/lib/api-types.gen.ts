@@ -535,13 +535,46 @@ export interface AlertRecipient {
 
 export interface Approval {
   action: "issue" | "rotate" | "revoke" | "sign";
+  approval_count: number;
   approvals: number;
   approver: string;
+  id: string;
+  intent_digest: string;
+  required_approvals: number;
   resource: string;
+  status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+}
+
+export interface ApprovalDecision {
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+  approval_count: number;
+  approvals: number;
+  approver: string;
+  id: string;
+  intent_digest: string;
+  required_approvals: number;
+  resource: string;
+  status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+}
+
+export interface ApprovalDecisionInput {
+  intent_digest: string;
+}
+
+export interface ApprovalDenialInput {
+  intent_digest: string;
+  reason: string;
 }
 
 export interface ApprovalRequest {
   action: "issue" | "rotate" | "revoke" | "sign";
+  intent_digest: string;
+  request_id: string;
+}
+
+export interface ApprovalRequestList {
+  items: PendingApprovalRequest[];
+  next_cursor?: string;
 }
 
 export interface Attestation {
@@ -2203,23 +2236,32 @@ export interface EphemeralAPIKeyRequest {
 }
 
 export interface EphemeralApproval {
-  action: string;
+  action: "issue";
+  approval_count: number;
   approvals: number;
   approver: string;
+  id: string;
+  intent_digest: string;
+  required_approvals: number;
   resource: string;
+  status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
 }
 
 export interface EphemeralApprovalRequest {
   action: "issue";
+  intent_digest: string;
+  request_id: string;
 }
 
 export interface EphemeralCredential {
+  approval_request_id: string;
   approvals: number;
   attestation: Attestation;
   certificate_id?: string;
   certificate_pem?: string;
   credential_id?: string;
   expires_at: string;
+  intent_digest: string;
   not_after?: string;
   request_id: string;
   required_approvals: number;
@@ -2969,7 +3011,9 @@ export interface ManagedKeyApproval {
 
 export interface ManagedKeyApprovalRequest {
   action: "rotate" | "revoke" | "zeroize";
+  intent_digest: string;
   key_id: string;
+  request_id: string;
 }
 
 export interface ManagedKeyGenerateRequest {
@@ -4035,6 +4079,26 @@ export interface PQCMigrationFindingDispositionRequest {
   reason: string;
 }
 
+export interface PendingApprovalRequest {
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+  approval_count: number;
+  created_at: string;
+  evidence_refs: string[];
+  expires_at: string;
+  from_state?: string;
+  id: string;
+  intent_digest: string;
+  reason?: string;
+  requester: string;
+  required_approvals: number;
+  resource_id: string;
+  resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral";
+  resource_name: string;
+  status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+  target_version: string;
+  to_state?: string;
+}
+
 export interface PlatformAirGap {
   buyer_evidence_receipts: string[];
   capability: string;
@@ -4830,13 +4894,20 @@ export interface ScaleUnitEconomics {
 
 export interface SecretApproval {
   action: "rotate" | "recover" | "delete";
+  approval_count: number;
   approvals: number;
   approver: string;
+  id: string;
+  intent_digest: string;
+  required_approvals: number;
   resource: string;
+  status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
 }
 
 export interface SecretApprovalRequest {
   action: "rotate" | "recover" | "delete";
+  intent_digest: string;
+  request_id: string;
 }
 
 export interface SecretImportRequest {
@@ -4931,6 +5002,7 @@ export interface SecretRotation {
   key: string;
   new_ref: string;
   old_ref: string;
+  queued: boolean;
   rollback_attempted: boolean;
   rollback_error?: string;
   rollback_failed: boolean;
@@ -4938,8 +5010,16 @@ export interface SecretRotation {
 }
 
 export interface SecretRotationDueRun {
+  complete: boolean;
+  deferred: SecretRotationScheduleDeferred[];
+  failed_schedule_id?: string;
+  partial: boolean;
   ran: number;
+  run_limit_reached: boolean;
   runs: SecretRotationScheduleRun[];
+  scan_limit_reached: boolean;
+  scanned: number;
+  system_error?: string;
 }
 
 export interface SecretRotationRequest {
@@ -4961,13 +5041,20 @@ export interface SecretRotationSchedule {
   last_new_ref?: string;
   last_run_at?: string;
   last_run_id?: string;
-  last_run_status: string;
+  last_run_status: "" | "completed" | "queued" | "failed" | "rolled_back" | "rollback_failed" | "retire_pending" | "delivery_failed" | "unsupported";
   name: string;
   next_run_at: string;
   old_ref: string;
   provider: string;
   tenant_id: string;
   updated_at: string;
+}
+
+export interface SecretRotationScheduleDeferred {
+  due_at: string;
+  error?: string;
+  reason: "approval_pending" | "command_in_flight" | "command_claimed" | "config_revision_unanchored";
+  schedule_id: string;
 }
 
 export interface SecretRotationScheduleList {
@@ -4986,12 +5073,14 @@ export interface SecretRotationScheduleRequest {
 }
 
 export interface SecretRotationScheduleRun {
+  due_at: string;
   error?: string;
   ran_at: string;
+  reconciled: boolean;
   rotation: SecretRotation;
   run_id: string;
   schedule_id: string;
-  status: string;
+  status: "completed" | "queued" | "failed" | "rolled_back" | "rollback_failed" | "retire_pending" | "delivery_failed" | "unsupported";
 }
 
 export interface SecretScan {

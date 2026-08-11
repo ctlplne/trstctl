@@ -144,7 +144,9 @@ function plannedAPICalls(history) {
     ...history.importedCertificates.map(() => "POST /api/v1/certificates"),
     "POST /api/v1/secrets/store",
     "PUT /api/v1/secrets/store/{name}",
-    "POST /api/v1/secrets/store/import",
+    "POST /api/v1/secrets/store",
+    "POST /api/v1/secrets/store",
+    "POST /api/v1/secrets/store",
     "POST /api/v1/secrets/shares",
     "POST /api/v1/secrets/pki",
     "POST /api/v1/transit/keys",
@@ -472,14 +474,18 @@ async function main() {
   await api("PUT", "/api/v1/secrets/store/payments/db/password", {
     value: runtimeDemoValue("payments-db-password-rotated"),
   }, stableKey("secret-payments-db-rotate"));
-  await api("POST", "/api/v1/secrets/store/import", {
-    prefix: "demo",
-    values: {
-      "stripe/api-key": runtimeDemoValue("stripe-api-key"),
-      "github/actions/deploy-token": runtimeDemoValue("github-actions-deploy-token"),
-      "aws/iam/rotator": runtimeDemoValue("aws-iam-rotator"),
-    },
-  }, stableKey("secret-import-tree"));
+  await api("POST", "/api/v1/secrets/store", {
+    name: "demo/stripe/api-key",
+    value: runtimeDemoValue("stripe-api-key"),
+  }, stableKey("secret-demo-stripe-api-key"));
+  await api("POST", "/api/v1/secrets/store", {
+    name: "demo/github/actions/deploy-token",
+    value: runtimeDemoValue("github-actions-deploy-token"),
+  }, stableKey("secret-demo-github-actions-deploy-token"));
+  await api("POST", "/api/v1/secrets/store", {
+    name: "demo/aws/iam/rotator",
+    value: runtimeDemoValue("aws-iam-rotator"),
+  }, stableKey("secret-demo-aws-iam-rotator"));
   const share = await api("POST", "/api/v1/secrets/shares", {
     value: runtimeDemoValue("breakglass-share"),
     ttl_seconds: 86400,
@@ -536,20 +542,38 @@ async function main() {
     // The first attempt opens the request and proves that destructive key actions
     // fail closed. Two separately authenticated principals then approve the exact
     // key/action pair before the original requester retries it.
-    await api("POST", "/api/v1/managed-keys/rotate", {
+    const rotateAttempt = await api("POST", "/api/v1/managed-keys/rotate", {
       key_id: managedKey.key_id,
     }, rotateKey, [403]);
-    const approvalBody = { key_id: managedKey.key_id, action: "rotate" };
-    for (const [index, subject] of ["demo-key-custodian-one", "demo-key-custodian-two"].entries()) {
-      const approverBearer = mintBootstrapToken(subject);
-      await api(
-        "POST",
-        "/api/v1/managed-keys/approvals",
-        approvalBody,
-        stableKey(`managed-key-rsa-rotate-approval-${index + 1}`),
-        [],
-        approverBearer,
+    if (rotateAttempt?.status === 403) {
+      const queue = await api("GET", "/api/v1/approval-requests?status=pending&limit=100");
+      const matchingRequests = (queue?.items || []).filter((request) =>
+        request.resource_kind === "managed_key" &&
+        request.resource_id === managedKey.key_id &&
+        request.action === "managedkey:rotate" &&
+        request.requester === "demo-seeder"
       );
+      if (matchingRequests.length !== 1 || !matchingRequests[0].id || !matchingRequests[0].intent_digest) {
+        throw new Error("managed-key rotate did not expose one exact immutable approval request");
+      }
+      const approvalRequest = matchingRequests[0];
+      const approvalBody = {
+        key_id: managedKey.key_id,
+        action: "rotate",
+        request_id: approvalRequest.id,
+        intent_digest: approvalRequest.intent_digest,
+      };
+      for (const [index, subject] of ["demo-key-custodian-one", "demo-key-custodian-two"].entries()) {
+        const approverBearer = mintBootstrapToken(subject);
+        await api(
+          "POST",
+          "/api/v1/managed-keys/approvals",
+          approvalBody,
+          stableKey(`managed-key-rsa-rotate-approval-${index + 1}`),
+          [],
+          approverBearer,
+        );
+      }
     }
     await api("POST", "/api/v1/managed-keys/rotate", rotateBody, rotateKey);
   }

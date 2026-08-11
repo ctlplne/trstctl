@@ -64,6 +64,8 @@ import type {
   APITokenCreateResponse,
   APITokenList,
   Approval as GenApproval,
+  ApprovalDecision as GenApprovalDecision,
+  ApprovalRequestList as GenApprovalRequestList,
   ApprovalRequest,
   Attestation as GenAttestation,
   AttestedSVID as GenAttestedSVID,
@@ -288,6 +290,7 @@ import type {
   PQCMigrationCampaignStartRequest,
   PQCMigrationCampaignUpdateRequest,
   PQCMigrationFindingDispositionRequest,
+  PendingApprovalRequest as GenPendingApprovalRequest,
   Profile as GenProfile,
   ProfileRequest,
   ProtocolProfileStatus,
@@ -306,7 +309,6 @@ import type {
   ScaleOrchestrationPlan,
   SecretApproval as GenSecretApproval,
   SecretApprovalRequest as GenSecretApprovalRequest,
-  SecretImportRequest,
   SecretMeta,
   SecretMetaList,
   SecretRecoverRequest,
@@ -582,7 +584,20 @@ export type CredentialRisk = GenCredentialRisk;
 export type ContextualRiskPriorities = GenContextualRiskPriorities;
 export type ContextualRiskPriority = GenContextualRiskPriority;
 export type Approval = GenApproval;
+export type ApprovalAction = ApprovalRequest["action"];
+export type PendingApprovalStatus = GenPendingApprovalRequest["status"];
+
+/** AUD-77: one immutable approval intent served by the control plane.
+ *
+ * The request id says which approval object an operator is deciding. The
+ * digest binds that decision to the exact resource version and operation
+ * intent, so a later lifecycle change cannot silently reuse an older vote.
+ * These aliases stay mechanically bound to the served OpenAPI schema. */
+export type PendingApprovalRequest = GenPendingApprovalRequest;
+export type PendingApprovalRequestList = GenApprovalRequestList;
+export type ApprovalRequestDecision = GenApprovalDecision;
 export type SecretApproval = GenSecretApproval;
+export type SecretApprovalRequest = GenSecretApprovalRequest;
 export type SecretApprovalAction = GenSecretApprovalRequest["action"];
 export type AuditEvent = GenAuditEvent;
 export type Profile = GenProfile;
@@ -819,7 +834,6 @@ export type {
   RotationRun,
   RotationRunList,
   ScaleOrchestrationPlan,
-  SecretImportRequest,
   SecretMeta,
   SecretMetaList,
   SecretRecoverRequest,
@@ -1374,6 +1388,12 @@ export interface Api {
   issueExternalCA(id: string, input: ExternalCAIssueRequest): Promise<ExternalCAIssuedCertificate>;
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
+  /** AUD-77: real pending intents only; lifecycle inventory is not an approval queue. */
+  approvalRequests(): Promise<PendingApprovalRequest[]>;
+  /** AUD-77: bind the vote to both the immutable request id and its intent digest. */
+  approveApprovalRequest(id: string, intentDigest: string): Promise<ApprovalRequestDecision>;
+  /** AUD-77: deny the immutable request itself; never mutate its target resource. */
+  denyApprovalRequest(id: string, intentDigest: string, reason: string): Promise<ApprovalRequestDecision>;
   nhiInventory(): Promise<NHIInventory>;
   nhiShadowPosture(): Promise<NHIShadowPosture>;
   nhiPolicyCompliance(): Promise<NHIPolicyCompliance>;
@@ -1386,7 +1406,9 @@ export interface Api {
   getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
   transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string): Promise<Identity>;
-  approveIdentityAction(id: string, action: ApprovalRequest["action"]): Promise<Approval>;
+  /** Compatibility route for identity decisions; the complete immutable request
+   * binding is mandatory, just like the canonical approval-request route. */
+  approveIdentityAction(id: string, input: ApprovalRequest): Promise<Approval>;
   /** issueCertificate is the one-call convenience the wizard and the "issue"
    * action use: it ensures an owner, creates the identity, and issues it. */
   issueCertificate(input: IssueCertificateInput): Promise<Identity>;
@@ -1593,7 +1615,6 @@ export interface Api {
   mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
   createSecret(input: SecretRequest): Promise<SecretMeta>;
-  importSecrets(input: SecretImportRequest): Promise<SecretMetaList>;
   getSecret(name: string, options?: { resolve?: boolean }): Promise<SecretValue>;
   /** Read one secret as the granted workload credential, without falling back
    * to the browser's human session cookie. The caller must discard the value. */
@@ -1602,7 +1623,7 @@ export interface Api {
   recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
   rotateSecret(name: string, input: SecretRequest): Promise<SecretMeta>;
   deleteSecret(name: string): Promise<void>;
-  approveSecretChange(name: string, action: SecretApprovalAction): Promise<SecretApproval>;
+  approveSecretChange(name: string, input: SecretApprovalRequest): Promise<SecretApproval>;
   secretRepositoryScanning(): Promise<SecretRepositoryScanPosture>;
   receiveSecretRepositoryWebhook(provider: string, input: SecretRepositoryWebhookRequest): Promise<SecretRepositoryWebhookReceipt>;
   thirdPartySecretScanning(): Promise<ThirdPartySecretScanPosture>;
@@ -1657,6 +1678,25 @@ export interface Api {
   testNotificationChannel(id: string, input: NotificationChannelTestRequest): Promise<NotificationChannelTest>;
   markNotificationRead(id: string): Promise<Notification>;
   requeueNotification(id: string): Promise<Notification>;
+}
+
+async function allPendingApprovalRequests(): Promise<PendingApprovalRequest[]> {
+  const items: PendingApprovalRequest[] = [];
+  const seen = new Set<string>();
+  let cursor = "";
+  do {
+    const query = new URLSearchParams();
+    query.set("status", "pending");
+    query.set("limit", "100");
+    if (cursor) query.set("cursor", cursor);
+    const page = await req<PendingApprovalRequestList>(`/api/v1/approval-requests?${query.toString()}`);
+    items.push(...(page.items ?? []));
+    const next = page.next_cursor ?? "";
+    if (next && seen.has(next)) throw new Error("approval queue returned a repeated cursor");
+    if (next) seen.add(next);
+    cursor = next;
+  } while (cursor);
+  return items;
 }
 
 const liveApi: Api = {
@@ -1746,6 +1786,14 @@ const liveApi: Api = {
   issueExternalCA: (id, input) => mutate<ExternalCAIssuedCertificate>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/issue`, input),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
+  approvalRequests: allPendingApprovalRequests,
+  approveApprovalRequest: (id, intentDigest) =>
+    mutate<ApprovalRequestDecision>("POST", `/api/v1/approval-requests/${encodeURIComponent(id)}/approvals`, { intent_digest: intentDigest }),
+  denyApprovalRequest: (id, intentDigest, reason) =>
+    mutate<ApprovalRequestDecision>("POST", `/api/v1/approval-requests/${encodeURIComponent(id)}/denials`, {
+      intent_digest: intentDigest,
+      reason,
+    }),
   nhiInventory: () => req<NHIInventory>("/api/v1/nhi/inventory"),
   nhiShadowPosture: () => req<NHIShadowPosture>("/api/v1/nhi/posture/shadow"),
   nhiPolicyCompliance: () => req<NHIPolicyCompliance>("/api/v1/nhi/policy/compliance"),
@@ -1763,7 +1811,7 @@ const liveApi: Api = {
       reason,
       ...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),
     }),
-  approveIdentityAction: (id, action) => mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, { action }),
+  approveIdentityAction: (id, input) => mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, input),
   issueCertificate: async (input) => {
     let ownerId = input.ownerId;
     if (!ownerId) {
@@ -2012,7 +2060,6 @@ const liveApi: Api = {
     return req<SecretMetaList>(`/api/v1/secrets/store${suffix ? `?${suffix}` : ""}`);
   },
   createSecret: (input) => mutate<SecretMeta>("POST", "/api/v1/secrets/store", input),
-  importSecrets: (input) => mutate<SecretMetaList>("POST", "/api/v1/secrets/store/import", input),
   getSecret: (name, options) => {
     const qs = new URLSearchParams();
     if (options?.resolve) qs.set("resolve", "true");
@@ -2029,7 +2076,7 @@ const liveApi: Api = {
   recoverSecret: (name, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/store/recover/${encodeURIComponent(name)}`, input),
   rotateSecret: (name, input) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
   deleteSecret: (name) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`),
-  approveSecretChange: (name, action) => mutate<SecretApproval>("POST", `/api/v1/secrets/store/approvals/${encodeURIComponent(name)}`, { action }),
+  approveSecretChange: (name, input) => mutate<SecretApproval>("POST", `/api/v1/secrets/store/approvals/${encodeURIComponent(name)}`, input),
   secretRepositoryScanning: () => req<SecretRepositoryScanPosture>("/api/v1/secrets/scans/repositories"),
   receiveSecretRepositoryWebhook: (provider, input) =>
     mutate<SecretRepositoryWebhookReceipt>("POST", `/api/v1/secrets/scans/repositories/${encodeURIComponent(provider)}/webhook`, input),

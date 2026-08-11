@@ -23,6 +23,7 @@ func openHistoryAwareEventLog(
 	cfg config.NATS,
 	st *store.Store,
 	auditKey *jose.SigningKey,
+	extraOptions ...events.OpenOption,
 ) (*events.Log, error) {
 	if st == nil {
 		return nil, errors.New("server: history-aware event log requires a store")
@@ -30,12 +31,41 @@ func openHistoryAwareEventLog(
 	if auditKey == nil {
 		return nil, errors.New("server: history-aware event log requires the persistent audit signing key")
 	}
-	return events.Open(
-		ctx,
-		cfg,
+	options := append([]events.OpenOption(nil), extraOptions...)
+	options = append(options,
+		events.WithRequiredPrivacyEventPolicies(),
 		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)),
 		events.WithHistoryRewriteContinuityVerifier(historycontinuity.NewReceiptVerifier(auditKey)),
 	)
+	return events.Open(ctx, cfg, options...)
+}
+
+// openSanitizedHistoryAwareEventLog is the production read/mutation constructor.
+// The lower-level constructor remains available to focused recovery tests that
+// must first inject a pre-patch generation. No caller may project, serve, rebuild,
+// or export from the returned log until this wrapper has completed successfully.
+func openSanitizedHistoryAwareEventLog(
+	ctx context.Context,
+	cfg config.NATS,
+	st *store.Store,
+	auditKey *jose.SigningKey,
+	fleetReady bool,
+	extraOptions ...events.OpenOption,
+) (*events.Log, error) {
+	log, err := openHistoryAwareEventLog(ctx, cfg, st, auditKey, extraOptions...)
+	if err != nil {
+		return nil, err
+	}
+	if err := log.RequireNoPendingBackupRestore(ctx); err != nil {
+		_ = log.Close()
+		return nil, err
+	}
+	if err := ensureLegacySchedulerHistorySanitized(ctx, log, st, auditKey, fleetReady); err != nil {
+		_ = log.Close()
+		return nil, err
+	}
+	log.EnforceLegacySchedulerWriteFloor()
+	return log, nil
 }
 
 // historyRewriteOrchestratorOptions wires the proof callbacks that are invoked by

@@ -83,6 +83,14 @@ const (
 	KeysWrite   Permission = "keys:write"
 	KeysApprove Permission = "keys:approve"
 
+	// ApprovalsReview is a computed route-admission predicate, not a grantable
+	// authority. Principal.Can derives it from one of the real domain review
+	// permissions below, and approval handlers still authorize every returned or
+	// decided request against its exact domain permission. Deliberately do not add
+	// it to allResourcePermissions or any role: holding it must never flatten the
+	// certificate, secret, and managed-key separation.
+	ApprovalsReview Permission = "approvals:review"
+
 	// AgentsGrantRelay authorizes minting an enrollment token that carries the
 	// NETWORK role (epic A2) — an agent that relays for devices which cannot host
 	// an agent themselves, and therefore holds the credentials that drive them.
@@ -238,6 +246,9 @@ type Principal struct {
 func (p Principal) Can(perm Permission, target Scope) bool {
 	if p.TenantID != target.TenantID {
 		return false
+	}
+	if perm == ApprovalsReview {
+		return p.Can(CertsIssue, target) || p.Can(SecretsWrite, target) || p.Can(KeysApprove, target)
 	}
 	for _, g := range p.Grants {
 		if g.Scope.Covers(target) && g.Role.Allows(perm) {

@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/eventledger"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 )
 
 // Record is one audit entry in the tamper-evident chain. The concrete type lives
@@ -162,37 +163,60 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 	if q.TenantID == "" {
 		return nil, ErrMissingTenant
 	}
-	from, seed, tenantOrdinal, err := s.searchSeed(ctx, q.TenantID)
-	if err != nil {
-		return nil, err
-	}
-	refs := map[string]struct{}{}
-	if s.erasures != nil {
-		refs, err = s.erasures.ListPrivacyErasureRefs(ctx, q.TenantID)
+	var (
+		seed string
+		out  []Record
+	)
+	err := s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		// The retention checkpoint is only a query floor, not permission to skip
+		// safety inspection. Scan the complete retained tenant prefix first, on the
+		// same pinned generation as the eventual filtered result.
+		if err := s.log.Replay(readCtx, 0, func(e events.Event) error {
+			if e.TenantID != q.TenantID {
+				return nil
+			}
+			unsafe, inspectErr := schedulerhistory.RequiresSanitation(e.Type, e.SchemaVersion, e.Data)
+			if inspectErr != nil || unsafe {
+				return schedulerhistory.ErrSanitationRequired
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		from, chainSeed, tenantOrdinal, err := s.searchSeed(readCtx, q.TenantID)
 		if err != nil {
-			return nil, err
+			return err
 		}
-	}
-	redactor := privacy.Redactor{TenantID: q.TenantID, Refs: refs}
-	out := []Record{}
-	err = s.log.Replay(ctx, from, func(e events.Event) error {
-		if e.TenantID != q.TenantID { // AN-1: tenant floor before any public cursor advances.
+		seed = chainSeed
+		refs := map[string]struct{}{}
+		if s.erasures != nil {
+			refs, err = s.erasures.ListPrivacyErasureRefs(readCtx, q.TenantID)
+			if err != nil {
+				return err
+			}
+		}
+		redactor := privacy.Redactor{TenantID: q.TenantID, Refs: refs}
+		out = []Record{}
+		return s.log.Replay(readCtx, from, func(e events.Event) error {
+			if e.TenantID != q.TenantID { // AN-1: tenant floor before any public cursor advances.
+				return nil
+			}
+			redacted := e
+			if !redactor.Empty() {
+				redacted.Actor = redactor.RedactActor(e.Actor)
+				redacted.Data = redactor.RedactJSON(e.Data)
+			}
+			tenantOrdinal++
+			if !q.matches(redacted, tenantOrdinal) {
+				return nil
+			}
+			out = append(out, Record{
+				Sequence: tenantOrdinal, StreamSequence: e.Sequence, ID: e.ID, Type: e.Type,
+				TenantID: e.TenantID, Time: e.Time, Actor: redacted.Actor, Data: json.RawMessage(redacted.Data),
+			})
 			return nil
-		}
-		redacted := e
-		if !redactor.Empty() {
-			redacted.Actor = redactor.RedactActor(e.Actor)
-			redacted.Data = redactor.RedactJSON(e.Data)
-		}
-		tenantOrdinal++
-		if !q.matches(redacted, tenantOrdinal) {
-			return nil
-		}
-		out = append(out, Record{
-			Sequence: tenantOrdinal, StreamSequence: e.Sequence, ID: e.ID, Type: e.Type,
-			TenantID: e.TenantID, Time: e.Time, Actor: redacted.Actor, Data: json.RawMessage(redacted.Data),
 		})
-		return nil
 	})
 	if err != nil {
 		return nil, err

@@ -11,6 +11,17 @@ material under `ee/LICENSE`.
 
 If a capability matters to your evaluation, check this page before relying on it.
 
+## Historical scheduled-rotation detail
+
+The current live event generation does not serve arbitrary provider error text
+from schema-v1 scheduled-rotation terminal events. Upgrade sanitation replaces
+that one field with a fixed status-specific class before reads, projections,
+retention, or export can proceed. This guarantee applies only to repository-
+controlled live history. Backup/export files and signed or WORM audit archives
+created before sanitation are external copies: trstctl cannot rewrite them and
+does not claim they were erased. Operators must govern those copies under their
+existing custody and retention policy.
+
 ## Feature served-state matrix
 
 This matrix is the canonical served-state table for the feature catalog. The docs
@@ -2573,14 +2584,16 @@ when off, requiring a KEK when on):
   `X-Tenant-ID` is only a lookup hint — mismatched tenant headers are rejected.
 - Application secrets SDK (F64) backs the secret store
   `POST/GET/PUT/DELETE /api/v1/secrets/store/...` (create, read, rotate,
-  delete), `POST /api/v1/secrets/store/import` (all-or-nothing tree import),
-  `GET /api/v1/secrets/store/{name}?resolve=true` (`${secret.path}` reference
+  delete), `GET /api/v1/secrets/store/{name}?resolve=true` (`${secret.path}` reference
   expansion with cycle rejection), `GET
   /api/v1/secrets/store/history/{name}?version=N` (read one prior sealed
   version), and `POST /api/v1/secrets/store/recover/{name}` (point-in-time
   recovery). Values are sealed at rest under the KEK. `trstctl-cli run --secret
   ENV=path -- <cmd>` wraps the same read path, injecting values only into the
-  child process environment.
+  child process environment. Bulk import is not served: the retained compatibility
+  route `POST /api/v1/secrets/store/import` returns `501` without writing, the web
+  console shows a disabled disclosure, and the CLI exposes no import command until
+  an atomic event-sourced batch command exists.
 - The Vault/OpenBao compatibility shim backs the common migration paths
   `GET /v1/auth/token/lookup-self`, KV mount-discovery preflight for
   `secret/`, `POST/PUT/GET /v1/secret/data/{path}`, and
@@ -2603,13 +2616,31 @@ when off, requiring a KEK when on):
   response opens the sealed credential. The acceptance proof logs in with each
   generated credential, rotates it, revokes both copies, and verifies both are
   rejected afterward.
-- Secret rotation (F37) backs `POST /api/v1/secrets/rotations` — a
-  four-phase stage/cutover/verify/retire flow through concrete PostgreSQL,
-  MySQL, and AWS IAM rotators, `connector:<target>` secret-sync handoffs, and
-  `dynamic-lease:<provider>` replacement leases. A failed cutover or
-  verification returns rollback metadata only, restores the previous consumer
-  pointer when possible, and revokes the staged backend credential without
-  returning secret material.
+- Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
+  `connector:<target>` secret-sync handoffs. Concrete PostgreSQL, MySQL, and AWS
+  IAM four-phase engines remain library/configuration components only: manual
+  static-provider and `dynamic-lease:<provider>` requests return `503` before
+  any stage, issue, cutover, delivery, verification, rollback, revoke, event, or
+  outbox effect because those phase chains do not yet have one crash-recoverable
+  worker receiver. Dynamic lease issue/renew/revoke remain separate served
+  operations. Rotation `ttl_seconds` is a compatibility field only: a connector
+  request that supplies it returns `400`, while static and dynamic-lease requests
+  still return their cached request-bound `503` regardless of that field. New schedules accept
+  only `connector:<target>`; static and dynamic schedule creation returns `503`.
+  Historical non-connector schedules are marked `unsupported`, disabled, and make
+  zero provider calls. Scheduled ticks bind each exact due edge to one durable,
+  deterministic command before effects, execute at most 50 rotations while
+  scanning at most 500 due rows, report every `approval_pending`,
+  `command_in_flight`, `command_claimed`, or `config_revision_unanchored`
+  deferral, and continue past row-local poison.
+  A shared store/event/custody/integrity failure returns a cached `503` partial
+  envelope; the same idempotency key replays it byte-for-byte without child
+  execution, while a new key reconciles retained terminal evidence and continues.
+  `delivery_failed` advances a connector schedule only after its canonical local
+  version committed; generic `failed` never promotes `new_ref`. Verified terminal
+  command rows are purged only after the schedule advanced, the exact event remains
+  retained, and a newer command exists; the newest lineage fence and all claimed
+  or ambiguous rows remain.
 - PKI-as-a-secret / dynamic certificate leasing (F67) backs
   `POST /api/v1/secrets/pki` — issues a short-lived certificate and its
   private key (a usable TLS identity, `tls.X509KeyPair`-loadable) through the
@@ -3120,7 +3151,9 @@ This is a deliberate, documented trust boundary, not an accident.
   proof, opens an approval request, and enqueues the approval notification
   intent in the same tenant transaction. A distinct approver with
   `certs:issue` records approval at
-  `POST /api/v1/ephemeral/{request_id}/approvals`; the requester then calls
+  `POST /api/v1/ephemeral/{id}/approvals`, where `{id}` is the genuine queue
+  `approval_request_id` and the JSON body carries `action: issue`, the same UUID
+  as `request_id`, and its matching `intent_digest`; the requester then calls
   `/api/v1/ephemeral` with a fresh `Idempotency-Key` to mint the short-TTL
   credential. Ephemeral API keys are served separately at
   `POST /api/v1/ephemeral/api-keys` and `trstctl-cli ephemeral api-keys

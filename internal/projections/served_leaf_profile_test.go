@@ -172,17 +172,19 @@ func TestServedMintRejectsOutOfProfileRequest(t *testing.T) {
 		t.Skip("assembles the control plane with a real signer child; skipped in -short")
 	}
 
-	// --- Deny case: a profile that the served mint (30-day ECDSA leaf) violates. ---
+	// --- Deny case: a profile whose RSA-only key policy the ECDSA mint violates. ---
 	t.Run("out-of-profile is rejected with a deny event", func(t *testing.T) {
 		st := newStore(t)
 		log := openLog(t)
 		prov, stop := startSignerChild(t)
 		defer stop()
 
-		// The served mint issues a 30-day leaf; a 1h validity ceiling makes it
-		// out-of-profile and must reject.
+		// MaxValidity now clamps the requested lifetime before signing. Use an
+		// independent RSA-only policy to prove a genuinely out-of-profile ECDSA
+		// request is still rejected rather than treating a safe TTL clamp as a
+		// policy failure.
 		storeProfile(t, st, tenantA, "served-default", profile.CertificateProfile{
-			Name: "served-default", AllowedKeyAlgorithms: []string{"ECDSA"}, MinECDSABits: 256,
+			Name: "served-default", AllowedKeyAlgorithms: []string{"RSA"}, MinRSABits: 2048,
 			MaxValidity: profile.Duration(time.Hour), AllowedProtocols: []string{"api"},
 		})
 

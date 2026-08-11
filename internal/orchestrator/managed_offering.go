@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/projections"
 )
 
 const ManagedOfferingDeploymentModel = "managed_provider"
@@ -70,8 +69,12 @@ type managedTenantOfferingMetadata struct {
 // lets the projector build the tenant row. The provider tenant is recorded as
 // event metadata; it is not used as the row's tenant_id, so the hosted tenant gets
 // its own RLS boundary from the first projected row.
-func (o *Orchestrator) ProvisionManagedTenant(ctx context.Context, providerTenantID string, in ManagedTenantProvisionRequest) (ManagedTenant, error) {
-	if o == nil || o.log == nil || o.proj == nil || o.store == nil {
+func (o *Orchestrator) ProvisionManagedTenant(
+	ctx context.Context,
+	providerTenantID, idempotencyKey string,
+	in ManagedTenantProvisionRequest,
+) (ManagedTenant, error) {
+	if o == nil || o.log == nil || o.proj == nil || o.store == nil || o.durableIdem == nil {
 		return ManagedTenant{}, errors.New("orchestrator: managed offering is not configured")
 	}
 	providerTenantID = strings.TrimSpace(providerTenantID)
@@ -82,30 +85,48 @@ func (o *Orchestrator) ProvisionManagedTenant(ctx context.Context, providerTenan
 	if err := validateManagedTenantProvision(in); err != nil {
 		return ManagedTenant{}, err
 	}
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return ManagedTenant{}, errors.New("orchestrator: managed tenant idempotency key is required")
+	}
 	actor := ""
 	if a, ok := events.ActorFromContext(ctx); ok {
 		actor = a.Subject
 	}
-	now := time.Now().UTC().Truncate(time.Second)
-	payload, err := json.Marshal(managedTenantRegisteredPayload{
-		Name: in.Name,
-		ManagedOffering: managedTenantOfferingMetadata{
-			Enabled:          true,
-			DeploymentModel:  ManagedOfferingDeploymentModel,
-			ProviderTenantID: providerTenantID,
-			Region:           in.Region,
-			DataResidency:    in.DataResidency,
-			Plan:             in.Plan,
-			SupportTier:      in.SupportTier,
-			SLOTier:          in.SLOTier,
-			ProvisionedBy:    actor,
-			ProvisionedAt:    now,
-		},
+	requestMaterial, err := json.Marshal(struct {
+		ProviderTenantID string                        `json:"provider_tenant_id"`
+		Request          ManagedTenantProvisionRequest `json:"request"`
+	}{
+		ProviderTenantID: providerTenantID,
+		Request:          in,
 	})
 	if err != nil {
 		return ManagedTenant{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventTenantRegistered, in.TenantID, payload)
+	ev, err := ExecuteTenantRegistration(
+		ctx, o.log, o.store, o.proj, o.durableIdem,
+		TenantRegistrationCommand{
+			TenantID: in.TenantID, Name: in.Name, IdempotencyKey: idempotencyKey,
+			RequestMaterial: requestMaterial,
+			PayloadAt: func(eventTime time.Time) ([]byte, error) {
+				return json.Marshal(managedTenantRegisteredPayload{
+					Name: in.Name,
+					ManagedOffering: managedTenantOfferingMetadata{
+						Enabled:          true,
+						DeploymentModel:  ManagedOfferingDeploymentModel,
+						ProviderTenantID: providerTenantID,
+						Region:           in.Region,
+						DataResidency:    in.DataResidency,
+						Plan:             in.Plan,
+						SupportTier:      in.SupportTier,
+						SLOTier:          in.SLOTier,
+						ProvisionedBy:    actor,
+						ProvisionedAt:    eventTime.UTC().Truncate(time.Second),
+					},
+				})
+			},
+		},
+	)
 	if err != nil {
 		return ManagedTenant{}, err
 	}

@@ -127,11 +127,15 @@ The direct X.509-SVID flavor is served when attested issuance is configured, at
 `POST /api/v1/workloads/attested-issuance`; the approval-gated JIT flavor is served
 when ephemeral issuance is configured, at `POST /api/v1/ephemeral`. The first call
 verifies the proof, opens a dual-control approval, and enqueues the notification
-intent in the same tenant transaction; after a distinct approver calls
-`POST /api/v1/ephemeral/{request_id}/approvals`, a fresh `Idempotency-Key` on
-`POST /api/v1/ephemeral` mints the short-TTL credential. The response carries
-`certificate_pem`, `credential_id`, `certificate_id`, `subject`, `not_after`, approval
-counts, and verified attestation metadata.
+intent in the same tenant transaction. Its response keeps the caller's workflow
+`request_id` separate from the genuine queue `approval_request_id` and returns the
+queue record's `intent_digest`. A distinct approver calls
+`POST /api/v1/ephemeral/{id}/approvals`, where `{id}` is that
+`approval_request_id`, with `action: issue`, the same UUID in body `request_id`, and
+the matching `intent_digest`. A fresh `Idempotency-Key` on
+`POST /api/v1/ephemeral` then mints the short-TTL credential. The response also
+carries `certificate_pem`, `credential_id`, `certificate_id`, `subject`,
+`not_after`, approval counts, and verified attestation metadata.
 
 ### Non-human identity lifecycle (F59)
 
@@ -255,7 +259,7 @@ Replaying the same key returns the same response without minting twice.
 | NHI lifecycle routes (F59) | Served — `/api/v1/identities`, `/transitions` |
 | SPIFFE Workload API (F24) | Served — gRPC over a UDS (`protocols.spiffe.enabled`); `FetchX509SVID`, `FetchJWTSVID`, bundle fetches, and `ValidateJWTSVID` wired to the signer-backed path |
 | SPIRE upstream authority | Served and container-proven for X.509 — SPIRE loads `trstctl-spire-upstream-authority`, trstctl signs its intermediate CA CSR via `/api/v1/ca/authorities/{id}/intermediates/csr`, and the e2e verifies a minted SVID chain to the trstctl root |
-| Ephemeral issuance (F25) | Served — direct attested X.509-SVID mint at `POST /api/v1/workloads/attested-issuance` once a tenant trust source is enabled; approval-gated JIT mint at `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{request_id}/approvals` |
+| Ephemeral issuance (F25) | Served — direct attested X.509-SVID mint at `POST /api/v1/workloads/attested-issuance` once a tenant trust source is enabled; approval-gated JIT mint at `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{id}/approvals`, where `{id}` is the genuine `approval_request_id` and the body repeats it with the matching `intent_digest` |
 | Attestation chain (F30) | Served — tenant trust-source lifecycle at `/api/v1/workloads/attester-trust-sources`; the six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; conformance covers each attester |
 | AI-agent broker (F61) | Served when configured — `POST /api/v1/broker/agent-identities` verifies proof, gates policy, mints a short-lived credential, and projects the graph grant |
 
@@ -275,7 +279,8 @@ renewal for workloads and agents — the point, but plan for it.
   `DELETE /api/v1/workloads/attester-trust-sources/{id}`,
   `POST /api/v1/workloads/attested-issuance`,
   `POST /api/v1/ephemeral`,
-  `POST /api/v1/ephemeral/{request_id}/approvals`,
+  `POST /api/v1/ephemeral/{id}/approvals` (`{id}` is the genuine
+  `approval_request_id`; body `request_id` and `intent_digest` must match it),
   `POST /api/v1/broker/agent-identities`,
   `POST /api/v1/ca/authorities/{id}/intermediates/csr`.
 - **Attestation methods:** `tpm`, `aws_iid`, `gcp_iit`, `azure_imds`, `k8s_sat`,

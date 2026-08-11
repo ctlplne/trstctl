@@ -36,6 +36,7 @@ const (
 var magic = []byte{'C', 'S', 'L', '1'}
 
 var domainTagContext = []byte("trstctl.seal.domain.v2")
+var keyedDigestContext = []byte("trstctl.seal.keyed-digest.v1")
 
 var (
 	// ErrKeySize is returned when a local KEK is not a 256-bit key.
@@ -98,6 +99,31 @@ func (k *LocalKEK) Destroy() { k.key.Destroy() }
 // behind a queued Destroy deadlocks.
 func (k *LocalKEK) WithKey(fn func(kek []byte) error) error {
 	return k.key.Use(fn)
+}
+
+// KeyedDigest computes a domain-separated HMAC-SHA256 under the locked KEK
+// without exposing or copying the KEK outside this crypto boundary. It is used
+// for non-reversible command evidence: the result is safe to persist, while a log
+// reader cannot test guesses for a low-entropy request or secret without the KEK.
+func (k *LocalKEK) KeyedDigest(domain, material []byte) ([]byte, error) {
+	if len(domain) == 0 {
+		return nil, errors.New("seal: keyed digest requires a domain")
+	}
+	var digest []byte
+	err := k.key.Use(func(kek []byte) error {
+		mac := hmac.New(sha256.New, kek)
+		_, _ = mac.Write(keyedDigestContext)
+		var size [8]byte
+		binary.BigEndian.PutUint64(size[:], uint64(len(domain))) // #nosec G115 -- slice lengths cannot exceed uint64.
+		_, _ = mac.Write(size[:])
+		_, _ = mac.Write(domain)
+		binary.BigEndian.PutUint64(size[:], uint64(len(material))) // #nosec G115 -- slice lengths cannot exceed uint64.
+		_, _ = mac.Write(size[:])
+		_, _ = mac.Write(material)
+		digest = mac.Sum(nil)
+		return nil
+	})
+	return digest, err
 }
 
 // GenerateKEK returns a fresh random 256-bit key-encryption key. The caller

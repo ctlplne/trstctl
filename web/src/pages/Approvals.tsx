@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { IssuanceRequestsPanel } from "@/components/IssuanceRequestsPanel";
 import { Info } from "lucide-react";
 import { Link } from "react-router-dom";
-import { ApiError, UnauthorizedError, api, type EphemeralApproval, type Identity } from "@/lib/api";
+import { ApiError, UnauthorizedError, api, type EphemeralApproval, type PendingApprovalRequest } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
-import { approvalAuditHref, approvalRows, parseApprovalProgress, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
+import { approvalAuditHref, approvalRequestsQueryKey, approvalRows, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
+import { useApiQuery, useQueryClient } from "@/lib/query";
 import { Num } from "@/components/typography";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -20,7 +21,8 @@ type Notice = { kind: "permission" | "error"; message: string };
 export function Approvals() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [identities, setIdentities] = useState<Identity[] | null>(null);
+  const queryClient = useQueryClient();
+  const requests = useApiQuery(approvalRequestsQueryKey, api.approvalRequests);
   const [error, setError] = useState<Notice | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -28,21 +30,9 @@ export function Approvals() {
   const [ephemeralBusy, setEphemeralBusy] = useState(false);
   const [ephemeralError, setEphemeralError] = useState<string | null>(null);
   const [ephemeralApproval, setEphemeralApproval] = useState<EphemeralApproval | null>(null);
-  const rows = useMemo(() => approvalRows(identities ?? []), [identities]);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setIdentities(await api.identities());
-    } catch (err) {
-      setIdentities(null);
-      setError(noticeForError(err));
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const rows = useMemo(() => approvalRows(requests.data ?? []), [requests.data]);
+  const queryError = requests.errorValue ? noticeForError(requests.errorValue) : null;
+  const visibleError = error ?? queryError;
 
   const approve = useCallback(
     async (row: ApprovalQueueRow) => {
@@ -51,16 +41,30 @@ export function Approvals() {
       setError(null);
       setNotice(null);
       try {
-        const result = await api.approveIdentityAction(row.identity.id, row.action);
-        setNotice(`${result.action} approval recorded for ${result.resource} (${result.approvals})`);
-        await load();
+        const result = await api.approveApprovalRequest(row.id, row.intent_digest);
+        queryClient.setQueryData<PendingApprovalRequest[]>(approvalRequestsQueryKey, (current) =>
+          current
+            ?.map((request) =>
+              request.id === row.id
+                ? {
+                    ...request,
+                    approval_count: result.approval_count,
+                    required_approvals: result.required_approvals,
+                    status: result.status,
+                  }
+                : request,
+            )
+            .filter((request) => request.status === "pending"),
+        );
+        setNotice(`${row.action} approval recorded for ${row.resource_name || row.resource_id} (${result.approval_count})`);
+        void queryClient.invalidateQueries({ queryKey: approvalRequestsQueryKey });
       } catch (err) {
         setError({ kind: "error", message: approvalErrorMessage(err) });
       } finally {
         setBusyKey(null);
       }
     },
-    [load],
+    [queryClient],
   );
 
   async function approveEphemeralCredential(event: FormEvent<HTMLFormElement>) {
@@ -69,7 +73,14 @@ export function Approvals() {
     setEphemeralApproval(null);
     setEphemeralBusy(true);
     try {
-      const result = await api.approveEphemeralCredential(ephemeralRequestID.trim(), { action: "issue" });
+      const resourceID = ephemeralRequestID.trim();
+      const exactRequest = rows.find((request) => request.resource_kind === "ephemeral" && request.resource_id === resourceID && request.action === "issue");
+      if (!exactRequest) throw new Error(t("source.no.pending.approvals.261de9be5f"));
+      const result = await api.approveEphemeralCredential(exactRequest.id, {
+        action: "issue",
+        request_id: exactRequest.id,
+        intent_digest: exactRequest.intent_digest,
+      });
       setEphemeralApproval(result);
       setEphemeralRequestID("");
     } catch (err) {
@@ -85,7 +96,20 @@ export function Approvals() {
         id: "resource",
         header: "Resource",
         sortable: true,
-        cell: (row) => <span className="font-medium">{row.identity.name}</span>,
+        cell: (row) => (
+          <div className="grid gap-0.5">
+            <span className="font-medium">{row.resource_name || row.resource_id}</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              {row.resource_kind} · {row.resource_id}
+            </span>
+            <span className="text-caption text-muted-foreground">
+              {translateNow("parity.requestId_63aa59")}: <span className="font-mono">{row.id}</span>
+            </span>
+            <span className="text-caption text-muted-foreground">
+              {translateNow("source.version.dd167905de")}: <span className="font-mono">{row.target_version}</span>
+            </span>
+          </div>
+        ),
       },
       {
         id: "action",
@@ -98,6 +122,11 @@ export function Approvals() {
         cell: (row) => row.requester,
       },
       {
+        id: "reason",
+        header: translateNow("policy.accessChange.reason"),
+        cell: (row) => row.reason || "—",
+      },
+      {
         id: "quorum",
         header: (
           <span className="inline-flex items-center gap-1" title={translateNow("source.recorded.approvals.and.required.approvals.4d359a312b")}>
@@ -105,20 +134,45 @@ export function Approvals() {
             <Info className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
         ),
-        cell: (row) => <ApprovalQuorum approvals={row.approvals} />,
+        cell: (row) => <ApprovalQuorum have={row.approval_count} need={row.required_approvals} />,
       },
       {
         id: "grant",
         header: "Time-bound grant",
-        cell: (row) => row.grantExpiresAt,
+        cell: (row) => (
+          <div className="grid gap-0.5 text-caption">
+            <span>
+              {translateNow("source.created.d70b9e24bc")}: <span className="font-mono">{row.created_at}</span>
+            </span>
+            <span>
+              {translateNow("source.expires.f6725f3af0")}: <span className="font-mono">{row.expires_at}</span>
+            </span>
+          </div>
+        ),
       },
       {
         id: "audit",
         header: "Evidence",
         cell: (row) => (
-          <Link className="text-brand-accent underline" to={approvalAuditHref(row)}>
-            {translateNow("source.audit.trail.c1ada08ce1")}
-          </Link>
+          <div className="grid gap-1">
+            <span className="font-mono text-xs" title={row.intent_digest}>
+              {row.intent_digest}
+            </span>
+            {row.evidence_refs.length > 0 ? (
+              <ul className="grid gap-0.5 text-caption text-muted-foreground">
+                {row.evidence_refs.map((reference) => (
+                  <li key={reference} className="font-mono">
+                    {reference}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-caption text-muted-foreground">{translateNow("policy.accessChange.noEvidenceRef")}</span>
+            )}
+            <Link className="text-brand-accent underline" to={approvalAuditHref(row)}>
+              {translateNow("source.audit.trail.c1ada08ce1")}
+            </Link>
+          </div>
         ),
       },
       {
@@ -137,7 +191,10 @@ export function Approvals() {
                 aria-describedby={describedBy}
                 onClick={() => void approve(row)}
               >
-                {translateNow("source.approve.value1.for.value2.f59c2fc633", { value1: row.action, value2: row.identity.name })}
+                {translateNow("source.approve.value1.for.value2.f59c2fc633", {
+                  value1: row.action,
+                  value2: row.resource_name || row.resource_id,
+                })}
               </Button>
               {selfApproval && (
                 <p id={describedBy} className="max-w-xs text-xs text-muted-foreground">
@@ -154,11 +211,7 @@ export function Approvals() {
 
   return (
     <section aria-labelledby="approvals-heading" className="space-y-6">
-      <PageHeader
-        title={translateNow("source.approvals.2bfc347157")}
-        titleId="approvals-heading"
-        description="Dual-control issue, rotate, and revoke decisions for a distinct approver. The queue is built from pending identities; quorum and requester details appear when identity attributes carry them."
-      />
+      <PageHeader title={translateNow("source.approvals.2bfc347157")} titleId="approvals-heading" />
       <IssuanceRequestsPanel />
 
       {notice && (
@@ -166,15 +219,11 @@ export function Approvals() {
           {notice}
         </p>
       )}
-      {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
-      {error?.kind === "error" && <ErrorState title={translateNow("source.approvals.unavailable.8071a7e2c8")}>{error.message}</ErrorState>}
-      {!identities && !error && <LoadingState>{translateNow("source.loading.approvals.192880172b")}</LoadingState>}
-      {identities && rows.length === 0 && (
-        <EmptyState title={translateNow("source.no.pending.approvals.261de9be5f")}>
-          {translateNow("source.no.identities.currently.require.an.issue.r.3200466dfb")}
-        </EmptyState>
-      )}
-      {identities && rows.length > 0 && <DataGrid ariaLabel="Pending approvals" rows={rows} columns={columns} getRowId={rowKey} />}
+      {visibleError?.kind === "permission" && <PermissionDeniedState>{visibleError.message}</PermissionDeniedState>}
+      {visibleError?.kind === "error" && <ErrorState title={translateNow("source.approvals.unavailable.8071a7e2c8")}>{visibleError.message}</ErrorState>}
+      {requests.loading && !visibleError && <LoadingState>{translateNow("source.loading.approvals.192880172b")}</LoadingState>}
+      {requests.data && !visibleError && rows.length === 0 && <EmptyState title={translateNow("source.no.pending.approvals.261de9be5f")} />}
+      {requests.data && !visibleError && rows.length > 0 && <DataGrid ariaLabel="Pending approvals" rows={rows} columns={columns} getRowId={rowKey} />}
 
       <section aria-labelledby="ephemeral-approvals-heading" className="ui-panel grid max-w-xl gap-3 p-comfortable">
         <div>
@@ -182,7 +231,7 @@ export function Approvals() {
             {t("parity.ephemeralCredentialApprovals_9a4b68")}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Attestation-gated JIT credentials awaiting quorum. There is no server-side pending list; paste the request id from the requester.
+            Paste the requester&apos;s client request ID. trstctl finds its exact immutable pending queue record before recording approval.
           </p>
         </div>
         <form aria-label={t("parity.approveEphemeralCredential_760861")} className="grid gap-3" onSubmit={(event) => void approveEphemeralCredential(event)}>
@@ -223,33 +272,24 @@ export function Approvals() {
 }
 
 function rowKey(row: ApprovalQueueRow): string {
-  return `${row.identity.id}:${row.action}`;
+  return row.id;
 }
 
 /** S-C18: show the quorum as have/need with what is still outstanding, so an
  * approver reads one number instead of parsing a sentence. Text the server
  * emits in a shape we do not recognize is passed through untouched rather
  * than guessed at. */
-function ApprovalQuorum({ approvals }: { approvals: string }) {
-  const progress = parseApprovalProgress(approvals);
-  if (!progress) return <span className="text-caption text-muted-foreground">{approvals}</span>;
+function ApprovalQuorum({ have, need }: { have: number; need: number }) {
+  const remaining = Math.max(0, need - have);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span
-        className="inline-flex items-baseline gap-1"
-        aria-label={translateNow("source.value1.value2.7d8908f134", { value1: progress.have, value2: progress.need })}
-      >
-        <Num className="font-medium">{String(progress.have)}</Num>
+      <span className="inline-flex items-baseline gap-1" aria-label={translateNow("source.value1.value2.7d8908f134", { value1: have, value2: need })}>
+        <Num className="font-medium">{String(have)}</Num>
         <span className="text-caption text-muted-foreground">/</span>
-        <Num>{String(progress.need)}</Num>
+        <Num>{String(need)}</Num>
       </span>
-      {progress.remaining > 0 ? (
-        <StatusBadge
-          vocabulary="lifecycle"
-          value="pending"
-          label={translateNow("approvals.quorum.remaining", { count: String(progress.remaining) })}
-          tone="warning"
-        />
+      {remaining > 0 ? (
+        <StatusBadge vocabulary="lifecycle" value="pending" label={translateNow("approvals.quorum.remaining", { count: String(remaining) })} tone="warning" />
       ) : (
         <StatusBadge vocabulary="lifecycle" value="approved" label={translateNow("approvals.quorum.met")} tone="success" />
       )}
@@ -265,6 +305,8 @@ function statusForApprovalAction(action: ApprovalQueueRow["action"]): string {
       return "renewing";
     case "revoke":
       return "revoked";
+    default:
+      return "pending";
   }
 }
 

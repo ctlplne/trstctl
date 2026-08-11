@@ -152,6 +152,144 @@ func TestDynamicSecretIssueBindingSurvivesPostgresTimestampPrecision(t *testing.
 	}
 }
 
+func TestDynamicSecretEpochBoundUpgradeCommandsRejectStaleEpochBeforeProviderAUD108(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111126"
+	ctx := context.Background()
+	st, log, _, outbox, provider, dispatcher := newDynamicSecretOutboxTestStack(t, tenant)
+	projector := projections.New(st)
+	epoch, err := st.DynamicSecretTenantEpoch(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const staleEpoch = "00000000-0000-4000-8000-00000000dead"
+	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+	pending := projections.DynamicSecretLeasePending{
+		ID: "lease-aud108-upgrade-command", IdempotencyKey: "aud108-upgrade-command",
+		RequestBinding: "sha256:aud108-upgrade-command", Provider: provider.name, Role: "reader",
+		ExpiresAt:     time.Date(2099, 8, 11, 13, 0, 0, 0, time.UTC),
+		HardExpiresAt: time.Date(2099, 8, 11, 14, 0, 0, 0, time.UTC),
+	}
+	pendingData, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pendingEvent, err := log.Append(ctx, events.Event{
+		Type: projections.EventDynamicSecretLeasePending, TenantID: tenant,
+		Time: now, Data: pendingData,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.Apply(ctx, pendingEvent); err != nil {
+		t.Fatal(err)
+	}
+	lease, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issueMessage, err := outbox.Get(ctx, tenant, lease.IssueOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var issueCommand projections.DynamicSecretIssueCommand
+	if err := json.Unmarshal(issueMessage.Payload, &issueCommand); err != nil {
+		t.Fatal(err)
+	}
+	if issueCommand.TenantEpoch != epoch ||
+		issueMessage.IdempotencyKey != store.DynamicSecretIssueOutboxIdempotencyKey(epoch, pending.ID) {
+		t.Fatalf("upgraded issue command = epoch:%q key:%q, want epoch:%q canonical key",
+			issueCommand.TenantEpoch, issueMessage.IdempotencyKey, epoch)
+	}
+	staleIssue := issueCommand
+	staleIssue.TenantEpoch = staleEpoch
+	staleIssuePayload, err := json.Marshal(staleIssue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issueDelivery := orchestrator.Message{
+		ID: issueMessage.ID, TenantID: issueMessage.TenantID, Destination: issueMessage.Destination,
+		IdempotencyKey: issueMessage.IdempotencyKey, Payload: issueMessage.Payload, Attempts: 1,
+	}
+	staleIssueMessage := issueDelivery
+	staleIssueMessage.IdempotencyKey = store.DynamicSecretIssueOutboxIdempotencyKey(staleEpoch, pending.ID)
+	staleIssueMessage.Payload = staleIssuePayload
+	if handled, err := dispatcher.Deliver(ctx, staleIssueMessage); !handled || err == nil {
+		t.Fatalf("stale-epoch issue dispatch = (handled:%t err:%v), want fail closed", handled, err)
+	}
+	if calls := len(provider.Requests()); calls != 0 {
+		t.Fatalf("stale-epoch issue made %d provider calls, want zero", calls)
+	}
+	if handled, err := dispatcher.Deliver(ctx, issueDelivery); !handled || err != nil {
+		t.Fatalf("exact upgraded issue dispatch = (handled:%t err:%v)", handled, err)
+	}
+	if calls := len(provider.Requests()); calls != 1 {
+		t.Fatalf("exact upgraded issue made %d provider calls, want one", calls)
+	}
+
+	issued, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokeData, err := json.Marshal(projections.DynamicSecretLeaseRevocationRequested{
+		ID: issued.ID, Provider: issued.Provider, BackendRef: issued.BackendRef,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokeEvent, err := log.Append(ctx, events.Event{
+		Type: projections.EventDynamicSecretLeaseRevocationRequested, TenantID: tenant,
+		Time: now.Add(time.Minute), Data: revokeData,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.Apply(ctx, revokeEvent); err != nil {
+		t.Fatal(err)
+	}
+	revoked, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil || revoked.RevokeOutboxID == nil {
+		t.Fatalf("load upgraded revoke command lease = %+v err=%v", revoked, err)
+	}
+	revokeMessage, err := outbox.Get(ctx, tenant, *revoked.RevokeOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var revokeCommand dynsecret.RevokeItem
+	if err := json.Unmarshal(revokeMessage.Payload, &revokeCommand); err != nil {
+		t.Fatal(err)
+	}
+	if revokeCommand.TenantEpoch != epoch ||
+		revokeMessage.IdempotencyKey != store.DynamicSecretRevokeOutboxIdempotencyKey(epoch, pending.ID) {
+		t.Fatalf("upgraded revoke command = epoch:%q key:%q, want epoch:%q canonical key",
+			revokeCommand.TenantEpoch, revokeMessage.IdempotencyKey, epoch)
+	}
+	staleRevoke := revokeCommand
+	staleRevoke.TenantEpoch = staleEpoch
+	staleRevokePayload, err := json.Marshal(staleRevoke)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokeDelivery := orchestrator.Message{
+		ID: revokeMessage.ID, TenantID: revokeMessage.TenantID, Destination: revokeMessage.Destination,
+		IdempotencyKey: revokeMessage.IdempotencyKey, Payload: revokeMessage.Payload, Attempts: 1,
+	}
+	staleRevokeMessage := revokeDelivery
+	staleRevokeMessage.IdempotencyKey = store.DynamicSecretRevokeOutboxIdempotencyKey(staleEpoch, pending.ID)
+	staleRevokeMessage.Payload = staleRevokePayload
+	if handled, err := dispatcher.Deliver(ctx, staleRevokeMessage); !handled || err == nil {
+		t.Fatalf("stale-epoch revoke dispatch = (handled:%t err:%v), want fail closed", handled, err)
+	}
+	if calls := len(provider.Revocations()); calls != 0 {
+		t.Fatalf("stale-epoch revoke made %d provider calls, want zero", calls)
+	}
+	if handled, err := dispatcher.Deliver(ctx, revokeDelivery); !handled || err != nil {
+		t.Fatalf("exact upgraded revoke dispatch = (handled:%t err:%v)", handled, err)
+	}
+	if calls := len(provider.Revocations()); calls != 1 {
+		t.Fatalf("exact upgraded revoke made %d provider calls, want one", calls)
+	}
+}
+
 type preparedIssueOutboxProvider struct {
 	*issueOutboxProvider
 	prepares atomic.Int64
@@ -167,6 +305,194 @@ func (p *preparedIssueOutboxProvider) GeneratePrepared(ctx context.Context, req 
 		return dynsecret.Credential{}, errors.New("prepared identity changed before provider mutation")
 	}
 	return p.Generate(ctx, req)
+}
+
+func TestDynamicSecretPreparedAndIssuedHistoryFenceSurvivesDedupeExpiryAUD108(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111128"
+	// JetStream enforces a 100 ms minimum duplicate window. Crossing three times
+	// that minimum still proves correctness does not depend on broker retention.
+	const duplicateWindow = 100 * time.Millisecond
+	ctx := context.Background()
+	st := newServerTestStore(t)
+	log, err := events.Open(ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
+		events.WithDuplicateWindowForTesting(duplicateWindow))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	projector := projections.New(st)
+	tenantData, err := json.Marshal(map[string]string{"name": "Dynamic Secret Retained Fence"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registered, err := log.Append(ctx, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenant, Data: tenantData,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.Apply(ctx, registered); err != nil {
+		t.Fatal(err)
+	}
+	epoch, err := st.DynamicSecretTenantEpoch(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	pending := projections.DynamicSecretLeasePending{
+		TenantEpoch: epoch, ID: "lease-retained-provider-fence",
+		IdempotencyKey: "issue-retained-provider-fence", RequestBinding: "sha256:retained-provider-fence",
+		Provider: "postgres-production", Role: "reader",
+		ExpiresAt: now.Add(30 * time.Minute), HardExpiresAt: now.Add(time.Hour),
+	}
+	pendingData, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pendingEvent, err := log.Append(ctx, events.Event{
+		ID:   store.DynamicSecretEventID(tenant, epoch, "issue-requested", pending.ID),
+		Type: projections.EventDynamicSecretLeasePending, TenantID: tenant,
+		Time: now, SchemaVersion: projections.DynamicSecretEventSchemaVersion, Data: pendingData,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.Apply(ctx, pendingEvent); err != nil {
+		t.Fatal(err)
+	}
+	record, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outbox := orchestrator.NewOutbox(st)
+	queued, err := outbox.Get(ctx, tenant, record.IssueOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := orchestrator.Message{
+		ID: queued.ID, TenantID: queued.TenantID, Destination: queued.Destination,
+		IdempotencyKey: queued.IdempotencyKey, Payload: queued.Payload, Attempts: 1,
+	}
+	kek, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x68}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(kek.Destroy)
+	provider := &preparedIssueOutboxProvider{issueOutboxProvider: &issueOutboxProvider{name: pending.Provider}}
+	preparedCrash := errors.New("test crash after prepared append")
+	issuedCrash := errors.New("test crash after issued append")
+	var crashedPrepared, crashedIssued bool
+	dispatcher := &secretIntegrationOutboxDispatcher{
+		dynamicProviders: DynamicSecretProviderRegistry{tenant: {provider}},
+		kek:              kek, store: st, log: log,
+		afterCanonicalAppend: func(event events.Event) error {
+			switch event.Type {
+			case projections.EventDynamicSecretLeasePrepared:
+				if !crashedPrepared {
+					crashedPrepared = true
+					return preparedCrash
+				}
+			case projections.EventDynamicSecretLeaseIssued:
+				if !crashedIssued {
+					crashedIssued = true
+					return issuedCrash
+				}
+			}
+			return nil
+		},
+	}
+
+	if handled, err := dispatcher.Deliver(ctx, message); !handled || !errors.Is(err, preparedCrash) {
+		t.Fatalf("prepared append crash = (handled:%t err:%v)", handled, err)
+	}
+	if provider.prepares.Load() != 1 || len(provider.Requests()) != 0 {
+		t.Fatalf("after prepared crash prepares=%d provider_calls=%d, want 1/0",
+			provider.prepares.Load(), len(provider.Requests()))
+	}
+	time.Sleep(3 * duplicateWindow)
+	message.Attempts++
+	if handled, err := dispatcher.Deliver(ctx, message); !handled || !errors.Is(err, issuedCrash) {
+		t.Fatalf("issued append crash = (handled:%t err:%v)", handled, err)
+	}
+	if provider.prepares.Load() != 1 || len(provider.Requests()) != 1 {
+		t.Fatalf("after issued crash prepares=%d provider_calls=%d, want 1/1",
+			provider.prepares.Load(), len(provider.Requests()))
+	}
+	time.Sleep(3 * duplicateWindow)
+	message.Attempts++
+	if handled, err := dispatcher.Deliver(ctx, message); !handled || err != nil {
+		t.Fatalf("retained issued recovery = (handled:%t err:%v)", handled, err)
+	}
+	if provider.prepares.Load() != 1 || len(provider.Requests()) != 1 {
+		t.Fatalf("retained history repeated provider work: prepares=%d calls=%d",
+			provider.prepares.Load(), len(provider.Requests()))
+	}
+	record, err = st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil || record.State != store.DynamicSecretLeaseActive || len(record.SealedCredential) == 0 {
+		t.Fatalf("recovered lease = %+v err=%v, want active sealed result", record, err)
+	}
+
+	revokeOperationID := "revoke-retained-provider-fence"
+	revokeRequested := projections.DynamicSecretLeaseRevocationRequested{
+		TenantEpoch: epoch, OperationID: revokeOperationID, ID: pending.ID,
+		Provider: pending.Provider, BackendRef: record.BackendRef,
+	}
+	revokeData, err := json.Marshal(revokeRequested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokeEvent, err := log.Append(ctx, events.Event{
+		ID:   store.DynamicSecretEventID(tenant, epoch, "lease-revocation-requested", revokeOperationID),
+		Type: projections.EventDynamicSecretLeaseRevocationRequested, TenantID: tenant,
+		SchemaVersion: projections.DynamicSecretEventSchemaVersion, Data: revokeData,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.Apply(ctx, revokeEvent); err != nil {
+		t.Fatal(err)
+	}
+	record, err = st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil || record.RevokeOutboxID == nil {
+		t.Fatalf("revocation intent = %+v err=%v", record, err)
+	}
+	revokeQueued, err := outbox.Get(ctx, tenant, *record.RevokeOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokeMessage := orchestrator.Message{
+		ID: revokeQueued.ID, TenantID: revokeQueued.TenantID, Destination: revokeQueued.Destination,
+		IdempotencyKey: revokeQueued.IdempotencyKey, Payload: revokeQueued.Payload, Attempts: 1,
+	}
+	revocationCrash := errors.New("test crash after revocation completion append")
+	crashedRevocation := false
+	dispatcher.afterCanonicalAppend = func(event events.Event) error {
+		if event.Type == projections.EventDynamicSecretLeaseRevocationCompleted && !crashedRevocation {
+			crashedRevocation = true
+			return revocationCrash
+		}
+		return nil
+	}
+	if handled, err := dispatcher.Deliver(ctx, revokeMessage); !handled || !errors.Is(err, revocationCrash) {
+		t.Fatalf("revocation append crash = (handled:%t err:%v)", handled, err)
+	}
+	if got := len(provider.Revocations()); got != 1 {
+		t.Fatalf("revocation calls after append crash=%d, want one", got)
+	}
+	time.Sleep(3 * duplicateWindow)
+	revokeMessage.Attempts++
+	if handled, err := dispatcher.Deliver(ctx, revokeMessage); !handled || err != nil {
+		t.Fatalf("retained revocation recovery = (handled:%t err:%v)", handled, err)
+	}
+	if got := len(provider.Revocations()); got != 1 {
+		t.Fatalf("retained revocation repeated provider deletion: calls=%d", got)
+	}
+	record, err = st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil || record.RevocationStatus != store.DynamicSecretRevocationCompleted ||
+		record.RevocationCompletedAt == nil {
+		t.Fatalf("recovered revocation = %+v err=%v", record, err)
+	}
 }
 
 func TestDurableDynamicSecretIssueIsOutboxOnlyAndCrashReplaySafe(t *testing.T) {

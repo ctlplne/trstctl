@@ -426,6 +426,102 @@ export const messages = {
     description: "Session ledger: endpoint not served (needs the event log and datastore).",
   },
   "secrets.sessions.failedTitle": { defaultMessage: "Session revoke failed", description: "Session ledger action error title." },
+  "secrets.rotation.scopeDescription": {
+    defaultMessage:
+      "Manual native-store rotation replaces one stored value at a time. Provider rotation currently accepts only connector:<target> and queues worker delivery. Static and dynamic-lease providers, plus rotation TTL input, remain unavailable until the full effect and rollback chain is durable. Scheduled rotations run below, and downstream sync lives in the sync section.",
+    description: "Secret rotation panel: truthful served backend scope.",
+  },
+  "secrets.rotation.scheduleDescription": {
+    defaultMessage:
+      "Schedule a connector-backed application-secret rotation. Delivery is worker-queued; only key and reference metadata are stored. Static and dynamic-lease schedules are unavailable until their full phase chains have durable workers.",
+    description: "Secret rotation schedule dialog: truthful served scope.",
+  },
+  "secrets.rotation.scheduleStateMessage": {
+    defaultMessage: "Create a connector:<target> schedule; delivery is worker-queued and crash-resumable.",
+    description: "Secret rotation schedule table empty state.",
+  },
+  "secrets.rotation.connectorOnly": {
+    defaultMessage:
+      "Manual provider rotation currently requires connector:<target>. Static and dynamic-lease providers stay unavailable until one durable worker owns every effect and rollback phase.",
+    description: "Secret rotation form: connector-only fail-closed validation.",
+  },
+  "secrets.rotation.scheduleConnectorOnly": {
+    defaultMessage: "Scheduled rotation currently requires a connector:<target> provider. Static and dynamic-lease providers remain unavailable.",
+    description: "Secret rotation schedule form: connector-only fail-closed validation.",
+  },
+  "secrets.rotation.scheduleProviderPlaceholder": {
+    defaultMessage: "connector:ci",
+    description: "Secret rotation schedule form: connector provider example.",
+  },
+  "secrets.rotation.queued": {
+    defaultMessage: "Rotation queued for delivery",
+    description: "Secret rotation result: local version committed and connector delivery queued.",
+  },
+  "secrets.rotation.completed": {
+    defaultMessage: "Rotation completed",
+    description: "Secret rotation result: completed.",
+  },
+  "secrets.rotation.failed": {
+    defaultMessage: "Rotation failed",
+    description: "Secret rotation result: failed.",
+  },
+  "secrets.rotation.dueNotice": {
+    defaultMessage: "Ran {ran} due rotations; deferred {deferred} of {scanned} scanned schedules.",
+    description: "Secret rotation scheduler tick result summary.",
+  },
+  "secrets.rotation.limitNoticeLabel": {
+    defaultMessage: "Scheduled rotation continuation notice",
+    description: "Secret rotation scheduler: accessible label for bounded-tick continuation evidence.",
+  },
+  "secrets.rotation.runLimitNotice": {
+    defaultMessage: "The full 50-run budget was consumed. Run due rotations again to continue from the durable fair cursor.",
+    description: "Secret rotation scheduler: run safety budget continuation notice.",
+  },
+  "secrets.rotation.scanLimitNotice": {
+    defaultMessage: "The full 500-schedule scan budget was consumed. Run due rotations again to continue fairly from the durable cursor.",
+    description: "Secret rotation scheduler: scan safety budget continuation notice.",
+  },
+  "secrets.rotation.deferredSummary": {
+    defaultMessage: "{count} due schedules remain deferred; each exact due edge is listed below and later due work was still scanned.",
+    description: "Secret rotation scheduler deferred-row evidence.",
+  },
+  "secrets.rotation.deferredListLabel": {
+    defaultMessage: "Deferred rotation schedule evidence",
+    description: "Secret rotation scheduler: accessible label for exact deferred rows.",
+  },
+  "secrets.rotation.deferredDueAt": {
+    defaultMessage: "Due {time}",
+    description: "Secret rotation scheduler: exact deferred due-edge time.",
+  },
+  "secrets.rotation.deferredReason.approvalPending": {
+    defaultMessage: "Approval pending",
+    description: "Secret rotation scheduler deferred reason.",
+  },
+  "secrets.rotation.deferredReason.commandInFlight": {
+    defaultMessage: "Secret command in flight",
+    description: "Secret rotation scheduler deferred reason.",
+  },
+  "secrets.rotation.deferredReason.commandClaimed": {
+    defaultMessage: "Due edge claimed by another runner",
+    description: "Secret rotation scheduler deferred reason.",
+  },
+  "secrets.import.unavailableTitle": {
+    defaultMessage: "Bulk secret import",
+    description: "Disabled bulk-import disclosure: heading.",
+  },
+  "secrets.import.unavailableDescription": {
+    defaultMessage: "Unavailable until atomic event-sourced batch commands are implemented",
+    description: "Disabled bulk-import disclosure: short availability reason.",
+  },
+  "secrets.import.unavailableBody": {
+    defaultMessage:
+      "Bulk import is disabled so a batch can never bypass the immutable event log or half-land. Create each secret with its own idempotency key instead.",
+    description: "Disabled bulk-import disclosure: safety rationale and supported alternative.",
+  },
+  "secrets.import.unavailableAction": {
+    defaultMessage: "Import unavailable",
+    description: "Disabled bulk-import disclosure: disabled action label.",
+  },
   "secrets.tabs.store": {
     defaultMessage: "Store",
     description: "Secrets page tab: browse, import, and manage the native secret store.",
@@ -8682,7 +8778,8 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.recurringRollbackSafeRotationsRunBy_06c343": {
-    defaultMessage: "Recurring rollback-safe rotations run by the scheduler. Run due now executes every enabled schedule whose next run is already due.",
+    defaultMessage:
+      "The scheduler runs at most 50 rotations per tick while scanning at most 500 enabled due schedules. Approval-pending or already-running commands are reported as deferred while later due rows are still scanned.",
     description: "CLI-parity console flow copy.",
   },
   "parity.remediationEvidence_5174c6": {
@@ -8710,16 +8807,16 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.rollbackSafeRotationFailed_5f1a57": {
-    defaultMessage: "Rollback-safe rotation failed",
+    defaultMessage: "Secret rotation failed",
     description: "CLI-parity console flow copy.",
   },
   "parity.rollbackSafeRotation_267d4a": {
-    defaultMessage: "Rollback-safe rotation",
+    defaultMessage: "Connector rotation",
     description: "CLI-parity console flow copy.",
   },
   "parity.rotateAProviderBackedCredentialBy_ec7a8f": {
     defaultMessage:
-      "Rotate a provider-backed credential by reference. If a phase fails, the run rolls back to the old reference and the result below reports the exact outcome. No secret values pass through this form.",
+      "Queue connector delivery for a credential reference. Static and dynamic-lease providers are refused before effects until their complete phase chains are durable. No secret values pass through this form.",
     description: "CLI-parity console flow copy.",
   },
   "parity.rotateChallenge_99fc02": {
@@ -8748,7 +8845,7 @@ export const messages = {
     description: "CLI-parity console flow copy.",
   },
   "parity.runRollbackSafeRotation_5a7f2d": {
-    defaultMessage: "Run rollback-safe rotation",
+    defaultMessage: "Run connector rotation",
     description: "CLI-parity console flow copy.",
   },
   "parity.saveConfig_64e1de": {

@@ -78,13 +78,37 @@ func (w *TailWorker) Run(ctx context.Context) error {
 	if err := w.syncAppliedCheckpoint(ctx); err != nil {
 		return err
 	}
+	secretAuthority, err := classifySecretSyncLifecycle(ctx, w.log)
+	if err != nil {
+		return err
+	}
+	dynamicSecretAuthority, err := classifyDynamicSecretLifecycle(ctx, w.log)
+	if err != nil {
+		return err
+	}
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 	if w.sampler != nil {
 		go w.sampleLagLoop(runCtx)
 	}
 	tailErr := w.log.TailFrom(runCtx, w.proj.store.ProjectionCheckpoint, func(e events.Event) error {
-		if err := w.proj.Apply(runCtx, e); err != nil {
+		skip, err := secretAuthority.skip(e)
+		if err != nil {
+			return w.persistFailure(runCtx, e.Sequence, err)
+		}
+		skipDynamicSecret, err := dynamicSecretAuthority.skip(e)
+		if err != nil {
+			return w.persistFailure(runCtx, e.Sequence, err)
+		}
+		skip = skip || skipDynamicSecret
+		if skip {
+			err = w.proj.applyEventProjections(runCtx, e)
+		} else if isTenantLifecycleEventType(e.Type) {
+			err = w.proj.ApplyRetainedTenantLifecycle(runCtx, e)
+		} else {
+			err = w.proj.Apply(runCtx, e)
+		}
+		if err != nil {
 			return w.persistFailure(runCtx, e.Sequence, err)
 		}
 		// Advance the projection checkpoint as the tail applies out-of-band events

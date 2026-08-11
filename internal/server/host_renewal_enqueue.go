@@ -122,6 +122,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 	commonName string,
 	dnsNames []string,
 	predecessorCertificateID string,
+	issuance *store.OperationApprovalIssuanceBinding,
 	idempotencyKey string,
 ) error {
 	if d.outbox == nil {
@@ -145,6 +146,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		SubjectCommonName:        commonName,
 		SubjectDNSNames:          dnsNames,
 		PredecessorCertificateID: predecessorCertificateID,
+		Issuance:                 issuance,
 	}
 	payload, err := json.Marshal(intent)
 	if err != nil {
@@ -286,7 +288,7 @@ func (d *issuanceDispatcher) dispatchHostRenewal(
 		return false, nil
 	}
 	if err := d.enqueueHostRenewal(ctx, tenantID, ident, target,
-		dnsNames[0], dnsNames, predecessor.ID, "host-renew:"+idemKey); err != nil {
+		dnsNames[0], dnsNames, predecessor.ID, nil, "host-renew:"+idemKey); err != nil {
 		_ = d.recordRotationRun(ctx, tenantID, run, "failed", err.Error())
 		return false, err
 	}

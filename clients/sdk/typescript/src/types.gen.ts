@@ -641,6 +641,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/approval-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List immutable operation approval requests in authorized review domains */
+        get: operations["listApprovalRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approval-requests/{id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve one exact immutable operation request */
+        post: operations["approveApprovalRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approval-requests/{id}/denials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deny one exact immutable operation request without mutating its target */
+        post: operations["denyApprovalRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/events": {
         parameters: {
             query?: never;
@@ -4241,7 +4292,7 @@ export interface paths {
         /** List scheduled secret rotations */
         get: operations["listSecretRotationSchedules"];
         put?: never;
-        /** Create a scheduled zero-downtime dual-phase secret rotation */
+        /** Create a scheduled connector:<target> secret rotation */
         post: operations["createSecretRotationSchedule"];
         delete?: never;
         options?: never;
@@ -4275,7 +4326,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run a rollback-safe static, connector, or dynamic-lease secret rotation */
+        /** Queue connector secret rotation; refuse non-durable provider modes */
         post: operations["rotateStaticSecret"];
         delete?: never;
         options?: never;
@@ -4497,7 +4548,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import a tree of application secrets (sealed at rest) */
+        /**
+         * Bulk application-secret import is unavailable (fails closed without writing)
+         * @deprecated
+         */
         post: operations["importSecrets"];
         delete?: never;
         options?: never;
@@ -5571,13 +5625,48 @@ export interface components {
         Approval: {
             /** @enum {string} */
             action: "issue" | "rotate" | "revoke" | "sign";
+            approval_count: number;
             approvals: number;
             approver: string;
+            /** Format: uuid */
+            id: string;
+            intent_digest: string;
+            required_approvals: number;
             resource: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+        };
+        ApprovalDecision: {
+            /** @enum {string} */
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+            approval_count: number;
+            approvals: number;
+            approver: string;
+            /** Format: uuid */
+            id: string;
+            intent_digest: string;
+            required_approvals: number;
+            resource: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+        };
+        ApprovalDecisionInput: {
+            intent_digest: string;
+        };
+        ApprovalDenialInput: {
+            intent_digest: string;
+            reason: string;
         };
         ApprovalRequest: {
             /** @enum {string} */
             action: "issue" | "rotate" | "revoke" | "sign";
+            intent_digest: string;
+            /** Format: uuid */
+            request_id: string;
+        };
+        ApprovalRequestList: {
+            items: components["schemas"]["PendingApprovalRequest"][];
+            next_cursor?: string;
         };
         Attestation: {
             claims?: Record<string, never>;
@@ -7290,16 +7379,29 @@ export interface components {
             ttl_seconds: number;
         };
         EphemeralApproval: {
-            action: string;
+            /** @enum {string} */
+            action: "issue";
+            approval_count: number;
             approvals: number;
             approver: string;
+            /** Format: uuid */
+            id: string;
+            intent_digest: string;
+            required_approvals: number;
             resource: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
         };
         EphemeralApprovalRequest: {
             /** @enum {string} */
             action: "issue";
+            intent_digest: string;
+            /** Format: uuid */
+            request_id: string;
         };
         EphemeralCredential: {
+            /** Format: uuid */
+            approval_request_id: string;
             approvals: number;
             attestation: components["schemas"]["Attestation"];
             /** Format: uuid */
@@ -7308,6 +7410,7 @@ export interface components {
             credential_id?: string;
             /** Format: date-time */
             expires_at: string;
+            intent_digest: string;
             /** Format: date-time */
             not_after?: string;
             request_id: string;
@@ -8074,7 +8177,10 @@ export interface components {
         ManagedKeyApprovalRequest: {
             /** @enum {string} */
             action: "rotate" | "revoke" | "zeroize";
+            intent_digest: string;
             key_id: string;
+            /** Format: uuid */
+            request_id: string;
         };
         ManagedKeyGenerateRequest: {
             algorithm: string;
@@ -9203,6 +9309,31 @@ export interface components {
             method: string;
             reason: string;
         };
+        PendingApprovalRequest: {
+            /** @enum {string} */
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+            approval_count: number;
+            /** Format: date-time */
+            created_at: string;
+            evidence_refs: string[];
+            /** Format: date-time */
+            expires_at: string;
+            from_state?: string;
+            /** Format: uuid */
+            id: string;
+            intent_digest: string;
+            reason?: string;
+            requester: string;
+            required_approvals: number;
+            resource_id: string;
+            /** @enum {string} */
+            resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral";
+            resource_name: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+            target_version: string;
+            to_state?: string;
+        };
         PlatformAirGap: {
             buyer_evidence_receipts: string[];
             capability: string;
@@ -10011,13 +10142,23 @@ export interface components {
         SecretApproval: {
             /** @enum {string} */
             action: "rotate" | "recover" | "delete";
+            approval_count: number;
             approvals: number;
             approver: string;
+            /** Format: uuid */
+            id: string;
+            intent_digest: string;
+            required_approvals: number;
             resource: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
         };
         SecretApprovalRequest: {
             /** @enum {string} */
             action: "rotate" | "recover" | "delete";
+            intent_digest: string;
+            /** Format: uuid */
+            request_id: string;
         };
         SecretImportRequest: {
             prefix?: string;
@@ -10106,21 +10247,43 @@ export interface components {
             key: string;
             new_ref: string;
             old_ref: string;
+            queued: boolean;
             rollback_attempted: boolean;
             rollback_error?: string;
             rollback_failed: boolean;
             rolled_back: boolean;
         };
         SecretRotationDueRun: {
+            /** @description True only when the fixed PostgreSQL due-through UUID ring was proven exhausted without a subsystem/store/event/custody failure. False when either safety budget was consumed or a system failure stopped the tick. */
+            complete: boolean;
+            deferred: components["schemas"]["SecretRotationScheduleDeferred"][];
+            /**
+             * Format: uuid
+             * @description Due schedule at which a subsystem failure stopped the batch; omitted for scan/retention failures.
+             */
+            failed_schedule_id?: string;
+            /** @description True when at least one run or deferred row was recorded before a subsystem failure stopped this tick. */
+            partial: boolean;
+            /** @description Durable run records written in this tick, including terminal row-local failures; maximum 50. */
             ran: number;
+            /** @description True when the full 50-run budget was consumed. The captured due ring was not proven exhausted, so another tick with a new Idempotency-Key may be required. */
+            run_limit_reached: boolean;
             runs: components["schemas"]["SecretRotationScheduleRun"][];
+            /** @description True when the full 500-row scan budget was consumed. The captured due ring was not proven exhausted, so another tick with a new Idempotency-Key may be required. */
+            scan_limit_reached: boolean;
+            /** @description Due schedule rows inspected from the durable fair UUID ring in this tick; maximum 500. */
+            scanned: number;
+            /** @description Non-secret fail-stop detail. A 503 envelope is cached by the outer Idempotency-Key; retry with the same key is byte-identical and executes no child again. Use a new key to continue after repair. */
+            system_error?: string;
         };
         SecretRotationRequest: {
             key: string;
             old_ref: string;
+            /** @description connector:<target> is the only executable mode. Static and dynamic-lease providers are unavailable and fail closed with 503 before effects. */
             provider: string;
             remote_key?: string;
             target?: string;
+            /** @description Compatibility input only. Connector requests reject any supplied ttl_seconds with 400. Static and dynamic-lease providers remain unavailable with 503 regardless of this field. */
             ttl_seconds?: number;
         };
         SecretRotationSchedule: {
@@ -10137,7 +10300,11 @@ export interface components {
             last_run_at?: string;
             /** Format: uuid */
             last_run_id?: string;
-            last_run_status: string;
+            /**
+             * @description Empty means never run. delivery_failed proves the connector's canonical local successor committed. unsupported marks and disables a historical non-connector schedule without invoking its provider. retire_pending is retained compatibility evidence from pre-durable static histories. Generic failed does not advance old_ref.
+             * @enum {string}
+             */
+            last_run_status: "" | "completed" | "queued" | "failed" | "rolled_back" | "rollback_failed" | "retire_pending" | "delivery_failed" | "unsupported";
             name: string;
             /** Format: date-time */
             next_run_at: string;
@@ -10147,6 +10314,19 @@ export interface components {
             tenant_id: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        SecretRotationScheduleDeferred: {
+            /** Format: date-time */
+            due_at: string;
+            /** @description Non-secret reason detail for this exact deferred due edge. */
+            error?: string;
+            /**
+             * @description Row-local retry state. The exact due edge and command identity remain unchanged for a later tick. config_revision_unanchored means a pre-evidence schedule was scanned and diagnosed without creating a child command or invoking a provider.
+             * @enum {string}
+             */
+            reason: "approval_pending" | "command_in_flight" | "command_claimed" | "config_revision_unanchored";
+            /** Format: uuid */
+            schedule_id: string;
         };
         SecretRotationScheduleList: {
             items: components["schemas"]["SecretRotationSchedule"][];
@@ -10160,18 +10340,27 @@ export interface components {
             /** Format: date-time */
             next_run_at?: string;
             old_ref: string;
+            /** @description connector:<target> only. Static and dynamic-lease schedules fail closed with 503 before persistence because their provider phases do not yet have a durable worker command. */
             provider: string;
         };
         SecretRotationScheduleRun: {
+            /** Format: date-time */
+            due_at: string;
             error?: string;
             /** Format: date-time */
             ran_at: string;
+            /** @description True when this response was reconstructed from the retained deterministic terminal event without re-running the child command. */
+            reconciled: boolean;
             rotation: components["schemas"]["SecretRotation"];
             /** Format: uuid */
             run_id: string;
             /** Format: uuid */
             schedule_id: string;
-            status: string;
+            /**
+             * @description delivery_failed has explicit committed-successor authority. unsupported proves a historical non-connector row was disabled with zero provider calls. retire_pending is compatibility evidence from older static histories; generic failed carries no successor authority.
+             * @enum {string}
+             */
+            status: "completed" | "queued" | "failed" | "rolled_back" | "rollback_failed" | "retire_pending" | "delivery_failed" | "unsupported";
         };
         SecretScan: {
             capabilities: string[];
@@ -12627,6 +12816,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AIStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listApprovalRequests: {
+        parameters: {
+            query?: {
+                /** @description request status filter: pending, approved, denied, expired, superseded, or consumed */
+                status?: string;
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque newest-first pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequestList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    approveApprovalRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecisionInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalDecision"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    denyApprovalRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDenialInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalDecision"];
                 };
             };
             /** @description client error */
@@ -16391,7 +16719,6 @@ export interface operations {
                 "Idempotency-Key": string;
             };
             path: {
-                /** @description ephemeral JIT request id */
                 id: string;
             };
             cookie?: never;
@@ -23236,6 +23563,16 @@ export interface operations {
                     "application/json": components["schemas"]["SecretRotationDueRun"];
                 };
             };
+            /** @description The scheduler may return a cached typed fail-stop receipt after claiming this Idempotency-Key; pre-handler or disabled-subsystem failures remain RFC 7807 problems. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRotationDueRun"];
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             /** @description client error */
             "4XX": {
                 headers: {
@@ -23279,6 +23616,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretRotation"];
+                };
+            };
+            /** @description Static and dynamic-lease provider rotation is unavailable until one durable worker owns every effect and compensation phase. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description client error */
@@ -23889,13 +24235,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description success */
-            201: {
+            /** @description Event-sourced atomic batch import is not implemented; use one idempotent create request per secret. */
+            501: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SecretMetaList"];
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description client error */

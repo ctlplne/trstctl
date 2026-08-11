@@ -13,7 +13,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/audit"
@@ -58,80 +61,88 @@ type API struct {
 	// lastDrill returns the most recent restore drill, or nil if none has run
 	// (J2). Nil-returning rather than a zero value: "no drill has run" and "a
 	// drill ran and failed" must not render the same way.
-	lastDrill                 func() *backup.DrillAttestation
-	roles                     *authz.Registry
-	principal                 func(*http.Request) (authz.Principal, error)
-	audit                     *audit.Service
-	auditTimestamper          auditanchor.Timestamper
-	retirementChecklist       RetirementChecklistSource
-	auth                      *AuthConfig
-	oidcPreLogin              *oidcPreLoginStore
-	scim                      *SCIMConfig
-	scimTokens                map[string]scimToken
-	agentTokens               BootstrapTokenIssuer
-	agentEnroller             BootstrapEnroller
-	agentEnrollmentObserver   func(result string)
-	rateLimiter               RateLimiter
-	specialAbuse              *specialRouteAbuseLimiter
-	gate                      MutationGate
-	abac                      ABACDenyEvaluator
-	abacEnvironment           map[string]string
-	abacNow                   func() time.Time
-	approvals                 ApprovalRecorder
-	breakglass                BreakglassReconciler
-	breakglassIssuer          BreakglassIssuer
-	breakglassCeremonies      BreakglassCeremonyService
-	breakglassRotation        BreakglassRotationService
-	breakglassAdmin           *breakglass.AdminService
-	caHierarchy               CAHierarchyService
-	edgeDelegations           EdgeDelegationService
-	externalCAs               ExternalCAService
-	attestedIssuer            AttestedIssuerService
-	sshWorkflow               SSHWorkflowService
-	broker                    BrokerService
-	ephemeral                 EphemeralIssuerService
-	pam                       PAMService
-	managedKeys               ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
-	transit                   TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
-	vaultCompat               *vaultCompatState
-	protocolProfile           ProtocolProfileControl
-	codeSigning               CodeSigningService
-	ctSubmission              CTSubmissionService
-	secrets                   *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
-	ai                        *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
-	cbom                      CBOMService     // served CBOM scanner and crypto inventory
-	pqcCampaignSigner         PQCCampaignClosureSigner
-	licensedRoutes            []LicensedRoute
-	licensedSchemas           map[string]*Schema
-	complianceEvidence        ComplianceEvidenceService
-	license                   *license.Manager
-	remediation               bool
-	notificationChannels      []string
-	notificationOutbox        *orchestrator.Outbox
-	outboxCircuits            func() []orchestrator.CircuitSnapshot
-	bulkheadStats             func() []bulkhead.Stats
-	systemReadout             SystemReadoutProvider
-	idemProtection            IdempotencyResultProtectionProvider
-	tenantKeyDomains          TenantKeyDomainLifecycle
-	tenantCrypto              tenantseal.Access
-	connectorRegistry         *connector.Registry
-	caLeafValidity            time.Duration
-	sshFleet                  SSHFleetProvider
-	codeSigningIdentities     CodeSigningIdentityProvider
-	serviceNowBindings        []ServiceNowBinding
-	outboundEnvCredentialRefs map[string]struct{}
-	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
-	acmeCAAResolver           acmesrv.CAAResolver
-	acmeARIPosture            ACMEARIPostureProvider
-	acmeEAB                   ACMEEABProvider
-	agentJobPosture           AgentJobPostureProvider
-	enqueueConnectorTest      ConnectorTestEnqueuer
-	adcsPosture               ADCSPostureProvider
-	acmeEABDisable            ACMEEABDisabler
-	privacyRetentionPolicy    privacy.RetentionPolicy
-	privacyRetentionSource    privacy.RetentionPolicySource
-	kubernetesCSRPosture      KubernetesPostureReader
-	kubernetesTrustPosture    KubernetesPostureReader
+	lastDrill               func() *backup.DrillAttestation
+	roles                   *authz.Registry
+	principal               func(*http.Request) (authz.Principal, error)
+	audit                   *audit.Service
+	auditTimestamper        auditanchor.Timestamper
+	retirementChecklist     RetirementChecklistSource
+	auth                    *AuthConfig
+	oidcPreLogin            *oidcPreLoginStore
+	scim                    *SCIMConfig
+	scimTokens              map[string]scimToken
+	agentTokens             BootstrapTokenIssuer
+	agentEnroller           BootstrapEnroller
+	agentEnrollmentObserver func(result string)
+	rateLimiter             RateLimiter
+	specialAbuse            *specialRouteAbuseLimiter
+	gate                    MutationGate
+	abac                    ABACDenyEvaluator
+	abacEnvironment         map[string]string
+	abacNow                 func() time.Time
+	approvals               ApprovalRecorder
+	breakglass              BreakglassReconciler
+	breakglassIssuer        BreakglassIssuer
+	breakglassCeremonies    BreakglassCeremonyService
+	breakglassRotation      BreakglassRotationService
+	breakglassAdmin         *breakglass.AdminService
+	caHierarchy             CAHierarchyService
+	edgeDelegations         EdgeDelegationService
+	externalCAs             ExternalCAService
+	attestedIssuer          AttestedIssuerService
+	sshWorkflow             SSHWorkflowService
+	broker                  BrokerService
+	ephemeral               EphemeralIssuerService
+	pam                     PAMService
+	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
+	transit                 TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
+	vaultCompat             *vaultCompatState
+	protocolProfile         ProtocolProfileControl
+	codeSigning             CodeSigningService
+	ctSubmission            CTSubmissionService
+	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
+	// applicationSecretReconcileRun serializes crash recovery across startup,
+	// readiness-triggered retries, and the periodic worker. The health map contains
+	// only bounded recovery-reason codes and counts: no secret names, values,
+	// requesters, or idempotency material.
+	applicationSecretReconcileRun      sync.Mutex
+	applicationSecretReconcileHealthMu sync.RWMutex
+	applicationSecretReconcileBlocked  map[tenantseal.Status]int
+	applicationSecretReconcileFailed   bool
+	ai                                 *aiSurface  // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
+	cbom                               CBOMService // served CBOM scanner and crypto inventory
+	pqcCampaignSigner                  PQCCampaignClosureSigner
+	licensedRoutes                     []LicensedRoute
+	licensedSchemas                    map[string]*Schema
+	complianceEvidence                 ComplianceEvidenceService
+	license                            *license.Manager
+	remediation                        bool
+	notificationChannels               []string
+	notificationOutbox                 *orchestrator.Outbox
+	outboxCircuits                     func() []orchestrator.CircuitSnapshot
+	bulkheadStats                      func() []bulkhead.Stats
+	systemReadout                      SystemReadoutProvider
+	idemProtection                     IdempotencyResultProtectionProvider
+	tenantKeyDomains                   TenantKeyDomainLifecycle
+	tenantCrypto                       tenantseal.Access
+	connectorRegistry                  *connector.Registry
+	caLeafValidity                     time.Duration
+	sshFleet                           SSHFleetProvider
+	codeSigningIdentities              CodeSigningIdentityProvider
+	serviceNowBindings                 []ServiceNowBinding
+	outboundEnvCredentialRefs          map[string]struct{}
+	acmeDNS01Providers                 []ACMEDNS01ProviderCatalogItem
+	acmeCAAResolver                    acmesrv.CAAResolver
+	acmeARIPosture                     ACMEARIPostureProvider
+	acmeEAB                            ACMEEABProvider
+	agentJobPosture                    AgentJobPostureProvider
+	enqueueConnectorTest               ConnectorTestEnqueuer
+	adcsPosture                        ADCSPostureProvider
+	acmeEABDisable                     ACMEEABDisabler
+	privacyRetentionPolicy             privacy.RetentionPolicy
+	privacyRetentionSource             privacy.RetentionPolicySource
+	kubernetesCSRPosture               KubernetesPostureReader
+	kubernetesTrustPosture             KubernetesPostureReader
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
@@ -623,6 +634,7 @@ type Route struct {
 	OperationID       string
 	Permission        authz.Permission
 	PublicRationale   string
+	UnavailableReason string
 	Mutation          bool
 	SensitiveResponse bool
 }
@@ -642,6 +654,7 @@ func (a *API) Routes() []Route {
 			OperationID:       r.opID,
 			Permission:        r.perm,
 			PublicRationale:   publicRationaleForRoute(r),
+			UnavailableReason: r.unavailableReason,
 			Mutation:          r.mutation,
 			SensitiveResponse: r.sensitiveResponse,
 		})
@@ -717,6 +730,8 @@ type route struct {
 	reqOptional       bool
 	resSchema         string
 	successCode       string
+	responseOverrides map[string]Response
+	unavailableReason string
 	mutation          bool
 	sensitiveResponse bool
 	perm              authz.Permission // required permission; "" means public
@@ -849,7 +864,7 @@ func (a *API) routes() []route {
 	notificationChannelPath := []param{pathString("id", "notification channel id")}
 	notificationRoutingPolicyPath := []param{pathUUID("id")}
 	policyVersionPath := []param{pathUUID("id")}
-	ephemeralRequestPath := []param{pathString("id", "ephemeral JIT request id")}
+	ephemeralRequestPath := []param{pathUUID("id")}
 	page := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
@@ -993,6 +1008,13 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/ephemeral/api-keys", opID: "issueEphemeralAPIKey", summary: "Mint a short-TTL API key for machine workflows", handler: a.issueEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKey", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
 		{method: "POST", path: "/api/v1/ephemeral/{id}/approvals", opID: "approveEphemeralCredential", summary: "Approve a pending ephemeral JIT credential request", handler: a.approveEphemeralCredential, pathParams: ephemeralRequestPath, reqSchema: "EphemeralApprovalRequest", resSchema: "EphemeralApproval", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
+		{method: "GET", path: "/api/v1/approval-requests", opID: "listApprovalRequests", summary: "List immutable operation approval requests in authorized review domains", handler: a.listApprovalRequests, query: []param{
+			{name: "status", typ: "string", desc: "request status filter: pending, approved, denied, expired, superseded, or consumed"},
+			{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+			{name: "cursor", typ: "string", desc: "opaque newest-first pagination cursor from a prior page"},
+		}, resSchema: "ApprovalRequestList", successCode: "200", perm: authz.ApprovalsReview},
+		{method: "POST", path: "/api/v1/approval-requests/{id}/approvals", opID: "approveApprovalRequest", summary: "Approve one exact immutable operation request", handler: a.approveApprovalRequest, pathParams: idPath, reqSchema: "ApprovalDecisionInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, perm: authz.ApprovalsReview},
+		{method: "POST", path: "/api/v1/approval-requests/{id}/denials", opID: "denyApprovalRequest", summary: "Deny one exact immutable operation request without mutating its target", handler: a.denyApprovalRequest, pathParams: idPath, reqSchema: "ApprovalDenialInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, perm: authz.ApprovalsReview},
 		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/bulk-revoke", opID: "bulkRevokeIdentities", summary: "Bulk revoke identities by id or criteria", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
@@ -1201,13 +1223,13 @@ func (a *API) routes() []route {
 		// still in the registry so OpenAPI/generated clients see the served contract.
 		{method: "POST", path: "/api/v1/secrets/store", opID: "createSecret", summary: "Create an application secret (sealed at rest)", handler: a.createSecret, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/store", opID: "listSecrets", summary: "List application secret names (no values)", handler: a.listSecrets, query: page, resSchema: "SecretMetaList", successCode: "200", perm: authz.SecretsRead},
-		{method: "POST", path: "/api/v1/secrets/store/import", opID: "importSecrets", summary: "Import a tree of application secrets (sealed at rest)", handler: a.importSecrets, reqSchema: "SecretImportRequest", resSchema: "SecretMetaList", successCode: "201", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/store/import", opID: "importSecrets", summary: "Bulk application-secret import is unavailable (fails closed without writing)", handler: a.importSecrets, reqSchema: "SecretImportRequest", unavailableReason: "Event-sourced atomic batch import is not implemented; use one idempotent create request per secret.", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/store/history/{name...}", opID: "getSecretVersion", summary: "Read one historical application-secret version", handler: a.getSecretVersion, pathParams: secretNamePath, query: []param{{name: "version", typ: "integer", desc: "historical version number to read"}}, resSchema: "SecretValue", successCode: "200", sensitiveResponse: true, perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/store/recover/{name...}", opID: "recoverSecretAt", summary: "Recover an application secret to a point in time", handler: a.recoverSecretAt, pathParams: secretNamePath, reqSchema: "SecretRecoverRequest", resSchema: "SecretMeta", successCode: "200", mutation: true, perm: authz.SecretsWrite},
-		{method: "POST", path: "/api/v1/secrets/rotations", opID: "rotateStaticSecret", summary: "Run a rollback-safe static, connector, or dynamic-lease secret rotation", handler: a.rotateStaticSecret, reqSchema: "SecretRotationRequest", resSchema: "SecretRotation", successCode: "200", mutation: true, perm: authz.SecretsWrite},
-		{method: "POST", path: "/api/v1/secrets/rotation-schedules", opID: "createSecretRotationSchedule", summary: "Create a scheduled zero-downtime dual-phase secret rotation", handler: a.createSecretRotationSchedule, reqSchema: "SecretRotationScheduleRequest", resSchema: "SecretRotationSchedule", successCode: "201", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/rotations", opID: "rotateStaticSecret", summary: "Queue connector secret rotation; refuse non-durable provider modes", handler: a.rotateStaticSecret, reqSchema: "SecretRotationRequest", resSchema: "SecretRotation", successCode: "200", responseOverrides: map[string]Response{"503": secretRotationUnavailableResponse()}, mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/rotation-schedules", opID: "createSecretRotationSchedule", summary: "Create a scheduled connector:<target> secret rotation", handler: a.createSecretRotationSchedule, reqSchema: "SecretRotationScheduleRequest", resSchema: "SecretRotationSchedule", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/rotation-schedules", opID: "listSecretRotationSchedules", summary: "List scheduled secret rotations", handler: a.listSecretRotationSchedules, query: page, resSchema: "SecretRotationScheduleList", successCode: "200", perm: authz.SecretsRead},
-		{method: "POST", path: "/api/v1/secrets/rotation-schedules/run-due", opID: "runDueSecretRotationSchedules", summary: "Run due scheduled secret rotations", handler: a.runDueSecretRotationSchedules, resSchema: "SecretRotationDueRun", successCode: "200", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/rotation-schedules/run-due", opID: "runDueSecretRotationSchedules", summary: "Run due scheduled secret rotations", handler: a.runDueSecretRotationSchedules, resSchema: "SecretRotationDueRun", successCode: "200", responseOverrides: map[string]Response{"503": secretRotationDueRunUnavailableResponse()}, mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/cloud-secret-managers", opID: "getCloudSecretManagerIntegration", summary: "Report cloud secret-manager discovery and sync integration coverage", handler: a.cloudSecretManagers, resSchema: "CloudSecretManagerIntegration", successCode: "200", perm: authz.SecretsRead},
 		{method: "GET", path: "/api/v1/secrets/kubernetes-operator", opID: "getKubernetesSecretOperator", summary: "Report Kubernetes SecretSync operator coverage", handler: a.kubernetesSecretOperator, resSchema: "KubernetesSecretOperator", successCode: "200", perm: authz.SecretsRead},
 		{method: "GET", path: "/api/v1/secrets/workload-injection", opID: "getSecretWorkloadInjection", summary: "Report no-code workload secret-injection coverage", handler: a.secretWorkloadInjection, resSchema: "SecretWorkloadInjection", successCode: "200", perm: authz.SecretsRead},
@@ -1479,9 +1501,17 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
 			return
 		}
-		if err := a.checkABAC(r.Context(), r, principal, perm, target); err != nil {
-			a.writeError(w, err)
-			return
+		// approvals:review is a computed route-admission token, not a grantable
+		// domain permission. The approval handlers evaluate ABAC against each real
+		// permission (certs:issue, secrets:write, or keys:approve) and bind decisions
+		// to the exact locked request. Sending this synthetic token through ABAC
+		// would let an unknown-permission rule block an otherwise valid reviewer and
+		// would evaluate policy against the wrong domain vocabulary.
+		if perm != authz.ApprovalsReview {
+			if err := a.checkABAC(r.Context(), r, principal, perm, target); err != nil {
+				a.writeError(w, err)
+				return
+			}
 		}
 		// Shed load per tenant (R2.3): an authenticated-but-over-budget caller is
 		// rejected with 429 + Retry-After so one noisy tenant cannot exhaust the
@@ -1648,9 +1678,29 @@ func principalRoles(p authz.Principal) []string {
 // cachedResponse is the response envelope stored by the idempotency recorder so
 // a replayed key returns the identical status and body.
 type cachedResponse struct {
-	Status  int             `json:"s"`
-	Body    json.RawMessage `json:"b"`
-	Binding string          `json:"h,omitempty"`
+	Status      int             `json:"s"`
+	Body        json.RawMessage `json:"b"`
+	Binding     string          `json:"h,omitempty"`
+	ContentType string          `json:"c,omitempty"`
+}
+
+func cachedResponseContentType(body any) string {
+	if _, ok := body.(*problem.Problem); ok {
+		return problem.MediaType
+	}
+	return ""
+}
+
+func writeCachedResponseContentType(w http.ResponseWriter, contentType string) error {
+	switch contentType {
+	case "":
+		w.Header().Set("Content-Type", "application/json")
+	case problem.MediaType:
+		w.Header().Set("Content-Type", problem.MediaType)
+	default:
+		return errors.New("api: cached response has unsupported content type")
+	}
+	return nil
 }
 
 type secretResponse interface {
@@ -1679,6 +1729,90 @@ func (a *API) mutateDurable(w http.ResponseWriter, r *http.Request, idempotencyK
 // cached success for a different command or caller.
 func (a *API) mutateDurableBound(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
 	a.mutateWithRecorder(w, r, idempotencyKey, binding, fn, true)
+}
+
+// mutatePreparedDurableBound is the scheduler-style durable path where the
+// receiver's immutable work snapshot must be created in the exact transaction
+// that first binds the outer key. The verifier compares the terminal receiver
+// bytes before the outer protected result is committed.
+func (a *API) mutatePreparedDurableBound(
+	w http.ResponseWriter,
+	r *http.Request,
+	idempotencyKey, binding string,
+	prepare func(context.Context, string, pgx.Tx) (orchestrator.PreparedDurableEffectClaim, error),
+	verifyTerminal func(context.Context, string, pgx.Tx, []byte) error,
+	fn func(context.Context, string) (int, any, error),
+) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problem.New(http.StatusUnauthorized, "missing or invalid tenant"))
+		return
+	}
+	if idempotencyKey == "" {
+		a.writeProblem(w, problem.New(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
+		return
+	}
+	if binding == "" || prepare == nil || verifyTerminal == nil || fn == nil {
+		a.writeError(w, errors.New("api: prepared durable mutation is missing exact authority"))
+		return
+	}
+	recordResult := func(ctx context.Context) ([]byte, error) {
+		status, body, err := fn(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		bodyJSON := json.RawMessage("null")
+		if body != nil {
+			encoded, err := json.Marshal(body)
+			if err != nil {
+				return nil, err
+			}
+			defer secret.Wipe(encoded)
+			bodyJSON = encoded
+		}
+		return json.Marshal(cachedResponse{
+			Status: status, Body: bodyJSON, Binding: binding,
+			ContentType: cachedResponseContentType(body),
+		})
+	}
+	raw, err := a.idem.DoPreparedDurableEffectBound(
+		r.Context(), tenantID, idempotencyKey, binding,
+		func(ctx context.Context, tx pgx.Tx) (orchestrator.PreparedDurableEffectClaim, error) {
+			return prepare(ctx, tenantID, tx)
+		},
+		func(ctx context.Context, tx pgx.Tx, plaintext []byte) error {
+			return verifyTerminal(ctx, tenantID, tx, plaintext)
+		},
+		recordResult,
+	)
+	if err != nil {
+		if errors.Is(err, orchestrator.ErrIdempotencyConflict) || errors.Is(err, store.ErrIdempotencyConflict) {
+			err = errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request")
+		}
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(raw)
+	var cached cachedResponse
+	if err := json.Unmarshal(raw, &cached); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(cached.Body)
+	if !crypto.ConstantTimeEqual([]byte(cached.Binding), []byte(binding)) {
+		a.writeError(w, errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request"))
+		return
+	}
+	if cached.Status == http.StatusNoContent {
+		w.WriteHeader(cached.Status)
+		return
+	}
+	if err := writeCachedResponseContentType(w, cached.ContentType); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	w.WriteHeader(cached.Status)
+	_, _ = w.Write(cached.Body)
 }
 
 func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error), durable bool) {
@@ -1725,7 +1859,10 @@ func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempot
 			defer secret.Wipe(bj)
 			bodyJSON = bj
 		}
-		return json.Marshal(cachedResponse{Status: status, Body: bodyJSON, Binding: binding})
+		return json.Marshal(cachedResponse{
+			Status: status, Body: bodyJSON, Binding: binding,
+			ContentType: cachedResponseContentType(body),
+		})
 	}
 	var (
 		raw []byte
@@ -1759,7 +1896,10 @@ func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempot
 		w.WriteHeader(c.Status)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	if err := writeCachedResponseContentType(w, c.ContentType); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	w.WriteHeader(c.Status)
 	_, _ = w.Write(c.Body)
 }

@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -42,6 +43,10 @@ var TenantScopedTables = []string{
 	"incident_executions",
 	"pam_sessions",
 	"compliance_report_schedules",
+	"secret_rotation_schedule_tick_rows",
+	"secret_rotation_schedule_ticks",
+	"secret_rotation_schedule_scan_cursors",
+	"secret_rotation_schedule_commands",
 	"secret_rotation_schedules",
 	"dynamic_secret_operations",
 	"dynamic_secret_leases",
@@ -58,6 +63,7 @@ var TenantScopedTables = []string{
 	"pqc_migration_campaigns",
 	"privacy_archive_erasure_attestations",
 	"privacy_retention_runs",
+	"privacy_subject_erasure_preparations",
 	"privacy_subject_erasure_operations",
 	"privacy_subject_erasures",
 	"connector_delivery_receipts",
@@ -67,6 +73,11 @@ var TenantScopedTables = []string{
 	"identities",
 	"ca_ceremony_approvals",
 	"ca_key_ceremonies",
+	// AUD-77 exact approvals are event-sourced tenant data. Decisions carry a
+	// composite FK to requests, so erase them first. The legacy pair below remains
+	// independently backed-up history until its retention window ends.
+	"operation_approval_decisions",
+	"operation_approval_requests",
 	"issuance_approvals",         // EXC-WIRE-03: FK -> issuance_approval_requests
 	"issuance_approval_requests", // EXC-WIRE-03: served dual-control approval state
 	// I3: the first-class request object. Tenant history — who asked for what,
@@ -155,6 +166,10 @@ var TenantScopedTables = []string{
 	"notification_channels",
 	"notification_routing_policies",
 	"secret_shares",
+	"approved_target_event_fences",
+	"application_secret_mutation_fences",
+	"application_secret_tenant_epochs",
+	"application_secret_mutation_receipts",
 	"secret_store_versions",
 	"secret_store",
 	"read_model_snapshots",
@@ -200,6 +215,154 @@ type TenantDeletionAttestation struct {
 	Complete bool           `json:"complete"` // true iff every table's residue is 0
 }
 
+// TenantSecretSyncNotQuiescentError identifies receiver authority that can still
+// write stale bytes after local deletion. Lease expiry is deliberately absent:
+// once a generation crossed the receiver boundary, only exact single-generation
+// terminal evidence proves that no older call can finish later.
+type TenantSecretSyncNotQuiescentError struct {
+	TenantID         string
+	TenantEpoch      string
+	JobID            string
+	OutboxID         int64
+	ReceiverIOStarts int64
+	Reason           string
+}
+
+func (e *TenantSecretSyncNotQuiescentError) Error() string {
+	if e == nil {
+		return "store: tenant secret-sync receiver is not quiescent"
+	}
+	return fmt.Sprintf(
+		"store: tenant %s secret-sync receiver is not quiescent (epoch=%s job=%s outbox=%d starts=%d): %s",
+		e.TenantID, e.TenantEpoch, e.JobID, e.OutboxID, e.ReceiverIOStarts, e.Reason,
+	)
+}
+
+type tenantSecretSyncEffectAuthority struct {
+	outboxID         int64
+	destination      string
+	status           string
+	targetOrder      int64
+	receiverIOStarts int64
+}
+
+// PreflightTenantOffboardTx acquires the exclusive lifecycle fence before the
+// tenant row, then proves every effect_possible receiver is an exact delivered
+// command with one and only one receiver generation. Orphaned or malformed
+// authority is itself unsafe: deleting it would erase the only warning that an
+// external write may still finish.
+func (s *Store) PreflightTenantOffboardTx(ctx context.Context, tx pgx.Tx, tenantID string) error {
+	if tenantID == "" {
+		return fmt.Errorf("store: tenant offboard preflight requires a tenant id")
+	}
+	// This is the first callback statement. A direct caller may already hold the
+	// backup fence through WithTenant, so blocking behind the privacy operation's
+	// exclusive grant would invert the global order and deadlock its cutover.
+	var privacyOperationShared bool
+	if err := tx.QueryRow(ctx,
+		`SELECT pg_try_advisory_xact_lock_shared($1)`,
+		HistoryRewriteOperationAdvisoryLockKey).Scan(&privacyOperationShared); err != nil {
+		return fmt.Errorf("store: test privacy operation fence before offboard: %w", err)
+	}
+	if !privacyOperationShared {
+		return ErrPrivacyHistoryOperationActive
+	}
+	if _, err := lockTenantRegistrationForOffboardTx(ctx, tx, tenantID); err != nil {
+		return err
+	}
+	preparationActive, err := hasPrivacySubjectErasurePreparationTx(ctx, tx, tenantID)
+	if err != nil {
+		return fmt.Errorf("store: inspect privacy erasure preparation before offboard: %w", err)
+	}
+	if preparationActive {
+		return ErrPrivacySubjectErasurePreparationActive
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT id, destination, status, COALESCE(secret_sync_target_order, 0),
+		       secret_sync_receiver_io_starts
+		  FROM outbox
+		 WHERE tenant_id = $1
+		   AND secret_sync_receiver_effect_state = 'effect_possible'
+		 ORDER BY id
+		 FOR UPDATE`, tenantID)
+	if err != nil {
+		return fmt.Errorf("store: inspect tenant secret-sync receiver authority: %w", err)
+	}
+	var authorities []tenantSecretSyncEffectAuthority
+	for rows.Next() {
+		var authority tenantSecretSyncEffectAuthority
+		if err := rows.Scan(&authority.outboxID, &authority.destination, &authority.status,
+			&authority.targetOrder, &authority.receiverIOStarts); err != nil {
+			rows.Close()
+			return err
+		}
+		authorities = append(authorities, authority)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	for _, authority := range authorities {
+		var (
+			tenantEpoch    string
+			jobID          string
+			status         SecretSyncJobStatus
+			target         string
+			jobOutboxID    int64
+			jobTargetOrder int64
+		)
+		// Migration 0153 deliberately revoked UPDATE on secret_sync_jobs from
+		// trstctl_app so a request path cannot forge terminal evidence. PostgreSQL
+		// also requires UPDATE privilege for SELECT ... FOR UPDATE, so this one
+		// owner-backed lifecycle preflight must briefly leave the application role
+		// to lock the evidence row. The explicit tenant/outbox predicate remains the
+		// AN-1 boundary, and the role is restored before any caller work continues.
+		if _, err := tx.Exec(ctx, "RESET ROLE"); err != nil {
+			return fmt.Errorf("store: offboard assume owner for secret-sync receiver preflight: %w", err)
+		}
+		err := tx.QueryRow(ctx, `
+			SELECT tenant_epoch, id, status, target, outbox_id, target_order
+			  FROM secret_sync_jobs
+			 WHERE tenant_id = $1 AND outbox_id = $2
+			 ORDER BY id
+			 LIMIT 1
+			 FOR UPDATE`, tenantID, authority.outboxID).Scan(
+			&tenantEpoch, &jobID, &status, &target, &jobOutboxID, &jobTargetOrder,
+		)
+		if _, roleErr := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); roleErr != nil {
+			return fmt.Errorf("store: offboard restore application role after secret-sync receiver preflight: %w", roleErr)
+		}
+		reason := ""
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			reason = "effect_possible outbox has no exact projected job"
+		case err != nil:
+			return fmt.Errorf("store: load tenant secret-sync receiver job: %w", err)
+		case jobOutboxID != authority.outboxID || jobTargetOrder != authority.targetOrder ||
+			authority.destination != "secret.sync."+target:
+			reason = "effect_possible job/outbox identity is malformed"
+		case authority.status != "delivered":
+			reason = "receiver outbox has no exact delivered terminal receipt"
+		case status == SecretSyncJobPending:
+			reason = "receiver generation has no terminal event"
+		case status != SecretSyncJobDelivered:
+			reason = "effect_possible authority is incompatible with terminal job status"
+		case authority.receiverIOStarts != 1:
+			reason = "multiple receiver generations may complete out of order"
+		}
+		if reason != "" {
+			return &TenantSecretSyncNotQuiescentError{
+				TenantID: tenantID, TenantEpoch: tenantEpoch, JobID: jobID,
+				OutboxID: authority.outboxID, ReceiverIOStarts: authority.receiverIOStarts,
+				Reason: reason,
+			}
+		}
+	}
+	return nil
+}
+
 // OffboardTenant erases every tenant-scoped row for tenantID and returns a
 // deletion attestation (TENANT-002). It is the data-retention / right-to-erasure
 // primitive enterprise procurement requires: after it returns Complete, the
@@ -224,11 +387,7 @@ type TenantDeletionAttestation struct {
 // (cold-storage bundles) is out of band and is documented in docs/limitations.md as
 // operator-driven cleanup.
 func (s *Store) OffboardTenant(ctx context.Context, tenantID string) (TenantDeletionAttestation, error) {
-	att := TenantDeletionAttestation{
-		TenantID: tenantID,
-		Deleted:  make(map[string]int, len(TenantScopedTables)),
-		Residue:  make(map[string]int),
-	}
+	att := newTenantDeletionAttestation(tenantID)
 	if tenantID == "" {
 		// Fail closed: under RLS an empty tenant id makes the policy GUC NULL, so a
 		// DELETE would match no rows and silently "succeed" — exactly the fail-open we
@@ -236,41 +395,110 @@ func (s *Store) OffboardTenant(ctx context.Context, tenantID string) (TenantDele
 		return att, fmt.Errorf("store: OffboardTenant requires a tenant id (AN-1)")
 	}
 
+	err := s.WithPrivacyRecoveryBarrier(ctx, tenantID, "tenant offboard", func(barrierCtx context.Context) error {
+		return s.WithTenant(barrierCtx, tenantID, func(tx pgx.Tx) error {
+			var err error
+			att, err = s.OffboardTenantTx(barrierCtx, tx, tenantID)
+			return err
+		})
+	})
+	return att, err
+}
+
+// ProjectTenantOffboard is the replay/tail form used when the caller may already
+// own the event-history read barrier. It must not acquire the privacy operation
+// lock outside that history grant (the inverse order can deadlock a cutover).
+// OffboardTenantTx instead tries the shared operation xact lock before its first
+// lifecycle statement and fails fast while a privacy rewrite owns the exclusive
+// side; the durable marker check closes the crashed-writer window.
+func (s *Store) ProjectTenantOffboard(
+	ctx context.Context,
+	tenantID string,
+) (TenantDeletionAttestation, error) {
+	att := newTenantDeletionAttestation(tenantID)
+	if tenantID == "" {
+		return att, fmt.Errorf("store: ProjectTenantOffboard requires a tenant id (AN-1)")
+	}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		for _, table := range TenantScopedTables {
-			// RLS confines this DELETE to tenantID; the redundant explicit predicate is
-			// defense-in-depth and documents intent. (Identifiers are from the
-			// constant TenantScopedTables, never user input, so the interpolation is
-			// safe.)
+		var err error
+		att, err = s.OffboardTenantTx(ctx, tx, tenantID)
+		return err
+	})
+	return att, err
+}
+
+func newTenantDeletionAttestation(tenantID string) TenantDeletionAttestation {
+	return TenantDeletionAttestation{
+		TenantID: tenantID,
+		Deleted:  make(map[string]int, len(TenantScopedTables)),
+		Residue:  make(map[string]int),
+	}
+}
+
+// OffboardTenantTx performs the guarded relational erase on the caller's tenant
+// transaction. Live event emitters use this form so the preflight, immutable
+// event append, and core deletion share one lifecycle fence and one SQL commit.
+func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string) (TenantDeletionAttestation, error) {
+	att := newTenantDeletionAttestation(tenantID)
+	if tenantID == "" {
+		return att, fmt.Errorf("store: OffboardTenantTx requires a tenant id (AN-1)")
+	}
+	if err := s.PreflightTenantOffboardTx(ctx, tx, tenantID); err != nil {
+		return att, err
+	}
+	for _, table := range TenantScopedTables {
+		if table == "secret_rotation_schedule_tick_rows" ||
+			table == "secret_rotation_schedule_ticks" ||
+			table == "secret_rotation_schedule_commands" ||
+			table == "secret_rotation_schedule_scan_cursors" {
+			// Tick/command receivers and fair-scan cursors intentionally survive
+			// read-model truncation and trstctl_app cannot DELETE them. Tenant
+			// offboarding is the one broad erase path: temporarily return this
+			// owner-backed transaction to its session role, delete only the explicit
+			// tenant, then immediately restore the RLS application role.
+			if _, err := tx.Exec(ctx, "RESET ROLE"); err != nil {
+				return att, fmt.Errorf("store: offboard assume owner for %s: %w", table, err)
+			}
 			tag, err := tx.Exec(ctx,
 				"DELETE FROM "+table+" WHERE tenant_id = $1", tenantID)
 			if err != nil {
-				return fmt.Errorf("store: offboard delete from %s: %w", table, err)
+				return att, fmt.Errorf("store: offboard delete from %s: %w", table, err)
+			}
+			if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
+				return att, fmt.Errorf("store: offboard restore application role: %w", err)
 			}
 			n := int(tag.RowsAffected())
 			att.Deleted[table] = n
 			att.Total += n
+			continue
 		}
-
-		// Verification pass: in the same transaction (and same tenant RLS context),
-		// confirm nothing tenant-scoped survives. If any row remains, fail closed so
-		// the whole erase rolls back rather than being attested as complete.
-		for _, table := range TenantScopedTables {
-			var remaining int
-			if err := tx.QueryRow(ctx,
-				"SELECT count(*) FROM "+table+" WHERE tenant_id = $1", tenantID).Scan(&remaining); err != nil {
-				return fmt.Errorf("store: offboard verify %s: %w", table, err)
-			}
-			if remaining != 0 {
-				att.Residue[table] = remaining
-				return fmt.Errorf("store: offboard incomplete: %d row(s) remain in %s for tenant %s", remaining, table, tenantID)
-			}
+		// RLS confines this DELETE to tenantID; the redundant explicit predicate is
+		// defense-in-depth and documents intent. Identifiers come only from the
+		// constant TenantScopedTables list.
+		tag, err := tx.Exec(ctx,
+			"DELETE FROM "+table+" WHERE tenant_id = $1", tenantID)
+		if err != nil {
+			return att, fmt.Errorf("store: offboard delete from %s: %w", table, err)
 		}
-		att.Complete = true
-		return nil
-	})
-	if err != nil {
-		return att, err
+		n := int(tag.RowsAffected())
+		att.Deleted[table] = n
+		att.Total += n
 	}
+
+	// Verification pass: in the same transaction (and same tenant RLS context),
+	// confirm nothing tenant-scoped survives. If any row remains, fail closed so
+	// the whole erase rolls back rather than being attested as complete.
+	for _, table := range TenantScopedTables {
+		var remaining int
+		if err := tx.QueryRow(ctx,
+			"SELECT count(*) FROM "+table+" WHERE tenant_id = $1", tenantID).Scan(&remaining); err != nil {
+			return att, fmt.Errorf("store: offboard verify %s: %w", table, err)
+		}
+		if remaining != 0 {
+			att.Residue[table] = remaining
+			return att, fmt.Errorf("store: offboard incomplete: %d row(s) remain in %s for tenant %s", remaining, table, tenantID)
+		}
+	}
+	att.Complete = true
 	return att, nil
 }

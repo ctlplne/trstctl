@@ -79,6 +79,7 @@ func TestReadModelDeleteOrderIsForeignKeySafe(t *testing.T) {
 		{"ca_ceremony_approvals", "ca_key_ceremonies"},
 		{"discovery_runs", "discovery_schedules"},
 		{"secret_sync_workload_identity_sources", "workload_attester_trust_sources"},
+		{"operation_approval_decisions", "operation_approval_requests"},
 	}
 	for _, edge := range edges {
 		child, parent := edge[0], edge[1]

@@ -9,6 +9,7 @@ package managedkeys
 // so restart/rebuild uses PostgreSQL + NATS rather than process-local maps.
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
@@ -36,7 +38,7 @@ type durableService struct {
 	store         *store.Store
 	log           *events.Log
 	provider      string
-	gate          ApprovalGate
+	approvals     api.ExactApprovalChecker
 	loadOperation func(context.Context, string, string) (store.ManagedKeyOperation, error)
 	loadKey       func(context.Context, string, string, string) (store.ManagedKey, error)
 }
@@ -67,10 +69,10 @@ func NewDurableFactory(provider string) server.ManagedKeyServiceFactory {
 		if provider == "" {
 			return nil, errors.New("managedkeys: a signer-local provider selection is required")
 		}
-		svc := &durableService{store: d.Store, log: d.Log, provider: provider}
-		if d.ApprovalChecker != nil {
-			svc.gate = approvalGate{checker: d.ApprovalChecker}
+		if d.ApprovalChecker == nil {
+			return nil, errors.New("managedkeys: durable destructive commands require exact one-shot approval authority")
 		}
+		svc := &durableService{store: d.Store, log: d.Log, provider: provider, approvals: d.ApprovalChecker}
 		return svc, nil
 	}
 }
@@ -167,31 +169,127 @@ func (s *durableService) submit(ctx context.Context, tenantID, keyID, requester,
 			return Result{}, err
 		}
 		alg = crypto.Algorithm(key.Algorithm)
-		if s.gate != nil {
-			approved, reason := s.gate.IsApproved(ctx, tenantID, keyID, action, requester)
-			if !approved {
-				return Result{}, fmt.Errorf("%w: %s", ErrNotApproved, reason)
-			}
+		if key.Version < 0 {
+			return Result{}, store.ErrApprovalDrifted
 		}
 		command.Algorithm = string(alg)
+		command.Requester = requester
+		command.FromState = key.State
+		command.TargetVersion = uint64(key.Version)
+		command.ToState, _ = projections.ManagedKeyCommandTargetState(command.Action)
+		command.IdempotencyKeyDigest = projections.ManagedKeyIdempotencyKeyDigest(idempotencyKey)
+		evidence, err := projections.ManagedKeyApprovalEvidence(command)
+		if err != nil {
+			return Result{}, err
+		}
+		command.ApprovalEvidenceRefs = evidence
+		if s.approvals == nil {
+			return Result{}, fmt.Errorf("%w: exact one-shot approval authority is unavailable", ErrNotApproved)
+		}
+		authority, approved, reason := s.approvals.AuthorizeApproval(ctx, api.ApprovalIntent{
+			TenantID: tenantID, ResourceKind: "managed_key", ResourceID: keyID,
+			ResourceName: keyID, Action: action, Requester: requester,
+			FromState: key.State, ToState: command.ToState, TargetVersion: uint64(key.Version),
+			Reason: "authorize one exact managed-key " + command.Action + " command", EvidenceRefs: evidence,
+		})
+		if !approved {
+			// Another copy of the same request may have committed while this one
+			// was opening/checking the authority. Durable operation state wins over
+			// a now-consumed approval on an exact replay.
+			if replay, replayErr := s.operation(ctx, tenantID, operationID); replayErr == nil &&
+				managedKeyCommandMatches(replay, command, false) {
+				return s.wait(ctx, tenantID, operationID)
+			}
+			if reason == "" {
+				reason = "an exact approved operation request is required"
+			}
+			return Result{}, fmt.Errorf("%w: %s", ErrNotApproved, reason)
+		}
+		command.Approval = &store.OperationApprovalUse{
+			RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
+			Requester: authority.Requester, ResourceKind: authority.ResourceKind,
+			ResourceID: authority.ResourceID, Action: authority.Action,
+			FromState: authority.FromState, ToState: authority.ToState,
+			TargetVersion: authority.TargetVersion, RequiredApprovals: authority.RequiredApprovals,
+		}
 	}
 	payload, err := json.Marshal(command)
 	if err != nil {
 		return Result{}, err
 	}
-	event, err := s.log.Append(ctx, events.Event{
-		Type: projections.EventManagedKeyCommandRequested, TenantID: tenantID, Data: payload,
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID,
+		[]byte("managed-key-command\x00"+tenantID+"\x00"+operationID)).String()
+	schemaVersion := events.DefaultSchemaVersion
+	if command.Approval != nil {
+		schemaVersion = projections.ManagedKeyApprovalEventSchemaVersion
+	}
+	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		eventTime := time.Now().UTC()
+		if command.Approval != nil {
+			if _, err := s.store.ValidateManagedKeyApprovalCommandTx(ctx, tx, tenantID,
+				*command.Approval, command.KeyID, command.ApprovalEvidenceRefs); err != nil {
+				return err
+			}
+			if _, err := s.store.ValidateOperationApprovalUseTx(ctx, tx, tenantID,
+				*command.Approval, eventTime); err != nil {
+				return err
+			}
+			locked, err := s.store.ManagedKeyApprovalTargetTx(ctx, tx, tenantID, command.Provider, command.KeyID, true)
+			if err != nil {
+				return err
+			}
+			if locked.Algorithm != command.Algorithm || locked.State != command.FromState ||
+				locked.Version < 0 || uint64(locked.Version) != command.TargetVersion {
+				return store.ErrApprovalDrifted
+			}
+		}
+		event, err := s.log.Append(ctx, events.Event{
+			ID: eventID, Type: projections.EventManagedKeyCommandRequested,
+			TenantID: tenantID, Time: eventTime,
+			SchemaVersion: schemaVersion, Data: payload,
+		})
+		if err != nil {
+			return err
+		}
+		if event.ID != eventID || event.Type != projections.EventManagedKeyCommandRequested ||
+			event.TenantID != tenantID || schemaVersionOfManagedKeyEvent(event) != schemaVersion ||
+			!bytes.Equal(event.Data, payload) {
+			return fmt.Errorf("%w: canonical managed-key event differs", orchestrator.ErrIdempotencyConflict)
+		}
+		return projections.New(s.store).ApplyTx(ctx, tx, event)
 	})
 	if err != nil {
-		return Result{}, err
-	}
-	if err := projections.New(s.store).Apply(ctx, event); err != nil {
+		if existing, getErr := s.operation(ctx, tenantID, operationID); getErr == nil &&
+			managedKeyCommandMatches(existing, command, action == ActionGenerate) {
+			return s.wait(ctx, tenantID, operationID)
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Result{}, fmt.Errorf("%w: managed-key operation already binds a different command", orchestrator.ErrIdempotencyConflict)
+		}
+		if managedKeyApprovalFailure(err) {
+			return Result{}, fmt.Errorf("%w: %v", ErrNotApproved, err)
 		}
 		return Result{}, err
 	}
 	return s.wait(ctx, tenantID, operationID)
+}
+
+func schemaVersionOfManagedKeyEvent(event events.Event) int {
+	if event.SchemaVersion == 0 {
+		return events.DefaultSchemaVersion
+	}
+	return event.SchemaVersion
+}
+
+func managedKeyApprovalFailure(err error) bool {
+	return errors.Is(err, store.ErrApprovalRequestNotFound) ||
+		errors.Is(err, store.ErrApprovalDigestMismatch) ||
+		errors.Is(err, store.ErrApprovalSelfDecision) ||
+		errors.Is(err, store.ErrApprovalExpired) ||
+		errors.Is(err, store.ErrApprovalSuperseded) ||
+		errors.Is(err, store.ErrApprovalConsumed) ||
+		errors.Is(err, store.ErrApprovalDrifted) ||
+		errors.Is(err, store.ErrApprovalNotReady)
 }
 
 func managedKeyCommandMatches(existing store.ManagedKeyOperation, requested projections.ManagedKeyCommand, compareAlgorithm bool) bool {
@@ -368,8 +466,13 @@ func (h *durableOutboxHandler) DeliverLicensed(ctx context.Context, message orch
 	if err != nil {
 		return true, err
 	}
+	schemaVersion := events.DefaultSchemaVersion
+	if command.Approval != nil {
+		schemaVersion = projections.ManagedKeyApprovalEventSchemaVersion
+	}
 	event, err := h.log.Append(ctx, events.Event{
-		Type: projections.EventManagedKeyCommandCompleted, TenantID: message.TenantID, Data: payload,
+		Type: projections.EventManagedKeyCommandCompleted, TenantID: message.TenantID,
+		SchemaVersion: schemaVersion, Data: payload,
 	})
 	if err != nil {
 		return true, err

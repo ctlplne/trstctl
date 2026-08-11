@@ -46,6 +46,15 @@ func newSecretOutboxCompletionStore(t *testing.T) *store.Store {
 	return st
 }
 
+func secretOutboxCompletionEpoch(t *testing.T, st *store.Store) string {
+	t.Helper()
+	epoch, err := st.DynamicSecretTenantEpoch(context.Background(), secretOutboxCompletionTenant)
+	if err != nil {
+		t.Fatalf("resolve dynamic-secret tenant epoch: %v", err)
+	}
+	return epoch
+}
+
 // secretOutboxRowState reads the durable row behind a secret-integration queue item.
 func secretOutboxRowState(t *testing.T, st *store.Store, destination, key string) (status, workerID string) {
 	t.Helper()
@@ -155,7 +164,7 @@ func TestDynamicSecretOutboxDoneRefusesToStealADispatchLease(t *testing.T) {
 	if err := queue.Enqueue(ctx, item); err != nil {
 		t.Fatalf("enqueue revocation intent: %v", err)
 	}
-	key := dynamicSecretRevokeKey(item.LeaseID)
+	key := dynamicSecretRevokeKey(secretOutboxCompletionEpoch(t, st), item.LeaseID)
 
 	release, claimed, dispatched, _ := parkedDispatch(ctx, t, ob)
 	select {
@@ -204,7 +213,7 @@ func TestDynamicSecretRevocationRunsExactlyOnceWhileTheDispatcherHoldsTheLease(t
 	if err := queue.Enqueue(ctx, item); err != nil {
 		t.Fatalf("enqueue revocation intent: %v", err)
 	}
-	key := dynamicSecretRevokeKey(item.LeaseID)
+	key := dynamicSecretRevokeKey(secretOutboxCompletionEpoch(t, st), item.LeaseID)
 
 	release, claimed, dispatched, dispatcherCalls := parkedDispatch(ctx, t, ob)
 	select {
@@ -269,7 +278,7 @@ func TestDynamicSecretOutboxDoneRecordsDestinationCircuitSuccess(t *testing.T) {
 	if state := secretOutboxCircuitState(ob, lane); state != orchestrator.CircuitClosed {
 		t.Errorf("circuit for %s = %q after a successful Done, want closed: the completion never recorded the destination's success (AN-6)", lane, state)
 	}
-	if status, _ := secretOutboxRowState(t, st, dynamicSecretRevokeDestination, dynamicSecretRevokeKey(item.LeaseID)); status != "delivered" {
+	if status, _ := secretOutboxRowState(t, st, dynamicSecretRevokeDestination, dynamicSecretRevokeKey(secretOutboxCompletionEpoch(t, st), item.LeaseID)); status != "delivered" {
 		t.Fatalf("outbox row after Done = %s, want delivered", status)
 	}
 }
@@ -288,7 +297,7 @@ func TestOutboxCompleteByKeyIsIdempotentAndRejectsAnIncompleteIdentity(t *testin
 	if err := queue.Enqueue(ctx, item); err != nil {
 		t.Fatalf("enqueue revocation intent: %v", err)
 	}
-	key := dynamicSecretRevokeKey(item.LeaseID)
+	key := dynamicSecretRevokeKey(secretOutboxCompletionEpoch(t, st), item.LeaseID)
 
 	completed, err := ob.CompleteByKey(ctx, secretOutboxCompletionTenant, dynamicSecretRevokeDestination, key)
 	if err != nil || !completed {

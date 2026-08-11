@@ -3,12 +3,15 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -51,6 +54,7 @@ type Orchestrator struct {
 	store                *store.Store
 	outbox               *Outbox
 	proj                 *projections.Projector
+	durableIdem          *Idempotency
 	tenantDataRewrite    []events.TenantDataRewriteOption
 	profileEditApprovals map[string]approvalProfileEditRequest
 	profileEditMu        sync.Mutex
@@ -64,6 +68,38 @@ type Orchestrator struct {
 // OrchestratorOption configures served command-side behavior while keeping the
 // long-standing NewOrchestrator call source-compatible.
 type OrchestratorOption func(*Orchestrator)
+
+// WithProjector supplies the already-assembled live projector. The server uses
+// this to give tenant lifecycle commands the same licensed projection set as
+// catch-up/tail, allowing opted-in transactional extensions to join the core
+// lifecycle transaction instead of running after its fence is released.
+func WithProjector(projector *projections.Projector) OrchestratorOption {
+	return func(orchestrator *Orchestrator) {
+		if projector != nil {
+			orchestrator.proj = projector
+		}
+	}
+}
+
+// WithDurableIdempotency supplies the production result-protected recorder used
+// by command families whose durable recovery authority must inspect or rewrite
+// the generic idempotency receiver. Each family still owns its narrower lock
+// order and receiver protocol.
+func WithDurableIdempotency(idempotency *Idempotency) OrchestratorOption {
+	return func(orchestrator *Orchestrator) {
+		if idempotency != nil {
+			orchestrator.durableIdem = idempotency
+		}
+	}
+}
+
+// WithTenantRegistrationIdempotency is the source-compatible name retained for
+// embedders compiled against the original tenant-registration-only seam. New
+// composition roots should use WithDurableIdempotency because the same protected
+// receiver owner also resolves scheduler privacy erasure.
+func WithTenantRegistrationIdempotency(idempotency *Idempotency) OrchestratorOption {
+	return WithDurableIdempotency(idempotency)
+}
 
 // WithSideEffectRoleClassifier wires the function that stamps a transition side
 // effect's required agent role onto its outbox row (epic A3). The classifier
@@ -94,6 +130,7 @@ func WithTenantDataRewriteOptions(options ...events.TenantDataRewriteOption) Orc
 func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox, options ...OrchestratorOption) *Orchestrator {
 	orch := &Orchestrator{
 		log: log, store: st, outbox: ob, proj: projections.New(st),
+		durableIdem:          NewIdempotency(st),
 		profileEditApprovals: map[string]approvalProfileEditRequest{},
 	}
 	for _, option := range options {
@@ -126,7 +163,7 @@ type SideEffectPayloadTransform func(context.Context, SideEffectPayloadContext) 
 // transaction updates the identity's status and enqueues any outbox side effect,
 // so the external call is recorded with the state change (AN-6).
 func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID string, to State, reason string) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", "", nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", "", nil, nil, nil)
 }
 
 // TransitionWithIdempotency moves an identity like Transition, but binds any
@@ -136,7 +173,7 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 // async issue/revoke/deploy work from minting twice if the response cache is not
 // the layer that observes the retry (CORRECT-001).
 func (o *Orchestrator) TransitionWithIdempotency(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey string) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, nil)
 }
 
 // TransitionWithSubjectCSR is TransitionWithIdempotency for a requested→issued
@@ -147,11 +184,26 @@ func (o *Orchestrator) TransitionWithIdempotency(ctx context.Context, tenantID, 
 //
 // The CSR is public material and is stored as-is. Callers must have parsed and
 // validated it first; this method carries it, it does not vouch for it.
-func (o *Orchestrator) TransitionWithSubjectCSR(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string) error {
-	if strings.TrimSpace(csrPEM) == "" {
-		return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil)
+func (o *Orchestrator) TransitionWithSubjectCSR(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, issuance ...*store.OperationApprovalIssuanceBinding) error {
+	if len(issuance) > 1 {
+		return errors.New("orchestrator: lifecycle transition has multiple issuance bindings")
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil)
+	var binding *store.OperationApprovalIssuanceBinding
+	if len(issuance) == 1 {
+		binding = issuance[0]
+	}
+	if strings.TrimSpace(csrPEM) == "" {
+		return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, binding)
+	}
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding)
+}
+
+// TransitionWithSubjectCSRAndApproval is the served dual-control path. The exact
+// request/digest authority is embedded in the lifecycle event; its projection
+// consumes that authority in the same PostgreSQL transaction as the status and
+// external-effect outbox intent.
+func (o *Orchestrator) TransitionWithSubjectCSRAndApproval(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, approval store.OperationApprovalUse) error {
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil)
 }
 
 // TransitionWithSideEffectPayload moves an identity through the normal lifecycle
@@ -163,7 +215,7 @@ func (o *Orchestrator) TransitionWithSideEffectPayload(ctx context.Context, tena
 	if len(payload) == 0 {
 		return o.Transition(ctx, tenantID, identityID, to, reason)
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", nil, nil, nil)
 }
 
 // TransitionWithSideEffectPayloadTransform is TransitionWithSideEffectPayload with
@@ -174,22 +226,71 @@ func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Cont
 	if len(payload) == 0 {
 		return o.Transition(ctx, tenantID, identityID, to, reason)
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", transform)
+	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", transform, nil, nil)
 }
 
-func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform) error {
+func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding) error {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	subjectCSRPEM = strings.TrimSpace(subjectCSRPEM)
+	if approval != nil && issuance != nil {
+		return errors.New("orchestrator: lifecycle issuance binding must have one authority source")
+	}
+	if issuance != nil {
+		if _, err := issuance.EvidenceRefs(); err != nil {
+			return fmt.Errorf("orchestrator: invalid lifecycle issuance binding: %w", err)
+		}
+	}
 	ident, err := o.store.GetIdentity(ctx, tenantID, identityID)
 	if err != nil {
 		return fmt.Errorf("orchestrator: load identity %s: %w", identityID, err)
 	}
 	from := State(ident.Status)
+	if approval != nil && from == to {
+		// DoDurableEffectBound may retry after the target transaction committed but
+		// before its HTTP result was cached. The consumed request is not enough by
+		// itself: load the one deterministic event and prove its envelope, edge,
+		// command body, side effect, and current projected version before returning
+		// the original success.
+		eventID := approvalExecutionEventID(tenantID, *approval)
+		retained, found, loadErr := lifecycleApprovalEventByID(ctx, o.log, eventID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if !found {
+			return fmt.Errorf("%w: consumed lifecycle approval has no retained target event", store.ErrIdempotencyConflict)
+		}
+		return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			current, version, err := o.store.IdentityApprovalTargetTx(ctx, tx, tenantID, identityID, true)
+			if err != nil {
+				return err
+			}
+			request, err := o.store.GetOperationApprovalForUpdateTx(ctx, tx, tenantID, approval.RequestID)
+			if err != nil {
+				return err
+			}
+			if request.Status != store.ApprovalStatusConsumed || request.ConsumedEventID != eventID ||
+				State(current.Status) != to || version != retained.Sequence || request.Reason != reason {
+				return store.ErrApprovalDrifted
+			}
+			if err := projections.ValidateLifecycleApprovalAttemptEvidence(request.EvidenceRefs, idempotencyKey, subjectCSRPEM); err != nil {
+				return err
+			}
+			if err := validateRetainedLifecycleApprovalEvent(retained, tenantID, identityID, to,
+				reason, idempotencyKey, subjectCSRPEM, *approval); err != nil {
+				return err
+			}
+			return o.store.ConsumeOperationApprovalTx(ctx, tx, tenantID, *approval, eventID, retained.Time)
+		})
+	}
 
 	evType, ok := EventTypeFor(from, to)
 	if !ok {
 		return &TransitionError{IdentityID: identityID, From: from, To: to}
 	}
+	if issuance != nil && (from != StateRequested || to != StateIssued) {
+		return errors.New("orchestrator: issuance binding is only valid for requested -> issued")
+	}
 
-	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
 	schemaVersion := 0
 	if idempotencyKey != "" {
@@ -202,7 +303,17 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		sideEffectKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
 		schemaVersion = projections.LifecycleSideEffectEventSchemaVersion
 	}
-	basePayload := transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey, SubjectCSRPEM: subjectCSRPEM}
+	basePayload := transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey, SubjectCSRPEM: subjectCSRPEM, Approval: approval, Issuance: issuance}
+	if approval != nil {
+		schemaVersion = projections.LifecycleApprovalEventSchemaVersion
+		eventID = approvalExecutionEventID(tenantID, *approval)
+		if hasSideEffect {
+			sideEffectKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
+		}
+	}
+	if issuance != nil {
+		schemaVersion = projections.LifecycleIssuanceEventSchemaVersion
+	}
 	// Classify the claim demand from the RAW side-effect payload, before any
 	// sealing transform makes it opaque (epic A3). The classifier is injected by
 	// the composition root because vantage is the connector registry's census,
@@ -231,10 +342,18 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		}
 	}
 	if hasSideEffect {
+		replayPayload := append([]byte(nil), outboxPayload...)
+		if approval != nil || issuance != nil {
+			// V4 approval and v5 issuance events have one command body, not an
+			// opaque base64 copy inside themselves. Warm enqueue and boot
+			// reconciliation derive the body by removing this SideEffect object
+			// from the canonical event.
+			replayPayload = nil
+		}
 		basePayload.SideEffect = &transitionSideEffect{
 			Destination:       sideEffectDest,
 			IdempotencyKey:    sideEffectKey,
-			Payload:           append([]byte(nil), outboxPayload...),
+			Payload:           replayPayload,
 			RequiredAgentRole: requiredAgentRole,
 		}
 		payload, err = json.Marshal(basePayload)
@@ -243,35 +362,201 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		}
 	}
 
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		ev, err := o.log.Append(ctx, events.Event{ID: eventID, Type: evType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload})
-		if err != nil {
-			return err
-		}
-		// Project the status change through the projector (the sole read-model
-		// writer, AN-2) in the same transaction as the outbox enqueue (AN-6).
-		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
-			return err
-		}
-		if hasSideEffect {
-			// Enqueue the side effect idempotently (SPINE-011): legacy/internal
-			// transitions key by event ID, while served lifecycle requests key by
-			// their Idempotency-Key so a replay cannot enqueue a second async effect.
-			// If a prior attempt already enqueued the effect, EnqueueIfAbsent is a
-			// no-op, so the inline path and boot reconciliation cannot both enqueue it.
-			if _, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-				TenantID:          tenantID,
-				Destination:       sideEffectDest,
-				IdempotencyKey:    sideEffectKey,
-				Payload:           outboxPayload,
-				EffectLane:        lifecycleEffectLane(sideEffectDest, identityID),
-				RequiredAgentRole: requiredAgentRole,
-			}); err != nil {
+	var terminalApprovalErr error
+	apply := func(ctx context.Context) error {
+		return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			eventTime := time.Now().UTC()
+			locked, version, err := o.store.IdentityApprovalTargetTx(ctx, tx, tenantID, identityID, true)
+			if err != nil {
 				return err
 			}
+			if State(locked.Status) != from {
+				if approval != nil {
+					return store.ErrApprovalDrifted
+				}
+				return &TransitionError{IdentityID: identityID, From: State(locked.Status), To: to}
+			}
+			if approval != nil {
+				if approval.ResourceKind != "identity" || approval.ResourceID != identityID ||
+					approval.FromState != string(from) || approval.ToState != string(to) ||
+					approval.TargetVersion != version {
+					return store.ErrApprovalDrifted
+				}
+				authority, err := o.store.ValidateOperationApprovalUseTx(ctx, tx, tenantID, *approval, eventTime)
+				if err != nil {
+					return err
+				}
+				if authority.Reason != reason {
+					return store.ErrApprovalDrifted
+				}
+				if approval.EvidenceRefs == nil || approval.Reason != authority.Reason ||
+					!sameApprovalEvidence(approval.EvidenceRefs, authority.EvidenceRefs) {
+					return store.ErrApprovalDrifted
+				}
+				if err := projections.ValidateLifecycleApprovalAttemptEvidence(authority.EvidenceRefs, idempotencyKey, subjectCSRPEM); err != nil {
+					return err
+				}
+				if approval.Issuance != nil {
+					if to != StateIssued || approval.Action != "issue" {
+						return store.ErrApprovalDrifted
+					}
+					if approval.Issuance.ProfileID != "" {
+						if err := o.store.ValidateActiveProfileApprovalBindingTx(ctx, tx, tenantID, *approval.Issuance); err != nil {
+							if errors.Is(err, store.ErrApprovalDrifted) {
+								if statusErr := o.changeOperationApprovalStatusTx(ctx, tx, tenantID, authority,
+									store.ApprovalStatusSuperseded, "", eventTime); statusErr != nil {
+									return statusErr
+								}
+								terminalApprovalErr = store.ErrApprovalDrifted
+								return nil
+							}
+							return err
+						}
+					}
+				}
+			}
+			if issuance != nil && issuance.ProfileID != "" {
+				if err := o.store.ValidateActiveProfileApprovalBindingTx(ctx, tx, tenantID, *issuance); err != nil {
+					return err
+				}
+			}
+			ev, err := o.log.Append(ctx, events.Event{ID: eventID, Type: evType, TenantID: tenantID, Time: eventTime, SchemaVersion: schemaVersion, Data: payload})
+			if err != nil {
+				return err
+			}
+			expectedSchemaVersion := schemaVersion
+			if expectedSchemaVersion == 0 {
+				expectedSchemaVersion = events.DefaultSchemaVersion
+			}
+			if (eventID != "" && ev.ID != eventID) || ev.Type != evType || ev.TenantID != tenantID ||
+				ev.SchemaVersion != expectedSchemaVersion || !bytes.Equal(ev.Data, payload) {
+				return fmt.Errorf("%w: canonical lifecycle event differs", store.ErrIdempotencyConflict)
+			}
+			var canonical transitionPayload
+			if err := json.Unmarshal(ev.Data, &canonical); err != nil {
+				return fmt.Errorf("orchestrator: decode canonical lifecycle event: %w", err)
+			}
+			// Project the status change through the projector (the sole read-model
+			// writer, AN-2) in the same transaction as the outbox enqueue (AN-6).
+			if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
+				return err
+			}
+			if hasSideEffect {
+				canonicalKey, canonicalPayload, err := lifecycleOutboxIntentFromEvent(ev, canonical, sideEffectDest)
+				if err != nil {
+					return err
+				}
+				// Enqueue the side effect idempotently (SPINE-011): legacy/internal
+				// transitions key by event ID, while served lifecycle requests key by
+				// their Idempotency-Key so a replay cannot enqueue a second async effect.
+				// If a prior attempt already enqueued the effect, EnqueueIfAbsent is a
+				// no-op, so the inline path and boot reconciliation cannot both enqueue it.
+				if _, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+					TenantID:          tenantID,
+					Destination:       sideEffectDest,
+					IdempotencyKey:    canonicalKey,
+					Payload:           canonicalPayload,
+					EffectLane:        lifecycleEffectLane(sideEffectDest, identityID),
+					RequiredAgentRole: canonical.SideEffect.RequiredAgentRole,
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	profileBound := approval != nil && approval.Issuance != nil && approval.Issuance.ProfileID != ""
+	profileBound = profileBound || issuance != nil && issuance.ProfileID != ""
+	if profileBound {
+		// Profile writes already use this cross-replica lock. Taking it around
+		// validation+append makes event order agree with the active revision we
+		// observed: either the profile update wins and this authority drifts, or
+		// this issuance commits before the later profile version exists.
+		err := o.store.WithProjectionLock(ctx, apply)
+		if err == nil && terminalApprovalErr != nil {
+			return terminalApprovalErr
 		}
-		return nil
+		return err
+	}
+	err = apply(ctx)
+	if err == nil && terminalApprovalErr != nil {
+		return terminalApprovalErr
+	}
+	return err
+}
+
+func sameApprovalEvidence(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func approvalExecutionEventID(tenantID string, approval store.OperationApprovalUse) string {
+	return projections.LifecycleApprovalEventID(tenantID, approval)
+}
+
+func lifecycleApprovalEventByID(ctx context.Context, log *events.Log, eventID string) (events.Event, bool, error) {
+	if log == nil || eventID == "" {
+		return events.Event{}, false, errors.New("orchestrator: lifecycle approval event lookup is incomplete")
+	}
+	stop := errors.New("orchestrator: lifecycle approval event found")
+	var found events.Event
+	err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.ID != eventID {
+			return nil
+		}
+		found = event
+		return stop
 	})
+	if errors.Is(err, stop) {
+		return found, true, nil
+	}
+	return events.Event{}, false, err
+}
+
+func validateRetainedLifecycleApprovalEvent(
+	event events.Event,
+	tenantID, identityID string,
+	to State,
+	reason, idempotencyKey, subjectCSRPEM string,
+	approval store.OperationApprovalUse,
+) error {
+	expectedType, ok := EventTypeFor(State(approval.FromState), State(approval.ToState))
+	if !ok || State(approval.ToState) != to || event.ID != approvalExecutionEventID(tenantID, approval) ||
+		event.Type != expectedType || event.TenantID != tenantID ||
+		event.SchemaVersion != projections.LifecycleApprovalEventSchemaVersion || event.Sequence == 0 {
+		return store.ErrApprovalDrifted
+	}
+	if err := projections.ValidateLifecycleApprovalEvent(event); err != nil {
+		return err
+	}
+	var payload transitionPayload
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("orchestrator: decode retained lifecycle approval event: %w", err)
+	}
+	if payload.IdentityID != identityID || payload.From != State(approval.FromState) || payload.To != to ||
+		payload.Reason != reason || payload.IdempotencyKey != strings.TrimSpace(idempotencyKey) ||
+		payload.SubjectCSRPEM != strings.TrimSpace(subjectCSRPEM) || payload.Approval == nil {
+		return store.ErrApprovalDrifted
+	}
+	wantApproval, err := json.Marshal(approval)
+	if err != nil {
+		return err
+	}
+	gotApproval, err := json.Marshal(payload.Approval)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(gotApproval, wantApproval) {
+		return store.ErrApprovalDrifted
+	}
+	return nil
 }
 
 func transitionOutboxIdempotencyKey(eventID, requestKey string) string {
@@ -280,6 +565,99 @@ func transitionOutboxIdempotencyKey(eventID, requestKey string) string {
 		return eventID
 	}
 	return "transition:" + requestKey
+}
+
+// rewriteLifecycleOutboxFromCanonicalHistory keeps executable lifecycle commands
+// and approval notifications in the same privacy generation as their source
+// events. It first validates and collects the complete tenant history, then
+// changes PostgreSQL, so malformed or colliding history cannot produce a partial
+// rewrite. The historical name is retained because lifecycle commands were the
+// first consumer of this privacy fence.
+func (o *Orchestrator) rewriteLifecycleOutboxFromCanonicalHistory(ctx context.Context, tenantID string) error {
+	if o.outbox == nil {
+		return errors.New("orchestrator: lifecycle outbox rewrite is not configured")
+	}
+	entries := make(map[string]Entry)
+	addEntry := func(key string, candidate Entry) error {
+		if prior, exists := entries[key]; exists {
+			if prior.Destination != candidate.Destination ||
+				effectiveOutboxLane(prior.Destination, prior.EffectLane) != effectiveOutboxLane(candidate.Destination, candidate.EffectLane) ||
+				prior.RequiredAgentRole != candidate.RequiredAgentRole || prior.RequiredAgentID != candidate.RequiredAgentID ||
+				!bytes.Equal(prior.Payload, candidate.Payload) {
+				return fmt.Errorf("%w: rewritten history reuses receiver key %q", store.ErrIdempotencyConflict, key)
+			}
+			return nil
+		}
+		entries[key] = candidate
+		return nil
+	}
+	err := o.log.Replay(ctx, 0, func(ev events.Event) error {
+		if ev.TenantID != tenantID {
+			return nil
+		}
+		if ev.Type == projections.EventApprovalRequested {
+			request, err := operationApprovalRequestFromEvent(ev)
+			if err != nil {
+				return err
+			}
+			entry, err := approvalRequestOutboxEntry(tenantID, request)
+			if err != nil {
+				return err
+			}
+			return addEntry(entry.IdempotencyKey, entry)
+		}
+		if !isLifecycleTransition(ev.Type) {
+			return nil
+		}
+		if err := projections.ValidateSchemaVersion(ev); err != nil {
+			return err
+		}
+		if err := projections.ValidateLifecycleApprovalEvent(ev); err != nil {
+			return err
+		}
+		var payload transitionPayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			return fmt.Errorf("orchestrator: privacy decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+		}
+		destination, ok := sideEffectFor(payload.From, payload.To)
+		if !ok {
+			return nil
+		}
+		key, command, err := lifecycleOutboxIntentFromEvent(ev, payload, destination)
+		if err != nil {
+			return err
+		}
+		requiredAgentRole := ""
+		if payload.SideEffect != nil {
+			requiredAgentRole = payload.SideEffect.RequiredAgentRole
+		}
+		candidate := Entry{
+			TenantID: tenantID, Destination: destination, IdempotencyKey: key,
+			Payload: command, EffectLane: lifecycleEffectLane(destination, payload.IdentityID),
+			RequiredAgentRole: requiredAgentRole,
+		}
+		return addEntry(key, candidate)
+	})
+	if err != nil {
+		return fmt.Errorf("orchestrator: collect canonical lifecycle outbox: %w", err)
+	}
+
+	keys := make([]string, 0, len(entries))
+	for key := range entries {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		for _, key := range keys {
+			if _, err := o.outbox.rewriteCanonicalIfPresent(ctx, tx, entries[key]); err != nil {
+				return fmt.Errorf("rewrite lifecycle outbox %q: %w", key, err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("orchestrator: rewrite lifecycle outbox transaction: %w", err)
+	}
+	return nil
 }
 
 // ReconcileOutbox heals the narrow crash window between an event append and the
@@ -326,6 +704,31 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			healed = healedBefore
 			reconcileErr = o.quarantineOutboxReconciliationConflict(ctx, log, ev, conflict)
 		}()
+		// Approval requests notify reviewers. The ordinary command path projects the
+		// request and records this intent in one PostgreSQL transaction; this branch
+		// heals the earlier append-ACK / transaction-rollback gap from the immutable
+		// request event. Migration 0151 rewinds the checkpoint once so events skipped
+		// by pre-fix binaries are covered after upgrade too.
+		if ev.Type == projections.EventApprovalRequested {
+			request, err := operationApprovalRequestFromEvent(ev)
+			if err != nil {
+				return fmt.Errorf("orchestrator: reconcile %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			entry, err := approvalRequestOutboxEntry(ev.TenantID, request)
+			if err != nil {
+				return err
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+				if inserted {
+					healed++
+				}
+				return err
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		// Lifecycle transitions and queued discovery runs carry outbox side effects;
 		// skip everything else (domain CRUD events, tenant events, certificate events).
 		if ev.Type == EventITSMTicketRequested {
@@ -615,6 +1018,9 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		if err := projections.ValidateSchemaVersion(ev); err != nil {
 			return err
 		}
+		if err := projections.ValidateLifecycleApprovalEvent(ev); err != nil {
+			return err
+		}
 		var pl transitionPayload
 		if err := json.Unmarshal(ev.Data, &pl); err != nil {
 			// A malformed transition payload is a producer bug; surface it rather than
@@ -728,6 +1134,19 @@ func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest 
 	}
 	if pl.SideEffect.IdempotencyKey != expectedKey {
 		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): side_effect idempotency key is not event-derived", ev.Type, ev.Sequence)
+	}
+	if ev.SchemaVersion == projections.LifecycleApprovalEventSchemaVersion ||
+		ev.SchemaVersion == projections.LifecycleIssuanceEventSchemaVersion {
+		if len(pl.SideEffect.Payload) != 0 {
+			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): canonical side_effect must not duplicate the outer payload", ev.Type, ev.Sequence)
+		}
+		canonical := pl
+		canonical.SideEffect = nil
+		payload, err := json.Marshal(canonical)
+		if err != nil {
+			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): derive canonical outbox payload: %w", ev.Type, ev.Sequence, err)
+		}
+		return pl.SideEffect.IdempotencyKey, payload, nil
 	}
 	if len(pl.SideEffect.Payload) == 0 {
 		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): side_effect payload is required", ev.Type, ev.Sequence)

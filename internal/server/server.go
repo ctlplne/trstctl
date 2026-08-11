@@ -486,8 +486,9 @@ type Deps struct {
 	// present it takes precedence over the legacy static slice above, which remains
 	// for embedded compositions and existing tests.
 	TenantDynamicSecretProviders DynamicSecretProviderRegistry
-	// SecretRotators are the configured rollback-safe static secret rotators exposed
-	// by /api/v1/secrets/rotations (F37). Empty keeps the route fail-closed.
+	// SecretRotators retain configured static-credential engines for library users
+	// and a future durable worker. The served HTTP route refuses them before any
+	// provider effect; only connector rotation is executable today (F37).
 	SecretRotators map[string]rotation.Rotator
 	// SecretSyncTargets are the configured external secret-sync destinations exposed
 	// by /api/v1/secrets/syncs (F68). Empty keeps the route fail-closed.
@@ -815,6 +816,11 @@ type Server struct {
 	mAgentEnrollments *observ.CounterVec
 	mAgentsTotal      *observ.Gauge
 	mAgentsStale      *observ.Gauge
+	// Application-secret crash recovery is tenant-isolated. A custody outage
+	// leaves only that tenant's commands fenced, degrades readiness, and increments
+	// this unlabeled gauge without exposing tenant or secret names.
+	mApplicationSecretReconcileBlocked  *observ.Gauge
+	mApplicationSecretReconcileDegraded *observ.Gauge
 
 	// api is the assembled REST surface, retained so a wiring assertion (e.g. the
 	// GAP-006 secrets surface) can confirm the running binary actually mounts a
@@ -894,11 +900,28 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if s.signTO <= 0 {
 		s.signTO = 10 * time.Second
 	}
+	privacyRecovery := orchestrator.NewOrchestrator(
+		d.Log,
+		d.Store,
+		orchestrator.NewOutbox(d.Store),
+		historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)...,
+	)
+	if completed, recoveryErr := privacyRecovery.RecoverPrivacySubjectErasurePreparations(ctx); recoveryErr != nil {
+		return nil, fmt.Errorf(
+			"server: recover prepared privacy subject erasures before read-model restore: %w",
+			recoveryErr,
+		)
+	} else if completed > 0 && d.Logger != nil {
+		d.Logger.Warn(
+			"completed privacy subject erasures interrupted after durable preparation",
+			slog.Int("completed", completed),
+		)
+	}
 	proj, err := catchUpReadModel(ctx, d)
 	if err != nil {
 		return nil, err
 	}
-	orch, idem, err := s.configureMutationSpine(ctx, d)
+	orch, idem, err := s.configureMutationSpine(ctx, d, proj)
 	if err != nil {
 		return nil, err
 	}
@@ -911,6 +934,28 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	a, auditSvc, err := s.configureAPI(d, orch, idem)
 	if err != nil {
 		return nil, err
+	}
+	if healed, reconcileErr := a.ReconcileApplicationSecretMutationFences(ctx); reconcileErr != nil {
+		if !errors.Is(reconcileErr, api.ErrApplicationSecretMutationReconcileBlocked) {
+			return nil, fmt.Errorf("server: reconcile application-secret mutation fences: %w", reconcileErr)
+		}
+		if d.Logger != nil {
+			d.Logger.Warn("application-secret crash recovery is custody-blocked; affected commands remain fenced and readiness will be degraded",
+				slog.Int("blocked", a.ApplicationSecretMutationReconcileBlockedCount()))
+		}
+	} else if healed > 0 && d.Logger != nil {
+		d.Logger.Warn("reconciled application-secret commands missed by an append/project crash", slog.Int("healed", healed))
+	}
+	if healed, reconcileErr := reconcileApprovedTargetEventFences(ctx, d.Store, d.Log, orch); reconcileErr != nil {
+		if !errors.Is(reconcileErr, store.ErrPrivacySubjectErasurePreparationActive) {
+			return nil, fmt.Errorf("server: reconcile approved target event fences: %w", reconcileErr)
+		}
+		if d.Logger != nil {
+			d.Logger.Warn("approved-target crash recovery is blocked by an active privacy erasure preparation; commands remain fenced")
+		}
+	} else if healed > 0 && d.Logger != nil {
+		d.Logger.Warn("reconciled approved certificate/code-signing commands missed by an append/project crash",
+			slog.Int("healed", healed))
 	}
 	if err := s.configureKMIPSurface(d); err != nil {
 		return nil, err
@@ -937,10 +982,22 @@ func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, erro
 	if err := proj.ProjectCatchUp(ctx, d.Log); err != nil {
 		return nil, fmt.Errorf("server: project event log: %w", err)
 	}
+	if err := d.Store.ValidateSecretRotationScheduleStartupAuthority(ctx,
+		func(resolveCtx context.Context, tenantID string) (string, uint64, error) {
+			authority, err := orchestrator.ResolveLiveTenantRegistrationAuthority(
+				resolveCtx, d.Log, d.Store, tenantID)
+			return authority.EventID, authority.EventSequence, err
+		}); err != nil {
+		return nil, fmt.Errorf("server: validate secret rotation scheduler startup authority: %w", err)
+	}
 	return proj, nil
 }
 
-func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestrator.Orchestrator, *orchestrator.Idempotency, error) {
+func (s *Server) configureMutationSpine(
+	ctx context.Context,
+	d Deps,
+	proj *projections.Projector,
+) (*orchestrator.Orchestrator, *orchestrator.Idempotency, error) {
 	if d.IdempotencyResultMigrator != nil {
 		statuses, err := d.IdempotencyResultMigrator.MigrateAll(ctx)
 		if err != nil {
@@ -977,6 +1034,7 @@ func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestra
 		}),
 	)
 	orchOptions := historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)
+	orchOptions = append(orchOptions, orchestrator.WithProjector(proj))
 	if d.ConnectorRegistry != nil {
 		// Stamp each connector side effect's per-row agent-role demand from the
 		// shipped vantage census at enqueue (epic A3). Without a registry there
@@ -984,15 +1042,16 @@ func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestra
 		orchOptions = append(orchOptions,
 			orchestrator.WithSideEffectRoleClassifier(connectorSideEffectRoleClassifier(d.ConnectorRegistry)))
 	}
+	idem := orchestrator.NewIdempotency(
+		d.Store,
+		orchestrator.WithResultProtector(d.IdempotencyResultProtector),
+	)
+	orchOptions = append(orchOptions, orchestrator.WithDurableIdempotency(idem))
 	orch := orchestrator.NewOrchestrator(
 		d.Log,
 		d.Store,
 		s.outbox,
 		orchOptions...,
-	)
-	idem := orchestrator.NewIdempotency(
-		d.Store,
-		orchestrator.WithResultProtector(d.IdempotencyResultProtector),
 	)
 	s.orch, s.idem, s.defaultProfile = orch, idem, d.DefaultProfile
 	if healed, err := orch.ReconcileOutbox(ctx, d.Log); err != nil {
@@ -1080,7 +1139,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	}
 	defaults = append(defaults, api.WithPrivacyRetentionPolicy(d.PrivacyRetentionPolicy))
 	defaults = append(defaults, api.WithPrivacyRetentionPolicySource(d.GovernancePolicySource))
-	if err := s.configurePolicyGate(d, &defaults); err != nil {
+	if err := s.configurePolicyGate(d, orch, &defaults); err != nil {
 		return nil, nil, err
 	}
 	authOpt, err := buildBrowserAuth(d.OIDC, d.SAML, d.LDAP, d.SecurityHeaders.TLS, d.AuthHTTPClient, d.Store, d.KEK, d.TenantCrypto)
@@ -1135,7 +1194,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	} else if externalCAs != nil {
 		defaults = append(defaults, api.WithExternalCAs(externalCAs))
 	}
-	if mk, err := buildManagedKeyService(d, idem, s.outbox); err != nil {
+	if mk, err := buildManagedKeyService(d, idem, s.outbox, orch); err != nil {
 		return nil, nil, fmt.Errorf("server: configure managed-key lifecycle: %w", err)
 	} else if mk != nil {
 		defaults = append(defaults, api.WithManagedKeys(mk))
@@ -1292,7 +1351,7 @@ func (s *Server) buildTransitService(d Deps) *transitpkg.Service {
 	return s.transit
 }
 
-func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
+func (s *Server) configurePolicyGate(d Deps, orch *orchestrator.Orchestrator, defaults *[]api.Option) error {
 	s.bulk = d.Bulkhead
 	if s.bulk == nil {
 		s.bulk = bulkhead.Default()
@@ -1321,7 +1380,7 @@ func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
 		}
 	}
 	s.mBulkheads = observ.NewBulkheadMetrics(s.registry)
-	gate, approvals, err := buildMutationGate(d, s.bulk, s.outbox)
+	gate, approvals, err := buildMutationGate(d, s.bulk, s.outbox, orch)
 	if err != nil {
 		return err
 	}
@@ -1455,12 +1514,14 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		}
 	}
 	secretIntegrations := &secretIntegrationOutboxDispatcher{
-		dynamicProviders: d.TenantDynamicSecretProviders,
-		syncTargets:      d.TenantSecretSyncTargets,
-		kek:              d.KEK,
-		tenantCrypto:     d.TenantCrypto,
-		store:            d.Store,
-		log:              d.Log,
+		dynamicProviders:         d.TenantDynamicSecretProviders,
+		fallbackDynamicProviders: d.DynamicSecretProviders,
+		syncTargets:              d.TenantSecretSyncTargets,
+		fallbackSyncTargets:      d.SecretSyncTargets,
+		kek:                      d.KEK,
+		tenantCrypto:             d.TenantCrypto,
+		store:                    d.Store,
+		log:                      d.Log,
 	}
 	var tenantKeyDomains *tenantKeyDomainSealOutboxDispatcher
 	if d.TenantKeyDomains != nil {
@@ -1705,6 +1766,18 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mEventLogReplicasActual = s.registry.Gauge("trstctl_event_log_replicas_actual", "Observed JetStream replica count on the source-of-truth event stream.")
 	s.mAgentsTotal = s.registry.Gauge("trstctl_agents_total", "Total agents currently known to the control plane.")
 	s.mAgentsStale = s.registry.Gauge("trstctl_agents_stale_total", "Agents whose last heartbeat is older than two heartbeat intervals.")
+	s.mApplicationSecretReconcileBlocked = s.registry.Gauge(
+		"trstctl_application_secret_reconcile_blocked",
+		"Durable application-secret commands whose crash recovery is blocked by tenant cryptographic custody.")
+	s.mApplicationSecretReconcileDegraded = s.registry.Gauge(
+		"trstctl_application_secret_reconcile_degraded",
+		"Whether the most recent application-secret crash-recovery pass was custody-blocked or failed structurally (1 degraded, 0 healthy).")
+	if s.api != nil {
+		s.mApplicationSecretReconcileBlocked.Set(float64(s.api.ApplicationSecretMutationReconcileBlockedCount()))
+		if s.api.ApplicationSecretMutationReconcileDegraded() {
+			s.mApplicationSecretReconcileDegraded.Set(1)
+		}
+	}
 	if err := s.sampleEventLogReplicas(ctx); err != nil {
 		s.logger.Warn("event-log replica metrics sample failed", slog.String("error", err.Error()))
 	}
@@ -1789,6 +1862,12 @@ func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.SystemPool().Ping(ctx) }},
 		{Name: "nats", Probe: func(ctx context.Context) error { return s.probeEventLog(ctx) }},
 		{Name: "projection", Probe: s.probeProjectionTail},
+		{Name: "secret_sync_recovery_authority", Probe: d.Store.RequireSecretSyncReceiverRecoveryAuthorized},
+	}
+	if s.api != nil {
+		checks = append(checks, observ.Check{
+			Name: "application_secret_reconciliation", Probe: s.api.ApplicationSecretMutationReconcileHealth,
+		})
 	}
 	if d.Signer == nil {
 		return checks
@@ -2348,6 +2427,56 @@ func (s *Server) RunPrivacyRetention(ctx context.Context) {
 // Reclaiming expired keys is a low-urgency maintenance task and the retention
 // window is days, so an hourly cadence keeps the table bounded without pressure.
 const idemGCInterval = time.Hour
+
+// applicationSecretReconcileInterval bounds how long a tenant custody recovery
+// can remain unnoticed after startup. The sweep is metadata/ciphertext-only and
+// serialized inside the API; a tenant outage cannot block another tenant's pass.
+const applicationSecretReconcileInterval = 15 * time.Second
+
+// RunApplicationSecretMutationReconciler periodically retries durable commands
+// stranded by a process crash. Custody-unavailable commands remain fenced and
+// degrade readiness; structural store/event-log failures are logged and retried.
+func (s *Server) RunApplicationSecretMutationReconciler(ctx context.Context) {
+	if s.api == nil {
+		return
+	}
+	s.reconcileApplicationSecretMutationsOnce(ctx)
+	ticker := time.NewTicker(applicationSecretReconcileInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.reconcileApplicationSecretMutationsOnce(ctx)
+		}
+	}
+}
+
+func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
+	healed, err := s.api.ReconcileApplicationSecretMutationFences(ctx)
+	if s.mApplicationSecretReconcileBlocked != nil {
+		s.mApplicationSecretReconcileBlocked.Set(float64(s.api.ApplicationSecretMutationReconcileBlockedCount()))
+	}
+	if s.mApplicationSecretReconcileDegraded != nil {
+		degraded := 0.0
+		if s.api.ApplicationSecretMutationReconcileDegraded() {
+			degraded = 1
+		}
+		s.mApplicationSecretReconcileDegraded.Set(degraded)
+	}
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("application-secret crash recovery sweep incomplete",
+				slog.Int("blocked", s.api.ApplicationSecretMutationReconcileBlockedCount()),
+				slog.String("error", err.Error()))
+		}
+		return
+	}
+	if healed > 0 && s.logger != nil {
+		s.logger.Info("application-secret crash recovery sweep completed commands", slog.Int("healed", healed))
+	}
+}
 
 // RunIdempotencyGC reclaims completed idempotency keys past the retention window
 // on a fixed cadence until ctx is cancelled (SPINE-002), keeping idempotency_keys

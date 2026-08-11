@@ -29,6 +29,9 @@ const { apiMock } = vi.hoisted(() => ({
     rotationRuns: vi.fn(),
     connectorDeliveries: vi.fn(),
     identities: vi.fn(),
+    approvalRequests: vi.fn(),
+    approveApprovalRequest: vi.fn(),
+    denyApprovalRequest: vi.fn(),
     approveIdentityAction: vi.fn(),
     transitionIdentity: vi.fn(),
   },
@@ -58,6 +61,19 @@ describe("operational console surface", () => {
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);
+    apiMock.approvalRequests.mockResolvedValue([]);
+    apiMock.approveApprovalRequest.mockResolvedValue({
+      id: "approval-request-1",
+      status: "approved",
+      approval_count: 2,
+      required_approvals: 2,
+    });
+    apiMock.denyApprovalRequest.mockResolvedValue({
+      id: "approval-request-1",
+      status: "denied",
+      approval_count: 1,
+      required_approvals: 2,
+    });
     apiMock.nhiPolicyCompliance.mockResolvedValue(emptyNHIPolicyCompliance());
     apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
     apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
@@ -66,6 +82,51 @@ describe("operational console surface", () => {
     apiMock.contextualRiskPriorities.mockResolvedValue(emptyContextualRiskPriorities());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
+  });
+
+  it("AUD-77 keeps issued and deployed identities out of operations without served approval requests", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "issued-1", name: "issued-without-request", status: "issued" },
+      { id: "deployed-1", name: "deployed-without-request", status: "deployed" },
+    ]);
+    apiMock.approvalRequests.mockResolvedValue([]);
+
+    renderAt("/operations");
+
+    expect(await screen.findByText("No operations found")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve revoke for/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject revoke for/i })).not.toBeInTheDocument();
+    expect(apiMock.approvalRequests).toHaveBeenCalledTimes(1);
+    expect(apiMock.identities).not.toHaveBeenCalled();
+  });
+
+  it("AUD-77 approves a genuine operations request by immutable request id and digest", async () => {
+    apiMock.identities.mockResolvedValue([]);
+    apiMock.approvalRequests.mockResolvedValue([
+      {
+        id: "approval-request-1",
+        intent_digest: "sha256:8ec59a9c",
+        resource_id: "jit-1",
+        resource_name: "jit-db",
+        resource_kind: "identity",
+        action: "issue",
+        requester: "dev@example.test",
+        approval_count: 1,
+        required_approvals: 2,
+        status: "pending",
+        created_at: "2026-06-19T17:00:00Z",
+        expires_at: "2026-06-19T18:00:00Z",
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderAt("/operations");
+
+    const approve = await screen.findByRole("button", { name: /approve issue for jit-db/i });
+    await user.click(approve);
+
+    await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:8ec59a9c"));
+    expect(apiMock.approveIdentityAction).not.toHaveBeenCalled();
   });
 
   it("routes to profiles, lists versions, and creates a profile", async () => {
@@ -336,12 +397,23 @@ describe("operational console surface", () => {
   });
 
   it("traps focus in the operations rejection dialog and returns focus to the opener", async () => {
-    apiMock.identities.mockResolvedValue([
+    apiMock.approvalRequests.mockResolvedValue([
       {
-        id: "req-1",
-        name: "requested-svc",
-        status: "requested",
-        attributes: { requester: "app-team", approvals: "1/2", grant_expires_at: "2026-07-01T00:00:00Z" },
+        id: "approval-request-1",
+        intent_digest: "sha256:request",
+        resource_id: "req-1",
+        resource_name: "requested-svc",
+        resource_kind: "identity",
+        action: "issue",
+        requester: "app-team",
+        target_version: "transition:0",
+        reason: "issue requested service identity",
+        evidence_refs: [],
+        approval_count: 1,
+        required_approvals: 2,
+        status: "pending",
+        created_at: "2026-06-30T00:00:00Z",
+        expires_at: "2026-07-01T00:00:00Z",
       },
     ]);
     const user = userEvent.setup();
@@ -365,6 +437,39 @@ describe("operational console surface", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Reject issue for requested-svc" })).not.toBeInTheDocument();
     expect(opener).toHaveFocus();
+  });
+
+  it("records an immutable denial and never retires the approval target", async () => {
+    apiMock.approvalRequests.mockResolvedValue([
+      {
+        id: "approval-request-1",
+        intent_digest: "sha256:request",
+        resource_id: "secret:payments/api-key",
+        resource_name: "payments/api-key",
+        resource_kind: "secret",
+        action: "rotate",
+        requester: "app-team",
+        target_version: "7",
+        reason: "rotate application secret",
+        evidence_refs: [],
+        approval_count: 0,
+        required_approvals: 2,
+        status: "pending",
+        created_at: "2026-06-30T00:00:00Z",
+        expires_at: "2026-07-01T00:00:00Z",
+      },
+    ]);
+    const user = userEvent.setup();
+    renderAt("/operations");
+
+    await user.click(await screen.findByRole("button", { name: "Reject rotate for payments/api-key" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reject rotate for payments/api-key" });
+    await user.type(within(dialog).getByLabelText("Reason"), "unsafe rollout window");
+    await user.click(within(dialog).getByRole("button", { name: "Reject request" }));
+
+    await waitFor(() => expect(apiMock.denyApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:request", "unsafe rollout window"));
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+    expect(await screen.findByRole("status")).toHaveTextContent("request rejected for payments/api-key");
   });
 
   it("routes to graph inventory and runs blast-radius analysis", async () => {

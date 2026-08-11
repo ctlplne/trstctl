@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestPrivacySubjectErasureIdentityIsStableAndTenantScoped(t *testing.T) {
@@ -54,7 +55,14 @@ func TestPrivacyErasureCanonicalEventFailsClosedOnBindingDrift(t *testing.T) {
 		RequestBinding: binding,
 		SubjectRef:     privacy.SubjectRef(tenantID, subject),
 		Reason:         "data subject request",
-		Counts:         map[string]int{"owners": 1},
+		Counts: map[string]int{
+			"owners": 1, "secret_rotation_schedule_ticks": 0,
+			"secret_rotation_schedule_tick_rows":         0,
+			"secret_rotation_schedule_commands":          0,
+			"secret_rotation_schedule_outer_resolutions": 0,
+		},
+		RecoveryFences:        []store.PrivacyRecoveryFenceDisposition{},
+		SchedulerDispositions: []store.SecretRotationSchedulePrivacyDisposition{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -71,6 +79,24 @@ func TestPrivacyErasureCanonicalEventFailsClosedOnBindingDrift(t *testing.T) {
 	if got.SubjectRef != privacy.SubjectRef(tenantID, subject) || got.Counts["owners"] != 1 {
 		t.Fatalf("canonical erasure = %+v", got)
 	}
+	legacyPayload := projections.PrivacySubjectErased{
+		OperationID: identity.OperationID, RequestBinding: binding,
+		SubjectRef: privacy.SubjectRef(tenantID, subject),
+		Selectors: store.PrivacyErasureSelectors{
+			ApprovalRequests: []store.PrivacyApprovalSelector{{Resource: "legacy-resource", Action: "issue"}},
+		},
+		Counts: map[string]int{"owners": 1},
+	}
+	legacyData, err := json.Marshal(legacyPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := canonical
+	legacy.SchemaVersion = projections.PrivacySubjectErasedOperationEventSchemaVersion
+	legacy.Data = legacyData
+	if _, err := privacyErasureFromEvent(legacy, tenantID, subject, identity, binding); err != nil {
+		t.Fatalf("legacy v2 operation event must remain recoverable: %v", err)
+	}
 
 	for name, call := range map[string]func() error{
 		"request binding": func() error {
@@ -84,6 +110,12 @@ func TestPrivacyErasureCanonicalEventFailsClosedOnBindingDrift(t *testing.T) {
 		"event schema": func() error {
 			changed := canonical
 			changed.SchemaVersion = 1
+			_, err := privacyErasureFromEvent(changed, tenantID, subject, identity, binding)
+			return err
+		},
+		"future event schema": func() error {
+			changed := canonical
+			changed.SchemaVersion = projections.PrivacySubjectErasedEventSchemaVersion + 1
 			_, err := privacyErasureFromEvent(changed, tenantID, subject, identity, binding)
 			return err
 		},

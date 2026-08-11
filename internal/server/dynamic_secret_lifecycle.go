@@ -3,10 +3,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,7 +26,6 @@ import (
 var (
 	dynamicSecretLeaseNamespace     = uuid.MustParse("f4ca4708-7319-5c77-a50c-ad13185a86e8")
 	dynamicSecretOperationNamespace = uuid.MustParse("c5cb64fd-788f-51c2-9ed2-4623d2bafee8")
-	dynamicSecretEventNamespace     = uuid.MustParse("908f1994-a04c-506c-8471-71897e290a4a")
 )
 
 const (
@@ -49,6 +50,10 @@ type durableDynamicSecretLifecycle struct {
 	outbox    *orchestrator.Outbox
 	wake      func()
 	providers map[string]dynsecret.Provider
+
+	// Test-only crash seam after a canonical event append and before projection.
+	// Production leaves it nil.
+	afterCanonicalAppend func(events.Event) error
 }
 
 func newDurableDynamicSecretLifecycle(tenantID string, providers []dynsecret.Provider, st *store.Store, log *events.Log, kek seal.KeyWrapper, outbox *orchestrator.Outbox, wake func(), tenantCrypto ...tenantseal.Access) (*durableDynamicSecretLifecycle, error) {
@@ -95,13 +100,17 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 		return dynsecret.Lease{}, nil, errors.New("dynsecret: role and positive TTL are required")
 	}
 
+	tenantEpoch, err := l.store.DynamicSecretTenantEpoch(ctx, l.tenantID)
+	if err != nil {
+		return dynsecret.Lease{}, nil, fmt.Errorf("dynsecret: resolve tenant lifecycle epoch: %w", err)
+	}
 	leaseID := "lease-" + uuid.NewSHA1(dynamicSecretLeaseNamespace, []byte(l.tenantID+"\x00"+idempotencyKey)).String()
 	operationID := "issue:" + leaseID
 	op, opErr := l.store.GetDynamicSecretOperationByIdempotencyKey(ctx, l.tenantID, idempotencyKey)
 	operationFound := opErr == nil
 	switch {
 	case operationFound:
-		if !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "issue", leaseID) {
+		if op.TenantEpoch != tenantEpoch || !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "issue", leaseID) {
 			return dynsecret.Lease{}, nil, dynamicSecretIdempotencyConflict()
 		}
 	case !store.IsNotFound(opErr):
@@ -112,7 +121,7 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 	found := err == nil
 	switch {
 	case found:
-		if record.IdempotencyKey != idempotencyKey || record.Provider != providerID || record.Role != role || record.RequestBinding != requestBinding {
+		if record.TenantEpoch != tenantEpoch || record.IdempotencyKey != idempotencyKey || record.Provider != providerID || record.Role != role || record.RequestBinding != requestBinding {
 			return dynsecret.Lease{}, nil, dynamicSecretIdempotencyConflict()
 		}
 		if record.State == store.DynamicSecretLeaseActive {
@@ -148,18 +157,19 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 		// representation across append, projection, restart, and worker delivery.
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		pending := projections.DynamicSecretLeasePending{
-			ID: leaseID, IdempotencyKey: idempotencyKey, RequestBinding: requestBinding, Provider: providerID, Role: role,
+			TenantEpoch: tenantEpoch, ID: leaseID, IdempotencyKey: idempotencyKey,
+			RequestBinding: requestBinding, Provider: providerID, Role: role,
 			ExpiresAt:     now.Add(ttl).Truncate(time.Microsecond),
 			HardExpiresAt: now.Add(maxTTL).Truncate(time.Microsecond),
 		}
-		if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, "issue-requested", operationID), projections.EventDynamicSecretLeasePending, pending); err != nil {
+		if err := l.appendAndProjectIssueRequest(ctx, dynamicSecretEventID(l.tenantID, tenantEpoch, "issue-requested", leaseID), pending, now, ttl, maxTTL); err != nil {
 			return dynsecret.Lease{}, nil, err
 		}
 		op, err = l.store.GetDynamicSecretOperationByIdempotencyKey(ctx, l.tenantID, idempotencyKey)
 		if err != nil {
 			return dynsecret.Lease{}, nil, err
 		}
-		if !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "issue", leaseID) {
+		if op.TenantEpoch != tenantEpoch || !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "issue", leaseID) {
 			return dynsecret.Lease{}, nil, dynamicSecretIdempotencyConflict()
 		}
 		record, err = l.store.GetDynamicSecretLease(ctx, l.tenantID, leaseID)
@@ -169,7 +179,10 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 	}
 
 	if time.Until(record.HardExpiresAt) <= 0 {
-		_ = l.appendAndProject(ctx, projections.EventDynamicSecretLeaseIssuanceFailed, projections.DynamicSecretLeaseFailure{ID: leaseID, Error: "provider credential validity window elapsed before issuance"})
+		_ = l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, record.TenantEpoch, "provider-issue-failed", leaseID), projections.EventDynamicSecretLeaseIssuanceFailed, projections.DynamicSecretLeaseIssuanceFailure{
+			TenantEpoch: record.TenantEpoch, ID: leaseID,
+			Error: "provider credential validity window elapsed before issuance",
+		})
 		return dynsecret.Lease{}, nil, errors.New("dynsecret: provider credential validity window elapsed before issuance")
 	}
 	// The request thread only signals the normal bounded dispatcher and polls this
@@ -208,7 +221,9 @@ func (l *durableDynamicSecretLifecycle) waitForIssued(ctx context.Context, lease
 				if outboxRecord.LastError != "" {
 					message = outboxRecord.LastError
 				}
-				if err := l.appendAndProject(waitCtx, projections.EventDynamicSecretLeaseIssuanceFailed, projections.DynamicSecretLeaseFailure{ID: leaseID, Error: message}); err != nil {
+				if err := l.appendAndProjectID(waitCtx, dynamicSecretEventID(l.tenantID, record.TenantEpoch, "provider-issue-failed", leaseID), projections.EventDynamicSecretLeaseIssuanceFailed, projections.DynamicSecretLeaseIssuanceFailure{
+					TenantEpoch: record.TenantEpoch, ID: leaseID, Error: message,
+				}); err != nil {
 					return dynsecret.Lease{}, nil, err
 				}
 				continue
@@ -259,7 +274,10 @@ func (l *durableDynamicSecretLifecycle) Renew(ctx context.Context, leaseID strin
 	if next.After(record.HardExpiresAt) {
 		return dynsecret.Lease{}, fmt.Errorf("dynsecret: renewal exceeds hard provider expiry %s", record.HardExpiresAt.Format(time.RFC3339))
 	}
-	if err := l.appendAndProject(ctx, projections.EventDynamicSecretLeaseRenewed, projections.DynamicSecretLeaseRenewed{ID: leaseID, ExpiresAt: next}); err != nil {
+	operationID := "legacy-renew:" + leaseID + ":" + next.UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano)
+	if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, record.TenantEpoch, "lease-renewed", operationID), projections.EventDynamicSecretLeaseRenewed, projections.DynamicSecretLeaseRenewed{
+		TenantEpoch: record.TenantEpoch, OperationID: operationID, ID: leaseID, ExpiresAt: next,
+	}); err != nil {
 		return dynsecret.Lease{}, err
 	}
 	record.ExpiresAt = next
@@ -276,10 +294,14 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 	if idempotencyKey == "" || requestBinding == "" || leaseID == "" {
 		return dynsecret.Lease{}, errors.New("dynsecret: bound renewal requires lease, idempotency key, and authenticated request binding")
 	}
+	tenantEpoch, err := l.store.DynamicSecretTenantEpoch(ctx, l.tenantID)
+	if err != nil {
+		return dynsecret.Lease{}, fmt.Errorf("dynsecret: resolve tenant lifecycle epoch: %w", err)
+	}
 	operationID := dynamicSecretOperationID(l.tenantID, idempotencyKey)
 	op, err := l.store.GetDynamicSecretOperationByIdempotencyKey(ctx, l.tenantID, idempotencyKey)
 	if err == nil {
-		if !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "renew", leaseID) {
+		if op.TenantEpoch != tenantEpoch || !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "renew", leaseID) {
 			return dynsecret.Lease{}, dynamicSecretIdempotencyConflict()
 		}
 		return l.resumeRenewal(ctx, op)
@@ -295,6 +317,9 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 	if record.State != store.DynamicSecretLeaseActive {
 		return dynsecret.Lease{}, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)
 	}
+	if record.TenantEpoch != tenantEpoch {
+		return dynsecret.Lease{}, store.ErrDynamicSecretTenantEpochMismatch
+	}
 	next := record.ExpiresAt.Add(extend)
 	if next.After(record.HardExpiresAt) {
 		return dynsecret.Lease{}, fmt.Errorf("dynsecret: renewal exceeds hard provider expiry %s", record.HardExpiresAt.Format(time.RFC3339))
@@ -304,10 +329,10 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 		return dynsecret.Lease{}, err
 	}
 	requested := projections.DynamicSecretOperationRequested{
-		OperationID: operationID, IdempotencyKey: idempotencyKey, RequestBinding: requestBinding,
+		TenantEpoch: tenantEpoch, OperationID: operationID, IdempotencyKey: idempotencyKey, RequestBinding: requestBinding,
 		Action: "renew", LeaseID: leaseID, Response: response,
 	}
-	if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, "operation-requested", operationID), projections.EventDynamicSecretOperationRequested, requested); err != nil {
+	if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, tenantEpoch, "operation-requested", operationID), projections.EventDynamicSecretOperationRequested, requested); err != nil {
 		if errors.Is(err, store.ErrIdempotencyConflict) {
 			return dynsecret.Lease{}, dynamicSecretIdempotencyConflict()
 		}
@@ -317,7 +342,7 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 	if err != nil {
 		return dynsecret.Lease{}, err
 	}
-	if !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "renew", leaseID) {
+	if op.TenantEpoch != tenantEpoch || !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "renew", leaseID) {
 		return dynsecret.Lease{}, dynamicSecretIdempotencyConflict()
 	}
 	return l.resumeRenewal(ctx, op)
@@ -344,11 +369,15 @@ func (l *durableDynamicSecretLifecycle) resumeRenewal(ctx context.Context, op st
 	if record.State != store.DynamicSecretLeaseActive {
 		return dynsecret.Lease{}, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, op.LeaseID)
 	}
+	if record.TenantEpoch != op.TenantEpoch {
+		return dynsecret.Lease{}, store.ErrDynamicSecretTenantEpochMismatch
+	}
 	if response.ExpiresAt.After(record.HardExpiresAt) {
 		return dynsecret.Lease{}, errors.New("dynsecret: durable renewal result exceeds provider hard expiry")
 	}
 	if record.ExpiresAt.Before(response.ExpiresAt) {
-		if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, "lease-renewed", op.OperationID), projections.EventDynamicSecretLeaseRenewed, projections.DynamicSecretLeaseRenewed{
+		if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "lease-renewed", op.OperationID), projections.EventDynamicSecretLeaseRenewed, projections.DynamicSecretLeaseRenewed{
+			TenantEpoch: op.TenantEpoch, OperationID: op.OperationID,
 			ID: op.LeaseID, ExpiresAt: response.ExpiresAt,
 		}); err != nil {
 			return dynsecret.Lease{}, err
@@ -371,7 +400,9 @@ func (l *durableDynamicSecretLifecycle) Revoke(ctx context.Context, leaseID stri
 	if record.State != store.DynamicSecretLeaseActive {
 		return fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)
 	}
-	return l.appendAndProject(ctx, projections.EventDynamicSecretLeaseRevocationRequested, projections.DynamicSecretLeaseRevocationRequested{
+	operationID := "legacy-revoke:" + record.ID
+	return l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, record.TenantEpoch, "lease-revocation-requested", operationID), projections.EventDynamicSecretLeaseRevocationRequested, projections.DynamicSecretLeaseRevocationRequested{
+		TenantEpoch: record.TenantEpoch, OperationID: operationID,
 		ID: record.ID, Provider: record.Provider, BackendRef: record.BackendRef,
 	})
 }
@@ -383,10 +414,14 @@ func (l *durableDynamicSecretLifecycle) RevokeBound(ctx context.Context, leaseID
 	if leaseID == "" || idempotencyKey == "" || requestBinding == "" {
 		return dynsecret.Lease{}, errors.New("dynsecret: bound revocation requires lease, idempotency key, and authenticated request binding")
 	}
+	tenantEpoch, err := l.store.DynamicSecretTenantEpoch(ctx, l.tenantID)
+	if err != nil {
+		return dynsecret.Lease{}, fmt.Errorf("dynsecret: resolve tenant lifecycle epoch: %w", err)
+	}
 	operationID := dynamicSecretOperationID(l.tenantID, idempotencyKey)
 	op, err := l.store.GetDynamicSecretOperationByIdempotencyKey(ctx, l.tenantID, idempotencyKey)
 	if err == nil {
-		if !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "revoke", leaseID) {
+		if op.TenantEpoch != tenantEpoch || !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "revoke", leaseID) {
 			return dynsecret.Lease{}, dynamicSecretIdempotencyConflict()
 		}
 		return l.resumeRevocation(ctx, op)
@@ -401,15 +436,18 @@ func (l *durableDynamicSecretLifecycle) RevokeBound(ctx context.Context, leaseID
 	if record.State != store.DynamicSecretLeaseActive && record.State != store.DynamicSecretLeaseRevoked {
 		return dynsecret.Lease{}, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)
 	}
+	if record.TenantEpoch != tenantEpoch {
+		return dynsecret.Lease{}, store.ErrDynamicSecretTenantEpochMismatch
+	}
 	response, err := json.Marshal(dynamicSecretOperationResponseFromLease(dynamicLeaseFromStore(record), dynsecret.LeaseRevoked, record.ExpiresAt))
 	if err != nil {
 		return dynsecret.Lease{}, err
 	}
 	requested := projections.DynamicSecretOperationRequested{
-		OperationID: operationID, IdempotencyKey: idempotencyKey, RequestBinding: requestBinding,
+		TenantEpoch: tenantEpoch, OperationID: operationID, IdempotencyKey: idempotencyKey, RequestBinding: requestBinding,
 		Action: "revoke", LeaseID: leaseID, Response: response,
 	}
-	if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, "operation-requested", operationID), projections.EventDynamicSecretOperationRequested, requested); err != nil {
+	if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, tenantEpoch, "operation-requested", operationID), projections.EventDynamicSecretOperationRequested, requested); err != nil {
 		if errors.Is(err, store.ErrIdempotencyConflict) {
 			return dynsecret.Lease{}, dynamicSecretIdempotencyConflict()
 		}
@@ -419,7 +457,7 @@ func (l *durableDynamicSecretLifecycle) RevokeBound(ctx context.Context, leaseID
 	if err != nil {
 		return dynsecret.Lease{}, err
 	}
-	if !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "revoke", leaseID) {
+	if op.TenantEpoch != tenantEpoch || !dynamicSecretOperationMatches(op, operationID, idempotencyKey, requestBinding, "revoke", leaseID) {
 		return dynsecret.Lease{}, dynamicSecretIdempotencyConflict()
 	}
 	return l.resumeRevocation(ctx, op)
@@ -443,9 +481,13 @@ func (l *durableDynamicSecretLifecycle) resumeRevocation(ctx context.Context, op
 	if err != nil {
 		return dynsecret.Lease{}, leaseStoreError(err, op.LeaseID)
 	}
+	if record.TenantEpoch != op.TenantEpoch {
+		return dynsecret.Lease{}, store.ErrDynamicSecretTenantEpochMismatch
+	}
 	switch record.State {
 	case store.DynamicSecretLeaseActive:
-		if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, "lease-revocation-requested", op.OperationID), projections.EventDynamicSecretLeaseRevocationRequested, projections.DynamicSecretLeaseRevocationRequested{
+		if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "lease-revocation-requested", op.OperationID), projections.EventDynamicSecretLeaseRevocationRequested, projections.DynamicSecretLeaseRevocationRequested{
+			TenantEpoch: op.TenantEpoch, OperationID: op.OperationID,
 			ID: record.ID, Provider: record.Provider, BackendRef: record.BackendRef,
 		}); err != nil {
 			return dynsecret.Lease{}, err
@@ -494,20 +536,99 @@ func (l *durableDynamicSecretLifecycle) ExpireDue(ctx context.Context, now time.
 // Revocation delivery is owned by the process-wide PostgreSQL outbox worker.
 func (l *durableDynamicSecretLifecycle) RunRevocations(context.Context) (int, error) { return 0, nil }
 
-func (l *durableDynamicSecretLifecycle) appendAndProject(ctx context.Context, eventType string, payload any) error {
-	return l.appendAndProjectID(ctx, "", eventType, payload)
+// appendAndProjectIssueRequest recovers the canonical timing window for an issue
+// command. ExpiresAt is derived from the request clock, so a retry after an
+// append/projection crash cannot rebuild byte-identical JSON. The retained event
+// is accepted only when its full envelope, authenticated command fields, and both
+// requested/provider TTL relationships are exact.
+func (l *durableDynamicSecretLifecycle) appendAndProjectIssueRequest(ctx context.Context, eventID string, pending projections.DynamicSecretLeasePending, requestedAt time.Time, requestedTTL, maximumTTL time.Duration) error {
+	data, err := json.Marshal(pending)
+	if err != nil {
+		return err
+	}
+	candidate := events.Event{
+		ID: eventID, Type: projections.EventDynamicSecretLeasePending, TenantID: l.tenantID,
+		Time:          requestedAt.UTC().Truncate(time.Microsecond),
+		SchemaVersion: projections.DynamicSecretEventSchemaVersion, Data: data,
+	}
+	if actor, ok := events.ActorFromContext(ctx); ok {
+		candidate.Actor = &actor
+	}
+	canonical, found, err := l.log.EventByID(ctx, eventID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		canonical, err = l.log.Append(ctx, candidate)
+		if err != nil {
+			return err
+		}
+	}
+	if canonical.ID != candidate.ID || canonical.Type != candidate.Type ||
+		canonical.TenantID != candidate.TenantID || canonical.SchemaVersion != candidate.SchemaVersion ||
+		canonical.Time.IsZero() || !reflect.DeepEqual(canonical.Actor, candidate.Actor) {
+		return fmt.Errorf("%w: canonical dynamic-secret issue event envelope differs", store.ErrIdempotencyConflict)
+	}
+	var retained projections.DynamicSecretLeasePending
+	if err := json.Unmarshal(canonical.Data, &retained); err != nil {
+		return fmt.Errorf("%w: canonical dynamic-secret issue payload is invalid", store.ErrIdempotencyConflict)
+	}
+	if retained.TenantEpoch != pending.TenantEpoch || retained.ID != pending.ID ||
+		canonical.ID != dynamicSecretEventID(l.tenantID, pending.TenantEpoch, "issue-requested", pending.ID) ||
+		retained.IdempotencyKey != pending.IdempotencyKey ||
+		retained.RequestBinding != pending.RequestBinding || retained.Provider != pending.Provider ||
+		retained.Role != pending.Role ||
+		!retained.ExpiresAt.Equal(canonical.Time.Add(requestedTTL).Truncate(time.Microsecond)) ||
+		!retained.HardExpiresAt.Equal(canonical.Time.Add(maximumTTL).Truncate(time.Microsecond)) {
+		return fmt.Errorf("%w: canonical dynamic-secret issue command differs", store.ErrIdempotencyConflict)
+	}
+	if l.afterCanonicalAppend != nil {
+		if err := l.afterCanonicalAppend(canonical); err != nil {
+			return err
+		}
+	}
+	return projections.New(l.store).Apply(ctx, canonical)
 }
 
 func (l *durableDynamicSecretLifecycle) appendAndProjectID(ctx context.Context, eventID, eventType string, payload any) error {
+	if eventID == "" {
+		return errors.New("server: dynamic-secret event identity is empty")
+	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	event, err := l.log.Append(ctx, events.Event{ID: eventID, Type: eventType, TenantID: l.tenantID, Data: data})
+	candidate := events.Event{
+		ID: eventID, Type: eventType, TenantID: l.tenantID,
+		SchemaVersion: dynamicSecretEventSchemaVersion(eventType), Data: data,
+	}
+	if actor, ok := events.ActorFromContext(ctx); ok {
+		candidate.Actor = &actor
+	}
+	canonical := events.Event{}
+	found := false
+	canonical, found, err = l.log.EventByID(ctx, eventID)
 	if err != nil {
 		return err
 	}
-	return projections.New(l.store).Apply(ctx, event)
+	if !found {
+		canonical, err = l.log.Append(ctx, candidate)
+		if err != nil {
+			return err
+		}
+	}
+	if canonical.ID != candidate.ID || canonical.Type != candidate.Type ||
+		canonical.TenantID != candidate.TenantID || canonical.SchemaVersion != candidate.SchemaVersion ||
+		canonical.Time.IsZero() || !bytes.Equal(canonical.Data, candidate.Data) ||
+		!reflect.DeepEqual(canonical.Actor, candidate.Actor) {
+		return fmt.Errorf("%w: canonical dynamic-secret event envelope differs", store.ErrIdempotencyConflict)
+	}
+	if l.afterCanonicalAppend != nil {
+		if err := l.afterCanonicalAppend(canonical); err != nil {
+			return err
+		}
+	}
+	return projections.New(l.store).Apply(ctx, canonical)
 }
 
 type dynamicSecretOperationResponse struct {
@@ -545,8 +666,12 @@ func dynamicSecretOperationID(tenantID, idempotencyKey string) string {
 	return "dynsecret-op-" + uuid.NewSHA1(dynamicSecretOperationNamespace, []byte(tenantID+"\x00"+idempotencyKey)).String()
 }
 
-func dynamicSecretEventID(tenantID, purpose, operationID string) string {
-	return "dynsecret-event-" + uuid.NewSHA1(dynamicSecretEventNamespace, []byte(tenantID+"\x00"+purpose+"\x00"+operationID)).String()
+func dynamicSecretEventID(tenantID, tenantEpoch, purpose, operationID string) string {
+	return store.DynamicSecretEventID(tenantID, tenantEpoch, purpose, operationID)
+}
+
+func dynamicSecretEventSchemaVersion(eventType string) int {
+	return projections.DynamicSecretEventSchemaVersion
 }
 
 func dynamicSecretOperationMatches(op store.DynamicSecretOperation, operationID, idempotencyKey, requestBinding, action, leaseID string) bool {
@@ -560,8 +685,8 @@ func dynamicSecretIdempotencyConflict() error {
 }
 
 func (l *durableDynamicSecretLifecycle) completeDynamicSecretOperation(ctx context.Context, op store.DynamicSecretOperation) error {
-	return l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, "operation-completed", op.OperationID), projections.EventDynamicSecretOperationCompleted, projections.DynamicSecretOperationCompleted{
-		OperationID: op.OperationID, RequestBinding: op.RequestBinding,
+	return l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "operation-completed", op.OperationID), projections.EventDynamicSecretOperationCompleted, projections.DynamicSecretOperationCompleted{
+		TenantEpoch: op.TenantEpoch, OperationID: op.OperationID, RequestBinding: op.RequestBinding,
 		Action: op.Action, LeaseID: op.LeaseID,
 	})
 }

@@ -12,9 +12,12 @@ package docs
 // Two locks:
 //
 //   - TestEEPatentMarkingClaimsOnlyPendingStatus scans every TRACKED prose file
-//     under ee/ and fails if any of them asserts a granted patent, then requires
-//     the two PCAS marking sites (ee/README.md, ee/succession/doc.go) to carry the
-//     pending wording, the filing that backs it, and the owning entity.
+//     present in the candidate tree under ee/ and fails if any of them asserts a
+//     granted patent, then requires the two PCAS marking sites (ee/README.md,
+//     ee/succession/doc.go) to carry the pending wording, the filing that backs
+//     it, and the owning entity. Index-tracked files deleted by the candidate are
+//     skipped because they cannot ship and disappear from git's tracked set when
+//     that deletion is committed.
 //   - TestPatentStatusIsPendingNotGranted holds the same line for the two public
 //     license-facing documents outside ee/ (README.md, ee/LICENSE) and — when a
 //     maintainer checkout sits beside the out-of-tree filings directory — verifies
@@ -132,8 +135,14 @@ func TestEEPatentMarkingClaimsOnlyPendingStatus(t *testing.T) {
 		if rel == "" || !isPatentMarkingFile(rel) {
 			continue
 		}
+		path := filepath.FromSlash("../" + rel)
+		if _, statErr := os.Stat(path); errors.Is(statErr, os.ErrNotExist) {
+			continue
+		} else if statErr != nil {
+			t.Fatalf("LEGAL-001: stat tracked prose file %s: %v", rel, statErr)
+		}
 		scanned++
-		body := read(t, filepath.FromSlash("../"+rel))
+		body := read(t, path)
 		for _, at := range unqualifiedPatentedOffsets(body) {
 			t.Errorf("LEGAL-001: %s marks an ee/ feature as already patented, but certctl LLC holds provisional applications only and nothing has issued — use the pending wording: ...%s...", rel, excerpt(body, at))
 		}

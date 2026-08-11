@@ -1620,6 +1620,11 @@ type Secrets struct {
 	// database floor after draining legacy rows. It is never inferred from one
 	// process seeing zero legacy rows.
 	IdempotencyResultFleetReady bool `json:"idempotency_result_fleet_ready,omitempty"`
+	// SecretRotationHistoryFleetReady is the operator assertion that every old
+	// process capable of reading, exporting, or writing schema-v1 scheduler runs
+	// has been stopped. Startup may then replace unsafe retained error bytes with
+	// a signed generation rewrite. It is never inferred from one replica's scan.
+	SecretRotationHistoryFleetReady bool `json:"secret_rotation_history_fleet_ready,omitempty"`
 	// EnableAPI turns on the served secrets/identity surface (GAP-006): the secret
 	// store (CRUD + rotation), one-time secret sharing, the dynamic PKI secret, and
 	// machine login under /api/v1/secrets/*. OFF by default (fail closed): an upgrade
@@ -2169,6 +2174,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
 	setBool(getenv, "TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY", &c.Secrets.IdempotencyResultFleetReady)
+	setBool(getenv, "TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY", &c.Secrets.SecretRotationHistoryFleetReady)
 	localWrapperID := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID")
 	localWrapperFile := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE")
 	if localWrapperID != "" || localWrapperFile != "" {

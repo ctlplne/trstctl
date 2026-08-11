@@ -129,7 +129,9 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 		return nil, fmt.Errorf("bootstrap: audit signing key: %w", err)
 	}
 	defer signerRuntime.Close()
-	log, err := openHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey)
+	log, err := openSanitizedHistoryAwareEventLog(
+		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: open event log: %w", err)
 	}

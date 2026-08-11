@@ -29,11 +29,13 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 )
 
 const (
@@ -244,6 +246,40 @@ func WriteLogThrough(ctx context.Context, log *events.Log, w io.Writer, cut uint
 
 // WriteLogWithKeyThrough is WriteLogThrough with optional HMAC integrity.
 func WriteLogWithKeyThrough(ctx context.Context, log *events.Log, w io.Writer, key []byte, cut uint64) (int, error) {
+	if log == nil {
+		return 0, errors.New("backup: event log is required")
+	}
+	var records int
+	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		// Inspect the complete pinned cut before emitting even the header. A writer
+		// cannot retract bytes, so detecting the unsafe record while streaming would
+		// already have created a partial export artifact.
+		if err := log.ExportBackupHistoryThrough(readCtx, cut, func(history events.BackupHistoryRecord) error {
+			if history.IsGap() {
+				return nil
+			}
+			version := history.Event.SchemaVersion
+			if version == 0 {
+				version = schedulerhistory.LegacySchemaVersion
+			}
+			unsafe, inspectErr := schedulerhistory.RequiresSanitation(
+				history.Event.Type, version, history.Event.Data,
+			)
+			if inspectErr != nil || unsafe {
+				return schedulerhistory.ErrSanitationRequired
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		var err error
+		records, err = writeSanitizedLogWithKeyThrough(readCtx, log, w, key, cut)
+		return err
+	})
+	return records, err
+}
+
+func writeSanitizedLogWithKeyThrough(ctx context.Context, log *events.Log, w io.Writer, key []byte, cut uint64) (int, error) {
 	bw := bufio.NewWriter(w)
 	// Tee every byte we write into a digest so the trailer covers the exact stream.
 	dig := newDigest(key)
@@ -359,48 +395,53 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 	if err := validateVerifiedStream(h, tr, spool.records, spool.entries); err != nil {
 		return 0, err
 	}
-	if err := spool.rewind(); err != nil {
-		return 0, err
-	}
 
 	if h.HistoryLayout == exactHistoryLayout {
-		n, err := restoreExactHistory(ctx, log, h.EventCutSequence, tr.SHA256, spool)
+		n, err := restoreExactHistory(
+			ctx, log, h.EventCutSequence, tr.SHA256, key, spool,
+		)
 		if errors.Is(err, events.ErrBackupHistoryPrefixMismatch) {
 			return n, errors.Join(ErrRestoreTargetNotEmpty, err)
 		}
 		return n, err
 	}
 
-	// A legacy backup can be restored safely only after validateVerifiedStream
-	// proved it was contiguous from sequence one through its cut. Append therefore
-	// recreates the same sequence and canonical message identity.
-	pristine, err := log.BackupHistoryPristine(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("backup: inspect restore target history: %w", err)
+	// A legacy artifact has already passed checksum/HMAC and contiguous 1..N
+	// validation. Convert it to the existing exact restore source instead of
+	// exposing a second append API that could bypass the live schema floor.
+	n, err := restoreVerifiedBackupHistory(
+		ctx, log, h.EventCutSequence, tr.SHA256, key,
+		func(yield func(events.BackupHistoryRecord) error) error {
+			if err := spool.rewind(); err != nil {
+				return err
+			}
+			sc := bufio.NewScanner(bufio.NewReader(spool.file))
+			sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+			sequence := uint64(0)
+			for sc.Scan() {
+				sequence++
+				var rec record
+				if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+					return fmt.Errorf("backup: replay spooled record %d: %w", sequence, err)
+				}
+				history, err := events.LegacyBackupHistoryRecord(ctx, sequence, events.Event{
+					ID: rec.ID, Type: rec.Type, TenantID: rec.TenantID,
+					SchemaVersion: rec.SchemaVersion, Time: rec.Time,
+					Data: []byte(rec.Data), Actor: rec.Actor,
+				})
+				if err != nil {
+					return fmt.Errorf("backup: prepare legacy record %d: %w", sequence, err)
+				}
+				if err := yield(history); err != nil {
+					return err
+				}
+			}
+			return sc.Err()
+		})
+	if errors.Is(err, events.ErrBackupHistoryPrefixMismatch) || errors.Is(err, events.ErrBackupHistoryNotPristine) {
+		return n, errors.Join(ErrRestoreTargetNotEmpty, err)
 	}
-	if !pristine {
-		return 0, ErrRestoreTargetNotEmpty
-	}
-	n := 0
-	sc := bufio.NewScanner(bufio.NewReader(spool.file))
-	sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
-	for sc.Scan() {
-		var rec record
-		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
-			return n, fmt.Errorf("backup: replay spooled record %d: %w", n+1, err)
-		}
-		if _, err := log.Append(ctx, events.Event{
-			ID: rec.ID, Type: rec.Type, TenantID: rec.TenantID, SchemaVersion: rec.SchemaVersion, Time: rec.Time,
-			Data: []byte(rec.Data), Actor: rec.Actor,
-		}); err != nil {
-			return n, fmt.Errorf("backup: append record %d: %w", n+1, err)
-		}
-		n++
-	}
-	if err := sc.Err(); err != nil {
-		return n, fmt.Errorf("backup: replay spooled stream: %w", err)
-	}
-	return n, nil
+	return n, err
 }
 
 func restoreExactHistory(
@@ -408,34 +449,41 @@ func restoreExactHistory(
 	log *events.Log,
 	cut uint64,
 	artifactDigest string,
+	key []byte,
 	spool *restoreSpool,
 ) (int, error) {
-	n, err := log.RestoreBackupHistory(ctx, cut, artifactDigest, func(yield func(events.BackupHistoryRecord) error) error {
-		sc := bufio.NewScanner(bufio.NewReader(spool.file))
-		sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
-		entry := 0
-		for sc.Scan() {
-			entry++
-			var rec record
-			if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
-				return fmt.Errorf("backup: replay spooled entry %d: %w", entry, err)
-			}
-			history := events.BackupHistoryRecord{
-				Sequence:   rec.Sequence,
-				GapThrough: rec.GapThrough,
-				Subject:    rec.Subject,
-				MessageID:  rec.MessageID,
-				Stored:     append([]byte(nil), rec.Stored...),
-			}
-			if err := yield(history); err != nil {
+	n, err := restoreVerifiedBackupHistory(
+		ctx, log, cut, artifactDigest, key,
+		func(yield func(events.BackupHistoryRecord) error) error {
+			if err := spool.rewind(); err != nil {
 				return err
 			}
-		}
-		if err := sc.Err(); err != nil {
-			return fmt.Errorf("backup: replay spooled exact history: %w", err)
-		}
-		return nil
-	})
+			sc := bufio.NewScanner(bufio.NewReader(spool.file))
+			sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+			entry := 0
+			for sc.Scan() {
+				entry++
+				var rec record
+				if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+					return fmt.Errorf("backup: replay spooled entry %d: %w", entry, err)
+				}
+				history := events.BackupHistoryRecord{
+					Sequence:   rec.Sequence,
+					GapThrough: rec.GapThrough,
+					Subject:    rec.Subject,
+					MessageID:  rec.MessageID,
+					Stored:     append([]byte(nil), rec.Stored...),
+				}
+				if err := yield(history); err != nil {
+					return err
+				}
+			}
+			if err := sc.Err(); err != nil {
+				return fmt.Errorf("backup: replay spooled exact history: %w", err)
+			}
+			return nil
+		},
+	)
 	if err != nil {
 		return n, fmt.Errorf("backup: restore exact event history: %w", err)
 	}
@@ -494,6 +542,326 @@ func VerifyLogMatchesWithKey(ctx context.Context, log *events.Log, r io.Reader, 
 		return n, fmt.Errorf("backup: resume mismatch: matched %d events but trailer claims %d", n, tr.Records)
 	}
 	return n, nil
+}
+
+func restoreVerifiedBackupHistory(
+	ctx context.Context,
+	log *events.Log,
+	cut uint64,
+	artifactDigest string,
+	key []byte,
+	source events.BackupHistorySource,
+) (int, error) {
+	if len(key) == 0 {
+		return log.RestoreBackupHistory(ctx, cut, artifactDigest, source)
+	}
+	historyDigest, err := events.BackupHistoryDigest(ctx, cut, source)
+	if err != nil {
+		return 0, fmt.Errorf("backup: digest verified restore history: %w", err)
+	}
+	authorization, err := crypto.BackupRestoreAuthorization(
+		key,
+		crypto.BackupRestoreIntent{
+			EventCutSequence: cut,
+			ArtifactSHA256:   artifactDigest,
+			HistorySHA256:    historyDigest,
+		},
+	)
+	if err != nil {
+		return 0, fmt.Errorf("backup: authorize verified artifact restore: %w", err)
+	}
+	defer authorization.Destroy()
+	return log.RestoreAuthorizedBackupHistory(
+		ctx, cut, artifactDigest, authorization, source,
+	)
+}
+
+// SanitationReceiptVerifier cryptographically opens one history-continuity
+// receipt and returns its signed report. The backup package owns exact artifact
+// comparison; the caller owns the deployment audit key and signature policy.
+type SanitationReceiptVerifier func(context.Context, events.Event) (events.TenantDataRewriteReport, error)
+
+// VerifyLogMatchesSanitizedSchedulerHistoryWithKey is the only permitted
+// non-exact full-restore resume proof. It first HMAC-verifies the original
+// artifact, then permits precisely the deterministic AUD-116 error-token rewrite
+// below its cut and one profiled, signed continuity receipt per affected tenant.
+// VerifyLogMatchesWithKey remains byte-exact and is deliberately not weakened.
+func VerifyLogMatchesSanitizedSchedulerHistoryWithKey(
+	ctx context.Context,
+	log *events.Log,
+	r io.Reader,
+	key []byte,
+	verifyReceipt SanitationReceiptVerifier,
+) (int, error) {
+	if len(key) == 0 {
+		return 0, errors.New("backup: scheduler sanitation resume requires an HMAC integrity key")
+	}
+	if verifyReceipt == nil {
+		return 0, errors.New("backup: scheduler sanitation resume requires a continuity receipt verifier")
+	}
+	h, spool, tr, err := readAndVerify(r, key)
+	if err != nil {
+		return 0, err
+	}
+	defer spool.cleanup()
+	if err := validateVerifiedStream(h, tr, spool.records, spool.entries); err != nil {
+		return 0, err
+	}
+	if h.HistoryLayout != exactHistoryLayout {
+		return 0, errors.New("backup: scheduler sanitation resume requires exact-sequence history")
+	}
+	var records int
+	err = log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		if err := spool.rewind(); err != nil {
+			return err
+		}
+		head, err := log.LastSequence(readCtx)
+		if err != nil {
+			return fmt.Errorf("backup: scheduler sanitation resume read target head: %w", err)
+		}
+		if head <= h.EventCutSequence {
+			return errors.New("backup: scheduler sanitation resume target is not a signed descendant")
+		}
+
+		scanner := bufio.NewScanner(bufio.NewReader(spool.file))
+		scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+		affected := make(map[string]int)
+		var affectedOrder []string
+		var receipts []events.BackupHistoryRecord
+		var reports []events.TenantDataRewriteReport
+		receiptIndex := 0
+		entries := 0
+		err = log.ExportBackupHistoryThrough(readCtx, head, func(history events.BackupHistoryRecord) error {
+			if history.Sequence <= h.EventCutSequence {
+				if !scanner.Scan() {
+					return errors.New("backup: scheduler sanitation resume target has more source entries than artifact")
+				}
+				entries++
+				var rec record
+				if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+					return fmt.Errorf("backup: scheduler sanitation resume decode entry %d: %w", entries, err)
+				}
+				if history.IsGap() {
+					if !historyMatchesRecord(history, rec) {
+						return fmt.Errorf("backup: scheduler sanitation resume gap mismatch at entry %d", entries)
+					}
+					return nil
+				}
+				records++
+				version := rec.SchemaVersion
+				if version == 0 {
+					version = schedulerhistory.LegacySchemaVersion
+				}
+				if rec.Type != schedulerhistory.EventType || version != schedulerhistory.LegacySchemaVersion {
+					if !historyMatchesRecord(history, rec) {
+						return fmt.Errorf("backup: scheduler sanitation resume changed unrelated entry %d", entries)
+					}
+					return nil
+				}
+				expectedData, changed, rewriteErr := schedulerhistory.RewriteLegacyRun(rec.Data)
+				if rewriteErr != nil {
+					return schedulerhistory.ErrSanitationRequired
+				}
+				if !changed {
+					if !historyMatchesRecord(history, rec) {
+						return fmt.Errorf("backup: scheduler sanitation resume changed canonical entry %d", entries)
+					}
+					return nil
+				}
+				affected[rec.TenantID]++
+				if !sanitizedHistoryMatchesRecord(history, rec, expectedData) {
+					return fmt.Errorf("backup: scheduler sanitation resume changed envelope semantics at entry %d", entries)
+				}
+				return nil
+			}
+
+			if affectedOrder == nil {
+				if scanner.Scan() {
+					return errors.New("backup: scheduler sanitation resume artifact has entries past its declared cut")
+				}
+				if err := scanner.Err(); err != nil {
+					return fmt.Errorf("backup: scheduler sanitation resume scan artifact: %w", err)
+				}
+				for tenantID := range affected {
+					affectedOrder = append(affectedOrder, tenantID)
+				}
+				sort.Strings(affectedOrder)
+			}
+			if history.IsGap() || receiptIndex >= len(affectedOrder) {
+				return errors.New("backup: scheduler sanitation resume has an unrelated post-cut entry")
+			}
+			report, verifyErr := verifyReceipt(readCtx, history.Event)
+			if verifyErr != nil {
+				return errors.New("backup: scheduler sanitation resume continuity receipt did not verify")
+			}
+			expectedTenant := affectedOrder[receiptIndex]
+			if report.Profile != schedulerhistory.RewriteProfile ||
+				history.Event.TenantID != expectedTenant || report.TenantID != expectedTenant ||
+				report.ChangedEvents != affected[expectedTenant] ||
+				report.ReceiptSequence != history.Sequence ||
+				report.SourceCutSequence+1 != report.ReceiptSequence ||
+				report.SourceCutSequence != h.EventCutSequence+uint64(receiptIndex) {
+				return errors.New("backup: scheduler sanitation resume continuity receipt policy mismatch")
+			}
+			receipts = append(receipts, cloneBackupHistoryRecord(history))
+			reports = append(reports, report)
+			receiptIndex++
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if scanner.Scan() {
+			return errors.New("backup: scheduler sanitation resume artifact has unmatched history entries")
+		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("backup: scheduler sanitation resume scan artifact: %w", err)
+		}
+		if records != tr.Records || entries != tr.Entries || len(affected) == 0 ||
+			receiptIndex != len(affectedOrder) {
+			return errors.New("backup: scheduler sanitation resume cardinality mismatch")
+		}
+
+		activeStream, activeGeneration, err := log.ActiveHistoryIdentity(readCtx)
+		if err != nil {
+			return fmt.Errorf("backup: scheduler sanitation resume read active generation: %w", err)
+		}
+		if err := events.ValidateTenantDataRewriteLineage(reports, activeStream, activeGeneration); err != nil {
+			return errors.New("backup: scheduler sanitation resume signed generation lineage mismatch")
+		}
+		affectedIndex := make(map[string]int, len(affectedOrder))
+		for index, tenantID := range affectedOrder {
+			affectedIndex[tenantID] = index
+		}
+		for index, report := range reports {
+			pairs := schedulerHistoryRewriteProofPairs(
+				spool, h.EventCutSequence, affectedIndex, index, receipts,
+			)
+			if err := events.VerifyTenantDataRewriteDigestProof(report, pairs); err != nil {
+				return errors.New("backup: scheduler sanitation resume signed content proof mismatch")
+			}
+		}
+		return nil
+	})
+	return records, err
+}
+
+func sanitizedHistoryMatchesRecord(
+	history events.BackupHistoryRecord,
+	rec record,
+	expectedData []byte,
+) bool {
+	expected, err := backupHistoryRecordForProof(rec, expectedData)
+	if err != nil || history.IsGap() || expected.IsGap() {
+		return false
+	}
+	return history.Sequence == expected.Sequence && history.Subject == expected.Subject &&
+		history.MessageID == expected.MessageID && bytes.Equal(history.Stored, expected.Stored)
+}
+
+func schedulerHistoryRewriteProofPairs(
+	spool *restoreSpool,
+	artifactCut uint64,
+	affectedIndex map[string]int,
+	stage int,
+	receipts []events.BackupHistoryRecord,
+) events.TenantDataRewriteHistoryPairs {
+	return func(yield func(source, target events.BackupHistoryRecord) error) error {
+		if yield == nil || spool == nil || stage < 0 || stage > len(receipts) {
+			return errors.New("backup: scheduler sanitation proof source is incomplete")
+		}
+		if err := spool.rewind(); err != nil {
+			return err
+		}
+		scanner := bufio.NewScanner(bufio.NewReader(spool.file))
+		scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+		for scanner.Scan() {
+			var rec record
+			if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+				return errors.New("backup: scheduler sanitation proof artifact record is malformed")
+			}
+			if rec.Sequence > artifactCut || (rec.Kind == "gap" && rec.GapThrough > artifactCut) {
+				return errors.New("backup: scheduler sanitation proof artifact exceeds its cut")
+			}
+			index, affected := affectedIndex[rec.TenantID]
+			version := rec.SchemaVersion
+			if version == 0 {
+				version = events.DefaultSchemaVersion
+			}
+			profiled := affected && rec.Type == schedulerhistory.EventType &&
+				version == schedulerhistory.LegacySchemaVersion
+			sourceData := rec.Data
+			targetData := rec.Data
+			if profiled && index < stage {
+				var err error
+				sourceData, _, err = schedulerhistory.RewriteLegacyRun(rec.Data)
+				if err != nil {
+					return schedulerhistory.ErrSanitationRequired
+				}
+			}
+			if profiled && index <= stage {
+				var err error
+				targetData, _, err = schedulerhistory.RewriteLegacyRun(rec.Data)
+				if err != nil {
+					return schedulerhistory.ErrSanitationRequired
+				}
+			}
+			source, err := backupHistoryRecordForProof(rec, sourceData)
+			if err != nil {
+				return err
+			}
+			target, err := backupHistoryRecordForProof(rec, targetData)
+			if err != nil {
+				return err
+			}
+			if err := yield(source, target); err != nil {
+				return err
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("backup: scheduler sanitation proof scan artifact: %w", err)
+		}
+		for index := 0; index < stage; index++ {
+			receipt := receipts[index]
+			if err := yield(receipt, receipt); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func backupHistoryRecordForProof(rec record, data []byte) (events.BackupHistoryRecord, error) {
+	if rec.Kind == "gap" {
+		return events.BackupHistoryRecord{Sequence: rec.Sequence, GapThrough: rec.GapThrough}, nil
+	}
+	version := rec.SchemaVersion
+	if version == 0 {
+		version = events.DefaultSchemaVersion
+	}
+	stored := rec.Stored
+	if !bytes.Equal(data, rec.Data) {
+		var err error
+		stored, err = events.RewriteStoredEnvelopeDataExact(rec.Stored, rec.Data, data)
+		if err != nil {
+			return events.BackupHistoryRecord{}, fmt.Errorf("backup: rewrite scheduler sanitation proof envelope: %w", err)
+		}
+	}
+	return events.BackupHistoryRecord{
+		Sequence: rec.Sequence, Subject: rec.Subject, MessageID: rec.MessageID,
+		Stored: append([]byte(nil), stored...),
+		Event: events.Event{
+			Sequence: rec.Sequence, ID: rec.ID, Type: rec.Type, TenantID: rec.TenantID,
+			SchemaVersion: version, Time: rec.Time, Data: append([]byte(nil), data...), Actor: rec.Actor,
+		},
+	}, nil
+}
+
+func cloneBackupHistoryRecord(record events.BackupHistoryRecord) events.BackupHistoryRecord {
+	clone := record
+	clone.Stored = append([]byte(nil), record.Stored...)
+	clone.Event.Data = append([]byte(nil), record.Event.Data...)
+	return clone
 }
 
 func verifyExactHistoryMatches(

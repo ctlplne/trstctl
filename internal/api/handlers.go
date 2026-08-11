@@ -428,57 +428,29 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req transitionRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		if err := canonicalizeTransitionRequest(&req); err != nil {
-			return 0, nil, err
-		}
-		// EXC-WIRE-03: enforce the served policy / RA-separation / dual-control gate
-		// BEFORE the orchestrator records the transition and enqueues the mint/revoke
-		// outbox effect. This is the seam where the authenticated principal is in
-		// context, which the RA scope split (certs:issue) and the distinct-approver
-		// check require. The gate is fail-closed; the zero gate is a no-op. Doing this
-		// inside the idempotency closure means a denial is the recorded result for the
-		// key (a replay re-denies, never silently mints — AN-5).
-		var resourceAttrs map[string]string
-		if a.gate.ABAC != nil {
-			var err error
-			resourceAttrs, err = a.identityABACResourceAttrs(ctx, tenantID, id)
-			if err != nil {
-				return 0, nil, err
-			}
-			resourceAttrs["transition.to"] = req.To
-		}
+	var req transitionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if err := canonicalizeTransitionRequest(&req); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	binding, err := identityTransitionRequestBinding(principal.Subject, id, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		state := orchestrator.State(req.To)
-		gate := a.gate
-		if state == orchestrator.StateIssued && a.orch != nil {
-			profileReq, err := a.orch.ProfileApprovalRequirement(ctx, tenantID, id)
-			if err != nil {
-				return 0, nil, err
-			}
-			gate = gateWithProfileApproval(gate, profileReq)
-		}
-		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if err := gate.check(ctx, principal, tenantID, id, state, resourceAttrs); err != nil {
-			var ge *gateError
-			if errors.As(err, &ge) {
-				return 0, nil, errStatus(ge.status, ge.detail)
-			}
+		identity, targetVersion, err := a.store.IdentityApprovalTarget(ctx, tenantID, id)
+		if err != nil {
 			return 0, nil, err
 		}
-		// Per-feature telemetry (COVER-009): time the served lifecycle operation
-		// (issuance/revocation/deployment) and record a non-sensitive feature/action/
-		// outcome signal. The labels come from a closed catalog map, never tenant or
-		// credential data.
-		start := time.Now()
-		// CSR-first (B1): a caller-supplied request is carried to the issuance
-		// dispatcher, which signs it rather than minting a key. It is validated
-		// here so a malformed request is a 400 to the caller instead of an opaque
-		// failure later in the outbox worker.
 		csrPEM := strings.TrimSpace(req.SubjectCSRPEM)
+		idempotencyKeyDigest, subjectCSRDigest := identityTransitionAttemptDigests(idempotencyKey, csrPEM)
 		if csrPEM != "" {
 			if state != orchestrator.StateIssued {
 				return 0, nil, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued")
@@ -487,12 +459,57 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, errWithStatus(http.StatusBadRequest, err)
 			}
 		}
-		// L2: the quota gate, consulted BEFORE the transition is accepted so an
-		// over-cap tenant gets a structured 429 here rather than an opaque
-		// outbox failure later. Community builds install an allow-all checker,
-		// so this costs nothing where no cap can exist; a Provider deployment
-		// with a cap set refuses fast (AN-7's reject-at-the-edge, applied to
-		// capacity).
+		if _, ok := orchestrator.EventTypeFor(orchestrator.State(identity.Status), state); !ok {
+			if orchestrator.State(identity.Status) == state {
+				recovered, recoverErr := a.replayConsumedIdentityTransition(ctx, tenantID, id,
+					principal.Subject, state, req.Reason, idempotencyKey, csrPEM,
+					idempotencyKeyDigest, subjectCSRDigest)
+				if recoverErr != nil {
+					return 0, nil, approvalAPIError(recoverErr)
+				}
+				if recovered {
+					updated, err := a.store.GetIdentity(ctx, tenantID, id)
+					if err != nil {
+						return 0, nil, err
+					}
+					return http.StatusOK, toIdentityResponse(updated), nil
+				}
+			}
+			return 0, nil, &orchestrator.TransitionError{IdentityID: id, From: orchestrator.State(identity.Status), To: state}
+		}
+		gate := a.gate
+		var profileReq orchestrator.ProfileApprovalRequirement
+		if state == orchestrator.StateIssued && a.orch != nil {
+			profileReq, err = a.orch.ProfileApprovalRequirement(ctx, tenantID, id)
+			if err != nil {
+				return 0, nil, err
+			}
+			// An identity-level profile wins. Otherwise resolve the configured
+			// served default when it exists, so a display label cannot stand in
+			// for the revision that will actually govern signing.
+			if profileReq.ProfileName == "" && gate.Profile != "" {
+				configured, resolveErr := a.orch.ProfileApprovalRequirementByName(ctx, tenantID, gate.Profile)
+				if resolveErr != nil {
+					// A configured label without a stored revision is not approval
+					// evidence. Fail before EnsureOperationApprovalRequest so the
+					// queue cannot advertise authority the dispatcher must reject.
+					return 0, nil, resolveErr
+				}
+				profileReq = configured
+			}
+			gate = gateWithProfileApproval(gate, profileReq)
+		}
+		var issuanceBinding *store.OperationApprovalIssuanceBinding
+		if state == orchestrator.StateIssued {
+			issuanceBinding = profileReq.IssuanceBinding()
+		}
+		evidenceRefs, err := identityTransitionApprovalEvidence(idempotencyKeyDigest, subjectCSRDigest, gate.Profile, issuanceBinding)
+		if err != nil {
+			return 0, nil, err
+		}
+
+		// Validate every part of the operation before creating an approval request.
+		// An invalid transition/CSR/quota denial is not genuine work for a reviewer.
 		if state == orchestrator.StateIssued {
 			if err := usage.AllowCreate(ctx, tenantID, usage.MeterCertificatesStored); err != nil {
 				if errors.Is(err, usage.ErrQuotaExhausted) {
@@ -501,12 +518,48 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, err
 			}
 		}
-		terr := a.orch.TransitionWithSubjectCSR(ctx, tenantID, id, state, req.Reason, idempotencyKey, csrPEM)
+
+		var resourceAttrs map[string]string
+		if a.gate.ABAC != nil {
+			resourceAttrs, err = a.identityABACResourceAttrs(ctx, tenantID, id)
+			if err != nil {
+				return 0, nil, err
+			}
+			resourceAttrs["transition.to"] = req.To
+		}
+		authority, err := gate.checkWithApproval(ctx, principal, tenantID, id, state, resourceAttrs, &ApprovalIntent{
+			ResourceKind: "identity", ResourceID: id, ResourceName: identity.Name,
+			FromState: identity.Status, ToState: req.To, TargetVersion: targetVersion,
+			Reason: req.Reason, EvidenceRefs: evidenceRefs,
+		})
+		if err != nil {
+			var ge *gateError
+			if errors.As(err, &ge) {
+				return 0, nil, errStatus(ge.status, ge.detail)
+			}
+			return 0, nil, err
+		}
+		start := time.Now()
+		var terr error
+		if authority != nil {
+			terr = a.orch.TransitionWithSubjectCSRAndApproval(ctx, tenantID, id, state,
+				req.Reason, idempotencyKey, csrPEM, store.OperationApprovalUse{
+					RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
+					Requester: authority.Requester, ResourceKind: authority.ResourceKind,
+					ResourceID: authority.ResourceID, Action: authority.Action,
+					FromState: authority.FromState, ToState: authority.ToState,
+					TargetVersion: authority.TargetVersion, RequiredApprovals: authority.RequiredApprovals,
+					Reason: authority.Reason, EvidenceRefs: append([]string(nil), authority.EvidenceRefs...),
+					Issuance: authority.Issuance,
+				})
+		} else {
+			terr = a.orch.TransitionWithSubjectCSR(ctx, tenantID, id, state, req.Reason, idempotencyKey, csrPEM, issuanceBinding)
+		}
 		if feature, action, ok := transitionFeatureAction(state); ok {
 			a.observeFeature(feature, action, start, terr)
 		}
 		if terr != nil {
-			return 0, nil, terr
+			return 0, nil, approvalAPIError(terr)
 		}
 		updated, err := a.store.GetIdentity(ctx, tenantID, id)
 		if err != nil {
@@ -514,6 +567,87 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusOK, toIdentityResponse(updated), nil
 	})
+}
+
+func identityTransitionAttemptDigests(idempotencyKey, csrPEM string) (idempotencyKeyDigest, subjectCSRDigest string) {
+	idempotencyKeyDigest = crypto.SHA256Hex([]byte(idempotencyKey))
+	if csrPEM != "" {
+		subjectCSRDigest = crypto.SHA256Hex([]byte(csrPEM))
+	}
+	return idempotencyKeyDigest, subjectCSRDigest
+}
+
+func identityTransitionApprovalEvidence(idempotencyKeyDigest, subjectCSRDigest, profile string, issuance *store.OperationApprovalIssuanceBinding) ([]string, error) {
+	// The approval is one attempt, not a standing permission for every later
+	// identical-looking transition. A retry with the same raw AN-5 key maps to the
+	// same immutable request; a fresh key has different evidence. Only non-secret
+	// digests and the public profile label are durable.
+	evidenceRefs := []string{"idempotency-key-sha256:" + idempotencyKeyDigest}
+	if issuance != nil {
+		bound, err := issuance.EvidenceRefs()
+		if err != nil {
+			return nil, err
+		}
+		evidenceRefs = append(evidenceRefs, bound...)
+	} else if profile != "" {
+		evidenceRefs = append(evidenceRefs, "profile:"+profile)
+	}
+	if subjectCSRDigest != "" {
+		evidenceRefs = append(evidenceRefs, "csr-sha256:"+subjectCSRDigest)
+	}
+	return evidenceRefs, nil
+}
+
+// replayConsumedIdentityTransition closes the receiver-commit/HTTP-result crash
+// gap. It finds only an already-consumed approval whose immutable requester/body/
+// evidence matches this exact attempt, then asks the orchestrator to validate the
+// deterministic consumed event ID. It never turns pending or generic consumed
+// authority into a fresh lifecycle mutation.
+func (a *API) replayConsumedIdentityTransition(
+	ctx context.Context,
+	tenantID, identityID, requester string,
+	to orchestrator.State,
+	reason, idempotencyKey, csrPEM string,
+	idempotencyKeyDigest, subjectCSRDigest string,
+) (bool, error) {
+	if a.orch == nil {
+		return false, nil
+	}
+	action, privileged, ok := privilegedActionFor(to)
+	if !ok || !privileged {
+		return false, nil
+	}
+	request, found, err := a.store.ConsumedOperationApprovalForAttempt(ctx, tenantID, store.OperationApprovalAttempt{
+		ResourceKind: "identity", ResourceID: identityID,
+		Action: string(action), Requester: requester, ToState: string(to),
+		Reason: reason, IdempotencyKeyDigest: idempotencyKeyDigest,
+		SubjectCSRDigest: subjectCSRDigest,
+	})
+	if err != nil || !found {
+		return false, err
+	}
+	approval, err := store.OperationApprovalUseFromRequest(request)
+	if err != nil {
+		return false, err
+	}
+	if err := a.orch.TransitionWithSubjectCSRAndApproval(ctx, tenantID, identityID, to,
+		reason, idempotencyKey, csrPEM, approval); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func identityTransitionRequestBinding(principal, identityID string, request transitionRequest) (string, error) {
+	raw, err := json.Marshal(struct {
+		Domain     string            `json:"domain"`
+		Principal  string            `json:"principal"`
+		IdentityID string            `json:"identity_id"`
+		Request    transitionRequest `json:"request"`
+	}{Domain: "trstctl.api.identity-transition.v2", Principal: principal, IdentityID: identityID, Request: request})
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(raw), nil
 }
 
 func (a *API) identityABACResourceAttrs(ctx context.Context, tenantID, id string) (map[string]string, error) {

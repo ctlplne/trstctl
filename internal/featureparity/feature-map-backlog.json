@@ -5681,7 +5681,7 @@
             "backend_status": "served approval-gated ephemeral/JIT issuance workflow: POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, blocks self-approval, mints a short-TTL signer-backed credential only after distinct approval, supports idempotent pending/issued replays, emits ephemeral.issued and certificate.recorded, and expires by TTL",
             "current_frontend_mapping": "operate: Workloads at /workloads serves dynamic and ephemeral credential issuance with provider role, TTL policy, lease metadata, renew/revoke controls, expiry state, and copy-once credential handling.",
             "target_gui_mapping": "Roadmap residual: dedicated issuance UI for raw proof collection, approval controls, requester, attestation evidence, issued credential class, lease expiry, and revoke-now action beyond the served REST/CLI workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedEphemeralJITIssuesAfterAttestationAndApproval plus OpenAPI/CLI parity for /api/v1/ephemeral and /api/v1/ephemeral/{request_id}/approvals; roadmap residual is the dedicated issuance UI that collects raw proof material and renders approval controls beyond the served Workloads disclosure.",
+            "acceptance_test": "Served GA acceptance is TestServedEphemeralJITIssuesAfterAttestationAndApproval plus OpenAPI/CLI parity for /api/v1/ephemeral and /api/v1/ephemeral/{id}/approvals, where {id} is the genuine approval_request_id and the body repeats it with the matching intent_digest; roadmap residual is the dedicated issuance UI that collects raw proof material and renders approval controls beyond the served Workloads disclosure.",
             "source_docs": [
                 "docs/features/workload-identity.md"
             ],
@@ -5757,7 +5757,7 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served GA acceptance is TestServedEphemeralJITIssuesAfterAttestationAndApproval plus OpenAPI/CLI parity for /api/v1/ephemeral and /api/v1/ephemeral/{request_id}/approvals; roadmap residual is the dedicated issuance UI that collects raw proof material and renders approval controls beyond the served Workloads disclosure.",
+                        "acceptance_test: Served GA acceptance is TestServedEphemeralJITIssuesAfterAttestationAndApproval plus OpenAPI/CLI parity for /api/v1/ephemeral and /api/v1/ephemeral/{id}/approvals, where {id} is the genuine approval_request_id and the body repeats it with the matching intent_digest; roadmap residual is the dedicated issuance UI that collects raw proof material and renders approval controls beyond the served Workloads disclosure.",
                         "TRACE-024 guard: TestTRACE024EphemeralCredentialRowSplitsServedGAFromRoadmapResidual keeps F25 in the served GA denominator only when the served approval-gated JIT workflow and explicit dedicated issuance UI roadmap residual are both present.",
                         "TestServedEphemeralJITIssuesAfterAttestationAndApproval drives the assembled HTTP API, idempotent pending/issued replays, outbox intent, approval, event emission, and TTL expiry.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -8712,6 +8712,9 @@
                 "docs/features/incident-and-jit.md"
             ],
             "source_backend": [
+                "/api/v1/approval-requests",
+                "/api/v1/approval-requests/{id}/approvals",
+                "/api/v1/approval-requests/{id}/denials",
                 "/api/v1/identities/{id}/approvals",
                 "/api/v1/ephemeral",
                 "/api/v1/ephemeral/{id}/approvals",
@@ -8731,6 +8734,9 @@
                 "listProfiles",
                 "listIdentities",
                 "createIdentity",
+                "listApprovalRequests",
+                "approveApprovalRequest",
+                "denyApprovalRequest",
                 "approveIdentityAction",
                 "transitionIdentity",
                 "issueEphemeralCredential",
@@ -8744,6 +8750,9 @@
                 "profiles list",
                 "identities list",
                 "identities create",
+                "approval-requests list",
+                "approval-requests approve",
+                "approval-requests deny",
                 "identities approve",
                 "identities approve issue",
                 "identities approve rotate",
@@ -8794,6 +8803,9 @@
                         "CLI command: profiles list",
                         "CLI command: identities list",
                         "CLI command: identities create",
+                        "CLI command: approval-requests list",
+                        "CLI command: approval-requests approve",
+                        "CLI command: approval-requests deny",
                         "CLI command: identities approve",
                         "CLI command: identities transition",
                         "CLI command: ephemeral issue",
@@ -8812,6 +8824,9 @@
                         "OpenAPI operationId: listProfiles",
                         "OpenAPI operationId: listIdentities",
                         "OpenAPI operationId: createIdentity",
+                        "OpenAPI operationId: listApprovalRequests",
+                        "OpenAPI operationId: approveApprovalRequest",
+                        "OpenAPI operationId: denyApprovalRequest",
                         "OpenAPI operationId: approveIdentityAction",
                         "OpenAPI operationId: transitionIdentity",
                         "OpenAPI operationId: issueEphemeralCredential",
@@ -8855,7 +8870,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listProfiles, listIdentities, createIdentity, approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession, listPAMSessions, getPAMSession",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listProfiles, listIdentities, createIdentity, listApprovalRequests, approveApprovalRequest, denyApprovalRequest, approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession, listPAMSessions, getPAMSession",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -8868,7 +8883,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession",
+                        "mutating served surface requires audit/event evidence: approveApprovalRequest, denyApprovalRequest, approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession",
                         "ephemeral JIT emits ephemeral.approval.requested/granted plus ephemeral.issued and certificate.recorded after distinct approval.",
                         "PAM-lite emits pam.session.started and pam.session.expired without recording one-time credential material.",
                         "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
@@ -9101,10 +9116,10 @@
             "phase": "P1",
             "priority": 32,
             "served_state": "conditional",
-            "backend_status": "conditional: served native-store rotation, rollback-safe static rotation API, connector-backed rotation with rollback through the secret-sync outbox, dynamic-lease replacement rotation with connector handoff, and event-projected scheduled zero-downtime dual-phase rotation",
-            "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; API/CLI expose rollback-safe static, connector-backed, dynamic-lease, and scheduled due-run rotation at /api/v1/secrets/rotations and /api/v1/secrets/rotation-schedules",
+            "backend_status": "conditional: served native-store rotation, worker-queued connector rotation, and connector-only schedules with durable exact due-edge commands, deterministic resume/reconcile, bounded scanning, cached truthful partial failure, verified terminal-command retention, and explicit deferral evidence; manual static/dynamic rotation and static/dynamic schedule creation fail closed before unsupported effects",
+            "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete plus worker-queued connector rotation; the console accepts only connector:<target> for provider rotation and schedules, omits unsupported TTL, rejects static and dynamic-lease providers, distinguishes queued from completed, lists each deferred schedule ID/reason/due time/error, and clears stale run/deferred evidence when a tick fails",
             "target_gui_mapping": "Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status.",
-            "acceptance_test": "Served tests cover native-store rotation, rollback-safe static rotation, connector-backed rotation rollback, and dynamic-lease replacement with connector handoff; UI hides backend-specific rotation controls until served.",
+            "acceptance_test": "Served tests cover native-store rotation; zero-effect fail-closed manual static and dynamic-lease rotation; worker-queued connector rotation; connector-only schedule creation; zero-effect disabling of inherited non-connector schedules; durable exact due-edge claim across overlap, crash, restart, and rebuild; version-2 due-tuple replay under decreasing producer clocks; rollback on a missed schedule CAS; monotonic reverse replay; bounded scanning past deferred rows; byte-identical same-key partial-503 replay with no child re-execution and new-key reconciliation; verified terminal-command retention; and truthful localized UI evidence that is cleared on failure.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
@@ -9113,13 +9128,14 @@
                 "/api/v1/secrets/rotations",
                 "/api/v1/secrets/rotation-schedules",
                 "/api/v1/secrets/rotation-schedules/run-due",
-                "/api/v1/secrets/leases",
                 "/api/v1/secrets/syncs",
                 "internal/rotation",
-                "internal/dynsecret",
                 "internal/secretsync"
             ],
-            "source_frontend": [],
+            "source_frontend": [
+                "web/src/pages/Secrets.tsx",
+                "web/src/pages/secrets/SecretsPageParts.tsx"
+            ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [
@@ -9142,7 +9158,7 @@
                 "served": {
                     "evidence": [
                         "served_state=conditional",
-                        "backend_status=conditional: served native-store rotation, rollback-safe static rotation API, connector-backed rotation with rollback through the secret-sync outbox, dynamic-lease replacement rotation with connector handoff, and event-projected scheduled zero-downtime dual-phase rotation"
+                        "backend_status=conditional: served native-store rotation, worker-queued connector rotation, and connector-only schedules with durable exact due-edge commands, deterministic resume/reconcile, bounded scanning, cached truthful partial failure, verified terminal-command retention, and explicit deferral evidence; manual static/dynamic rotation and static/dynamic schedule creation fail closed before unsupported effects"
                     ],
                     "commands": [
                         "make test"
@@ -9150,17 +9166,19 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; API/CLI expose rollback-safe static, connector-backed, dynamic-lease, and scheduled due-run rotation at /api/v1/secrets/rotations and /api/v1/secrets/rotation-schedules",
+                        "current_frontend_mapping: operate: Secrets at /secrets - manual native-store rotate/delete plus worker-queued connector rotation; the console accepts only connector:<target> for provider rotation and schedules, omits unsupported TTL, rejects static and dynamic-lease providers, distinguishes queued from completed, lists each deferred schedule ID/reason/due time/error, and clears stale run/deferred evidence when a tick fails",
                         "target_gui_mapping: Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status."
                     ],
                     "refs": [
-                        "web/src/lib/navigation.ts",
-                        "web/src/App.tsx"
+                        "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/SecretsPageParts.tsx",
+                        "web/src/__tests__/secrets.test.tsx",
+                        "web/src/__tests__/secretsRotationHealth.test.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "CLI commands: secrets store update, secrets rotations run, secrets rotation-schedules create, secrets rotation-schedules list, secrets rotation-schedules run-due; secrets rotations run accepts static providers, connector:<target>, and dynamic-lease:<provider> with connector handoff fields"
+                        "CLI commands: secrets store update, secrets rotations run, secrets rotation-schedules create, secrets rotation-schedules list, secrets rotation-schedules run-due; manual secrets rotations run accepts connector:<target> only, static and dynamic-lease providers perform no effect, and schedule creation accepts connector:<target> only"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -9169,7 +9187,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationIds: rotateSecret, rotateStaticSecret, createSecretRotationSchedule, listSecretRotationSchedules, runDueSecretRotationSchedules; SecretRotationRequest includes optional target, remote_key, and ttl_seconds for connector and dynamic-lease rotation"
+                        "OpenAPI operationIds: rotateSecret, rotateStaticSecret, createSecretRotationSchedule, listSecretRotationSchedules, runDueSecretRotationSchedules; SecretRotationRequest retains target and remote_key, rejects connector ttl_seconds with 400, and returns the cached request-bound 503 for static/dynamic-lease providers regardless of ttl_seconds before effects; schedule creation is connector-only, and due-run responses expose complete/partial truth, the failed schedule/system error, bounded scan/run limits, reconciled runs, and exact deferred schedule evidence"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -9178,8 +9196,10 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served tests cover native-store rotation, rollback-safe static rotation, connector-backed rotation rollback, and dynamic-lease replacement with connector handoff; UI hides backend-specific rotation controls until served.",
-                        "TestServedSecretRotationCoversConnectorAndDynamicBackendsTRACE008 drives /api/v1/secrets/rotations through connector:ci rollback and dynamic-lease:postgresql replacement with metadata-only responses and audit evidence.",
+                        "acceptance_test: Served tests cover native-store rotation; zero-effect fail-closed manual static and dynamic-lease rotation; worker-queued connector rotation; connector-only schedule creation; zero-effect disabling of inherited non-connector schedules; durable exact due-edge claim across overlap, crash, restart, and rebuild; version-2 due-tuple replay under decreasing producer clocks; rollback on a missed schedule CAS; monotonic reverse replay; bounded scanning past deferred rows; byte-identical same-key partial-503 replay with no child re-execution and new-key reconciliation; verified terminal-command retention; and truthful localized UI evidence that is cleared on failure.",
+                        "TestServedManualStaticSecretRotationFailsClosedBeforeProviderEffect proves a configured static rotator receives zero calls and same-key retries return the stable 503; TestServedSecretRotationCoversConnectorAndDynamicBackendsTRACE008 proves connector:ci returns queued before worker delivery, rejects every supplied static/connector rotation TTL, and proves dynamic-lease:postgresql returns a stable 503 without provider issuance/revocation, connector delivery, lifecycle events, or outbox work.",
+                        "Scheduled-rotation served tests prove one durable exact due-edge owner across overlapping runners, lease-based crash resume, retained-terminal reconciliation after restart/rebuild, reverse-replay monotonicity, later-row progress after four explicit deferral classes, zero-effect unsupported historical schedules, and byte-identical same-key partial-503 replay with new-key continuation.",
+                        "Terminal-command GC tests prove only an older event-derived row with an advanced schedule and newer command is deleted, version-2 replay advances from exact due_at under decreasing producer clocks, a full projection rebuild does not recreate or execute that edge, a missed schedule CAS rolls back command terminalization, and the successor cadence still progresses while the newest lineage fence remains.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -9216,7 +9236,7 @@
                 "audit": {
                     "evidence": [
                         "mutating served surface requires audit/event evidence: rotateSecret, rotateStaticSecret, createSecretRotationSchedule, runDueSecretRotationSchedules",
-                        "connector-backed rotation emits secret.rotation.connector_cutover/connector_rolled_back plus rotation.rolled_back; dynamic-lease rotation emits secret.rotation.dynamic_cutover, dynsecret.lease.revoked, and secret.rotation.completed without credential material.",
+                        "worker-queued connector rotation emits one canonical application-secret rotation event with its same-transaction sealed sync intent plus one deterministic secret.rotation_schedule.ran terminal event; unavailable manual static/dynamic rotation and static/dynamic schedule creation emit no lifecycle or provider-effect event, while inherited unsupported schedules emit only terminal truth and disable themselves.",
                         "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
                     ],
                     "refs": [
@@ -9807,10 +9827,10 @@
             "phase": "P1",
             "priority": 34,
             "served_state": "partial",
-            "backend_status": "partial: served SDK path plus trstctl-cli run injection, reference resolution, and imports",
-            "current_frontend_mapping": "observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads/imports, and registered customer route evidence",
+            "backend_status": "partial: served SDK path plus trstctl-cli run injection and reference resolution; bulk import is explicitly unavailable and its compatibility route returns 501 without writing",
+            "current_frontend_mapping": "observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads, and a disabled bulk-import disclosure",
             "target_gui_mapping": "Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation.",
-            "acceptance_test": "UI examples match CLI/API contract, imports return metadata only, resolved reads are explicit, and generated snippets never include real secret values.",
+            "acceptance_test": "UI examples match CLI/API contract, bulk import is visibly unavailable across OpenAPI/CLI/UI, resolved reads are explicit, and generated snippets never include real secret values.",
             "source_docs": [
                 "docs/features/secrets.md",
                 "docs/cli.md",
@@ -9825,7 +9845,7 @@
             ],
             "source_frontend": [],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence and tightened by SEC-09 run-style injection. Test evidence: internal/cli/cli_test.go proves trstctl-cli run fetches served secrets, injects child env, and does not log values; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "Closed by route-level feature-map evidence and tightened by SEC-09 run-style injection. AUD-105 keeps bulk import fail-closed until an atomic event-sourced batch command exists: OpenAPI marks the compatibility operation unavailable with only a 501 response, the CLI omits the command, and the web console renders a disabled disclosure. Test evidence: internal/cli/cli_test.go proves trstctl-cli run fetches served secrets, injects child env, and does not log values; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage.",
             "api_surface": [
                 "createSecret",
                 "listSecrets",
@@ -9838,7 +9858,6 @@
             "cli_surface": [
                 "secrets store put",
                 "secrets store list",
-                "secrets store import",
                 "secrets store get",
                 "secrets store update",
                 "secrets store delete",
@@ -9849,7 +9868,7 @@
                 "served": {
                     "evidence": [
                         "served_state=partial",
-                        "backend_status=partial: served SDK path plus trstctl-cli run injection, reference resolution, and imports"
+                        "backend_status=partial: served SDK path plus trstctl-cli run injection and reference resolution; bulk import is explicitly unavailable and its compatibility route returns 501 without writing"
                     ],
                     "commands": [
                         "make test"
@@ -9857,7 +9876,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads/imports, and registered customer route evidence",
+                        "current_frontend_mapping: observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads, and a disabled bulk-import disclosure",
                         "target_gui_mapping: Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation."
                     ],
                     "refs": [
@@ -9869,11 +9888,11 @@
                     "evidence": [
                         "CLI command: secrets store put",
                         "CLI command: secrets store list",
-                        "CLI command: secrets store import",
                         "CLI command: secrets store get",
                         "CLI command: secrets store update",
                         "CLI command: secrets store delete",
-                        "CLI command: run"
+                        "CLI command: run",
+                        "No CLI command is registered for the explicitly unavailable bulk-import compatibility route."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -9885,7 +9904,7 @@
                     "evidence": [
                         "OpenAPI operationId: createSecret",
                         "OpenAPI operationId: listSecrets",
-                        "OpenAPI operationId: importSecrets",
+                        "OpenAPI operationId importSecrets is deprecated, marked x-trstctl-availability=unavailable, and publishes 501 with no success response.",
                         "OpenAPI operationId: getSecret",
                         "OpenAPI operationId: rotateSecret",
                         "OpenAPI operationId: deleteSecret"
@@ -9897,7 +9916,7 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: UI examples match CLI/API contract, imports return metadata only, resolved reads are explicit, and generated snippets never include real secret values.",
+                        "acceptance_test: UI examples match CLI/API contract, bulk import is visibly unavailable across OpenAPI/CLI/UI, resolved reads are explicit, and generated snippets never include real secret values.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -9932,8 +9951,8 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: createSecret, listSecrets, importSecrets, getSecret, rotateSecret, deleteSecret",
-                        "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
+                        "importSecrets is an explicit no-write 501 guard until an atomic event-sourced batch command exists.",
+                        "Available secret mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
                     ],
                     "refs": [
                         "internal/api/api.go",

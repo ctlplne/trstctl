@@ -25,6 +25,15 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+func currentSecretSyncJobIDForTest(t *testing.T, s *store.Store, tenantID, rawKey string) string {
+	t.Helper()
+	epoch, err := s.ApplicationSecretTenantEpoch(t.Context(), tenantID)
+	if err != nil {
+		t.Fatalf("application-secret tenant epoch: %v", err)
+	}
+	return store.DurableSecretSyncJobIDForEpoch(tenantID, epoch, rawKey)
+}
+
 func TestDurableSecretSyncReplayDoesNotReadRotatedSourceAfterRecorderGC(t *testing.T) {
 	pusher := &outboxSyncPusher{}
 	h := newServedHarness(t, config.Protocols{},
@@ -35,6 +44,7 @@ func TestDurableSecretSyncReplayDoesNotReadRotatedSourceAfterRecorderGC(t *testi
 			}}
 		},
 	)
+	registerServedTenant(t, h, "durable secret sync replay tenant")
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "durable-sync-caller", "secrets:read", "secrets:write")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token,
 		map[string]any{"name": "sync/rotating-source", "value": "source-v1"})
@@ -47,7 +57,8 @@ func TestDurableSecretSyncReplayDoesNotReadRotatedSourceAfterRecorderGC(t *testi
 	if status != http.StatusOK {
 		t.Fatalf("first durable sync status=%d body=%s", status, original)
 	}
-	job, err := h.store.GetSecretSyncJob(context.Background(), h.tenant, store.DurableSecretSyncJobID(h.tenant, rawKey))
+	jobID := currentSecretSyncJobIDForTest(t, h.store, h.tenant, rawKey)
+	job, err := h.store.GetSecretSyncJob(context.Background(), h.tenant, jobID)
 	if err != nil || job.SecretVersion != 1 || job.RequestBinding == "" {
 		t.Fatalf("durable original job=%+v err=%v", job, err)
 	}
@@ -65,7 +76,7 @@ func TestDurableSecretSyncReplayDoesNotReadRotatedSourceAfterRecorderGC(t *testi
 	if status != http.StatusOK || !bytes.Equal(replay, original) {
 		t.Fatalf("durable replay status=%d body=%s, original=%s", status, replay, original)
 	}
-	job, err = h.store.GetSecretSyncJob(context.Background(), h.tenant, store.DurableSecretSyncJobID(h.tenant, rawKey))
+	job, err = h.store.GetSecretSyncJob(context.Background(), h.tenant, jobID)
 	if err != nil || job.SecretVersion != 1 {
 		t.Fatalf("replay rebound to rotated source: job=%+v err=%v", job, err)
 	}
@@ -255,7 +266,7 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 		if drainErr != nil {
 			t.Fatalf("drain %s durable sync: %v", tc.target, drainErr)
 		}
-		job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant, store.DurableSecretSyncJobID(h.tenant, idempotencyKey))
+		job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant, currentSecretSyncJobIDForTest(t, h.store, h.tenant, idempotencyKey))
 		if err != nil || job.Status != store.SecretSyncJobDelivered {
 			outboxRecord, outboxErr := h.srv.outbox.Get(t.Context(), h.tenant, job.OutboxID)
 			t.Fatalf("%s durable sync job = status %q err %v, outbox=%+v outbox_err=%v, want delivered", tc.target, job.Status, err, outboxRecord, outboxErr)
@@ -528,7 +539,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 		if drainErr != nil {
 			t.Fatalf("drain %s CAP-SEC-04 durable sync: %v", tc.target, drainErr)
 		}
-		job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant, store.DurableSecretSyncJobID(h.tenant, idempotencyKey))
+		job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant, currentSecretSyncJobIDForTest(t, h.store, h.tenant, idempotencyKey))
 		if err != nil || job.Status != store.SecretSyncJobDelivered {
 			outboxRecord, outboxErr := h.srv.outbox.Get(t.Context(), h.tenant, job.OutboxID)
 			t.Fatalf("%s CAP-SEC-04 durable job = status %q err %v, outbox=%+v outbox_err=%v, want delivered", tc.target, job.Status, err, outboxRecord, outboxErr)

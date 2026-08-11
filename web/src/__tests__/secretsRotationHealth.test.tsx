@@ -15,7 +15,7 @@ function schedule(overrides: Partial<SecretRotationSchedule> = {}): SecretRotati
     created_at: "2026-06-01T00:00:00Z",
     next_run_at: "2026-07-27T00:00:00Z",
     last_run_at: "2026-07-26T00:00:00Z",
-    last_run_status: "succeeded",
+    last_run_status: "completed",
     ...overrides,
   } as SecretRotationSchedule;
 }
@@ -55,6 +55,10 @@ describe("secret rotation health", () => {
   it("surfaces a failed last run, which is usually why the next one did not happen", () => {
     const health = rotationHealth(schedule({ last_run_status: "failed" }), now);
     expect(health.lastRunFailed).toBe(true);
+  });
+
+  it.each(["rolled_back", "delivery_failed", "rollback_failed", "retire_pending"] as const)("surfaces explicit incomplete outcome %s", (lastRunStatus) => {
+    expect(rotationHealth(schedule({ last_run_status: lastRunStatus }), now).lastRunFailed).toBe(true);
   });
 
   it("falls back to the overdue signal when the last run timestamp is unusable", () => {

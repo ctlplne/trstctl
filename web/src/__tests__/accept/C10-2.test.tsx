@@ -3,13 +3,14 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Operations } from "@/pages/Operations";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     rotationRuns: vi.fn(),
     connectorDeliveries: vi.fn(),
-    identities: vi.fn(),
-    approveIdentityAction: vi.fn(),
+    approvalRequests: vi.fn(),
+    approveApprovalRequest: vi.fn(),
     transitionIdentity: vi.fn(),
   },
 }));
@@ -21,9 +22,11 @@ vi.mock("@/lib/api", async (orig) => {
 
 function renderOperations() {
   return render(
-    <MemoryRouter>
-      <Operations />
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        <Operations />
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
@@ -63,17 +66,35 @@ describe("C10-2 operations queue", () => {
         },
       ],
     });
-    apiMock.identities.mockResolvedValue([
+    apiMock.approvalRequests.mockResolvedValue([
       {
-        id: "jit-1",
-        name: "jit-db",
-        kind: "x509_certificate",
-        status: "requested",
-        owner_id: "owner-1",
-        attributes: { requester: "dev@example.test", approvals: "1/2" },
+        id: "019fec49-6641-7131-ae7f-17f7ea4b5e0e",
+        intent_digest: "sha256:jit-db",
+        resource_id: "jit-1",
+        resource_name: "jit-db",
+        resource_kind: "identity",
+        action: "issue",
+        requester: "dev@example.test",
+        target_version: "transition:0",
+        evidence_refs: [],
+        approval_count: 1,
+        required_approvals: 3,
+        status: "pending",
+        created_at: "2026-06-26T10:01:00Z",
+        expires_at: "2026-06-26T11:01:00Z",
       },
     ]);
-    apiMock.approveIdentityAction.mockResolvedValue({ resource: "jit-1", action: "issue", approver: "ra@example.test", approvals: 2 });
+    apiMock.approveApprovalRequest.mockResolvedValue({
+      id: "019fec49-6641-7131-ae7f-17f7ea4b5e0e",
+      intent_digest: "sha256:jit-db",
+      resource: "jit-1",
+      action: "issue",
+      approver: "ra@example.test",
+      approvals: 2,
+      approval_count: 2,
+      required_approvals: 3,
+      status: "pending",
+    });
     apiMock.transitionIdentity.mockResolvedValue({
       id: "jit-1",
       name: "jit-db",
@@ -90,7 +111,7 @@ describe("C10-2 operations queue", () => {
     expect(await screen.findByRole("heading", { name: "Operations queue" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.rotationRuns).toHaveBeenCalledWith({ limit: 50 }));
     expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 50 });
-    expect(apiMock.identities).toHaveBeenCalled();
+    expect(apiMock.approvalRequests).toHaveBeenCalled();
 
     expect(screen.getByRole("combobox", { name: "Status filter" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Type filter" })).toBeInTheDocument();
@@ -108,8 +129,8 @@ describe("C10-2 operations queue", () => {
     const approvalRow = screen.getByText("jit-db").closest("tr")!;
     expect(within(approvalRow).getByText("Awaiting approval")).toBeInTheDocument();
     await user.click(within(approvalRow).getByRole("button", { name: "Approve issue for jit-db" }));
-    await waitFor(() => expect(apiMock.approveIdentityAction).toHaveBeenCalledWith("jit-1", "issue"));
-    expect(await screen.findByRole("status")).toHaveTextContent("issue approval recorded for jit-1");
+    await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("019fec49-6641-7131-ae7f-17f7ea4b5e0e", "sha256:jit-db"));
+    expect(await screen.findByRole("status")).toHaveTextContent("issue approval recorded for jit-db");
 
     await user.click(within(approvalRow).getByRole("button", { name: "Reject issue for jit-db" }));
     const dialog = await screen.findByRole("dialog", { name: "Reject issue for jit-db" });

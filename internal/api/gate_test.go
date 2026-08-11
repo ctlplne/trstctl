@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/policy"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const gateTenant = "11111111-1111-1111-1111-111111111111"
@@ -59,8 +60,9 @@ func (f *fakeABAC) EvaluateDeny(_ context.Context, in policy.ABACInput) (policy.
 	return policy.ABACDecision{Deny: f.deny, Reason: f.reason}, f.err
 }
 
-// fakeChecker is a deterministic ApprovalChecker recording the last call so a test
-// can assert the gate passes the right action/requester.
+// fakeChecker implements both the retired fail-closed compatibility seam and the
+// exact authority seam. Tests can therefore prove that the gate calls only the
+// immutable intent-bound method.
 type fakeChecker struct {
 	approved bool
 	reason   string
@@ -70,7 +72,28 @@ type fakeChecker struct {
 
 func (f *fakeChecker) IsApproved(_ context.Context, _, _, action, requester string) (bool, string) {
 	f.gotAction, f.gotRequester = action, requester
-	return f.approved, f.reason
+	return false, "legacy approval checks cannot authorize"
+}
+
+func (f *fakeChecker) AuthorizeApproval(_ context.Context, intent ApprovalIntent) (ApprovalAuthority, bool, string) {
+	f.gotAction, f.gotRequester = intent.Action, intent.Requester
+	return ApprovalAuthority{
+		RequestID: "approval-request-1", IntentDigest: "sha256:exact-intent",
+		Requester: intent.Requester, ResourceKind: intent.ResourceKind,
+		ResourceID: intent.ResourceID, Action: intent.Action,
+		FromState: intent.FromState, ToState: intent.ToState,
+		TargetVersion: intent.TargetVersion, RequiredApprovals: intent.RequiredApprovals,
+		Reason: intent.Reason, EvidenceRefs: append([]string(nil), intent.EvidenceRefs...),
+	}, f.approved, f.reason
+}
+
+func testGateApprovalIntent() *ApprovalIntent {
+	return &ApprovalIntent{
+		ResourceKind: "identity", ResourceName: "example identity",
+		FromState: "requested", ToState: "issued", TargetVersion: 7,
+		Reason:       "authorize one exact lifecycle transition",
+		EvidenceRefs: []string{"request:sha256:0123456789abcdef"}, RequiredApprovals: 2,
+	}
 }
 
 // principalWith builds a principal in gateTenant holding exactly the given roles.
@@ -240,7 +263,8 @@ func TestGuardABACDenyOverlayAfterRBAC(t *testing.T) {
 func TestGateDualControlRequiresApproval(t *testing.T) {
 	checker := &fakeChecker{approved: false, reason: "needs a distinct approver"}
 	g := MutationGate{Policy: fakePolicy{allow: true}, RequireApproval: true, Checker: checker}
-	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil))
+	_, err := g.checkWithApproval(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil, testGateApprovalIntent())
+	ge := asGateErr(t, err)
 	if ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("dual control with no approval must be 403, got %v", ge)
 	}
@@ -251,8 +275,23 @@ func TestGateDualControlRequiresApproval(t *testing.T) {
 
 func TestGateDualControlAllowsWhenApproved(t *testing.T) {
 	g := MutationGate{Policy: fakePolicy{allow: true}, RequireApproval: true, Checker: &fakeChecker{approved: true}}
-	if err := g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil); err != nil {
+	if _, err := g.checkWithApproval(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil, testGateApprovalIntent()); err != nil {
 		t.Fatalf("approved dual-control action should pass, got %v", err)
+	}
+}
+
+type legacyApprovalChecker struct{}
+
+func (legacyApprovalChecker) IsApproved(context.Context, string, string, string, string) (bool, string) {
+	return true, ""
+}
+
+func TestGateDualControlRejectsLegacyBooleanApproval(t *testing.T) {
+	g := MutationGate{Policy: fakePolicy{allow: true}, RequireApproval: true, Checker: legacyApprovalChecker{}}
+	_, err := g.checkWithApproval(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil, testGateApprovalIntent())
+	ge := asGateErr(t, err)
+	if ge == nil || ge.status != http.StatusForbidden || !strings.Contains(ge.detail, "exact request ID") {
+		t.Fatalf("legacy boolean approval must fail closed, got %v", err)
 	}
 }
 
@@ -274,6 +313,17 @@ func TestGateRABeatsApproval(t *testing.T) {
 	ge := asGateErr(t, g.check(context.Background(), principalWith("alice", roleRequester), gateTenant, "id-1", "issued", nil))
 	if ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("a requester (no certs:issue) must be denied regardless of approvals, got %v", ge)
+	}
+}
+
+func TestApprovalDriftIsAStableConflict(t *testing.T) {
+	err := approvalAPIError(store.ErrApprovalDrifted)
+	var apiErr *apiError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("approval drift error = %T %v, want API error", err, err)
+	}
+	if apiErr.status != http.StatusConflict || apiErr.detail != "approval target version or state drifted" {
+		t.Fatalf("approval drift response = (%d, %q), want stable 409 conflict", apiErr.status, apiErr.detail)
 	}
 }
 

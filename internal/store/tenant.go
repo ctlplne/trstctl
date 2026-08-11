@@ -4,10 +4,18 @@ package store
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// ErrTenantRegistrationConflict means a tenant UUID already names a different
+// live registration. Registration is create-or-exact-replay; changing a live
+// tenant requires a separate event, and reusing the UUID requires completed
+// offboarding first.
+var ErrTenantRegistrationConflict = errors.New("store: tenant UUID already has a different live registration")
 
 // Tenant is the tenant read model (the Tenant entity).
 type Tenant struct {
@@ -17,15 +25,16 @@ type Tenant struct {
 	EventSeq  uint64
 }
 
-// UpsertTenant inserts or updates a tenant row. It is a system (cross-tenant,
-// RLS-bypassing) operation used by projection workers; it runs as the connecting
-// role.
+// UpsertTenant inserts one tenant registration or accepts its exact replay. It is
+// a legacy direct projection helper, so it takes the same exclusive lifecycle
+// xact fence as live event registration before touching the row.
 func (s *Store) UpsertTenant(ctx context.Context, t Tenant) error {
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO tenants (tenant_id, name, event_seq) VALUES ($1, $2, $3)
-		 ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name, event_seq = EXCLUDED.event_seq`,
-		t.TenantID, t.Name, int64(t.EventSeq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
-	return err
+	if t.TenantID == "" {
+		return fmt.Errorf("store: tenant registration requires a tenant id")
+	}
+	return s.WithTenantRegistrationFence(ctx, t.TenantID, func(tx pgx.Tx) error {
+		return s.UpsertTenantTx(ctx, tx, t)
+	})
 }
 
 // ListTenants returns all tenants ordered by id. It is a system operation.

@@ -95,7 +95,7 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 
 	out, err := d.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
 		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
-		material, err := d.mintServedLeafFromCSR(ctx, tenantID, ident, csrPEM)
+		material, err := d.mintServedLeafFromCSR(ctx, tenantID, ident, csrPEM, intent.Issuance)
 		if err != nil {
 			return nil, err
 		}

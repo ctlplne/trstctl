@@ -143,6 +143,144 @@ deliberately. With the default `TRSTCTL_MIGRATE_AUTO=true` (convenient for
 single-node eval and first boot), pending migrations are applied automatically on
 startup, still under the advisory lock.
 
+### Migration 0153 requires a stopped control-plane fleet
+
+Migration `0153_secret_sync_target_order.sql` is deliberately not a rolling
+upgrade. It replaces database-allocation order with the immutable event sequence
+for each tenant+secret-sync target. An old API process can still create a legacy
+compatibility-queue row, and an old worker can select a newer same-target row
+without the event-order predicate. The database trigger is a fail-closed safety
+net for an old claim statement; it is not a liveness-compatible mixed-version
+mode.
+
+Before applying 0153:
+
+1. Quiesce old-release producers first: put the control-plane ingress into
+   maintenance/read-only mode and block every API or automation path that can
+   enqueue a new `secret.sync.*` command. Keep the old worker processes running
+   so already-recorded commands can drain. Do not start a new-release replica and
+   do not use a rolling Deployment update.
+2. While those old workers are still running, drain and reconcile through the
+   supported old-release workflow until there are zero
+   `secret_sync_jobs.status = 'pending'` commands. Never manufacture a terminal
+   state with SQL: only a retained delivered/failed event may remove a FIFO
+   barrier. A terminal job whose outbox row is still `pending` is the one
+   recognized crash shape and may remain; the new worker acknowledges that cleanup
+   row with zero receiver I/O. The migration refuses an active compatibility row
+   without a projected job, malformed command binding, missing terminal pair, or
+   any other job/outbox disagreement. PostgreSQL ids are not event or commit order,
+   so do not infer safety from them.
+3. Stop or scale to zero the final old control-plane process. Leave PostgreSQL,
+   JetStream, and the signer running. After it has stopped, confirm no secret-sync
+   claim remains in flight:
+
+    ```sql
+    SELECT tenant_id, id, destination, worker_id, lease_until
+      FROM outbox
+     WHERE status = 'processing'
+       AND left(destination, 12) = 'secret.sync.';
+    ```
+
+   The result must contain zero rows. If it does not, keep producers quiesced,
+   restart only the old release, let the lease expire or the old worker finish,
+   reconcile it, then stop that last old process and repeat this check. Never run
+   0153 while an old process is alive.
+4. Reconfirm both the zero-pending-job condition from step 2 and the zero-processing
+   condition from step 3. Then take the normal full pre-migration backup, run
+   `trstctl --migrate` as a
+   standalone maintenance step, and verify migration 0153 is recorded.
+5. Start one new-release control plane and require its full retained-history
+   validation to pass. Startup compares every terminal SQL fact with the canonical
+   JetStream event and upgrades migration receipts only after exact evidence
+   agreement. A mismatch fails closed before secret-sync workers start. Once that
+   node is healthy, scale the rest of the new fleet normally.
+
+The migration also installs command-global receiver authority on each secret-sync
+outbox row. Receiver-start count only increases; `effect_possible` can become
+failed authority only for the first and still-only typed no-network start. The
+closed failure and its attempt count are frozen together. This state is included in
+the independent PostgreSQL artifact. Restoring an older artifact never derives
+secret-sync order from the outbox id: it must join the exact event-rebuilt job or
+the restore fails closed.
+
+An inherited failed command, or an inherited delivered command with more than one
+old claim attempt, has no pre-0153 receiver-start receipt. Migration preserves that
+uncertainty as `effect_possible`. The new worker may retire a leftover pending
+outbox row with zero receiver I/O, but the terminal job remains a target-wide FIFO
+barrier: a fresh command is recorded but cannot overtake it. Keep the target
+blocked and escalate for provider-specific authenticated readback/reconciliation;
+generic trstctl code cannot invent that proof, and tenant offboarding also refuses
+while the possible receiver generation is unresolved. Do not edit the historical
+row into `failure_authorized`. A single-attempt inherited delivery is the only
+legacy terminal shape that releases a successor without additional reconciliation.
+
+If 0153 fails its preflight, its transaction commits neither schema nor backfill.
+Keep the fleet stopped, reconcile the exact reported secret-sync state using the
+old release, and retry the migration from the beginning.
+
+### Secret-sync recovery-authority migration 0162
+
+Migration `0162_secret_sync_recovery_authority.sql` adds one deployment-local
+singleton row. It is not tenant data and it is not copied from a source backup.
+Think of it as a red/green power light for external secret-sync writes: normal
+upgrades create it green, while an event-log restore turns it red before mutating
+the recovered stream. Events contain the sealed command and terminal outcome, but
+not the exact PostgreSQL receiver-start count, so an event-only target must not
+perform receiver I/O.
+
+The application role has no privileges on this table. The offline full-restore
+coordinator is the only production path that may rebuild while red; that exception
+does not bypass the receiver-start check. It imports and stably reconciles the
+paired outbox authority, completes a final event replay, validates retained
+history, and then turns the row green before readiness. If restore stops anywhere
+earlier, leave the row red and resume the same full artifact. Do not manually
+`UPDATE secret_sync_recovery_authority`: doing so converts missing external-effect
+evidence into permission to write.
+
+### Scheduled-rotation authority migrations 0155 and 0157
+
+Migration `0155_secret_rotation_schedule_commands.sql` is transactional and adds
+only new receiver tables, RLS policies, grants, and constraints. It creates the
+per-due-edge child command, the one-row-per-tenant fair cursor, and the per-outer-key
+tick that retains its database cutoff, row-start snapshot, ordered receipt, logical
+budgets, and terminal response bytes. The tick has a composite foreign key to the
+exact tenant/idempotency key with `ON DELETE CASCADE`; it has no foreign key to the
+event-rebuilt schedule projection. Existing schedule rows and idempotency rows are
+not rewritten.
+
+Migration
+`0157_secret_rotation_schedule_scan_index_no_transaction.sql` adds the UUID-ring
+scan index to the already-populated `secret_rotation_schedules` table. It is a
+no-transaction migration: the runner keeps the deployment-wide advisory lock but
+runs `DROP INDEX CONCURRENTLY IF EXISTS` followed by `CREATE INDEX CONCURRENTLY`.
+That means normal schedule writes can continue during the build, and retry after an
+interrupted build first removes PostgreSQL's possible invalid same-name index. The
+ledger row is written only after the valid build succeeds. No special fleet stop is
+required for 0155 or 0157 beyond the normal pre-migration full backup gate.
+
+### Scheduled-rotation history sanitation (application cutover)
+
+The schema-v1 `secret.rotation_schedule.ran` error closure is an event-history
+generation change, not a PostgreSQL migration and not migration 0163. Before the
+new release starts, stop every older control-plane, worker, federation importer,
+and export process that can touch this history. Set
+`TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY=true` only after that fleet-wide
+quiescence is real, then start one new binary.
+
+That binary takes the deployment-wide history operation/cutover walls, scans the
+complete retained generation, and writes one deterministic signed rewrite per
+affected tenant in sorted order. It replaces only an unsafe JSON `error` token;
+sequence, envelope identity, subject, message ID, and every unrelated byte stay
+fixed. Startup scans again before projection catch-up and installs a normal
+append/import floor that rejects future v1 scheduler-run events. A crash resumes
+through the existing generation-recovery proofs. If the assertion is absent,
+history is malformed, signing/audit/backup fencing is unavailable, or any unsafe
+record remains, the node stays unready and returns no legacy detail.
+
+Live sanitation cannot alter an event export, backup, or signed/WORM audit archive
+already copied elsewhere. Retain or destroy those artifacts under their existing
+custody and retention policy; do not claim that this cutover erased them.
+
 ## Upgrade runbook
 
 1. **Read the release notes** for the new version and note any migration callouts.
@@ -194,16 +332,15 @@ rollback path.
 
 ## Online-safe migrations on populated tables (expand–contract)
 
-Every migration shipped to date creates each index *in the same migration as its
-own empty table*, so it takes no meaningful lock — the table has no rows and no
-other session is using it. The first migration that must add an index or a column
-to a **large, already-populated** table, or change a live column's type, is
-different: done naively it takes an `ACCESS EXCLUSIVE` lock for the duration of a
-full table rewrite/scan, which stalls every reader and writer of that table — an
-outage on a system of record. Use the patterns below, and the migration-safety
-guard (a CI test over the embedded SQL) will keep you honest: a lock-heavy
-statement against an existing table must either use the online-safe form or carry
-a one-line `-- online-safe: <reason>` justification on the statement.
+Indexes created with their own new empty table take no meaningful data lock. An
+index added to an **already-populated** table is different: a normal build blocks
+writes while it scans the table. Migration 0157's schedule UUID-ring index is the
+concrete shipped example of the safe form below. The same rule applies to adding a
+column or changing a live column's type when that operation can rewrite or scan a
+large table. Use the patterns below, and the migration-safety guard (a CI test over
+the embedded SQL) will keep you honest: a lock-heavy statement against an existing
+table must either use the online-safe form or carry a one-line
+`-- online-safe: <reason>` justification on the statement.
 
 **Add an index → `CREATE INDEX CONCURRENTLY`.** It builds without blocking writes.
 It cannot run inside a transaction, so the migration that uses it must be a
@@ -254,8 +391,10 @@ records a content digest per applied version and refuses to start on a mismatch
 (see [Applied migrations are content-checksummed](#applied-migrations-are-content-checksummed-ops-mig-cksum-001)). Keep migrations additive and non-destructive so the
 forward-only policy stays low-risk; for a change to a populated table, follow the
 [online-safe patterns above](#online-safe-migrations-on-populated-tables-expandcontract)
-so it does not take a long `ACCESS EXCLUSIVE` lock. Any new persistent table is
-tenant-scoped with row-level security and joins the backup set
+so it does not take a long `ACCESS EXCLUSIVE` lock. Any new tenant data table is
+tenant-scoped with row-level security. A rare deployment-wide system singleton,
+such as the 0162 restore light, must document its AN-1 exemption and expose no
+tenant payload. Every new table joins the backup classification
 ([Backup & disaster recovery](disaster-recovery.md)).
 
 See [Configuration → Datastores](configuration.md#datastores) for the Postgres

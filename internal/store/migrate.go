@@ -152,6 +152,106 @@ func (s *Store) Migrate(ctx context.Context) error {
 			return err
 		}
 	}
+	// A migration performs the first format-22 cutover and installs a database
+	// floor that rejects writes from rolling pre-v22 snapshot workers. Repeat the
+	// check on every startup to repair an externally restored missing,
+	// unvalidated, or same-name-but-weaker floor. Snapshots are disposable, so
+	// finding even one legacy row physically purges the whole mixed relation;
+	// boot then replays the event log and the current leader publishes one fresh
+	// complete generation.
+	if err := purgeLegacyReadModelSnapshots(ctx, conn); err != nil {
+		return err
+	}
+	return nil
+}
+
+func purgeLegacyReadModelSnapshots(ctx context.Context, conn *pgxpool.Conn) error {
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("store: begin snapshot format-floor repair: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Hold the table still from inspection through constraint repair. A rolling
+	// v21 writer either commits before this lock and is purged below, or waits for
+	// commit and then meets the repaired v22 floor. It can never slip into the gap
+	// between the purge and the replacement constraint.
+	if _, err := tx.Exec(ctx,
+		`LOCK TABLE read_model_snapshots IN ACCESS EXCLUSIVE MODE`); err != nil {
+		return fmt.Errorf("store: lock read-model snapshots for format-floor repair: %w", err)
+	}
+
+	var legacy bool
+	//trstctl:system-query — startup inspects only whether any cross-tenant disposable snapshot uses a pre-v22 format; no tenant ID or payload leaves PostgreSQL (AN-1 exemption).
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM read_model_snapshots WHERE format_version < $1
+		)`, SnapshotFormatVersion).Scan(&legacy); err != nil {
+		return fmt.Errorf("store: inspect legacy read-model snapshots: %w", err)
+	}
+	if legacy {
+		//trstctl:system-query — one legacy blob makes the mixed cache generation unusable; TRUNCATE drops every disposable cross-tenant payload so raw pre-erasure bytes are not merely ignored by restore (AN-1/AN-2 exemption).
+		if _, err := tx.Exec(ctx, `TRUNCATE TABLE read_model_snapshots`); err != nil {
+			return fmt.Errorf("store: purge legacy read-model snapshots: %w", err)
+		}
+	}
+
+	const floorConstraint = "read_model_snapshots_format_floor_v22"
+	expectedFloorExpression := fmt.Sprintf("format_version>=%d", SnapshotFormatVersion)
+	var floorExists, floorMatches, floorValidated bool
+	//trstctl:system-query — migration startup inspects one schema constraint's type, normalized exact CHECK expression, and validation bit; normalization removes only whitespace, redundant parentheses, and PostgreSQL's no-op integer cast rendering, never operators or operands; no tenant rows or payloads leave PostgreSQL (AN-1 exemption).
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*) = 1,
+		       coalesce(bool_and(
+		           contype = 'c' AND
+		           NOT connoinherit AND
+		           regexp_replace(
+		               replace(pg_get_expr(conbin, conrelid, true), '::integer', ''),
+		               '[[:space:]()]', '', 'g'
+		           ) = $2
+		       ), false),
+		       coalesce(bool_and(convalidated), false)
+		  FROM pg_constraint
+		 WHERE conrelid = 'read_model_snapshots'::regclass
+		   AND conname = $1`, floorConstraint, expectedFloorExpression).
+		Scan(&floorExists, &floorMatches, &floorValidated); err != nil {
+		return fmt.Errorf("store: inspect snapshot format floor: %w", err)
+	}
+	if !floorExists {
+		if _, err := tx.Exec(ctx, fmt.Sprintf(
+			`ALTER TABLE read_model_snapshots
+			 ADD CONSTRAINT %s CHECK (format_version >= %d)`,
+			floorConstraint, SnapshotFormatVersion,
+		)); err != nil {
+			return fmt.Errorf("store: restore snapshot format floor: %w", err)
+		}
+	} else if !floorMatches {
+		// A validated constraint with the expected name is not authority unless it
+		// is exactly the intended CHECK. Drop and add are one transaction while the
+		// table lock remains held, so a weaker lookalike never creates a write gap.
+		if _, err := tx.Exec(ctx, fmt.Sprintf(
+			`ALTER TABLE read_model_snapshots DROP CONSTRAINT %s`,
+			floorConstraint,
+		)); err != nil {
+			return fmt.Errorf("store: drop mismatched snapshot format floor: %w", err)
+		}
+		if _, err := tx.Exec(ctx, fmt.Sprintf(
+			`ALTER TABLE read_model_snapshots
+			 ADD CONSTRAINT %s CHECK (format_version >= %d)`,
+			floorConstraint, SnapshotFormatVersion,
+		)); err != nil {
+			return fmt.Errorf("store: replace mismatched snapshot format floor: %w", err)
+		}
+	} else if !floorValidated {
+		if _, err := tx.Exec(ctx,
+			`ALTER TABLE read_model_snapshots
+			 VALIDATE CONSTRAINT `+floorConstraint); err != nil {
+			return fmt.Errorf("store: validate snapshot format floor: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("store: commit snapshot format-floor repair: %w", err)
+	}
 	return nil
 }
 

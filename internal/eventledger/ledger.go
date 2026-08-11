@@ -127,6 +127,9 @@ const (
 	EventTenantKeyDomainSealed                    = "tenant.key_domain.sealed"
 	EventTenantKeyDomainUnsealRequested           = "tenant.key_domain.unseal_requested"
 	EventTenantKeyDomainUnsealed                  = "tenant.key_domain.unsealed"
+	EventApprovalRequested                        = "approval.requested"
+	EventApprovalDecisionRecorded                 = "approval.decision.recorded"
+	EventApprovalStatusChanged                    = "approval.request.status_changed"
 )
 
 // FeatureEvent is one row of the event-name ledger: the immutable AN-2 event types
@@ -281,6 +284,14 @@ var ledger = []FeatureEvent{
 	// F33 — Just-in-time privileged access sessions.
 	{"F33", "Just-in-time issuance with approval flows", "open_pam_session", "openPAMSession", []string{EventPAMSessionStarted}},
 	{"F33", "Just-in-time issuance with approval flows", "expire_pam_session", "openPAMSession", []string{EventPAMSessionExpired}},
+	{"F33", "Just-in-time issuance with approval flows", "request_operation_approval", "transitionIdentity", []string{
+		EventApprovalRequested,
+		EventApprovalStatusChanged,
+	}},
+	{"F33", "Just-in-time issuance with approval flows", "decide_operation_approval", "approveApprovalRequest", []string{
+		EventApprovalDecisionRecorded,
+		EventApprovalStatusChanged,
+	}},
 
 	// F28 — policy/governance access-change approval workflow with PR evidence.
 	{"F28", "Policy engine", "create_access_change_request", "createAccessChangeRequest", []string{EventAccessChangeRequestCreated}},

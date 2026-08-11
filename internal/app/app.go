@@ -13,6 +13,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/events"
@@ -72,26 +73,22 @@ func (s *Service) Close() { s.bulk.Close() }
 //
 //trstctl:mutation
 func (s *Service) RegisterTenant(ctx context.Context, tenantID, name, idempotencyKey string) error {
-	_, err := s.idem.Do(ctx, tenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
-		data, err := json.Marshal(struct {
-			Name string `json:"name"`
-		}{Name: name})
-		if err != nil {
-			return nil, err
-		}
-		ev, err := s.log.Append(ctx, events.Event{
-			Type:     "tenant.registered",
-			TenantID: tenantID,
-			Data:     data,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if err := s.proj.Apply(ctx, ev); err != nil {
-			return nil, err
-		}
-		return data, nil
-	})
+	data, err := json.Marshal(struct {
+		Name string `json:"name"`
+	}{Name: name})
+	if err != nil {
+		return err
+	}
+	_, err = orchestrator.ExecuteTenantRegistration(
+		ctx, s.log, s.store, s.proj, s.idem,
+		orchestrator.TenantRegistrationCommand{
+			TenantID: tenantID, Name: name, IdempotencyKey: idempotencyKey,
+			RequestMaterial: data,
+			PayloadAt: func(time.Time) ([]byte, error) {
+				return append([]byte(nil), data...), nil
+			},
+		},
+	)
 	return err
 }
 

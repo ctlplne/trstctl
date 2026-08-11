@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -434,6 +435,10 @@ func buildServer(t *testing.T, ctx context.Context, dsn string, oidc config.OIDC
 		phaseStore.Close()
 		t.Fatalf("open event log: %v", err)
 	}
+	storeServerTestProfile(t, phaseStore, "11111111-1111-1111-1111-111111111111", "tls-server", profile.CertificateProfile{
+		Name: "tls-server", AllowedEKUs: []string{"serverAuth"},
+		MaxValidity: profile.Duration(365 * 24 * time.Hour), AllowedProtocols: []string{"api"},
+	})
 	// A custom "requester" role: identities:write (so a requester PASSES the transition
 	// route guard) but NOT certs:issue — so a requester's self-issue is denied by the
 	// GATE's RA split, not merely the route RBAC. This is what proves the served RA

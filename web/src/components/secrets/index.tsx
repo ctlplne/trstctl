@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { SectionCard, AttentionList, AttentionRow } from "@/components/dashboard";
+import { Button } from "@/components/ui/button";
 import { api, type SecretMeta } from "@/lib/api";
 import { translateNow } from "@/i18n/I18nProvider";
 
@@ -282,80 +283,13 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
   );
 }
 
-export function SecretImport({ onImported }: { onImported?: (names: string[]) => void }) {
-  const [prefix, setPrefix] = useState("");
-  const [text, setText] = useState("");
-  const [imported, setImported] = useState<string[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  function parse(input: string): Record<string, unknown> {
-    const values: Record<string, unknown> = {};
-    for (const line of input.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq === -1) continue;
-      values[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
-    }
-    return values;
-  }
-
-  async function submit() {
-    setError(null);
-    setImported(null);
-    try {
-      const result = await api.importSecrets({ values: parse(text), ...(prefix.trim() ? { prefix: prefix.trim() } : {}) });
-      const names = (result.items ?? []).map((item) => item.name);
-      setImported(names);
-      onImported?.(names);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
+export function SecretImport() {
   return (
-    <SectionCard title={translateNow("source.import.secrets.a657cdf701")} description="bulk-import key=value pairs into a folder">
-      <div className="grid gap-2">
-        <label className="grid gap-1 text-body">
-          <span className="font-medium">{translateNow("source.folder.prefix.2d63670e07")}</span>
-          <input
-            value={prefix}
-            onChange={(event) => setPrefix(event.target.value)}
-            placeholder={translateNow("source.prod.imported.b9342ac821")}
-            className="rounded-control border border-border bg-background px-3 py-2"
-          />
-        </label>
-        <label className="grid gap-1 text-body">
-          <span className="font-medium">Key=value pairs</span>
-          <textarea
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            rows={3}
-            placeholder={"DB_URL=postgres://...\nAPI_KEY=..."}
-            className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
-          />
-        </label>
-        <div>
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={!text.trim()}
-            className="min-h-9 rounded-control border border-border px-3 text-body disabled:opacity-60"
-          >
-            Import
-          </button>
-        </div>
-      </div>
-      {imported ? (
-        <p className="mt-2 text-caption text-status-success">
-          {translateNow("source.imported.321f179c80")} {imported.length} {translateNow("source.secrets.cdefff020a")} {imported.join(", ")}
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="mt-2 text-caption text-risk-critical">
-          {error}
-        </p>
-      ) : null}
+    <SectionCard title={translateNow("secrets.import.unavailableTitle")} description={translateNow("secrets.import.unavailableDescription")}>
+      <p className="text-body text-muted-foreground">{translateNow("secrets.import.unavailableBody")}</p>
+      <Button type="button" variant="outline" disabled className="mt-3">
+        {translateNow("secrets.import.unavailableAction")}
+      </Button>
     </SectionCard>
   );
 }

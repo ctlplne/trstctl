@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"trstctl.com/trstctl/internal/store"
 )
 
 // State is a point in an identity's lifecycle.
@@ -133,8 +135,13 @@ type transitionPayload struct {
 	// Absent means the legacy path — the control plane generates the subject key
 	// itself — which is retained for one release train behind a recorded
 	// deprecation event.
-	SubjectCSRPEM string                `json:"subject_csr_pem,omitempty"`
-	SideEffect    *transitionSideEffect `json:"side_effect,omitempty"`
+	SubjectCSRPEM string                      `json:"subject_csr_pem,omitempty"`
+	SideEffect    *transitionSideEffect       `json:"side_effect,omitempty"`
+	Approval      *store.OperationApprovalUse `json:"approval,omitempty"`
+	// Issuance is the exact profile revision and TTL used by an issuance that
+	// does not require dual control. Approval-gated issuance carries the same
+	// binding inside Approval instead, so each command has one canonical copy.
+	Issuance *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
 }
 
 // transitionSideEffect carries the durable outbox intent for lifecycle events
@@ -144,7 +151,7 @@ type transitionPayload struct {
 type transitionSideEffect struct {
 	Destination    string `json:"destination"`
 	IdempotencyKey string `json:"idempotency_key"`
-	Payload        []byte `json:"payload"`
+	Payload        []byte `json:"payload,omitempty"`
 	// RequiredAgentRole is the per-row claim demand stamped on the outbox entry
 	// (epic A3). It is durable HERE, in the event, because reconciliation
 	// rebuilds the outbox row from this record — a classifier consulted only at

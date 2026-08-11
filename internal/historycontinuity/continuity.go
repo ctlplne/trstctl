@@ -106,34 +106,78 @@ func NewReceiptSigner(key *jose.SigningKey) events.TenantDataContinuity {
 // compared with the verified canonical claims.
 func NewReceiptVerifier(key *jose.SigningKey) events.TenantDataContinuityVerifier {
 	return func(_ context.Context, evidence events.TenantDataContinuityEvidence) error {
-		if key == nil {
-			return errors.New("history continuity: audit verification key is required")
-		}
 		if err := validateEvidenceEnvelope(evidence); err != nil {
 			return err
 		}
-
-		var envelope receiptData
-		if err := decodeCanonical(evidence.Receipt.Data, &envelope); err != nil {
-			return fmt.Errorf("history continuity: receipt data is not canonical: %w", err)
-		}
-		if strings.TrimSpace(envelope.JWS) == "" {
-			return errors.New("history continuity: receipt JWS is empty")
-		}
-		payload, err := key.JWKS().Verify(envelope.JWS)
+		report, err := VerifyReceipt(key, evidence.Receipt)
 		if err != nil {
-			return fmt.Errorf("history continuity: verify receipt JWS: %w", err)
-		}
-
-		var claims receiptClaims
-		if err := decodeCanonical(payload, &claims); err != nil {
-			return fmt.Errorf("history continuity: signed claims are not canonical: %w", err)
-		}
-		if err := validateClaims(evidence, claims); err != nil {
 			return err
 		}
-		return nil
+		signedReport, err := json.Marshal(report)
+		if err != nil {
+			return fmt.Errorf("history continuity: encode signed report: %w", err)
+		}
+		evidenceReport, err := json.Marshal(evidence.Report)
+		if err != nil {
+			return fmt.Errorf("history continuity: encode evidence report: %w", err)
+		}
+		if !bytes.Equal(signedReport, evidenceReport) {
+			return errors.New("history continuity: signed report does not exactly match durable recovery evidence")
+		}
+		switch {
+		case report.OperationID != evidence.OperationID:
+			return errors.New("history continuity: signed operation does not match recovery evidence")
+		case report.TenantID != evidence.TenantID:
+			return errors.New("history continuity: signed tenant does not match recovery evidence")
+		case report.SourceStream != evidence.SourceStream:
+			return errors.New("history continuity: signed source stream does not match recovery evidence")
+		case report.TargetStream != evidence.TargetStream:
+			return errors.New("history continuity: signed target stream does not match recovery evidence")
+		case report.ReceiptSequence != evidence.ReceiptSequence:
+			return errors.New("history continuity: signed receipt sequence does not match recovery evidence")
+		default:
+			return nil
+		}
 	}
+}
+
+// VerifyReceipt cryptographically opens a self-contained continuity receipt.
+// Recovery uses NewReceiptVerifier to additionally compare mutable stream
+// metadata; backup descendant verification has no surviving source generation,
+// so it uses this narrower signed-envelope proof and independently compares every
+// artifact/history position.
+func VerifyReceipt(key *jose.SigningKey, receipt events.Event) (events.TenantDataRewriteReport, error) {
+	if key == nil {
+		return events.TenantDataRewriteReport{}, errors.New("history continuity: audit verification key is required")
+	}
+	var envelope receiptData
+	if err := decodeCanonical(receipt.Data, &envelope); err != nil {
+		return events.TenantDataRewriteReport{}, fmt.Errorf("history continuity: receipt data is not canonical: %w", err)
+	}
+	if strings.TrimSpace(envelope.JWS) == "" {
+		return events.TenantDataRewriteReport{}, errors.New("history continuity: receipt JWS is empty")
+	}
+	payload, err := key.JWKS().Verify(envelope.JWS)
+	if err != nil {
+		return events.TenantDataRewriteReport{}, fmt.Errorf("history continuity: verify receipt JWS: %w", err)
+	}
+	var claims receiptClaims
+	if err := decodeCanonical(payload, &claims); err != nil {
+		return events.TenantDataRewriteReport{}, fmt.Errorf("history continuity: signed claims are not canonical: %w", err)
+	}
+	report := claims.Rewrite
+	evidence := events.TenantDataContinuityEvidence{
+		OperationID: report.OperationID, TenantID: report.TenantID,
+		SourceStream: report.SourceStream, TargetStream: report.TargetStream,
+		ReceiptSequence: report.ReceiptSequence, Receipt: receipt, Report: report,
+	}
+	if err := validateEvidenceEnvelope(evidence); err != nil {
+		return events.TenantDataRewriteReport{}, err
+	}
+	if err := validateClaims(evidence, claims); err != nil {
+		return events.TenantDataRewriteReport{}, err
+	}
+	return report, nil
 }
 
 func receiptActor() *events.Actor {
