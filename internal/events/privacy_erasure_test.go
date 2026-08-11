@@ -883,12 +883,39 @@ func TestPseudonymizeEventPolicyRejectsDuplicateJSONKeysBeforeCollapse(t *testin
 
 func TestPseudonymizeEventPolicyRejectsObjectKeyCollisionInEitherOrder(t *testing.T) {
 	const eventType = "privacy.policy.key-collision.test"
-	if err := RegisterPrivacyEventPolicy(eventType, 1, PrivacyEventPolicy{Rules: []PrivacyFieldRule{
-		{Path: "/@key", Mode: PrivacyFieldIdentityExact},
-	}}); err != nil {
+	if privacyPathMatches([]string{"*"}, []string{"@key"}) ||
+		privacyRulePathsOverlap([]string{"*"}, []string{"@key"}) {
+		t.Fatal("dynamic-object value wildcard shadows the synthetic key coordinate")
+	}
+	if privacyPathMatches([]string{"0"}, []string{"*"}) {
+		t.Fatal("an explicit value segment matched a runtime wildcard path")
+	}
+	if err := RegisterPrivacyEventPolicy(eventType, 1, PrivacyEventPolicy{
+		Rules: []PrivacyFieldRule{
+			{Path: "/@key", Mode: PrivacyFieldIdentityExact},
+			{Path: "/*", Mode: PrivacyFieldOpaqueExact},
+		},
+		PayloadShape: PrivacyPayloadShapeOf[map[string]string](),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	placeholder := privacyref.Placeholder(privacyref.SubjectRef("tenant-a", "alice"))
+	if err := validateRegisteredPrivacyEventPayload(
+		[]byte(`{"safe":1}`), eventType, 1,
+	); err == nil || !strings.Contains(err.Error(), "scalar") {
+		t.Fatalf("typed dynamic-object value drift error = %v", err)
+	}
+	rewritten, changed, err := PseudonymizeEventDataForSubject(
+		[]byte(`{"alice":"opaque-value"}`), "tenant-a", "alice", eventType, 1,
+	)
+	if err != nil || !changed {
+		t.Fatalf("dynamic-object key rewrite changed=%t err=%v", changed, err)
+	}
+	var decoded map[string]string
+	if err := json.Unmarshal(rewritten, &decoded); err != nil ||
+		decoded[placeholder] != "opaque-value" || len(decoded) != 1 {
+		t.Fatalf("dynamic-object key rewrite = %v err=%v", decoded, err)
+	}
 	for _, data := range [][]byte{
 		[]byte(`{"alice":"first","` + placeholder + `":"second"}`),
 		[]byte(`{"` + placeholder + `":"second","alice":"first"}`),

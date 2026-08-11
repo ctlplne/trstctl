@@ -330,9 +330,16 @@ func validatePrivacyPayloadShapeNodeClosed(
 			node.element, appendPrivacyPath(path, "*"), rules,
 		)
 	case privacyPayloadShapeMap:
-		return fmt.Errorf(
-			"dynamic object path /%s needs one explicit closing rule",
-			strings.Join(path, "/"),
+		keyShape := &privacyPayloadShapeNode{
+			kind: privacyPayloadShapeScalar, scalar: privacyPayloadScalarString,
+		}
+		if err := validatePrivacyPayloadShapeNodeClosed(
+			keyShape, appendPrivacyPath(path, "@key"), rules,
+		); err != nil {
+			return err
+		}
+		return validatePrivacyPayloadShapeNodeClosed(
+			node.element, appendPrivacyPath(path, "*"), rules,
 		)
 	case privacyPayloadShapeOpen:
 		return fmt.Errorf(
@@ -1146,10 +1153,29 @@ func validatePrivacyPayloadValue(
 		}
 		return nil
 	case privacyPayloadShapeMap:
-		if _, ok := value.(map[string]any); !ok {
+		object, ok := value.(map[string]any)
+		if !ok {
 			return fmt.Errorf("dynamic object path /%s changed shape", strings.Join(path, "/"))
 		}
-		return fmt.Errorf("dynamic object path /%s lacks an explicit opaque/free-text/JSON-identity rule", strings.Join(path, "/"))
+		if shape.element == nil {
+			return fmt.Errorf("dynamic object path /%s has no declared value shape", strings.Join(path, "/"))
+		}
+		keyShape := &privacyPayloadShapeNode{
+			kind: privacyPayloadShapeScalar, scalar: privacyPayloadScalarString,
+		}
+		for key, child := range object {
+			if err := validatePrivacyPayloadValue(
+				key, appendPrivacyPath(path, "@key"), keyShape, rules,
+			); err != nil {
+				return err
+			}
+			if err := validatePrivacyPayloadValue(
+				child, appendPrivacyPath(path, "*"), shape.element, rules,
+			); err != nil {
+				return err
+			}
+		}
+		return nil
 	case privacyPayloadShapeOpen:
 		return fmt.Errorf("open path /%s lacks an explicit opaque/free-text/JSON-identity rule", strings.Join(path, "/"))
 	default:
@@ -1391,11 +1417,28 @@ func privacyPathMatches(rule, path []string) bool {
 		return false
 	}
 	for i := range rule {
-		if rule[i] != "*" && rule[i] != path[i] {
+		if !privacyPathSegmentMatches(rule[i], path[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func privacyPathSegmentMatches(rule, path string) bool {
+	// @key is a synthetic map-key coordinate, never an object/array value.
+	// Keeping it disjoint from * lets one closed typed map declare different
+	// handling for arbitrary keys and arbitrary values without rule shadowing.
+	if rule == "@key" || path == "@key" {
+		return rule == path
+	}
+	return rule == "*" || rule == path
+}
+
+func privacyPathSegmentsOverlap(left, right string) bool {
+	if left == "@key" || right == "@key" {
+		return left == right
+	}
+	return left == right || left == "*" || right == "*"
 }
 
 func privacyRulePathsOverlap(left, right []string) bool {
@@ -1404,7 +1447,7 @@ func privacyRulePathsOverlap(left, right []string) bool {
 		shared = len(right)
 	}
 	for i := 0; i < shared; i++ {
-		if left[i] != right[i] && left[i] != "*" && right[i] != "*" {
+		if !privacyPathSegmentsOverlap(left[i], right[i]) {
 			return false
 		}
 	}
