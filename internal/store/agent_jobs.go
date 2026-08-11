@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -47,6 +48,59 @@ type AgentJobResultClaim struct {
 	Destination    string
 	IdempotencyKey string
 	Payload        []byte
+}
+
+// HostDeployEvidence is the public routing half of the latest completed host
+// deploy. It contains no PEM or key bytes.
+type HostDeployEvidence struct {
+	AgentID     string
+	IdentityID  string
+	Fingerprint string
+}
+
+// LastSuccessfulHostDeployEvidence returns the exact host agent and public
+// successor identity for targetID. That agent owns the encrypted predecessor;
+// the fingerprint follows the certificate replacement edge even when the bad
+// successor's SAN no longer matches its identity.
+func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, targetID string) (HostDeployEvidence, bool, error) {
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		return HostDeployEvidence{}, false, nil
+	}
+	var out HostDeployEvidence
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`SELECT claimed_by_agent_id::text,
+			        COALESCE(convert_from(payload, 'UTF8')::jsonb ->> 'identity_id', ''),
+			        COALESCE(convert_from(payload, 'UTF8')::jsonb ->> 'fingerprint', '')
+			   FROM outbox
+			  WHERE tenant_id = $1
+			    AND destination = 'connector.deploy'
+			    AND status = 'delivered'
+			    AND delivered_at IS NOT NULL
+			    AND required_agent_role = 'host'
+			    AND claimed_by_agent_id IS NOT NULL
+			    AND convert_from(payload, 'UTF8')::jsonb ->> 'target_id' = $2
+			  ORDER BY delivered_at DESC, id DESC
+			  LIMIT 1`, tenantID, targetID).Scan(&out.AgentID, &out.IdentityID, &out.Fingerprint)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		found = true
+		return nil
+	})
+	return out, found, err
+}
+
+// LastSuccessfulHostDeployAgentID is the narrow routing-only view retained for
+// callers that do not need certificate replacement evidence.
+func (s *Store) LastSuccessfulHostDeployAgentID(ctx context.Context, tenantID, targetID string) (string, bool, error) {
+	evidence, found, err := s.LastSuccessfulHostDeployEvidence(ctx, tenantID, targetID)
+	return evidence.AgentID, found, err
 }
 
 // AgentJobClaimForResult proves that this exact claim generation is still held
@@ -106,9 +160,18 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 		// the planner is free to re-evaluate the subquery per row, which silently
 		// claims the whole queue instead of one batch — a fleet-wide thundering
 		// herd hiding behind correct-looking SQL.
+		//
+		// A blank/legacy lane (or the old destination-wide default) is made unique
+		// per job here. Only an explicitly narrower lane serializes work. This
+		// preserves batch claiming for pre-lane rows while making modern
+		// connector.bind:target:<id> deploy/rollback pairs mutually exclusive.
 		rows, err := tx.Query(ctx,
-			`WITH claimable AS (
-			        SELECT c.id
+			`WITH eligible AS (
+			        SELECT c.id,
+			               CASE
+			                 WHEN c.effect_lane <> '' AND c.effect_lane <> c.destination THEN c.effect_lane
+			                 ELSE 'agent-job:' || c.id::text
+			               END AS effective_lane
 			          FROM outbox AS c
 			         WHERE c.tenant_id = $1
 			           AND c.destination = ANY($3::text[])
@@ -118,9 +181,35 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			           AND (c.claimed_by_agent_id IS NULL OR c.claim_expires_at < $5)
 			           AND (c.required_agent_role = '' OR c.required_agent_role = ANY($7::text[]))
 			           AND (c.required_agent_id IS NULL OR c.required_agent_id = $2::uuid)
+			           AND NOT EXISTS (
+			                 SELECT 1
+			                   FROM outbox AS held
+			                  WHERE held.tenant_id = c.tenant_id
+			                    AND CASE
+			                          WHEN held.effect_lane <> '' AND held.effect_lane <> held.destination THEN held.effect_lane
+			                          ELSE 'agent-job:' || held.id::text
+			                        END =
+			                        CASE
+			                          WHEN c.effect_lane <> '' AND c.effect_lane <> c.destination THEN c.effect_lane
+			                          ELSE 'agent-job:' || c.id::text
+			                        END
+			                    AND held.status = 'pending'
+			                    AND held.delivered_at IS NULL
+			                    AND held.claim_completed_at IS NULL
+			                    AND held.claimed_by_agent_id IS NOT NULL
+			                    AND held.claim_expires_at >= $5
+			           )
+			 ), lane_heads AS (
+			        SELECT DISTINCT ON (effective_lane) id, effective_lane
+			          FROM eligible
+			         ORDER BY effective_lane, id
+			 ), claimable AS (
+			        SELECT c.id
+			          FROM outbox AS c
+			          JOIN lane_heads AS h ON h.id = c.id
 			         ORDER BY c.id
 			         LIMIT $4
-			         FOR UPDATE SKIP LOCKED
+			         FOR UPDATE OF c SKIP LOCKED
 			 )
 			 UPDATE outbox AS o
 			    SET claimed_by_agent_id = $2::uuid,

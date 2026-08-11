@@ -460,6 +460,26 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		"agent": info.CommonName, "job_id": req.JobID, "kind": destination,
 		"evidence_digest": req.EvidenceDigest,
 	}
+	if destination == "connector.rollback" {
+		var rollback struct {
+			Connector              string `json:"connector"`
+			Target                 string `json:"target"`
+			TargetID               string `json:"target_id"`
+			PredecessorFingerprint string `json:"predecessor_fingerprint"`
+			SuccessorFingerprint   string `json:"successor_fingerprint"`
+			RequiredAgentID        string `json:"required_agent_id"`
+			RequiredAgentRole      string `json:"required_agent_role"`
+		}
+		if json.Unmarshal(claim.Payload, &rollback) == nil {
+			executed["connector"] = rollback.Connector
+			executed["target"] = rollback.Target
+			executed["target_id"] = rollback.TargetID
+			executed["predecessor_fingerprint"] = rollback.PredecessorFingerprint
+			executed["successor_fingerprint"] = rollback.SuccessorFingerprint
+			executed["required_agent_id"] = rollback.RequiredAgentID
+			executed["required_agent_role"] = rollback.RequiredAgentRole
+		}
+	}
 	a.attachJobReceipt(executed, info, req)
 	a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.executed", executed)
 	a.recordVerifiedReceipt(ctx, info, req, destination, now)
@@ -493,6 +513,10 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		payload, _, _ := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
 		a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, payload)
 	}
+	if destination == "connector.rollback" && a.recordDeployVerification != nil &&
+		(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
+		a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, claim.Payload)
+	}
 	// B2: a host-generated renewal reports the same three outcomes a deploy
 	// does, and needs the same two things done with them.
 	//
@@ -518,14 +542,14 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// response, and it is the decision D4's executed re-bind was waiting for.
 	// Opt-in per target — see maybeAutoRollbackAfterVerifyFailure.
 	if destination == "connector.deploy" && req.Outcome == transport.JobOutcomeVerifyFailed {
-		a.maybeAutoRollbackAfterVerifyFailure(ctx, info.TenantID, req.JobID)
+		a.maybeAutoRollbackAfterVerifyFailure(ctx, info.TenantID, agentID, req.JobID)
 	}
 	// D4: a re-bind that actually happened. The receipt is written from the
 	// JOB payload rather than from the agent's report, because the payload
 	// is what the control plane itself queued — an agent cannot name a
 	// different target in its result and have that recorded as fact.
 	if destination == "connector.rollback" && a.recordRollback != nil {
-		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, idemKey, "", true)
+		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, idemKey, req.Outcome, "")
 	}
 	return &transport.ReportJobResultResponse{Accepted: true}, nil
 }
@@ -564,7 +588,7 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 			// kind, so it classifies contact. It is not free text and is
 			// not rendered as the agent's words.
 			a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, "",
-				strings.TrimSpace(req.Detail), false)
+				transport.JobOutcomeFailed, strings.TrimSpace(req.Detail))
 		}
 	}
 	if ok {
@@ -705,7 +729,7 @@ func (a *agentService) attachJobReceipt(payload map[string]any, info mtls.PeerCe
 // control plane queued; a receipt built from what an agent said would let an
 // agent name a target it was never given and have that written into the
 // tenant's evidence chain as fact.
-func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agentName string, jobID int64, idemKey, reason string, executed bool) {
+func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agentName string, jobID int64, idemKey, outcome, reason string) {
 	if a.store == nil || a.recordRollback == nil {
 		return
 	}
@@ -716,7 +740,7 @@ func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agen
 	if idemKey == "" {
 		idemKey = key
 	}
-	a.recordRollback(ctx, tenantID, agentName, idemKey, string(payload), reason, executed)
+	a.recordRollback(ctx, tenantID, agentName, idemKey, string(payload), outcome, reason)
 }
 
 func (a *agentService) recordVerifiedReceipt(ctx context.Context, info mtls.PeerCertInfo,

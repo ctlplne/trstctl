@@ -186,6 +186,27 @@ func TestAServedCertificateCoveringTheWrongNamesIsASANMismatch(t *testing.T) {
 	}
 }
 
+// A deploy verifies the exact bytes it wrote, but that is not enough: those
+// bytes may be a perfectly well-formed certificate for the wrong hostname.
+// The operator's configured SNI is therefore an independent name check.
+func TestTheDeployedCertificateWithTheWrongConfiguredServerNameFails(t *testing.T) {
+	t.Parallel()
+	addr, leafPEM := serveTLS(t, "wrong.example.test")
+	res, err := verify.Endpoint(context.Background(), verify.Request{
+		Address: addr, ServerName: "wanted.example.test", Vantage: transport.VantageLocal,
+		Expect: expectationFor(t, leafPEM),
+	})
+	if err != nil {
+		t.Fatalf("Endpoint: %v", err)
+	}
+	if res.OK() || res.Verdict.Mismatch != certinfo.MismatchSANs {
+		t.Fatalf("wrong configured server name verdict = %+v", res.Verdict)
+	}
+	if res.Transcript.ServerName != "wanted.example.test" || res.Transcript.Mismatch != certinfo.MismatchSANs {
+		t.Fatalf("wrong-SAN transcript = %+v", res.Transcript)
+	}
+}
+
 // A request with no vantage is refused rather than defaulted.
 //
 // Defaulting would let a local self-check be recorded as network evidence, and

@@ -48,9 +48,10 @@ const (
 	OutcomeFailed   = "failed"
 )
 
-// ClaimableKinds are the job kinds a relay asks for. Only connector work: a
-// relay's whole purpose is driving things that cannot host an agent, and asking
-// for host-local kinds would be asking for work it cannot do.
+// ClaimableKinds are the job kinds the shared agent executor asks for. The
+// server's row-level role and exact-agent demands decide whether this process
+// receives host-local or network-relay work; the executor then independently
+// refuses a connector it cannot run.
 func ClaimableKinds() []string {
 	return []string{
 		"connector.deploy", "connector.test", KindConnectorRollback,
@@ -75,8 +76,8 @@ func ClaimableKinds() []string {
 // needs, probe the target, describe what would change, mutate nothing.
 const KindConnectorTest = "connector.test"
 
-// KindConnectorRollback is the executed re-bind (epic D4): point a listener
-// back at a predecessor object that is still installed on the appliance.
+// KindConnectorRollback is the executed inverse: appliance object re-bind or
+// host-agent local predecessor restore/reload/reverify.
 //
 // It is a separate kind from connector.deploy because an operator must be able
 // to enable rolling back without enabling deploying, and because the payload is
@@ -147,7 +148,7 @@ func RunOnceSelfUpgradeOnly(ctx context.Context, ch Channel, selfUp *SelfUpgrade
 	}
 	executed := 0
 	for _, job := range jobs {
-		if runJob(ctx, ch, nil, connector.LocalOpsConfig{}, nil, selfUp, job) {
+		if runJob(ctx, ch, nil, connector.LocalOpsConfig{}, nil, selfUp, nil, job) {
 			executed++
 		}
 	}
@@ -171,6 +172,23 @@ func RunOnceWithSelfUpgrade(
 	selfUp *SelfUpgrade,
 	limit, leaseSeconds int,
 ) (int, error) {
+	return RunOnceWithSelfUpgradeAndHostRollback(ctx, ch, client, hostProfile, plugins, selfUp, nil, limit, leaseSeconds)
+}
+
+// RunOnceWithSelfUpgradeAndHostRollback is the production host-agent runner.
+// hostRollback is the machine-local encrypted predecessor ledger; passing nil
+// preserves the library entry points used by network-only relays, while the
+// assembled trstctl-agent always supplies it when host execution is enabled.
+func RunOnceWithSelfUpgradeAndHostRollback(
+	ctx context.Context,
+	ch Channel,
+	client *http.Client,
+	hostProfile connector.LocalOpsConfig,
+	plugins *PluginRuntime,
+	selfUp *SelfUpgrade,
+	hostRollback *HostRollbackStore,
+	limit, leaseSeconds int,
+) (int, error) {
 	if ch == nil {
 		return 0, errors.New("relay: no channel")
 	}
@@ -184,7 +202,7 @@ func RunOnceWithSelfUpgrade(
 	}
 	executed := 0
 	for _, job := range jobs {
-		if runJob(ctx, ch, client, hostProfile, plugins, selfUp, job) {
+		if runJob(ctx, ch, client, hostProfile, plugins, selfUp, hostRollback, job) {
 			executed++
 		}
 	}
@@ -198,7 +216,7 @@ func RunOnceWithSelfUpgrade(
 // than waiting out its lease: a relay that dies silently is indistinguishable
 // from a slow one, and the difference matters to whoever is waiting for the
 // certificate to land.
-func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, plugins *PluginRuntime, selfUp *SelfUpgrade, job Job) bool {
+func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, plugins *PluginRuntime, selfUp *SelfUpgrade, hostRollback *HostRollbackStore, job Job) bool {
 	// A5: a self-upgrade redeems nothing — the artifact URL travels in the
 	// payload and its sha256 is the trust anchor. Routed first because it is
 	// the one kind whose executor is about to replace this process.
@@ -255,7 +273,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// from trying to decode a payload that will never have the fields it
 	// expects.
 	if job.Kind == KindConnectorRollback {
-		return runRollback(ctx, ch, client, job)
+		return runRollback(ctx, ch, client, hostProfile, hostRollback, job)
 	}
 
 	var intent DeployIntent
@@ -292,6 +310,11 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		// profile, so it has no authorized command set. Saying so is the point:
 		// silently doing nothing would look identical to a healthy agent.
 		report(ctx, ch, job, OutcomeFailed, "this agent has no host exec profile configured for file and reload deploys")
+		return false
+	}
+	if hostJob && hostRollback != nil &&
+		(strings.TrimSpace(intent.TargetID) == "" || strings.TrimSpace(intent.Fingerprint) == "") {
+		report(ctx, ch, job, OutcomeFailed, "host deploy is missing target or fingerprint rollback identity")
 		return false
 	}
 
@@ -369,6 +392,16 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		report(ctx, ch, job, OutcomeFailed, "connector attempted an operation outside its declared capabilities")
 		return false
 	}
+	if hostJob && hostRollback != nil {
+		if err := hostRollback.RecordDeploy(intent.Connector, intent.TargetID, intent.Fingerprint,
+			material["credential.cert_pem"], material["credential.key_pem"]); err != nil {
+			// The target changed but its predecessor could not be retained. Do not
+			// claim a complete deploy: a retry is idempotent and gets another chance
+			// to durably bind the rollback state before verification is reported.
+			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be committed")
+			return false
+		}
+	}
 	// D2: the deploy applied. Whether the listener is SERVING it is a different
 	// question, and this is the only moment it can be asked — the redeemed
 	// certificate's life ends when this function returns.
@@ -397,13 +430,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	return outcome != transport.OutcomeVerifyFailed
 }
 
-// runRollback executes one re-bind (epic D4).
+// runRollback executes one appliance re-bind or host-local restore (D4/G1).
 //
-// It still redeems: re-pointing a listener means authenticating to the
-// appliance's management interface. What it does NOT redeem is a subject key,
-// because there is none to redeem and none is needed — which is exactly why
-// this operation is available at all.
-func runRollback(ctx context.Context, ch Channel, client *http.Client, job Job) bool {
+// An appliance re-bind still redeems its management credential. A host restore
+// redeems NOTHING: it opens the encrypted predecessor held only by this exact
+// agent, uses the key inside the restore callback, and wipes it afterwards.
+func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, hostRollback *HostRollbackStore, job Job) bool {
 	var intent RollbackIntent
 	if err := decodeJobPayload(job.Payload, &intent); err != nil {
 		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedBadPayload)
@@ -412,11 +444,12 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, job Job) 
 	// Refuse before redeeming, same discipline as a deploy: a credential
 	// redeemed for an attempt that was never going to run is material outside
 	// the seal for nothing, and it burns the attempt's one redemption.
-	if !Executes(intent.Connector) {
+	hostJob := ExecutesOnHost(intent.Connector)
+	if !hostJob && !Executes(intent.Connector) {
 		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNotExecutable)
 		return false
 	}
-	if !connector.CanRollback(intent.Connector) {
+	if !hostJob && !connector.CanRollback(intent.Connector) {
 		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedCannotRebind)
 		return false
 	}
@@ -425,6 +458,71 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, job Job) 
 		// retrying would never produce one.
 		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoPredecessor)
 		return false
+	}
+	if hostJob {
+		if !connector.CanRollbackOnHost(intent.Connector) {
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoHostRestore)
+			return false
+		}
+		if hostRollback == nil {
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoHostState)
+			return false
+		}
+		if RequiresHostExecProfile(intent.Connector) && len(hostProfile.AllowedRoots) == 0 {
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoHostProfile)
+			return false
+		}
+		if strings.TrimSpace(intent.TargetID) == "" {
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedBadPayload)
+			return false
+		}
+		var outcome, detail, evidence string
+		var denied, restoreStarted bool
+		err := hostRollback.Restore(intent.Connector, intent.TargetID, intent.PredecessorFingerprint,
+			func(certPEM, keyPEM []byte) (bool, error) {
+				restoreStarted = true
+				material := Material{
+					"credential.cert_pem": certPEM,
+					"credential.key_pem":  keyPEM,
+				}
+				stats, execErr := ExecuteOnHost(ctx, hostProfile, DeployIntent{
+					Connector: intent.Connector, Target: intent.Target, TargetID: intent.TargetID,
+					Fingerprint: intent.PredecessorFingerprint, TargetConfig: intent.TargetConfig,
+					VerifyAddress: intent.VerifyAddress, VerifyServerName: intent.VerifyServerName,
+				}, material, client)
+				if execErr != nil {
+					return false, execErr
+				}
+				if stats.Denied > 0 {
+					denied = true
+					return false, errors.New("host rollback capability denied")
+				}
+				outcome, detail, evidence = postDeployVerification(ctx, DeployIntent{
+					Connector: intent.Connector, Target: intent.Target, TargetID: intent.TargetID,
+					Fingerprint: intent.PredecessorFingerprint, TargetConfig: intent.TargetConfig,
+					VerifyAddress: intent.VerifyAddress, VerifyServerName: intent.VerifyServerName,
+				}, material)
+				return outcome != transport.OutcomeVerifyFailed, nil
+			})
+		switch {
+		case errors.Is(err, ErrHostRollbackPredecessorMissing):
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedHostPredecessorMissing)
+			return false
+		case denied:
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedCapability)
+			return false
+		case err != nil && !restoreStarted:
+			// Decryption, format, or local disk errors happen before the restore
+			// callback. Calling them a target failure would claim contact that did
+			// not occur.
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedHostStateUnavailable)
+			return false
+		case err != nil:
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackFailedAtTarget)
+			return false
+		}
+		reportWithEvidence(ctx, ch, job, outcome, detail, evidence)
+		return outcome != transport.OutcomeVerifyFailed
 	}
 
 	items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)

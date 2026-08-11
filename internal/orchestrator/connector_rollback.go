@@ -9,37 +9,37 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/events"
 )
 
-// Queueing a rollback that actually executes (epic D4).
+// Queueing a rollback that actually executes (epic D4 + AUD32/G1).
 //
 // The route used to record the operator's intent and stop. That was honest
 // about what it did and useless in the moment it was needed: an operator
 // staring at a listener serving a wrong certificate does not want a receipt,
 // they want the previous certificate serving again.
 //
-// It executes as a re-BIND, queued like every other estate-touching effect —
-// through the outbox, claimed by a relay over its own connection, reported back
-// with a signed receipt. Nothing about the mechanism is special because nothing
-// about it should be: a rollback is a deploy's inverse and belongs on the same
-// rails.
+// Appliances execute a re-bind. Host targets restore the bounded predecessor
+// held only by the exact enrolled host agent. Both travel through the outbox,
+// share the deploy's target lane, and return a signed receipt.
 
-// DestinationConnectorRollback is the outbox destination a relay claims.
+// DestinationConnectorRollback is the outbox destination an enrolled agent claims.
 const DestinationConnectorRollback = "connector.rollback"
 
 // EventConnectorRollbackRequested records that an operator asked for a
 // rollback, before anything is attempted.
 const EventConnectorRollbackRequested = "connector.rollback.requested"
 
-// ConnectorRollbackRequest is one queued re-bind.
+// ConnectorRollbackRequest is one queued appliance re-bind or host restore.
 //
 // It carries no certificate and no key. The predecessor is identified by
-// fingerprint alone, which is enough because the object is already on the
-// appliance — and it is all we could carry anyway, since the control plane
-// holds no subject key after CSR-first issuance.
+// fingerprint alone. An appliance relay selects an installed object; a host
+// agent selects its encrypted local predecessor. The control plane holds no
+// subject key after CSR-first issuance.
 type ConnectorRollbackRequest struct {
 	Connector    string          `json:"connector"`
 	Target       string          `json:"target"`
@@ -51,8 +51,18 @@ type ConnectorRollbackRequest struct {
 	// PredecessorSerial is carried for the operator-facing receipt only. The
 	// relay binds by fingerprint; the serial is what a human recognizes.
 	PredecessorSerial string `json:"predecessor_serial,omitempty"`
-	Reason            string `json:"reason,omitempty"`
-	RequestedBy       string `json:"requested_by,omitempty"`
+	// SuccessorFingerprint identifies the bundle being undone. Together with
+	// the predecessor it makes the signed execution event a complete G1
+	// before/after transcript rather than only a destination.
+	SuccessorFingerprint string `json:"successor_fingerprint,omitempty"`
+	Reason               string `json:"reason,omitempty"`
+	RequestedBy          string `json:"requested_by,omitempty"`
+	// RequiredAgentID binds a host restore to the exact enrolled agent whose
+	// successful deploy retained the predecessor. Empty for appliance re-bind.
+	RequiredAgentID string `json:"required_agent_id,omitempty"`
+	// RequiredAgentRole is derived here and recorded in the request transcript;
+	// callers cannot relocate the operation by choosing it.
+	RequiredAgentRole string `json:"required_agent_role,omitempty"`
 }
 
 // ConnectorRollbackQueued describes the queued job.
@@ -60,19 +70,16 @@ type ConnectorRollbackQueued struct {
 	OutboxID       int64
 	IdempotencyKey string
 	Destination    string
-	// Queued reports whether a relay can actually pick this up. It exists so a
+	// Queued reports whether the required agent can actually pick this up. It exists so a
 	// caller cannot serve "queued" over a row that is not claimable — the
 	// failure that turns an incident-time rollback into a lie the operator acts
 	// on.
 	Queued bool
 }
 
-// RequestConnectorRollback queues a re-bind for a relay to execute.
-//
-// The row demands the NETWORK role. A rollback re-points an appliance listener,
-// which is relay work by definition — a host agent has no route to it, and
-// letting one claim the job would move the work to a machine that cannot do it
-// and then wait out the lease.
+// RequestConnectorRollback queues the appropriate executable inverse. Appliance
+// rows demand network role; host rows demand host role plus the exact agent ID
+// that retained the predecessor.
 func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID string, in ConnectorRollbackRequest) (ConnectorRollbackQueued, error) {
 	req := ConnectorRollbackRequest{
 		Connector:              strings.TrimSpace(in.Connector),
@@ -82,8 +89,15 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 		TargetConfig:           in.TargetConfig,
 		PredecessorFingerprint: strings.TrimSpace(in.PredecessorFingerprint),
 		PredecessorSerial:      strings.TrimSpace(in.PredecessorSerial),
+		SuccessorFingerprint:   strings.TrimSpace(in.SuccessorFingerprint),
 		Reason:                 strings.TrimSpace(in.Reason),
 		RequestedBy:            strings.TrimSpace(in.RequestedBy),
+		RequiredAgentID:        strings.TrimSpace(in.RequiredAgentID),
+	}
+	if normalized, err := normalizeRollbackTargetConfig(req.TargetConfig); err != nil {
+		return ConnectorRollbackQueued{}, fmt.Errorf("orchestrator: normalize connector rollback target config: %w", err)
+	} else {
+		req.TargetConfig = normalized
 	}
 	if req.Connector == "" || req.Target == "" {
 		return ConnectorRollbackQueued{}, errors.New("orchestrator: a connector rollback needs a connector and a target")
@@ -93,6 +107,23 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 		// deployment has no predecessor, and putting that on a relay's queue
 		// only moves the discovery of a fact we already have.
 		return ConnectorRollbackQueued{}, errors.New("orchestrator: a connector rollback needs a predecessor fingerprint")
+	}
+	switch {
+	case connector.CanRollbackOnHost(req.Connector):
+		req.RequiredAgentRole = "host"
+		if req.TargetID == "" {
+			return ConnectorRollbackQueued{}, errors.New("orchestrator: a host rollback needs a stable target id")
+		}
+		if _, err := uuid.Parse(req.RequiredAgentID); err != nil {
+			return ConnectorRollbackQueued{}, errors.New("orchestrator: a host rollback needs the exact enrolled agent id that retained the predecessor")
+		}
+	case connector.CanRollback(req.Connector):
+		req.RequiredAgentRole = "network"
+		if req.RequiredAgentID != "" {
+			return ConnectorRollbackQueued{}, errors.New("orchestrator: an appliance re-bind cannot be pinned to a host agent")
+		}
+	default:
+		return ConnectorRollbackQueued{}, connector.ErrRollbackUnsupported
 	}
 	if req.RequestedBy == "" {
 		if actor, ok := events.ActorFromContext(ctx); ok {
@@ -122,14 +153,14 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 	// Idempotent on (target, predecessor): asking twice for the same rollback is
 	// one rollback. Without this an operator hammering the button during an
 	// incident would queue a job per click, and a relay would execute the same
-	// re-bind repeatedly against an appliance already in the desired state.
+	// restore repeatedly against a target already in the desired state.
 	idemKey := "connector-rollback:" + req.TargetID + ":" + req.Target + ":" + req.PredecessorFingerprint
 
 	var outboxID int64
 	var queuedNow bool
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		// The request is recorded before it is queued, so the audit trail shows
-		// who asked even when the relay never gets to it.
+		// who asked even when the required agent never gets to it.
 		if _, appendErr := o.log.Append(ctx, events.Event{
 			Type: EventConnectorRollbackRequested, TenantID: tenantID, Data: payload,
 		}); appendErr != nil {
@@ -144,20 +175,13 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 			// destination, so a deploy and a rollback for the same listener
 			// share a lane.
 			//
-			// Stated honestly: this does NOT currently serialize anything on the
-			// agent path. The lane limit is enforced by the control plane's own
-			// dispatch claim; ClaimAgentJobs has no lane predicate, so a deploy
-			// and a rollback for one listener can be held by two relays at once
-			// and the last write wins. The lane is set correctly here so that
-			// adding the predicate is a change in one place, and the race is
-			// recorded in docs/limitations.md rather than left for an operator
-			// to discover. Setting the lane and describing it as protection it
-			// does not yet provide would be the worse option.
-			EffectLane: "connector.bind:target:" + req.TargetID,
-			// A rollback re-points an appliance listener, so only a relay can
-			// perform it. Stamped at enqueue from the same vocabulary the deploy
-			// path uses (epic A2).
-			RequiredAgentRole: "network",
+			// ClaimAgentJobs enforces one live holder and one batch row per
+			// effective lane, so deploy and rollback cannot race this target.
+			EffectLane: ConnectorTargetEffectLane(req.TargetID),
+			// Role and exact-agent demand were derived above from the connector's
+			// execution model, not chosen by the API caller.
+			RequiredAgentRole: req.RequiredAgentRole,
+			RequiredAgentID:   req.RequiredAgentID,
 		})
 		if err != nil {
 			return err
@@ -172,7 +196,7 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 		}
 		if inserted || status == "pending" {
 			// Either freshly queued, or an honest replay of work still waiting
-			// for a relay.
+			// for the required agent.
 			queuedNow = true
 			return nil
 		}
@@ -185,10 +209,12 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 		//
 		// Re-arming in place rather than inserting a second row keeps the
 		// idempotency key meaning one command, which is what the claim path and
-		// the receipt chain both key on.
+		// the receipt chain both key on. claim_attempts is deliberately NOT
+		// reset: the signed receipt includes that generation, so reuse would let
+		// a recent receipt from the earlier execution close the re-armed job.
 		tag, err := tx.Exec(ctx,
 			`UPDATE outbox
-			    SET status = 'pending', attempts = 0, claim_attempts = 0,
+			    SET status = 'pending', attempts = 0,
 			        claimed_by_agent_id = NULL, claim_expires_at = NULL,
 			        claim_completed_at = NULL, delivered_at = NULL,
 			        last_error = NULL, next_attempt_at = now()
@@ -206,4 +232,20 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 		OutboxID: outboxID, IdempotencyKey: idemKey, Destination: DestinationConnectorRollback,
 		Queued: queuedNow,
 	}, nil
+}
+
+// normalizeRollbackTargetConfig removes control-plane policy that does not
+// change the restore command. Toggling automatic rollback off before a manual
+// retry must not turn the same (target, predecessor) idempotency key into a
+// payload conflict; the agent neither reads nor needs this flag.
+func normalizeRollbackTargetConfig(raw json.RawMessage) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	delete(fields, "auto_rollback_on_verify_failure")
+	return json.Marshal(fields)
 }

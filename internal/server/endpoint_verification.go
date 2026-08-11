@@ -62,7 +62,7 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 	// The connector and target come from the job payload the control plane
 	// queued, never from the agent's report — the same rule the sweep ingest
 	// follows, for the same reason.
-	intent = deployIntentForVerificationReceipt(jobPayload)
+	intent, rollback := deployIntentForVerificationReceipt(jobPayload)
 
 	for _, res := range report.Results {
 		id := strings.TrimSpace(res.EndpointID)
@@ -70,7 +70,9 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 			continue
 		}
 		s.appendEndpointVerification(ctx, tenantID, agentName, id, res.Transcript, res.Detail)
-		s.recordVerificationReceipt(ctx, tenantID, idempotencyKey, intent, res.Transcript, res.Detail)
+		if !rollback {
+			s.recordVerificationReceipt(ctx, tenantID, idempotencyKey, intent, res.Transcript, res.Detail)
+		}
 		if !res.Transcript.Reached || res.Transcript.Mismatch != "" {
 			s.raiseVerificationAlert(ctx, tenantID, store.EndpointVerification{
 				EndpointID: id, Address: res.Transcript.Address,
@@ -90,14 +92,23 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 // queued deploy. Modern credential-bearing jobs are sealed, so unmarshalling
 // them directly as DeployIntent silently produced an empty connector/target on
 // the verified receipt even though the agent executed the right work.
-func deployIntentForVerificationReceipt(jobPayload []byte) relay.DeployIntent {
+func deployIntentForVerificationReceipt(jobPayload []byte) (relay.DeployIntent, bool) {
+	var rollback relay.RollbackIntent
+	if json.Unmarshal(jobPayload, &rollback) == nil && strings.TrimSpace(rollback.PredecessorFingerprint) != "" {
+		return relay.DeployIntent{
+			Connector: rollback.Connector, Target: rollback.Target, TargetID: rollback.TargetID,
+			IdentityID: rollback.IdentityID, Fingerprint: rollback.PredecessorFingerprint,
+			TargetConfig: rollback.TargetConfig, VerifyAddress: rollback.VerifyAddress,
+			VerifyServerName: rollback.VerifyServerName,
+		}, true
+	}
 	var direct relay.DeployIntent
 	if json.Unmarshal(jobPayload, &direct) == nil && strings.TrimSpace(direct.Connector) != "" {
-		return direct
+		return direct, false
 	}
 	var wrapped sealedConnectorDeployPayload
 	if json.Unmarshal(jobPayload, &wrapped) != nil || wrapped.Format != connectorDeploySealedFormat {
-		return relay.DeployIntent{}
+		return relay.DeployIntent{}, false
 	}
 	address, serverName := verifyTargetFromConfig(wrapped.TargetConfig)
 	return relay.DeployIntent{
@@ -105,7 +116,7 @@ func deployIntentForVerificationReceipt(jobPayload []byte) relay.DeployIntent {
 		Revision: wrapped.Revision, IdentityID: wrapped.IdentityID,
 		Fingerprint: wrapped.Fingerprint, TargetConfig: append(json.RawMessage(nil), wrapped.TargetConfig...),
 		VerifyAddress: address, VerifyServerName: serverName,
-	}
+	}, false
 }
 
 // recordEndpointVerificationSweep ingests a relay's endpoint.verify report.

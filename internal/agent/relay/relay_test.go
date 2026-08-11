@@ -257,13 +257,13 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 	if _, ok := relay.UnshippedJobKinds()["connector.rollback"]; ok {
 		t.Error("connector.rollback is shipped and must not also be listed as unshipped")
 	}
-	capable := relay.RollbackCapableKinds()
+	capable := relay.RollbackExecutableKinds()
 	if len(capable) == 0 {
 		t.Fatal("no relay connector can roll back; connector.rollback must not be advertised")
 	}
 	for _, kind := range capable {
-		if !relay.Executes(kind) {
-			t.Errorf("rollback census names %q, which this relay cannot even reach", kind)
+		if !relay.Executes(kind) && !relay.ExecutesOnHost(kind) {
+			t.Errorf("rollback census names %q, which this agent cannot execute", kind)
 		}
 	}
 	for _, s := range shipped {
@@ -271,7 +271,7 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 			continue
 		}
 		if len(s.Connectors) != len(capable) {
-			t.Errorf("connector.rollback advertises %v but only %v can re-bind", s.Connectors, capable)
+			t.Errorf("connector.rollback advertises %v but executable families are %v", s.Connectors, capable)
 		}
 	}
 }

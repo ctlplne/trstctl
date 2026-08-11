@@ -53,6 +53,12 @@ func serviceArguments(o agentOptions) []string {
 		// D1: without the profile an SCM-restarted agent claims no file/reload
 		// deploys and looks perfectly healthy doing it.
 		args = append(args, "--host-exec-profile", o.hostExecProfile)
+		if o.hostRollbackDir != "" {
+			// G1: the predecessor ledger must survive an SCM restart at the exact
+			// operator-owned location; otherwise rollback disappears precisely
+			// when restart durability is supposed to prove it.
+			args = append(args, "--host-rollback-dir", o.hostRollbackDir)
+		}
 	}
 	if o.relayClaim {
 		args = append(args, "--relay-claim")

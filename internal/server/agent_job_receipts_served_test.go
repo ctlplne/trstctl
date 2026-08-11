@@ -394,7 +394,7 @@ func TestARefusalForUnclaimedWorkIsAuditedButNotCounted(t *testing.T) {
 	}
 }
 
-// A rollback the relay refused before contact must not be recorded as contact.
+// A rollback the agent refused before contact must not be recorded as contact.
 //
 // The served status vocabulary declares ContactedTarget on the generic failure
 // status, so recording a pre-flight refusal there would tell an operator the
@@ -409,6 +409,11 @@ func TestRollbackContactClassificationMatchesWhatTheRelayDid(t *testing.T) {
 		transport.RollbackRefusedNoPredecessor,
 		transport.RollbackRefusedNoCredential,
 		transport.RollbackRefusedNoLockedMemory,
+		transport.RollbackRefusedNoHostRestore,
+		transport.RollbackRefusedNoHostState,
+		transport.RollbackRefusedNoHostProfile,
+		transport.RollbackRefusedHostPredecessorMissing,
+		transport.RollbackRefusedHostStateUnavailable,
 		transport.RollbackRefusedCapability,
 	}
 	for _, reason := range refusedBeforeContact {
@@ -422,7 +427,7 @@ func TestRollbackContactClassificationMatchesWhatTheRelayDid(t *testing.T) {
 	}
 	for _, reason := range reachedTarget {
 		if !transport.RollbackReasonContactedTarget(reason) {
-			t.Errorf("reason %q means the relay reached the target but classifies as no contact", reason)
+			t.Errorf("reason %q means the agent reached the target but classifies as no contact", reason)
 		}
 	}
 	// An unknown phrase — a newer or older agent — must fail closed to NO

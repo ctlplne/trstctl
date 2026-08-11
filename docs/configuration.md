@@ -1432,6 +1432,13 @@ waited.
 See [Getting started](getting-started.md) for the blank Compose stack's published
 agent-channel port and the local CA-pinning steps to reach it from an agent CLI.
 
+For host connector execution, `trstctl-agent --host-exec-profile <file>` also
+initializes an encrypted two-generation predecessor ledger. Set
+`--host-rollback-dir <absolute-directory>` to choose its durable location; when
+omitted it is `host-rollbacks` beside `--key`. Back up or persist that directory
+with the agent identity. If it is lost, the exact host predecessor cannot be
+reconstructed by the control plane and rollback is refused.
+
 ## WASM plugins
 
 The WASM plugin surface is off by default. When enabled, the binary admits only signed

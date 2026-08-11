@@ -39,9 +39,10 @@ type Result struct {
 }
 
 type config struct {
-	timeout time.Duration
-	dialer  *net.Dialer
-	alpn    []string
+	timeout    time.Duration
+	dialer     *net.Dialer
+	alpn       []string
+	serverName string
 }
 
 // Option configures a probe.
@@ -63,6 +64,14 @@ func WithALPN(protos ...string) Option {
 	return func(c *config) { c.alpn = protos }
 }
 
+// WithServerName overrides the address host used for SNI. Verification of a
+// virtual host must ask the listener for the same certificate a real client
+// would; recording an override only in the transcript while still sending the
+// IP address would inspect the wrong virtual host.
+func WithServerName(name string) Option {
+	return func(c *config) { c.serverName = name }
+}
+
 // Probe dials addr (host:port), performs a TLS handshake to capture the
 // presented certificate chain, and closes without sending application data. The
 // host part of addr is sent as SNI. It returns an error if the address is
@@ -76,6 +85,9 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return Result{}, fmt.Errorf("tlsprobe: invalid address %q: %w", addr, err)
+	}
+	if cfg.serverName != "" {
+		host = cfg.serverName
 	}
 
 	if cfg.timeout > 0 {

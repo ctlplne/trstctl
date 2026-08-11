@@ -490,3 +490,106 @@ func TestClaimHonorsPerRowAgentIdentityDemand(t *testing.T) {
 		t.Fatalf("the named agent could not claim its own upgrade: %v", got)
 	}
 }
+
+// AUD32: effect_lane is the lock name for the estate object being changed.
+// A batch claimant must not take both a deploy and rollback for one listener,
+// and a second enrolled agent must not take the sibling while the first lease
+// is alive. Otherwise "rollback" and "deploy" race and the last writer wins.
+func TestAgentJobClaimSerializesOneEffectiveLaneAcrossAgents(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	st, tenantID := newStore(t), tenantA
+	ctx := context.Background()
+	seedAgentJobTenant(t, ctx, st, tenantID)
+	const (
+		firstAgent  = "dddddddd-0000-0000-0000-000000000001"
+		secondAgent = "dddddddd-0000-0000-0000-000000000002"
+		lane        = "connector.bind:target:target-a"
+	)
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		for i, destination := range []string{"connector.deploy", "connector.rollback"} {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO outbox
+				        (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role)
+				 VALUES ($1, $2, $3, $4, $5, 'host')`,
+				tenantID, destination, []byte(`{"target_id":"target-a"}`), "aud32-lane-"+itoa(i), lane); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed same-lane jobs: %v", err)
+	}
+
+	now := time.Now().UTC()
+	first, err := st.ClaimAgentJobs(ctx, tenantID, firstAgent,
+		[]string{"connector.deploy", "connector.rollback"}, []string{"host"}, 10, time.Minute, now)
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if len(first) != 1 {
+		t.Fatalf("first agent claimed %d same-lane jobs, want exactly one: %+v", len(first), first)
+	}
+	second, err := st.ClaimAgentJobs(ctx, tenantID, secondAgent,
+		[]string{"connector.deploy", "connector.rollback"}, []string{"host"}, 10, time.Minute, now)
+	if err != nil {
+		t.Fatalf("second claim: %v", err)
+	}
+	if len(second) != 0 {
+		t.Fatalf("second agent claimed same lane while first lease is active: %+v", second)
+	}
+}
+
+// The predecessor lives on one machine. Role-compatible is not enough: the
+// rollback route must recover the exact enrolled agent that completed the most
+// recent host deploy, and the lookup must stay tenant scoped.
+func TestLastSuccessfulHostDeployAgentIDIsExactRecentAndTenantScoped(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	st := newStore(t)
+	ctx := context.Background()
+	seedAgentJobTenant(t, ctx, st, tenantA)
+	seedAgentJobTenant(t, ctx, st, tenantB)
+	const (
+		oldAgent   = "eeeeeeee-0000-0000-0000-000000000001"
+		newAgent   = "eeeeeeee-0000-0000-0000-000000000002"
+		otherAgent = "eeeeeeee-0000-0000-0000-000000000003"
+	)
+	seed := func(tenantID, idem, agentID, targetID string, delivered time.Time) {
+		t.Helper()
+		if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx,
+				`INSERT INTO outbox
+				        (tenant_id, destination, payload, idempotency_key, status, delivered_at,
+				         required_agent_role, claimed_by_agent_id, claim_expires_at, claim_completed_at)
+				 VALUES ($1, 'connector.deploy', $2, $3, 'delivered', $4,
+				         'host', $5::uuid, $4, $4)`,
+				tenantID, []byte(`{"target_id":"`+targetID+`","identity_id":"identity-`+idem+`","fingerprint":"fingerprint-`+idem+`"}`), idem, delivered, agentID)
+			return err
+		}); err != nil {
+			t.Fatalf("seed delivered deploy: %v", err)
+		}
+	}
+	now := time.Now().UTC()
+	seed(tenantA, "aud32-old", oldAgent, "target-a", now.Add(-time.Minute))
+	seed(tenantA, "aud32-new", newAgent, "target-a", now)
+	seed(tenantB, "aud32-other", otherAgent, "target-a", now.Add(time.Minute))
+
+	got, found, err := st.LastSuccessfulHostDeployAgentID(ctx, tenantA, "target-a")
+	if err != nil || !found || got != newAgent {
+		t.Fatalf("tenant A exact host = %q found=%v err=%v, want %s", got, found, err, newAgent)
+	}
+	evidence, found, err := st.LastSuccessfulHostDeployEvidence(ctx, tenantA, "target-a")
+	if err != nil || !found || evidence.AgentID != newAgent || evidence.IdentityID != "identity-aud32-new" || evidence.Fingerprint != "fingerprint-aud32-new" {
+		t.Fatalf("tenant A latest host evidence = %+v found=%v err=%v", evidence, found, err)
+	}
+	got, found, err = st.LastSuccessfulHostDeployAgentID(ctx, tenantB, "target-a")
+	if err != nil || !found || got != otherAgent {
+		t.Fatalf("tenant B exact host = %q found=%v err=%v, want %s", got, found, err, otherAgent)
+	}
+	if _, found, err := st.LastSuccessfulHostDeployAgentID(ctx, tenantA, "missing"); err != nil || found {
+		t.Fatalf("missing target found=%v err=%v", found, err)
+	}
+}

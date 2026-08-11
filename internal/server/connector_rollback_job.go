@@ -20,16 +20,17 @@ var rollbackReceiptNamespace = uuid.MustParse("6f1d9a52-0f2a-4a5e-9a41-2f9c7f6b0
 // The rollback result receipt (epic D4).
 //
 // Queueing a rollback and executing one are different facts, and the evidence
-// chain records both. The queue receipt says an operator asked; this one says a
-// relay re-bound the listener. Collapsing them into a single "rolled back"
-// written at request time is exactly the memo-only receipt this epic replaced.
+// chain records both. The queue receipt says an operator asked; this one says an
+// agent performed the family-specific rollback. Collapsing them into a single
+// "rolled back" written at request time is exactly the memo-only receipt this
+// epic replaced.
 
-// rollbackReceipt records what a relay reported for a connector.rollback job.
+// rollbackReceipt records what an agent reported for a connector.rollback job.
 //
 // outcome is the relay's own terminal outcome, already verified by the signed
 // receipt gate (epic A1) before this runs — so what is recorded here is a claim
 // the agent signed, not a claim the control plane invented about itself.
-func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName, idempotencyKey, payloadJSON, reason string, executed bool) {
+func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName, idempotencyKey, payloadJSON, outcome, reason string) {
 	if s.orch == nil {
 		return
 	}
@@ -43,17 +44,27 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName, idemp
 		PredecessorSerial      string `json:"predecessor_serial"`
 	}
 	if err := json.Unmarshal([]byte(payloadJSON), &req); err != nil {
-		// A relay reporting something this cannot read is version skew, not a
+		// An agent reporting something this cannot read is version skew, not a
 		// rollback result. Recording it either way would be a guess.
 		return
 	}
 
 	status := servedstatus.ConnectorRolledBack
 	receiptReason := "rolled_back"
-	detail := "the target was re-bound to the predecessor certificate serial " + req.PredecessorSerial +
-		". No key was uploaded — the object was already installed on the target."
-	if !executed {
-		// Contact is classified from the relay's closed-set reason, never
+	detail := "agent " + agentName + " restored the predecessor certificate serial " + req.PredecessorSerial +
+		" and completed the connector reload."
+	switch outcome {
+	case transport.JobOutcomeVerified:
+		receiptReason = "rolled_back_and_reverified"
+		detail += " The same agent re-handshook the listener and verified the predecessor is serving."
+	case transport.JobOutcomeExecuted:
+		detail += " No listener verification address was configured, so this receipt does not claim what is serving."
+	case transport.JobOutcomeVerifyFailed:
+		status = servedstatus.ConnectorRollbackFailed
+		receiptReason = "rollback_restore_reverify_failed"
+		detail += " The restore ran, but the same agent's listener re-verification failed."
+	default:
+		// Contact is classified from the agent's closed-set reason, never
 		// assumed. Five of the failure reasons are refusals made before a socket
 		// is opened, and recording those as "the attempt ran against the target"
 		// would send an operator to check an appliance that never heard about
@@ -62,11 +73,11 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName, idemp
 		if transport.RollbackReasonContactedTarget(reason) {
 			status = servedstatus.ConnectorRollbackFailed
 			receiptReason = "rollback_failed"
-			detail = "the relay reached the target and the re-bind did not succeed: " + reason
+			detail = "the agent reached the target and the rollback operation did not succeed: " + reason
 		} else {
 			status = servedstatus.ConnectorRollbackRefused
 			receiptReason = "rollback_refused"
-			detail = "the relay declined before contacting the target: " + reason
+			detail = "the agent declined before contacting the target: " + reason
 		}
 	}
 

@@ -196,6 +196,16 @@ dry-run copy; the `--host-exec-profile` file is the authority enforced where the
 effect runs, so operators keep their roots and actions aligned. To add a target
 trstctl doesn't ship, follow the [connector authoring guide](../guides/connector-authoring.md).
 
+Host rollback never sends predecessor key material back through the control
+plane. Run the host agent with `--relay-claim --host-exec-profile <file>`; it
+keeps active plus one predecessor in an encrypted local ledger at
+`--host-rollback-dir` (by default `host-rollbacks` beside the agent key). A
+rollback is routed to that exact enrolled agent, serialized with deploys for the
+target, restores files, runs the allowlisted reload, and re-handshakes
+`verify_address`. The four appliance families listed in the support matrix use
+object re-bind instead. Every other family returns a conflict and records no
+rollback-shaped success.
+
 ## Pitfalls & limits
 
 - **Serving status:** the SDK and all 24 shipped connectors (initial + appliance) are

@@ -16,18 +16,18 @@ import (
 //
 // This is the pair that makes verification worth having. Detection alone tells
 // an operator that production is serving the wrong certificate; it does not
-// stop production serving the wrong certificate. D4 built the executed re-bind
-// and could only be triggered by hand, because nothing could yet decide
-// automatically that a re-bind was warranted. `verify_failed` is that decision.
+// stop production serving the wrong certificate. D4 built appliance re-bind;
+// AUD32 adds host-local predecessor restore. Both could only be triggered by
+// hand until `verify_failed` became the automatic decision.
 //
 // It fires only on verify_failed and never on plain failure, and the difference
 // is load-bearing: a deploy that FAILED did not change the target, so rolling
 // it back would undo something that was never done — at best a no-op, at worst
-// a re-bind away from a certificate that is serving perfectly well.
+// a restore away from a certificate that is serving perfectly well.
 //
 // OPT-IN, per target, default off.
 //
-// Automatic re-binding of a production listener is a mutation an operator did
+// Automatic rollback of a production listener is a mutation an operator did
 // not ask for at the moment it happens, and this codebase's habit is that
 // consent for one thing is not consent for another: enabling verification says
 // "tell me when this breaks", not "change my load balancer when you think it
@@ -43,8 +43,8 @@ const autoRollbackConfigKey = "auto_rollback_on_verify_failure"
 //
 // Everything it needs comes from the job payload the control plane itself
 // queued — never from the agent's report. An agent that could name the target
-// in its result could trigger a re-bind of a target it was never given.
-func (a *agentService) maybeAutoRollbackAfterVerifyFailure(ctx context.Context, tenantID string, jobID int64) {
+// in its result could trigger rollback of a target it was never given.
+func (a *agentService) maybeAutoRollbackAfterVerifyFailure(ctx context.Context, tenantID, reportingAgentID string, jobID int64) {
 	if a.store == nil || a.orch == nil {
 		return
 	}
@@ -70,14 +70,14 @@ func (a *agentService) maybeAutoRollbackAfterVerifyFailure(ctx context.Context, 
 		// change a production listener.
 		return
 	}
-	// Only families whose API can address an installed object separately from
-	// uploading one can re-bind at all (D4). For the rest there is nothing to
-	// automate, and pretending otherwise would queue work that fails.
-	if !connector.CanRollback(target.Type) {
+	// Executable families either re-bind an already-installed appliance object
+	// or restore an encrypted predecessor retained by the exact host agent. For
+	// every other family there is nothing to automate, so fail closed here.
+	if !connector.CanExecuteRollback(target.Type) {
 		return
 	}
 
-	predecessor := a.store.ResolvePredecessorCertificate(ctx, tenantID, intent.IdentityID)
+	predecessor := a.store.ResolvePredecessorCertificateForFingerprint(ctx, tenantID, intent.Fingerprint)
 	if predecessor.Fingerprint == "" {
 		// No predecessor means there is nothing to roll back TO. A first
 		// deployment that fails verification is a deployment to fix, not a
@@ -94,6 +94,13 @@ func (a *agentService) maybeAutoRollbackAfterVerifyFailure(ctx context.Context, 
 		IdentityID: intent.IdentityID, TargetConfig: target.Config,
 		PredecessorFingerprint: predecessor.Fingerprint,
 		PredecessorSerial:      predecessor.Serial,
+		SuccessorFingerprint:   intent.Fingerprint,
+		RequiredAgentID: func() string {
+			if connector.CanRollbackOnHost(target.Type) {
+				return reportingAgentID
+			}
+			return ""
+		}(),
 		// The reason travels into the receipt so an operator reading the
 		// evidence chain later sees WHY a rollback they did not request
 		// happened, and can tell it from one they did.
@@ -105,7 +112,7 @@ func (a *agentService) maybeAutoRollbackAfterVerifyFailure(ctx context.Context, 
 // config.
 //
 // Absent means off. A missing flag is not consent, and a target whose config
-// predates this feature must never start re-binding itself because a new
+// predates this feature must never start rolling itself back because a new
 // version shipped.
 func autoRollbackEnabled(cfg json.RawMessage) bool {
 	if len(cfg) == 0 {

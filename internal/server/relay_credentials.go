@@ -388,8 +388,8 @@ func relayDeployIntentFromSealed(job store.AgentJob) (RelayDeployIntent, error) 
 	}, nil
 }
 
-// RelayRollbackIntent is what a relay receives when it claims a rollback job
-// (epic D4).
+// RelayRollbackIntent is what an appliance relay or exact host agent receives
+// when it claims a rollback job (D4/G1).
 //
 // It carries no certificate and no key, and it never needs to: a rollback
 // re-binds a listener to an object already installed on the appliance. The
@@ -404,8 +404,11 @@ type RelayRollbackIntent struct {
 	TargetConfig json.RawMessage `json:"target_config,omitempty"`
 	// PredecessorFingerprint names the installed object to bind back to.
 	PredecessorFingerprint string   `json:"predecessor_fingerprint"`
+	SuccessorFingerprint   string   `json:"successor_fingerprint,omitempty"`
 	Reason                 string   `json:"reason,omitempty"`
 	CredentialRefs         []string `json:"credential_refs,omitempty"`
+	VerifyAddress          string   `json:"verify_address,omitempty"`
+	VerifyServerName       string   `json:"verify_server_name,omitempty"`
 }
 
 // projectRollbackIntent builds the agent's view of a rollback job.
@@ -429,6 +432,7 @@ func projectRollbackIntent(job store.AgentJob) ([]byte, error) {
 		return nil, errors.New("connector rollback payload carries key material")
 	}
 	intent.CredentialRefs = collectSecretRefs(intent.TargetConfig)
+	intent.VerifyAddress, intent.VerifyServerName = verifyTargetFromConfig(intent.TargetConfig)
 	return json.Marshal(intent)
 }
 

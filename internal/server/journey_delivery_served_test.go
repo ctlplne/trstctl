@@ -584,8 +584,14 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 		"identity_id": ident.ID,
 		"reason":      "journey-001 rollback drill",
 	})
-	if status != http.StatusOK || !jsonContains(t, body, "rollback_recorded") {
-		t.Fatalf("rollback target action: status %d body %s", status, body)
+	if status != http.StatusConflict || jsonContains(t, body, "rollback_recorded") ||
+		!jsonContains(t, body, "no executable rollback route") {
+		t.Fatalf("unsupported rollback was not honestly refused: status %d body %s", status, body)
+	}
+	afterRefusal := connectorDeliveriesForIdentity(t, h, tok, ident.ID)
+	if len(afterRefusal.Items) != len(afterRenew.Items) {
+		t.Fatalf("unsupported rollback wrote a rollback-shaped receipt: before=%d after=%d raw=%s",
+			len(afterRenew.Items), len(afterRefusal.Items), afterRefusal.Raw)
 	}
 
 	transition("revoked", "keyCompromise")

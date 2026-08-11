@@ -106,7 +106,7 @@ func Endpoint(ctx context.Context, req Request) (Result, error) {
 	// handshake worked (M1). Measured around the dial itself, so it includes the
 	// key exchange whose size is the whole question for a hybrid group.
 	handshakeStart := time.Now()
-	probe, err := tlsprobe.Probe(ctx, addr, tlsprobe.WithTimeout(timeout))
+	probe, err := tlsprobe.Probe(ctx, addr, tlsprobe.WithTimeout(timeout), tlsprobe.WithServerName(strings.TrimSpace(req.ServerName)))
 	tr.HandshakeMillis = time.Since(handshakeStart).Milliseconds()
 	if err != nil {
 		// Unreachable. The transcript says so and claims nothing else: no
@@ -175,6 +175,12 @@ func Endpoint(ctx context.Context, req Request) (Result, error) {
 		ChainFingerprints: chain,
 		At:                observedAt,
 	})
+	if verdict.OK() && strings.TrimSpace(req.ServerName) != "" &&
+		certinfo.VerifyHostname(probe.PeerCertificates[0], req.ServerName) != nil {
+		verdict.Mismatch = certinfo.MismatchSANs
+		verdict.CheckedSANs = true
+		verdict.Detail = "served certificate is not valid for the configured server name"
+	}
 	tr.Mismatch = verdict.Mismatch
 	tr.CheckedSANs = verdict.CheckedSANs
 	tr.CheckedChain = verdict.CheckedChain

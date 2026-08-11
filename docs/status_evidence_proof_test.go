@@ -260,7 +260,7 @@ var consoleSuccessEvidenceValues = map[string]string{
 	"certificateStatus.active":       "the certificate read model says active rather than revoked or superseded",
 	"deliveryStatus.delivered":       "the connector receipt records target mutation; verification remains a distinct value",
 	"deliveryStatus.dry_run_planned": "the relay contacted the target and returned a zero-write mutation plan",
-	"deliveryStatus.rolled_back":     "the relay reported that it rebound the target to the predecessor object",
+	"deliveryStatus.rolled_back":     "an enrolled agent reported a family-specific predecessor restore; receipt detail states whether the listener was reverified",
 	"expiryBands.healthy":            "a parsed expiry is more than ninety days away",
 	"lifecycleStatus.deployed":       "the event-sourced lifecycle records deployment",
 	"lifecycleStatus.issued":         "the event-sourced lifecycle records issuance",

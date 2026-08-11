@@ -67,15 +67,12 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags:      []string{"--relay-claim"},
 		},
 		{
-			// D4: the executed re-bind. NOT every relay connector — only the
-			// families whose API can address an installed object separately
-			// from uploading one, because that is the property a re-bind needs.
-			// Advertising the rest would take a claim, redeem a credential, and
-			// hand the work back having changed nothing while a bad certificate
-			// kept serving traffic.
+			// D4/G1: appliances re-bind an installed object; host agents restore
+			// their one encrypted predecessor bundle, reload, and reverify.
+			// Every other family is refused at the API rather than advertised.
 			Kind:       KindConnectorRollback,
-			Connectors: RollbackCapableKinds(),
-			Flags:      []string{"--relay-claim"},
+			Connectors: RollbackExecutableKinds(),
+			Flags:      []string{"--relay-claim", "--host-exec-profile", "--host-rollback-dir"},
 		},
 		{
 			// R1: revocation distribution-point health. It carries no credential

@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -521,26 +522,56 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if reason == "" {
 			reason = "operator rollback"
 		}
-		// D4: this EXECUTES where it can.
+		// D4/AUD32: this EXECUTES where it can.
 		//
 		// The predecessor is resolved from the certificate's own replacement
 		// chain. Where the connector family can address an installed object
 		// separately from uploading one, the rollback is queued as a real
-		// connector.rollback job a relay claims and performs — a re-bind, which
-		// is the only executable form available once the control plane holds no
-		// subject key to re-upload.
+		// connector.rollback job a network relay claims and performs as a
+		// re-bind. A host connector instead routes to the exact host agent whose
+		// encrypted local ledger holds the predecessor bundle; the control plane
+		// never receives that bundle or its key.
 		//
-		// Where it cannot, the old attested-intent receipt stands, with the
-		// predecessor named by serial and fingerprint so the manual restore is a
-		// task someone can actually perform. Both outcomes are recorded with a
-		// status that says which happened; a route that reported "rolled back"
-		// for both would be the memo-only receipt this epic exists to remove.
+		// A family without either execution model is refused below; it never gets
+		// a rollback-shaped success receipt.
 		predecessor := resolvePredecessorCertificate(ctx, a.store, tenantID, identityID)
-		rollbackRef := predecessorRollbackRef(ctx, a.store, tenantID, identityID, target.Name)
-		status := servedstatus.ConnectorRollbackRecorded
-		statusReason := "rollback_attested_not_executed"
+		var rollbackRef string
+		if !connector.CanExecuteRollback(target.Type) {
+			return 0, nil, errStatus(http.StatusConflict,
+				"this connector family has no executable rollback route; no rollback receipt was recorded")
+		}
+		if a.orch == nil {
+			return 0, nil, errors.New("connector rollback orchestrator is not configured")
+		}
+		status := servedstatus.ConnectorRollbackQueued
+		statusReason := "rollback_queued_for_agent_execution"
+		var requiredAgentID string
+		if connector.CanRollbackOnHost(target.Type) {
+			evidence, found, evidenceErr := a.store.LastSuccessfulHostDeployEvidence(ctx, tenantID, target.ID)
+			err = evidenceErr
+			if err != nil {
+				return 0, nil, err
+			}
+			if !found {
+				return 0, nil, errStatus(http.StatusConflict,
+					"no successful enrolled host-agent deploy owns a predecessor for this target; no rollback was queued or recorded")
+			}
+			if strings.TrimSpace(req.IdentityID) != "" && evidence.IdentityID != strings.TrimSpace(req.IdentityID) {
+				return 0, nil, errStatus(http.StatusConflict,
+					"the latest host deploy belongs to a different identity; no rollback was queued or recorded")
+			}
+			requiredAgentID = evidence.AgentID
+			fingerprint = evidence.Fingerprint
+			p := a.store.ResolvePredecessorCertificateForFingerprint(ctx, tenantID, evidence.Fingerprint)
+			predecessor = predecessorCertificate{Serial: p.Serial, Fingerprint: p.Fingerprint}
+			rollbackRef = "restore predecessor for the latest enrolled host-agent deploy on " + target.Name
+		}
+		if predecessor.Fingerprint == "" {
+			return 0, nil, errStatus(http.StatusConflict,
+				"this target has no predecessor certificate to restore; no rollback receipt was recorded")
+		}
 
-		if connector.CanRollback(target.Type) && predecessor.Fingerprint != "" && a.orch != nil {
+		{
 			// The SAME string a deploy routes on. target.Name is the display
 			// name; the connectors derive their installed object from the
 			// routing attribute, and using the display name here would make
@@ -554,6 +585,8 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 				IdentityID: strings.TrimSpace(req.IdentityID), TargetConfig: target.Config,
 				PredecessorFingerprint: predecessor.Fingerprint,
 				PredecessorSerial:      predecessor.Serial,
+				SuccessorFingerprint:   fingerprint,
+				RequiredAgentID:        requiredAgentID,
 				Reason:                 reason,
 			})
 			if qErr != nil {
@@ -568,20 +601,26 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 					"a rollback for this target and predecessor exists and could not be re-queued; "+
 						"inspect the connector delivery receipts for its outcome before retrying")
 			}
-			status = servedstatus.ConnectorRollbackQueued
-			statusReason = "rollback_queued_for_relay_execution"
-			// Deliberately does NOT assert the object is on the appliance. All
-			// this side checked is its own replacement chain; whether the
-			// fingerprint-named object is actually installed is something only
-			// the relay can see, and it checks before binding. Stating it as
-			// fact here would be the control plane vouching for a machine it
-			// has never looked at.
-			rollbackRef = "queued for relay execution on " + target.Name +
-				": re-bind to the predecessor certificate serial " + predecessor.Serial +
-				" (fingerprint " + predecessor.Fingerprint + "), outbox key " + queued.IdempotencyKey +
-				". No key is uploaded. Whether that object is still installed on the target is " +
-				"verified by the relay when it runs; if it is gone the rollback fails rather than " +
-				"reporting success."
+			if connector.CanRollbackOnHost(target.Type) {
+				rollbackRef = "queued for exact enrolled host-agent execution on " + target.Name +
+					": restore predecessor certificate serial " + predecessor.Serial +
+					" (fingerprint " + predecessor.Fingerprint + ") from that agent's encrypted local ledger, outbox key " +
+					queued.IdempotencyKey + ". The predecessor key never passes through the control plane. " +
+					"The agent reloads the service and reverifies the configured listener; missing or mismatched local state fails closed."
+			} else {
+				// Deliberately does NOT assert the object is on the appliance. All
+				// this side checked is its own replacement chain; whether the
+				// fingerprint-named object is actually installed is something only
+				// the relay can see, and it checks before binding. Stating it as
+				// fact here would be the control plane vouching for a machine it
+				// has never looked at.
+				rollbackRef = "queued for enrolled network-relay execution on " + target.Name +
+					": re-bind to the predecessor certificate serial " + predecessor.Serial +
+					" (fingerprint " + predecessor.Fingerprint + "), outbox key " + queued.IdempotencyKey +
+					". No key is uploaded. Whether that object is still installed on the target is " +
+					"verified by the relay when it runs; if it is gone the rollback fails rather than " +
+					"reporting success."
+			}
 		}
 
 		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
@@ -928,7 +967,7 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		item.Capabilities = []string{}
 		item.ReplaySafety = replaySafetyLabel(connector.ReplaySafetyAtMostOnce)
 		item.TargetVantage = string(connector.VantageControlPlane)
-		item.ExecutesRollback = connector.CanRollback(item.Name)
+		item.ExecutesRollback = connector.CanExecuteRollback(item.Name)
 		item.DeviceProven = connector.DeviceProven(item.Name)
 		if connector.IsRelayVantageFamily(item.Name) {
 			status := connector.ParityStatusFor(item.Name)
@@ -976,45 +1015,6 @@ func replaySafetyLabel(safety connector.ReplaySafety) string {
 		return "reconciled"
 	}
 	return "at-most-once"
-}
-
-// predecessorRollbackRef names the exact credential a manual rollback must
-// restore (epic D4, partial).
-//
-// The previous ref said "pending manual restore of the previous credential",
-// which on a target renewed several times is a question rather than an
-// instruction. This resolves the replacement chain and names the predecessor by
-// serial and fingerprint — the two identifiers an operator can match against
-// what is installed on the appliance.
-//
-// When there is no predecessor it says so plainly. A first deployment has
-// nothing to roll back to, and an operator told to "restore the previous
-// credential" for one would waste their time looking for it.
-func predecessorRollbackRef(ctx context.Context, st *store.Store, tenantID string, identityID *string, targetName string) string {
-	if st == nil || identityID == nil || strings.TrimSpace(*identityID) == "" {
-		return "no predecessor is resolvable: this rollback names no identity, so there is no replacement chain to walk"
-	}
-	identity, err := st.GetIdentity(ctx, tenantID, *identityID)
-	if err != nil {
-		return "no predecessor is resolvable: the identity could not be loaded"
-	}
-	certs, err := st.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, identity.OwnerID, identity.Name)
-	if err != nil || len(certs) == 0 {
-		return "no predecessor is resolvable: no issued certificate history for this identity"
-	}
-	current := certs[len(certs)-1]
-	if current.ReplacesID == nil || strings.TrimSpace(*current.ReplacesID) == "" {
-		return "no predecessor exists: the credential on " + targetName +
-			" is the first issued for this identity, so there is nothing to roll back to"
-	}
-	previous, err := st.GetCertificate(ctx, tenantID, *current.ReplacesID)
-	if err != nil {
-		return "a predecessor is recorded but could not be loaded; the replacement chain names certificate " + *current.ReplacesID
-	}
-	return "pending manual restore on " + targetName + ": rebind to the predecessor certificate serial " +
-		previous.Serial + " (fingerprint " + previous.Fingerprint + "), which replaced-by serial " + current.Serial +
-		". trstctl cannot execute this: after CSR-first issuance the control plane holds no subject key to re-upload, " +
-		"and no connector yet exposes a rebind-only operation"
 }
 
 // parityGateNames renders gates for the wire, never nil.

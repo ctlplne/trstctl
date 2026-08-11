@@ -144,6 +144,24 @@ func Inspect(raw []byte) (Info, error) {
 	return info, nil
 }
 
+// VerifyHostname applies the standard X.509 DNS/IP name rules to a PEM or DER
+// certificate. It stays inside the crypto boundary because VerifyHostname is a
+// crypto/x509 operation; callers need only the pass/fail fact.
+func VerifyHostname(raw []byte, hostname string) error {
+	der := raw
+	if block, _ := pem.Decode(raw); block != nil {
+		if block.Type != "CERTIFICATE" {
+			return fmt.Errorf("certinfo: PEM block is %q, not CERTIFICATE", block.Type)
+		}
+		der = block.Bytes
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return fmt.Errorf("certinfo: parse certificate: %w", err)
+	}
+	return cert.VerifyHostname(strings.TrimSpace(hostname))
+}
+
 // InspectAll parses every certificate in raw. PEM bundles may contain private-key
 // blocks next to certificate blocks; this helper ignores non-certificate PEM
 // blocks and returns only public certificate metadata. Non-PEM input is tried as

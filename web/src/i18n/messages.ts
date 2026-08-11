@@ -1167,20 +1167,20 @@ export const messages = {
     description: "A3: credential-redemption custody health on the Operations agent job ledger panel.",
   },
   "source.executes.rebind.d4rb000003": {
-    defaultMessage: "trstctl executes this (re-bind)",
-    description: "D4: this connector family can perform its own rollback by re-binding to the installed predecessor.",
+    defaultMessage: "trstctl executes rollback",
+    description: "G1: this family executes rollback by appliance re-bind or exact host-agent local restore.",
   },
   "source.manual.procedure.d4rb000004": {
-    defaultMessage: "Manual procedure",
-    description: "D4: this connector family cannot re-bind; the rollback text is a procedure for an operator to perform.",
+    defaultMessage: "Unsupported (request refused)",
+    description: "G1: this family has no executable rollback route, so requests fail without a success-shaped receipt.",
   },
   "source.rollback.queued.d4rb000001": {
-    defaultMessage: "Rollback queued for a relay",
-    description: "D4: a connector rollback has been queued for relay execution; no relay has reported yet.",
+    defaultMessage: "Rollback queued for the required agent",
+    description: "G1: a rollback is queued for its network relay or exact predecessor-owning host agent; no result exists yet.",
   },
   "source.rolled.back.d4rb000002": {
-    defaultMessage: "Rolled back (re-bound to predecessor)",
-    description: "D4: a relay re-bound the target to the predecessor certificate already installed on it.",
+    defaultMessage: "Rolled back by agent",
+    description: "G1: an agent re-bound or locally restored the predecessor; receipt detail states whether listener reverification ran.",
   },
   "discovery.coverage.segmentPercent": {
     defaultMessage: "Declared segments swept",

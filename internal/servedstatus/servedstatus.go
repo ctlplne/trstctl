@@ -167,30 +167,28 @@ const (
 	// and no predecessor bundle was restored (truth-integrity 4). Epic D4 makes
 	// this an executed job with a restore transcript.
 	ConnectorRollbackRecorded = "rollback_recorded"
-	// ConnectorRollbackQueued means an executable rollback has been QUEUED for a
-	// relay (epic D4). Deliberately not a result: the relay has not reported
-	// yet, and a status that read as an outcome here would repeat the defect
+	// ConnectorRollbackQueued means an executable rollback has been QUEUED for
+	// the required agent (epic D4 + AUD32). Deliberately not a result: no agent
+	// has reported yet, and a status that read as an outcome here would repeat the defect
 	// rollback_recorded was created to expose, one step further along.
 	ConnectorRollbackQueued = "rollback_queued"
-	// ConnectorRolledBack means a relay reported that it re-bound the target to
-	// the predecessor object. The listener was contacted and its binding was
-	// changed; what it now serves has not been independently re-read, which is
-	// verification and a separate state.
+	// ConnectorRolledBack means an agent reported a family-specific predecessor
+	// restore: appliance re-bind or host-local bundle restore and reload. Receipt
+	// reason/detail say whether the listener was reverified afterwards.
 	ConnectorRolledBack = "rolled_back"
-	// ConnectorRollbackRefused means the relay declined the rollback WITHOUT
+	// ConnectorRollbackRefused means the agent declined the rollback WITHOUT
 	// reaching the target — it could not execute the connector, the connector
-	// cannot re-bind, no predecessor was named, the credential was not granted,
-	// or the sandbox blocked the operation.
+	// has no supported inverse, no predecessor was named or retained, required
+	// local state was absent, or the sandbox blocked the operation.
 	//
 	// It exists because the alternative was recording these as a generic
 	// failure whose registry entry asserts ContactedTarget. That would tell an
 	// operator the appliance rejected something it never heard about, and send
 	// them to check an appliance that is fine.
 	ConnectorRollbackRefused = "rollback_refused"
-	// ConnectorRollbackFailed means the relay REACHED the target and the
-	// re-bind did not succeed — including the case where the predecessor object
-	// is no longer installed, which is the reason an operator most needs
-	// distinguished, since no retry will produce one.
+	// ConnectorRollbackFailed means the agent REACHED the target and the
+	// family-specific restore did not succeed. The reason distinguishes a
+	// mutation/reload failure from failed listener reverification.
 	ConnectorRollbackFailed = "rollback_failed"
 	// ConnectorTestQueued means a relay-executed dry-run has been QUEUED (epic
 	// D5). It is deliberately not a result: the relay has not reported yet. A
@@ -250,22 +248,22 @@ var ConnectorDelivery = Registry{
 		},
 		{
 			Value:   ConnectorRollbackQueued,
-			Meaning: "An executable rollback was queued for a relay. No relay has reported yet, so the target is unchanged so far as this control plane knows.",
+			Meaning: "An executable rollback was queued for the required enrolled agent. No agent has reported yet, so the target is unchanged so far as this control plane knows.",
 		},
 		{
 			Value:           ConnectorRolledBack,
 			ContactedTarget: true,
 			MutatedTarget:   true,
-			Meaning:         "A relay re-bound the target to the predecessor certificate already installed on it. No key was uploaded. What the endpoint now serves has not been independently re-read.",
+			Meaning:         "An enrolled agent performed the family-specific predecessor restore. Appliance keys were not uploaded; host key material stayed in the exact host agent's encrypted local ledger. Receipt detail says whether listener reverification ran.",
 		},
 		{
 			Value:   ConnectorRollbackRefused,
-			Meaning: "A relay declined the rollback before contacting the target. The reason names which precondition it failed; the target was not reached and is unchanged.",
+			Meaning: "An agent declined the rollback before contacting the target. The reason names which precondition it failed; the target was not reached and is unchanged.",
 		},
 		{
 			Value:           ConnectorRollbackFailed,
 			ContactedTarget: true,
-			Meaning:         "A relay reached the target and the re-bind did not succeed. The reason distinguishes a predecessor that is no longer installed — which no retry will fix — from a failure at the appliance.",
+			Meaning:         "An agent reached the target and the family-specific restore, reload, or listener reverification did not succeed. The reason names the failed stage.",
 		},
 		{
 			Value:   ConnectorTestQueued,

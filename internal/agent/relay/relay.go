@@ -185,13 +185,13 @@ func Execute(ctx context.Context, client *http.Client, intent DeployIntent, mate
 	})
 }
 
-// RollbackIntent is a re-bind the relay executes (epic D4).
+// RollbackIntent is an appliance re-bind or host-local restore an agent executes.
 //
 // It carries no certificate and no key. That is not an omission — it is the
 // reason a rollback is executable at all: the control plane holds no subject
-// key after B1, and a rollback that needed one could not be performed by
-// anybody. What travels is the predecessor's FINGERPRINT, which names an object
-// already installed on the appliance.
+// key after B1. What travels is the predecessor's FINGERPRINT, which names an
+// object already installed on an appliance or an encrypted predecessor in the
+// exact host agent's local ledger.
 type RollbackIntent struct {
 	Connector    string          `json:"connector"`
 	Target       string          `json:"target"`
@@ -200,12 +200,18 @@ type RollbackIntent struct {
 	TargetConfig json.RawMessage `json:"target_config,omitempty"`
 	// PredecessorFingerprint identifies the installed object to bind back to.
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
+	SuccessorFingerprint   string `json:"successor_fingerprint,omitempty"`
+	// Host restores re-run the same local listener verification the successor
+	// deploy used. Empty still means "restored but not listener-verified".
+	VerifyAddress    string `json:"verify_address,omitempty"`
+	VerifyServerName string `json:"verify_server_name,omitempty"`
 	// Reason is operator context for the transcript. It never reaches the
 	// appliance.
 	Reason string `json:"reason,omitempty"`
 }
 
-// Rollback drives one connector re-bind against a real target.
+// Rollback drives the appliance re-bind model. Host restore is implemented in
+// runRollback because it needs the agent-local predecessor ledger.
 //
 // The credential material it takes is the APPLIANCE credential — the password
 // or token that authenticates to the management interface — never a subject
@@ -257,6 +263,16 @@ func RollbackCapableKinds() []string {
 			out = append(out, kind)
 		}
 	}
+	return out
+}
+
+// RollbackExecutableKinds is the full agent-side rollback surface: appliance
+// re-bind plus host-local predecessor restore. Each row's role still chooses
+// the correct executor.
+func RollbackExecutableKinds() []string {
+	out := append([]string(nil), RollbackCapableKinds()...)
+	out = append(out, HostConnectorKinds()...)
+	sort.Strings(out)
 	return out
 }
 

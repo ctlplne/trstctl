@@ -391,11 +391,11 @@ func countUpstreamPresentRows(t *testing.T, ctx context.Context, h *servedHarnes
 
 // Auto-rollback is OPT-IN, and an absent flag is not consent (epic D2 + D4).
 //
-// Automatic re-binding of a production listener is a mutation the operator did
+// Automatic rollback of a production listener is a mutation the operator did
 // not ask for at the moment it happens. Enabling verification says "tell me
 // when this breaks"; it does not say "change my load balancer when you decide
 // it has". A target whose config predates this feature must never start
-// re-binding itself because a new version shipped.
+// rolling itself back because a new version shipped.
 func TestAutoRollbackRequiresExplicitOptIn(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

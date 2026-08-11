@@ -456,7 +456,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 					Destination:       sideEffectDest,
 					IdempotencyKey:    canonicalKey,
 					Payload:           canonicalPayload,
-					EffectLane:        lifecycleEffectLane(sideEffectDest, identityID),
+					EffectLane:        lifecycleEffectLane(sideEffectDest, identityID, canonicalPayload),
 					RequiredAgentRole: canonical.SideEffect.RequiredAgentRole,
 				}); err != nil {
 					return err
@@ -633,7 +633,7 @@ func (o *Orchestrator) rewriteLifecycleOutboxFromCanonicalHistory(ctx context.Co
 		}
 		candidate := Entry{
 			TenantID: tenantID, Destination: destination, IdempotencyKey: key,
-			Payload: command, EffectLane: lifecycleEffectLane(destination, payload.IdentityID),
+			Payload: command, EffectLane: lifecycleEffectLane(destination, payload.IdentityID, command),
 			RequiredAgentRole: requiredAgentRole,
 		}
 		return addEntry(key, candidate)
@@ -1050,7 +1050,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				Destination:       dest,
 				IdempotencyKey:    idempotencyKey,
 				Payload:           outboxPayload,
-				EffectLane:        lifecycleEffectLane(dest, pl.IdentityID),
+				EffectLane:        lifecycleEffectLane(dest, pl.IdentityID, outboxPayload),
 				RequiredAgentRole: requiredAgentRole,
 			})
 			if err != nil {
@@ -1114,11 +1114,30 @@ func (o *Orchestrator) quarantineOutboxReconciliationConflict(ctx context.Contex
 	return nil
 }
 
-func lifecycleEffectLane(destination, identityID string) string {
+func lifecycleEffectLane(destination, identityID string, payload []byte) string {
 	if destination == "connector.deploy" && identityID != "" {
-		return destination + ":identity:" + identityID
+		return ConnectorDeployEffectLane(identityID, payload)
 	}
 	return destination
+}
+
+// ConnectorDeployEffectLane derives the mutex name for a deploy. Modern target
+// payloads expose target_id outside the credential seal, so deploy and rollback
+// share one target lane. Legacy payloads retain identity ordering rather than
+// being silently collapsed into one global connector lane.
+func ConnectorDeployEffectLane(identityID string, payload []byte) string {
+	var route struct {
+		TargetID string `json:"target_id"`
+	}
+	if json.Unmarshal(payload, &route) == nil && strings.TrimSpace(route.TargetID) != "" {
+		return ConnectorTargetEffectLane(route.TargetID)
+	}
+	return "connector.deploy:identity:" + strings.TrimSpace(identityID)
+}
+
+// ConnectorTargetEffectLane is shared by a target deploy and its inverse.
+func ConnectorTargetEffectLane(targetID string) string {
+	return "connector.bind:target:" + strings.TrimSpace(targetID)
 }
 
 func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest string) (string, []byte, error) {

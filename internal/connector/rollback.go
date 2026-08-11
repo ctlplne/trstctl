@@ -139,12 +139,48 @@ var rollbackCapableFamilies = []string{
 	"a10",
 }
 
+// hostRollbackCapableFamilies is the generated/cross-checked census of native
+// host connectors whose enrolled agent retains one encrypted predecessor
+// bundle and can restore/reload/reverify it locally. It is separate from the
+// re-bind census above: appliances restore by naming an object already on the
+// device; hosts restore bytes that never went back to the control plane.
+var hostRollbackCapableFamilies = []string{
+	"apache", "caddy", "elasticsearch", "envoy", "haproxy", "iis", "java-keystore",
+	"mysql", "nginx", "postfix", "postgresql", "rabbitmq", "tomcat", "traefik",
+}
+
 // RollbackCapableConnectors reports which connector families can roll back by
 // re-binding, sorted.
 func RollbackCapableConnectors() []string {
 	out := append([]string(nil), rollbackCapableFamilies...)
 	sort.Strings(out)
 	return out
+}
+
+// HostRollbackCapableConnectors reports the host families with an agent-local
+// predecessor restore runner, sorted.
+func HostRollbackCapableConnectors() []string {
+	out := append([]string(nil), hostRollbackCapableFamilies...)
+	sort.Strings(out)
+	return out
+}
+
+// CanRollbackOnHost reports whether a host connector restores from the
+// enrolled agent's encrypted predecessor ledger.
+func CanRollbackOnHost(name string) bool {
+	for _, n := range hostRollbackCapableFamilies {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// CanExecuteRollback is the operator-facing truth: either the network relay
+// can re-bind an installed appliance object, or the exact host agent can
+// restore its locally retained predecessor bundle.
+func CanExecuteRollback(name string) bool {
+	return CanRollback(name) || CanRollbackOnHost(name)
 }
 
 // CanRollback reports whether a connector family can execute a re-bind.

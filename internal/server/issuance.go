@@ -1127,7 +1127,7 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 			Destination:       "connector.deploy",
 			IdempotencyKey:    idemKey,
 			Payload:           sealedPayload,
-			EffectLane:        "connector.deploy:identity:" + identityID,
+			EffectLane:        orchestrator.ConnectorDeployEffectLane(identityID, sealedPayload),
 			RequiredAgentRole: requiredAgentRole,
 		})
 		return err

@@ -187,3 +187,24 @@ func (s *Store) ResolvePredecessorCertificate(ctx context.Context, tenantID, ide
 	}
 	return PredecessorCertificate{Serial: previous.Serial, Fingerprint: previous.Fingerprint}
 }
+
+// ResolvePredecessorCertificateForFingerprint follows the replacement edge
+// from the exact certificate a deploy attempted. The automatic wrong-SAN path
+// must use this form: a malformed successor whose SAN omits the identity name
+// is intentionally absent from ListActiveIssuedCertificatesForIdentity, and
+// that is precisely the certificate whose predecessor must be recoverable.
+func (s *Store) ResolvePredecessorCertificateForFingerprint(ctx context.Context, tenantID, currentFingerprint string) PredecessorCertificate {
+	currentFingerprint = strings.TrimSpace(currentFingerprint)
+	if currentFingerprint == "" {
+		return PredecessorCertificate{}
+	}
+	current, err := s.GetCertificateByFingerprint(ctx, tenantID, currentFingerprint)
+	if err != nil || current.ReplacesID == nil || strings.TrimSpace(*current.ReplacesID) == "" {
+		return PredecessorCertificate{}
+	}
+	previous, err := s.GetCertificate(ctx, tenantID, *current.ReplacesID)
+	if err != nil {
+		return PredecessorCertificate{}
+	}
+	return PredecessorCertificate{Serial: previous.Serial, Fingerprint: previous.Fingerprint}
+}

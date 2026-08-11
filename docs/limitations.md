@@ -179,11 +179,11 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
-| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **`connector.deploy` (A3), `connector.test` (D5), `connector.rollback` (D4), `revocation.probe` (R1), `discovery.run` (C2) and `adcs.inventory` (F1) have relay-side executors**; the rest become claimable when theirs ship. Nothing is claimable until an operator names a kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which an operator must enable separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
+| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; queue health on Operations. **`connector.deploy` (A3), `connector.test` (D5), `connector.rollback` (D4/AUD32), `revocation.probe` (R1), `discovery.run` (C2) and `adcs.inventory` (F1) have agent-side executors**; each row's role demand selects a host agent or network relay. The rest become claimable when theirs ship. Nothing is claimable until an operator names a kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which an operator must enable separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the listener it just changed — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
-| Connector rollback | Served as EXECUTED re-bind for **f5, kemp, netscaler, a10** — the families whose API addresses an installed object separately from uploading one. Deploys now install under a fingerprint-derived object name so the predecessor survives; a rollback re-points the listener at it and uploads nothing, which is the only form available once the control plane holds no subject key. Other families keep the attested-intent receipt and the census says which is which. A missing predecessor object **fails** rather than reporting success. **On an existing install nothing is rollable immediately** — certificates deployed before this change sit under the old target-derived name, so a target becomes rollable only after two deploys under the new scheme. Automatic rollback on failed verification is not served — it needs the verification engine | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
+| Connector rollback | Served through two honest execution models. **f5, kemp, netscaler, a10** re-bind a fingerprint-named object already on the appliance. All 14 host connectors restore the one encrypted predecessor bundle retained only by the exact enrolled host agent, run the connector reload, and reverify the listener when configured. Deploy and rollback share a serialized per-target lane. Unsupported cloud/appliance/plugin routes return `409` and write no rollback-shaped receipt. Automatic rollback after `verify_failed` is opt-in per target; manual rollback uses the same job and signed transcript | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Agents redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. The control-plane dispatcher structurally refuses host-stamped and legacy host-family rows before native lookup or I/O, so 14 host families execute only on the enrolled host agent; an unavailable agent leaves pending work, never a control-plane fallback | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
@@ -1497,11 +1497,9 @@ claims file/exec or co-resident Envoy work, an agent granted both roles claims
 both, and the per-row role demand stamped at enqueue decides which agent may take a given job.
 The two executor sets are disjoint by test.
 
-**Rollback executes now, for the families that can re-bind (D4).** The obvious
-design — re-deploy the previous certificate — is not available: after CSR-first
-issuance the control plane holds no subject key, so there is nothing to push
-back, and storing keys to make rollback convenient would trade the strongest
-property in the product for an operator convenience.
+**Rollback executes now through two custody-safe models (D4/G1).** After
+CSR-first issuance the control plane holds no subject key, so it never rebuilds
+a predecessor bundle and never sends one back down.
 
 The executable form is a re-BIND. The predecessor is already installed on the
 appliance; what a deploy changed was which installed object the listener points
@@ -1517,13 +1515,24 @@ since the same certificate computes the same name). The listener-facing object �
 an F5 Client SSL profile, a NetScaler certkey, an A10 client-SSL template, a
 Kemp virtual service — keeps its name, so existing bindings are untouched.
 
-Four families ship it: **f5, kemp, netscaler, a10** — the ones whose API
+Four appliance families ship re-bind: **f5, kemp, netscaler, a10** — the ones whose API
 addresses an installed object separately from uploading one, which is the
 property a re-bind needs. The rest do not implement it and the census says so
 rather than offering a rollback that would return success having changed
 nothing. A rollback whose predecessor object is no longer on the appliance
 **fails**, with a distinct error, because reporting success there tells an
 operator that a bad certificate stopped serving traffic when it did not.
+
+All 14 host connectors use a different model. After a successful host deploy,
+the exact enrolled host agent stores active plus one predecessor bundle in a
+machine-local AES-GCM ledger (`--host-rollback-dir`, default beside the agent
+key). The key file and state files are `0600`; plaintext certificate/key bytes
+exist only in locked memory while recording or restoring. A rollback is pinned
+to that exact agent, reopens the ledger after restart, restores the predecessor,
+runs the same connector reload, and repeats local listener verification. A
+second predecessor is never retained, so this is a rollback buffer rather than
+a key archive. Losing that directory means the host predecessor is gone and the
+job is refused; the control plane cannot reconstruct it.
 
 **Two things to know before relying on it.** First, an existing install has no
 rollable target on day one: every certificate deployed before this change was
@@ -1542,25 +1551,16 @@ running those should expect to prune. Automatic pruning is deliberately not
 served: deleting a crypto object that something else might be bound to is a
 worse failure than leaving one behind.
 
-**A deploy and a rollback for one listener are not serialized.** Estate-touching
-work carries an effect lane, and the control plane's own dispatcher honours it.
-The agent claim path does not: it filters on tenant, destination, status, lease
-and role, and has no lane predicate. So a renewal deploy and an operator's
-rollback for the same listener can be held by two relays simultaneously, and
-whichever finishes last decides what the endpoint serves. Both report success,
-because both did what they were asked.
+Deploy and rollback now use the same `connector.bind:target:<id>` effect lane.
+The agent claim query admits one unexpired holder per lane and returns at most
+one row from that lane in a batch, so two agents cannot race a deploy and restore
+against the same listener. Unrelated targets remain parallel.
 
-The lanes are keyed on the contended target so that adding the predicate is a
-change in one place. Until it lands, the practical advice is the unsatisfying
-one: do not roll back a target that has a renewal in flight, and check the job
-queue on Operations first. This is written down because the alternative — a
-comment in the source claiming the lane protects something it does not — is how
-an operator ends up trusting a control that was never there.
-
-**What is still not served.** Automatic rollback on a failed verification — the
-loop that makes this a safety net rather than a button — needs the verification
-engine, which is a separate epic. Today a rollback is operator-initiated.
-Plugin-backed connectors, `connector.right_size` and the TLS
+Automatic rollback is served when a target explicitly sets
+`auto_rollback_on_verify_failure`; manual console rollback queues the same
+command. Unsupported connector families and targets with no predecessor are
+refused at request time with no memo-only success receipt. Plugin-backed
+connectors, `connector.right_size` and the TLS
 posture path stay control-plane-only. No job kind is claimable by default:
 `agent_channel.claimable_job_kinds` must name each kind before any of this
 moves, which is deliberate rather than unfinished. `connector.rollback` is named
@@ -1706,11 +1706,11 @@ evidence predicate is reviewed.
 | `dry_run_queued` | connector delivery | A relay-executed dry-run was queued for the agent bound to this target. | That anything is yet known about the target. No relay has reported. |
 | `dry_run_planned` | connector delivery | A relay reached the target, resolved every credential a real deploy needs, and returned the mutation plan. | That anything was deployed. The dry-run path never invokes a connector's `Deploy`, so zero writes is structural, not promised. |
 | `dry_run_blocked` | connector delivery | A relay ran the dry-run and a real deploy would **not** proceed. The reason names the step that stopped it. | That the target is broken in every respect — one step failed, and the plan says which. |
-| `rollback_recorded` | connector delivery | `POST /api/v1/connectors/targets/{id}/rollback` recorded an operator-attested rollback intent as durable evidence, with the `rollback_ref` naming the predecessor by **serial and fingerprint** resolved from the certificate's replacement chain. Written when nothing was queued — either the family cannot re-bind, **or** no predecessor was resolvable (a first deployment, or an identity with no replacement chain). The `rollback_ref` says which. | That a rollback executed, or that the family necessarily cannot re-bind. The predecessor is **not** restored on the target. |
-| `rollback_queued` | connector delivery | An executable rollback was queued for a relay to perform (D4). | That anything happened yet. No relay has reported, so the target is unchanged so far as this control plane knows. |
-| `rolled_back` | connector delivery | A relay re-bound the target to the predecessor certificate **already installed on it**, and reported it with a signed receipt. No key was uploaded. | That the endpoint was re-read. What it now serves is a verification claim, and verification is a separate state. |
-| `rollback_refused` | connector delivery | A relay declined the rollback **before contacting the target** — it cannot execute that connector, the connector cannot re-bind, no predecessor was named, the credential was not granted, or the sandbox blocked the operation. | That the appliance rejected anything. It was never reached and is unchanged. |
-| `rollback_failed` | connector delivery | A relay **reached** the target and the re-bind did not succeed. The reason distinguishes "the predecessor object is no longer installed" — which no retry fixes — from a failure at the appliance. | That the target is broken in every respect, or that the predecessor is gone unless the reason says so. |
+| `rollback_recorded` | connector delivery | Legacy evidence from releases that recorded a memo instead of executing. New unsupported/no-predecessor requests are refused and do not create this status. | That a rollback executed. Nothing was restored. |
+| `rollback_queued` | connector delivery | An executable rollback was queued for the required enrolled agent. Host rows also pin the exact agent that retained the predecessor. | That anything happened yet. No agent has reported. |
+| `rolled_back` | connector delivery | An agent restored the predecessor and returned a signed receipt. `reason=rolled_back_and_reverified` additionally proves the same agent handshook the listener after reload; otherwise the detail explicitly says verification was not configured. | That an unverified restore is live when the reason does not say reverified. |
+| `rollback_refused` | connector delivery | An agent declined the rollback **before contacting the target** — it cannot execute that connector, no supported inverse exists, the named predecessor is absent, the exact host ledger/profile is unavailable, or the sandbox blocked the operation. | That the target rejected anything. It was never reached and is unchanged. |
+| `rollback_failed` | connector delivery | An agent **reached** the target and the family-specific re-bind or local restore/reload/reverification did not succeed. The reason names the failed stage. | That the target is broken in every respect, or that the predecessor is absent unless the reason says so. |
 | `not_evaluated` | fleet re-issuance health gate | No evidence exists from which a verdict could be computed, so trstctl asserts none. | It is **not** a pass. |
 | `passed` / `failed` | fleet re-issuance health gate | Either an operator attested the verdict, or the replacement-deployment gate was computed from signature-verified agent receipts. | That a plain delivery row or an unsigned report proved endpoint health. |
 | `planned` | fleet re-issuance batch | A partition of the affected identity set that has not been published. | That anything in the batch was attempted. |
@@ -3885,9 +3885,10 @@ a perfectly correct file that a process never reloaded.
 only on `verify_failed` and never on plain failure — a deploy that failed did not
 change the target, so rolling it back would undo something that was never done.
 Absent flag means off; a target whose config predates this feature never starts
-re-binding itself because a new version shipped. Only the four families that can
-address an installed object separately from uploading one can re-bind at all, and
-a first deployment with no predecessor has nothing to roll back to.
+changing itself because a new version shipped. The four appliance re-bind
+families and all 14 host-local restore families can execute it. Host work is
+pinned to the agent that retained the predecessor; a first deployment still has
+nothing to roll back to.
 
 **Configuring it.** Local post-deploy verification runs when a deployment target
 carries `verify_address` (and optionally `verify_server_name`) in its config —

@@ -3,13 +3,18 @@
 package relay_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 )
 
 // The relay's rollback path (epic D4).
@@ -126,6 +131,117 @@ func TestRollbackIntentCannotCarryKeyMaterial(t *testing.T) {
 		if json.Valid(encoded) && containsFold(string(encoded), forbidden) {
 			t.Errorf("rollback intent encodes %q: %s", forbidden, encoded)
 		}
+	}
+}
+
+// G1's real host path: two ordinary deploy attempts retain the predecessor on
+// the enrolled agent. A later rollback redeems nothing, restores the old bytes,
+// runs the connector's reload path, and proves the listener serves the old
+// certificate before signing a verified result.
+func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T) {
+	predecessor, err := tlsprobe.NewServingTestServer("rollback.example.test")
+	if err != nil {
+		t.Fatalf("start predecessor listener: %v", err)
+	}
+	defer predecessor.Close()
+	successor, err := tlsprobe.NewServingTestServer("successor.example.test")
+	if err != nil {
+		t.Fatalf("mint successor: %v", err)
+	}
+	defer successor.Close()
+
+	root := t.TempDir()
+	state, err := relay.NewHostRollbackStore(filepath.Join(root, "rollback-state"), "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := hostProfileForNginx(t, root)
+	config := mustJSON(t, map[string]string{
+		"cert_path": filepath.Join(root, "server.crt"),
+		"key_path":  filepath.Join(root, "server.key"),
+	})
+	deploy := func(jobID int64, fingerprint string, certPEM []byte) {
+		t.Helper()
+		ch := &fakeChannel{
+			jobs: []relay.Job{intentJob(t, jobID, relay.DeployIntent{
+				Connector: "nginx", Target: "edge", TargetID: "target-a",
+				TargetConfig: config, Fingerprint: fingerprint,
+			})},
+			material: map[string][]byte{
+				"credential.cert_pem": certPEM,
+				"credential.key_pem":  []byte(testKeyPEM + fingerprint),
+			},
+		}
+		if _, runErr := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), ch,
+			http.DefaultClient, profile, nil, nil, state, 1, 30); runErr != nil {
+			t.Fatalf("deploy %s: %v", fingerprint, runErr)
+		}
+		if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeExecuted {
+			t.Fatalf("deploy %s reports = %+v", fingerprint, ch.reports)
+		}
+	}
+	deploy(10, "first", predecessor.LeafPEM)
+	deploy(11, "second", successor.LeafPEM)
+
+	rollback := &fakeChannel{jobs: []relay.Job{rollbackJob(t, 12, relay.RollbackIntent{
+		Connector: "nginx", Target: "edge", TargetID: "target-a", TargetConfig: config,
+		PredecessorFingerprint: "first", VerifyAddress: predecessor.Addr,
+	})}}
+	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), rollback,
+		http.DefaultClient, profile, nil, nil, state, 1, 30); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	if rollback.redeemed != 0 {
+		t.Fatalf("host rollback redeemed %d control-plane credentials, want zero", rollback.redeemed)
+	}
+	if len(rollback.reports) != 1 || rollback.reports[0].outcome != transport.OutcomeVerified || rollback.reports[0].evidence == "" {
+		t.Fatalf("rollback reports = %+v, want signed-evidence-ready verified result", rollback.reports)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "server.crt")) // #nosec G304 -- test-owned temporary path (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, predecessor.LeafPEM) {
+		t.Fatal("host certificate file was not restored to the predecessor")
+	}
+}
+
+// A corrupt or unreadable encrypted ledger is a LOCAL refusal. No restore
+// callback ran, so recording it as "failed at target" would invent target
+// contact and send the operator to the wrong machine.
+func TestHostRollbackUnreadableStateRefusesBeforeTargetContact(t *testing.T) {
+	root := t.TempDir()
+	stateRoot := filepath.Join(root, "rollback-state")
+	state, err := relay.NewHostRollbackStore(stateRoot, "tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := state.RecordDeploy("nginx", "target-a", "first", []byte(testCertPEM), []byte(testKeyPEM)); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(stateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) == ".state" {
+			if err := os.WriteFile(filepath.Join(stateRoot, entry.Name()), []byte("not encrypted state"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	ch := &fakeChannel{jobs: []relay.Job{rollbackJob(t, 13, relay.RollbackIntent{
+		Connector: "nginx", Target: "edge", TargetID: "target-a", PredecessorFingerprint: "first",
+	})}}
+	if _, err := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), ch,
+		http.DefaultClient, hostProfileForNginx(t, root), nil, nil, state, 1, 30); err != nil {
+		t.Fatal(err)
+	}
+	if ch.redeemed != 0 {
+		t.Fatalf("unreadable local state redeemed %d control-plane credentials", ch.redeemed)
+	}
+	if len(ch.reports) != 1 || ch.reports[0].detail != transport.RollbackRefusedHostStateUnavailable {
+		t.Fatalf("unreadable local state reports = %+v", ch.reports)
 	}
 }
 

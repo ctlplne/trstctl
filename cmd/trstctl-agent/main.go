@@ -64,6 +64,7 @@ func main() {
 	relayClaim := flag.Bool("relay-claim", false, "claim and execute connector deploy jobs for appliances in this network segment (epic A3). Requires the network relay role in this agent's enrolled certificate; a host-role agent is refused the work by the control plane. Off by default: a relay redeems live credential material, so an operator turns it on deliberately")
 	selfUpgrade := flag.Bool("self-upgrade", false, "claim this agent's own agent.upgrade jobs from staged rollout campaigns (epic A5): download the campaign's artifact for this platform, verify its sha256, swap the binary, and restart. Off by default because it replaces this executable — the control-plane operator starts the campaign, but replacing the binary on THIS machine is this machine's operator's decision. The previous binary is kept beside it as .old")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
+	hostRollbackDir := flag.String("host-rollback-dir", "", "directory for this host agent's encrypted, two-generation connector predecessor bundles (AUD32/G1). Empty stores them beside --key under host-rollbacks. The bundles never return to the control plane and are required for host rollback after restart")
 	enrollProxyListen := flag.String("enroll-proxy-listen", "", "serve a LAN-local ACME/EST/SCEP proxy on this address for hosts and devices in this segment that have no route to the control plane (epic A4). The proxy is pass-through: it forwards protocol traffic unaltered, adds no credential of its own, and makes no trust decision — the control plane's validators and policy still decide. Empty disables it")
 	enrollProxyUpstream := flag.String("enroll-proxy-upstream", "", "comma-separated https control-plane endpoints the enrolment proxy forwards to. More than one gives automatic failover when an endpoint stops answering; a control-plane ERROR is passed back to the client rather than retried, because it is an answer")
 	revCacheListen := flag.String("crl-cache-listen", "", "serve the control plane's CRL to relying parties in this segment on this address (epic R3). The relay holds the CA's signed bytes and hands them over — it signs nothing — and REFUSES to serve a list past its nextUpdate, because a stale CRL still verifies and would have a relying party trust a certificate revoked yesterday. Empty disables it")
@@ -273,6 +274,7 @@ func main() {
 		pluginCapPrefix:                   *pluginCapPrefix,
 		relayPollEvery:                    *relayPollEvery,
 		hostExecProfile:                   strings.TrimSpace(*hostExecProfile),
+		hostRollbackDir:                   strings.TrimSpace(*hostRollbackDir),
 		inventorySSH: sshdiscovery.Config{
 			HostKeyGlobs:        splitList(*inventorySSHHostKeyGlobs),
 			UserKeyGlobs:        splitList(*inventorySSHUserKeyGlobs),
@@ -384,6 +386,9 @@ type agentOptions struct {
 	// (epic D1). Empty means this agent executes no file/reload connectors:
 	// without an authorized command set there is nothing safe to default to.
 	hostExecProfile string
+	// hostRollbackDir holds the encrypted two-generation predecessor ledger on
+	// this host. Empty derives a stable directory beside keyPath.
+	hostRollbackDir string
 }
 
 func prepareIdentityDir(path string, uid, gid int) error {
@@ -523,6 +528,24 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	// would poll forever and be handed nothing, which reads as a stalled fabric
 	// instead of a misconfiguration.
 	relayTimer, relayCh, hostProfile := relayLoopFor(o, a, conn)
+	var hostRollback *relay.HostRollbackStore
+	if len(hostProfile.AllowedRoots) > 0 {
+		stateDir := strings.TrimSpace(o.hostRollbackDir)
+		if stateDir == "" {
+			stateDir = filepath.Join(filepath.Dir(o.keyPath), "host-rollbacks")
+		}
+		stateDir, err = filepath.Abs(stateDir)
+		if err != nil {
+			return fmt.Errorf("resolve host rollback directory: %w", err)
+		}
+		hostRollback, err = relay.NewHostRollbackStore(stateDir, a.Identity().TenantID())
+		if err != nil {
+			// Fail before claiming a host deploy. Running without the ledger would
+			// make the deploy work and its rollback impossible after a restart.
+			return fmt.Errorf("initialize host rollback predecessor store: %w", err)
+		}
+		fmt.Printf("trstctl-agent: encrypted host rollback state enabled at %s\n", stateDir)
+	}
 	if relayTimer != nil {
 		defer relayTimer.Stop()
 	}
@@ -608,7 +631,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			var executed int
 			var rerr error
 			if o.relayClaim {
-				executed, rerr = relay.RunOnceWithSelfUpgrade(ctx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, selfUp, relayClaimBatch, lease)
+				executed, rerr = relay.RunOnceWithSelfUpgradeAndHostRollback(ctx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, selfUp, hostRollback, relayClaimBatch, lease)
 			} else {
 				// Self-upgrade only: ask for nothing but this agent's own
 				// upgrade jobs (A5).
