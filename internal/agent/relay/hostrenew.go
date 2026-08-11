@@ -4,6 +4,7 @@ package relay
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -48,7 +49,7 @@ type CSRSigner interface {
 
 // runHostRenew generates a key, gets a certificate for it, installs both, and
 // verifies the result.
-func runHostRenew(ctx context.Context, ch Channel, profile connector.LocalOpsConfig, job Job) bool {
+func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile connector.LocalOpsConfig, job Job) bool {
 	var intent DeployIntent
 	if err := decodeIntent(job.Payload, &intent); err != nil {
 		report(ctx, ch, job, OutcomeFailed, "job payload is not a renewal intent")
@@ -72,7 +73,7 @@ func runHostRenew(ctx context.Context, ch Channel, profile connector.LocalOpsCon
 			"host-generated renewal requires a host-executable connector")
 		return false
 	}
-	if len(profile.AllowedRoots) == 0 {
+	if RequiresHostExecProfile(intent.Connector) && len(profile.AllowedRoots) == 0 {
 		report(ctx, ch, job, OutcomeFailed,
 			"this agent has no host exec profile configured for file and reload deploys")
 		return false
@@ -150,7 +151,7 @@ func runHostRenew(ctx context.Context, ch Channel, profile connector.LocalOpsCon
 		installIntent.Fingerprint = fingerprint
 	}
 
-	if _, err := ExecuteOnHost(ctx, profile, installIntent, material); err != nil {
+	if _, err := ExecuteOnHost(ctx, profile, installIntent, material, client); err != nil {
 		// Reached only after a certificate was successfully issued. Naming that
 		// matters: the identity now has a live certificate the estate is not
 		// serving, which is a different repair than "renewal failed".

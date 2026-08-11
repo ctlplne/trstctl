@@ -5,8 +5,10 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 
+	agentrelay "trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
 )
 
@@ -57,6 +59,23 @@ func TestVantageCensusCoversEveryShippedConnector(t *testing.T) {
 	}
 	if got := nativeConnectorVantage("some-future-connector"); got != connector.VantageControlPlane {
 		t.Errorf("unlisted connector classifies as %q, want the fail-closed control_plane", got)
+	}
+
+	// A host stamp is now an unconditional control-plane refusal. Therefore the
+	// production census and the agent binary's constructors must be the SAME
+	// set; an extra name on either side strands work or permits a split-brain
+	// executor. Derive both sides so a new family fails this guard automatically.
+	var classifiedHost []string
+	for _, name := range shipped {
+		if nativeConnectorVantage(name) == connector.VantageHostAgent {
+			classifiedHost = append(classifiedHost, name)
+		}
+	}
+	slices.Sort(classifiedHost)
+	hostExecutable := agentrelay.HostConnectorKinds()
+	slices.Sort(hostExecutable)
+	if !slices.Equal(classifiedHost, hostExecutable) {
+		t.Fatalf("host-vantage census = %v, agent constructors = %v; every refused family needs a shipped executor", classifiedHost, hostExecutable)
 	}
 }
 

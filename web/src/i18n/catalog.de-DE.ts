@@ -3803,6 +3803,7 @@ const deDECatalog = {
   "source.table.16d1c9050a": "Table",
   "source.target.978354db0c": "Ziel",
   "source.target.actions.4d6d059ed8": "Zielaktionen",
+  "source.target.deploy.listener.verification.and.rollback.38783cea3d": "{target}: Bereitstellungs-, Listener-Prüfungs- und Rollback-Nachweise in der von den bereitgestellten APIs aufgezeichneten Reihenfolge.",
   "source.target.hosts.b345027096": "Zielhosts",
   "source.targets.27445f6ab6": "Targets",
   "source.team.filter.f485fa9dcf": "Team-Filter",

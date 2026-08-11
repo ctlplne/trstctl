@@ -247,7 +247,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// redemption asking for material the control plane deliberately does not
 	// hold.
 	if job.Kind == KindEndpointRenew {
-		return runHostRenew(ctx, ch, hostProfile, job)
+		return runHostRenew(ctx, ch, client, hostProfile, job)
 	}
 
 	// A rollback carries a rollback intent, not a deploy intent — no
@@ -287,7 +287,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		report(ctx, ch, job, OutcomeFailed, "connector is not executable by this agent")
 		return false
 	}
-	if hostJob && len(hostProfile.AllowedRoots) == 0 {
+	if RequiresHostExecProfile(intent.Connector) && len(hostProfile.AllowedRoots) == 0 {
 		// The connector is host-executable but this agent has no operator
 		// profile, so it has no authorized command set. Saying so is the point:
 		// silently doing nothing would look identical to a healthy agent.
@@ -351,7 +351,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		// would make the sandbox a formality.
 		execErr = plugins.Deploy(ctx, intent.Connector)
 	} else if hostJob {
-		stats, execErr = ExecuteOnHost(ctx, hostProfile, intent, material)
+		stats, execErr = ExecuteOnHost(ctx, hostProfile, intent, material, client)
 	} else {
 		stats, execErr = Execute(ctx, client, intent, material)
 	}

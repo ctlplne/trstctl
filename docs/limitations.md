@@ -184,7 +184,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the listener it just changed — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
 | Connector rollback | Served as EXECUTED re-bind for **f5, kemp, netscaler, a10** — the families whose API addresses an installed object separately from uploading one. Deploys now install under a fingerprint-derived object name so the predecessor survives; a rollback re-points the listener at it and uploads nothing, which is the only form available once the control plane holds no subject key. Other families keep the attested-intent receipt and the census says which is which. A missing predecessor object **fails** rather than reporting success. **On an existing install nothing is rollable immediately** — certificates deployed before this change sit under the old target-derived name, so a target becomes rollable only after two deploys under the new scheme. Automatic rollback on failed verification is not served — it needs the verification engine | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
-| Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Relays redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. Execution itself still happens control-plane-side | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
+| Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Agents redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. The control-plane dispatcher structurally refuses host-stamped and legacy host-family rows before native lookup or I/O, so 14 host families execute only on the enrolled host agent; an unavailable agent leaves pending work, never a control-plane fallback | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
 | SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
@@ -1196,17 +1196,26 @@ cloud-store deploy (ACM, Azure Key Vault, GCP Certificate Manager) is stamped
 `control_plane` and handed to no agent ever. The stamp is durable in the
 lifecycle event's side-effect record, so reconcile-replay reproduces it rather
 than re-deriving it against a possibly-changed census; rows enqueued before the
-census existed carry the empty demand and behave exactly as they always did.
+census existed carry the empty demand. The dispatcher reclassifies those legacy
+rows by connector family before native lookup, so an old nginx row cannot use an
+upgrade as a path back into control-plane execution.
 
 The census is per connector KIND, written by hand in the composition root, and
-deliberately not derived from transport: envoy is HTTP-driven yet classified
+deliberately not derived from transport: Envoy is HTTP-driven yet classified
 host-agent, because its admin surface binds loopback in the deployments we ship
-for. **What is still not served: per-target overrides** (declaring that one
-particular envoy is remote and needs a relay) **and agent execution itself** —
-every connector deploy still executes control-plane-side; the stamp decides who
-MAY claim the row once executors ship with the relay runtime. The `roles` column on the agents read model is a
-**projection** for the console only: writing `network` into it grants nothing,
-because the certificate still says host and the claim path still refuses.
+for. The agent has constructors for the same 14 host families, including Envoy,
+and a generated parity test compares the two closed sets. A host stamp is carried
+through the control-plane outbox claim rather than discarded; the dispatcher
+defers it before unsealing, and its direct handler repeats the family check before
+registry lookup. Classification failure is therefore a refusal, never permission
+to touch the control-plane host.
+
+**What is still not served: per-target vantage overrides** (declaring that one
+particular Envoy is remote and needs a relay). The `roles` column on the agents
+read model is a **projection** for the console only: writing `network` into it
+grants nothing, because the certificate still says host and the claim path still
+refuses. Host availability also never re-enables the old path: with no eligible
+host agent the deploy stays pending for Operations to surface.
 
 ### AD CS template posture, read from inside the domain
 
@@ -1465,6 +1474,12 @@ serves the machine, not against the control plane's own filesystem. The
 connector implementations moved unchanged: they were always host-neutral, and
 what changed is which filesystem they resolve against.
 
+Envoy is the fourteenth host connector. It pushes SDS over HTTP instead of
+writing files, but the shipped target is a co-resident loopback listener. The
+agent therefore supplies its own HTTP client and the control plane refuses the
+row exactly like every file/reload family; transport shape does not make a
+loopback address reachable from the right machine.
+
 The exec profile moved with them, and had to. An allowlist naming
 `/usr/sbin/nginx` is a statement about a host; leaving it on the control plane
 while the exec happened on an agent would mean an operator authorizing a binary
@@ -1478,8 +1493,8 @@ re-`Lstat`s every command on the host that will run them, which is the point —
 the check and the execution finally happen on the same machine.
 
 One binary serves both vantages. A relay claims appliance work, a host agent
-claims file/exec work, an agent granted both roles claims both, and the
-per-row role demand stamped at enqueue decides which agent may take a given job.
+claims file/exec or co-resident Envoy work, an agent granted both roles claims
+both, and the per-row role demand stamped at enqueue decides which agent may take a given job.
 The two executor sets are disjoint by test.
 
 **Rollback executes now, for the families that can re-bind (D4).** The obvious
@@ -1634,14 +1649,16 @@ And the transcript behind `evidence_digest` stays on the agent: the receipt
 binds to a digest of something the control plane has never seen, which is a real
 binding and not the same as holding the evidence.
 
-**What is served, and what is not.** `connector.deploy` has a relay-side executor
-as of A3 — an agent with the network role claims it, redeems its credential for
-one attempt, and drives the appliance. The other five kinds still have no
-executor. The claimable set remains empty by default and
+**What is served, and what is not.** `connector.deploy` has both the network-relay
+executor from A3 and the host executor for the 14 host-vantage families; a role-
+eligible agent claims it, redeems its credential for one attempt, and performs the
+effect from the required machine or segment. Connector test, rollback, endpoint
+verification, discovery, revocation probing, AD CS inventory, trust distribution,
+and self-upgrade also have the executors named in their own sections. The claimable
+set remains empty by default and
 `agent_channel.claimable_job_kinds` is the only way to fill it. That is deliberate
-rather than unfinished: a kind should become claimable when an agent-side executor
-for it exists, and handing out work nothing can perform fills a queue while the
-control plane's own worker stops doing it. The six kinds the allowlist recognises
+rather than unfinished: handing out work nothing can perform fills a queue while the
+control plane's own worker stops doing it. The kinds the allowlist recognises
 — `connector.deploy`, `connector.rollback`, `endpoint.verify`, `discovery.run`,
 `revocation.probe`, `trust.distribute` — each become real as their executor ships.
 Anything outside that allowlist is dropped even if an operator names it in
@@ -1649,10 +1666,9 @@ configuration, so `ca.issue` and `notification.expiry` cannot be moved onto a ho
 those are the control plane's own effects and CA-adjacent work does not belong in
 the estate.
 
-Also not served yet: agent-signed result receipts (a report is authenticated by the
-channel's client certificate today, not signed as a separate artifact), per-agent
-claim quotas beyond the shared agent bulkhead, and the per-agent live-claim view on
-the Agents page.
+Agent-signed result receipts are served and verified against the same certificate
+that authenticated the mTLS channel. Per-agent claim quotas beyond the shared agent
+bulkhead and the per-agent live-claim view on the Agents page remain unserved.
 
 ### Served status vocabulary: what each status claims
 

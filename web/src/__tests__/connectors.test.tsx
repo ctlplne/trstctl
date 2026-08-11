@@ -17,6 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     deployConnectorTarget: vi.fn(),
     rollbackConnectorTarget: vi.fn(),
     connectorDeliveries: vi.fn(),
+    endpointVerifications: vi.fn(),
   },
 }));
 
@@ -164,6 +165,23 @@ describe("connector deployment disclosure surface", () => {
         },
       ],
     });
+    apiMock.endpointVerifications.mockReset().mockResolvedValue({
+      guidance: "",
+      summary: { endpoints: 1, verified: 1, diverged: 0, unreachable: 0, not_checked: 0 },
+      items: [
+        {
+          endpoint_id: "target-1",
+          address: "edge-1.internal:443",
+          vantage: "local",
+          status: "verified",
+          checked_sans: true,
+          checked_chain: true,
+          agent_common_name: "host-agent-edge-1",
+          detail: "listener serves the deployed certificate",
+          last_checked_at: "2026-06-20T00:01:00Z",
+        },
+      ],
+    });
   });
 
   it("renders connector registry and receipt evidence from served data only", async () => {
@@ -184,13 +202,17 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText("edge/prod/payments").length).toBeGreaterThan(0);
     expect(screen.getAllByText("native registry, signed plugin, or receipt").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();
-    expect(screen.getByText("delivered")).toBeInTheDocument();
+    expect(screen.getAllByText("delivered").length).toBeGreaterThan(0);
     expect(screen.getByText("sha256:served-receipt")).toBeInTheDocument();
     expect(screen.getAllByText(/connector\.deploy/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("receipt:rollback-nginx-2026-06-26").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rollback" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bind and enroll" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Credential activity timeline" })).toBeInTheDocument();
+    expect(screen.getByTestId("selected-target-timeline")).toHaveTextContent("connector.deploy");
+    expect(screen.getByTestId("selected-target-timeline")).toHaveTextContent("endpoint.verify");
+    expect(screen.getByTestId("selected-target-timeline")).toHaveTextContent("host-agent-edge-1");
     expect(document.body.textContent).not.toMatch(/BEGIN .* PRIVATE KEY|raw token hidden/i);
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
   });

@@ -30,6 +30,10 @@ type Message struct {
 	Payload        []byte
 	Attempts       int
 	EffectLane     string
+	// RequiredAgentRole is copied from the durable row into the delivery
+	// attempt. Reservation cannot constrain a control-plane handler unless that
+	// handler can see which executor owns the row.
+	RequiredAgentRole string
 }
 
 // Entry is a new outbox row to enqueue alongside a state change.
@@ -910,11 +914,12 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		  FROM candidate
 		 WHERE o.id = candidate.id
 		 RETURNING o.id, o.tenant_id::text, o.destination, o.payload, o.idempotency_key, o.attempts,
-		           COALESCE(NULLIF(o.effect_lane, ''), o.destination)`,
+		           COALESCE(NULLIF(o.effect_lane, ''), o.destination),
+		           COALESCE(o.required_agent_role, '')`,
 		cutoff, now, o.maxInFlightPerDestination, o.maxInFlightPerTenant,
 		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenTenantLanes), blockedCircuitKeys,
 		scope.IncludePrefixes, scope.ExcludePrefixes).
-		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts, &claim.msg.EffectLane)
+		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts, &claim.msg.EffectLane, &claim.msg.RequiredAgentRole)
 	if errors.Is(err, pgx.ErrNoRows) {
 		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, tx.Commit(ctx)

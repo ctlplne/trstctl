@@ -207,6 +207,23 @@ type issuanceDispatcher struct {
 // fail closed so the outbox never marks a lifecycle side effect delivered without
 // doing real work.
 func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message) error {
+	if m.Destination == "connector.deploy" {
+		switch m.RequiredAgentRole {
+		case "host":
+			// The role stamp is outside the sealed payload. Return modern host
+			// rows before tenant-key access, JSON decode, connector lookup, or
+			// target I/O so the dispatcher cannot race the host agent.
+			return orchestrator.DeferDelivery(errors.New(
+				"server: host connector deploy executes on the enrolled host agent, not the control plane"))
+		case "", "network", "control_plane":
+			// Empty is a legacy row classified from its payload below. Network
+			// retains its E1 migration gate; cloud stores remain CP-owned.
+		default:
+			// Unknown routing metadata is not authority to guess an executor.
+			return orchestrator.DeferDelivery(errors.New(
+				"server: connector deploy has an unknown executor role"))
+		}
+	}
 	if d.tenantCrypto == nil || m.Destination == store.TenantKeyDomainSealDestination {
 		return d.deliver(ctx, m)
 	}
@@ -1132,6 +1149,12 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 		return err
 	}
 	defer wipeConnectorDeployPayload(&p)
+	if d.connectorDeployVantage(p.Connector) == connector.VantageHostAgent {
+		// Legacy rows predate required_agent_role. The decoded family is their
+		// last safe routing boundary, so refuse before registry lookup or I/O.
+		return orchestrator.DeferDelivery(fmt.Errorf(
+			"server: %s deploy executes on the enrolled host agent, not the control plane", p.Connector))
+	}
 	p.TenantID = m.TenantID
 	receipt := connectorDeliveryEvidence{
 		ID:             evidenceID("connector-delivery", m.TenantID, m.IdempotencyKey, m.ID),
@@ -1158,11 +1181,10 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 	// E1: a family through its relay parity gate executes on a relay, and the
 	// control plane must not race the relay for its work.
 	//
-	// The outbox claim query carries no required_agent_role predicate — that
-	// column is read by ClaimAgentJobs when an agent asks for work, never by the
-	// dispatcher — so without this the control plane sweeps the same pending row
-	// on a one-second ticker and beats every relay to it. The A3 role stamp
-	// would be correct in the column and decide nothing.
+	// The dispatcher sees required_agent_role on its claimed Message, but network
+	// migration remains conditional on a relay being present. The role stamp
+	// gates agent claims; this presence check decides whether the control-plane
+	// fallback is still allowed for the migrated appliance family.
 	//
 	// Conditional on a relay actually being ENROLLED, and that condition is the
 	// difference between a guarantee and an outage. Refusing unconditionally
@@ -1257,6 +1279,21 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 		return []byte("deployed:" + p.Connector), nil
 	}
 	return d.runConnectorEffect(ctx, m, receipt, connector.ReplaySafetyAtMostOnce, effect)
+}
+
+// connectorDeployVantage uses the production registry declaration when it has
+// one, then the compiled native census so disabled native connectors and legacy
+// rows still receive the same routing decision as newly-enqueued work.
+func (d *issuanceDispatcher) connectorDeployVantage(name string) connector.TargetVantage {
+	native := nativeConnectorVantage(name)
+	if d.connectorRegistry == nil {
+		return native
+	}
+	declared := d.connectorRegistry.TargetVantageFor(name)
+	if declared != connector.VantageControlPlane || native == connector.VantageControlPlane {
+		return declared
+	}
+	return native
 }
 
 // runConnectorEffect applies the connector's audited receiver contract. A

@@ -455,11 +455,16 @@ func (s *Server) sealRelayDeployForTest(ctx context.Context, tenantID, destinati
 		return nil, err
 	}
 	return json.Marshal(sealedConnectorDeployPayload{
-		Format:      connectorDeploySealedFormat,
-		Version:     connectorDeploySealedVersion,
-		IdentityID:  identityID,
-		Fingerprint: fingerprint,
-		Sealed:      sealed,
+		Format:       connectorDeploySealedFormat,
+		Version:      connectorDeploySealedVersion,
+		IdentityID:   identityID,
+		Fingerprint:  fingerprint,
+		Sealed:       sealed,
+		Connector:    p.Connector,
+		Target:       p.Target,
+		TargetID:     p.TargetID,
+		Revision:     p.TargetRevision,
+		TargetConfig: append(json.RawMessage(nil), p.TargetConfig...),
 	})
 }
 

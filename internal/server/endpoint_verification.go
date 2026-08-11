@@ -62,7 +62,7 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 	// The connector and target come from the job payload the control plane
 	// queued, never from the agent's report — the same rule the sweep ingest
 	// follows, for the same reason.
-	_ = json.Unmarshal(jobPayload, &intent)
+	intent = deployIntentForVerificationReceipt(jobPayload)
 
 	for _, res := range report.Results {
 		id := strings.TrimSpace(res.EndpointID)
@@ -83,6 +83,28 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 				Detail:              res.Detail,
 			})
 		}
+	}
+}
+
+// deployIntentForVerificationReceipt reads only the public routing half of a
+// queued deploy. Modern credential-bearing jobs are sealed, so unmarshalling
+// them directly as DeployIntent silently produced an empty connector/target on
+// the verified receipt even though the agent executed the right work.
+func deployIntentForVerificationReceipt(jobPayload []byte) relay.DeployIntent {
+	var direct relay.DeployIntent
+	if json.Unmarshal(jobPayload, &direct) == nil && strings.TrimSpace(direct.Connector) != "" {
+		return direct
+	}
+	var wrapped sealedConnectorDeployPayload
+	if json.Unmarshal(jobPayload, &wrapped) != nil || wrapped.Format != connectorDeploySealedFormat {
+		return relay.DeployIntent{}
+	}
+	address, serverName := verifyTargetFromConfig(wrapped.TargetConfig)
+	return relay.DeployIntent{
+		Connector: wrapped.Connector, Target: wrapped.Target, TargetID: wrapped.TargetID,
+		Revision: wrapped.Revision, IdentityID: wrapped.IdentityID,
+		Fingerprint: wrapped.Fingerprint, TargetConfig: append(json.RawMessage(nil), wrapped.TargetConfig...),
+		VerifyAddress: address, VerifyServerName: serverName,
 	}
 }
 

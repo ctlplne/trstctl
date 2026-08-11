@@ -138,6 +138,37 @@ func TestOutboxEnqueueIfAbsentRejectsCrossSubsystemAndPayloadCollisions(t *testi
 	}
 }
 
+// required_agent_role is executable routing state, not enqueue-only metadata.
+// The control-plane handler must receive the exact durable value so it can
+// refuse host-owned work before opening its sealed payload.
+func TestOutboxDispatchCarriesRequiredAgentRoleAUD30(t *testing.T) {
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	ob := orchestrator.NewOutbox(s)
+	enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "connector.deploy", IdempotencyKey: "aud30-host-role",
+		Payload: []byte(`{"sealed":true}`), RequiredAgentRole: "host",
+	})
+	// Rebuild the worker over the same store. The routing decision has to
+	// survive process restart; an in-memory copy would reopen the race after an
+	// upgrade even though the database row still said host.
+	ob = orchestrator.NewOutbox(s)
+	var got orchestrator.Message
+	processed, err := ob.DispatchScoped(context.Background(), orchestrator.HandlerFunc(func(_ context.Context, message orchestrator.Message) error {
+		got = message
+		return orchestrator.DeferDelivery(errors.New("host agent owns this deploy"))
+	}), orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if processed != 1 {
+		t.Fatalf("processed = %d, want 1", processed)
+	}
+	if got.RequiredAgentRole != "host" {
+		t.Fatalf("handler role = %q, want durable host role", got.RequiredAgentRole)
+	}
+}
+
 func TestOutboxEffectLanesLetUnrelatedReceiversWithOneDestinationProgress(t *testing.T) {
 	s := newStore(t)
 	mustRegisterTenant(t, s, tenantA)

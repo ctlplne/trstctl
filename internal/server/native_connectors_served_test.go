@@ -24,11 +24,9 @@ import (
 	"trstctl.com/trstctl/internal/connector/azurekv/azurekvtest"
 	"trstctl.com/trstctl/internal/connector/elasticsearch"
 	"trstctl.com/trstctl/internal/connector/example"
-	"trstctl.com/trstctl/internal/connector/javakeystore"
 	"trstctl.com/trstctl/internal/connector/kemp"
 	"trstctl.com/trstctl/internal/connector/kemp/kemptest"
 	"trstctl.com/trstctl/internal/connector/mysql"
-	"trstctl.com/trstctl/internal/connector/nginx"
 	"trstctl.com/trstctl/internal/connector/postgresql"
 	"trstctl.com/trstctl/internal/connector/rabbitmq"
 	"trstctl.com/trstctl/internal/connector/tomcat"
@@ -362,6 +360,11 @@ func TestServedPublishedConnectorCatalogCAPDEP09(t *testing.T) {
 	reg.Register(rabbitmq.New(specs[2].certPath, specs[2].keyPath))
 	reg.Register(elasticsearch.New(specs[3].certPath, specs[3].keyPath))
 	reg.Register(tomcat.New(specs[4].certPath, specs[4].keyPath))
+	for _, spec := range specs {
+		if err := reg.DeclareTargetVantage(spec.name, connector.VantageHostAgent); err != nil {
+			t.Fatalf("declare %s host vantage: %v", spec.name, err)
+		}
+	}
 
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = reg
@@ -410,66 +413,79 @@ func TestServedPublishedConnectorCatalogCAPDEP09(t *testing.T) {
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("drain published connector catalog outbox: %v", err)
 	}
+	// These five catalog additions are host-vantage connectors. Publishing them
+	// must not mean the control-plane registry may execute them: the same
+	// in-memory Ops objects used by the old acceptance test make any accidental
+	// local write directly observable.
 	for _, spec := range specs {
 		ops := opsByName[spec.name]
-		gotCert, ok := ops.File(spec.certPath)
-		if !ok || !bytes.Equal(gotCert, certPEM) {
-			t.Fatalf("%s did not write certificate to %s", spec.name, spec.certPath)
+		if _, ok := ops.File(spec.certPath); ok {
+			t.Fatalf("%s wrote certificate to control-plane path %s; host work must be deferred to an agent", spec.name, spec.certPath)
 		}
-		gotKey, ok := ops.File(spec.keyPath)
-		if !ok || !bytes.Equal(gotKey, keyPEM) {
-			t.Fatalf("%s did not write private key to %s", spec.name, spec.keyPath)
+		if _, ok := ops.File(spec.keyPath); ok {
+			t.Fatalf("%s wrote private key to control-plane path %s; host work must be deferred to an agent", spec.name, spec.keyPath)
+		}
+		var status, role string
+		var attempts int
+		if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+			return tx.QueryRow(t.Context(),
+				`SELECT status, attempts, COALESCE(required_agent_role, '') FROM outbox
+				  WHERE tenant_id = $1 AND idempotency_key = $2`,
+				h.tenant, "cap-dep-09-"+spec.name).Scan(&status, &attempts, &role)
+		}); err != nil {
+			t.Fatalf("read %s deploy row: %v", spec.name, err)
+		}
+		if status != "pending" || attempts != 0 || role != "host" {
+			t.Fatalf("%s deploy row = status %q attempts %d role %q, want pending/0/host", spec.name, status, attempts, role)
 		}
 	}
-
-	deliveries := connectorDeliveries(t, h, tok)
-	want := map[string]bool{}
-	for _, spec := range specs {
-		want[spec.name] = true
-	}
-	for _, got := range deliveries.Items {
-		if !want[got.Connector] {
-			continue
-		}
-		if got.Status != "delivered" || got.Reason != "native_delivered" || got.Fingerprint == "" {
-			t.Fatalf("bad catalog connector receipt for %s: %+v", got.Connector, got)
-		}
-		delete(want, got.Connector)
-	}
-	if len(want) != 0 {
-		t.Fatalf("missing delivered catalog connector receipts for %+v; got %s", want, deliveries.Raw)
+	if got := connectorDeliveries(t, h, tok); len(got.Items) != 0 {
+		t.Fatalf("host catalog deploys produced control-plane receipts: %s", got.Raw)
 	}
 }
 
 func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 	const (
-		nginxCertPath = "/etc/nginx/tls/fullchain.pem"
-		nginxKeyPath  = "/etc/nginx/tls/privkey.pem"
-		javaStorePath = "/opt/payments/tls/payments.p12"
-		kempToken     = "cap-life-05-kemp-token" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		kempVS        = "vs-cap-life-05-443"
+		awsAccessKey = "AKIDCAPLIFE05"
+		awsSecretKey = "CAPLIFE05SecretKeyForSigV4Only" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		acmARN       = "arn:aws:acm:us-east-1:123456789012:certificate/cap-life-05"
+		azureToken   = "cap-life-05-azure-token" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		azureName    = "cap-life-05-web"
+		kempToken    = "cap-life-05-kemp-token" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		kempVS       = "vs-cap-life-05-443"
 	)
 
-	nginxOps := connector.NewMemoryOps()
-	javaOps := connector.NewMemoryOps()
+	acmSrv := acmtest.New(awsAccessKey, awsSecretKey)
+	defer acmSrv.Close()
+	azureSrv := azurekvtest.New(azureToken)
+	defer azureSrv.Close()
 	kempSrv := kemptest.New(kempToken)
 	defer kempSrv.Close()
 
 	reg := connector.NewRegistry(func(name string) connector.Ops {
 		switch name {
-		case "nginx":
-			return nginxOps
-		case "java-keystore":
-			return javaOps
+		case "aws-acm":
+			return connector.NewHTTPOps(acmSrv.Client())
+		case "azure-keyvault":
+			return connector.NewHTTPOps(azureSrv.Client())
 		case "kemp":
 			return connector.NewHTTPOps(kempSrv.Client())
 		default:
 			return nil
 		}
 	})
-	reg.Register(nginx.New(nginxCertPath, nginxKeyPath))
-	reg.Register(javakeystore.New(javaStorePath, []byte("changeit"), "payments"))
+	reg.Register(acm.New("us-east-1", acm.Credentials{
+		AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey),
+	}, acm.WithEndpoint(acmSrv.URL())))
+	reg.Register(azurekv.New(azureSrv.URL(), azurekv.StaticToken([]byte(azureToken))))
 	reg.Register(kemp.New(kempSrv.URL(), []byte(kempToken)))
+	for name, vantage := range map[string]connector.TargetVantage{
+		"aws-acm": connector.VantageControlPlane, "azure-keyvault": connector.VantageControlPlane, "kemp": connector.VantageNetworkRelay,
+	} {
+		if err := reg.DeclareTargetVantage(name, vantage); err != nil {
+			t.Fatalf("declare %s vantage: %v", name, err)
+		}
+	}
 
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = reg
@@ -495,8 +511,8 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 		connector string
 		route     string
 	}{
-		{name: "cap-life-05-nginx.served.test", connector: "nginx", route: "edge/nginx/payments"},
-		{name: "cap-life-05-java.served.test", connector: "java-keystore", route: "payments-keystore"},
+		{name: "cap-life-05-acm.served.test", connector: "aws-acm", route: acmARN},
+		{name: "cap-life-05-azure.served.test", connector: "azure-keyvault", route: azureName},
 		{name: "cap-life-05-kemp.served.test", connector: "kemp", route: kempVS},
 	} {
 		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, map[string]any{
@@ -520,17 +536,13 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 		t.Fatalf("drain endpoint binding pushes: %v", err)
 	}
 
-	nginxCert, ok := nginxOps.File(nginxCertPath)
-	if !ok || !bytes.Contains(nginxCert, []byte("BEGIN CERTIFICATE")) {
-		t.Fatalf("nginx connector did not receive an issued certificate")
+	acmImport, ok := acmSrv.Imported(acmARN)
+	if !ok || !bytes.Contains(acmImport.Certificate, []byte("BEGIN CERTIFICATE")) || !bytes.Contains(acmImport.PrivateKey, []byte("BEGIN PRIVATE KEY")) {
+		t.Fatalf("ACM connector did not import the issued credential: %+v ok=%v", acmImport, ok)
 	}
-	nginxKey, ok := nginxOps.File(nginxKeyPath)
-	if !ok || !bytes.Contains(nginxKey, []byte("BEGIN PRIVATE KEY")) {
-		t.Fatalf("nginx connector did not receive the private key")
-	}
-	javaStore, ok := javaOps.File(javaStorePath)
-	if !ok || len(javaStore) == 0 {
-		t.Fatalf("java-keystore connector did not write a keystore")
+	azureImport, ok := azureSrv.Imported(azureName)
+	if !ok || !bytes.Contains(azureImport.PEM, []byte("BEGIN CERTIFICATE")) || !bytes.Contains(azureImport.PEM, []byte("BEGIN PRIVATE KEY")) {
+		t.Fatalf("Azure Key Vault connector did not import the issued credential: %+v ok=%v", azureImport, ok)
 	}
 	kempBinding, ok := kempSrv.Binding(kempVS)
 	if !ok || len(kempBinding.Certificate) == 0 || len(kempBinding.PrivateKey) == 0 {
@@ -544,7 +556,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 			delivered[got.Connector] = true
 		}
 	}
-	for _, want := range []string{"nginx", "java-keystore", "kemp"} {
+	for _, want := range []string{"aws-acm", "azure-keyvault", "kemp"} {
 		if !delivered[want] {
 			t.Fatalf("missing delivered CAP-LIFE-05 receipt for %s; got %s", want, deliveries.Raw)
 		}
@@ -591,6 +603,11 @@ func enqueueServedConnectorDeploy(t *testing.T, h *servedHarness, idemKey, conne
 	if !ok {
 		t.Fatal("served outbox handler is not the issuance dispatcher")
 	}
+	// Production issuance classifies the public connector name before sealing
+	// and persists that demand beside the opaque payload. Keep this direct test
+	// helper on the same path; classifying after sealing would lose the routing
+	// fact and turn every fixture into a legacy row.
+	requiredAgentRole := connectorSideEffectRoleClassifier(handler.connectorRegistry)("connector.deploy", payload)
 	payload, err = handler.sealConnectorDeployBytes(context.Background(), h.tenant, "connector.deploy", idemKey, payload)
 	if err != nil {
 		t.Fatalf("seal connector deploy: %v", err)
@@ -598,10 +615,11 @@ func enqueueServedConnectorDeploy(t *testing.T, h *servedHarness, idemKey, conne
 	ctx := context.Background()
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		_, err := h.srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{
-			TenantID:       h.tenant,
-			Destination:    "connector.deploy",
-			IdempotencyKey: idemKey,
-			Payload:        payload,
+			TenantID:          h.tenant,
+			Destination:       "connector.deploy",
+			IdempotencyKey:    idemKey,
+			Payload:           payload,
+			RequiredAgentRole: requiredAgentRole,
 		})
 		return err
 	}); err != nil {

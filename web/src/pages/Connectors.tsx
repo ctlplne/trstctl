@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
-import { describeStatus } from "@/lib/statusVocab";
+import { describeStatus, type StatusTone } from "@/lib/statusVocab";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
@@ -161,6 +161,31 @@ export function Connectors() {
   }, []);
 
   const connectorOptions = useMemo(() => (catalog ?? []).map((item) => item.name), [catalog]);
+  const selectedTargetRecord = useMemo(() => (targets ?? []).find((target) => target.id === selectedTarget), [selectedTarget, targets]);
+  const selectedTargetTimeline = useMemo(() => {
+    if (!selectedTargetRecord) return [];
+    const receiptRows = (deliveries ?? [])
+      .filter((receipt) => receipt.target === selectedTargetRecord.name)
+      .map((receipt) => ({
+        id: `delivery:${receipt.id}`,
+        stage: receipt.destination,
+        status: receipt.status,
+        at: receipt.updated_at || receipt.created_at,
+        detail: receipt.detail || receipt.reason || receipt.rollback_ref || "",
+        actor: "",
+      }));
+    const verificationRows = endpointVerifications
+      .filter((row) => row.endpoint_id === selectedTargetRecord.id)
+      .map((row) => ({
+        id: `verification:${row.endpoint_id}:${row.vantage}`,
+        stage: "endpoint.verify",
+        status: row.status,
+        at: row.last_checked_at || "",
+        detail: row.detail || row.mismatch || "",
+        actor: row.agent_common_name || "",
+      }));
+    return [...receiptRows, ...verificationRows].sort((left, right) => Date.parse(right.at || "") - Date.parse(left.at || ""));
+  }, [deliveries, endpointVerifications, selectedTargetRecord]);
 
   const createTarget = async (event: FormEvent) => {
     event.preventDefault();
@@ -458,6 +483,37 @@ export function Connectors() {
             </div>
             {actionResult && <output className="font-mono text-xs text-muted-foreground md:col-span-3">{actionResult}</output>}
           </div>
+          {selectedTargetRecord ? (
+            <section aria-labelledby="selected-target-timeline-heading" className="ui-panel grid gap-3">
+              <div>
+                <h3 id="selected-target-timeline-heading" className="font-semibold">
+                  {translateNow("source.credential.activity.timeline.e03f707dcc")}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {translateNow("source.target.deploy.listener.verification.and.rollback.38783cea3d", { target: selectedTargetRecord.name })}
+                </p>
+              </div>
+              {selectedTargetTimeline.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{translateNow("source.no.deployment.receipts.yet.439880ad78")}</p>
+              ) : (
+                <ol className="grid gap-2" data-testid="selected-target-timeline">
+                  {selectedTargetTimeline.map((item) => (
+                    <li key={item.id} className="grid gap-1 rounded-md border border-border p-3 sm:grid-cols-[10rem_8rem_1fr] sm:gap-3">
+                      <div>
+                        <p className="font-mono text-xs font-semibold">{item.stage}</p>
+                        <p className="text-xs text-muted-foreground">{item.at ? formatDateTime(item.at) : "-"}</p>
+                      </div>
+                      <StatusBadge value={item.status} vocabulary="delivery" tone={targetTimelineStatusTone(item.stage, item.status)} />
+                      <div className="text-xs text-muted-foreground">
+                        {item.actor ? <p className="font-mono">{translateNow("source.agent.11b39c9377")}: {item.actor}</p> : null}
+                        <p>{item.detail || "-"}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          ) : null}
         </section>
       )}
 
@@ -1056,6 +1112,14 @@ function ConnectorDetailRow({ children, mono = false, term }: { term: string; ch
 // rollback_recorded never restored anything.
 function deliveryStatusTone(status: ConnectorDelivery["status"]) {
   return describeStatus("delivery", status).tone;
+}
+
+function targetTimelineStatusTone(stage: string, status: string): StatusTone {
+  if (stage !== "endpoint.verify") return describeStatus("delivery", status).tone;
+  if (status === "verified") return "success";
+  if (status === "diverged") return "critical";
+  if (status === "unreachable") return "warning";
+  return "neutral";
 }
 
 function circuitStateTone(state: OutboxCircuit["state"]) {

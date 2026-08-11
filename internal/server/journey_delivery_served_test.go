@@ -50,7 +50,7 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 		"name":     "journey-002.served.test",
 		"owner_id": owner.ID,
 		"attributes": map[string]any{
-			"connector": "nginx",
+			"connector": "aws-acm",
 			"target":    "edge-1",
 		},
 	})
@@ -94,7 +94,7 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 		}
 		t.Fatalf("connector receipts after deploy = %d, want 1 (%s); pending outbox: %+v", len(first.Items), first.Raw, pending)
 	}
-	if got := first.Items[0]; got.Status != "failed" || got.Connector != "nginx" || got.Target != "edge-1" || got.Fingerprint == "" {
+	if got := first.Items[0]; got.Status != "failed" || got.Connector != "aws-acm" || got.Target != "edge-1" || got.Fingerprint == "" {
 		t.Fatalf("bad deploy receipt: %+v", got)
 	}
 
@@ -454,12 +454,12 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	)
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
-		"name":      "edge/prod/payments",
-		"connector": "nginx",
+		"name":      "cloud/acm/payments",
+		"connector": "aws-acm",
 		"config": map[string]any{
-			"host":           "edge-1.internal",
-			"credential_ref": "secret://connectors/nginx/edge-1",
-			"reload":         "systemctl reload nginx",
+			"region":                "us-east-1",
+			"access_key_id":         "AKIDTESTONLY",
+			"secret_access_key_ref": "secret://connectors/aws-acm/access-key",
 		},
 	})
 	if status != http.StatusCreated {
@@ -473,7 +473,7 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &target); err != nil {
 		t.Fatalf("decode connector target: %v", err)
 	}
-	if target.ID == "" || target.Connector != "nginx" || jsonContains(t, target.Config, "password") {
+	if target.ID == "" || target.Connector != "aws-acm" || jsonContains(t, target.Config, "password") {
 		t.Fatalf("bad target response: %+v body=%s", target, body)
 	}
 
@@ -516,7 +516,7 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &ident); err != nil {
 		t.Fatalf("decode bound identity: %v", err)
 	}
-	if !jsonContains(t, ident.Attributes, target.ID) || !jsonContains(t, ident.Attributes, "edge/prod/payments") {
+	if !jsonContains(t, ident.Attributes, target.ID) || !jsonContains(t, ident.Attributes, "cloud/acm/payments") {
 		t.Fatalf("bound identity attributes = %s, want connector target id and route", ident.Attributes)
 	}
 
@@ -557,7 +557,7 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 		t.Fatalf("drain deploy: %v", err)
 	}
 	first := connectorDeliveriesForIdentity(t, h, tok, ident.ID)
-	if len(first.Items) != 1 || first.Items[0].Connector != "nginx" || first.Items[0].Target != "edge/prod/payments" || first.Items[0].Fingerprint == "" {
+	if len(first.Items) != 1 || first.Items[0].Connector != "aws-acm" || first.Items[0].Target != "cloud/acm/payments" || first.Items[0].Fingerprint == "" {
 		t.Fatalf("delivery receipt after target deploy = %+v raw=%s", first.Items, first.Raw)
 	}
 
@@ -643,12 +643,12 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 		"identity_name": "cap-life-01.served.test",
 		"reason":        "CAP-LIFE-01 endpoint lifecycle automation",
 		"target": map[string]any{
-			"name":      "edge/prod/cap-life-01",
-			"connector": "nginx",
+			"name":      "cloud/acm/cap-life-01",
+			"connector": "aws-acm",
 			"config": map[string]any{
-				"credential_ref": "secret://connectors/nginx/cap-life-01",
-				"host":           "edge-1.internal",
-				"reload":         "systemctl reload nginx",
+				"region":                "us-east-1",
+				"access_key_id":         "AKIDTESTONLY",
+				"secret_access_key_ref": "secret://connectors/aws-acm/access-key",
 			},
 		},
 	})
@@ -674,7 +674,7 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 	if binding.Identity.ID == "" || binding.Identity.Status != "issued" {
 		t.Fatalf("binding identity = %+v, want issued before outbox deployment", binding.Identity)
 	}
-	if binding.Target.ID == "" || binding.Target.Name != "edge/prod/cap-life-01" || binding.Target.Connector != "nginx" {
+	if binding.Target.ID == "" || binding.Target.Name != "cloud/acm/cap-life-01" || binding.Target.Connector != "aws-acm" {
 		t.Fatalf("binding target = %+v", binding.Target)
 	}
 	for _, want := range []string{"ca.issue", "connector.deploy"} {
@@ -697,7 +697,7 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 		t.Fatalf("issued certs after endpoint binding = %+v", certs)
 	}
 	first := connectorDeliveriesForIdentity(t, h, tok, binding.Identity.ID)
-	if len(first.Items) != 1 || first.Items[0].Connector != "nginx" || first.Items[0].Target != "edge/prod/cap-life-01" || first.Items[0].Fingerprint != certs[0].Fingerprint {
+	if len(first.Items) != 1 || first.Items[0].Connector != "aws-acm" || first.Items[0].Target != "cloud/acm/cap-life-01" || first.Items[0].Fingerprint != certs[0].Fingerprint {
 		t.Fatalf("initial delivery receipt = %+v raw=%s cert=%s", first.Items, first.Raw, certs[0].Fingerprint)
 	}
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+binding.Identity.ID, tok, nil)

@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/connector/apache"
 	"trstctl.com/trstctl/internal/connector/caddy"
 	"trstctl.com/trstctl/internal/connector/elasticsearch"
+	"trstctl.com/trstctl/internal/connector/envoy"
 	"trstctl.com/trstctl/internal/connector/haproxy"
 	"trstctl.com/trstctl/internal/connector/iis"
 	"trstctl.com/trstctl/internal/connector/javakeystore"
@@ -29,7 +33,9 @@ import (
 
 // Host-executed connector deploys (epic D1).
 //
-// Thirteen connectors write files and run reload commands. Until now they did
+// Thirteen connectors write files and run reload commands. Envoy is the
+// fourteenth host-vantage connector: its co-resident SDS endpoint is HTTP, but
+// it is still reachable only from the serving host. Until now they did
 // that against the CONTROL PLANE's filesystem — which is doctrine D1's founding
 // defect stated as plainly as it can be: the machine that decided the deploy is
 // not the machine the certificate belongs on, and a product that writes
@@ -53,9 +59,16 @@ import (
 // trusted, the same way the relay refuses appliance work it does not carry.
 func HostConnectorKinds() []string {
 	return []string{
-		"apache", "caddy", "elasticsearch", "haproxy", "iis", "java-keystore",
+		"apache", "caddy", "elasticsearch", "envoy", "haproxy", "iis", "java-keystore",
 		"mysql", "nginx", "postfix", "postgresql", "rabbitmq", "tomcat", "traefik",
 	}
+}
+
+// RequiresHostExecProfile reports whether this connector writes local files or
+// runs allowlisted commands. Envoy is host-vantage too, but uses only the
+// co-resident HTTP SDS endpoint and needs no filesystem/exec grant.
+func RequiresHostExecProfile(name string) bool {
+	return ExecutesOnHost(name) && name != "envoy"
 }
 
 // ExecutesOnHost reports whether this build can execute the named connector on
@@ -135,7 +148,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 }
 
 // HostTargetConfig is the host-side view of a deployment target: the paths and
-// options the thirteen file/exec connectors need. It covers host-vantage
+// options the 13 file/exec connectors and co-resident Envoy need. It covers host-vantage
 // connectors only, for the same reason TargetConfig covers relay ones — a host
 // agent has no business decoding an appliance's endpoint schema.
 type HostTargetConfig struct {
@@ -143,6 +156,8 @@ type HostTargetConfig struct {
 	KeyPath    string `json:"key_path,omitempty"`
 	CRTPath    string `json:"crt_path,omitempty"`
 	ConfigPath string `json:"config_path,omitempty"`
+	Endpoint   string `json:"endpoint,omitempty"`
+	SecretName string `json:"secret_name,omitempty"`
 
 	// IIS.
 	Binding   string `json:"binding,omitempty"`
@@ -175,6 +190,7 @@ func ExecuteOnHost(
 	profile connector.LocalOpsConfig,
 	intent DeployIntent,
 	material Material,
+	clients ...*http.Client,
 ) (connector.Stats, error) {
 	if !ExecutesOnHost(intent.Connector) {
 		return connector.Stats{}, fmt.Errorf("relay: connector %q is not host-executable", intent.Connector)
@@ -199,12 +215,21 @@ func ExecuteOnHost(
 	if err != nil {
 		return connector.Stats{}, err
 	}
-	// NewLocalOps re-canonicalizes the roots and re-Lstats every command HERE,
-	// on the host that will run them. That is the whole point of moving the
-	// profile: the check and the execution finally happen on the same machine.
-	ops, err := connector.NewLocalOps(profile)
-	if err != nil {
-		return connector.Stats{}, fmt.Errorf("relay: host exec profile is not usable: %w", err)
+	var ops connector.Ops
+	if intent.Connector == "envoy" {
+		var client *http.Client
+		if len(clients) > 0 {
+			client = clients[0]
+		}
+		ops = connector.NewHTTPOps(client)
+	} else {
+		// NewLocalOps re-canonicalizes roots and re-Lstats every command HERE,
+		// so the authorization and effect bind to the same machine.
+		local, localErr := connector.NewLocalOps(profile)
+		if localErr != nil {
+			return connector.Stats{}, fmt.Errorf("relay: host exec profile is not usable: %w", localErr)
+		}
+		ops = local
 	}
 	return connector.Run(ctx, built, ops, connector.Deployment{
 		Target:      intent.Target,
@@ -235,6 +260,11 @@ func buildHostConnector(name string, target HostTargetConfig, material Material)
 		return rabbitmq.New(target.CertPath, target.KeyPath), nil
 	case "elasticsearch":
 		return elasticsearch.New(target.CertPath, target.KeyPath), nil
+	case "envoy":
+		if err := validateCoResidentEnvoyEndpoint(target.Endpoint); err != nil {
+			return nil, err
+		}
+		return envoy.New(target.Endpoint, target.SecretName), nil
 	case "tomcat":
 		return tomcat.New(target.CertPath, target.KeyPath), nil
 	case "haproxy":
@@ -273,4 +303,20 @@ func buildHostConnector(name string, target HostTargetConfig, material Material)
 	default:
 		return nil, fmt.Errorf("relay: connector %q is not host-executable", name)
 	}
+}
+
+func validateCoResidentEnvoyEndpoint(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+		return errors.New("relay: host Envoy endpoint must be an absolute HTTP(S) loopback URL without user info")
+	}
+	host := strings.TrimSpace(u.Hostname())
+	if strings.EqualFold(host, "localhost") {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return errors.New("relay: host Envoy endpoint must name localhost or a literal loopback address")
+	}
+	return nil
 }

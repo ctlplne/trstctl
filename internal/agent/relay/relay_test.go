@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -56,6 +57,10 @@ type report struct {
 	// are reading is the one the agent signed.
 	evidence string
 }
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 func (f *fakeChannel) ClaimJobs(context.Context, []string, int, int) ([]relay.Job, error) {
 	return f.jobs, nil
@@ -443,6 +448,66 @@ func TestHostExecutorRefusesWorkItCannotDo(t *testing.T) {
 		map[string][]byte{"credential.cert_pem": []byte(testCertPEM), "credential.key_pem": []byte(testKeyPEM)},
 	); err == nil {
 		t.Fatal("the host executor accepted appliance work")
+	}
+}
+
+// Envoy is host-vantage even though its local side effect is HTTP: the SDS
+// management socket is co-resident and commonly loopback-only. Prove the agent
+// carries that fourteenth constructor and uses its own client without asking
+// for an unrelated filesystem/exec grant.
+func TestHostExecutorDeploysToCoResidentEnvoy(t *testing.T) {
+	puts := 0
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		status := http.StatusNotFound
+		switch r.Method {
+		case http.MethodGet:
+		case http.MethodPut:
+			puts++
+			status = http.StatusNoContent
+		default:
+			status = http.StatusMethodNotAllowed
+		}
+		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
+	})}
+	config, err := json.Marshal(map[string]string{"endpoint": "http://127.0.0.1:9901", "secret_name": "edge-cert"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats, err := relay.ExecuteOnHost(context.Background(), connector.LocalOpsConfig{}, relay.DeployIntent{
+		Connector: "envoy", Target: "edge", TargetConfig: config, Fingerprint: "sha256:edge",
+	}, map[string][]byte{
+		"credential.cert_pem": []byte(testCertPEM),
+		"credential.key_pem":  []byte(testKeyPEM),
+	}, client)
+	if err != nil {
+		t.Fatalf("ExecuteOnHost(envoy): %v", err)
+	}
+	if puts != 1 || stats.Denied != 0 {
+		t.Fatalf("envoy requests: puts=%d stats=%+v, want one permitted update", puts, stats)
+	}
+}
+
+func TestHostExecutorRefusesNonLoopbackEnvoyEndpointBeforeIO(t *testing.T) {
+	requests := 0
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		requests++
+		return nil, errors.New("request must not run")
+	})}
+	config, err := json.Marshal(map[string]string{"endpoint": "https://envoy.remote.example", "secret_name": "edge-cert"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = relay.ExecuteOnHost(context.Background(), connector.LocalOpsConfig{}, relay.DeployIntent{
+		Connector: "envoy", Target: "edge", TargetConfig: config,
+	}, map[string][]byte{
+		"credential.cert_pem": []byte(testCertPEM),
+		"credential.key_pem":  []byte(testKeyPEM),
+	}, client)
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("ExecuteOnHost(remote envoy) error = %v, want loopback refusal", err)
+	}
+	if requests != 0 {
+		t.Fatalf("remote Envoy endpoint received %d HTTP requests, want zero", requests)
 	}
 }
 

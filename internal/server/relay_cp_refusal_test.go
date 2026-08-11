@@ -125,13 +125,45 @@ func TestAnUnmigratedFamilyIsNeverRefused(t *testing.T) {
 	}
 }
 
-// A host connector is untouched by any of this.
-func TestAHostConnectorIsNeverRefused(t *testing.T) {
+// A legacy row has no role stamp, so the connector family is the last safe
+// classification boundary. Host work still belongs to the host agent and must
+// be returned to the queue before the native registry can touch this machine.
+func TestAHostConnectorFamilyIsRefusedEvenWithoutARoleStamp(t *testing.T) {
 	t.Parallel()
-	relays := &relayPresenceStore{present: true}
-	d := &issuanceDispatcher{relayPresence: relays}
-	if err := d.handleDeploy(context.Background(), deployMessage(t, "nginx")); orchestrator.IsDeliveryDeferred(err) {
-		t.Fatal("an nginx deploy was deferred to a relay; host connectors execute on the host")
+	d := &issuanceDispatcher{}
+	if err := d.handleDeploy(context.Background(), deployMessage(t, "nginx")); !orchestrator.IsDeliveryDeferred(err) {
+		t.Fatalf("nginx deploy error = %v, want a retry-budget-neutral deferral to the host agent", err)
+	}
+}
+
+// A modern row carries its role outside the sealed payload. The dispatcher can
+// therefore refuse it before opening tenant ciphertext or even decoding JSON.
+// Invalid JSON makes that ordering executable: if decoding starts, this test
+// sees a decode error instead of the typed deferral.
+func TestAHostStampedRowIsRefusedBeforePayloadDecode(t *testing.T) {
+	t.Parallel()
+	d := &issuanceDispatcher{}
+	err := d.Deliver(context.Background(), orchestrator.Message{
+		TenantID: "11111111-1111-1111-1111-111111111111", Destination: "connector.deploy",
+		IdempotencyKey: "deploy-host-stamped", Payload: []byte("not-json"), RequiredAgentRole: "host",
+	})
+	if !orchestrator.IsDeliveryDeferred(err) {
+		t.Fatalf("host-stamped deploy error = %v, want deferral before payload decode", err)
+	}
+}
+
+// Unknown role values are corrupted routing metadata, not permission for the
+// control plane to guess. Defer before payload decode so repair/reconciliation
+// can make one explicit executor choice without risking a local mutation.
+func TestAnUnknownRoleStampFailsClosedBeforePayloadDecode(t *testing.T) {
+	t.Parallel()
+	d := &issuanceDispatcher{}
+	err := d.Deliver(context.Background(), orchestrator.Message{
+		TenantID: "11111111-1111-1111-1111-111111111111", Destination: "connector.deploy",
+		IdempotencyKey: "deploy-unknown-role", Payload: []byte("not-json"), RequiredAgentRole: "future-role",
+	})
+	if !orchestrator.IsDeliveryDeferred(err) {
+		t.Fatalf("unknown-role deploy error = %v, want fail-closed deferral", err)
 	}
 }
 

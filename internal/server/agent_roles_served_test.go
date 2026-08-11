@@ -34,8 +34,10 @@ import (
 // agent enrolled under a named capability grant.
 type roleHarness struct {
 	*servedHarness
-	client *transport.AgentClient
-	agent  string
+	client      *transport.AgentClient
+	agent       string
+	channelAddr string
+	serverName  string
 	// identity signs this harness's job receipts (epic A1).
 	identity *agent.Agent
 }
@@ -75,7 +77,14 @@ func newRoleHarness(t *testing.T, roles []string, claimable ...string) *roleHarn
 		t.Fatalf("dial agent channel: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return &roleHarness{servedHarness: h, client: transport.NewAgentClient(conn), agent: cn, identity: a}
+	return &roleHarness{
+		servedHarness: h,
+		client:        transport.NewAgentClient(conn),
+		agent:         cn,
+		channelAddr:   ln.Addr().String(),
+		serverName:    serverName,
+		identity:      a,
+	}
 }
 
 // TestServedHostAgentCannotClaimRelayWork is the point of the epic. The operator

@@ -38,7 +38,23 @@ with `ErrDenied`.
 
 Delivery is reliable and journaled: the orchestrator writes a `connector.deploy`
 message in the *same transaction* as the state change that requested deployment, so a
-crash can't drop it, and the outbox worker decodes it — checking the trusted native
+crash can't drop it. Before sealing the credential-bearing payload it stamps the row
+with the execution vantage from the closed connector census. The control-plane worker
+refuses every row stamped `host` before it opens the payload or looks up a native
+connector. An old row without a stamp is classified from its connector family and is
+refused the same way; an unknown stamp also fails closed. This means the one row cannot
+race between the control plane and a host agent, and a missing or offline host agent
+leaves it visibly pending instead of silently writing the control-plane filesystem.
+
+An enrolled host-role agent claims that durable row over the served mTLS channel,
+redeems its sealed credential once for that attempt, and executes the connector on the
+machine that actually serves the workload. The shipped host census has 14 families:
+the 13 file/reload connectors plus co-resident Envoy SDS. A generated parity test
+compares this list with the control-plane vantage census, so a newly classified host
+family cannot ship without an agent constructor. Cloud-store work remains in the
+control plane; appliance migration keeps its separately documented network-relay gate.
+
+After choosing the permitted execution path, the worker checks the trusted native
 `ConnectorRegistry`, then provenance-verified signed WASM plugins. If neither owns the
 name it records a `failed` receipt and leaves the row pending; a `queued` receipt has
 `attempts=0` and means only that durable work exists, not that deployment happened.
@@ -80,29 +96,31 @@ console. A target names the connector, the route name, and references to credent
 or operator-managed endpoint config; it never stores passwords, tokens, private keys,
 or certificate key bytes.
 
-The control-plane operator first enables the native connector and, for a local
-file/reload target, defines the exact roots and executables tenant target rows may use
-— process configuration, so a tenant cannot grant itself a new filesystem root or
-command:
+The control-plane operator first enables the native connector. For a local file/reload
+target, the operator also enrolls a host-role agent, enables `connector.deploy` in
+`agent_channel.claimable_job_kinds`, starts the agent with `--relay-claim`, and places
+the exact roots and executables in the file named by `--host-exec-profile`. The profile
+lives on the target host because an allowlist for `/usr/sbin/nginx` on the control
+plane says nothing about the binary the target host will actually run. Tenant target
+rows select a logical profile name but cannot add a root, executable, or argument:
 
 ```json
 {
-  "connectors": {
-    "enabled": ["nginx"],
-    "local_profiles": {
-      "nginx-prod": {
-        "allowed_roots": ["/etc/nginx/tls"],
-        "actions": [{
-          "logical_name": "nginx",
-          "command": "/usr/sbin/nginx",
-          "pass_args": true,
-          "timeout": "15s"
-        }]
-      }
-    }
-  }
+  "allowed_roots": ["/etc/nginx/tls"],
+  "actions": [{
+    "logical_name": "nginx",
+    "command": "/usr/sbin/nginx",
+    "pass_args": true,
+    "timeout_seconds": 15
+  }]
 }
 ```
+
+Envoy uses its co-resident HTTP SDS endpoint and does not consume filesystem or exec
+permissions, but it is still host-vantage work: the control plane never falls back to
+dialing a loopback Envoy endpoint on its own machine. The host executor accepts only
+`localhost` or a literal loopback IP, so an Envoy target cannot become arbitrary
+network egress from the agent host.
 
 A tenant with `connectors:write` then creates the target with the connector's strict
 schema and drives its lifecycle:
@@ -173,8 +191,10 @@ entry, which maps the connector's logical command (`nginx`, `apachectl`, `caddy`
 general shells and symlinked executables are rejected. IIS's `powershell` action
 additionally requires an exact `logical_args` allowlist and a separate `args` list
 with `pass_args: false`, so the requested argv is only ever compared, never forwarded
-as a tenant-derived byte to `-Command`. To add a target trstctl doesn't ship, follow
-the [connector authoring guide](../guides/connector-authoring.md).
+as a tenant-derived byte to `-Command`. That control-plane entry is the admission and
+dry-run copy; the `--host-exec-profile` file is the authority enforced where the
+effect runs, so operators keep their roots and actions aligned. To add a target
+trstctl doesn't ship, follow the [connector authoring guide](../guides/connector-authoring.md).
 
 ## Pitfalls & limits
 
@@ -184,6 +204,14 @@ the [connector authoring guide](../guides/connector-authoring.md).
   path for third-party code. Tenant-scoped target CRUD, test, deploy, rollback, and
   identity binding are served; target mutation needs the matching native connector
   enabled or a signed plugin owner.
+- **Host availability:** host-family deploys have no control-plane fallback. If no
+  enrolled host-role agent with `connector.deploy` enabled and a usable host profile
+  is polling, the row remains pending. Operations shows the queue; this is a safe
+  refusal, not a request to place the target's filesystem on the control-plane host.
+- **Target evidence:** selecting a target in Connectors shows one time-ordered deploy,
+  listener-verification, and rollback timeline. Agent verification rows name the
+  certificate identity that produced the signed observation; a delivery receipt alone
+  does not claim that the listener is serving the new certificate.
 - Grants are deny-by-default: an ungranted operation fails with `ErrDenied` — that's
   the safety net, not a bug, if a connector seems to do nothing.
 - Appliance connectors need reachable management endpoints and import-only
