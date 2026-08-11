@@ -238,14 +238,18 @@ func TestBuildAutonomouslyCompletesPreparedPrivacyErasureBeforeRestore(t *testin
 		t.Fatal(err)
 	}
 	preparedAt := time.Now().UTC().Round(0)
+	requestBinding := strings.Repeat("8", 64)
+	identity := orchestrator.PrivacySubjectErasureIdentityFor(
+		tenantID, "privacy-prepared-restart", requestBinding,
+	)
 	candidate := store.PrivacySubjectErasurePreparation{
 		PrivacySubjectErasure: store.PrivacySubjectErasure{
 			TenantID: tenantID, SubjectRef: privacy.SubjectRef(tenantID, subject),
 			Reason: "restart recovery", ErasedAt: preparedAt,
 		},
-		OperationID:        "sha256:" + strings.Repeat("7", 64),
-		RequestBinding:     strings.Repeat("8", 64),
-		EventID:            "privacy-prepared-restart-completion",
+		OperationID:        identity.OperationID,
+		RequestBinding:     requestBinding,
+		EventID:            identity.EventID,
 		RewriteOperationID: "privacy-no-op-rewrite",
 		TargetGeneration:   generation,
 		EventActor: &events.Actor{
@@ -364,6 +368,17 @@ func TestApplicationSecretAppendReloadsFenceAcrossPrivacyHistoryCutover(t *testi
 		subject  = "privacy-race-alice@example.test"
 		name     = "privacy/race-secret"
 	)
+	type privacyRaceSource struct {
+		Requester string `json:"requester"`
+	}
+	if err := events.RegisterPrivacyEventPolicy("privacy.race.source", 1, events.PrivacyEventPolicy{
+		Rules: []events.PrivacyFieldRule{{
+			Path: "/requester", Mode: events.PrivacyFieldIdentityExact,
+		}},
+		PayloadShape: events.PrivacyPayloadShapeOf[privacyRaceSource](),
+	}); err != nil {
+		t.Fatal(err)
+	}
 	st := newServerTestStore(t)
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "privacy-race"}); err != nil {
 		t.Fatal(err)
@@ -416,7 +431,7 @@ func TestApplicationSecretAppendReloadsFenceAcrossPrivacyHistoryCutover(t *testi
 		t.Fatalf("raw finalized fence fixture=%+v err=%v", before, err)
 	}
 	wantRawRoles := append([]string(nil), before.Actor.Roles...)
-	rawSource, _ := json.Marshal(map[string]string{"requester": subject})
+	rawSource, _ := json.Marshal(privacyRaceSource{Requester: subject})
 	if _, err := log.Append(ctx, events.Event{
 		Type: "privacy.race.source", TenantID: tenantID, Data: rawSource,
 		Actor: &events.Actor{Subject: subject, Roles: append([]string(nil), wantRawRoles...)},

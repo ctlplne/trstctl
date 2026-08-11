@@ -442,11 +442,9 @@ func TestServedConnectorRotationUsesExactSecretAuthorityAndProjectedOutbox(t *te
 			}
 		},
 	)
+	registerServedTenant(t, h, "served exact connector rotation tenant")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "rotation-alice", "secrets:read", "secrets:write")
 	approver := seedScopedTokenSubject(t, h.store, h.tenant, "rotation-bob", "secrets:write")
-	if epoch, err := h.store.ApplicationSecretTenantEpoch(context.Background(), h.tenant); err != nil || epoch == "" {
-		t.Fatalf("initialize application-secret tenant epoch: epoch=%q err=%v", epoch, err)
-	}
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", requester,
 		map[string]any{"name": "rotation/exact", "value": "connector-v1"})
 	if status != http.StatusCreated {
@@ -552,6 +550,7 @@ func TestServedConnectorRotationRecoveryCollapsesProviderError(t *testing.T) {
 			}
 		},
 	)
+	registerServedTenant(t, h, "served connector terminal recovery tenant")
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token,
 		map[string]any{"name": "rotation/direct-terminal", "value": "direct-v1"})
@@ -640,6 +639,7 @@ func TestServedScheduledConnectorRotationKeepsDueEdgeUntilExactApproval(t *testi
 			d.SecretSyncTargets = map[string]*secretsync.Target{"ci": secretsync.NewCITarget(connector)}
 		},
 	)
+	registerServedTenant(t, h, "served scheduled connector approval tenant")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-alice", "secrets:read", "secrets:write")
 	runnerB := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-charlie", "secrets:read", "secrets:write")
 	approver := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-bob", "secrets:write")
@@ -704,23 +704,17 @@ func TestServedScheduledConnectorRotationKeepsDueEdgeUntilExactApproval(t *testi
 	if err != nil || pendingCommand.Status != "claimed" || pendingCommand.LeaseToken != "" {
 		t.Fatalf("pending due-edge command after first runner=%+v err=%v", pendingCommand, err)
 	}
-	claimedCommand, acquired, err := h.store.ClaimSecretRotationScheduleCommand(
-		context.Background(), pendingCommand, "overlap-runner-a", time.Minute)
-	if err != nil || !acquired || claimedCommand.RunID != pendingCommand.RunID {
-		t.Fatalf("hold overlap command=%+v acquired=%t err=%v", claimedCommand, acquired, err)
-	}
+	// A child lease is valid only while its aggregate tick is in row_started.
+	// The first tick completed after deferring this row, so a later runner must
+	// reacquire it through its own durable aggregate and observe the same pending
+	// approval; no direct orphan child lease is valid between ticks.
 	status, body = secretsReqKey(t, h, http.MethodPost,
 		"/api/v1/secrets/rotation-schedules/run-due", runnerB, "scheduled-overlap-runner-b", nil)
 	var overlap secretRotationDueRunValue
 	if status != http.StatusOK || json.Unmarshal(body, &overlap) != nil || overlap.Ran != 0 ||
 		len(overlap.Deferred) != 1 || overlap.Deferred[0].ScheduleID != scheduled.ID ||
-		overlap.Deferred[0].Reason != "command_claimed" {
+		overlap.Deferred[0].Reason != "approval_pending" {
 		t.Fatalf("overlapping runner batch status=%d body=%s decoded=%+v", status, body, overlap)
-	}
-	if err := h.store.ReleaseSecretRotationScheduleCommandLease(
-		context.Background(), h.tenant, scheduled.ID, pendingCommand.RunID,
-		"overlap-runner-a"); err != nil {
-		t.Fatalf("release overlap command: %v", err)
 	}
 	requests, err := h.store.ListOperationApprovals(context.Background(), h.tenant, store.ApprovalStatusPending, 100)
 	if err != nil {
@@ -795,6 +789,7 @@ func TestServedScheduledConnectorAuthoritySurvivesRunnerChangeAndRestart(t *test
 			d.SecretSyncTargets = targets
 		},
 	)
+	registerServedTenant(t, h, "served scheduled connector restart authority tenant")
 	runnerA := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-runner-a", "secrets:read", "secrets:write")
 	runnerB := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-runner-b", "secrets:read", "secrets:write")
 	approver := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-restart-approver", "secrets:write")
@@ -919,6 +914,7 @@ func TestServedScheduledConnectorTerminalApprovalsAdvanceWithoutStarvingLaterWor
 			d.SecretSyncTargets = map[string]*secretsync.Target{"ci": secretsync.NewCITarget(connector)}
 		},
 	)
+	registerServedTenant(t, h, "served scheduled connector terminal approval tenant")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-terminal-requester", "secrets:read", "secrets:write")
 	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-terminal-reviewer", "approvals:review", "secrets:write")
 	ctx := context.Background()
@@ -984,7 +980,8 @@ func TestServedScheduledConnectorTerminalApprovalsAdvanceWithoutStarvingLaterWor
 	}
 	if _, err := h.store.SystemPool().Exec(ctx,
 		`UPDATE operation_approval_requests
-		    SET expires_at = now() - interval '1 second'
+		    SET created_at = now() - interval '2 seconds',
+		        expires_at = now() - interval '1 second'
 		  WHERE tenant_id = $1 AND id = $2`, h.tenant, expired.ID); err != nil {
 		t.Fatalf("expire scheduled authority fixture: %v", err)
 	}
@@ -1057,6 +1054,7 @@ func TestServedScheduledConnectorInFlightCommandDefersWithoutStarvingLaterWork(t
 			d.SecretSyncTargets = map[string]*secretsync.Target{"ci": secretsync.NewCITarget(connector)}
 		},
 	)
+	registerServedTenant(t, h, "served scheduled connector in-flight tenant")
 	runner := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-transient-runner", "secrets:read", "secrets:write")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", runner,
 		map[string]any{"name": "rotation/scheduled-in-flight", "value": "in-flight-v1"})
@@ -1133,6 +1131,7 @@ func TestServedScheduledRotationScansPastFiftyDeferredRowsWithinBound(t *testing
 			d.SecretSyncTargets = map[string]*secretsync.Target{"ci": secretsync.NewCITarget(connector)}
 		},
 	)
+	registerServedTenant(t, h, "served scheduled connector page tenant")
 	runner := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-page-runner", "secrets:read", "secrets:write")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", runner,
 		map[string]any{"name": "rotation/shared-deferred-source", "value": "shared-v1"})
@@ -1204,6 +1203,7 @@ func TestServedScheduledRotationFairCursorReachesRow501AcrossRestartAUD113(t *te
 			d.SecretSyncTargets = map[string]*secretsync.Target{"ci": secretsync.NewCITarget(connector)}
 		},
 	)
+	registerServedTenant(t, h, "served scheduled connector fair-cursor tenant")
 	runner := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-row-501-runner", "secrets:read", "secrets:write")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", runner,
 		map[string]any{"name": "rotation/aud113-shared", "value": "shared-v1"})
@@ -1289,6 +1289,7 @@ func TestServedScheduledRotationUsesOuterDatabaseCutoffNotHostClockAUD112(t *tes
 			d.SecretRotators = map[string]rotation.Rotator{"historical-static": historicalRotator}
 		},
 	)
+	registerServedTenant(t, h, "served scheduler database-cutoff tenant")
 	runner := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-db-cutoff-runner", "secrets:read", "secrets:write")
 	ctx := context.Background()
 	const (
@@ -1375,6 +1376,7 @@ func TestServedScheduledRotationUsesOuterDatabaseCutoffNotHostClockAUD112(t *tes
 
 func TestServedScheduledRotationSameKeyLiveContentionIsNotCachedAUD113(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "served scheduler same-key contention tenant")
 	runner := seedScopedTokenSubject(t, h.store, h.tenant, "schedule-live-contender", "secrets:read", "secrets:write")
 	ctx := context.Background()
 	const (
@@ -1516,6 +1518,7 @@ func TestServedScheduledConnectorRotationMissingSourceDoesNotStarveLaterDueSched
 			}
 		},
 	)
+	registerServedTenant(t, h, "served scheduled missing-source tenant")
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
 		map[string]any{"name": "rotation/scheduled-after-broken", "value": "scheduled-good-v1"})
@@ -1623,6 +1626,7 @@ func TestServedScheduledConnectorRotationRemovedTargetDoesNotStarveLaterDueSched
 		withSecretsEnabled(t, nil),
 		func(d *Deps) { d.SecretSyncTargets = targets },
 	)
+	registerServedTenant(t, h, "served scheduled removed-target tenant")
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	for _, key := range []string{"rotation/scheduled-removed-target", "rotation/scheduled-after-removed-target"} {
 		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
@@ -1706,6 +1710,7 @@ func TestServedScheduledConnectorTerminalSyncDoesNotStarveLaterDueSchedule(t *te
 			d.SecretSyncTargets = map[string]*secretsync.Target{"ci": secretsync.NewCITarget(connector)}
 		},
 	)
+	registerServedTenant(t, h, "served scheduled terminal-sync tenant")
 	runner := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", runner,
 		map[string]any{"name": "rotation/scheduled-terminal-sync", "value": "terminal-sync-v1"})
@@ -1803,7 +1808,14 @@ func TestServedScheduledConnectorTerminalSyncDoesNotStarveLaterDueSchedule(t *te
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules/run-due", runner,
 		"terminal-sync-does-not-starve", nil)
 	if status != http.StatusOK {
-		t.Fatalf("run terminal sync and later schedule: status=%d body=%s", status, body)
+		command, commandErr := h.store.GetLatestSecretRotationScheduleCommand(
+			context.Background(), h.tenant, terminalSchedule.ID)
+		jobAfter, jobErr := h.store.GetSecretSyncJob(context.Background(), h.tenant, job.ID)
+		t.Fatalf("run terminal sync and later schedule: status=%d body=%s; command status=%q tick=%q ordinal=%d prepared=%q terminal=%q lease=%q err=%v; job status=%q attempts=%d terminal=%q seq=%v err=%v",
+			status, body, command.Status, command.TickIdempotencyKey, command.TickOrdinal,
+			command.PreparedStatus, command.TerminalEventType, command.LeaseToken, commandErr,
+			jobAfter.Status, jobAfter.Attempts, jobAfter.TerminalEventType,
+			jobAfter.TerminalEventSequence, jobErr)
 	}
 	terminalBody := append([]byte(nil), body...)
 	if bytes.Contains(terminalBody, []byte(providerError)) {
@@ -1971,6 +1983,7 @@ func TestServedScheduledConnectorPartial503IsStableAndNewKeyReconciles(t *testin
 			d.SecretSyncTargets = map[string]*secretsync.Target{"ci": secretsync.NewCITarget(connector)}
 		},
 	)
+	registerServedTenant(t, h, "served scheduled partial-receipt tenant")
 	runner := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	ctx := context.Background()
 	names := []string{"rotation/partial-first", "rotation/partial-crash", "rotation/partial-after"}
@@ -2121,6 +2134,7 @@ func TestServedScheduledConnectorRotationOutboxSurvivesRestart(t *testing.T) {
 		secretKEK = d.KEK
 		d.TenantSecretSyncTargets = registry
 	})
+	registerServedTenant(t, h, "served scheduled connector outbox-restart tenant")
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
 		map[string]any{"name": "rotation/scheduled-restart", "value": "scheduled-restart-v1"})

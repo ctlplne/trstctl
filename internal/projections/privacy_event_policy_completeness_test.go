@@ -167,6 +167,30 @@ func TestShortSubjectDoesNotCollideWithOpaqueKnownSchemaValues(t *testing.T) {
 	for eventType, knownVersions := range knownSchemaVersions {
 		for version := range knownVersions {
 			data := []byte(`{"status":"active","algorithm":"saml","digest":"aa4a","kind":"ca","protocol":"data"}`)
+			if isApplicationSecretMutationEvent(eventType) {
+				action := applicationSecretMutationAction(eventType)
+				switch version {
+				case 1:
+					data = []byte(mustPrivacyFixtureJSON(t, applicationSecretLegacyRecoveryFence{
+						Name: "secret", Action: action,
+					}))
+				case ApplicationSecretMutationSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, ApplicationSecretMutation{
+						TenantEpoch: "epoch-a", Action: action, Name: "secret",
+						ExpectedVersion: 1, ResultVersion: 2,
+						IdempotencyKeyDigest: "aa4a", RequestBinding: "aa4a",
+						CommandEvidence: "aa4a", Surface: "data",
+					}))
+				case ApplicationSecretPrivacyDispositionSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, ApplicationSecretPrivacyNameTombstone{
+						Action: action, PrivacyDisposition: events.ApplicationSecretPrivacyDispositionNameTombstoned,
+						PrivacySubjectRef: "aa4a", PrivacySourceSchemaVersion: 2,
+						PrivacyAuthorityTombstone: true,
+					}))
+				default:
+					t.Fatalf("application-secret event %s has no opaque fixture for schema v%d", eventType, version)
+				}
+			}
 			if eventType == EventCodeSigningCommanded {
 				payload := CodeSigningCommanded{
 					OperationID:   "data",
@@ -190,6 +214,31 @@ func TestShortSubjectDoesNotCollideWithOpaqueKnownSchemaValues(t *testing.T) {
 					eventType, version, changed, err, rewritten)
 			}
 		}
+	}
+}
+
+func applicationSecretMutationAction(eventType string) string {
+	switch eventType {
+	case EventApplicationSecretCreated:
+		return "create"
+	case EventApplicationSecretRotated:
+		return "rotate"
+	case EventApplicationSecretRecovered:
+		return "recover"
+	case EventApplicationSecretDeleted:
+		return "delete"
+	default:
+		return ""
+	}
+}
+
+func isApplicationSecretMutationEvent(eventType string) bool {
+	switch eventType {
+	case EventApplicationSecretCreated, EventApplicationSecretRotated,
+		EventApplicationSecretRecovered, EventApplicationSecretDeleted:
+		return true
+	default:
+		return false
 	}
 }
 

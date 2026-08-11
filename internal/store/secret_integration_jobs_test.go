@@ -1093,6 +1093,7 @@ func TestSecretSyncJobProjectionTracksOutboxWithoutSecretMaterial(t *testing.T) 
 	crossTenant := newer
 	crossTenant.ID = "sync-cross-tenant"
 	crossTenant.TenantID = tenantB
+	crossTenant.TenantEpoch = mustSecretSyncTenantEpoch(t, s, tenantB)
 	crossTenant.OutboxID = 804
 	crossTenant.TargetOrder = 804
 	crossTenant.IdempotencyKey = "sync-request-cross"

@@ -339,7 +339,7 @@ func TestPreparePrivacySubjectErasureSnapshotsAuthorityAndRewritesRecoveryFences
 	if len(prepared.RecoveryFences) != 1 ||
 		prepared.RecoveryFences[0] != (store.PrivacyRecoveryFenceDisposition{
 			Kind:    store.PrivacyRecoveryFenceApplicationSecret,
-			EventID: fence.EventID, Disposition: store.PrivacyRecoveryFencePseudonymized,
+			EventID: fence.EventID, Disposition: store.PrivacyRecoveryFenceDeleted,
 		}) {
 		t.Fatalf("recovery dispositions = %+v", prepared.RecoveryFences)
 	}
@@ -411,33 +411,16 @@ func TestPreparePrivacySubjectErasureSnapshotsAuthorityAndRewritesRecoveryFences
 		t.Fatalf("durable preparation/final payload contains raw subject %q: %s", subject, completionPayload)
 	}
 
-	rewrittenName := strings.ReplaceAll(fence.Name, subject, placeholder)
-	rewritten, err := st.GetApplicationSecretMutationFence(ctx, tenantA, rewrittenName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if bytes.Contains(rewritten.Payload, []byte(subject)) || !bytes.Contains(rewritten.Payload, []byte(placeholder)) {
-		t.Fatalf("rewritten payload retained raw subject: %s", rewritten.Payload)
-	}
-	var rewrittenPayload projections.ApplicationSecretMutation
-	if err := json.Unmarshal(rewritten.Payload, &rewrittenPayload); err != nil {
-		t.Fatal(err)
-	}
-	if rewrittenPayload.Name != rewrittenName || rewrittenPayload.Sync == nil ||
-		rewrittenPayload.Sync.Target != "target/"+placeholder ||
-		rewrittenPayload.Sync.RemoteKey != "remote/"+placeholder {
-		t.Fatalf("name/target/remote key were not transformed exactly: %+v", rewrittenPayload)
-	}
-	if rewritten.Actor == nil || rewritten.Actor.Subject != placeholder ||
-		!reflect.DeepEqual(rewritten.Actor.Roles, []string{
-			"operator", "scope:" + placeholder, "auditor", placeholder + ":delegate",
-		}) {
-		t.Fatalf("actor/roles = %+v", rewritten.Actor)
+	// Name, target, and remote key are AAD/external-authority coordinates. A
+	// privacy rewrite cannot rename those fields while retaining their sealed
+	// bytes, so preparation deletes the pre-finalization recovery copy and the
+	// replacement history carries the explicit v3 authority disposition.
+	if _, err := st.GetApplicationSecretMutationFence(ctx, tenantA, fence.Name); !store.IsNotFound(err) {
+		t.Fatalf("raw AAD-bound application-secret fence remains after preparation: %v", err)
 	}
 	fencesAfterPreparation, err := st.ListApplicationSecretMutationFences(ctx, tenantA)
-	if err != nil || len(fencesAfterPreparation) != 1 || fencesAfterPreparation[0].Actor == nil ||
-		!reflect.DeepEqual(fencesAfterPreparation[0].Actor.Roles, rewritten.Actor.Roles) {
-		t.Fatalf("restart scan after preparation = %+v err=%v", fencesAfterPreparation, err)
+	if err != nil || len(fencesAfterPreparation) != 0 {
+		t.Fatalf("restart scan retained AAD-bound recovery authority = %+v err=%v", fencesAfterPreparation, err)
 	}
 	authority, err := st.GetOperationApproval(ctx, tenantA, request.ID)
 	if err != nil {

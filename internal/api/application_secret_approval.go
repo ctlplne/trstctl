@@ -653,7 +653,7 @@ func applicationSecretMutationError(err error) error {
 	case errors.Is(err, store.ErrApplicationSecretTenantEpochMismatch):
 		return errStatus(http.StatusConflict, "application-secret command belongs to a prior tenant lifecycle")
 	case errors.Is(err, errTerminalConnectorRotationDelivery):
-		return errStatus(http.StatusServiceUnavailable, "connector delivery failed")
+		return errStatus(http.StatusServiceUnavailable, connectorRotationDeliveryFailedDetail)
 	default:
 		return err
 	}

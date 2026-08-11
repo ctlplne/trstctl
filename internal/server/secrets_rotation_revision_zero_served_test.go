@@ -27,6 +27,7 @@ func TestServedScheduledRotationDefersUnanchoredConfigurationWithoutChildEffect(
 			}
 		},
 	)
+	registerServedTenant(t, h, "served unanchored rotation configuration tenant")
 	runner := seedScopedTokenSubject(t, h.store, h.tenant,
 		"schedule-unanchored-runner", "secrets:read", "secrets:write")
 	const (

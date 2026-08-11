@@ -83,6 +83,7 @@ func newStore(t *testing.T) *store.Store {
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE approved_target_event_fences, application_secret_mutation_fences,
 		          application_secret_tenant_epochs, application_secret_mutation_receipts,
+		          privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
 		          secret_rotation_schedule_ticks, tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits,
 		          enrollment_diagnostic_observations, enrollment_diagnostics,

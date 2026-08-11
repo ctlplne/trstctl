@@ -326,10 +326,10 @@ func TestSecretRotationSchedulePrivacySequentialErasureRequiresCompletedPriorOpe
 	)
 	firstSubjectRef := privacy.SubjectRef(tenantA, "alice")
 	secondSubjectRef := privacy.SubjectRef(tenantA, "bob")
-	firstOperationID := "sha256:" + strings.Repeat("1", 64)
-	firstEventID := "sha256:" + strings.Repeat("2", 64)
-	secondOperationID := "sha256:" + strings.Repeat("3", 64)
-	secondEventID := "sha256:" + strings.Repeat("4", 64)
+	firstOperationID := "sha256:" + strings.Repeat("a", 60) + "0155"
+	firstEventID := "sha256:" + strings.Repeat("b", 60) + "0155"
+	secondOperationID := "sha256:" + strings.Repeat("c", 60) + "0155"
+	secondEventID := "sha256:" + strings.Repeat("d", 60) + "0155"
 	providerBefore := "connector:" + privacy.Placeholder(firstSubjectRef) + "/bob"
 
 	if _, err := s.SystemPool().Exec(ctx,

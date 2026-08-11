@@ -1403,7 +1403,7 @@ func secretRotationScheduleSystemErrorDetail(err error) string {
 // LastError is provider-controlled and is collapsed to a fixed delivery class.
 func secretRotationScheduleTerminalErrorDetail(err error) string {
 	if errors.Is(err, errTerminalConnectorRotationDelivery) {
-		return "connector delivery failed"
+		return connectorRotationDeliveryFailedDetail
 	}
 	if errors.Is(err, errTerminalApplicationSecretApproval) {
 		return "application-secret approval is no longer usable"
@@ -1419,6 +1419,7 @@ func secretRotationScheduleTerminalErrorDetail(err error) string {
 			"approval authority already consumed",
 			"approval target version or state drifted",
 			"approval request has not reached quorum",
+			connectorRotationDeliveryFailedDetail,
 			connectorRotationTargetRequiredDetail,
 			connectorRotationTargetUnavailableDetail,
 			connectorRotationOldRefInvalidDetail,
@@ -1704,6 +1705,7 @@ const (
 	connectorRotationTargetUnavailableDetail = "secret sync target is not configured"
 	connectorRotationOldRefInvalidDetail     = "connector rotation old_ref must be version:<n>"
 	connectorRotationOldRefStaleDetail       = "connector rotation old_ref does not name the current version"
+	connectorRotationDeliveryFailedDetail    = "connector delivery failed"
 	dynamicLeaseRotationUnavailableDetail    = "dynamic-lease rotation is unavailable until its issue, delivery, and predecessor retirement phases share one durable worker command"
 	manualStaticRotationUnavailableDetail    = "manual static-provider rotation is unavailable until a durable worker owns stage, cutover, verification, rollback, and retirement"
 	scheduledStaticRotationUnavailableDetail = "scheduled static-provider rotation is unavailable until a durable worker owns stage, cutover, verification, rollback, and retirement"

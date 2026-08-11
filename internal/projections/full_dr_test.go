@@ -70,6 +70,12 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 
 	srcCounts := recoveredTableCounts(t, src)
 	for _, table := range backup.RecoveredFromPostgresBackup {
+		if table == "privacy_subject_erasure_preparations" {
+			if srcCounts[table] != 0 {
+				t.Fatalf("healthy full DR fixture has %d active privacy preparation(s), want zero", srcCounts[table])
+			}
+			continue
+		}
 		if srcCounts[table] == 0 {
 			t.Fatalf("full DR fixture did not seed %s", table)
 		}
@@ -87,8 +93,12 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WritePostgresState: %v", err)
 	}
-	if exportSummary.Records != len(backup.RecoveredFromPostgresBackup) {
-		t.Fatalf("postgres-state export rows = %d, want one per independent table (%d)", exportSummary.Records, len(backup.RecoveredFromPostgresBackup))
+	wantExportRecords := 0
+	for _, count := range srcCounts {
+		wantExportRecords += count
+	}
+	if exportSummary.Records != wantExportRecords {
+		t.Fatalf("postgres-state export rows = %d, want exact pinned source row count %d", exportSummary.Records, wantExportRecords)
 	}
 
 	dst := newStore(t)
@@ -713,7 +723,10 @@ func seedRecoveredFromPostgresTables(
 	// Cursor/tick receipt columns are deliberately unavailable to trstctl_app.
 	// Seed this trusted DR fixture through the same narrow owner-role boundary as
 	// the production tick state machine, using a coherent terminal receiver.
-	terminalTickBody := `{"ran":0,"scanned":0,"runs":[],"deferred":[],"run_limit_reached":false,"scan_limit_reached":false,"complete":true,"partial":false}`
+	terminalTickBody := fmt.Sprintf(
+		`{"ran":0,"scanned":1,"runs":[],"deferred":[{"schedule_id":%q,"reason":"approval_pending","due_at":%q}],"run_limit_reached":false,"scan_limit_reached":false,"complete":true,"partial":false}`,
+		rotationScheduleID, rotationDueAt.Format(time.RFC3339Nano),
+	)
 	if err := st.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO secret_rotation_schedule_scan_cursors
@@ -726,14 +739,27 @@ func seedRecoveredFromPostgresTables(
 			        (tenant_id, identity_version, tenant_registration_event_id,
 			         tenant_registration_event_sequence,
 			         idempotency_key, request_binding, due_through,
-			         start_schedule_id, after_schedule_id, phase, snapshot_count, receipt,
+			         start_schedule_id, after_schedule_id, phase, ran, scanned, snapshot_count, receipt,
 			         owner_token, owner_generation, terminal_http_status,
 			         terminal_body, created_at, updated_at, completed_at)
-			 VALUES ($1, 3, $2, $3, $4, $5, $6, $7, $7, 'terminal', 0, $8::jsonb,
+			 VALUES ($1, 3, $2, $3, $4, $5, $6, $7, $7, 'terminal', 0, 1, 1, $8::jsonb,
 			         '', 1, 200, $9, $10, $10, $10)`,
 			tenantA, registrationID, registrationSequence,
 			rotationTickKey, rotationTickBinding, rotationDueAt,
 			rotationScheduleID, terminalTickBody, []byte(terminalTickBody), now)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx,
+			`INSERT INTO secret_rotation_schedule_tick_rows
+			        (tenant_id, identity_version, tenant_registration_event_id,
+			         tenant_registration_event_sequence, idempotency_key, ordinal,
+			         schedule_id, due_at, provider, secret_key, old_ref,
+			         interval_seconds, config_event_sequence)
+			 VALUES ($1, 3, $2, $3, $4, 1, $5, $6, 'connector:ci',
+			         'rotation/full-dr', 'version:1', 60, $7)`,
+			tenantA, registrationID, registrationSequence, rotationTickKey,
+			rotationScheduleID, rotationDueAt, registrationSequence+1)
 		return err
 	}); err != nil {
 		t.Fatalf("seed protected scheduler recovery authority: %v", err)

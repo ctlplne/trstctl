@@ -9,6 +9,15 @@ type applicationSecretLegacyAudit struct {
 	Version int    `json:"version"`
 }
 
+// applicationSecretLegacyRecoveryFence is the pre-v2 command shape retained by
+// an application-secret mutation fence after an append/SQL crash gap. It shares
+// the event's schema coordinate, but /action (rather than /version) keeps the two
+// historical shapes closed and unambiguous.
+type applicationSecretLegacyRecoveryFence struct {
+	Name   string `json:"name"`
+	Action string `json:"action"`
+}
+
 type secretstoreLegacyDeleteAudit struct {
 	Path string `json:"path"`
 }
@@ -17,15 +26,20 @@ func init() {
 	legacyRules := []events.PrivacyFieldRule{
 		{Path: "/name", Mode: events.PrivacyFieldSubjectToken},
 		{Path: "/version", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/action", Mode: events.PrivacyFieldOpaqueExact},
 	}
 	legacy := events.PrivacyEventPolicy{
-		Rules: legacyRules, PayloadShape: events.PrivacyPayloadShapeOf[applicationSecretLegacyAudit](),
+		Rules: legacyRules, PayloadShape: events.PrivacyPayloadShapeOneOf(
+			events.PrivacyPayloadShapeOf[applicationSecretLegacyAudit](),
+			events.PrivacyPayloadShapeOf[applicationSecretLegacyRecoveryFence](),
+		),
 	}
 	deletedLegacy := events.PrivacyEventPolicy{
 		Rules: append(append([]events.PrivacyFieldRule(nil), legacyRules...),
 			events.PrivacyFieldRule{Path: "/path", Mode: events.PrivacyFieldSubjectToken}),
 		PayloadShape: events.PrivacyPayloadShapeOneOf(
 			events.PrivacyPayloadShapeOf[applicationSecretLegacyAudit](),
+			events.PrivacyPayloadShapeOf[applicationSecretLegacyRecoveryFence](),
 			events.PrivacyPayloadShapeOf[secretstoreLegacyDeleteAudit](),
 		),
 	}

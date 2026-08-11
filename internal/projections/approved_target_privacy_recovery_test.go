@@ -111,7 +111,12 @@ func TestApprovedCodeSigningFenceProjectsAfterAuthorizedHistoryPrivacyRewrite(t 
 	if changed, err := s.PseudonymizeApprovedTargetFences(ctx, tenantA, subject); err != nil || changed != 1 {
 		t.Fatalf("rewrite durable fence = changed %d err=%v", changed, err)
 	}
-	rewritten, changed := events.PseudonymizeDataForSubject(event.Data, tenantA, subject)
+	rewritten, changed, err := events.PseudonymizeEventDataForSubject(
+		event.Data, tenantA, subject, event.Type, event.SchemaVersion,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !changed {
 		t.Fatal("canonical event payload did not contain privacy subject")
 	}

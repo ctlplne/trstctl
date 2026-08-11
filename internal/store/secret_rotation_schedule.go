@@ -551,7 +551,9 @@ func (s *Store) ClaimSecretRotationScheduleCommand(
 				}
 				err := scanSecretRotationScheduleCommand(tx.QueryRow(ctx,
 					`UPDATE secret_rotation_schedule_commands
-				    SET lease_token = $4,
+				    SET tick_idempotency_key = $6,
+				        tick_ordinal = $7,
+				        lease_token = $4,
 				        lease_until = clock_timestamp() + make_interval(secs => $5::double precision),
 				        updated_at = clock_timestamp()
 				  WHERE tenant_id = $1 AND schedule_id = $2 AND run_id = $3::uuid
@@ -570,7 +572,7 @@ func (s *Store) ClaimSecretRotationScheduleCommand(
 				            status, new_ref, error, lease_token,
 				            lease_until, created_at, updated_at, terminal_at`,
 					command.TenantID, command.ScheduleID, command.RunID, leaseToken,
-					leaseDuration.Seconds()), &out)
+					leaseDuration.Seconds(), command.TickIdempotencyKey, command.TickOrdinal), &out)
 				if errors.Is(err, pgx.ErrNoRows) {
 					out.ClaimState = SecretRotationScheduleCommandBusy
 					return nil

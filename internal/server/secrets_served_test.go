@@ -285,6 +285,7 @@ func secretsReqKey(t *testing.T, h *servedHarness, method, path, token, idemKey 
 // pre-wiring tree (the routes 404).
 func TestServedSecretStoreCreateReadRotate(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "served secret create/read/rotate tenant")
 	if !h.srv.handlerServesSecrets() {
 		t.Fatal("served handler does not mount the secrets surface — GAP-006 wiring missing")
 	}
@@ -377,6 +378,7 @@ func TestServedSecretStoreCreateReadRotate(t *testing.T) {
 // state to a point in time, and keeps tenant B outside tenant A's version history.
 func TestServedSecretStoreVersionHistoryAndPITR(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "served secret version history tenant")
 	tokA := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tokA,
@@ -852,6 +854,7 @@ func TestServedSecretChangeRequiresDualControlApproval(t *testing.T) {
 		d.RequireApproval = true
 		d.RequiredApprovals = 2
 	})
+	registerServedTenant(t, h, "served dual-control application-secret tenant")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "alice", "secrets:read", "secrets:write")
 	approverA := seedScopedTokenSubject(t, h.store, h.tenant, "bob", "secrets:write")
 	approverB := seedScopedTokenSubject(t, h.store, h.tenant, "carol", "secrets:write")
@@ -1361,6 +1364,7 @@ func TestVaultOverwriteRequiresExactSecretApproval(t *testing.T) {
 		d.RequireApproval = true
 		d.RequiredApprovals = 1
 	})
+	registerServedTenant(t, h, "served Vault application-secret tenant")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "vault-alice", "secrets:read", "secrets:write")
 	approver := seedScopedTokenSubject(t, h.store, h.tenant, "vault-bob", "secrets:write")
 
