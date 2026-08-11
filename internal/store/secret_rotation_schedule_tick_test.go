@@ -689,6 +689,89 @@ func TestSecretRotationScheduleTickImmutableSnapshotVisitsRingOnceAUD113(t *test
 	}
 }
 
+func TestSecretRotationScheduleFairCursorSurvivesDeletedBoundaryAUD111(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	cutoff := time.Now().UTC().Truncate(time.Microsecond)
+	const (
+		key               = "aud111-deleted-cursor-boundary"
+		binding           = "aud111-deleted-cursor-boundary-binding"
+		lowID             = "11100000-0000-4000-8000-000000000010"
+		deletedBoundaryID = "11100000-0000-4000-8000-000000000020"
+		highID            = "11100000-0000-4000-8000-000000000030"
+	)
+	seedRotationTickRegistration(t, s, tenantA)
+	for index, id := range []string{lowID, highID} {
+		seedSecretRotationSchedule(t, s, store.SecretRotationSchedule{
+			ID: id, TenantID: tenantA, Name: fmt.Sprintf("deleted-boundary-%d", index),
+			Provider: "connector:ci", Key: fmt.Sprintf("rotation/deleted-boundary-%d", index),
+			OldRef: "version:1", IntervalSeconds: 3600, Enabled: true,
+			NextRunAt: cutoff.Add(-time.Minute),
+		})
+	}
+	if err := s.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO secret_rotation_schedule_scan_cursors
+			        (tenant_id, after_schedule_id, generation, updated_at)
+			 VALUES ($1, $2, 11, clock_timestamp())`, tenantA, deletedBoundaryID)
+		return err
+	}); err != nil {
+		t.Fatalf("seed deleted cursor boundary: %v", err)
+	}
+
+	tick, state, err := s.ClaimSecretRotationScheduleTick(
+		ctx, tenantA, key, binding,
+		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
+		"aud111-deleted-boundary-owner", "aud111-deleted-boundary-child", time.Minute)
+	if err != nil || state != store.SecretRotationScheduleTickAcquired ||
+		tick.StartScheduleID != deletedBoundaryID || tick.SnapshotCount != 2 {
+		t.Fatalf("claim deleted-boundary tick=%+v state=%q err=%v", tick, state, err)
+	}
+
+	wantOrder := []string{highID, lowID}
+	deferred := make([]json.RawMessage, 0, len(wantOrder))
+	for ordinal, wantID := range wantOrder {
+		row, err := s.GetSecretRotationScheduleTickRow(ctx, tenantA, key, ordinal+1)
+		if err != nil || row.ID != wantID {
+			t.Fatalf("deleted-boundary ordinal %d=%+v err=%v, want %s", ordinal+1, row, err, wantID)
+		}
+		childToken := fmt.Sprintf("aud111-deleted-boundary-child-%d", ordinal+1)
+		tick, err = s.StartSecretRotationScheduleTickRow(
+			ctx, tick, tick.OwnerToken, tick.OwnerGeneration, row, childToken, time.Minute)
+		if err != nil {
+			t.Fatalf("start deleted-boundary row %s: %v", row.ID, err)
+		}
+		encoded := json.RawMessage(fmt.Sprintf(
+			`{"schedule_id":%q,"reason":"approval_pending","due_at":%q}`,
+			row.ID, row.NextRunAt.Format(time.RFC3339Nano)))
+		deferred = append(deferred, encoded)
+		tick, err = s.CompleteSecretRotationScheduleTickRow(
+			ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+			marshalRotationTickReceipt(t, rotationTickReceiptFixture{
+				Scanned: ordinal + 1, Deferred: deferred,
+			}),
+			0, ordinal+1, nil, time.Minute)
+		if err != nil {
+			t.Fatalf("complete deleted-boundary row %s: %v", row.ID, err)
+		}
+	}
+	cursor, err := s.GetSecretRotationScheduleScanCursor(ctx, tenantA)
+	if err != nil || cursor.AfterScheduleID != lowID || cursor.Generation != 13 {
+		t.Fatalf("deleted-boundary cursor=%+v err=%v, want wrapped low edge and generation 13", cursor, err)
+	}
+	if _, err := s.GetSecretRotationScheduleScanCursor(ctx, tenantB); !store.IsNotFound(err) {
+		t.Fatalf("tenant B observed tenant A fair cursor: %v", err)
+	}
+	terminalBody := marshalRotationTickReceipt(t, rotationTickReceiptFixture{
+		Scanned: 2, Deferred: deferred, Complete: true,
+	})
+	if _, err := s.FinalizeSecretRotationScheduleTick(
+		ctx, tick, tick.OwnerToken, tick.OwnerGeneration, 200, terminalBody, nil); err != nil {
+		t.Fatalf("finalize deleted-boundary tick: %v", err)
+	}
+}
+
 func TestSecretRotationScheduleTickSnapshotRetainsUnanchoredRevisionForExplicitDeferralAUD112(t *testing.T) {
 	s := newStore(t)
 	seedTwoTenants(t, s)

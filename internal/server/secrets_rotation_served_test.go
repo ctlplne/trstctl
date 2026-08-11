@@ -1189,7 +1189,7 @@ func TestServedScheduledRotationScansPastFiftyDeferredRowsWithinBound(t *testing
 	}
 }
 
-func TestServedScheduledRotationFairCursorReachesRow501AcrossRestartAUD113(t *testing.T) {
+func TestServedScheduledRotationFairCursorReachesRow501AcrossRestartAUD111AUD113(t *testing.T) {
 	connector := newRotationCapturePusher()
 	historicalRotator := &countingRotationRotator{}
 	var secretKEK cryptoseal.KeyWrapper
