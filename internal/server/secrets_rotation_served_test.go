@@ -1361,7 +1361,8 @@ func TestServedScheduledRotationUsesOuterDatabaseCutoffNotHostClockAUD112(t *tes
 		t.Fatalf("load outer database cutoff: %v", err)
 	}
 	tick, err := h.store.GetSecretRotationScheduleTick(ctx, h.tenant, storedTickKey)
-	if err != nil || !tick.DueThrough.Equal(outerCreatedAt) || !scheduleDueAt.After(tick.DueThrough) {
+	if err != nil || tick.SnapshotCount != 0 || !tick.DueThrough.Equal(outerCreatedAt) ||
+		!scheduleDueAt.After(tick.DueThrough) {
 		t.Fatalf("tick cutoff=%s outer=%s schedule=%s err=%v, want exact outer DB timestamp before schedule",
 			tick.DueThrough, outerCreatedAt, scheduleDueAt, err)
 	}
@@ -1371,6 +1372,32 @@ func TestServedScheduledRotationUsesOuterDatabaseCutoffNotHostClockAUD112(t *tes
 	}
 	if historicalRotator.calls != 0 {
 		t.Fatalf("host-fast tick invoked %d provider calls, want zero", historicalRotator.calls)
+	}
+
+	// Remove the synthetic old database cutoff. A fresh key now captures the real
+	// PostgreSQL clock and must visit the same edge exactly once: refusing early
+	// execution cannot turn into permanent loss or a host-clock-dependent skip.
+	if _, err := h.store.SystemPool().Exec(ctx,
+		`DROP TRIGGER IF EXISTS test_aud112_scheduler_database_cutoff_trigger ON idempotency_keys`); err != nil {
+		t.Fatalf("drop database-cutoff test trigger: %v", err)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost,
+		"/api/v1/secrets/rotation-schedules/run-due", runner, "aud112-database-owned-cutoff-retry", nil)
+	if status != http.StatusOK {
+		t.Fatalf("database-authoritative retry tick status=%d body=%s", status, body)
+	}
+	var retry secretRotationDueRunValue
+	if err := json.Unmarshal(body, &retry); err != nil || retry.Ran != 1 || retry.Scanned != 1 ||
+		len(retry.Runs) != 1 || retry.Runs[0].ScheduleID != scheduleID ||
+		retry.Runs[0].Status != "unsupported" || !retry.Complete || retry.RunLimitReached || retry.ScanLimitReached {
+		t.Fatalf("database-authoritative retry receipt=%+v err=%v, want one exact terminal edge", retry, err)
+	}
+	retained, err = h.store.GetSecretRotationSchedule(ctx, h.tenant, scheduleID)
+	if err != nil || retained.Enabled || retained.LastRunStatus != "unsupported" {
+		t.Fatalf("database-authoritative retry did not terminalize exact edge: schedule=%+v err=%v", retained, err)
+	}
+	if historicalRotator.calls != 0 {
+		t.Fatalf("unsupported retry invoked %d provider calls, want zero", historicalRotator.calls)
 	}
 }
 

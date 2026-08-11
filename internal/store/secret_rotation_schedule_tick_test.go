@@ -815,7 +815,7 @@ func TestSecretRotationScheduleTickSnapshotRetainsUnanchoredRevisionForExplicitD
 	}
 }
 
-func TestSecretRotationScheduleCommandLeaseUsesPostgresClockAndExactAggregateTokenAUD113(t *testing.T) {
+func TestSecretRotationScheduleCommandLeaseUsesPostgresClockAndExactAggregateTokenAUD112AUD113(t *testing.T) {
 	s := newStore(t)
 	seedTwoTenants(t, s)
 	ctx := context.Background()
