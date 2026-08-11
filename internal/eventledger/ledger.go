@@ -53,6 +53,7 @@ const (
 	EventBreakglassCARotated                      = "breakglass.ca.rotated"
 	EventBreakglassCACrossSigned                  = "breakglass.ca.cross_signed"
 	EventOCSPResponderRotated                     = "ca.ocsp_responder.rotated"
+	EventDiscoverySegmentUpserted                 = "discovery.segment.upserted"
 	EventDiscoverySourceUpserted                  = "discovery.source.upserted"
 	EventDiscoveryScheduleUpserted                = "discovery.schedule.upserted"
 	EventDiscoveryRunQueued                       = "discovery.run.queued"
@@ -157,6 +158,7 @@ var ledger = []FeatureEvent{
 	{"F47", "X.509 revocation infrastructure", "rotate_ocsp_responder", "respondOCSP", []string{EventOCSPResponderRotated}},
 
 	// F2 — Discovery (sources, schedules, runs).
+	{"F2", "Network discovery", "declare_segment", "createDiscoverySegment", []string{EventDiscoverySegmentUpserted}},
 	{"F2", "Network discovery", "create_source", "createDiscoverySource", []string{EventDiscoverySourceUpserted}},
 	{"F2", "Network discovery", "create_schedule", "createDiscoverySchedule", []string{EventDiscoveryScheduleUpserted}},
 	{"F2", "Network discovery", "start_run", "startDiscoveryRun", []string{EventDiscoveryRunQueued}},

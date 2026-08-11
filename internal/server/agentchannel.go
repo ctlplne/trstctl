@@ -274,6 +274,9 @@ type agentService struct {
 	// recordTicketSync turns mapped ServiceNow fields into issuance requests;
 	// it runs before the job is closed so a projection failure remains retryable.
 	recordTicketSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
+	// recordDiscoveryScan validates and projects a network relay's signed scan
+	// report before the exact job claim is closed (AUD-28/C2).
+	recordDiscoveryScan func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
 	// recordADCSPosture turns a relay's AD CS observation into the Posture
 	// console's read model (epic F1).
 	recordADCSPosture func(ctx context.Context, tenantID, agent, idempotencyKey, report string)

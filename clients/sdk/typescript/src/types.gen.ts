@@ -1771,6 +1771,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/segments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Declare or update a discovery segment */
+        post: operations["createDiscoverySegment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/sources": {
         parameters: {
             query?: never;
@@ -6885,6 +6902,7 @@ export interface components {
             total: number;
         };
         DiscoveryRun: {
+            blocked: number;
             /** Format: date-time */
             completed_at?: string;
             /** Format: date-time */
@@ -6892,13 +6910,21 @@ export interface components {
             discovered: number;
             dry_run: boolean;
             error?: string;
+            /** Format: uuid */
+            executed_by_agent_id?: string;
+            /** @enum {string} */
+            execution: "control_plane" | "relay";
             failed: number;
             /** Format: uuid */
             id: string;
             rejected: number;
             requested_by?: string;
             /** Format: uuid */
+            required_agent_id?: string;
+            required_agent_role?: string;
+            /** Format: uuid */
             schedule_id?: string;
+            segment?: string;
             /** Format: uuid */
             source_id: string;
             /** Format: date-time */
@@ -6946,6 +6972,21 @@ export interface components {
             /** Format: uuid */
             source_id: string;
         };
+        DiscoverySegment: {
+            /** Format: date-time */
+            created_at: string;
+            excluded: boolean;
+            exclusion_reason?: string;
+            /** Format: uuid */
+            id: string;
+            last_found_count: number;
+            /** Format: date-time */
+            last_swept_at?: string;
+            last_swept_by?: string;
+            name: string;
+            ranges: string[];
+            staleness_hours: number;
+        };
         DiscoverySegmentCoverage: {
             exclusion_reason?: string;
             last_found_count?: number;
@@ -6957,6 +6998,13 @@ export interface components {
             staleness_hours: number;
             /** @enum {string} */
             status: "swept" | "stale" | "never" | "excluded";
+        };
+        DiscoverySegmentRequest: {
+            excluded?: boolean;
+            exclusion_reason?: string;
+            name: string;
+            ranges: string[];
+            staleness_hours?: number;
         };
         DiscoverySource: {
             config: Record<string, never>;
@@ -16057,6 +16105,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoverySchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createDiscoverySegment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoverySegmentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverySegment"];
                 };
             };
             /** @description client error */

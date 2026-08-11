@@ -103,11 +103,10 @@ const agentJobKindEndpointRenew = "endpoint.renew"
 //
 // The cut follows what the work physically is, not what it is called:
 //
-//   - discovery.run and trust.distribute act on the machine the agent runs on —
-//     enumerate this filesystem, install these roots in this trust store. A relay
-//     sitting in front of an F5 has no filesystem of the F5's to scan and no
-//     business installing roots on its own box on someone else's behalf.
-//   - endpoint.verify and revocation.probe are observations made from a vantage:
+//   - trust.distribute acts on the machine the agent runs on — install these
+//     roots in this trust store. A relay sitting in front of an F5 has no
+//     filesystem of the F5's and no business installing roots on its own box.
+//   - discovery.run, endpoint.verify, and revocation.probe are observations made from a vantage:
 //     connect to this listener as a client would, reach this responder across the
 //     segment. That vantage is the entire reason a network agent exists.
 //   - connector.deploy and connector.rollback are legitimately both. A host agent
@@ -428,6 +427,12 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 			ingestErr = errors.New("ticket result receiver is not configured")
 		} else {
 			ingestErr = a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+		}
+	case relay.KindDiscoveryRun:
+		if a.recordDiscoveryScan == nil {
+			ingestErr = errors.New("discovery result receiver is not configured")
+		} else {
+			ingestErr = a.recordDiscoveryScan(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
 		}
 	}
 	if ingestErr != nil {

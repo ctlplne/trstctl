@@ -41,21 +41,27 @@ type DiscoverySchedule struct {
 
 // DiscoveryRun is one queued/executed discovery run.
 type DiscoveryRun struct {
-	ID          string
-	TenantID    string
-	SourceID    string
-	ScheduleID  *string
-	Status      string
-	DryRun      bool
-	RequestedBy string
-	Targets     int
-	Discovered  int
-	Failed      int
-	Rejected    int
-	Error       string
-	StartedAt   *time.Time
-	CompletedAt *time.Time
-	CreatedAt   time.Time
+	ID                string
+	TenantID          string
+	SourceID          string
+	ScheduleID        *string
+	Status            string
+	DryRun            bool
+	RequestedBy       string
+	Execution         string
+	Segment           string
+	RequiredAgentRole string
+	RequiredAgentID   string
+	ExecutedByAgentID string
+	Targets           int
+	Discovered        int
+	Failed            int
+	Rejected          int
+	Blocked           int
+	Error             string
+	StartedAt         *time.Time
+	CompletedAt       *time.Time
+	CreatedAt         time.Time
 }
 
 // DiscoveryFinding is a metadata-only credential reference produced by a run.
@@ -166,15 +172,25 @@ func (s *Store) ApplyDiscoveryScheduleUpsertedTx(ctx context.Context, tx pgx.Tx,
 
 // ApplyDiscoveryRunQueuedTx projects a discovery.run.queued event.
 func (s *Store) ApplyDiscoveryRunQueuedTx(ctx context.Context, tx pgx.Tx, run DiscoveryRun) error {
+	execution := run.Execution
+	if execution == "" {
+		execution = "control_plane"
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO discovery_runs
-		        (id, tenant_id, source_id, schedule_id, status, dry_run, requested_by, created_at)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		        (id, tenant_id, source_id, schedule_id, status, dry_run, requested_by,
+		         execution, segment, required_agent_role, required_agent_id, created_at)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11, '')::uuid, $12)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		      SET status = EXCLUDED.status,
 		          dry_run = EXCLUDED.dry_run,
-		          requested_by = EXCLUDED.requested_by`,
-		run.ID, run.TenantID, run.SourceID, run.ScheduleID, run.Status, run.DryRun, run.RequestedBy, run.CreatedAt)
+		          requested_by = EXCLUDED.requested_by,
+		          execution = EXCLUDED.execution,
+		          segment = EXCLUDED.segment,
+		          required_agent_role = EXCLUDED.required_agent_role,
+		          required_agent_id = EXCLUDED.required_agent_id`,
+		run.ID, run.TenantID, run.SourceID, run.ScheduleID, run.Status, run.DryRun, run.RequestedBy,
+		execution, run.Segment, run.RequiredAgentRole, run.RequiredAgentID, run.CreatedAt)
 	return err
 }
 
@@ -183,13 +199,21 @@ func (s *Store) ApplyDiscoveryRunStartedTx(ctx context.Context, tx pgx.Tx, tenan
 	tag, err := tx.Exec(ctx,
 		`UPDATE discovery_runs
 		    SET status = 'running', started_at = $3
-		  WHERE tenant_id = $1 AND id = $2`,
+		  WHERE tenant_id = $1 AND id = $2 AND status = 'queued'`,
 		tenantID, runID, startedAt)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return pgx.ErrNoRows
+	if tag.RowsAffected() != 0 {
+		return nil
+	}
+	// A duplicate producer event may be projected after the terminal event when
+	// two copies of one signed receipt race. An existing run is success; a missing
+	// run still fails so replay cannot silently skip an absent queue event.
+	var exists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT true FROM discovery_runs WHERE tenant_id = $1 AND id = $2`, tenantID, runID).Scan(&exists); err != nil {
+		return err
 	}
 	return nil
 }
@@ -321,11 +345,13 @@ func (s *Store) ApplyDiscoveryRunCompletedTx(ctx context.Context, tx pgx.Tx, run
 		        discovered = $5,
 		        failed = $6,
 		        rejected = $7,
-		        error = $8,
-		        completed_at = $9
+		        blocked = $8,
+		        error = $9,
+		        executed_by_agent_id = NULLIF($10, '')::uuid,
+		        completed_at = $11
 		  WHERE tenant_id = $1 AND id = $2`,
 		run.TenantID, run.ID, run.Status, run.Targets, run.Discovered, run.Failed,
-		run.Rejected, run.Error, run.CompletedAt)
+		run.Rejected, run.Blocked, run.Error, run.ExecutedByAgentID, run.CompletedAt)
 	if err != nil {
 		return err
 	}
@@ -490,7 +516,9 @@ func (s *Store) GetDiscoveryRun(ctx context.Context, tenantID, id string) (Disco
 	var out DiscoveryRun
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanDiscoveryRun(tx.QueryRow(ctx, `SELECT id::text, tenant_id::text, source_id::text, schedule_id::text, status, dry_run,
-		              requested_by, targets, discovered, failed, rejected, error, started_at, completed_at, created_at
+		              requested_by, execution, segment, required_agent_role,
+		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
+		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
@@ -502,7 +530,9 @@ func (s *Store) ListDiscoveryRunsPage(ctx context.Context, tenantID, afterID str
 	var out []DiscoveryRun
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id::text, tenant_id::text, source_id::text, schedule_id::text, status, dry_run,
-		              requested_by, targets, discovered, failed, rejected, error, started_at, completed_at, created_at
+		              requested_by, execution, segment, required_agent_role,
+		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
+		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND id > $2
 		     ORDER BY id LIMIT $3`, tenantID, afterID, limit)
@@ -667,7 +697,8 @@ func scanDiscoverySource(row rowScanner, src *DiscoverySource) error {
 
 func scanDiscoveryRun(row rowScanner, run *DiscoveryRun) error {
 	return row.Scan(&run.ID, &run.TenantID, &run.SourceID, &run.ScheduleID, &run.Status, &run.DryRun,
-		&run.RequestedBy, &run.Targets, &run.Discovered, &run.Failed, &run.Rejected, &run.Error,
+		&run.RequestedBy, &run.Execution, &run.Segment, &run.RequiredAgentRole, &run.RequiredAgentID,
+		&run.ExecutedByAgentID, &run.Targets, &run.Discovered, &run.Failed, &run.Rejected, &run.Blocked, &run.Error,
 		&run.StartedAt, &run.CompletedAt, &run.CreatedAt)
 }
 

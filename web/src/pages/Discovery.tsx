@@ -567,6 +567,8 @@ export function Discovery() {
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<SourceKind>("network");
   const [targets, setTargets] = useState("");
+  const [segment, setSegment] = useState("");
+  const [relayAgentID, setRelayAgentID] = useState("");
   const [structuredRows, setStructuredRows] = useState<Record<StructuredSourceKind, StructuredRow[]>>(() => initialStructuredRows());
   const [structuredTemplates, setStructuredTemplates] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredTemplates());
   const [structuredJSONImports, setStructuredJSONImports] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredJSONImports());
@@ -677,14 +679,20 @@ export function Discovery() {
     setNotice(null);
     try {
       const config =
-        sourceKind === "network"
-          ? { targets: parseTargets(targets) }
+        sourceKind === "network" || sourceKind === "ssh"
+          ? {
+              targets: parseTargets(targets),
+              segment: segment.trim(),
+              ...(relayAgentID.trim() ? { relay_agent_id: relayAgentID.trim() } : {}),
+            }
           : isStructuredSourceKind(sourceKind)
             ? buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind])
             : {};
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
       setTargets("");
+      setSegment("");
+      setRelayAgentID("");
       setStructuredRows(initialStructuredRows());
       setStructuredTemplates(initialStructuredTemplates());
       setStructuredJSONImports(initialStructuredJSONImports());
@@ -842,17 +850,39 @@ export function Discovery() {
                 </select>
               </label>
             </div>
-            {sourceKind === "network" && (
-              <label className="grid gap-1 text-sm font-medium">
-                {translateNow("source.targets.27445f6ab6")}
-                <textarea
-                  className="ui-input min-h-24 font-mono text-xs"
-                  value={targets}
-                  onChange={(event) => setTargets(event.target.value)}
-                  placeholder="10.0.0.10:443"
-                  required
-                />
-              </label>
+            {(sourceKind === "network" || sourceKind === "ssh") && (
+              <div className="grid gap-3">
+                <label className="grid gap-1 text-sm font-medium">
+                  {t("discovery.source.segment")}
+                  <input
+                    className="ui-input"
+                    value={segment}
+                    onChange={(event) => setSegment(event.target.value)}
+                    placeholder={t("discovery.source.segmentPlaceholder")}
+                    required
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-medium">
+                  {t("discovery.source.relayAgent")}
+                  <input
+                    className="ui-input font-mono text-xs"
+                    value={relayAgentID}
+                    onChange={(event) => setRelayAgentID(event.target.value)}
+                    placeholder={t("discovery.source.relayAgentPlaceholder")}
+                  />
+                  <span className="text-xs font-normal text-muted-foreground">{t("discovery.source.relayHint")}</span>
+                </label>
+                <label className="grid gap-1 text-sm font-medium">
+                  {translateNow("source.targets.27445f6ab6")}
+                  <textarea
+                    className="ui-input min-h-24 font-mono text-xs"
+                    value={targets}
+                    onChange={(event) => setTargets(event.target.value)}
+                    placeholder={sourceKind === "ssh" ? "10.0.0.10:22" : "10.0.0.10:443"}
+                    required
+                  />
+                </label>
+              </div>
             )}
             {isStructuredSourceKind(sourceKind) && (
               <StructuredSourceForm
@@ -1610,6 +1640,11 @@ function SourceTable({
       cell: (source) => targetCount(source),
     },
     {
+      id: "relay-binding",
+      header: translateNow("discovery.source.executionBinding"),
+      cell: (source) => relayBinding(source),
+    },
+    {
       id: "last-run",
       header: "Last run",
       cell: (source) => <SourceActivityCell activity={activity.get(source.id)} formatDateTime={formatDateTime} />,
@@ -1730,7 +1765,12 @@ function RunTable({ runs, sourceByID }: { runs: DiscoveryRun[]; sourceByID: Map<
     {
       id: "failed",
       header: "Failed",
-      cell: (run) => run.failed + run.rejected,
+      cell: (run) => run.failed + run.rejected + run.blocked,
+    },
+    {
+      id: "executor",
+      header: translateNow("discovery.run.executor"),
+      cell: (run) => runExecution(run),
     },
     {
       id: "completed",
@@ -2504,6 +2544,20 @@ function targetCount(source: DiscoverySource): string {
   const cidrs = source.config.cidrs;
   if (Array.isArray(cidrs)) return `${cidrs.length} cidr`;
   return "-";
+}
+
+function relayBinding(source: DiscoverySource): string {
+  if (source.kind !== "network" && source.kind !== "ssh") return translateNow("discovery.run.controlPlane");
+  const segment = typeof source.config.segment === "string" ? source.config.segment : translateNow("discovery.run.unbound");
+  const relay = typeof source.config.relay_agent_id === "string" ? ` · ${shortID(source.config.relay_agent_id)}` : "";
+  return `${translateNow("discovery.run.relay")} · ${segment}${relay}`;
+}
+
+function runExecution(run: DiscoveryRun): string {
+  if (run.execution !== "relay") return translateNow("discovery.run.controlPlane");
+  const relay = run.executed_by_agent_id || run.required_agent_id;
+  const suffix = relay ? ` · ${shortID(relay)}` : "";
+  return `${translateNow("discovery.run.relay")} · ${run.segment || translateNow("discovery.run.unbound")}${suffix}`;
 }
 
 function renderNotice(notice: Notice) {

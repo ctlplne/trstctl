@@ -656,6 +656,46 @@ export const messages = {
     defaultMessage: "Runs",
     description: "Discovery page tab: discovery run history.",
   },
+  "discovery.source.segment": {
+    defaultMessage: "Declared segment",
+    description: "C2: network segment whose network-role relay executes this discovery source.",
+  },
+  "discovery.source.segmentPlaceholder": {
+    defaultMessage: "production-dmz",
+    description: "C2: example declared segment name in the discovery source form.",
+  },
+  "discovery.source.relayAgent": {
+    defaultMessage: "Relay agent ID",
+    description: "C2: optional exact network-role agent selector for a discovery source.",
+  },
+  "discovery.source.relayAgentPlaceholder": {
+    defaultMessage: "Optional agent UUID",
+    description: "C2: placeholder for the optional exact relay selector.",
+  },
+  "discovery.source.relayHint": {
+    defaultMessage: "Leave empty to allow any enrolled network-role relay to claim this segment scan.",
+    description: "C2: explains the empty exact-agent selector while retaining the mandatory role boundary.",
+  },
+  "discovery.source.executionBinding": {
+    defaultMessage: "Execution binding",
+    description: "C2: source table column showing control-plane versus relay/segment execution.",
+  },
+  "discovery.run.executor": {
+    defaultMessage: "Executor",
+    description: "C2: run table column showing the relay or control-plane executor provenance.",
+  },
+  "discovery.run.relay": {
+    defaultMessage: "Relay",
+    description: "C2: run or source is executed by an enrolled network-role relay.",
+  },
+  "discovery.run.controlPlane": {
+    defaultMessage: "Control plane",
+    description: "C2: non-network discovery source is executed by its explicit control-plane connector.",
+  },
+  "discovery.run.unbound": {
+    defaultMessage: "Unbound",
+    description: "C2: defensive console state for legacy data missing an execution segment.",
+  },
   "discovery.coverage.caption": {
     defaultMessage: "Discovery coverage by asset class",
     description: "Screen-reader caption for the discovery coverage table.",

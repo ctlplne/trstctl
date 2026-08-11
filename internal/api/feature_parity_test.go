@@ -139,8 +139,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// raise it to 350: the approval inbox now reads requests instead of inventing
 	// them from inventory state, and every decision binds request ID plus intent
 	// digest. Denial closes only the request; it never mutates the target.
-	if len(out) != 350 {
-		t.Fatalf("OpenAPI operationIds = %d, want 350", len(out))
+	// AUD-28's segment declaration raises it to 351: network and SSH sources now
+	// bind a served, event-sourced denominator before a relay can execute them.
+	if len(out) != 351 {
+		t.Fatalf("OpenAPI operationIds = %d, want 351", len(out))
 	}
 	return out
 }

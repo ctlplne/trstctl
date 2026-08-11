@@ -32,15 +32,16 @@ func TestServedDiscoveryCoverageThreeBuckets(t *testing.T) {
 		t.Fatalf("parse test TLS URL: %v", err)
 	}
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newDiscoveryRelayHarness(t, "coverage-net")
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "coverage-net",
 		"kind": "network",
 		"config": map[string]any{
 			"targets":        []string{u.Host},
 			"allow_loopback": true,
+			"segment":        "coverage-net",
 		},
 	})
 	if status != http.StatusCreated {
@@ -53,16 +54,14 @@ func TestServedDiscoveryCoverageThreeBuckets(t *testing.T) {
 		t.Fatalf("decode source: %v (%s)", err, body)
 	}
 
-	if status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+	if status, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
 		"source_id": source.ID,
 	}); status != http.StatusCreated {
 		t.Fatalf("start discovery run: status %d body %s", status, body)
 	}
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain discovery outbox: %v", err)
-	}
+	executeNextDiscoveryRelayJob(t, h)
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/coverage", tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/coverage", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("coverage = %d body %s, want 200", status, body)
 	}
@@ -123,7 +122,7 @@ func TestServedDiscoveryCoverageThreeBuckets(t *testing.T) {
 	}
 
 	// The class filter narrows to exactly the named class.
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/coverage?class=tls-endpoint", tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/coverage?class=tls-endpoint", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("filtered coverage = %d, want 200", status)
 	}
@@ -135,7 +134,7 @@ func TestServedDiscoveryCoverageThreeBuckets(t *testing.T) {
 	}
 
 	// The source_kind filter keeps only classes that kind's envelope observes.
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/coverage?source_kind=ct_log", tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/coverage?source_kind=ct_log", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("kind-filtered coverage = %d, want 200", status)
 	}

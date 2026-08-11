@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	164: true,
 	161: true,
 	156: true,
 	153: true,
@@ -55,6 +56,91 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0164PreservesRunsAndFencesRelayExecutorsByTenantAUD28(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 164)
+	if target.noTx || target.name != "0164_relay_discovery_execution.sql" {
+		t.Fatalf("migration 0164 classification = name:%q no_tx:%t, want transactional relay binding migration", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh 0164 content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	type fixture struct {
+		tenantID string
+		sourceID string
+		runID    string
+		agentID  string
+	}
+	fixtures := []fixture{
+		{tenantA, "16400000-0000-4000-8000-000000000001", "16400000-0000-4000-8000-000000000011", "16400000-0000-4000-8000-000000000021"},
+		{tenantB, "16400000-0000-4000-8000-000000000002", "16400000-0000-4000-8000-000000000012", "16400000-0000-4000-8000-000000000022"},
+	}
+	for row, item := range fixtures {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO agents (id, tenant_id, name, status, version, roles, last_seen_at)
+			VALUES ($1, $2, $3, 'active', 'pre-0164', ARRAY['network'], '2026-08-11T12:00:00Z')`,
+			item.agentID, item.tenantID, fmt.Sprintf("relay-%d", row)); err != nil {
+			t.Fatalf("seed pre-0164 agent %d: %v", row, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO discovery_sources (id, tenant_id, kind, name, config, created_at, updated_at)
+			VALUES ($1, $2, 'network', $3, $4::jsonb, '2026-08-11T12:00:00Z', '2026-08-11T12:00:00Z')`,
+			item.sourceID, item.tenantID, fmt.Sprintf("source-%d", row),
+			fmt.Sprintf(`{"targets":["192.0.2.%d:443"],"segment":"dmz"}`, row+1)); err != nil {
+			t.Fatalf("seed pre-0164 source %d: %v", row, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO discovery_runs
+			       (id, tenant_id, source_id, status, dry_run, requested_by,
+			        targets, discovered, failed, rejected, error, started_at, completed_at, created_at)
+			VALUES ($1, $2, $3, 'succeeded', false, $4, 1, 1, 0, 0, '',
+			        '2026-08-11T12:01:00Z', '2026-08-11T12:02:00Z', '2026-08-11T12:00:00Z')`,
+			item.runID, item.tenantID, item.sourceID, fmt.Sprintf("operator-%d", row)); err != nil {
+			t.Fatalf("seed pre-0164 run %d: %v", row, err)
+		}
+	}
+	const stable = `
+		SELECT id::text, tenant_id::text, source_id::text, status, dry_run::text,
+		       requested_by, targets::text, discovered::text, failed::text,
+		       rejected::text, error, started_at::text, completed_at::text, created_at::text
+		  FROM discovery_runs
+		 ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 2 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0164 changed existing discovery evidence: before=%d/%s after=%d/%s",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var badDefaults int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)
+		  FROM discovery_runs
+		 WHERE execution <> 'control_plane' OR segment <> '' OR required_agent_role <> ''
+		    OR required_agent_id IS NOT NULL OR executed_by_agent_id IS NOT NULL OR blocked <> 0`).Scan(&badDefaults); err != nil {
+		t.Fatalf("read post-0164 defaults: %v", err)
+	}
+	if badDefaults != 0 {
+		t.Fatalf("0164 gave %d legacy runs relay authority or invented terminal provenance", badDefaults)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE discovery_runs SET execution = 'socket_magic'`); err == nil {
+		t.Fatal("0164 accepted an unknown execution boundary")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE discovery_runs SET blocked = -1`); err == nil {
+		t.Fatal("0164 accepted a negative blocked-target count")
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE discovery_runs SET required_agent_id = $1 WHERE tenant_id = $2`,
+		fixtures[1].agentID, fixtures[0].tenantID); err == nil {
+		t.Fatal("0164 allowed a tenant-A run to bind tenant B's relay")
+	}
 }
 
 // seededContentColumns is the EXPLICIT, version-stable column projection used to

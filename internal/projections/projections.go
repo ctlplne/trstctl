@@ -22,6 +22,7 @@ import (
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
@@ -134,6 +135,7 @@ const (
 	EventAgentOffboarded                          = "agent.offboarded"
 	EventProfileCreated                           = "profile.created"
 	EventProfileUpdated                           = "profile.updated"
+	EventDiscoverySegmentUpserted                 = "discovery.segment.upserted"
 	EventDiscoverySourceUpserted                  = "discovery.source.upserted"
 	EventDiscoveryScheduleUpserted                = "discovery.schedule.upserted"
 	EventDiscoveryRunQueued                       = "discovery.run.queued"
@@ -1398,6 +1400,18 @@ type DiscoverySourceUpserted struct {
 	Config json.RawMessage `json:"config"`
 }
 
+// DiscoverySegmentUpserted is the operator-declared scan denominator. Sweep
+// observations are separate completion events, so editing a boundary cannot
+// make it look freshly observed.
+type DiscoverySegmentUpserted struct {
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Ranges          []string `json:"ranges"`
+	StalenessHours  int      `json:"staleness_hours"`
+	Excluded        bool     `json:"excluded"`
+	ExclusionReason string   `json:"exclusion_reason,omitempty"`
+}
+
 // DiscoveryScheduleUpserted is the payload of discovery.schedule.upserted.
 type DiscoveryScheduleUpserted struct {
 	ID              string `json:"id"`
@@ -1407,14 +1421,10 @@ type DiscoveryScheduleUpserted struct {
 	Enabled         bool   `json:"enabled"`
 }
 
-// DiscoveryRunQueued is the payload of discovery.run.queued.
-type DiscoveryRunQueued struct {
-	ID          string  `json:"id"`
-	SourceID    string  `json:"source_id"`
-	ScheduleID  *string `json:"schedule_id,omitempty"`
-	DryRun      bool    `json:"dry_run"`
-	RequestedBy string  `json:"requested_by,omitempty"`
-}
+// DiscoveryRunQueued is the payload of discovery.run.queued. Network and SSH
+// rows carry the resolved relay command; other source kinds leave those fields
+// empty and execute on the control plane.
+type DiscoveryRunQueued = segmentscan.Intent
 
 // DiscoveryRunStarted is the payload of discovery.run.started.
 type DiscoveryRunStarted struct {
@@ -1446,13 +1456,16 @@ type DiscoveryFindingTriageChanged struct {
 
 // DiscoveryRunCompleted is the payload of discovery.run.completed.
 type DiscoveryRunCompleted struct {
-	ID         string `json:"id"`
-	Status     string `json:"status"`
-	Targets    int    `json:"targets"`
-	Discovered int    `json:"discovered"`
-	Failed     int    `json:"failed"`
-	Rejected   int    `json:"rejected"`
-	Error      string `json:"error,omitempty"`
+	ID                string `json:"id"`
+	Status            string `json:"status"`
+	Targets           int    `json:"targets"`
+	Discovered        int    `json:"discovered"`
+	Failed            int    `json:"failed"`
+	Rejected          int    `json:"rejected"`
+	Blocked           int    `json:"blocked,omitempty"`
+	Error             string `json:"error,omitempty"`
+	Segment           string `json:"segment,omitempty"`
+	ExecutedByAgentID string `json:"executed_by_agent_id,omitempty"`
 }
 
 // ACMEDNS01ProviderConfigUpserted is the payload of
@@ -2667,6 +2680,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventKubernetesControllerPostureReported:      {1: true},
 	EventProfileCreated:                           {1: true, 2: true},
 	EventProfileUpdated:                           {1: true, 2: true},
+	EventDiscoverySegmentUpserted:                 {1: true},
 	EventDiscoverySourceUpserted:                  {1: true},
 	EventDiscoveryScheduleUpserted:                {1: true},
 	EventDiscoveryRunQueued:                       {1: true},
@@ -3481,6 +3495,16 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Version: pl.Version,
 			Spec: pl.Spec, Active: pl.Active, CreatedBy: pl.CreatedBy, CreatedAt: e.Time,
 		})
+	case EventDiscoverySegmentUpserted:
+		var pl DiscoverySegmentUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		_, err := p.store.ApplyDiscoverySegmentUpsertedTx(ctx, tx, e.TenantID, store.DiscoverySegment{
+			ID: pl.ID, Name: pl.Name, Ranges: pl.Ranges, StalenessHours: pl.StalenessHours,
+			Excluded: pl.Excluded, ExclusionReason: pl.ExclusionReason, CreatedAt: e.Time,
+		})
+		return err
 	case EventDiscoverySourceUpserted:
 		var pl DiscoverySourceUpserted
 		if err := decode(e, &pl); err != nil {
@@ -3515,7 +3539,9 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyDiscoveryRunQueuedTx(ctx, tx, store.DiscoveryRun{
 			ID: pl.ID, TenantID: e.TenantID, SourceID: pl.SourceID, ScheduleID: pl.ScheduleID,
-			Status: "queued", DryRun: pl.DryRun, RequestedBy: pl.RequestedBy, CreatedAt: e.Time,
+			Status: "queued", DryRun: pl.DryRun, RequestedBy: pl.RequestedBy,
+			Execution: pl.Execution, Segment: pl.Segment, RequiredAgentRole: pl.RequiredAgentRole,
+			RequiredAgentID: pl.RequiredAgentID, CreatedAt: e.Time,
 		})
 	case EventDiscoveryRunStarted:
 		var pl DiscoveryRunStarted
@@ -3578,9 +3604,16 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := p.store.ApplyDiscoveryRunCompletedTx(ctx, tx, store.DiscoveryRun{
 			ID: pl.ID, TenantID: e.TenantID, Status: pl.Status, Targets: pl.Targets,
 			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
-			Error: pl.Error, CompletedAt: &completedAt,
+			Blocked: pl.Blocked, Error: pl.Error, ExecutedByAgentID: pl.ExecutedByAgentID,
+			CompletedAt: &completedAt,
 		}); err != nil {
 			return err
+		}
+		if pl.Segment != "" {
+			if err := p.store.ApplyDiscoverySegmentSweepTx(ctx, tx, e.TenantID, pl.Segment,
+				pl.ExecutedByAgentID, pl.Discovered, completedAt); err != nil {
+				return err
+			}
 		}
 		// Fold the completed run into its source's coverage rollup in the
 		// same transaction; the run row just applied supplies the source

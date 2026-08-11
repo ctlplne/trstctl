@@ -49,7 +49,7 @@ function seedDiscoveryMocks() {
         tenant_id: "tenant-1",
         kind: "network",
         name: "edge",
-        config: { targets: ["10.0.0.10:443"] },
+        config: { targets: ["10.0.0.10:443"], segment: "production-dmz", relay_agent_id: "relay-agent-1" },
         created_at: "2026-06-20T10:00:00Z",
         updated_at: "2026-06-20T10:00:00Z",
       },
@@ -93,10 +93,16 @@ function seedDiscoveryMocks() {
         status: "succeeded",
         dry_run: false,
         requested_by: "operator",
+        execution: "relay",
+        segment: "production-dmz",
+        required_agent_role: "network",
+        required_agent_id: "relay-agent-1",
+        executed_by_agent_id: "relay-agent-1",
         targets: 1,
         discovered: 1,
         failed: 0,
         rejected: 0,
+        blocked: 0,
         created_at: "2026-06-20T10:02:00Z",
         completed_at: "2026-06-20T10:02:05Z",
       },
@@ -107,10 +113,12 @@ function seedDiscoveryMocks() {
         status: "succeeded",
         dry_run: false,
         requested_by: "operator",
+        execution: "control_plane",
         targets: 3,
         discovered: 3,
         failed: 0,
         rejected: 0,
+        blocked: 0,
         created_at: "2026-06-20T10:03:00Z",
         completed_at: "2026-06-20T10:03:05Z",
       },
@@ -290,7 +298,7 @@ function seedDiscoveryMocks() {
     tenant_id: "tenant-1",
     kind: "network",
     name: "edge-2",
-    config: { targets: ["10.0.0.11:443"] },
+    config: { targets: ["10.0.0.11:443"], segment: "production-dmz" },
     created_at: "2026-06-20T11:00:00Z",
     updated_at: "2026-06-20T11:00:00Z",
   });
@@ -308,10 +316,13 @@ function seedDiscoveryMocks() {
     source_id: "source-1",
     status: "queued",
     dry_run: false,
+    execution: "relay",
+    segment: "production-dmz",
     targets: 0,
     discovered: 0,
     failed: 0,
     rejected: 0,
+    blocked: 0,
     created_at: "2026-06-20T11:05:00Z",
   });
 }
@@ -474,18 +485,33 @@ describe("discovery control-plane surface", () => {
     await screen.findByRole("heading", { name: "Source" });
     const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
     expect(sourceForm).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Execution binding" })).toBeInTheDocument();
+    expect(screen.getByText(/Relay · production-dmz/)).toBeInTheDocument();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "edge-2");
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Declared segment"), "production-dmz");
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText(/^Relay agent ID/), "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Targets"), "10.0.0.11:443\n10.0.0.12:8443");
     await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
 
     expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
       name: "edge-2",
       kind: "network",
-      config: { targets: ["10.0.0.11:443", "10.0.0.12:8443"] },
+      config: {
+        targets: ["10.0.0.11:443", "10.0.0.12:8443"],
+        segment: "production-dmz",
+        relay_agent_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      },
     });
 
     await user.click(screen.getAllByRole("button", { name: "Run" })[0]);
     expect(apiMock.startDiscoveryRun).toHaveBeenCalledWith({ source_id: "source-1", dry_run: false });
+  });
+
+  it("shows relay segment and executing-agent provenance in run history", async () => {
+    renderDiscovery(["/discovery?tab=runs"]);
+    expect(await screen.findByRole("columnheader", { name: "Executor" })).toBeInTheDocument();
+    expect(screen.getByText(/Relay · production-dmz · relay-agent-/)).toBeInTheDocument();
+    expect(screen.getByText("Control plane")).toBeInTheDocument();
   });
 
   it("uses structured templates instead of primary JSON textareas for complex source creation", async () => {

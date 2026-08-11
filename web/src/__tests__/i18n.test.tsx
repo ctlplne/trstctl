@@ -562,8 +562,13 @@ describe("i18n boundary", () => {
       // configuration. The translations preserve that required action and do
       // not describe the row as failed. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "ef29de7ae7f2a96bcab8137f1244ce61ba43d04f5faf2c70f0239d0e99c1b672",
-      "de-DE": "29b222c798877cf7b1bca61c3b1008f4e9e62c9830b962cb8e0e73768e4a0336",
+      // AUD-28 relay-discovery re-pin: ten discovery.source/run keys name
+      // the declared segment, optional exact relay selector, execution binding,
+      // and verified terminal executor. “Unbound” must remain an absence state,
+      // and control-plane execution must not translate as relay execution.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "7046761be15320158fe78e1efed1faff36a3ffc5fcba2f494001f7e4770c8ac4",
+      "de-DE": "6a64cbcae5a079c0107d988e2a5f9bd70a2af66c2fc2e367316f43e7f7761728",
     });
   });
 

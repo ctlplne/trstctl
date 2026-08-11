@@ -6792,6 +6792,9 @@
       },
       "DiscoveryRun": {
         "properties": {
+          "blocked": {
+            "type": "integer"
+          },
           "completed_at": {
             "format": "date-time",
             "type": "string"
@@ -6809,6 +6812,17 @@
           "error": {
             "type": "string"
           },
+          "executed_by_agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "execution": {
+            "enum": [
+              "control_plane",
+              "relay"
+            ],
+            "type": "string"
+          },
           "failed": {
             "type": "integer"
           },
@@ -6822,8 +6836,18 @@
           "requested_by": {
             "type": "string"
           },
+          "required_agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "required_agent_role": {
+            "type": "string"
+          },
           "schedule_id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "segment": {
             "type": "string"
           },
           "source_id": {
@@ -6858,10 +6882,12 @@
           "source_id",
           "status",
           "dry_run",
+          "execution",
           "targets",
           "discovered",
           "failed",
           "rejected",
+          "blocked",
           "created_at"
         ],
         "type": "object"
@@ -6984,6 +7010,56 @@
         ],
         "type": "object"
       },
+      "DiscoverySegment": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "excluded": {
+            "type": "boolean"
+          },
+          "exclusion_reason": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_found_count": {
+            "type": "integer"
+          },
+          "last_swept_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_swept_by": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ranges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "staleness_hours": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ranges",
+          "staleness_hours",
+          "excluded",
+          "last_found_count",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "DiscoverySegmentCoverage": {
         "properties": {
           "exclusion_reason": {
@@ -7026,6 +7102,33 @@
           "ranges",
           "status",
           "staleness_hours"
+        ],
+        "type": "object"
+      },
+      "DiscoverySegmentRequest": {
+        "properties": {
+          "excluded": {
+            "type": "boolean"
+          },
+          "exclusion_reason": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ranges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "staleness_hours": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "ranges"
         ],
         "type": "object"
       },
@@ -29643,6 +29746,74 @@
           }
         ],
         "summary": "Create a discovery schedule",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/segments": {
+      "post": {
+        "operationId": "createDiscoverySegment",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverySegmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverySegment"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Declare or update a discovery segment",
         "x-trstctl-permission": "discovery:write"
       }
     },

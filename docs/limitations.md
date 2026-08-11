@@ -797,8 +797,8 @@ never live in the API process. What you can do end to end against the running bi
   NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, Postfix, Traefik, AWS ACM,
   Azure Key Vault, GCP Certificate Manager, Java keystore, PostgreSQL, MySQL,
   RabbitMQ, Elasticsearch, and Tomcat.
-- Discovery control plane + network, cloud-certificate, CT-log, drift execution,
-  and SSH host-key execution: the running binary serves discovery sources,
+- Discovery control plane + relay-owned network/SSH, cloud-certificate, CT-log,
+  and drift execution: the running binary serves discovery sources,
   schedules, and runs under `/api/v1/discovery/*` — create/list a source,
   create/list a schedule, queue a run (idempotent, deduplicated by
   `Idempotency-Key`), read runs and findings (keyset-paginated), and read
@@ -807,11 +807,14 @@ never live in the API process. What you can do end to end against the running bi
   `GET /api/v1/certificates/health` and `trstctl certificates health` serve the
   estate-wide expiry/source dashboard over the same inventory projection,
   including certificates issued elsewhere and later imported or discovered.
-  Queuing a run is an immutable `discovery.run.queued` event; the scan intent is
-  journaled to the outbox, and an outbox worker then executes the run with
-  at-least-once delivery. For a **network** source the worker runs a real
-  certificate sweep on its own bounded worker lane (a flood fast-rejects rather
-  than starving other subsystems) — the served network scan execution path. For a
+  Queuing a run is an immutable `discovery.run.queued` event. For **network** and
+  **SSH** sources the same transaction resolves the bounded target list and stamps
+  the declared segment, required `network` role, and optional exact relay ID into
+  both the event and outbox command. The control-plane dispatcher refuses to dial
+  those targets and leaves the row claimable. An enrolled relay executes the sweep
+  on its bounded worker lane, signs the result receipt, and the control plane
+  validates the command/report binding before projecting metadata-only findings,
+  counts, segment freshness, and the executing agent ID. For a
   **cloud_certificate** source the worker executes AWS ACM, Azure Key Vault, and
   GCP Certificate Manager enumeration through credential references — served
   cloud-certificate discovery execution. For a **ct_log** source the worker polls
@@ -1155,10 +1158,10 @@ that tries gets a certificate carrying only what the operator granted.
 
 At claim time the served channel reads the roles off the certificate the agent
 authenticated with — the same certificate the tenant is derived from — and
-intersects them with the vantage each job kind needs. `discovery.run` and
-`trust.distribute` act on the agent's own machine and are host work. `endpoint.verify`
-and `revocation.probe` are observations from a vantage and are relay work. A host
-agent reaching for relay work is handed nothing and the reach is recorded as
+intersects them with the vantage each job kind needs. `trust.distribute` acts on
+the agent's own machine and is host work. `discovery.run`, `endpoint.verify`, and
+`revocation.probe` are observations from a segment vantage and are relay work. A
+host agent reaching for relay work is handed nothing and the reach is recorded as
 `agent.jobs.role_refused`, because it is either a misconfiguration or the thing
 the gate exists to catch.
 
@@ -1309,6 +1312,18 @@ dependency-light, and the one thing keeping them out of the agent binary was a
 store-backed sink whose only caller was a control-plane test. Both modes travel:
 TLS sweeps for served certificates, SSH sweeps for host keys.
 
+The source must bind a declared `segment`; it may also bind one
+`relay_agent_id`. Declare the denominator first with idempotent
+`POST /api/v1/discovery/segments` (`name`, `ranges`, and the segment's
+`staleness_hours` SLO). That mutation emits `discovery.segment.upserted`, so a
+cold event replay reconstructs the declaration instead of relying on a seed-only
+database row. Queueing then resolves CIDRs into at most 10,000 stable `host:port`
+targets and persists that exact command with `required_agent_role=network` in the
+same event/outbox transaction. The generic control-plane worker recognizes both
+new commands and legacy network/SSH rows and defers them before receiver I/O, so
+an upgrade cannot make an old pending scan dial from the control plane. A wrong
+role or wrong exact agent cannot claim the row.
+
 **The reserved-range guard travels with the scanner, not with the control
 plane.** A relay does not escape it by being somewhere else: loopback,
 link-local and multicast targets are refused inside the scanner, and the sweep
@@ -1317,8 +1332,14 @@ empty segment. Attempted, discovered, failed, rejected and blocked are all
 reported, because a sweep that reached nothing and a segment with nothing in it
 must not read the same.
 
-Findings come back over the channel the agent opened and the control plane
-writes them, as with every other agent finding — a relay holds no database.
+Findings come back over the channel the agent opened and the control plane writes
+them, as with every other agent finding — a relay holds no database. The result is
+accepted only while that exact lease generation is held and only after its receipt
+signature, mode, assigned targets, counts, metadata bounds, and optional exact
+agent selector validate. A projection error leaves the claim retryable; a replay
+after completion is refused. The run API and Discovery console show the segment,
+role/agent binding, blocked count, and the relay ID from the verified terminal
+receipt.
 
 **What changed in the vantage table:** `discovery.run` was host work when it
 meant "enumerate this machine's filesystem". It is now a segment sweep, which is

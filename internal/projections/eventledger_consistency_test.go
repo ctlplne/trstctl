@@ -33,6 +33,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventBreakglassCACrossSigned:                  "EventBreakglassCACrossSigned",
 	projections.EventOCSPResponderRotated:                     "EventOCSPResponderRotated",
 	projections.EventDiscoverySourceUpserted:                  "EventDiscoverySourceUpserted",
+	projections.EventDiscoverySegmentUpserted:                 "EventDiscoverySegmentUpserted",
 	projections.EventDiscoveryScheduleUpserted:                "EventDiscoveryScheduleUpserted",
 	projections.EventDiscoveryRunQueued:                       "EventDiscoveryRunQueued",
 	projections.EventDiscoveryFindingTriageChanged:            "EventDiscoveryFindingTriageChanged",

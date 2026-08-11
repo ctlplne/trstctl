@@ -3,6 +3,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/discovery"
+	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -23,6 +25,42 @@ const discoveryRunDestination = "discovery.run"
 var agentInventorySourceNamespace = uuid.MustParse("d5e0734a-9cc6-53a4-92f3-4f99387f8c3a")
 var secretScanSourceNamespace = uuid.MustParse("f2a0de71-857b-5a96-83be-0e65a0f2f107")
 var discoverySourceNamespace = uuid.MustParse("c47d7a97-a79c-5a36-a5b4-673b5afbe3cf")
+var discoverySegmentNamespace = uuid.MustParse("5afb44ec-8cfa-5e68-a135-150af6c36e87")
+var discoveryRelayEventNamespace = uuid.MustParse("78899482-854a-5b4d-9276-d8d574bdd340")
+
+// DiscoveryRelayEventID turns one durable job key plus one semantic step into
+// an opaque producer identity. Concurrent or crash-retried signed receipts then
+// append one immutable event per step rather than merely converging in SQL.
+func DiscoveryRelayEventID(tenantID, idempotencyKey, purpose string) string {
+	return uuid.NewSHA1(discoveryRelayEventNamespace,
+		[]byte(tenantID+"\x00"+idempotencyKey+"\x00"+purpose)).String()
+}
+
+// UpsertDiscoverySegment records the operator's declared scan denominator as
+// an event. Completing a run records freshness separately; editing the declared
+// boundary never manufactures an observation.
+func (o *Orchestrator) UpsertDiscoverySegment(ctx context.Context, tenantID string, in store.DiscoverySegment) (store.DiscoverySegment, error) {
+	name := strings.TrimSpace(in.Name)
+	id := in.ID
+	if id == "" {
+		id = uuid.NewSHA1(discoverySegmentNamespace, []byte(tenantID+"\x00"+name)).String()
+	}
+	ranges := append([]string(nil), in.Ranges...)
+	if ranges == nil {
+		ranges = []string{}
+	}
+	payload, err := json.Marshal(projections.DiscoverySegmentUpserted{
+		ID: id, Name: name, Ranges: ranges, StalenessHours: in.StalenessHours,
+		Excluded: in.Excluded, ExclusionReason: strings.TrimSpace(in.ExclusionReason),
+	})
+	if err != nil {
+		return store.DiscoverySegment{}, err
+	}
+	if _, err := o.emit(ctx, projections.EventDiscoverySegmentUpserted, tenantID, payload); err != nil {
+		return store.DiscoverySegment{}, err
+	}
+	return o.store.GetDiscoverySegmentByName(ctx, tenantID, name)
+}
 
 // UpsertDiscoverySource records a tenant discovery source as an event and returns
 // the projected source row. Config is metadata/reference JSON only; API validation
@@ -96,7 +134,8 @@ func (o *Orchestrator) UpsertDiscoverySchedule(ctx context.Context, tenantID str
 // tenant-scoped transaction as the queued-run projection (AN-6), keyed by the event
 // ID so boot reconciliation can recreate a lost outbox intent exactly once.
 func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, in store.DiscoveryRun) (store.DiscoveryRun, error) {
-	if _, err := o.store.GetDiscoverySource(ctx, tenantID, in.SourceID); err != nil {
+	source, err := o.store.GetDiscoverySource(ctx, tenantID, in.SourceID)
+	if err != nil {
 		return store.DiscoveryRun{}, err
 	}
 	if in.ScheduleID != nil {
@@ -118,9 +157,36 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	if id == "" {
 		id = uuid.NewString()
 	}
-	payload, err := json.Marshal(projections.DiscoveryRunQueued{
+	queued := projections.DiscoveryRunQueued{
 		ID: id, SourceID: in.SourceID, ScheduleID: in.ScheduleID, DryRun: in.DryRun, RequestedBy: requestedBy,
-	})
+		Execution: segmentscan.ExecutionControlPlane,
+	}
+	if source.Kind == "network" || source.Kind == "ssh" {
+		resolved, err := segmentscan.Resolve(source.Kind, source.Config)
+		if err != nil {
+			return store.DiscoveryRun{}, err
+		}
+		segment, err := o.store.GetDiscoverySegmentByName(ctx, tenantID, resolved.Segment)
+		if err != nil {
+			return store.DiscoveryRun{}, fmt.Errorf("orchestrator: resolve discovery segment: %w", err)
+		}
+		if segment.Excluded {
+			return store.DiscoveryRun{}, fmt.Errorf("orchestrator: discovery segment %q is declared out of scope", segment.Name)
+		}
+		if resolved.RequiredAgentID != "" {
+			agent, err := o.store.GetAgent(ctx, tenantID, resolved.RequiredAgentID)
+			if err != nil {
+				return store.DiscoveryRun{}, fmt.Errorf("orchestrator: resolve discovery relay: %w", err)
+			}
+			if agent.Status == "offboarded" || !containsString(agent.Roles, segmentscan.RequiredRoleNetwork) {
+				return store.DiscoveryRun{}, fmt.Errorf("orchestrator: selected discovery relay is not an active network-role agent")
+			}
+		}
+		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
+		resolved.DryRun, resolved.RequestedBy = in.DryRun, requestedBy
+		queued = resolved
+	}
+	payload, err := json.Marshal(queued)
 	if err != nil {
 		return store.DiscoveryRun{}, err
 	}
@@ -135,10 +201,12 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 			return err
 		}
 		_, err = o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-			TenantID:       tenantID,
-			Destination:    discoveryRunDestination,
-			IdempotencyKey: ev.ID,
-			Payload:        payload,
+			TenantID:          tenantID,
+			Destination:       discoveryRunDestination,
+			IdempotencyKey:    ev.ID,
+			Payload:           payload,
+			RequiredAgentRole: queued.RequiredAgentRole,
+			RequiredAgentID:   queued.RequiredAgentID,
 		})
 		return err
 	}); err != nil {
@@ -146,22 +214,64 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	}
 	return store.DiscoveryRun{
 		ID: id, TenantID: tenantID, SourceID: in.SourceID, ScheduleID: in.ScheduleID,
-		Status: "queued", DryRun: in.DryRun, RequestedBy: requestedBy, CreatedAt: ev.Time,
+		Status: "queued", DryRun: in.DryRun, RequestedBy: requestedBy,
+		Execution: queued.Execution, Segment: queued.Segment, RequiredAgentRole: queued.RequiredAgentRole,
+		RequiredAgentID: queued.RequiredAgentID, CreatedAt: ev.Time,
 	}, nil
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 // StartDiscoveryRun records that an outbox worker began executing a run.
 func (o *Orchestrator) StartDiscoveryRun(ctx context.Context, tenantID, runID string) error {
+	return o.startDiscoveryRun(ctx, tenantID, runID, "")
+}
+
+// StartDiscoveryRunWithEventID is the durable-receiver form. eventID is derived
+// from the claimed outbox key, so two copies of one receipt share one event.
+func (o *Orchestrator) StartDiscoveryRunWithEventID(ctx context.Context, tenantID, runID, eventID string) error {
+	if strings.TrimSpace(eventID) == "" {
+		return errors.New("orchestrator: discovery start event id is required")
+	}
+	return o.startDiscoveryRun(ctx, tenantID, runID, eventID)
+}
+
+func (o *Orchestrator) startDiscoveryRun(ctx context.Context, tenantID, runID, eventID string) error {
 	payload, err := json.Marshal(projections.DiscoveryRunStarted{ID: runID})
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventDiscoveryRunStarted, tenantID, payload)
+	if eventID == "" {
+		_, err = o.emit(ctx, projections.EventDiscoveryRunStarted, tenantID, payload)
+	} else {
+		_, err = o.emitPreparedExact(ctx, events.Event{
+			ID: eventID, Type: projections.EventDiscoveryRunStarted, TenantID: tenantID, Data: payload,
+		})
+	}
 	return err
 }
 
 // RecordDiscoveryFinding records one metadata-only finding for a run.
 func (o *Orchestrator) RecordDiscoveryFinding(ctx context.Context, tenantID string, in store.DiscoveryFinding) (store.DiscoveryFinding, error) {
+	return o.recordDiscoveryFinding(ctx, tenantID, in, "")
+}
+
+// RecordDiscoveryFindingWithEventID appends one receipt-bound observation.
+func (o *Orchestrator) RecordDiscoveryFindingWithEventID(ctx context.Context, tenantID, eventID string, in store.DiscoveryFinding) (store.DiscoveryFinding, error) {
+	if strings.TrimSpace(eventID) == "" {
+		return store.DiscoveryFinding{}, errors.New("orchestrator: discovery finding event id is required")
+	}
+	return o.recordDiscoveryFinding(ctx, tenantID, in, eventID)
+}
+
+func (o *Orchestrator) recordDiscoveryFinding(ctx context.Context, tenantID string, in store.DiscoveryFinding, eventID string) (store.DiscoveryFinding, error) {
 	id := in.ID
 	if id == "" {
 		id = discovery.FindingID(tenantID, in.RunID, in.Kind, in.Ref, in.Fingerprint)
@@ -178,13 +288,40 @@ func (o *Orchestrator) RecordDiscoveryFinding(ctx context.Context, tenantID stri
 	if err != nil {
 		return store.DiscoveryFinding{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventDiscoveryFindingRecorded, tenantID, payload)
+	var ev events.Event
+	if eventID == "" {
+		ev, err = o.emit(ctx, projections.EventDiscoveryFindingRecorded, tenantID, payload)
+	} else {
+		ev, err = o.emitPreparedExact(ctx, events.Event{
+			ID: eventID, Type: projections.EventDiscoveryFindingRecorded, TenantID: tenantID, Data: payload,
+		})
+	}
 	if err != nil {
 		return store.DiscoveryFinding{}, err
 	}
 	out := in
 	out.ID, out.TenantID, out.Metadata, out.DiscoveredAt = id, tenantID, meta, ev.Time
 	return out, nil
+}
+
+// RecordCertificateWithEventID records public certificate metadata with both a
+// stable event ID and stable projected row ID. It is intentionally narrow: raw
+// certificate/key material does not enter this receiver path.
+func (o *Orchestrator) RecordCertificateWithEventID(ctx context.Context, tenantID, eventID string, in store.Certificate) (store.Certificate, error) {
+	if strings.TrimSpace(eventID) == "" {
+		return store.Certificate{}, errors.New("orchestrator: certificate event id is required")
+	}
+	rowID := uuid.NewSHA1(discoveryRelayEventNamespace, []byte("certificate-row\x00"+eventID)).String()
+	payload, err := json.Marshal(certificateRecordedPayload(rowID, in, nil, nil))
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	if _, err := o.emitPreparedExact(ctx, events.Event{
+		ID: eventID, Type: projections.EventCertificateRecorded, TenantID: tenantID, Data: payload,
+	}); err != nil {
+		return store.Certificate{}, err
+	}
+	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
 }
 
 // ClaimDiscoveryFinding marks a tenant finding as managed by an identity. The
@@ -439,13 +576,46 @@ func (o *Orchestrator) RecordSecretScan(ctx context.Context, tenantID, scanner, 
 // CompleteDiscoveryRun records terminal run counts. Status is usually
 // "succeeded" or "failed"; partial scans use "partial".
 func (o *Orchestrator) CompleteDiscoveryRun(ctx context.Context, tenantID string, in store.DiscoveryRun) error {
+	return o.completeDiscoveryRun(ctx, tenantID, in, "")
+}
+
+// CompleteDiscoveryRunWithEventID is the receipt-bound terminal transition.
+func (o *Orchestrator) CompleteDiscoveryRunWithEventID(ctx context.Context, tenantID, eventID string, in store.DiscoveryRun) error {
+	if strings.TrimSpace(eventID) == "" {
+		return errors.New("orchestrator: discovery completion event id is required")
+	}
+	return o.completeDiscoveryRun(ctx, tenantID, in, eventID)
+}
+
+func (o *Orchestrator) completeDiscoveryRun(ctx context.Context, tenantID string, in store.DiscoveryRun, eventID string) error {
 	payload, err := json.Marshal(projections.DiscoveryRunCompleted{
 		ID: in.ID, Status: in.Status, Targets: in.Targets, Discovered: in.Discovered,
-		Failed: in.Failed, Rejected: in.Rejected, Error: in.Error,
+		Failed: in.Failed, Rejected: in.Rejected, Blocked: in.Blocked, Error: in.Error,
+		Segment: in.Segment, ExecutedByAgentID: in.ExecutedByAgentID,
 	})
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventDiscoveryRunCompleted, tenantID, payload)
+	if eventID == "" {
+		_, err = o.emit(ctx, projections.EventDiscoveryRunCompleted, tenantID, payload)
+	} else {
+		_, err = o.emitPreparedExact(ctx, events.Event{
+			ID: eventID, Type: projections.EventDiscoveryRunCompleted, TenantID: tenantID, Data: payload,
+		})
+	}
 	return err
+}
+
+// emitPreparedExact verifies that duplicate suppression returned the same
+// immutable meaning. Reusing a receipt key with changed report bytes fails
+// closed instead of silently applying the earlier event.
+func (o *Orchestrator) emitPreparedExact(ctx context.Context, next events.Event) (events.Event, error) {
+	ev, err := o.emitPrepared(ctx, next)
+	if err != nil {
+		return events.Event{}, err
+	}
+	if ev.ID != next.ID || ev.Type != next.Type || ev.TenantID != next.TenantID || !bytes.Equal(ev.Data, next.Data) {
+		return events.Event{}, fmt.Errorf("%w: canonical discovery receipt event differs", store.ErrIdempotencyConflict)
+	}
+	return ev, nil
 }

@@ -2515,16 +2515,22 @@ DiscoveryProvenanceSummary = TypedDict(
 DiscoveryRun = TypedDict(
     'DiscoveryRun',
     {
+        'blocked': int,
         'completed_at': str,
         'created_at': str,
         'discovered': int,
         'dry_run': bool,
         'error': str,
+        'executed_by_agent_id': str,
+        'execution': str,
         'failed': int,
         'id': str,
         'rejected': int,
         'requested_by': str,
+        'required_agent_id': str,
+        'required_agent_role': str,
         'schedule_id': str,
+        'segment': str,
         'source_id': str,
         'started_at': str,
         'status': str,
@@ -2588,6 +2594,23 @@ DiscoveryScheduleRequest = TypedDict(
     total=False,
 )
 
+DiscoverySegment = TypedDict(
+    'DiscoverySegment',
+    {
+        'created_at': str,
+        'excluded': bool,
+        'exclusion_reason': str,
+        'id': str,
+        'last_found_count': int,
+        'last_swept_at': str,
+        'last_swept_by': str,
+        'name': str,
+        'ranges': list[str],
+        'staleness_hours': int,
+    },
+    total=False,
+)
+
 DiscoverySegmentCoverage = TypedDict(
     'DiscoverySegmentCoverage',
     {
@@ -2599,6 +2622,18 @@ DiscoverySegmentCoverage = TypedDict(
         'ranges': list[str],
         'staleness_hours': int,
         'status': str,
+    },
+    total=False,
+)
+
+DiscoverySegmentRequest = TypedDict(
+    'DiscoverySegmentRequest',
+    {
+        'excluded': bool,
+        'exclusion_reason': str,
+        'name': str,
+        'ranges': list[str],
+        'staleness_hours': int,
     },
     total=False,
 )

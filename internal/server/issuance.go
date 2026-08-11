@@ -251,6 +251,14 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 	case orchestrator.DestinationConnectorRightSize:
 		return d.handleConnectorRightSize(ctx, m)
 	case "discovery.run":
+		relayOwned, err := d.discoveryRunRelayOwned(ctx, m)
+		if err != nil {
+			return err
+		}
+		if relayOwned {
+			return orchestrator.DeferDelivery(errors.New(
+				"server: network and SSH discovery execute on a network relay, not the control plane"))
+		}
 		return d.handleDiscoveryRun(ctx, m)
 	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup:
 		if d.dns01 == nil {

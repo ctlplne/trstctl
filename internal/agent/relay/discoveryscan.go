@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/discovery/netscan"
+	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/discovery/sshscan"
 	"trstctl.com/trstctl/internal/sshinv"
 )
@@ -37,61 +38,21 @@ import (
 // KindDiscoveryRun is the job kind for a segment sweep.
 const KindDiscoveryRun = "discovery.run"
 
-// DiscoveryScanIntent is the job payload: what to sweep, and how.
-type DiscoveryScanIntent struct {
-	// Mode selects the sweep. "tls" probes for served certificates; "ssh"
-	// collects host keys. They are separate because they answer different
-	// questions and an operator schedules them differently.
-	Mode string `json:"mode"`
-	// Targets are hosts, host:port pairs, or CIDR ranges. The scanner expands
-	// and bounds them; a relay never invents targets of its own.
-	Targets []string `json:"targets"`
-	// AllowReservedRanges permits loopback and other reserved addresses. It
-	// exists for lab and test use and is off by default: a sweep that quietly
-	// probed 127.0.0.1 on every host in a fleet would be a surprising thing for
-	// a certificate manager to do.
-	AllowReservedRanges bool `json:"allow_reserved_ranges,omitempty"`
-}
+// DiscoveryScanIntent is the shared, bounded relay command.
+type DiscoveryScanIntent = segmentscan.Intent
 
 // Discovery sweep modes.
 const (
-	DiscoveryModeTLS = "tls"
-	DiscoveryModeSSH = "ssh"
+	DiscoveryModeTLS = segmentscan.ModeTLS
+	DiscoveryModeSSH = segmentscan.ModeSSH
 )
 
 // DiscoveryFinding is one certificate or host key the relay found, in the
 // metadata-only shape every other agent finding uses.
-type DiscoveryFinding struct {
-	// Address is where it was served, which is the fact a control-plane scan
-	// could not have learned for an unroutable segment.
-	Address string `json:"address"`
-	// Fingerprint identifies the credential. For TLS it is the certificate's
-	// SHA-256; for SSH it is the host key's.
-	Fingerprint string `json:"fingerprint"`
-	Subject     string `json:"subject,omitempty"`
-	Issuer      string `json:"issuer,omitempty"`
-	Serial      string `json:"serial,omitempty"`
-	KeyType     string `json:"key_type,omitempty"`
-	NotBefore   string `json:"not_before,omitempty"`
-	NotAfter    string `json:"not_after,omitempty"`
-}
+type DiscoveryFinding = segmentscan.Finding
 
 // DiscoveryReport is what a relay returns for one sweep.
-type DiscoveryReport struct {
-	Mode     string             `json:"mode"`
-	Findings []DiscoveryFinding `json:"findings"`
-	// The sweep's own counts. A sweep that reached nothing and a segment with
-	// nothing in it must not read the same, which is why these are reported
-	// rather than inferred from an empty findings list. Blocked in particular
-	// is worth surfacing: it counts targets the reserved-range guard refused
-	// before dialling, and an operator who scanned 127.0.0.0/8 by accident
-	// should see that as a refusal rather than as an empty segment.
-	Targets    int `json:"targets"`
-	Discovered int `json:"discovered"`
-	Failed     int `json:"failed"`
-	Rejected   int `json:"rejected"`
-	Blocked    int `json:"blocked"`
-}
+type DiscoveryReport = segmentscan.Report
 
 // relayScanSink collects findings in memory for one sweep. The relay holds no
 // database — findings travel back over the channel the agent opened, and the
@@ -115,13 +76,20 @@ func (s *relaySSHSink) Record(_ context.Context, f sshinv.Found) error {
 }
 
 func discoveryFindingFromCert(address string, info certinfo.Info) DiscoveryFinding {
+	sans := append([]string(nil), info.DNSNames...)
+	sans = append(sans, info.IPAddresses...)
+	sans = append(sans, info.EmailAddresses...)
+	sans = append(sans, info.URIs...)
 	out := DiscoveryFinding{
-		Address:     address,
-		Fingerprint: info.SHA256Fingerprint,
-		Subject:     info.Subject,
-		Issuer:      info.Issuer,
-		Serial:      info.SerialNumber,
-		KeyType:     info.KeyAlgorithm,
+		Address:       address,
+		Fingerprint:   info.SHA256Fingerprint,
+		Subject:       info.Subject,
+		Issuer:        info.Issuer,
+		Serial:        info.SerialNumber,
+		KeyType:       info.KeyAlgorithm,
+		SANs:          sans,
+		PublicKeyBits: info.PublicKeyBits,
+		IsCA:          info.IsCA,
 	}
 	if !info.NotBefore.IsZero() {
 		out.NotBefore = info.NotBefore.UTC().Format("2006-01-02T15:04:05Z")
@@ -138,13 +106,17 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 	if len(targets) == 0 {
 		return DiscoveryReport{}, errors.New("relay: discovery sweep names no targets")
 	}
+	if intent.DryRun {
+		return DiscoveryReport{Mode: intent.Mode, Findings: []DiscoveryFinding{}, Targets: len(targets)}, nil
+	}
 	switch intent.Mode {
 	case DiscoveryModeTLS:
 		sink := &relayScanSink{}
 		var opts []netscan.Option
-		if intent.AllowReservedRanges {
-			opts = append(opts, netscan.WithAllowLoopbackTargets(true))
-		}
+		opts = append(opts,
+			netscan.WithAllowRFC1918Targets(intent.AllowRFC1918 || intent.AllowReservedRanges),
+			netscan.WithAllowLoopbackTargets(intent.AllowLoopback || intent.AllowReservedRanges),
+		)
 		rep := netscan.New(sink, opts...).Scan(ctx, targets)
 		return DiscoveryReport{
 			Mode: DiscoveryModeTLS, Findings: sortFindings(sink.findings),
@@ -154,9 +126,10 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 	case DiscoveryModeSSH:
 		sink := &relaySSHSink{}
 		var opts []sshscan.Option
-		if intent.AllowReservedRanges {
-			opts = append(opts, sshscan.WithAllowLoopbackTargets(true))
-		}
+		opts = append(opts,
+			sshscan.WithAllowRFC1918Targets(intent.AllowRFC1918 || intent.AllowReservedRanges),
+			sshscan.WithAllowLoopbackTargets(intent.AllowLoopback || intent.AllowReservedRanges),
+		)
 		scanner := sshscan.New(sink, opts...)
 		defer scanner.Close()
 		rep := scanner.Scan(ctx, targets)

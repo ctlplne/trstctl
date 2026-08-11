@@ -225,6 +225,11 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/id", opaque), privacyRule("/kind", opaque),
 		privacyRule("/name", opaque), privacyRule("/config", jsonID),
 	)
+	discoverySegment := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/name", token),
+		privacyRule("/ranges", opaque), privacyRule("/staleness_hours", opaque),
+		privacyRule("/excluded", opaque), privacyRule("/exclusion_reason", clear),
+	)
 	discoveryRunQueued := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/source_id", opaque),
 		privacyRule("/schedule_id", opaque), privacyRule("/dry_run", opaque),
@@ -400,6 +405,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		),
 		{EventProfileCreated, ProfileEventSchemaVersion}:                             profileV2,
 		{EventProfileUpdated, ProfileEventSchemaVersion}:                             profileV2,
+		{EventDiscoverySegmentUpserted, 1}:                                           discoverySegment,
 		{EventDiscoverySourceUpserted, 1}:                                            discoverySource,
 		{EventDiscoveryRunQueued, 1}:                                                 discoveryRunQueued,
 		{EventDiscoveryFindingRecorded, 1}:                                           discoveryFinding,
@@ -908,6 +914,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventProfileUpdated, 1}:                                                     privacyPayloadShape[privacyProfileV1](),
 		{EventProfileCreated, ProfileEventSchemaVersion}:                             privacyPayloadShape[ProfileVersioned](),
 		{EventProfileUpdated, ProfileEventSchemaVersion}:                             privacyPayloadShape[ProfileVersioned](),
+		{EventDiscoverySegmentUpserted, 1}:                                           privacyPayloadShape[DiscoverySegmentUpserted](),
 		{EventDiscoverySourceUpserted, 1}:                                            privacyPayloadShape[DiscoverySourceUpserted](),
 		{EventDiscoveryRunQueued, 1}:                                                 privacyPayloadShape[DiscoveryRunQueued](),
 		{EventDiscoveryFindingRecorded, 1}:                                           privacyPayloadShape[DiscoveryFindingRecorded](),

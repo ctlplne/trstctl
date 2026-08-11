@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
+	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/discovery/serviceaccount"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -40,6 +41,27 @@ type discoverySourceResponse struct {
 	Config    json.RawMessage `json:"config"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+type discoverySegmentRequest struct {
+	Name            string   `json:"name"`
+	Ranges          []string `json:"ranges"`
+	StalenessHours  int      `json:"staleness_hours"`
+	Excluded        bool     `json:"excluded"`
+	ExclusionReason string   `json:"exclusion_reason"`
+}
+
+type discoverySegmentResponse struct {
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Ranges          []string   `json:"ranges"`
+	StalenessHours  int        `json:"staleness_hours"`
+	Excluded        bool       `json:"excluded"`
+	ExclusionReason string     `json:"exclusion_reason"`
+	LastSweptAt     *time.Time `json:"last_swept_at,omitempty"`
+	LastSweptBy     string     `json:"last_swept_by,omitempty"`
+	LastFoundCount  int        `json:"last_found_count"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type discoveryScheduleRequest struct {
@@ -67,21 +89,27 @@ type discoveryRunRequest struct {
 }
 
 type discoveryRunResponse struct {
-	ID          string     `json:"id"`
-	TenantID    string     `json:"tenant_id"`
-	SourceID    string     `json:"source_id"`
-	ScheduleID  *string    `json:"schedule_id"`
-	Status      string     `json:"status"`
-	DryRun      bool       `json:"dry_run"`
-	RequestedBy string     `json:"requested_by"`
-	Targets     int        `json:"targets"`
-	Discovered  int        `json:"discovered"`
-	Failed      int        `json:"failed"`
-	Rejected    int        `json:"rejected"`
-	Error       string     `json:"error"`
-	StartedAt   *time.Time `json:"started_at"`
-	CompletedAt *time.Time `json:"completed_at"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID                string     `json:"id"`
+	TenantID          string     `json:"tenant_id"`
+	SourceID          string     `json:"source_id"`
+	ScheduleID        *string    `json:"schedule_id"`
+	Status            string     `json:"status"`
+	DryRun            bool       `json:"dry_run"`
+	RequestedBy       string     `json:"requested_by"`
+	Execution         string     `json:"execution"`
+	Segment           string     `json:"segment"`
+	RequiredAgentRole string     `json:"required_agent_role"`
+	RequiredAgentID   string     `json:"required_agent_id"`
+	ExecutedByAgentID string     `json:"executed_by_agent_id"`
+	Targets           int        `json:"targets"`
+	Discovered        int        `json:"discovered"`
+	Failed            int        `json:"failed"`
+	Rejected          int        `json:"rejected"`
+	Blocked           int        `json:"blocked"`
+	Error             string     `json:"error"`
+	StartedAt         *time.Time `json:"started_at"`
+	CompletedAt       *time.Time `json:"completed_at"`
+	CreatedAt         time.Time  `json:"created_at"`
 }
 
 type discoveryFindingResponse struct {
@@ -442,6 +470,26 @@ func sourceKindsContain(xs []string, want string) bool {
 }
 
 //trstctl:mutation
+func (a *API) createDiscoverySegment(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req discoverySegmentRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		segment, err := validateDiscoverySegmentRequest(req)
+		if err != nil {
+			return 0, nil, err
+		}
+		created, err := a.orch.UpsertDiscoverySegment(ctx, tenantID, segment)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toDiscoverySegmentResponse(created), nil
+	})
+}
+
+//trstctl:mutation
 func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
@@ -456,6 +504,23 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 		if err := a.requireDiscoveryCredentialRefsAllowed(cfg); err != nil {
 			return 0, nil, err
 		}
+		kind := strings.TrimSpace(req.Kind)
+		if kind == "network" || kind == "ssh" {
+			intent, resolveErr := segmentscan.Resolve(kind, cfg)
+			if resolveErr != nil {
+				return 0, nil, errStatus(http.StatusBadRequest, resolveErr.Error())
+			}
+			segment, segmentErr := a.store.GetDiscoverySegmentByName(ctx, tenantID, intent.Segment)
+			if segmentErr != nil {
+				if store.IsNotFound(segmentErr) {
+					return 0, nil, errStatus(http.StatusBadRequest, "segment must be declared before creating a network or SSH source")
+				}
+				return 0, nil, segmentErr
+			}
+			if segment.Excluded {
+				return 0, nil, errStatus(http.StatusBadRequest, "an excluded segment cannot back an executable discovery source")
+			}
+		}
 		privateEgress, err := discoveryPrivateEgressRequested(cfg)
 		if err != nil {
 			return 0, nil, err
@@ -466,7 +531,7 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		src, err := a.orch.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
-			Kind: strings.TrimSpace(req.Kind), Name: strings.TrimSpace(req.Name), Config: cfg,
+			Kind: kind, Name: strings.TrimSpace(req.Name), Config: cfg,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -768,6 +833,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	if containsInlineSecret(obj) {
 		return nil, errStatus(http.StatusBadRequest, "config may contain credential references, not inline secret values")
 	}
+	if req.Kind == "network" || req.Kind == "ssh" {
+		if _, err := segmentscan.Resolve(req.Kind, cfg); err != nil {
+			return nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+	}
 	if req.Kind == nhi.SourceKind {
 		if err := nhi.ValidateConfig(cfg); err != nil {
 			return nil, errStatus(http.StatusBadRequest, err.Error())
@@ -804,6 +874,39 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		}
 	}
 	return append(json.RawMessage(nil), cfg...), nil
+}
+
+func validateDiscoverySegmentRequest(req discoverySegmentRequest) (store.DiscoverySegment, error) {
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len(name) > 256 {
+		return store.DiscoverySegment{}, errStatus(http.StatusBadRequest, "segment name is required and must be at most 256 bytes")
+	}
+	if len(req.Ranges) == 0 || len(req.Ranges) > 256 {
+		return store.DiscoverySegment{}, errStatus(http.StatusBadRequest, "segment ranges must contain between 1 and 256 declarations")
+	}
+	ranges := make([]string, 0, len(req.Ranges))
+	for _, value := range req.Ranges {
+		value = strings.TrimSpace(value)
+		if value == "" || len(value) > 4096 {
+			return store.DiscoverySegment{}, errStatus(http.StatusBadRequest, "segment ranges must be non-empty and at most 4096 bytes each")
+		}
+		ranges = append(ranges, value)
+	}
+	staleness := req.StalenessHours
+	if staleness == 0 {
+		staleness = 168
+	}
+	if staleness < 1 || staleness > 8760 {
+		return store.DiscoverySegment{}, errStatus(http.StatusBadRequest, "staleness_hours must be between 1 and 8760")
+	}
+	reason := strings.TrimSpace(req.ExclusionReason)
+	if req.Excluded && reason == "" {
+		return store.DiscoverySegment{}, errStatus(http.StatusBadRequest, "excluded segments require an exclusion_reason")
+	}
+	return store.DiscoverySegment{
+		Name: name, Ranges: ranges, StalenessHours: staleness,
+		Excluded: req.Excluded, ExclusionReason: reason,
+	}, nil
 }
 
 func discoveryPrivateEgressRequested(cfg json.RawMessage) (bool, error) {
@@ -970,6 +1073,16 @@ func toDiscoverySourceResponse(src store.DiscoverySource) discoverySourceRespons
 	}
 }
 
+func toDiscoverySegmentResponse(segment store.DiscoverySegment) discoverySegmentResponse {
+	return discoverySegmentResponse{
+		ID: segment.ID, Name: segment.Name, Ranges: segment.Ranges,
+		StalenessHours: segment.StalenessHours, Excluded: segment.Excluded,
+		ExclusionReason: segment.ExclusionReason, LastSweptAt: segment.LastSweptAt,
+		LastSweptBy: segment.LastSweptBy, LastFoundCount: segment.LastFoundCount,
+		CreatedAt: segment.CreatedAt,
+	}
+}
+
 func toDiscoveryScheduleResponse(s store.DiscoverySchedule) discoveryScheduleResponse {
 	return discoveryScheduleResponse{
 		ID: s.ID, TenantID: s.TenantID, SourceID: s.SourceID, Name: s.Name,
@@ -982,8 +1095,10 @@ func toDiscoveryRunResponse(run store.DiscoveryRun) discoveryRunResponse {
 	return discoveryRunResponse{
 		ID: run.ID, TenantID: run.TenantID, SourceID: run.SourceID, ScheduleID: run.ScheduleID,
 		Status: run.Status, DryRun: run.DryRun, RequestedBy: run.RequestedBy,
+		Execution: run.Execution, Segment: run.Segment, RequiredAgentRole: run.RequiredAgentRole,
+		RequiredAgentID: run.RequiredAgentID, ExecutedByAgentID: run.ExecutedByAgentID,
 		Targets: run.Targets, Discovered: run.Discovered, Failed: run.Failed, Rejected: run.Rejected,
-		Error: run.Error, StartedAt: run.StartedAt, CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt,
+		Blocked: run.Blocked, Error: run.Error, StartedAt: run.StartedAt, CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt,
 	}
 }
 

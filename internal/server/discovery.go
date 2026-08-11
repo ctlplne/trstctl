@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -39,56 +38,13 @@ import (
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/discovery/serviceaccount"
-	"trstctl.com/trstctl/internal/discovery/sshscan"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretscan"
-	"trstctl.com/trstctl/internal/sshinv"
 	"trstctl.com/trstctl/internal/store"
 )
-
-const maxServedDiscoveryTargets = 10000
-
-type networkDiscoveryConfig struct {
-	Targets []string `json:"targets"`
-	CIDRs   []string `json:"cidrs"`
-	CIDR    string   `json:"cidr"`
-	Ports   []int    `json:"ports"`
-	// AllowRFC1918 explicitly permits private RFC1918 scan targets. The default
-	// is false so CIDR scans cannot be turned into metadata/localhost/internal SSRF.
-	AllowRFC1918 bool `json:"allow_rfc1918"`
-	// AllowLoopback is for explicit localhost diagnostics/tests. It is false by
-	// default because loopback scanning is an SSRF boundary.
-	AllowLoopback bool `json:"allow_loopback"`
-}
-
-type networkDiscoveryPlan struct {
-	targets       []string
-	allowRFC1918  bool
-	allowLoopback bool
-}
-
-type sshDiscoveryConfig struct {
-	Targets []string `json:"targets"`
-	CIDRs   []string `json:"cidrs"`
-	CIDR    string   `json:"cidr"`
-	Ports   []int    `json:"ports"`
-	// AllowRFC1918 explicitly permits private RFC1918 scan targets. The default
-	// is false so tenant-supplied SSH scans cannot become internal-port probes.
-	AllowRFC1918 bool `json:"allow_rfc1918"`
-	// AllowLoopback is for explicit localhost diagnostics/tests. It is false by
-	// default because loopback scanning is an SSRF boundary.
-	AllowLoopback bool `json:"allow_loopback"`
-}
-
-type sshDiscoveryPlan struct {
-	targets       []string
-	allowRFC1918  bool
-	allowLoopback bool
-}
 
 type manualDiscoveryConfig struct {
 	Findings []manualDiscoveryFinding `json:"findings"`
@@ -215,6 +171,27 @@ func (d *issuanceDispatcher) handleDiscoveryRun(ctx context.Context, m orchestra
 	return err
 }
 
+// discoveryRunRelayOwned closes the old production escape hatch too: rows
+// queued before AUD-28 lack the execution field, so source kind is checked as a
+// compatibility fallback before the dispatcher performs any receiver I/O.
+func (d *issuanceDispatcher) discoveryRunRelayOwned(ctx context.Context, m orchestrator.Message) (bool, error) {
+	var p projections.DiscoveryRunQueued
+	if err := json.Unmarshal(m.Payload, &p); err != nil {
+		return false, fmt.Errorf("server: decode discovery.run payload: %w", err)
+	}
+	if p.Execution == "relay" {
+		return true, nil
+	}
+	if p.SourceID == "" || d.store == nil {
+		return false, nil
+	}
+	source, err := d.store.GetDiscoverySource(ctx, m.TenantID, p.SourceID)
+	if err != nil {
+		return false, err
+	}
+	return source.Kind == "network" || source.Kind == "ssh", nil
+}
+
 // discoveryRunExecutor executes one discovery run for a source of a specific
 // kind on behalf of the dispatcher.
 type discoveryRunExecutor func(d *issuanceDispatcher, ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error)
@@ -227,8 +204,8 @@ type discoveryRunExecutor func(d *issuanceDispatcher, ctx context.Context, tenan
 // name a kind here, so the two cannot drift. A kind absent from this map
 // falls back to recording operator-supplied manual findings.
 var discoveryRunExecutors = map[string]discoveryRunExecutor{
-	"network":           (*issuanceDispatcher).executeNetworkDiscoveryRun,
-	"ssh":               (*issuanceDispatcher).executeSSHDiscoveryRun,
+	"network":           (*issuanceDispatcher).executeRelayOwnedDiscoveryRun,
+	"ssh":               (*issuanceDispatcher).executeRelayOwnedDiscoveryRun,
 	"cloud_certificate": (*issuanceDispatcher).executeCloudCertificateDiscoveryRun,
 	// secret_store routes through the same served secret-manager
 	// connectors as cloud_secret (aws-secrets-manager, gcp-secret-manager,
@@ -250,6 +227,10 @@ var discoveryRunExecutors = map[string]discoveryRunExecutor{
 	k8stls.SourceKind:               (*issuanceDispatcher).executeKubernetesTLSAutoIssuanceRun,
 	secretscan.RepositorySourceKind: (*issuanceDispatcher).executeSecretRepositoryDiscoveryRun,
 	secretscan.ThirdPartySourceKind: (*issuanceDispatcher).executeThirdPartySecretDiscoveryRun,
+}
+
+func (d *issuanceDispatcher) executeRelayOwnedDiscoveryRun(context.Context, string, store.DiscoverySource, projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	return netscan.Report{}, "", "", errors.New("server: relay-owned discovery reached the control-plane executor")
 }
 
 // servedDiscoverySourceKinds returns the sorted catalog of source kinds the
@@ -296,119 +277,6 @@ func (d *issuanceDispatcher) executeAPIKeyOrManualDiscoveryRun(ctx context.Conte
 		return rep, "succeeded", "", nil
 	}
 	return netscan.Report{}, "failed", "api_key discovery requires either an observations config or inline findings", nil
-}
-
-func (d *issuanceDispatcher) executeNetworkDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
-	plan, err := networkDiscoveryPlanFromConfig(src.Config)
-	if err != nil {
-		return netscan.Report{}, "failed", err.Error(), nil
-	}
-	if run.DryRun {
-		return netscan.Report{Targets: len(plan.targets)}, "succeeded", "", nil
-	}
-	sink := discoveryRunSink{orch: d.orch, tenantID: tenantID, runID: run.ID, sourceID: src.ID}
-	scanner := netscan.New(sink,
-		netscan.WithWorkers(8),
-		netscan.WithQueue(128),
-		netscan.WithBackoff(10*time.Millisecond),
-		netscan.WithAllowRFC1918Targets(plan.allowRFC1918),
-		netscan.WithAllowLoopbackTargets(plan.allowLoopback),
-		netscan.WithBlockedTargetHook(d.blockedNetworkTargetHook(tenantID, run.ID, src.ID)),
-	)
-	defer scanner.Close()
-	rep := scanner.Scan(ctx, plan.targets)
-	status := "succeeded"
-	msg := ""
-	if rep.Failed > 0 || rep.Rejected > 0 || rep.Blocked > 0 {
-		if rep.Discovered > 0 {
-			status = "partial"
-			msg = "some discovery probes failed or were blocked"
-		} else {
-			status = "failed"
-			msg = "all discovery probes failed or were blocked"
-		}
-	}
-	return rep, status, msg, nil
-}
-
-func (d *issuanceDispatcher) executeSSHDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
-	plan, err := sshDiscoveryPlanFromConfig(src.Config)
-	if err != nil {
-		return netscan.Report{}, "failed", err.Error(), nil
-	}
-	if run.DryRun {
-		return netscan.Report{Targets: len(plan.targets)}, "succeeded", "", nil
-	}
-	sink := sshDiscoveryRunSink{orch: d.orch, tenantID: tenantID, runID: run.ID, sourceID: src.ID}
-	scanner := sshscan.New(sink,
-		sshscan.WithWorkers(8),
-		sshscan.WithQueue(128),
-		sshscan.WithBackoff(10*time.Millisecond),
-		sshscan.WithAllowRFC1918Targets(plan.allowRFC1918),
-		sshscan.WithAllowLoopbackTargets(plan.allowLoopback),
-		sshscan.WithBlockedTargetHook(d.blockedSSHTargetHook(tenantID, run.ID, src.ID)),
-	)
-	defer scanner.Close()
-	sshRep := scanner.Scan(ctx, plan.targets)
-	rep := netscan.Report{
-		Targets:    sshRep.Targets,
-		Discovered: sshRep.Discovered,
-		Failed:     sshRep.Failed,
-		Rejected:   sshRep.Rejected,
-		Blocked:    sshRep.Blocked,
-	}
-	status := "succeeded"
-	msg := ""
-	if rep.Failed > 0 || rep.Rejected > 0 || rep.Blocked > 0 {
-		if rep.Discovered > 0 {
-			status = "partial"
-			msg = "some SSH host-key probes failed or were blocked"
-		} else {
-			status = "failed"
-			msg = "all SSH host-key probes failed or were blocked"
-		}
-	}
-	return rep, status, msg, nil
-}
-
-func (d *issuanceDispatcher) blockedNetworkTargetHook(tenantID, runID, sourceID string) netscan.BlockedTargetHook {
-	return func(ctx context.Context, target netscan.BlockedTarget) {
-		if d.log == nil {
-			return
-		}
-		payload, err := json.Marshal(struct {
-			RunID    string `json:"run_id"`
-			SourceID string `json:"source_id"`
-			Target   string `json:"target"`
-			Reason   string `json:"reason"`
-		}{RunID: runID, SourceID: sourceID, Target: target.Address, Reason: target.Reason})
-		if err != nil {
-			return
-		}
-		if _, err := d.log.Append(ctx, events.Event{Type: "discovery.network_target_blocked", TenantID: tenantID, Data: payload}); err != nil {
-			return
-		}
-	}
-}
-
-func (d *issuanceDispatcher) blockedSSHTargetHook(tenantID, runID, sourceID string) sshscan.BlockedTargetHook {
-	return func(ctx context.Context, target sshscan.BlockedTarget) {
-		if d.log == nil {
-			return
-		}
-		payload, err := json.Marshal(struct {
-			RunID    string `json:"run_id"`
-			SourceID string `json:"source_id"`
-			Target   string `json:"target"`
-			Reason   string `json:"reason"`
-		}{RunID: runID, SourceID: sourceID, Target: target.Address, Reason: target.Reason})
-		if err != nil {
-			return
-		}
-		if _, err := d.log.Append(ctx, events.Event{Type: "discovery.ssh_target_blocked", TenantID: tenantID, Data: payload}); err != nil {
-			return
-		}
-	}
 }
 
 func (d *issuanceDispatcher) executeCloudCertificateDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
@@ -1296,82 +1164,6 @@ func resolveDiscoveryCredentialRef(ctx context.Context, ref string) (string, err
 	return "", fmt.Errorf("unsupported credential reference %q; use env:NAME", ref)
 }
 
-func networkDiscoveryPlanFromConfig(raw json.RawMessage) (networkDiscoveryPlan, error) {
-	var cfg networkDiscoveryConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return networkDiscoveryPlan{}, fmt.Errorf("decode network discovery config: %w", err)
-	}
-	targets := make([]string, 0, len(cfg.Targets))
-	for _, target := range cfg.Targets {
-		target = strings.TrimSpace(target)
-		if target == "" {
-			continue
-		}
-		if _, _, err := net.SplitHostPort(target); err != nil {
-			return networkDiscoveryPlan{}, fmt.Errorf("network discovery target %q must be host:port", target)
-		}
-		targets = append(targets, target)
-	}
-	cidrs := append([]string(nil), cfg.CIDRs...)
-	if cfg.CIDR != "" {
-		cidrs = append(cidrs, cfg.CIDR)
-	}
-	for _, cidr := range cidrs {
-		expanded, err := netscan.ExpandRange(cidr, cfg.Ports)
-		if err != nil {
-			return networkDiscoveryPlan{}, err
-		}
-		targets = append(targets, expanded...)
-	}
-	if len(targets) == 0 {
-		return networkDiscoveryPlan{}, errors.New("network discovery source requires targets or cidrs+ports")
-	}
-	if len(targets) > maxServedDiscoveryTargets {
-		return networkDiscoveryPlan{}, fmt.Errorf("network discovery source has %d targets; maximum is %d", len(targets), maxServedDiscoveryTargets)
-	}
-	return networkDiscoveryPlan{targets: targets, allowRFC1918: cfg.AllowRFC1918, allowLoopback: cfg.AllowLoopback}, nil
-}
-
-func sshDiscoveryPlanFromConfig(raw json.RawMessage) (sshDiscoveryPlan, error) {
-	var cfg sshDiscoveryConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return sshDiscoveryPlan{}, fmt.Errorf("decode ssh discovery config: %w", err)
-	}
-	targets := make([]string, 0, len(cfg.Targets))
-	for _, target := range cfg.Targets {
-		target = strings.TrimSpace(target)
-		if target == "" {
-			continue
-		}
-		if _, _, err := net.SplitHostPort(target); err != nil {
-			return sshDiscoveryPlan{}, fmt.Errorf("ssh discovery target %q must be host:port", target)
-		}
-		targets = append(targets, target)
-	}
-	cidrs := append([]string(nil), cfg.CIDRs...)
-	if cfg.CIDR != "" {
-		cidrs = append(cidrs, cfg.CIDR)
-	}
-	ports := append([]int(nil), cfg.Ports...)
-	if len(cidrs) > 0 && len(ports) == 0 {
-		ports = []int{22}
-	}
-	for _, cidr := range cidrs {
-		expanded, err := netscan.ExpandRange(cidr, ports)
-		if err != nil {
-			return sshDiscoveryPlan{}, err
-		}
-		targets = append(targets, expanded...)
-	}
-	if len(targets) == 0 {
-		return sshDiscoveryPlan{}, errors.New("ssh discovery source requires targets or cidrs")
-	}
-	if len(targets) > maxServedDiscoveryTargets {
-		return sshDiscoveryPlan{}, fmt.Errorf("ssh discovery source has %d targets; maximum is %d", len(targets), maxServedDiscoveryTargets)
-	}
-	return sshDiscoveryPlan{targets: targets, allowRFC1918: cfg.AllowRFC1918, allowLoopback: cfg.AllowLoopback}, nil
-}
-
 func (d *issuanceDispatcher) recordManualDiscoveryFindings(ctx context.Context, tenantID string, src store.DiscoverySource, runID string) (netscan.Report, error) {
 	var cfg manualDiscoveryConfig
 	if err := json.Unmarshal(src.Config, &cfg); err != nil {
@@ -1560,13 +1352,6 @@ func discoveryRunTerminal(status string) bool {
 	return status == "succeeded" || status == "partial" || status == "failed"
 }
 
-type discoveryRunSink struct {
-	orch     *orchestrator.Orchestrator
-	tenantID string
-	runID    string
-	sourceID string
-}
-
 type cloudDiscoveryRunSink struct {
 	orch     *orchestrator.Orchestrator
 	tenantID string
@@ -1575,13 +1360,6 @@ type cloudDiscoveryRunSink struct {
 }
 
 type cloudSecretDiscoveryRunSink struct {
-	orch     *orchestrator.Orchestrator
-	tenantID string
-	runID    string
-	sourceID string
-}
-
-type sshDiscoveryRunSink struct {
 	orch     *orchestrator.Orchestrator
 	tenantID string
 	runID    string
@@ -1671,63 +1449,6 @@ func (s cloudSecretDiscoveryRunSink) Record(ctx context.Context, f cloudsecret.F
 	return err
 }
 
-func (s sshDiscoveryRunSink) Record(ctx context.Context, f sshinv.Found) error {
-	meta, err := json.Marshal(map[string]any{
-		"source":               f.Source,
-		"location":             f.Location,
-		"key_type":             f.KeyType,
-		"comment":              f.Comment,
-		"standing_access":      f.StandingAccess,
-		"orphaned":             f.Orphaned,
-		"key_material_present": false,
-	})
-	if err != nil {
-		return err
-	}
-	ref := f.Location
-	if ref == "" {
-		ref = f.Fingerprint
-	}
-	_, err = s.orch.RecordDiscoveryFinding(ctx, s.tenantID, store.DiscoveryFinding{
-		RunID: s.runID, SourceID: s.sourceID, Kind: "ssh_key", Ref: ref,
-		Provenance:  "ssh:" + nonempty(f.Source, sshinv.SourceHostProbe) + ":" + ref,
-		Fingerprint: f.Fingerprint, RiskScore: sshDiscoveryRiskScore(f), Metadata: meta,
-	})
-	return err
-}
-
-func (s discoveryRunSink) Record(ctx context.Context, f netscan.Found) error {
-	meta, err := json.Marshal(map[string]any{
-		"subject":         f.Cert.Subject,
-		"issuer":          f.Cert.Issuer,
-		"serial":          f.Cert.SerialNumber,
-		"sans":            sansOf(f.Cert),
-		"not_before":      f.Cert.NotBefore,
-		"not_after":       f.Cert.NotAfter,
-		"key_algorithm":   f.Cert.KeyAlgorithm,
-		"public_key_bits": f.Cert.PublicKeyBits,
-		"is_ca":           f.Cert.IsCA,
-	})
-	if err != nil {
-		return err
-	}
-	nb, na := f.Cert.NotBefore, f.Cert.NotAfter
-	if _, err := s.orch.RecordCertificate(ctx, s.tenantID, store.Certificate{
-		Subject: f.Cert.Subject, SANs: sansOf(f.Cert), Issuer: f.Cert.Issuer,
-		Serial: f.Cert.SerialNumber, Fingerprint: f.Cert.SHA256Fingerprint,
-		KeyAlgorithm: f.Cert.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-		DeploymentLocation: f.Address, Source: "discovery:network",
-	}); err != nil {
-		return err
-	}
-	_, err = s.orch.RecordDiscoveryFinding(ctx, s.tenantID, store.DiscoveryFinding{
-		RunID: s.runID, SourceID: s.sourceID, Kind: "x509_certificate", Ref: f.Address,
-		Provenance: "network:" + f.Address, Fingerprint: f.Cert.SHA256Fingerprint,
-		RiskScore: discoveryRiskScore(f.Cert.NotAfter), Metadata: meta,
-	})
-	return err
-}
-
 func discoveryRiskScore(notAfter time.Time) int {
 	switch {
 	case notAfter.IsZero():
@@ -1738,18 +1459,5 @@ func discoveryRiskScore(notAfter time.Time) int {
 		return 40
 	default:
 		return 10
-	}
-}
-
-func sshDiscoveryRiskScore(f sshinv.Found) int {
-	switch {
-	case f.Orphaned:
-		return 90
-	case f.StandingAccess:
-		return 80
-	case f.Source == sshinv.SourceAuthorizedKeys:
-		return 70
-	default:
-		return 30
 	}
 }

@@ -253,6 +253,7 @@
             "source_backend": [
                 "internal/discovery/netscan",
                 "internal/discovery/serviceaccount",
+                "/api/v1/discovery/segments",
                 "/api/v1/discovery/sources",
                 "/api/v1/discovery/schedules",
                 "/api/v1/discovery/runs",
@@ -268,6 +269,7 @@
             "api_surface": [
                 "claimDiscoveryFinding",
                 "createDiscoverySchedule",
+                "createDiscoverySegment",
                 "createDiscoverySource",
                 "dismissDiscoveryFinding",
                 "getADCSPosture",

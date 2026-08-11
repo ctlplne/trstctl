@@ -43,6 +43,18 @@ type DiscoverySegment struct {
 // an operator editing a boundary or an SLO; treating that as an observation
 // would let a segment look freshly swept because somebody renamed it.
 func (s *Store) UpsertDiscoverySegment(ctx context.Context, tenantID string, seg DiscoverySegment) (DiscoverySegment, error) {
+	var out DiscoverySegment
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.ApplyDiscoverySegmentUpsertedTx(ctx, tx, tenantID, seg)
+		return err
+	})
+	return out, err
+}
+
+// ApplyDiscoverySegmentUpsertedTx projects a declared segment from its
+// immutable event. Observation columns are deliberately preserved on update.
+func (s *Store) ApplyDiscoverySegmentUpsertedTx(ctx context.Context, tx pgx.Tx, tenantID string, seg DiscoverySegment) (DiscoverySegment, error) {
 	if seg.StalenessHours <= 0 {
 		seg.StalenessHours = 168
 	}
@@ -50,12 +62,15 @@ func (s *Store) UpsertDiscoverySegment(ctx context.Context, tenantID string, seg
 	if ranges == nil {
 		ranges = []string{}
 	}
+	createdAt := seg.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
 	var out DiscoverySegment
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
-			`INSERT INTO discovery_segments
-			     (tenant_id, id, name, ranges, staleness_hours, excluded, exclusion_reason)
-			 VALUES ($1, COALESCE(NULLIF($2,'')::uuid, gen_random_uuid()), $3, $4::text[], $5, $6, $7)
+	err := tx.QueryRow(ctx,
+		`INSERT INTO discovery_segments
+			     (tenant_id, id, name, ranges, staleness_hours, excluded, exclusion_reason, created_at)
+			 VALUES ($1, COALESCE(NULLIF($2,'')::uuid, gen_random_uuid()), $3, $4::text[], $5, $6, $7, $8)
 			 ON CONFLICT (tenant_id, name) DO UPDATE
 			    SET ranges = EXCLUDED.ranges,
 			        staleness_hours = EXCLUDED.staleness_hours,
@@ -63,7 +78,22 @@ func (s *Store) UpsertDiscoverySegment(ctx context.Context, tenantID string, seg
 			        exclusion_reason = EXCLUDED.exclusion_reason
 			 RETURNING id::text, name, ranges, staleness_hours, excluded, exclusion_reason,
 			           last_swept_at, last_swept_by, last_found_count, created_at`,
-			tenantID, seg.ID, seg.Name, ranges, seg.StalenessHours, seg.Excluded, seg.ExclusionReason).
+		tenantID, seg.ID, seg.Name, ranges, seg.StalenessHours, seg.Excluded, seg.ExclusionReason, createdAt).
+		Scan(&out.ID, &out.Name, &out.Ranges, &out.StalenessHours, &out.Excluded,
+			&out.ExclusionReason, &out.LastSweptAt, &out.LastSweptBy, &out.LastFoundCount, &out.CreatedAt)
+	return out, err
+}
+
+// GetDiscoverySegmentByName resolves the immutable queue-time segment binding
+// inside the tenant's RLS context.
+func (s *Store) GetDiscoverySegmentByName(ctx context.Context, tenantID, name string) (DiscoverySegment, error) {
+	var out DiscoverySegment
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT id::text, name, ranges, staleness_hours, excluded, exclusion_reason,
+			        last_swept_at, last_swept_by, last_found_count, created_at
+			   FROM discovery_segments
+			  WHERE tenant_id = $1 AND name = $2`, tenantID, name).
 			Scan(&out.ID, &out.Name, &out.Ranges, &out.StalenessHours, &out.Excluded,
 				&out.ExclusionReason, &out.LastSweptAt, &out.LastSweptBy, &out.LastFoundCount, &out.CreatedAt)
 	})
@@ -77,13 +107,19 @@ func (s *Store) UpsertDiscoverySegment(ctx context.Context, tenantID string, seg
 // stale, because it is.
 func (s *Store) RecordSegmentSweep(ctx context.Context, tenantID, name, sweptBy string, found int, at time.Time) error {
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`UPDATE discovery_segments
-			    SET last_swept_at = $3, last_swept_by = $4, last_found_count = $5
-			  WHERE tenant_id = $1 AND name = $2`,
-			tenantID, name, at.UTC(), sweptBy, found)
-		return err
+		return s.ApplyDiscoverySegmentSweepTx(ctx, tx, tenantID, name, sweptBy, found, at)
 	})
+}
+
+// ApplyDiscoverySegmentSweepTx projects relay execution provenance from the
+// same discovery.run.completed event that closes the run.
+func (s *Store) ApplyDiscoverySegmentSweepTx(ctx context.Context, tx pgx.Tx, tenantID, name, sweptBy string, found int, at time.Time) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE discovery_segments
+		    SET last_swept_at = $3, last_swept_by = $4, last_found_count = $5
+		  WHERE tenant_id = $1 AND name = $2`,
+		tenantID, name, at.UTC(), sweptBy, found)
+	return err
 }
 
 // ListDiscoverySegments returns a tenant's declared segments, least recently

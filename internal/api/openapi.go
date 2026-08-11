@@ -1409,6 +1409,17 @@ func componentSchemas() map[string]*Schema {
 	discoverySourceReq := object(map[string]*Schema{
 		"kind": {Type: "string", Enum: discoverySourceKinds}, "name": str(), "config": {Type: "object"},
 	}, "kind", "name")
+	discoverySegmentReq := object(map[string]*Schema{
+		"name": str(), "ranges": {Type: "array", Items: str()},
+		"staleness_hours": {Type: "integer"}, "excluded": {Type: "boolean"},
+		"exclusion_reason": str(),
+	}, "name", "ranges")
+	discoverySegment := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "ranges": {Type: "array", Items: str()},
+		"staleness_hours": {Type: "integer"}, "excluded": {Type: "boolean"},
+		"exclusion_reason": str(), "last_swept_at": timestamp(), "last_swept_by": str(),
+		"last_found_count": {Type: "integer"}, "created_at": timestamp(),
+	}, "id", "name", "ranges", "staleness_hours", "excluded", "last_found_count", "created_at")
 	discoverySchedule := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "source_id": uuid(), "name": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
@@ -1421,10 +1432,12 @@ func componentSchemas() map[string]*Schema {
 		"id": uuid(), "tenant_id": uuid(), "source_id": uuid(), "schedule_id": uuid(),
 		"status":  {Type: "string", Enum: []string{"queued", "running", "succeeded", "partial", "failed"}},
 		"dry_run": {Type: "boolean"}, "requested_by": str(),
+		"execution": {Type: "string", Enum: []string{"control_plane", "relay"}},
+		"segment":   str(), "required_agent_role": str(), "required_agent_id": uuid(), "executed_by_agent_id": uuid(),
 		"targets": {Type: "integer"}, "discovered": {Type: "integer"}, "failed": {Type: "integer"},
-		"rejected": {Type: "integer"}, "error": str(), "started_at": timestamp(),
+		"rejected": {Type: "integer"}, "blocked": {Type: "integer"}, "error": str(), "started_at": timestamp(),
 		"completed_at": timestamp(), "created_at": timestamp(),
-	}, "id", "tenant_id", "source_id", "status", "dry_run", "targets", "discovered", "failed", "rejected", "created_at")
+	}, "id", "tenant_id", "source_id", "status", "dry_run", "execution", "targets", "discovered", "failed", "rejected", "blocked", "created_at")
 	discoveryRunReq := object(map[string]*Schema{
 		"source_id": uuid(), "schedule_id": uuid(), "dry_run": {Type: "boolean"},
 	}, "source_id")
@@ -4556,6 +4569,8 @@ func componentSchemas() map[string]*Schema {
 		"DiscoverySource":                          discoverySource,
 		"DiscoverySourceRequest":                   discoverySourceReq,
 		"DiscoverySourceList":                      list("DiscoverySource"),
+		"DiscoverySegment":                         discoverySegment,
+		"DiscoverySegmentRequest":                  discoverySegmentReq,
 		"DiscoverySchedule":                        discoverySchedule,
 		"DiscoveryScheduleRequest":                 discoveryScheduleReq,
 		"DiscoveryScheduleList":                    list("DiscoverySchedule"),

@@ -1763,16 +1763,22 @@ export interface DiscoveryProvenanceSummary {
 }
 
 export interface DiscoveryRun {
+  blocked: number;
   completed_at?: string;
   created_at: string;
   discovered: number;
   dry_run: boolean;
   error?: string;
+  executed_by_agent_id?: string;
+  execution: "control_plane" | "relay";
   failed: number;
   id: string;
   rejected: number;
   requested_by?: string;
+  required_agent_id?: string;
+  required_agent_role?: string;
   schedule_id?: string;
+  segment?: string;
   source_id: string;
   started_at?: string;
   status: "queued" | "running" | "succeeded" | "partial" | "failed";
@@ -1814,6 +1820,19 @@ export interface DiscoveryScheduleRequest {
   source_id: string;
 }
 
+export interface DiscoverySegment {
+  created_at: string;
+  excluded: boolean;
+  exclusion_reason?: string;
+  id: string;
+  last_found_count: number;
+  last_swept_at?: string;
+  last_swept_by?: string;
+  name: string;
+  ranges: string[];
+  staleness_hours: number;
+}
+
 export interface DiscoverySegmentCoverage {
   exclusion_reason?: string;
   last_found_count?: number;
@@ -1823,6 +1842,14 @@ export interface DiscoverySegmentCoverage {
   ranges: string[];
   staleness_hours: number;
   status: "swept" | "stale" | "never" | "excluded";
+}
+
+export interface DiscoverySegmentRequest {
+  excluded?: boolean;
+  exclusion_reason?: string;
+  name: string;
+  ranges: string[];
+  staleness_hours?: number;
 }
 
 export interface DiscoverySource {

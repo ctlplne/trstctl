@@ -34,6 +34,7 @@ func TestServedDiscoverySourceUpsertRetryKeepsTenantNameIdentity(t *testing.T) {
 			"kind": "network",
 			"config": map[string]any{
 				"targets": []string{target},
+				"segment": "retry-segment",
 			},
 		})
 		if status != http.StatusCreated {
@@ -87,15 +88,16 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 		t.Fatalf("parse test TLS URL: %v", err)
 	}
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newDiscoveryRelayHarness(t, "loopback-tls")
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read")
 
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "loopback-tls",
 		"kind": "network",
 		"config": map[string]any{
 			"targets":        []string{u.Host},
 			"allow_loopback": true,
+			"segment":        "loopback-tls",
 		},
 	})
 	if status != http.StatusCreated {
@@ -114,7 +116,7 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 		t.Fatalf("bad source response: %+v", source)
 	}
 
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+	status, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
 		"source_id": source.ID,
 	})
 	if status != http.StatusCreated {
@@ -132,11 +134,9 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 		t.Fatalf("bad queued run: %+v", queued)
 	}
 
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain discovery outbox: %v", err)
-	}
+	executeNextDiscoveryRelayJob(t, h)
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("get discovery run: status %d body %s", status, body)
 	}
@@ -153,7 +153,7 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 		t.Fatalf("completed run = %+v, want one successful discovery", completed)
 	}
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("list discovery findings: status %d body %s", status, body)
 	}
@@ -175,7 +175,7 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 		t.Fatalf("bad finding: %+v", f)
 	}
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/certificates", tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/certificates", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("list certificates: status %d body %s", status, body)
 	}
@@ -207,15 +207,16 @@ func TestServedSSHHostKeyDiscoveryEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(sshSrv.Close)
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newDiscoveryRelayHarness(t, "loopback-ssh")
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read")
 
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "loopback-ssh",
 		"kind": "ssh",
 		"config": map[string]any{
 			"targets":        []string{sshSrv.Addr()},
 			"allow_loopback": true,
+			"segment":        "loopback-ssh",
 		},
 	})
 	if status != http.StatusCreated {
@@ -234,7 +235,7 @@ func TestServedSSHHostKeyDiscoveryEndToEnd(t *testing.T) {
 		t.Fatalf("bad ssh source response: %+v", source)
 	}
 
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+	status, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
 		"source_id": source.ID,
 	})
 	if status != http.StatusCreated {
@@ -252,11 +253,9 @@ func TestServedSSHHostKeyDiscoveryEndToEnd(t *testing.T) {
 		t.Fatalf("bad queued ssh run: %+v", queued)
 	}
 
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain SSH discovery outbox: %v", err)
-	}
+	executeNextDiscoveryRelayJob(t, h)
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("get ssh discovery run: status %d body %s", status, body)
 	}
@@ -274,7 +273,7 @@ func TestServedSSHHostKeyDiscoveryEndToEnd(t *testing.T) {
 		t.Fatalf("completed ssh run = %+v, want one successful discovery", completed)
 	}
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("list ssh discovery findings: status %d body %s", status, body)
 	}
@@ -313,7 +312,7 @@ func TestServedSSHHostKeyDiscoveryEndToEnd(t *testing.T) {
 		t.Fatalf("ssh finding metadata must prove metadata-only storage: %s", finding.Metadata)
 	}
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/nhi/inventory", tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/nhi/inventory", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("list NHI inventory after ssh discovery: status %d body %s", status, body)
 	}
@@ -342,15 +341,16 @@ func TestServedContinuousMonitoringCentralizedInventoryCAPDISC06(t *testing.T) {
 		t.Fatalf("parse test TLS URL: %v", err)
 	}
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newDiscoveryRelayHarness(t, "loopback-continuous")
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read")
 
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "loopback-continuous",
 		"kind": "network",
 		"config": map[string]any{
 			"targets":        []string{u.Host},
 			"allow_loopback": true,
+			"segment":        "loopback-continuous",
 		},
 	})
 	if status != http.StatusCreated {
@@ -363,7 +363,7 @@ func TestServedContinuousMonitoringCentralizedInventoryCAPDISC06(t *testing.T) {
 		t.Fatalf("decode source: %v (%s)", err, body)
 	}
 
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/schedules", tok, map[string]any{
+	status, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/schedules", tok, map[string]any{
 		"source_id":        source.ID,
 		"name":             "loopback-continuous-every-5m",
 		"interval_seconds": 300,
@@ -384,7 +384,7 @@ func TestServedContinuousMonitoringCentralizedInventoryCAPDISC06(t *testing.T) {
 		t.Fatalf("bad schedule: %+v", schedule)
 	}
 
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+	status, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
 		"source_id":   source.ID,
 		"schedule_id": schedule.ID,
 	})
@@ -404,11 +404,9 @@ func TestServedContinuousMonitoringCentralizedInventoryCAPDISC06(t *testing.T) {
 		t.Fatalf("bad queued scheduled run: %+v", queued)
 	}
 
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain scheduled discovery outbox: %v", err)
-	}
+	executeNextDiscoveryRelayJob(t, h)
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/monitoring", tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/discovery/monitoring", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("continuous monitoring inventory = %d body %s, want 200", status, body)
 	}
@@ -472,20 +470,21 @@ func TestServedEstateWideCertificateExpiryHealthCAPDISC07(t *testing.T) {
 		t.Fatalf("parse test TLS URL: %v", err)
 	}
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newDiscoveryRelayHarness(t, "loopback-health")
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "discovery:read", "discovery:write")
 
-	importedPEM := servedHealthLeafPEM(t, h, "imported-edge.example", 48*time.Hour)
-	issuedPEM := servedHealthLeafPEM(t, h, "issued-api.example", 15*24*time.Hour)
-	ingestServedHealthCertificate(t, h, tok, "cap-disc-07-imported", importedPEM, "import", "f5:/Common/imported-edge")
-	ingestServedHealthCertificate(t, h, tok, "cap-disc-07-issued", issuedPEM, "issued", "k8s:default/issued-api")
+	importedPEM := servedHealthLeafPEM(t, h.servedHarness, "imported-edge.example", 48*time.Hour)
+	issuedPEM := servedHealthLeafPEM(t, h.servedHarness, "issued-api.example", 15*24*time.Hour)
+	ingestServedHealthCertificate(t, h.servedHarness, tok, "cap-disc-07-imported", importedPEM, "import", "f5:/Common/imported-edge")
+	ingestServedHealthCertificate(t, h.servedHarness, tok, "cap-disc-07-issued", issuedPEM, "issued", "k8s:default/issued-api")
 
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "loopback-health",
 		"kind": "network",
 		"config": map[string]any{
 			"targets":        []string{u.Host},
 			"allow_loopback": true,
+			"segment":        "loopback-health",
 		},
 	})
 	if status != http.StatusCreated {
@@ -497,15 +496,13 @@ func TestServedEstateWideCertificateExpiryHealthCAPDISC07(t *testing.T) {
 	if err := json.Unmarshal(body, &source); err != nil {
 		t.Fatalf("decode health source: %v (%s)", err, body)
 	}
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	status, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
 	if status != http.StatusCreated {
 		t.Fatalf("start health discovery run: status %d body %s", status, body)
 	}
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain health discovery outbox: %v", err)
-	}
+	executeNextDiscoveryRelayJob(t, h)
 
-	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/certificates/health", tok, nil)
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/certificates/health", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("get certificate health: status %d body %s", status, body)
 	}
@@ -573,10 +570,10 @@ func TestServedEstateWideCertificateExpiryHealthCAPDISC07(t *testing.T) {
 }
 
 func TestServedDiscoveryNetworkScanBlocksReservedTargets(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newDiscoveryRelayHarness(t, "blocked-network-targets")
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "blocked-network-targets",
 		"kind": "network",
 		"config": map[string]any{
@@ -585,6 +582,7 @@ func TestServedDiscoveryNetworkScanBlocksReservedTargets(t *testing.T) {
 				"169.254.169.254:443",
 				"10.0.0.0:443",
 			},
+			"segment": "blocked-network-targets",
 		},
 	})
 	if status != http.StatusCreated {
@@ -596,17 +594,15 @@ func TestServedDiscoveryNetworkScanBlocksReservedTargets(t *testing.T) {
 	if err := json.Unmarshal(body, &source); err != nil {
 		t.Fatalf("decode source: %v", err)
 	}
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+	status, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
 		"source_id": source.ID,
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("start discovery run: status %d body %s", status, body)
 	}
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain discovery outbox: %v", err)
-	}
-	if !h.hasEvent(t, "discovery.network_target_blocked") {
-		t.Fatal("reserved network targets were not emitted as blocked-target events")
+	report := executeNextDiscoveryRelayJob(t, h)
+	if report.Blocked != 3 || report.Discovered != 0 {
+		t.Fatalf("reserved targets were not refused by relay scanner: %+v", report)
 	}
 }
 

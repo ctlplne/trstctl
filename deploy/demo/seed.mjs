@@ -86,7 +86,7 @@ function buildDemoHistory() {
     { key: "postfix-edge", ownerKey: "edge", commonName: "postfix-edge.demo.trstctl.local", validDays: 45, deploymentLocation: "mail/postfix-edge:/etc/postfix/tls.crt", source: "discovery:manual", observedDaysAgo: 11 },
   ];
   const discoverySources = [
-    { key: "control-plane", name: "demo-control-plane-tls", kind: "network", config: { targets: ["trstctl:8443"] }, dryRun: true, daysAgo: 159 },
+    { key: "control-plane", name: "demo-control-plane-tls", kind: "network", config: { targets: ["trstctl:8443"], segment: "demo-control-plane" }, dryRun: true, daysAgo: 159 },
     { key: "manual-shadow", name: "manual-shadow-inventory", kind: "manual", config: { findings: manualDiscoveryFindings() }, dryRun: false, daysAgo: 147 },
     { key: "ct-watch", name: "public-ct-watch", kind: "ct_log", config: { logs: ["https://ct.googleapis.com/logs/argon2026/"], watched_domains: ["demo.trstctl.local"], max_batch: 25 }, dryRun: true, daysAgo: 99 },
     { key: "cloud-certs", name: "aws-acm-and-gcp-certs", kind: "cloud_certificate", config: { providers: [{ provider: "aws-acm", region: "us-east-1", access_key_id_ref: "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", secret_access_key_ref: "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY" }, { provider: "gcp-certmanager", project: "acme-demo", location: "us-central1", token_ref: "env:TRSTCTL_DISCOVERY_GCP_TOKEN" }] }, run: false, daysAgo: 73 },
@@ -162,6 +162,7 @@ function plannedAPICalls(history) {
     "POST /api/v1/access/api-tokens",
     "POST /api/v1/ephemeral/api-keys",
     ...history.agentTokens.map(() => "POST /api/v1/agents/enrollment-tokens"),
+    "POST /api/v1/discovery/segments",
     ...history.discoverySources.map(() => "POST /api/v1/discovery/sources"),
     ...history.discoverySources.filter((s) => s.run !== false).map(() => "POST /api/v1/discovery/runs"),
     "GET /api/v1/discovery/runs",
@@ -592,6 +593,12 @@ async function main() {
   for (const token of history.agentTokens) {
     enrollmentTokens.push(await api("POST", "/api/v1/agents/enrollment-tokens", undefined, stableKey(`agent-enrollment-token-${token.key}`)));
   }
+
+  await api("POST", "/api/v1/discovery/segments", {
+    name: "demo-control-plane",
+    ranges: ["compose:trstctl:8443"],
+    staleness_hours: 24,
+  }, stableKey("discovery-segment-control-plane"));
 
   for (const sourceDef of history.discoverySources) {
     const source = await api("POST", "/api/v1/discovery/sources", {
