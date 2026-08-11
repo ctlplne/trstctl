@@ -27,7 +27,7 @@ type schedulerPrivacyTestProtector struct{}
 func (schedulerPrivacyTestProtector) Protect(
 	_ context.Context, tenantID, key, binding string, plaintext []byte,
 ) (string, []byte, error) {
-	prefix := []byte("scheduler-privacy-test\x00" + tenantID + "\x00" + key + "\x00" + binding + "\x00")
+	prefix := []byte("CSL1scheduler-privacy-test\x00" + tenantID + "\x00" + key + "\x00" + binding + "\x00")
 	return orchestrator.ResultCodecSealedRowV1, append(prefix, plaintext...), nil
 }
 
@@ -37,7 +37,7 @@ func (schedulerPrivacyTestProtector) Open(
 	if codec != orchestrator.ResultCodecSealedRowV1 {
 		return nil, fmt.Errorf("test scheduler privacy codec %q is unsupported", codec)
 	}
-	prefix := []byte("scheduler-privacy-test\x00" + tenantID + "\x00" + key + "\x00" + binding + "\x00")
+	prefix := []byte("CSL1scheduler-privacy-test\x00" + tenantID + "\x00" + key + "\x00" + binding + "\x00")
 	if !bytes.HasPrefix(protected, prefix) {
 		return nil, errors.New("test scheduler privacy envelope AAD differs")
 	}

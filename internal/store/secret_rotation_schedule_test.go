@@ -168,7 +168,14 @@ func TestSecretRotationScheduleTerminalProjectionIsDueEdgeMonotonic(t *testing.T
 			secondRun := terminalScheduleRunForTest(secondCommand, tc.status, tc.secondRef,
 				firstAfter.NextRunAt.Add(time.Second), 15502, strings.Repeat("b", 64))
 			applyScheduleRunForTest(t, s, secondRun)
-			applyScheduleRunForTest(t, s, firstRun) // reverse/duplicate older projection
+			// Re-deliver only the already-proven immutable event. Re-preparing the
+			// older child command here would correctly fail because the second tick
+			// now owns the live aggregate cursor.
+			if err := s.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
+				return s.ApplySecretRotationScheduleRunTx(ctx, tx, firstRun)
+			}); err != nil {
+				t.Fatalf("replay older terminal schedule event: %v", err)
+			}
 
 			got, err := s.GetSecretRotationSchedule(ctx, tenantA, tc.scheduleID)
 			if err != nil || got.OldRef != tc.secondRef || got.LastRunID == nil || *got.LastRunID != secondCommand.RunID ||
@@ -565,7 +572,7 @@ func applyScheduleRunForTest(t *testing.T, s *store.Store, run store.SecretRotat
 		t.Fatalf("marshal exact scheduler run receipt: %v", err)
 	}
 	progress, err := json.Marshal(rotationTickReceiptFixture{
-		Ran: 1, Scanned: 1, Runs: []json.RawMessage{runReceipt},
+		Ran: 1, Scanned: 1, Runs: []json.RawMessage{runReceipt}, Deferred: []json.RawMessage{},
 	})
 	if err != nil {
 		t.Fatalf("marshal scheduler progress: %v", err)
@@ -577,7 +584,7 @@ func applyScheduleRunForTest(t *testing.T, s *store.Store, run store.SecretRotat
 		t.Fatalf("complete scheduler tick row: %v", err)
 	}
 	terminal, err := json.Marshal(rotationTickReceiptFixture{
-		Ran: 1, Scanned: 1, Runs: []json.RawMessage{runReceipt}, Complete: true,
+		Ran: 1, Scanned: 1, Runs: []json.RawMessage{runReceipt}, Deferred: []json.RawMessage{}, Complete: true,
 	})
 	if err != nil {
 		t.Fatalf("marshal scheduler terminal receipt: %v", err)

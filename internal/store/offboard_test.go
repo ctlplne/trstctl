@@ -155,9 +155,9 @@ func seedTenant(t *testing.T, s *store.Store, tenantID string) {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO read_model_snapshots (tenant_id, covered_seq, payload)
-			 VALUES ($1,42,'{}'::jsonb)`,
-			tenantID); err != nil {
+			`INSERT INTO read_model_snapshots (tenant_id, covered_seq, format_version, payload)
+			 VALUES ($1,42,$2,'{}'::jsonb)`,
+			tenantID, store.SnapshotFormatVersion); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
@@ -202,11 +202,11 @@ func seedTenant(t *testing.T, s *store.Store, tenantID string) {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO secret_rotation_schedule_ticks
 			        (tenant_id, idempotency_key, request_binding, due_through,
-			         start_schedule_id, after_schedule_id, phase, receipt,
+			         start_schedule_id, after_schedule_id, phase, snapshot_count, receipt,
 			         owner_token, owner_generation, terminal_http_status,
 			         terminal_body, created_at, updated_at, completed_at)
 			 VALUES ($1, 'offboard-scheduler-tick', 'offboard-scheduler-binding', now(),
-			         $2, $2, 'terminal', $3::jsonb, '', 1, 200,
+			         $2, $2, 'terminal', 0, $3::jsonb, '', 1, 200,
 			         $4, now(), now(), now())`,
 			tenantID, uuid(tenantID, 7), terminalTickBody, terminalTickBody)
 		return err

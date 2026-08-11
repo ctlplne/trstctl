@@ -27,11 +27,10 @@ func TestSecretRotationScheduleStartupAuthorityRejectsRestoredClosedCursorAndMal
 	s := newStore(t)
 	seedTwoTenants(t, s)
 	ctx := context.Background()
-	cutoff := time.Date(2026, 8, 11, 18, 0, 0, 0, time.UTC)
 	key := rotationcommand.OuterKeyV3Prefix + strings.Repeat("a", 64)
 	const binding = "aud113-startup-authority-binding"
 
-	seedBoundRotationTickKey(t, s, tenantA, key, binding, cutoff)
+	seedRotationTickRegistration(t, s, tenantA)
 	tick, state, err := s.ClaimSecretRotationScheduleTick(
 		ctx, tenantA, key, binding,
 		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
@@ -116,7 +115,7 @@ func TestSecretRotationScheduleStartupAuthorityRejectsForgedRegistrationAndComma
 		Enabled: true, NextRunAt: dueAt, CreatedAt: dueAt, UpdatedAt: dueAt,
 	}
 	seedSecretRotationSchedule(t, s, schedule)
-	seedBoundRotationTickKey(t, s, tenantA, key, binding, cutoff)
+	seedRotationTickRegistration(t, s, tenantA)
 
 	tick, state, err := s.ClaimSecretRotationScheduleTick(
 		ctx, tenantA, key, binding,
@@ -251,13 +250,13 @@ func TestSecretRotationScheduleStartupAuthorityAllowsUnanchoredConfigSnapshotAUD
 	s := newStore(t)
 	seedTwoTenants(t, s)
 	ctx := context.Background()
-	cutoff := time.Date(2026, 8, 11, 20, 0, 0, 0, time.UTC)
+	cutoff := time.Now().UTC().Add(-time.Minute)
 	const (
 		scheduleID = "b113b113-b113-4113-8113-b113b113b113"
 		binding    = "aud113-unanchored-config-binding"
 	)
 	key := rotationcommand.OuterKeyV3Prefix + strings.Repeat("c", 64)
-	seedBoundRotationTickKey(t, s, tenantA, key, binding, cutoff)
+	seedRotationTickRegistration(t, s, tenantA)
 	schedule := store.SecretRotationSchedule{
 		ID: scheduleID, TenantID: tenantA, Name: "AUD-113 migrated unanchored config",
 		Provider: "connector:ci", Key: "service/unanchored", OldRef: "version:1",

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,11 +39,7 @@ func seedBoundRotationTickKey(
 	createdAt time.Time,
 ) {
 	t.Helper()
-	if _, err := s.SystemPool().Exec(context.Background(),
-		`UPDATE tenants SET event_seq = $2 WHERE tenant_id = $1`,
-		tenantID, testRotationTenantRegistrationSequence); err != nil {
-		t.Fatalf("seed scheduler tenant registration sequence: %v", err)
-	}
+	seedRotationTickRegistration(t, s, tenantID)
 	if err := s.WithTenant(context.Background(), tenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(context.Background(),
 			`INSERT INTO idempotency_keys
@@ -52,6 +49,15 @@ func seedBoundRotationTickKey(
 		return err
 	}); err != nil {
 		t.Fatalf("seed bound scheduler key %s: %v", key, err)
+	}
+}
+
+func seedRotationTickRegistration(t *testing.T, s *store.Store, tenantID string) {
+	t.Helper()
+	if _, err := s.SystemPool().Exec(context.Background(),
+		`UPDATE tenants SET event_seq = $2 WHERE tenant_id = $1`,
+		tenantID, testRotationTenantRegistrationSequence); err != nil {
+		t.Fatalf("seed scheduler tenant registration sequence: %v", err)
 	}
 }
 
@@ -95,6 +101,35 @@ func marshalRotationTickRun(
 	return body
 }
 
+func TestSecretRotationScheduleTickRejectsPreboundOuterWithoutAtomicSnapshotAUD113(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	const (
+		key     = "aud113-prebound-without-snapshot"
+		binding = "aud113-prebound-without-snapshot-binding"
+	)
+	seedBoundRotationTickKey(t, s, tenantA, key, binding, time.Now().UTC())
+
+	if _, _, err := s.ClaimSecretRotationScheduleTick(
+		ctx, tenantA, key, binding,
+		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
+		"aud113-prebound-owner", "aud113-prebound-child", time.Minute,
+	); !errors.Is(err, store.ErrSecretRotationScheduleTickConflict) ||
+		!strings.Contains(err.Error(), "no atomically prepared tick snapshot") {
+		t.Fatalf("prebound outer without snapshot error=%v, want exact fail-closed conflict", err)
+	}
+	var tickCount int
+	if err := s.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM secret_rotation_schedule_ticks
+		  WHERE tenant_id = $1 AND idempotency_key = $2`, tenantA, key).Scan(&tickCount); err != nil {
+		t.Fatalf("count rejected scheduler receivers: %v", err)
+	}
+	if tickCount != 0 {
+		t.Fatalf("prebound corruption created %d scheduler receivers, want zero", tickCount)
+	}
+}
+
 func TestSecretRotationScheduleTickSameKeyRecoveryTerminalReplayAndGCLifecycleAUD113(t *testing.T) {
 	s := newStore(t)
 	seedTwoTenants(t, s)
@@ -105,7 +140,7 @@ func TestSecretRotationScheduleTickSameKeyRecoveryTerminalReplayAndGCLifecycleAU
 		binding    = "aud113-same-key-binding"
 		scheduleID = "11300000-0000-4000-8000-000000000001"
 	)
-	seedBoundRotationTickKey(t, s, tenantA, key, binding, dueThrough)
+	seedRotationTickRegistration(t, s, tenantA)
 	schedule := store.SecretRotationSchedule{
 		ID: scheduleID, TenantID: tenantA, Name: "same-key-recovery",
 		Provider: "connector:ci", Key: "rotation/aud113", OldRef: "version:1",
@@ -118,7 +153,8 @@ func TestSecretRotationScheduleTickSameKeyRecoveryTerminalReplayAndGCLifecycleAU
 		ctx, tenantA, key, binding,
 		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
 		"tick-owner-one", "child-owner-one", 2*time.Minute)
-	if err != nil || state != store.SecretRotationScheduleTickAcquired || !first.DueThrough.Equal(dueThrough) ||
+	if err != nil || state != store.SecretRotationScheduleTickAcquired || first.DueThrough.IsZero() ||
+		!first.DueThrough.After(schedule.NextRunAt) ||
 		first.StartScheduleID != store.ZeroUUID || first.AfterScheduleID != store.ZeroUUID {
 		t.Fatalf("first tick claim=%+v state=%q err=%v", first, state, err)
 	}
@@ -236,13 +272,26 @@ func TestSecretRotationScheduleTickSameKeyRecoveryTerminalReplayAndGCLifecycleAU
 	if _, err := s.GetSecretRotationScheduleTick(ctx, tenantA, key); err != nil {
 		t.Fatalf("bound outer GC removed scheduler receiver: %v", err)
 	}
+	outerPlaintext, err := json.Marshal(struct {
+		Status  int             `json:"s"`
+		Body    json.RawMessage `json:"b"`
+		Binding string          `json:"h,omitempty"`
+	}{Status: 200, Body: terminalBody, Binding: binding})
+	if err != nil {
+		t.Fatalf("marshal completed outer fixture: %v", err)
+	}
+	resultCodec, protectedResult, err := (schedulerPrivacyTestProtector{}).Protect(
+		ctx, tenantA, key, binding, outerPlaintext)
+	if err != nil {
+		t.Fatalf("protect completed outer fixture: %v", err)
+	}
 	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
 			`UPDATE idempotency_keys
-			    SET status = 'completed', result = $3,
+			    SET status = 'completed', result_codec = $3, result = $4,
 			        completed_at = clock_timestamp() - interval '1 hour'
 			  WHERE tenant_id = $1 AND key = $2 AND status = 'bound'`,
-			tenantA, key, []byte(`{"status":200}`))
+			tenantA, key, resultCodec, protectedResult)
 		return err
 	}); err != nil {
 		t.Fatalf("complete outer fixture: %v", err)
@@ -254,13 +303,12 @@ func TestSecretRotationScheduleTickSameKeyRecoveryTerminalReplayAndGCLifecycleAU
 		t.Fatalf("completed outer GC did not cascade its tick: %v", err)
 	}
 
-	newCutoff := dueThrough.Add(time.Hour)
-	seedBoundRotationTickKey(t, s, tenantA, key, "aud113-reused-binding", newCutoff)
 	reused, state, err := s.ClaimSecretRotationScheduleTick(
 		ctx, tenantA, key, "aud113-reused-binding",
 		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
 		"tick-reused-owner", "child-reused-owner", time.Minute)
-	if err != nil || state != store.SecretRotationScheduleTickAcquired || !reused.DueThrough.Equal(newCutoff) ||
+	if err != nil || state != store.SecretRotationScheduleTickAcquired || reused.DueThrough.IsZero() ||
+		!reused.DueThrough.After(first.DueThrough) ||
 		reused.StartScheduleID != scheduleID {
 		t.Fatalf("post-retention raw-key reuse retained old tick authority: tick=%+v state=%q err=%v", reused, state, err)
 	}
@@ -278,8 +326,7 @@ func TestSecretRotationScheduleTickDifferentKeySupersessionPreservesOldOuterAndC
 		newBinding = "aud113-takeover-new-binding"
 		scheduleID = "11300000-0000-4000-8000-000000000002"
 	)
-	seedBoundRotationTickKey(t, s, tenantA, oldKey, oldBinding, cutoff)
-	seedBoundRotationTickKey(t, s, tenantA, newKey, newBinding, cutoff.Add(time.Second))
+	seedRotationTickRegistration(t, s, tenantA)
 	schedule := store.SecretRotationSchedule{
 		ID: scheduleID, TenantID: tenantA, Name: "superseded-row",
 		Provider: "connector:ci", Key: "rotation/superseded", OldRef: "version:1",
@@ -374,8 +421,7 @@ func TestSecretRotationScheduleTickReregistrationMakesPriorLifecycleInertAUD106(
 		newBinding = "aud106-binding-sequence-2"
 		scheduleID = "10600000-0000-4000-8000-000000000106"
 	)
-	seedBoundRotationTickKey(t, s, tenantA, oldKey, oldBinding, cutoff)
-	seedBoundRotationTickKey(t, s, tenantA, newKey, newBinding, cutoff)
+	seedRotationTickRegistration(t, s, tenantA)
 	seedSecretRotationSchedule(t, s, store.SecretRotationSchedule{
 		ID: scheduleID, TenantID: tenantA, Name: "lifecycle-one",
 		Provider: "connector:ci", Key: "rotation/same", OldRef: "version:1",
@@ -571,7 +617,7 @@ func TestSecretRotationScheduleTickImmutableSnapshotVisitsRingOnceAUD113(t *test
 		startID = "11300000-0000-4000-8000-000000000020"
 		highID  = "11300000-0000-4000-8000-000000000030"
 	)
-	seedBoundRotationTickKey(t, s, tenantA, key, binding, cutoff)
+	seedRotationTickRegistration(t, s, tenantA)
 	for index, id := range []string{lowID, startID, highID} {
 		seedSecretRotationSchedule(t, s, store.SecretRotationSchedule{
 			ID: id, TenantID: tenantA, Name: fmt.Sprintf("wrap-%d", index),
@@ -653,7 +699,7 @@ func TestSecretRotationScheduleTickSnapshotRetainsUnanchoredRevisionForExplicitD
 		binding    = "aud112-unanchored-config-binding"
 		scheduleID = "11200000-0000-4000-8000-000000000001"
 	)
-	seedBoundRotationTickKey(t, s, tenantA, key, binding, cutoff)
+	seedRotationTickRegistration(t, s, tenantA)
 	if err := s.WithTenantProjection(ctx, tenantA, func(tx pgx.Tx) error {
 		return s.ApplySecretRotationScheduleUpsertedTx(ctx, tx, store.SecretRotationSchedule{
 			ID: scheduleID, TenantID: tenantA, Name: "pre-revision schedule",
