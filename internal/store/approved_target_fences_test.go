@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -82,6 +83,63 @@ func TestApprovedTargetFenceCommitsFirstCanonicalCommandBeforeAppend(t *testing.
 	}
 	if _, err := s.GetApprovedTargetFence(ctx, tenantB, candidate.TargetKind, candidate.CommandKey); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("tenant B read tenant A fence = %v, want pgx.ErrNoRows", err)
+	}
+}
+
+func TestApprovedTargetFenceReconsumesAuthorityRebuiltBeforeRetainedTarget(t *testing.T) {
+	s := newOperationApprovalStore(t)
+	ctx := context.Background()
+	request := operationApprovalRequest("77000000-0000-4000-8000-000000000804", tenantA)
+	request.IntentDigest = "sha256:" + strings.Repeat("e", 64)
+	request.RequiredApprovals = 1
+	if err := applyOperationApprovalRequest(ctx, s, request); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOperationApprovalDecision(ctx, s,
+		operationApprovalDecision(request, "bob", "77000000-0000-4000-8000-000000000805")); err != nil {
+		t.Fatal(err)
+	}
+	use := operationApprovalUse(request)
+	candidate := store.ApprovedTargetFence{
+		TenantID: tenantA, TargetKind: store.ApprovedTargetCodeSigningCommand,
+		CommandKey: "codesign-full-restore", RequestBinding: strings.Repeat("f", 64),
+		EventID: "77000000-0000-4000-8000-000000000806", EventType: "codesign.commanded",
+		SchemaVersion: 2, EventTime: operationApprovalBaseTime.Add(20 * time.Minute),
+		Payload: []byte(`{"sealed_command":"full-restore"}`), SemanticDigest: strings.Repeat("9", 64),
+	}
+	if _, _, err := s.ClaimApprovedTargetFence(ctx, candidate, use); err != nil {
+		t.Fatalf("claim target before append: %v", err)
+	}
+
+	// A full read-model rebuild replays request and decision history before the
+	// retained target event. The independent fence survives PostgreSQL restore,
+	// while the rebuilt request is approved again until that exact event projects.
+	if _, err := s.SystemPool().Exec(ctx, `UPDATE operation_approval_requests
+		SET status = 'approved', consumed_at = NULL, consumed_event_id = NULL
+		WHERE tenant_id = $1 AND id = $2`, tenantA, request.ID); err != nil {
+		t.Fatal(err)
+	}
+	err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		locked, rebuiltUse, privacyRewritten, err := s.LockApprovedTargetFenceTx(
+			ctx, tx, tenantA, candidate.TargetKind, candidate.CommandKey,
+		)
+		if err != nil {
+			return err
+		}
+		if privacyRewritten || !reflect.DeepEqual(rebuiltUse, use) {
+			t.Fatalf("rebuilt fence use = privacy %t use %+v, want exact %+v",
+				privacyRewritten, rebuiltUse, use)
+		}
+		return s.ConsumeOperationApprovalTx(
+			ctx, tx, tenantA, rebuiltUse, locked.EventID, locked.EventTime,
+		)
+	})
+	if err != nil {
+		t.Fatalf("reconsume rebuilt approval through retained exact target: %v", err)
+	}
+	rebuilt, err := s.GetOperationApproval(ctx, tenantA, request.ID)
+	if err != nil || rebuilt.Status != store.ApprovalStatusConsumed || rebuilt.ConsumedEventID != candidate.EventID {
+		t.Fatalf("rebuilt authority after target = %+v err=%v", rebuilt, err)
 	}
 }
 
@@ -245,18 +303,20 @@ func TestApprovedTargetFenceUsesEventHistoryPrivacyRewriteAndDefersRetention(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := json.Marshal(struct {
-		Approval *store.OperationApprovalUse `json:"approval"`
-		Detail   string                      `json:"detail"`
-	}{Approval: &use, Detail: "owned by " + subject})
+	payload, err := json.Marshal(projections.CertificateRecorded{
+		ID:      "77000000-0000-4000-8000-000000000835",
+		Subject: "CN=" + subject, SANs: []string{subject}, Issuer: "privacy-test-ca",
+		Serial: "01", Fingerprint: strings.Repeat("d", 64), KeyAlgorithm: "ECDSA-P256",
+		Source: "issued", Approval: &use,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	candidate := store.ApprovedTargetFence{
 		TenantID: tenantA, TargetKind: store.ApprovedTargetEphemeralCertificate,
 		CommandKey: "privacy-payload", RequestBinding: strings.Repeat("b", 64),
-		EventID: "77000000-0000-4000-8000-000000000833", EventType: "certificate.recorded",
-		SchemaVersion: 3, EventTime: operationApprovalBaseTime.Add(20 * time.Minute),
+		EventID: "77000000-0000-4000-8000-000000000833", EventType: projections.EventCertificateRecorded,
+		SchemaVersion: projections.CertificateApprovalEventSchemaVersion, EventTime: operationApprovalBaseTime.Add(20 * time.Minute),
 		Actor: &events.Actor{
 			Subject: "release-admin",
 			Roles:   []string{"team:" + subject, "release", subject + ":delegate", "release"},

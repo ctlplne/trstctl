@@ -748,7 +748,12 @@ func (l *Log) rewriteStoredGeneration(
 	if err != nil {
 		return 0, fmt.Errorf("events: tenant data rewrite source info: %w", err)
 	}
-	if sourceInfo.State.Msgs == 0 {
+	// A durable external preparation is still required when the stream is empty.
+	// The caller may need to erase SQL read-model rows, invalidate snapshots, and
+	// bind its completion event to the active generation even though no retained
+	// history record contains the subject. Let that case take the ordinary no-op
+	// path below, which restores the source and prepares against its generation.
+	if sourceInfo.State.Msgs == 0 && opts.externalPreparation == nil {
 		return 0, nil
 	}
 	if err := validateRewriteSourceConfig(sourceInfo.Config); err != nil {

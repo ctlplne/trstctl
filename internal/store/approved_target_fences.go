@@ -695,8 +695,11 @@ func (s *Store) claimApprovedTargetFenceUnbarriered(
 }
 
 // LockApprovedTargetFenceTx locks a fence and restores its exact approval use
-// inside the caller's projection transaction. The grant must already be consumed
-// by this fence's event; ConsumeOperationApprovalTx performs that idempotent proof.
+// inside the caller's projection transaction. The grant is normally already
+// consumed by this fence's event. A full read-model rebuild reconstructs request
+// and decision history as approved immediately before replaying that same target;
+// the caller's Apply transaction then re-consumes it after all exact binding,
+// quorum, expiry, and target-event checks pass.
 func (s *Store) LockApprovedTargetFenceTx(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -714,7 +717,10 @@ func (s *Store) LockApprovedTargetFenceTx(
 	if err != nil {
 		return ApprovedTargetFence{}, OperationApprovalUse{}, false, err
 	}
-	if request.Status != ApprovalStatusConsumed || request.ConsumedEventID != fence.EventID {
+	if request.Status == ApprovalStatusConsumed && request.ConsumedEventID != fence.EventID {
+		return ApprovedTargetFence{}, OperationApprovalUse{}, false, ErrApprovalDrifted
+	}
+	if request.Status != ApprovalStatusConsumed && request.Status != ApprovalStatusApproved {
 		return ApprovedTargetFence{}, OperationApprovalUse{}, false, ErrApprovalDrifted
 	}
 	use := fence.Approval.use(request.Requester)

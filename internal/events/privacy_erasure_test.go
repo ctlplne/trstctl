@@ -1388,6 +1388,64 @@ func TestPseudonymizeSubjectPreparationFollowsSignedStagingAndNoOpRetryStillComp
 	}
 }
 
+func TestPseudonymizeSubjectEmptyStreamStillPreparesAgainstActiveGeneration(t *testing.T) {
+	ctx := context.Background()
+	const (
+		tenantID = "11111111-1111-1111-1111-111111111111"
+		subject  = "alice@example.com"
+	)
+	coordinator := newPrivacyPreparationTestCoordinator()
+	log, err := Open(ctx, config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	},
+		WithHistoryRewriteCoordinator(coordinator),
+		WithHistoryRewriteContinuityVerifier(rewriteTestContinuityVerifier),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	wantGeneration, err := log.ActiveGeneration(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prepared, completed int
+	err = log.PseudonymizeSubjectWithPreparationAndCompletion(
+		ctx, tenantID, subject,
+		func(_ context.Context, report TenantDataRewriteReport) error {
+			prepared++
+			if report.OperationID == "" || report.SourceStream == "" ||
+				report.TargetStream != report.SourceStream ||
+				report.SourceGeneration != wantGeneration ||
+				report.TargetGeneration != wantGeneration || report.ChangedEvents != 0 {
+				t.Fatalf("empty-stream preparation report = %+v, want active source generation %q", report, wantGeneration)
+			}
+			return nil
+		},
+		func(context.Context) error {
+			completed++
+			if prepared != 1 {
+				t.Fatalf("completion ran before preparation: prepared=%d", prepared)
+			}
+			return nil
+		},
+		rewriteProofOptions(t)...,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared != 1 || completed != 1 {
+		t.Fatalf("empty-stream preparation/completion calls = %d/%d, want 1/1", prepared, completed)
+	}
+	gotGeneration, err := log.ActiveGeneration(ctx)
+	if err != nil || gotGeneration != wantGeneration {
+		t.Fatalf("empty-stream rewrite changed active generation to %q from %q: %v", gotGeneration, wantGeneration, err)
+	}
+	if state, err := log.findRewriteStreams(ctx); err != nil || state != nil {
+		t.Fatalf("empty-stream rewrite left state=%+v err=%v", state, err)
+	}
+}
+
 func TestPseudonymizeSubjectExternalPreparationReadsFrozenCanonicalGeneration(t *testing.T) {
 	ctx := context.Background()
 	const (
