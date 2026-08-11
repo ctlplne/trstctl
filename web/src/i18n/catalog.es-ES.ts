@@ -158,6 +158,7 @@ const esESCatalog = {
   "secrets.rotation.deferredReason.approvalPending": "Aprobación pendiente",
   "secrets.rotation.deferredReason.commandInFlight": "Comando de secreto en curso",
   "secrets.rotation.deferredReason.commandClaimed": "Vencimiento reclamado por otro ejecutor",
+  "secrets.rotation.deferredReason.configRevisionUnanchored": "La configuración del programa debe guardarse de nuevo",
   // AUD-77 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
   "secrets.import.unavailableTitle": "Importación masiva de secretos",
   "secrets.import.unavailableDescription": "No disponible hasta que se implementen comandos por lotes atómicos con origen en eventos",

@@ -32,7 +32,7 @@ type Translate = ReturnType<typeof useTranslation>["t"];
 
 export type SecretRotationDeferredEvidence = {
   schedule_id: string;
-  reason: "approval_pending" | "command_in_flight" | "command_claimed";
+  reason: "approval_pending" | "command_in_flight" | "command_claimed" | "config_revision_unanchored";
   due_at: string;
   error?: string;
 };
@@ -41,13 +41,117 @@ export const secretRotationDeferredReasonKeys = {
   approval_pending: "secrets.rotation.deferredReason.approvalPending",
   command_in_flight: "secrets.rotation.deferredReason.commandInFlight",
   command_claimed: "secrets.rotation.deferredReason.commandClaimed",
+  config_revision_unanchored: "secrets.rotation.deferredReason.configRevisionUnanchored",
 } as const;
 
 const secretRotationDeferredReasons = new Set<SecretRotationDeferredEvidence["reason"]>([
   "approval_pending",
   "command_in_flight",
   "command_claimed",
+  "config_revision_unanchored",
 ]);
+
+const secretRotationTickSystemErrors = new Set([
+  "scheduler operation was interrupted; retry this tick",
+  "scheduler processing failed; retry this tick and inspect server logs",
+  "scheduler tick lease expired before durable completion; the exact tick was terminalized as indeterminate and a new Idempotency-Key is required",
+]);
+
+const secretRotationDeferredErrors: Record<SecretRotationDeferredEvidence["reason"], string> = {
+  approval_pending: "scheduled rotation is waiting for approval",
+  command_in_flight: "scheduled rotation command is already in progress",
+  command_claimed: "scheduled rotation command is already in progress",
+  config_revision_unanchored: "schedule configuration must be re-saved before it can run",
+};
+
+const secretRotationGenericTerminalErrors = new Set([
+  "application-secret approval is no longer usable",
+  "no such secret",
+  "resource not found",
+  "approval requester cannot approve their own request",
+  "approval request expired",
+  "approval request superseded",
+  "approval authority already consumed",
+  "approval target version or state drifted",
+  "approval request has not reached quorum",
+  "connector rotation target is required",
+  "secret sync target is not configured",
+  "connector rotation old_ref must be version:<n>",
+  "connector rotation old_ref does not name the current version",
+  "scheduled rotation failed",
+]);
+
+const secretRotationUnsupportedErrors = new Set([
+  "dynamic-lease rotation is unavailable until its issue, delivery, and predecessor retirement phases share one durable worker command",
+  "scheduled static-provider rotation is unavailable until a durable worker owns stage, cutover, verification, rollback, and retirement",
+  "scheduled rotation is unavailable",
+]);
+
+function recordValue(candidate: unknown): candidate is Record<string, unknown> {
+  return candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
+}
+
+function secretRotationRunErrorIsClosed(status: unknown, detail: unknown): boolean {
+  if (typeof status !== "string" || (detail !== undefined && typeof detail !== "string")) return false;
+  if (detail === undefined || detail === "") return true;
+  switch (status) {
+    case "completed":
+    case "queued":
+      return false;
+    case "delivery_failed":
+      return detail === "connector delivery failed";
+    case "rollback_failed":
+      return detail === "scheduled rotation rollback failed";
+    case "unsupported":
+      return secretRotationUnsupportedErrors.has(detail);
+    case "failed":
+    case "rolled_back":
+    case "retire_pending":
+      return secretRotationGenericTerminalErrors.has(detail);
+    default:
+      return false;
+  }
+}
+
+// The browser treats the API as an untrusted byte boundary too. This mirrors
+// the server's closed durable vocabulary so a corrupted proxy/cache or an old
+// retained receipt cannot turn provider text back into operator-visible copy.
+export function secretRotationDueEvidenceHasClosedErrors(value: unknown): boolean {
+  if (!recordValue(value) || !Array.isArray(value.runs) || !Array.isArray(value.deferred)) return false;
+  if (
+    value.system_error !== undefined &&
+    (typeof value.system_error !== "string" || (value.system_error !== "" && !secretRotationTickSystemErrors.has(value.system_error)))
+  ) {
+    return false;
+  }
+  for (const candidate of value.runs) {
+    if (!recordValue(candidate) || !recordValue(candidate.rotation)) return false;
+    const runError = candidate.error ?? "";
+    const rotationError = candidate.rotation.error ?? "";
+    const rollbackError = candidate.rotation.rollback_error ?? "";
+    if (
+      !secretRotationRunErrorIsClosed(candidate.status, runError) ||
+      !secretRotationRunErrorIsClosed(candidate.status, rotationError) ||
+      runError !== rotationError ||
+      (rollbackError !== "" && rollbackError !== "scheduled rotation rollback failed")
+    ) {
+      return false;
+    }
+  }
+  for (const candidate of value.deferred) {
+    if (!recordValue(candidate) || !secretRotationDeferredReasons.has(candidate.reason as SecretRotationDeferredEvidence["reason"])) {
+      return false;
+    }
+    const detail = candidate.error ?? "";
+    if (
+      typeof detail !== "string" ||
+      (detail !== "" && detail !== secretRotationDeferredErrors[candidate.reason as SecretRotationDeferredEvidence["reason"]])
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export type SecretRotationDueEvidence = SecretRotationDueRun & {
   scanned?: number;
@@ -129,9 +233,6 @@ export function parseSecretRotationPartialReceipt(error: unknown): SecretRotatio
   const optionalStringField = (record: Record<string, unknown>, key: string) => record[key] === undefined || typeof record[key] === "string";
   const timestampField = (record: Record<string, unknown>, key: string) => stringField(record, key) && !Number.isNaN(Date.parse(record[key] as string));
   const uuidField = (record: Record<string, unknown>, key: string) => typeof record[key] === "string" && secretRotationUUIDPattern.test(record[key] as string);
-  const recordValue = (candidate: unknown): candidate is Record<string, unknown> =>
-    candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
-
   const validRun = (candidate: unknown) => {
     if (!recordValue(candidate) || !recordValue(candidate.rotation)) return false;
     const rotation = candidate.rotation;
@@ -168,10 +269,11 @@ export function parseSecretRotationPartialReceipt(error: unknown): SecretRotatio
     runs.length !== ran ||
     scanned < runs.length + deferred.length ||
     receipt.partial !== (runs.length > 0 || deferred.length > 0) ||
-	(receipt.run_limit_reached === true && ran !== 50) ||
-	(receipt.scan_limit_reached === true && scanned !== 500) ||
+    (receipt.run_limit_reached === true && ran !== 50) ||
+    (receipt.scan_limit_reached === true && scanned !== 500) ||
     !runs.every(validRun) ||
-    !deferred.every(validDeferred)
+    !deferred.every(validDeferred) ||
+    !secretRotationDueEvidenceHasClosedErrors(receipt)
   ) {
     return null;
   }

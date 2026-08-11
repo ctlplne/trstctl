@@ -167,6 +167,7 @@ const deDECatalog = {
   "secrets.rotation.deferredReason.approvalPending": "Genehmigung ausstehend",
   "secrets.rotation.deferredReason.commandInFlight": "Secret-Befehl wird ausgeführt",
   "secrets.rotation.deferredReason.commandClaimed": "Fälligkeitskante von einem anderen Runner beansprucht",
+  "secrets.rotation.deferredReason.configRevisionUnanchored": "Die Zeitplankonfiguration muss erneut gespeichert werden",
   // AUD-77 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
   "secrets.import.unavailableTitle": "Massenimport von Secrets",
   "secrets.import.unavailableDescription": "Nicht verfügbar, bis atomare ereignisbasierte Batch-Befehle implementiert sind",

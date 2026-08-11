@@ -69,6 +69,7 @@ import {
   secretApprovalActionLabel,
   secretApprovalQueueID,
   secretRotationDeferredReasonKeys,
+  secretRotationDueEvidenceHasClosedErrors,
   type SecretApprovalQueueItem,
   type SecretRotationDeferredEvidence,
   type SecretRotationDueEvidence,
@@ -1150,6 +1151,9 @@ export function Secrets() {
     setRunDueBusy(true);
     try {
       const result = (await api.runDueSecretRotations()) as SecretRotationDueEvidence;
+      if (!secretRotationDueEvidenceHasClosedErrors(result)) {
+        throw new Error("Could not run due rotations");
+      }
       setDueRuns(result.runs ?? []);
       setDueDeferred(result.deferred ?? []);
       setDueLimits({ run: result.run_limit_reached === true, scan: result.scan_limit_reached === true });
@@ -1178,7 +1182,10 @@ export function Secrets() {
         setDueRuns(null);
         setDueDeferred([]);
         setDueLimits(null);
-        setRunDueError(apiProblemMessage(err, "Could not run due rotations"));
+        // A malformed scheduler 503 is outside the closed wire contract. Do
+        // not fall back to its problem detail: a corrupted proxy/cache could
+        // otherwise reintroduce the exact provider text this decoder rejected.
+        setRunDueError(err instanceof ApiError && err.status === 503 ? "Could not run due rotations" : apiProblemMessage(err, "Could not run due rotations"));
       }
     } finally {
       setRunDueBusy(false);

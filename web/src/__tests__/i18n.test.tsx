@@ -557,8 +557,13 @@ describe("i18n boundary", () => {
       // not read as completed, and approval-pending/claimed work must not read
       // as a failed rotation. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "40b5270b9ed01f55385af3d4058ba5a737a44b7ad28494d858de201a8ccaf13d",
-      "de-DE": "c97a410d607055e5f92c7359104902c8acf7981a3bbe81335b45e332699d749b",
+      // AUD-115 client-boundary re-pin: one deferred-reason key names the
+      // pre-evidence schedule state that requires an operator to re-save its
+      // configuration. The translations preserve that required action and do
+      // not describe the row as failed. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "ef29de7ae7f2a96bcab8137f1244ce61ba43d04f5faf2c70f0239d0e99c1b672",
+      "de-DE": "29b222c798877cf7b1bca61c3b1008f4e9e62c9830b962cb8e0e73768e4a0336",
     });
   });
 

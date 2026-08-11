@@ -90,9 +90,9 @@ function scheduledRunFixture(index: number) {
       rolled_back: false,
       rollback_attempted: false,
       rollback_failed: false,
-      error: "provider failed before a successor became authoritative",
+      error: "scheduled rotation failed",
     },
-    error: "provider failed before a successor became authoritative",
+    error: "scheduled rotation failed",
     ran_at: "2026-06-19T10:01:00Z",
     reconciled: false,
   };
@@ -140,20 +140,20 @@ function primeSecretsMocks() {
   });
   apiMock.secretRotationSchedules.mockResolvedValue({ items: [] });
   apiMock.runDueSecretRotations.mockResolvedValue({
-		ran: 50,
-		scanned: 51,
-		runs: Array.from({ length: 50 }, (_, index) => scheduledRunFixture(index)),
+    ran: 50,
+    scanned: 51,
+    runs: Array.from({ length: 50 }, (_, index) => scheduledRunFixture(index)),
     deferred: [
       {
         schedule_id: "77777777-7777-7777-7777-777777777777",
         reason: "approval_pending",
         due_at: "2026-06-19T10:00:00Z",
-        error: "approval request still needs one distinct reviewer",
+        error: "scheduled rotation is waiting for approval",
       },
     ],
-		run_limit_reached: true,
-		scan_limit_reached: false,
-		complete: false,
+    run_limit_reached: true,
+    scan_limit_reached: false,
+    complete: false,
     partial: false,
   });
   apiMock.deleteSecret.mockResolvedValue(undefined);
@@ -846,90 +846,112 @@ describe("secrets surface", () => {
 
     await user.click(screen.getByRole("button", { name: "Run due now" }));
     await waitFor(() => expect(apiMock.runDueSecretRotations).toHaveBeenCalledTimes(1));
-		expect(await screen.findByText("Ran 50 due rotations; deferred 1 of 51 scanned schedules.")).toBeInTheDocument();
-		expect(screen.getByText(/full 50-run budget was consumed/i)).toBeInTheDocument();
-		expect(screen.queryByText(/full 500-schedule scan budget was consumed/i)).not.toBeInTheDocument();
+    expect(await screen.findByText("Ran 50 due rotations; deferred 1 of 51 scanned schedules.")).toBeInTheDocument();
+    expect(screen.getByText(/full 50-run budget was consumed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/full 500-schedule scan budget was consumed/i)).not.toBeInTheDocument();
     expect(screen.getByText(/1 due schedules remain deferred; each exact due edge is listed below/i)).toBeInTheDocument();
     const deferredList = screen.getByRole("list", { name: "Deferred rotation schedule evidence" });
     const deferredRow = within(deferredList).getByRole("listitem");
     expect(within(deferredRow).getByText("77777777-7777-7777-7777-777777777777")).toBeInTheDocument();
     expect(within(deferredRow).getByText("Approval pending")).toBeInTheDocument();
     expect(within(deferredRow).getByText("Due Jun 19, 2026, 10:00 AM")).toBeInTheDocument();
-    expect(within(deferredRow).getByText("approval request still needs one distinct reviewer")).toBeInTheDocument();
+    expect(within(deferredRow).getByText("scheduled rotation is waiting for approval")).toBeInTheDocument();
 
     apiMock.runDueSecretRotations.mockRejectedValueOnce(
       new ApiError(
         503,
         JSON.stringify({
           ran: 1,
-		  scanned: 500,
-		        runs: [scheduledRunFixture(0)],
+          scanned: 500,
+          runs: [scheduledRunFixture(0)],
           deferred: [
             {
               schedule_id: "99999999-9999-4999-8999-999999999999",
               reason: "command_claimed",
               due_at: "2026-06-19T10:02:00Z",
-              error: "another runner still owns this exact due edge",
+              error: "scheduled rotation command is already in progress",
             },
           ],
-		        run_limit_reached: false,
-		        scan_limit_reached: true,
+          run_limit_reached: false,
+          scan_limit_reached: true,
           complete: false,
           partial: true,
           failed_schedule_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-          system_error: "event store unavailable after durable partial progress",
+          system_error: "scheduler processing failed; retry this tick and inspect server logs",
         }),
       ),
     );
     await user.click(screen.getByRole("button", { name: "Run due now" }));
     await waitFor(() => expect(apiMock.runDueSecretRotations).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText("event store unavailable after durable partial progress")).toBeInTheDocument();
+    expect(await screen.findByText("scheduler processing failed; retry this tick and inspect server logs")).toBeInTheDocument();
     expect(screen.getByText("app/partial/password")).toBeInTheDocument();
     const partialDeferredList = screen.getByRole("list", { name: "Deferred rotation schedule evidence" });
     expect(within(partialDeferredList).getByText("99999999-9999-4999-8999-999999999999")).toBeInTheDocument();
     expect(within(partialDeferredList).getByText("Due edge claimed by another runner")).toBeInTheDocument();
-		expect(within(partialDeferredList).getByText("another runner still owns this exact due edge")).toBeInTheDocument();
-		expect(screen.getByText(/full 500-schedule scan budget was consumed/i)).toBeInTheDocument();
-		expect(screen.queryByText(/full 50-run budget was consumed/i)).not.toBeInTheDocument();
+    expect(within(partialDeferredList).getByText("scheduled rotation command is already in progress")).toBeInTheDocument();
+    expect(screen.getByText(/full 500-schedule scan budget was consumed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/full 50-run budget was consumed/i)).not.toBeInTheDocument();
     expect(screen.queryByText("77777777-7777-7777-7777-777777777777")).not.toBeInTheDocument();
 
-		apiMock.runDueSecretRotations.mockRejectedValueOnce(
-		  new ApiError(
-		    503,
-		    JSON.stringify({
-		      detail: "malformed scheduler receipt",
-		      ran: 0,
-		      scanned: 2,
-		      runs: [],
-		      deferred: [
-		        {
-		          schedule_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-		          reason: "constructor",
-		          due_at: "2026-06-19T10:03:00Z",
-		        },
-		        {
-		          schedule_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-		          reason: "toString",
-		          due_at: "2026-06-19T10:04:00Z",
-		        },
-		      ],
-		      run_limit_reached: false,
-		      scan_limit_reached: false,
-		      complete: false,
-		      partial: true,
-		      system_error: "must not render inherited prototype keys as a deferred reason",
-		    }),
-		  ),
-		);
-		await user.click(screen.getByRole("button", { name: "Run due now" }));
-		expect(await screen.findByText("malformed scheduler receipt")).toBeInTheDocument();
+    apiMock.runDueSecretRotations.mockRejectedValueOnce(
+      new ApiError(
+        503,
+        JSON.stringify({
+          detail: "malformed scheduler receipt",
+          ran: 0,
+          scanned: 2,
+          runs: [],
+          deferred: [
+            {
+              schedule_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              reason: "constructor",
+              due_at: "2026-06-19T10:03:00Z",
+            },
+            {
+              schedule_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+              reason: "toString",
+              due_at: "2026-06-19T10:04:00Z",
+            },
+          ],
+          run_limit_reached: false,
+          scan_limit_reached: false,
+          complete: false,
+          partial: true,
+          system_error: "must not render inherited prototype keys as a deferred reason",
+        }),
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Run due now" }));
+    expect(await screen.findByText("Could not run due rotations")).toBeInTheDocument();
     await waitFor(() => expect(apiMock.runDueSecretRotations).toHaveBeenCalledTimes(3));
     expect(screen.queryByRole("list", { name: "Deferred rotation schedule evidence" })).not.toBeInTheDocument();
     expect(screen.queryByText("77777777-7777-7777-7777-777777777777")).not.toBeInTheDocument();
     expect(screen.queryByText("Approval pending")).not.toBeInTheDocument();
     expect(screen.queryByText("99999999-9999-4999-8999-999999999999")).not.toBeInTheDocument();
-		expect(screen.queryByText("app/partial/password")).not.toBeInTheDocument();
-		expect(screen.queryByRole("status", { name: "Scheduled rotation continuation notice" })).not.toBeInTheDocument();
+    expect(screen.queryByText("app/partial/password")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "Scheduled rotation continuation notice" })).not.toBeInTheDocument();
+
+    const maliciousSchedulerError = "credential=super-secret subject=alice@example.test remote=vault/alice";
+    apiMock.runDueSecretRotations.mockRejectedValueOnce(
+      new ApiError(
+        503,
+        JSON.stringify({
+          ran: 0,
+          scanned: 0,
+          runs: [],
+          deferred: [],
+          run_limit_reached: false,
+          scan_limit_reached: false,
+          complete: false,
+          partial: false,
+          system_error: maliciousSchedulerError,
+        }),
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Run due now" }));
+    await waitFor(() => expect(apiMock.runDueSecretRotations).toHaveBeenCalledTimes(4));
+    expect(await screen.findByText("Could not run due rotations")).toBeInTheDocument();
+    expect(screen.queryByText(maliciousSchedulerError)).not.toBeInTheDocument();
   });
 
   it("queues denied secret changes for distinct approval and retry completion", async () => {

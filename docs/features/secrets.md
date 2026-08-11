@@ -208,6 +208,12 @@ preserving, and limited to the one JSON error token. Until it is safe to stop ol
 writers, projection catch-up, audit/search, retention, and backup export fail
 closed without returning any legacy payload bytes.
 
+The console revalidates that same closed vocabulary before rendering a successful
+or partial tick. An otherwise well-formed response with an unknown run, rollback,
+deferred, or system error is treated as a malformed scheduler failure; neither its
+error nor its problem detail is displayed. This keeps a stale cache or damaged
+proxy from turning rejected provider text back into operator-visible copy.
+
 Each `run-due` idempotency key owns one durable PostgreSQL tick. The tick freezes
 `due_through` from the outer idempotency row's database `created_at`, the UUID-ring
 cursor where scanning began, the current row snapshot, the ordered non-secret

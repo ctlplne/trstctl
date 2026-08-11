@@ -505,6 +505,10 @@ export const messages = {
     defaultMessage: "Due edge claimed by another runner",
     description: "Secret rotation scheduler deferred reason.",
   },
+  "secrets.rotation.deferredReason.configRevisionUnanchored": {
+    defaultMessage: "Schedule configuration must be re-saved",
+    description: "Secret rotation scheduler deferred reason for a pre-evidence schedule.",
+  },
   "secrets.import.unavailableTitle": {
     defaultMessage: "Bulk secret import",
     description: "Disabled bulk-import disclosure: heading.",
