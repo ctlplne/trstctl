@@ -3,6 +3,9 @@
 package docs
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"strings"
 	"testing"
 )
@@ -27,13 +30,17 @@ var custodyKinds = []string{
 	"SCEP leaf",
 	"CMP leaf",
 	"Identity leaf, `subject_csr_pem` supplied",
-	"Identity leaf, no CSR supplied",
+	"Identity leaf, no CSR, agent-executed target",
+	"Identity leaf, no CSR, retained control-plane target",
 	"CA root / intermediate",
 	"Agent enrollment identity",
 	"SSH host / user certificate",
-	"SPIFFE X.509-SVID",
+	"SPIFFE X.509-SVID, host-agent Workload API",
+	"SPIFFE X.509-SVID, control-plane compatibility Workload API",
 	"PKI-as-a-secret",
-	"Automated renewal successor",
+	"Automated renewal successor, agent-executed target",
+	"Automated renewal successor, recorded `subject_csr_pem`",
+	"Automated renewal successor, no CSR and retained control-plane target",
 	"Ephemeral workload credential",
 }
 
@@ -41,15 +48,9 @@ var custodyKinds = []string{
 // inside the control plane. Each must be named on the page together with what
 // replaces it — a disclosure with no successor is a confession, not a plan.
 var custodyControlPlaneKeygen = map[string]string{
-	"Identity leaf without a CSR": "subject_csr_pem",
-	"SPIFFE X.509-SVID":           "host agent",
-	"PKI-as-a-secret":             "brain-local convenience",
-	// Automated renewal builds its own CSR, so it generates a subject key like
-	// the others — and unlike the others it then destroys it, which makes the
-	// successor unusable rather than merely control-plane-custodied. Naming the
-	// successor is what stops that being discovered by an operator whose
-	// renewed endpoint stopped serving.
-	"Automated renewal successor": "Host-executed renewal",
+	"Identity leaf without a CSR":              "subject_csr_pem",
+	"Control-plane compatibility Workload API": "host-agent Workload API",
+	"PKI-as-a-secret with only a common name":  "csr_pem",
 }
 
 func TestCustodyTableCoversEveryCredentialKind(t *testing.T) {
@@ -74,6 +75,82 @@ func TestCustodyTableNamesEveryControlPlaneKeygenPathAndItsSuccessor(t *testing.
 			t.Errorf("docs/custody.md names %q but not what replaces it (%q); disclosing a custody gap without its successor is a confession, not a plan",
 				path, successor)
 		}
+	}
+}
+
+// TestSPIFFECustodyRowsFollowBothProductionSockets derives the two table rows
+// from the shipped composition roots, not from phrases that happen to occur in
+// comments. B3 added a host-local server without deleting the control-plane
+// compatibility socket. Collapsing those two runtimes into one row makes either
+// "yes" or "no" a lie, depending on which socket the workload dialled.
+func TestSPIFFECustodyRowsFollowBothProductionSockets(t *testing.T) {
+	t.Parallel()
+
+	agentRun := goFunction(t, "../cmd/trstctl-agent/main.go", "runAgent")
+	requireCall(t, agentRun, "startWorkloadAPI",
+		"the production agent must compose the host-local Workload API")
+	agentSocket := goFunction(t, "../cmd/trstctl-agent/workloadchannel.go", "startWorkloadAPI")
+	requireCall(t, agentSocket, "workloadapi.New",
+		"the host listener must be the agent Workload API implementation")
+	hostFetch := goFunction(t, "../internal/agent/workloadapi/server.go", "FetchX509SVID")
+	requireCallBefore(t, hostFetch, "crypto.GenerateLockedKey", "s.up.FetchWorkloadSVID",
+		"the host must generate the SVID key before asking the control plane to sign its public half")
+
+	controlPlaneBuild := goFunction(t, "../internal/server/protocol_mounts.go", "buildSPIFFE")
+	requireCall(t, controlPlaneBuild, "spiffe.NewWorkloadAPIServer",
+		"the retained control-plane compatibility socket must stay explicit while it exists")
+	controlPlaneRun := goFunction(t, "../internal/server/protocol_ssh.go", "RunSPIFFE")
+	requireCall(t, controlPlaneRun, "spiffe.ServeWorkloadAPI",
+		"the compatibility Workload API must be reachable from the production server composition")
+
+	custody := read(t, "custody.md")
+	requireCustodyRow(t, custody, "SPIFFE X.509-SVID, host-agent Workload API", "host agent", "No")
+	requireCustodyRow(t, custody, "SPIFFE X.509-SVID, control-plane compatibility Workload API", "control plane", "Yes", "deprecated")
+	for _, stale := range []string{"the socket is brain-local today", "Moving the socket to the host agent"} {
+		if strings.Contains(custody, stale) {
+			t.Errorf("docs/custody.md still says %q even though the host-agent socket is assembled in production", stale)
+		}
+	}
+}
+
+// TestRenewalCustodyRowsFollowTheProductionBranch pins the load-bearing order:
+// handleRenew asks whether the target executes on the agent before the fallback
+// mint can run. It also follows the queued work to the host executor that makes
+// the key. A census-only docs test missed both facts while stale prose stayed
+// green.
+func TestRenewalCustodyRowsFollowTheProductionBranch(t *testing.T) {
+	t.Parallel()
+
+	handleIssue := goFunction(t, "../internal/server/issuance.go", "handleIssue")
+	requireCallBefore(t, handleIssue, "d.enqueueHostRenewal", "d.mintServedLeafForTrigger",
+		"a no-CSR first issuance for an agent-executed target must branch before the fallback mint")
+	handleRenew := goFunction(t, "../internal/server/issuance.go", "handleRenew")
+	requireCallBefore(t, handleRenew, "d.dispatchHostRenewal", "d.mintServedLeafForRenewal",
+		"agent-executed renewal must branch before any control-plane fallback mint")
+	dispatch := goFunction(t, "../internal/server/host_renewal_enqueue.go", "dispatchHostRenewal")
+	requireCallBefore(t, dispatch, "d.hostRenewalTargetFor", "d.enqueueHostRenewal",
+		"the endpoint.renew job must be selected from the target's executor")
+	hostExecutor := goFunction(t, "../internal/agent/relay/hostrenew.go", "runHostRenew")
+	requireCall(t, hostExecutor, "crypto.GenerateHostSubjectKey",
+		"the queued renewal must terminate in key generation on the serving host")
+
+	custody := read(t, "custody.md")
+	requireCustodyRow(t, custody, "Identity leaf, no CSR, agent-executed target", "host agent", "No")
+	requireCustodyRow(t, custody, "Identity leaf, no CSR, retained control-plane target", "control plane", "Yes", "deprecated")
+	requireCustodyRow(t, custody, "Automated renewal successor, agent-executed target", "host agent", "No")
+	requireCustodyRow(t, custody, "Automated renewal successor, recorded `subject_csr_pem`", "requester", "No")
+	requireCustodyRow(t, custody, "Automated renewal successor, no CSR and retained control-plane target", "control plane", "Yes", "deprecated")
+	for _, stale := range []string{
+		"Host-executed renewal is the next piece of work",
+		"The four that still say yes",
+		"private key is **destroyed, not delivered**",
+	} {
+		if strings.Contains(custody, stale) {
+			t.Errorf("docs/custody.md retains the pre-B2 claim %q", stale)
+		}
+	}
+	if !strings.Contains(custody, "three retained control-plane generators") {
+		t.Error("docs/custody.md must state the current generator count; renewal reuses the deprecated no-CSR identity fallback rather than adding a fourth generator")
 	}
 }
 
@@ -130,4 +207,90 @@ func TestLimitationsNoLongerClaimsTheIdentityAPIHasNoCSRInput(t *testing.T) {
 	if !strings.Contains(limitations, "subject_csr_pem") {
 		t.Error("docs/limitations.md must record the CSR-first issuance path")
 	}
+}
+
+// goFunction parses the named production function and returns its AST. These
+// guards intentionally fail if composition moves: the custody page then needs
+// to be re-proved against the new root instead of remaining green on keywords.
+func goFunction(t *testing.T, file, name string) *ast.FuncDecl {
+	t.Helper()
+	fset := token.NewFileSet()
+	parsed, err := parser.ParseFile(fset, file, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", file, err)
+	}
+	for _, decl := range parsed.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Name.Name == name {
+			return fn
+		}
+	}
+	t.Fatalf("%s has no production function %s; re-prove the custody claim at its new composition root", file, name)
+	return nil
+}
+
+func requireCall(t *testing.T, fn *ast.FuncDecl, want, why string) {
+	t.Helper()
+	if len(callPositions(fn, want)) == 0 {
+		t.Errorf("%s does not call %s: %s", fn.Name.Name, want, why)
+	}
+}
+
+func requireCallBefore(t *testing.T, fn *ast.FuncDecl, first, second, why string) {
+	t.Helper()
+	firstAt := callPositions(fn, first)
+	secondAt := callPositions(fn, second)
+	if len(firstAt) == 0 || len(secondAt) == 0 {
+		t.Errorf("%s calls %s at %v and %s at %v: %s", fn.Name.Name, first, firstAt, second, secondAt, why)
+		return
+	}
+	if firstAt[0] >= secondAt[0] {
+		t.Errorf("%s calls %s after %s: %s", fn.Name.Name, first, second, why)
+	}
+}
+
+func callPositions(fn *ast.FuncDecl, want string) []token.Pos {
+	var positions []token.Pos
+	ast.Inspect(fn.Body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if ok && callName(call.Fun) == want {
+			positions = append(positions, call.Pos())
+		}
+		return true
+	})
+	return positions
+}
+
+func callName(expr ast.Expr) string {
+	switch value := expr.(type) {
+	case *ast.Ident:
+		return value.Name
+	case *ast.SelectorExpr:
+		prefix := callName(value.X)
+		if prefix == "" {
+			return value.Sel.Name
+		}
+		return prefix + "." + value.Sel.Name
+	case *ast.CallExpr:
+		return callName(value.Fun)
+	default:
+		return ""
+	}
+}
+
+func requireCustodyRow(t *testing.T, body, label string, claims ...string) {
+	t.Helper()
+	prefix := "| " + label + " |"
+	for _, line := range strings.Split(body, "\n") {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		for _, claim := range claims {
+			if !strings.Contains(line, claim) {
+				t.Errorf("custody row %q does not say %q: %s", label, claim, line)
+			}
+		}
+		return
+	}
+	t.Errorf("docs/custody.md has no exact row for %q", label)
 }

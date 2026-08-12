@@ -66,50 +66,60 @@ silently counted as a complete custody record.
 | SCEP leaf (RFC 8894) | The SCEP client / MDM | The device | No |
 | CMP leaf (RFC 4210) | The CMP client | Wherever the client put it | No |
 | Identity leaf, `subject_csr_pem` supplied | The requester | Wherever the requester put it | No |
-| Identity leaf, no CSR supplied | The control plane | Transient: in locked memory, wiped after the deploy intent is encoded | **Yes — deprecated**, see below |
+| Identity leaf, no CSR, agent-executed target | The host agent | Installed into the target's connector-specific host store; transient copies stay in locked host memory | No — only the CSR travels up |
+| Identity leaf, no CSR, retained control-plane target | The control plane | Locked memory; when a control-plane connector is configured, then a sealed deploy intent | **Yes — deprecated**, see below |
 | CA root / intermediate | The isolated signer | Inside the signer's key store or an HSM | No — it never leaves the signer |
 | Agent enrollment identity | The agent | The agent's own key store | No |
 | SSH host / user certificate | The requesting host or user | Wherever the requester put it | No |
-| SPIFFE X.509-SVID | The control plane | Transient: returned over the Workload API socket | **Yes** — the socket is brain-local today |
+| SPIFFE X.509-SVID, host-agent Workload API | The host agent | Transient locked memory in the agent, then returned to the workload over that host's UDS | No — only the public key travels up |
+| SPIFFE X.509-SVID, control-plane compatibility Workload API | The control plane | Transient locked memory, then returned over the control-plane-local UDS | **Yes — deprecated** compatibility path, see below |
 | PKI-as-a-secret, `csr_pem` supplied | The requester | Wherever the requester generated it | No |
 | PKI-as-a-secret, `common_name` supplied | The control plane | Returned once in the response, not persisted | **Yes — deprecated**, see below |
-| Automated renewal successor (rotate / renew-before-expiry) | The control plane | Transient: in locked memory, wiped when the successor is recorded | **Yes**, see below |
+| Automated renewal successor, agent-executed target | The host agent | Installed into the target's connector-specific host store; transient copies stay in locked host memory | No — only the CSR travels up |
+| Automated renewal successor, recorded `subject_csr_pem` | The original requester | Wherever the requester kept that matching key; renewal creates no new subject key | No |
+| Automated renewal successor, no CSR and retained control-plane target | The control plane | Locked memory; when a control-plane connector is configured, then a sealed deploy intent | **Yes — deprecated** identity fallback, see below |
 | Ephemeral workload credential (attested) | The attested workload | Wherever the workload put it | No — it presents its own public key |
 
-## The four that still say yes, and what replaces each
+## The three retained control-plane generators, and what replaces each
 
-**Identity leaf without a CSR.** The direct identity API had no CSR input at all,
-so transitioning an identity to `issued` meant the control plane generated the
-subject key, signed for it, and handed it onward. Supplying `subject_csr_pem` on
-that transition is now the primary path: trstctl signs the request you built and
-generates nothing. The old path still works for one release train and records an
-`issuance.server_side_keygen` event every time it runs, so you can find which of
-your flows still rely on it before it is removed. Note that an identity issued
-from your own CSR cannot be deployed by a control-plane connector — the material
-that deployment needs is on your side, which is the correct consequence and the
-reason host-executed renewal is the next piece of work.
+There are four `Yes` rows because the identity generator is reused by its
+automated-renewal fallback. There are only three distinct control-plane subject-key
+generators to remove.
 
-**Automated renewal successor.** When trstctl renews or rotates a certificate on
-its own — the scheduled renew-before-expiry pass and the rotate operation — it
-builds the successor's CSR itself, which means it generates the key. That key is
-held in locked memory and destroyed as soon as the successor is recorded.
+**Identity leaf without a CSR, including its renewal fallback.** Supplying
+`subject_csr_pem` is the primary direct-identity path: trstctl signs the request
+you built and generates nothing. On renewal, the recorded CSR is honoured again,
+so the requester keeps the same key and the control plane still generates nothing.
 
-Read that consequence carefully, because it is sharper than a custody note: the
-successor certificate's private key is **destroyed, not delivered**. Automated
-renewal produces a correct, recorded, retired-predecessor-linked certificate that
-no endpoint can actually serve with, because nothing holds its key. It is
-useful as inventory and as a lifecycle event; it is not by itself a renewal your
-load balancer can use. Host-executed renewal — the agent generating the key on
-the host that serves the traffic and sending up only a CSR — is what makes this
-path produce a usable credential, and it is why every renewal successor in your
-inventory reading `control_plane` is a measure of how much of that work is left.
+If the deployment target says `executor=agent`, first issuance and renewal take a
+different branch before any mint. The control plane queues `endpoint.renew`; the
+host agent generates the key, sends only a CSR upward, receives the certificate,
+installs the pair, verifies the live endpoint, and signs the custody receipt. This
+is the shipped B2 path, not future work.
 
-**SPIFFE X.509-SVID.** The Workload API socket is served by the control plane,
-which means it can only ever serve workloads on the control plane's own box, and
-it mints SVID keys in-process. Moving the socket to the host agent — the SPIRE
-agent shape — puts SVID key generation on the host that uses it.
+The retained fallback applies only when there is no CSR and the target is not
+agent-executed. It calls the same control-plane key generator for first issuance
+and renewal, and records `issuance.server_side_keygen`. The key is held in locked
+memory. If a control-plane connector is configured, the bytes are sealed into its
+outbox deploy intent; otherwise no deploy material is emitted. Working copies are
+wiped after the dispatcher finishes. This compatibility path is deprecated, and
+the event identifies the flows that must move to `subject_csr_pem` or an
+agent-executed target.
 
-**PKI-as-a-secret.** `/api/v1/secrets/pki` now requires exactly one custody mode.
+**Control-plane compatibility Workload API.** The production host agent now serves
+the SPIFFE Workload API on the workload's machine. Its `FetchX509SVID` generates a
+locked key before calling upward, sends only the public DER plus locally attested
+selectors to the control plane, and returns the private half only over that host's
+Unix-domain socket.
+
+The control plane still composes its older Workload API socket during the
+deprecation window. A workload that dials that compatibility socket receives a key
+generated in the control-plane process, so that row remains `Yes`. The host-agent
+Workload API is its replacement; the two rows stay separate until the compatibility
+socket is removed.
+
+**PKI-as-a-secret with only a common name.** `/api/v1/secrets/pki` now requires
+exactly one custody mode.
 Supply `csr_pem` and trstctl validates the self-signed PKCS#10 request through the
 crypto boundary, signs it, and returns only the certificate; the matching key never
 entered the control plane. Supplying `common_name` keeps the legacy brain-local convenience:
