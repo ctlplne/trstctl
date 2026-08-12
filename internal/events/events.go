@@ -723,21 +723,11 @@ func (l *Log) replayResolved(
 			}
 			return fmt.Errorf("events: get seq %d: %w", seq, err)
 		}
-		var s storedEvent
-		if err := json.Unmarshal(raw.Data, &s); err != nil {
-			return fmt.Errorf("events: decode seq %d: %w", seq, err)
+		event, err := decodeStored(raw.Data, raw.Sequence)
+		if err != nil {
+			return err
 		}
-		// A legacy envelope predating the schema-version field (or a v1 envelope that
-		// omits it) reads back as DefaultSchemaVersion, so replay treats it as the
-		// baseline payload shape rather than version 0 (SCHEMA-001).
-		ver := s.SchemaVersion
-		if ver == 0 {
-			ver = DefaultSchemaVersion
-		}
-		if err := fn(Event{
-			ID: s.ID, Type: s.Type, TenantID: s.TenantID, Time: s.Time,
-			SchemaVersion: ver, Data: s.Data, Sequence: raw.Sequence, Actor: s.Actor,
-		}); err != nil {
+		if err := fn(event); err != nil {
 			return err
 		}
 	}

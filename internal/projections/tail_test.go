@@ -230,9 +230,12 @@ func TestTailWorkerPersistsPoisonAndClearsItAfterRestart(t *testing.T) {
 
 	poison := &switchableTailProjection{err: errors.New("transient extension poison")}
 	proj1 := projections.New(s, projections.WithEventProjection(poison))
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant for extension poison: %v", err)
+	}
 	first, err := log1.Append(ctx, events.Event{
-		Type: projections.EventTenantRegistered, TenantID: tenantA,
-		Data: tenantRegistered("Acme"),
+		Type: projections.EventOwnerCreated, TenantID: tenantA,
+		Data: ownerCreated("00000000-0000-0000-0000-0000000000f0", "poison"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -312,8 +315,8 @@ func TestTailWorkerPersistsPoisonAndClearsItAfterRestart(t *testing.T) {
 		lastHealth.LastError != "" || lastHealth.FailedAt != nil {
 		t.Fatalf("restarted tail did not clear poison and drain later event: %+v", lastHealth)
 	}
-	if got := ownerCount(t, restartedStore, tenantA); got != 1 {
-		t.Fatalf("owners after recovered tail = %d, want 1", got)
+	if got := ownerCount(t, restartedStore, tenantA); got != 2 {
+		t.Fatalf("owners after recovered tail = %d, want 2", got)
 	}
 	cancel()
 	select {

@@ -3,6 +3,7 @@
 package events
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/config"
 )
 
 // TestEnvelopeDecodeErrorCarriesStreamSequence pins the pre-callback failure
@@ -30,6 +33,27 @@ func TestEnvelopeDecodeErrorCarriesStreamSequence(t *testing.T) {
 	}
 	if decodeErr.Unwrap() == nil {
 		t.Fatal("EnvelopeDecodeError lost the underlying JSON decoder error")
+	}
+}
+
+func TestReplayPreservesEnvelopeDecodeErrorSequence(t *testing.T) {
+	ctx := context.Background()
+	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	ack, err := log.js.Publish(ctx, "events.owner.created", []byte(`{"unterminated"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = log.Replay(ctx, 0, func(Event) error {
+		t.Fatal("malformed retained envelope reached replay callback")
+		return nil
+	})
+	var decodeErr *EnvelopeDecodeError
+	if !errors.As(err, &decodeErr) || decodeErr.Sequence != ack.Sequence {
+		t.Fatalf("Replay error = %v, want EnvelopeDecodeError seq %d", err, ack.Sequence)
 	}
 }
 

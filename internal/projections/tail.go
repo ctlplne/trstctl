@@ -80,11 +80,11 @@ func (w *TailWorker) Run(ctx context.Context) error {
 	}
 	secretAuthority, err := classifySecretSyncLifecycle(ctx, w.log)
 	if err != nil {
-		return err
+		return w.persistEnvelopeDecodeFailure(ctx, err)
 	}
 	dynamicSecretAuthority, err := classifyDynamicSecretLifecycle(ctx, w.log)
 	if err != nil {
-		return err
+		return w.persistEnvelopeDecodeFailure(ctx, err)
 	}
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
@@ -127,11 +127,15 @@ func (w *TailWorker) Run(ctx context.Context) error {
 	// so the callback path above has no Event.Sequence to persist. Only that typed
 	// pre-callback error is made durable here. Fetch and ACK transport failures do
 	// not mean the read model rejected an event and remain retry-only.
+	return w.persistEnvelopeDecodeFailure(runCtx, tailErr)
+}
+
+func (w *TailWorker) persistEnvelopeDecodeFailure(ctx context.Context, err error) error {
 	var decodeErr *events.EnvelopeDecodeError
-	if errors.As(tailErr, &decodeErr) {
-		return w.persistFailure(runCtx, decodeErr.Sequence, tailErr)
+	if errors.As(err, &decodeErr) {
+		return w.persistFailure(ctx, decodeErr.Sequence, err)
 	}
-	return tailErr
+	return err
 }
 
 // persistFailure records a poison before this Run invocation returns. It uses a
