@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -97,6 +98,44 @@ func (s *Store) LookupIssuedCert(ctx context.Context, tenantID, caID, serial str
 		}
 	})
 	return c, found, err
+}
+
+// ExactIssuedCertificateAuthority resolves the one tenant CA ledger row that
+// owns serial. Incident response refuses zero or ambiguous rows because a
+// revocation sent to the wrong responder is only an inventory label, not a
+// cryptographic revocation.
+func (s *Store) ExactIssuedCertificateAuthority(ctx context.Context, tenantID, serial string) (string, error) {
+	serial = strings.TrimSpace(serial)
+	if serial == "" {
+		return "", fmt.Errorf("store: issued certificate serial is required")
+	}
+	var ids []string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT ca_id::text FROM ca_issued_certs
+			  WHERE tenant_id = $1 AND serial = $2
+			  ORDER BY ca_id
+			  LIMIT 2`, tenantID, serial)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(ids) != 1 {
+		return "", fmt.Errorf("store: issued certificate serial resolves to %d revocation authorities", len(ids))
+	}
+	return ids[0], nil
 }
 
 // HasIssuedCerts reports whether tenantID has any issued-certificate surface for

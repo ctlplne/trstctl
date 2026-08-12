@@ -235,6 +235,21 @@ func TestPrivateEgressIsDedicatedPermission(t *testing.T) {
 	}
 }
 
+func TestIncidentGameDayIsDedicatedPermissionAUD41(t *testing.T) {
+	scope := authz.Scope{TenantID: "t1"}
+	incidentWriter := authz.Role{Name: "incident-writer", Permissions: []authz.Permission{authz.IncidentsWrite}}
+	rehearsalWriter := authz.Role{Name: "rehearsal-writer", Permissions: []authz.Permission{authz.IncidentsWrite, authz.IncidentsGameDay}}
+
+	writer := authz.Principal{TenantID: "t1", Grants: []authz.Grant{{Role: incidentWriter, Scope: scope}}}
+	rehearsal := authz.Principal{TenantID: "t1", Grants: []authz.Grant{{Role: rehearsalWriter, Scope: scope}}}
+	if writer.Can(authz.IncidentsGameDay, scope) {
+		t.Fatal("incidents:write alone must not authorize a game-day run")
+	}
+	if !rehearsal.Can(authz.IncidentsGameDay, scope) {
+		t.Fatal("the dedicated rehearsal permission must authorize a game-day run")
+	}
+}
+
 func TestMachineBuiltinRolesPinned(t *testing.T) {
 	want := map[string][]authz.Permission{
 		"agent": {
@@ -302,6 +317,7 @@ func TestMachineBuiltinRolesPinned(t *testing.T) {
 			authz.LifecycleRead,
 			authz.IncidentsRead,
 			authz.IncidentsWrite,
+			authz.IncidentsGameDay,
 			authz.PrivateEgress,
 			authz.AccessRead,
 			authz.AccessWrite,

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
@@ -116,6 +117,7 @@ type issuanceDispatcher struct {
 	idem           *orchestrator.Idempotency
 	outbox         *orchestrator.Outbox
 	store          *store.Store
+	audit          *audit.Service
 	admission      editionseam.AdmissionHook
 
 	// log is the event log used to emit the profile-gated issuance decision
@@ -259,6 +261,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleDeploy(ctx, m)
 	case orchestrator.DestinationFleetReissuanceBatch:
 		return d.handleFleetReissuanceBatch(ctx, m)
+	case orchestrator.DestinationIncidentMigrationRevoke:
+		return d.handleIncidentMigrationRevoke(ctx, m)
 	case orchestrator.DestinationConnectorRollback, "connector.test":
 		// Relay-executed kinds. This dispatcher sweeps every "connector." row
 		// (see outboxDispatchFamilies) and does not filter on

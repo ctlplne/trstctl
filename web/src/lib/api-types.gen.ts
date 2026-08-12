@@ -2436,14 +2436,12 @@ export interface FleetReissuanceHealthGate {
 }
 
 export interface FleetReissuanceRequest {
-  batch_size?: number;
-  connector?: string;
-  evidence_hint?: string;
-  health_gates?: FleetReissuanceHealthGate[];
+  cohorts: MigrationRunStartWave[];
   issuer_id: string;
+  mode: "live" | "game_day";
   reason?: string;
+  replacement_authority_id: string;
   rollback_ref?: string;
-  target?: string;
 }
 
 export interface FleetReissuanceRun {
@@ -2451,6 +2449,8 @@ export interface FleetReissuanceRun {
   batch_count: number;
   batch_size: number;
   batches: FleetReissuanceBatch[];
+  candidate_trust_hosts: string[];
+  candidate_trust_store_ids: string[];
   connector?: string;
   connector_deliveries?: ConnectorDelivery[];
   connector_delivery_ids?: string[];
@@ -2458,6 +2458,8 @@ export interface FleetReissuanceRun {
   created_by?: string;
   evidence_bundle?: string;
   evidence_bundle_format?: string;
+  exact_trust_hosts: string[];
+  exact_trust_store_ids: string[];
   failed_targets?: string[];
   graph_impact: GraphImpact;
   halted_reason?: string;
@@ -2465,9 +2467,13 @@ export interface FleetReissuanceRun {
   id: string;
   idempotency_key?: string;
   issuer_id: string;
+  migration_run_id?: string;
+  mode: "legacy" | "live" | "game_day";
   next_batch_index: number;
   phase: string;
+  plan_digest?: string;
   reason?: string;
+  replacement_authority_id?: string;
   replacement_identities?: Identity[];
   replacement_identity_ids: string[];
   revoked_identity_ids: string[];

@@ -575,6 +575,7 @@ type Deps struct {
 type Server struct {
 	store      *store.Store
 	log        *events.Log
+	audit      *audit.Service
 	outbox     *orchestrator.Outbox
 	outboxWake chan struct{}
 	idemGC     *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
@@ -1126,6 +1127,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	var auditSvc *audit.Service
 	if d.Log != nil {
 		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
+		s.audit = auditSvc
 		defaults = append(defaults, api.WithAudit(auditSvc))
 		// J1: chain heads are countersigned by the served TSA. Resolved lazily —
 		// the protocol mounts are built after this point.
@@ -1539,9 +1541,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	default:
-		s.obHandler = &issuanceDispatcher{authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	}
 	return nil
 }

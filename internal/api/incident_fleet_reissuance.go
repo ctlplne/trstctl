@@ -5,27 +5,31 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	guuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/migration"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
 type fleetReissuanceRequest struct {
-	IssuerID     string                            `json:"issuer_id"`
-	Reason       string                            `json:"reason"`
-	BatchSize    int                               `json:"batch_size"`
-	Connector    string                            `json:"connector"`
-	Target       string                            `json:"target"`
-	RollbackRef  string                            `json:"rollback_ref"`
-	HealthGates  []store.FleetReissuanceHealthGate `json:"health_gates"`
-	EvidenceHint string                            `json:"evidence_hint"`
+	IssuerID               string                 `json:"issuer_id"`
+	ReplacementAuthorityID string                 `json:"replacement_authority_id"`
+	Mode                   migration.IncidentMode `json:"mode"`
+	Reason                 string                 `json:"reason"`
+	Cohorts                []migrationStartWave   `json:"cohorts"`
+	RollbackRef            string                 `json:"rollback_ref"`
 }
 
 type fleetReissuanceActionRequest struct {
@@ -37,6 +41,14 @@ type fleetReissuanceRunResponse struct {
 	ID                     string                            `json:"id"`
 	TenantID               string                            `json:"tenant_id"`
 	IssuerID               string                            `json:"issuer_id"`
+	MigrationRunID         string                            `json:"migration_run_id,omitempty"`
+	ReplacementAuthorityID string                            `json:"replacement_authority_id,omitempty"`
+	Mode                   string                            `json:"mode"`
+	PlanDigest             string                            `json:"plan_digest,omitempty"`
+	ExactTrustStoreIDs     []string                          `json:"exact_trust_store_ids"`
+	ExactTrustHosts        []string                          `json:"exact_trust_hosts"`
+	CandidateTrustStoreIDs []string                          `json:"candidate_trust_store_ids"`
+	CandidateTrustHosts    []string                          `json:"candidate_trust_hosts"`
 	Status                 string                            `json:"status"`
 	Phase                  string                            `json:"phase"`
 	Reason                 string                            `json:"reason"`
@@ -96,6 +108,18 @@ func toFleetReissuanceRunResponse(r store.IncidentFleetReissuanceRun) fleetReiss
 	if r.AffectedIdentityIDs == nil {
 		r.AffectedIdentityIDs = []string{}
 	}
+	if r.ExactTrustStoreIDs == nil {
+		r.ExactTrustStoreIDs = []string{}
+	}
+	if r.ExactTrustHosts == nil {
+		r.ExactTrustHosts = []string{}
+	}
+	if r.CandidateTrustStoreIDs == nil {
+		r.CandidateTrustStoreIDs = []string{}
+	}
+	if r.CandidateTrustHosts == nil {
+		r.CandidateTrustHosts = []string{}
+	}
 	if r.ReplacementIdentityIDs == nil {
 		r.ReplacementIdentityIDs = []string{}
 	}
@@ -119,6 +143,10 @@ func toFleetReissuanceRunResponse(r store.IncidentFleetReissuanceRun) fleetReiss
 	}
 	return fleetReissuanceRunResponse{
 		ID: r.ID, TenantID: r.TenantID, IssuerID: r.IssuerID,
+		MigrationRunID: r.MigrationRunID, ReplacementAuthorityID: r.ReplacementAuthorityID,
+		Mode: r.Mode, PlanDigest: r.PlanDigest,
+		ExactTrustStoreIDs: r.ExactTrustStoreIDs, ExactTrustHosts: r.ExactTrustHosts,
+		CandidateTrustStoreIDs: r.CandidateTrustStoreIDs, CandidateTrustHosts: r.CandidateTrustHosts,
 		Status: r.Status, Phase: r.Phase, Reason: r.Reason, BatchSize: r.BatchSize,
 		NextBatchIndex: r.NextBatchIndex, HaltedReason: r.HaltedReason,
 		BatchCount: len(r.Batches), Connector: r.Connector, Target: r.Target,
@@ -134,33 +162,62 @@ func toFleetReissuanceRunResponse(r store.IncidentFleetReissuanceRun) fleetReiss
 
 //trstctl:mutation
 func (a *API) startFleetReissuance(w http.ResponseWriter, r *http.Request) {
+	var req fleetReissuanceRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid JSON body: "+err.Error()))
+		return
+	}
+	canonical, err := json.Marshal(req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	principalSubject, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding := crypto.SHA256Hex([]byte("incident-fleet-start\x00" + principalSubject + "\x00" + string(canonical)))
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req fleetReissuanceRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		req.IssuerID = strings.TrimSpace(req.IssuerID)
-		if req.IssuerID == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "issuer_id is required")
+		req.ReplacementAuthorityID = strings.TrimSpace(req.ReplacementAuthorityID)
+		if req.IssuerID == "" || req.ReplacementAuthorityID == "" || len(req.Cohorts) == 0 {
+			return 0, nil, errStatus(http.StatusBadRequest, "issuer_id, replacement_authority_id, and at least one cohort are required")
+		}
+		if req.Mode != migration.IncidentModeLive && req.Mode != migration.IncidentModeGameDay {
+			return 0, nil, errStatus(http.StatusBadRequest, "mode must be live or game_day")
 		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
 		if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
 			return 0, nil, errStatus(http.StatusForbidden, "forbidden: fleet reissuance that mints replacements requires "+string(authz.CertsIssue))
 		}
+		if req.Mode == migration.IncidentModeGameDay && !principal.Can(authz.IncidentsGameDay, authz.Scope{TenantID: tenantID}) {
+			return 0, nil, errStatus(http.StatusForbidden, "forbidden: incident rehearsal requires "+string(authz.IncidentsGameDay))
+		}
 		if _, err := a.store.GetIssuer(ctx, tenantID, req.IssuerID); err != nil {
 			return 0, nil, err
 		}
+
+		// Freeze both the affected certificate set and H1's exact public-key
+		// relationships before publishing any estate effect. Subject-only
+		// candidates remain visible guidance, but never enter execution authority.
+		g, err := graph.Build(ctx, a.store, tenantID)
+		if err != nil {
+			return 0, nil, err
+		}
+		issuerNodeID := "iss:" + req.IssuerID
+		if _, ok := g.Node(issuerNodeID); !ok {
+			return 0, nil, errStatus(http.StatusNotFound, "graph node not found for compromised issuer")
+		}
+		exactStores, exactHosts := g.TrustStoresForIssuer(issuerNodeID)
+		candidateStores, candidateHosts := g.TrustCandidatesForIssuer(issuerNodeID)
+		if len(exactStores) == 0 || len(exactHosts) == 0 {
+			return 0, nil, errStatus(http.StatusConflict, "incident execution requires at least one exact certificate/SPKI trust-store relationship and host")
+		}
 		reason := strings.TrimSpace(req.Reason)
 		if reason == "" {
-			reason = "served compromised issuer fleet reissuance"
-		}
-		batchSize := req.BatchSize
-		if batchSize <= 0 {
-			batchSize = 25
-		}
-		if batchSize > 100 {
-			batchSize = 100
+			reason = "verified compromised issuer fleet reissuance"
 		}
 		affected, err := a.store.ListRevocableIdentitiesByIssuer(ctx, tenantID, req.IssuerID)
 		if err != nil {
@@ -169,56 +226,90 @@ func (a *API) startFleetReissuance(w http.ResponseWriter, r *http.Request) {
 		if len(affected) == 0 {
 			return 0, nil, errStatus(http.StatusConflict, "fleet reissuance requires at least one issued, deployed, or renewing identity for the issuer")
 		}
-		impact, err := a.issuerBlastRadius(ctx, tenantID, req.IssuerID)
-		if err != nil {
-			return 0, nil, err
-		}
+		impact := g.BlastRadius(issuerNodeID)
 		impactJSON, err := json.Marshal(impact)
 		if err != nil {
 			return 0, nil, err
 		}
 
-		runID := guuid.NewString()
-		connector := strings.TrimSpace(req.Connector)
-		if connector == "" {
-			connector = "incident-remediation"
+		migrationReq := migrationStartRequest{
+			PlanID:         "incident:" + req.IssuerID,
+			NewAuthorityID: req.ReplacementAuthorityID,
+			Waves:          req.Cohorts,
 		}
-		target := strings.TrimSpace(req.Target)
-		if target == "" {
-			target = "unconfigured-target"
+		run, err := a.buildMigrationRun(ctx, tenantID, idempotencyKey, migrationReq)
+		if err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
+		exactStoreIDs, exactHostIDs := graphNodeIDs(exactStores), graphNodeNames(exactHosts)
+		candidateStoreIDs, candidateHostIDs := graphNodeIDs(candidateStores), graphNodeNames(candidateHosts)
+		affectedIDs := make([]string, 0, len(affected))
+		for _, identity := range affected {
+			affectedIDs = append(affectedIDs, identity.ID)
+		}
+		if err := a.bindIncidentMigrationMembers(ctx, tenantID, exactHostIDs, &run); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		run.Incident = &migration.IncidentPlan{
+			Mode: req.Mode, CompromisedIssuerID: req.IssuerID,
+			ReplacementAuthorityID: req.ReplacementAuthorityID,
+			ExactTrustStoreIDs:     exactStoreIDs, ExactTrustHosts: exactHostIDs,
+			AffectedIdentityIDs: affectedIDs,
+		}
+		if err := migration.ValidateExecutableRunForStart(run); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		planBytes, err := json.Marshal(run)
+		if err != nil {
+			return 0, nil, err
+		}
+		planDigest := crypto.SHA256Hex(planBytes)
+		started, actions, err := migration.StartRun(run)
+		if err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+
 		rollbackRef := strings.TrimSpace(req.RollbackRef)
 		if rollbackRef == "" {
-			rollbackRef = "restore previous credential binding if fleet health checks fail"
+			rollbackRef = "H2 automatically restores the failed cohort before any predecessor revocation"
 		}
-		healthGates := normalizeFleetHealthGates(req.HealthGates)
-
-		affectedIDs := make([]string, 0, len(affected))
-		plannedReplacementIDs := make([]string, 0, len(affected))
-		rollbackRefs := []string{"run:" + runID, "issuer:" + req.IssuerID, rollbackRef}
-		for _, compromised := range affected {
-			affectedIDs = append(affectedIDs, compromised.ID)
-			plannedReplacementIDs = append(plannedReplacementIDs, fleetReplacementID(runID, compromised.ID))
-			rollbackRefs = append(rollbackRefs, "identity:"+compromised.ID)
+		rollbackRefs := []string{"run:" + run.ID, "issuer:" + req.IssuerID, rollbackRef}
+		for _, identityID := range affectedIDs {
+			rollbackRefs = append(rollbackRefs, "identity:"+identityID)
 		}
-		batches := buildFleetBatches(affectedIDs, plannedReplacementIDs, batchSize)
-		batches[0].Status = servedstatus.FleetBatchQueued
-		evidenceFormat, evidenceBundle, err := a.incidentEvidenceBundle(ctx, tenantID, req.IssuerID)
-		if err != nil {
-			return 0, nil, err
-		}
-		run, err := a.orch.RecordIncidentFleetReissuanceAndEnqueueBatch(ctx, tenantID, store.IncidentFleetReissuanceRun{
-			ID: runID, IssuerID: req.IssuerID, Status: "running", Phase: "canary_queued",
-			Reason: reason, BatchSize: batchSize, Connector: connector, Target: target, GraphImpact: impactJSON,
-			AffectedIdentityIDs: affectedIDs, Batches: batches, HealthGates: healthGates,
-			NextBatchIndex: 1, RollbackRefs: rollbackRefs,
-			EvidenceBundleFormat: evidenceFormat, EvidenceBundle: evidenceBundle,
+		incident := store.IncidentFleetReissuanceRun{
+			ID: run.ID, IssuerID: req.IssuerID, MigrationRunID: run.ID,
+			ReplacementAuthorityID: req.ReplacementAuthorityID, Mode: string(req.Mode), PlanDigest: planDigest,
+			ExactTrustStoreIDs: exactStoreIDs, ExactTrustHosts: exactHostIDs,
+			CandidateTrustStoreIDs: candidateStoreIDs, CandidateTrustHosts: candidateHostIDs,
+			Status: "planned", Phase: "plan_persisted_before_estate_work", Reason: reason,
+			BatchSize: largestIncidentCohort(started.Waves), GraphImpact: impactJSON,
+			AffectedIdentityIDs: affectedIDs, Batches: incidentBatches(started),
+			HealthGates: incidentHealthGates(started), NextBatchIndex: 1, RollbackRefs: rollbackRefs,
 			IdempotencyKey: idempotencyKey, CreatedBy: principal.Subject,
-		}, 1)
+		}
+		// This event/projection is deliberately first. If the process dies after
+		// it, a retry sees the same immutable digest. Only the following H2 event
+		// may atomically publish trust-distribution intents.
+		planned, err := a.orch.RecordIncidentFleetReissuanceWithEventID(ctx, tenantID,
+			orchestrator.MigrationEventID(tenantID, incident.ID, "incident-plan"), incident)
 		if err != nil {
 			return 0, nil, err
 		}
-		resp := toFleetReissuanceRunResponse(run)
+		incident.CreatedAt = planned.CreatedAt
+		recorded, err := a.orch.RecordMigrationRun(ctx, tenantID,
+			orchestrator.MigrationEventID(tenantID, started.ID, "start"), started, actions)
+		if err != nil {
+			return 0, nil, err
+		}
+		applyMigrationRunToIncident(&incident, recorded.Run)
+		incident, err = a.orch.RecordIncidentFleetReissuanceWithEventID(ctx, tenantID,
+			orchestrator.MigrationEventID(tenantID, incident.ID,
+				fmt.Sprintf("incident-mirror:%d", recorded.LastEventSequence)), incident)
+		if err != nil {
+			return 0, nil, err
+		}
+		resp := toFleetReissuanceRunResponse(incident)
 		a.hydrateFleetReissuanceResponse(ctx, tenantID, &resp)
 		return http.StatusCreated, resp, nil
 	})
@@ -297,6 +388,61 @@ func (a *API) fleetReissuanceStateMutation(r *http.Request, idempotencyKey, stat
 		if err != nil {
 			return 0, nil, err
 		}
+		if run.MigrationRunID != "" {
+			principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+			if run.Mode == string(migration.IncidentModeGameDay) &&
+				!principal.Can(authz.IncidentsGameDay, authz.Scope{TenantID: tenantID}) {
+				return 0, nil, errStatus(http.StatusForbidden, "forbidden: incident rehearsal requires "+string(authz.IncidentsGameDay))
+			}
+			operation := "pause"
+			switch status {
+			case "running":
+				operation = "resume"
+				if err := requireMigrationIssuePermission(ctx, tenantID); err != nil {
+					return 0, nil, err
+				}
+			case "rollback_recorded":
+				operation = "rollback"
+			}
+			updatedMigration, err := a.orch.UpdateMigrationRun(ctx, tenantID, run.MigrationRunID,
+				orchestrator.MigrationEventID(tenantID, run.MigrationRunID, "incident-"+operation+":"+idempotencyKey),
+				func(current migration.Run) (migration.Run, []migration.Action, error) {
+					switch operation {
+					case "pause":
+						next, pauseErr := migration.PauseRun(current, req.Reason)
+						return next, nil, pauseErr
+					case "resume":
+						return migration.ResumeRun(current)
+					case "rollback":
+						return migration.StartRollback(current)
+					default:
+						return current, nil, errors.New("unsupported incident migration operation")
+					}
+				})
+			if err != nil {
+				return 0, nil, errStatus(http.StatusConflict, err.Error())
+			}
+			applyMigrationRunToIncident(&run, updatedMigration.Run)
+			if reason := strings.TrimSpace(req.Reason); reason != "" {
+				run.Reason += "; " + operation + ": " + reason
+			}
+			if rollbackRef := strings.TrimSpace(req.RollbackRef); rollbackRef != "" {
+				run.RollbackRefs = append(run.RollbackRefs, rollbackRef)
+			}
+			run.IdempotencyKey = idempotencyKey
+			if err := a.sealTerminalIncidentEvidence(ctx, tenantID, updatedMigration.Run, &run); err != nil {
+				return 0, nil, err
+			}
+			updated, err := a.orch.RecordIncidentFleetReissuanceWithEventID(ctx, tenantID,
+				orchestrator.MigrationEventID(tenantID, run.ID,
+					fmt.Sprintf("incident-mirror:%d", updatedMigration.LastEventSequence)), run)
+			if err != nil {
+				return 0, nil, err
+			}
+			resp := toFleetReissuanceRunResponse(updated)
+			a.hydrateFleetReissuanceResponse(ctx, tenantID, &resp)
+			return http.StatusOK, resp, nil
+		}
 		run.Status = status
 		run.Phase = phase
 		if status == "running" {
@@ -347,6 +493,10 @@ func (a *API) exportFleetReissuanceEvidence(w http.ResponseWriter, r *http.Reque
 		a.writeError(w, err)
 		return
 	}
+	if run.MigrationRunID != "" && (run.EvidenceBundleFormat != "jws" || strings.TrimSpace(run.EvidenceBundle) == "") {
+		a.writeError(w, errStatus(http.StatusConflict, "incident evidence is sealed only after verified completion or completed rollback"))
+		return
+	}
 	a.writeJSON(w, http.StatusOK, fleetReissuanceEvidenceResponse{
 		RunID: run.ID, EvidenceBundleFormat: run.EvidenceBundleFormat,
 		EvidenceBundle: run.EvidenceBundle, RollbackRefs: run.RollbackRefs,
@@ -366,6 +516,197 @@ func (a *API) issuerBlastRadius(ctx context.Context, tenantID, issuerID string) 
 	return g.BlastRadius(nodeID), nil
 }
 
+func graphNodeIDs(nodes []graph.Node) []string {
+	out := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		out = append(out, node.ID)
+	}
+	return out
+}
+
+func graphNodeNames(nodes []graph.Node) []string {
+	out := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		out = append(out, node.Name)
+	}
+	return out
+}
+
+// bindIncidentMigrationMembers adds the incident-only immutable facts H2 does
+// not require for an ordinary CA rollover: the exact old revocation authority,
+// the H1-observed host that owns the trust relationship, and the frozen
+// environment used by the game-day production fence.
+func (a *API) bindIncidentMigrationMembers(ctx context.Context, tenantID string, exactHosts []string, run *migration.Run) error {
+	if a.store == nil || run == nil {
+		return errors.New("incident migration execution is not configured")
+	}
+	hosts := make(map[string]bool, len(exactHosts))
+	for _, host := range exactHosts {
+		hosts[strings.ToLower(strings.TrimSpace(host))] = true
+	}
+	for waveIndex := range run.Waves {
+		for memberIndex := range run.Waves[waveIndex].Members {
+			member := &run.Waves[waveIndex].Members[memberIndex]
+			agent, err := a.store.GetAgent(ctx, tenantID, member.Binding.RequiredAgentID)
+			if err != nil || !hosts[strings.ToLower(strings.TrimSpace(agent.Name))] {
+				return errors.New("each incident cohort agent must be an exact H1 trust host for the compromised issuer")
+			}
+			cert, err := a.store.GetCertificate(ctx, tenantID, member.Binding.PredecessorCertificateID)
+			if err != nil {
+				return errors.New("incident predecessor certificate is no longer inventoried")
+			}
+			caID, err := a.store.ExactIssuedCertificateAuthority(ctx, tenantID, cert.Serial)
+			if err != nil {
+				return errors.New("incident predecessor does not resolve to exactly one internal revocation authority")
+			}
+			identity, err := a.store.GetIdentity(ctx, tenantID, member.IdentityID)
+			if err != nil {
+				return errors.New("incident cohort identity is no longer inventoried")
+			}
+			owner, err := a.store.GetOwner(ctx, tenantID, identity.OwnerID)
+			if err != nil {
+				return errors.New("incident cohort identity has no readable owner environment")
+			}
+			ownerEnvironment := strings.ToLower(strings.TrimSpace(owner.Environment))
+			targetEnvironment := incidentTargetEnvironment(member.Binding.TargetConfig)
+			if ownerEnvironment != "" && targetEnvironment != "" && ownerEnvironment != targetEnvironment {
+				return errors.New("incident cohort owner and deployment target environments conflict")
+			}
+			environment := ownerEnvironment
+			if targetEnvironment != "" {
+				environment = targetEnvironment
+			}
+			member.Binding.PredecessorCAID = caID
+			member.Binding.Environment = environment
+		}
+	}
+	return nil
+}
+
+func incidentTargetEnvironment(raw json.RawMessage) string {
+	var cfg map[string]any
+	if json.Unmarshal(raw, &cfg) != nil {
+		return ""
+	}
+	for _, key := range []string{"environment", "env"} {
+		if value, ok := cfg[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.ToLower(strings.TrimSpace(value))
+		}
+	}
+	return ""
+}
+
+func largestIncidentCohort(waves []migration.RunWave) int {
+	largest := 0
+	for _, wave := range waves {
+		if len(wave.Members) > largest {
+			largest = len(wave.Members)
+		}
+	}
+	return largest
+}
+
+func incidentBatches(run migration.Run) []store.FleetReissuanceBatch {
+	batches := make([]store.FleetReissuanceBatch, 0, len(run.Waves))
+	for index, wave := range run.Waves {
+		batch := store.FleetReissuanceBatch{
+			Index: index + 1, Status: servedstatus.FleetBatchPlanned,
+			HealthGate: servedstatus.FleetGateNotEvaluated,
+		}
+		if wave.Started {
+			batch.Status = servedstatus.FleetBatchWaitingVerification
+		}
+		if wave.Phase == migration.PhaseComplete {
+			batch.Status = servedstatus.FleetBatchExecuted
+			batch.HealthGate = servedstatus.FleetGatePassed
+		}
+		if wave.Phase == migration.PhaseRolledBack || strings.TrimSpace(wave.HaltReason) != "" {
+			batch.Status = servedstatus.FleetBatchFailed
+			batch.HealthGate = servedstatus.FleetGateFailed
+		}
+		for _, member := range wave.Members {
+			batch.IdentityIDs = append(batch.IdentityIDs, member.IdentityID)
+		}
+		batches = append(batches, batch)
+	}
+	return batches
+}
+
+func incidentHealthGates(run migration.Run) []store.FleetReissuanceHealthGate {
+	trust, live, revoked := servedstatus.FleetGatePassed, servedstatus.FleetGatePassed, servedstatus.FleetGatePassed
+	for _, wave := range run.Waves {
+		for _, member := range wave.Members {
+			trust = incidentVerdictGate(trust, member.TrustVerdict)
+			live = incidentVerdictGate(live, member.SuccessorVerdict)
+			revoked = incidentVerdictGate(revoked, member.RevocationVerdict)
+		}
+	}
+	return []store.FleetReissuanceHealthGate{
+		{Name: "signed_trust_distribution", Status: trust},
+		{Name: "signed_live_serving", Status: live},
+		{Name: "exact_predecessor_revocation", Status: revoked},
+	}
+}
+
+func incidentVerdictGate(current string, verdict migration.Verdict) string {
+	if current == servedstatus.FleetGateFailed || verdict == migration.VerdictFailed {
+		return servedstatus.FleetGateFailed
+	}
+	if current == servedstatus.FleetGateNotEvaluated || verdict == "" {
+		return servedstatus.FleetGateNotEvaluated
+	}
+	return servedstatus.FleetGatePassed
+}
+
+func applyMigrationRunToIncident(incident *store.IncidentFleetReissuanceRun, run migration.Run) {
+	if incident == nil {
+		return
+	}
+	incident.Status = string(run.Status)
+	incident.Phase = "planned"
+	incident.HaltedReason = run.HaltReason
+	incident.NextBatchIndex = len(run.Waves) + 1
+	for index, wave := range run.Waves {
+		if wave.Started && wave.Phase != migration.PhaseComplete && wave.Phase != migration.PhaseRolledBack {
+			incident.Phase = wave.ID + ":" + string(wave.Phase)
+			incident.NextBatchIndex = index + 1
+			break
+		}
+		if wave.Started {
+			incident.Phase = wave.ID + ":" + string(wave.Phase)
+		}
+	}
+	if run.Status == migration.RunComplete {
+		incident.Status = "executed"
+		incident.Phase = "fleet_reissued_verified_and_predecessors_revoked"
+	}
+	if run.Status == migration.RunRolledBack {
+		incident.Status = "rolled_back"
+		incident.Phase = "failed_cohort_rolled_back"
+	}
+	incident.Batches = incidentBatches(run)
+	incident.HealthGates = incidentHealthGates(run)
+}
+
+func (a *API) sealTerminalIncidentEvidence(ctx context.Context, tenantID string, run migration.Run, incident *store.IncidentFleetReissuanceRun) error {
+	if run.Status != migration.RunComplete && run.Status != migration.RunRolledBack {
+		return nil
+	}
+	if incident == nil || a.audit == nil {
+		return errors.New("terminal incident migration cannot be recorded without the audit signer")
+	}
+	if incident.EvidenceBundleFormat == "jws" && strings.TrimSpace(incident.EvidenceBundle) != "" {
+		return nil
+	}
+	bundle, err := a.audit.Export(ctx, audit.Query{TenantID: tenantID, Contains: run.ID})
+	if err != nil {
+		return err
+	}
+	incident.EvidenceBundleFormat = "jws"
+	incident.EvidenceBundle = bundle
+	return nil
+}
+
 func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID string, resp *fleetReissuanceRunResponse) {
 	for _, id := range resp.ReplacementIdentityIDs {
 		if ident, err := a.store.GetIdentity(ctx, tenantID, id); err == nil {
@@ -376,6 +717,12 @@ func (a *API) hydrateFleetReissuanceResponse(ctx context.Context, tenantID strin
 		if delivery, err := a.store.GetConnectorDeliveryReceipt(ctx, tenantID, id); err == nil {
 			resp.ConnectorDeliveries = append(resp.ConnectorDeliveries, toConnectorDeliveryResponse(delivery))
 		}
+	}
+	// H3 rows are projections of H2's signed gate receipts. The legacy D6 read
+	// hydration below derives synthetic batch labels from replacement identities;
+	// applying it here would overwrite the authoritative H2 cursor.
+	if resp.MigrationRunID != "" {
+		return
 	}
 	// D6: derive the replacement-deployment gate from what the endpoints are
 	// actually serving. Computed at READ time rather than frozen at run time,

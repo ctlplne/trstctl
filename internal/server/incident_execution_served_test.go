@@ -8,25 +8,23 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
-// JOURNEY-004 acceptance: the incident path is not a plan-only page. A served
-// operator request executes replacement-before-revocation over HTTP, records
-// connector delivery evidence, seals an audit bundle, persists an
-// incident.execution.recorded event, and exposes list/get evidence.
-func TestServedIncidentExecutionIssuesReplacementRevokesAndSealsEvidence(t *testing.T) {
+// JOURNEY-004/AUD-41 compatibility acceptance: old evidence stays readable,
+// but the unsafe direct mutation cannot create a replacement, connector intent,
+// or revocation before H1/H2 gates exist. Its conflict response points every
+// caller to the exact served fleet route instead of silently doing partial work.
+func TestServedIncidentExecutionRefusesMutationAndRetainsHistoryAUD41(t *testing.T) {
 	if testing.Short() {
-		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+		t.Skip("starts embedded PostgreSQL and NATS; skipped in -short")
 	}
 	ctx := context.Background()
 	const tenantID = "11111111-1111-1111-1111-111111111111"
@@ -35,28 +33,15 @@ func TestServedIncidentExecutionIssuesReplacementRevokesAndSealsEvidence(t *test
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "acme"}); err != nil {
 		t.Fatalf("seed tenant: %v", err)
 	}
-	owner, err := st.CreateOwner(ctx, store.Owner{TenantID: tenantID, Kind: store.OwnerWorkload, Name: "payments"})
-	if err != nil {
-		t.Fatalf("seed owner: %v", err)
-	}
 	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "incident-commander", []string{
-		string(authz.IdentitiesRead), string(authz.IdentitiesWrite),
 		string(authz.IncidentsRead), string(authz.IncidentsWrite),
-		string(authz.CertsIssue), string(authz.GraphRead),
-		string(authz.ConnectorsRead), string(authz.AuditRead),
 	})
-
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
-	auditKey, err := jose.GenerateRSASigningKey("journey-004-audit")
-	if err != nil {
-		_ = log.Close()
-		t.Fatalf("generate audit key: %v", err)
-	}
 	srv, err := Build(ctx, Deps{
-		Store: st, Log: log, AuditSigningKey: auditKey, EnableRemediation: true,
+		Store: st, Log: log, EnableRemediation: true,
 		APIOptions: []api.Option{api.WithAuth(api.AuthConfig{OIDCEnabled: true})},
 	})
 	if err != nil {
@@ -67,108 +52,55 @@ func TestServedIncidentExecutionIssuesReplacementRevokesAndSealsEvidence(t *test
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	compromisedID := createIdentityWithToken(t, ts, adminToken, owner.ID)
-	if code, body := transitionIdentityWithToken(t, ts, adminToken, compromisedID, "issued", "incident-compromised-issued"); code != http.StatusOK {
-		t.Fatalf("issue compromised identity = %d, want 200; body=%s", code, body)
-	}
-
-	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/executions", adminToken, "incident-execute-1", map[string]any{
-		"identity_id":           compromisedID,
-		"reason":                "private key export detected",
-		"replacement_name":      "svc.example.test-incident-replacement",
-		"connector":             "nginx",
-		"target":                "edge/prod/payments",
-		"delivery_rollback_ref": "restore edge/prod/payments previous fullchain",
+	historical, err := srv.orch.RecordIncidentExecution(ctx, tenantID, store.IncidentExecution{
+		ID:                    "44444444-4444-4444-8444-444444444444",
+		CompromisedIdentityID: "55555555-5555-4555-8555-555555555555",
+		Status:                "executed", Phase: "legacy_evidence_only", Reason: "pre-AUD-41 retained incident",
+		BlastRadius:      json.RawMessage(`{"node":{"id":"legacy"}}`),
+		RevocationStatus: "legacy_recorded", EvidenceBundleFormat: "jws", EvidenceBundle: "legacy.header.signature",
+		FailedTargets: []string{}, RollbackRefs: []string{"legacy:restore"},
+		IdempotencyKey: "legacy-incident", CreatedBy: "historical-commander",
 	})
-	if code != http.StatusCreated {
-		t.Fatalf("execute incident = %d, want 201; body=%s", code, body)
-	}
-	var execResp struct {
-		ID                    string          `json:"id"`
-		CompromisedIdentityID string          `json:"compromised_identity_id"`
-		ReplacementIdentityID string          `json:"replacement_identity_id"`
-		ConnectorDeliveryID   string          `json:"connector_delivery_id"`
-		Status                string          `json:"status"`
-		Phase                 string          `json:"phase"`
-		BlastRadius           json.RawMessage `json:"blast_radius"`
-		RevocationStatus      string          `json:"revocation_status"`
-		EvidenceBundleFormat  string          `json:"evidence_bundle_format"`
-		EvidenceBundle        string          `json:"evidence_bundle"`
-		FailedTargets         []string        `json:"failed_targets"`
-		RollbackRefs          []string        `json:"rollback_refs"`
-		ConnectorDelivery     struct {
-			Status      string `json:"status"`
-			Attempts    int    `json:"attempts"`
-			Connector   string `json:"connector"`
-			Target      string `json:"target"`
-			RollbackRef string `json:"rollback_ref"`
-		} `json:"connector_delivery"`
-		ReplacementIdentity struct {
-			Status string `json:"status"`
-			Name   string `json:"name"`
-		} `json:"replacement_identity"`
-	}
-	if err := json.Unmarshal(body, &execResp); err != nil {
-		t.Fatalf("decode incident response: %v body=%s", err, body)
-	}
-	if execResp.ID == "" || execResp.CompromisedIdentityID != compromisedID || execResp.ReplacementIdentityID == "" || execResp.ConnectorDeliveryID == "" {
-		t.Fatalf("incident response missing ids: %+v", execResp)
-	}
-	if execResp.Status != "executed" || execResp.Phase != "replacement_deployed_and_compromised_revoked" {
-		t.Fatalf("incident status/phase = %s/%s", execResp.Status, execResp.Phase)
-	}
-	if !bytes.Contains(execResp.BlastRadius, []byte(`"id":"id:`+compromisedID+`"`)) {
-		t.Fatalf("blast-radius snapshot does not name compromised graph node: %s", execResp.BlastRadius)
-	}
-	if execResp.RevocationStatus != "revocation_publish_queued" {
-		t.Fatalf("revocation status = %q", execResp.RevocationStatus)
-	}
-	if execResp.EvidenceBundleFormat != "jws" || strings.Count(execResp.EvidenceBundle, ".") != 2 {
-		t.Fatalf("evidence bundle = format %q bundle %q; want compact JWS", execResp.EvidenceBundleFormat, execResp.EvidenceBundle)
-	}
-	if execResp.ConnectorDelivery.Status != "queued" || execResp.ConnectorDelivery.Attempts != 0 || execResp.ConnectorDelivery.Connector != "nginx" || execResp.ConnectorDelivery.Target != "edge/prod/payments" {
-		t.Fatalf("connector delivery evidence = %+v", execResp.ConnectorDelivery)
-	}
-	if execResp.ConnectorDelivery.Status == "delivered" {
-		t.Fatal("zero-attempt incident connector intent was presented as delivered")
-	}
-	if len(execResp.FailedTargets) != 0 {
-		t.Fatalf("queued connector intent was presented as a failed target: %#v", execResp.FailedTargets)
-	}
-	if len(execResp.RollbackRefs) < 3 || !strings.Contains(strings.Join(execResp.RollbackRefs, " "), "previous fullchain") {
-		t.Fatalf("rollback refs = %#v", execResp.RollbackRefs)
-	}
-	if execResp.ReplacementIdentity.Status != "deployed" || execResp.ReplacementIdentity.Name != "svc.example.test-incident-replacement" {
-		t.Fatalf("replacement identity evidence = %+v", execResp.ReplacementIdentity)
+	if err != nil {
+		t.Fatalf("seed historical incident event: %v", err)
 	}
 
-	code, compromisedBody := doBearer(t, ts, http.MethodGet, "/api/v1/identities/"+compromisedID, adminToken, "", nil)
-	if code != http.StatusOK || !bytes.Contains(compromisedBody, []byte(`"status":"revoked"`)) {
-		t.Fatalf("compromised identity after incident = %d body=%s; want revoked", code, compromisedBody)
-	}
-	code, replacementBody := doBearer(t, ts, http.MethodGet, "/api/v1/identities/"+execResp.ReplacementIdentityID, adminToken, "", nil)
-	if code != http.StatusOK || !bytes.Contains(replacementBody, []byte(`"status":"deployed"`)) {
-		t.Fatalf("replacement identity after incident = %d body=%s; want deployed", code, replacementBody)
-	}
-	code, listBody := doBearer(t, ts, http.MethodGet, "/api/v1/incidents/executions?identity_id="+compromisedID, adminToken, "", nil)
-	if code != http.StatusOK || !bytes.Contains(listBody, []byte(execResp.ID)) {
-		t.Fatalf("list incident executions = %d body=%s; want execution id", code, listBody)
-	}
-	code, getBody := doBearer(t, ts, http.MethodGet, "/api/v1/incidents/executions/"+execResp.ID, adminToken, "", nil)
-	if code != http.StatusOK || !bytes.Contains(getBody, []byte(execResp.ConnectorDeliveryID)) {
-		t.Fatalf("get incident execution = %d body=%s; want connector delivery id", code, getBody)
+	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/executions", adminToken, "incident-direct-refused", map[string]any{
+		"identity_id": "66666666-6666-4666-8666-666666666666",
+		"reason":      "private key export detected",
+	})
+	if code != http.StatusConflict || !bytes.Contains(body, []byte("/api/v1/incidents/fleet-reissuance-runs")) ||
+		!bytes.Contains(body, []byte("trust-before-leaf")) {
+		t.Fatalf("retired direct execution = %d body=%s; want H2 conflict guidance", code, body)
 	}
 
-	var sawIncidentEvent bool
-	if err := log.Replay(ctx, 0, func(ev events.Event) error {
-		if ev.Type == projections.EventIncidentExecutionRecorded && ev.TenantID == tenantID && bytes.Contains(ev.Data, []byte(execResp.ID)) {
-			sawIncidentEvent = true
+	code, listBody := doBearer(t, ts, http.MethodGet, "/api/v1/incidents/executions", adminToken, "", nil)
+	if code != http.StatusOK || !bytes.Contains(listBody, []byte(historical.ID)) {
+		t.Fatalf("list retained incident history = %d body=%s", code, listBody)
+	}
+	code, getBody := doBearer(t, ts, http.MethodGet, "/api/v1/incidents/executions/"+historical.ID, adminToken, "", nil)
+	if code != http.StatusOK || !bytes.Contains(getBody, []byte("legacy_evidence_only")) {
+		t.Fatalf("get retained incident history = %d body=%s", code, getBody)
+	}
+
+	var incidentEvents int
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.TenantID == tenantID && event.Type == projections.EventIncidentExecutionRecorded {
+			incidentEvents++
 		}
 		return nil
 	}); err != nil {
-		t.Fatalf("replay event log: %v", err)
+		t.Fatal(err)
 	}
-	if !sawIncidentEvent {
-		t.Fatal("incident.execution.recorded event was not recorded")
+	if incidentEvents != 1 {
+		t.Fatalf("incident execution events = %d, want only retained history", incidentEvents)
+	}
+	var externalIntents int
+	if err := st.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination LIKE 'connector.%'`, tenantID).Scan(&externalIntents); err != nil {
+		t.Fatal(err)
+	}
+	if externalIntents != 0 {
+		t.Fatalf("retired direct execution queued %d connector effects", externalIntents)
 	}
 }

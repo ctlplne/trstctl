@@ -8563,10 +8563,10 @@
             "phase": "P2",
             "priority": 73,
             "served_state": "conditional",
-            "backend_status": "conditional: served compromised-issuer fleet reissuance with graph enumeration, batched replacement issue/deploy, original revocation, pause/resume/rollback evidence, and signed evidence export",
-            "current_frontend_mapping": "served: Incidents at /incidents starts compromised-issuer fleet runs, shows batch/health/progress/failed-target evidence, and records pause/resume/rollback/export actions from served API data",
+            "backend_status": "conditional: served compromised-issuer response freezes exact H1 trust scope and ordered H2 cohorts before mutation, gates trust/issue/deploy/live verification on signed agent evidence, revokes each exact predecessor only after its cohort passes, rolls back the current unrevoked cohort on failure, and seals compact-JWS evidence",
+            "current_frontend_mapping": "served: Incidents at /incidents plans live or separately authorized test-only game-day H2 cohorts, distinguishes exact stores from subject-only candidates, shows immutable plan digest/current signed gate/revocation verdicts, and records pause/resume/current-cohort rollback/JWS export actions from served API data; the unsafe direct single-identity action is retired with fleet guidance",
             "target_gui_mapping": "Fleet reissue UI for affected issuer, batches, health checks, resume, rollback, percent complete, failed targets, and audit receipts.",
-            "acceptance_test": "Served e2e test proves a compromised issuer reissues, deploys, and revokes multiple identities with rollback evidence; UI test starts the live fleet run and exercises pause/resume/rollback/evidence export actions.",
+            "acceptance_test": "Served e2e test proves plan-before-mutation exact-H1 enumeration, separately authorized and structurally test-only game-day operation, signed trust/live gates, post-verification exact predecessor revocation, offline-verifiable compact-JWS evidence, and failed-live-cohort automatic rollback with zero revocation; UI tests prove the same explicit H2 contract and retired direct-action guidance.",
             "source_docs": [
                 "docs/features/incident-and-jit.md"
             ],
@@ -8584,7 +8584,7 @@
                 "web/src/pages/Incidents.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence and JOURNEY-003. Test evidence: internal/server/incident_fleet_reissuance_served_test.go proves a compromised issuer is enumerated through the graph, split into health-gated batches, reissued/deployed through served identity and connector paths, revoked at the original identities, and exported with rollback/evidence refs. UI evidence: web/src/__tests__/incidents.test.tsx starts a live fleet run and records pause/resume/rollback/evidence export from /incidents.",
+            "notes": "Closed by route-level feature-map evidence and the assembled AUD-41 journey. The real PostgreSQL/JetStream/out-of-process-signer/mTLS-agent test proves immutable exact-H1 planning precedes every H2 mutation, trust and live-serving receipts gate each cohort, predecessor revocation is exact and post-verification, success and rollback packs verify as compact JWS, a failed live cohort restores trust with zero revocation, game-day requires incidents:game-day and refuses production bindings, and the old direct route fails closed. UI evidence covers explicit ordered cohorts, exact-versus-candidate scope, game-day mode, durable gate/revocation state, evidence export, and retired-action guidance.",
             "api_surface": [
                 "startFleetReissuance",
                 "listFleetReissuanceRuns",
@@ -8609,7 +8609,7 @@
                 "served": {
                     "evidence": [
                         "served_state=conditional",
-                        "backend_status=conditional: served compromised-issuer fleet reissuance with graph enumeration, batched replacement issue/deploy, original revocation, pause/resume/rollback evidence, and signed evidence export"
+                        "backend_status=conditional: immutable exact-H1 incident plan drives ordered H2 trust-before-leaf cohorts; signed agent gates release exact predecessor revocation; current-cohort rollback and compact-JWS evidence are served"
                     ],
                     "commands": [
                         "make test"
@@ -8617,7 +8617,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Incidents at /incidents starts compromised-issuer fleet runs, shows batch/health/progress/failed-target evidence, and records pause/resume/rollback/export actions from served API data",
+                        "current_frontend_mapping: served: Incidents at /incidents accepts live or separately authorized test-only game-day H2 cohorts, distinguishes exact from candidate H1 scope, shows immutable plan/gate/revocation evidence, records pause/resume/rollback/export actions, and refuses the retired direct action with fleet guidance",
                         "target_gui_mapping: Fleet reissue UI for affected issuer, batches, health checks, resume, rollback, percent complete, failed targets, and audit receipts."
                     ],
                     "refs": [
@@ -8658,8 +8658,8 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served e2e test proves a compromised issuer reissues, deploys, and revokes multiple identities with rollback evidence; UI test starts the live fleet run and exercises pause/resume/rollback/evidence export actions.",
-                        "internal/server/incident_fleet_reissuance_served_test.go proves graph-enumerated compromised issuer runs reissue/deploy replacements, revoke originals, record pause/resume/rollback events, and export evidence.",
+                        "acceptance_test: Served e2e proves plan-before-mutation exact-H1 scope, signed H2 trust/live gates, post-verification revocation, test-only game-day authorization, offline JWS evidence, and failed-cohort rollback with zero revocation; UI tests prove the explicit cohort contract and retired direct-action guidance.",
+                        "internal/server/incident_fleet_reissuance_served_test.go proves the real assembled exact-H1/H2/H3 success and rollback journeys through PostgreSQL, JetStream, isolated signer, enrolled mTLS agent, and live TLS listeners.",
                         "internal/cli/cli_test.go proves fleet reissuance CLI start/list/pause/evidence commands map to the served API with idempotency on mutations.",
                         "web/src/__tests__/incidents.test.tsx proves /incidents calls startFleetReissuance and all operator evidence actions.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -8684,7 +8684,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest guards fleet reissuance routes with incidents:read/write; startFleetReissuance also requires certs:issue before minting replacements.",
+                        "feature authz manifest guards fleet reissuance routes with incidents:read/write; startFleetReissuance also requires certs:issue before minting replacements, and mode=game_day additionally requires the independently grantable incidents:game-day permission.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded fleet reissuance operations."
                     ],
                     "refs": [
@@ -8696,8 +8696,8 @@
                 },
                 "audit": {
                     "evidence": [
-                        "startFleetReissuance records incident.fleet_reissuance.recorded with graph impact, batch, delivery, failed target, rollback, and JWS evidence; pause/resume/rollback re-emit the same event family for immutable replay.",
-                        "replacement deployment records connector delivery receipts and original identity revocation is projected from lifecycle transitions."
+                        "startFleetReissuance first records incident.fleet_reissuance.recorded with the immutable exact/candidate H1 plan, ordered H2 cohorts, mode, authority IDs, and digest before migration.started can publish estate work; pause/resume/rollback re-emit the incident family for immutable replay.",
+                        "Signed agent trust and live-serving receipts advance migration state, exact predecessor revocation is separately receipted only after verification, and terminal success/rollback stores a compact-JWS evidence bundle covering the relevant audit chain."
                     ],
                     "refs": [
                         "internal/api/incident_fleet_reissuance.go",

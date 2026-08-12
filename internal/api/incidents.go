@@ -13,7 +13,6 @@ import (
 	guuid "github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/audit"
-	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/servedstatus"
@@ -81,90 +80,8 @@ func (a *API) executeIncident(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if req.IdentityID == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "identity_id is required")
-		}
-		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
-			return 0, nil, errStatus(http.StatusForbidden, "forbidden: incident execution that issues replacements requires "+string(authz.CertsIssue))
-		}
-
-		compromised, err := a.store.GetIdentity(ctx, tenantID, req.IdentityID)
-		if err != nil {
-			return 0, nil, err
-		}
-		if !incidentRevocable(orchestrator.State(compromised.Status)) {
-			return 0, nil, errStatus(http.StatusConflict, "incident execution requires an issued, deployed, or renewing compromised identity")
-		}
-		reason := strings.TrimSpace(req.Reason)
-		if reason == "" {
-			reason = "served incident execution"
-		}
-
-		impact, err := a.incidentBlastRadius(ctx, tenantID, compromised.ID)
-		if err != nil {
-			return 0, nil, err
-		}
-		impactJSON, err := json.Marshal(impact)
-		if err != nil {
-			return 0, nil, err
-		}
-
-		replacementName := strings.TrimSpace(req.ReplacementName)
-		if replacementName == "" {
-			replacementName = compromised.Name + "-replacement"
-		}
-		replacement, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
-			Kind: compromised.Kind, Name: replacementName, OwnerID: compromised.OwnerID,
-			IssuerID: compromised.IssuerID, Attributes: incidentReplacementAttributes(compromised.ID, compromised.Attributes),
-		})
-		if err != nil {
-			return 0, nil, err
-		}
-		if err := a.orch.Transition(ctx, tenantID, replacement.ID, orchestrator.StateIssued, "incident replacement issued before revocation: "+reason); err != nil {
-			return 0, nil, err
-		}
-		if err := a.orch.Transition(ctx, tenantID, replacement.ID, orchestrator.StateDeployed, "incident replacement deployed before revocation: "+reason); err != nil {
-			return 0, nil, err
-		}
-		if err := a.orch.Transition(ctx, tenantID, compromised.ID, orchestrator.StateRevoked, "incident compromised identity revoked after replacement: "+reason); err != nil {
-			return 0, nil, err
-		}
-
-		delivery, err := a.recordIncidentDelivery(ctx, tenantID, replacement.ID, req, reason, idempotencyKey)
-		if err != nil {
-			return 0, nil, err
-		}
-		deliveryID := delivery.ID
-		failedTargets := incidentFailedTargets(delivery)
-		rollbackRefs := incidentRollbackRefs(compromised.ID, replacement.ID, delivery.RollbackRef)
-		evidenceFormat, evidenceBundle, err := a.incidentEvidenceBundle(ctx, tenantID, compromised.ID)
-		if err != nil {
-			return 0, nil, err
-		}
-
-		exec, err := a.orch.RecordIncidentExecution(ctx, tenantID, store.IncidentExecution{
-			ID: guuid.NewString(), CompromisedIdentityID: compromised.ID,
-			ReplacementIdentityID: &replacement.ID, ConnectorDeliveryID: &deliveryID,
-			Status: "executed", Phase: "replacement_deployed_and_compromised_revoked",
-			Reason: reason, BlastRadius: impactJSON, RevocationStatus: "revocation_publish_queued",
-			EvidenceBundleFormat: evidenceFormat, EvidenceBundle: evidenceBundle,
-			FailedTargets: failedTargets, RollbackRefs: rollbackRefs,
-			IdempotencyKey: idempotencyKey, CreatedBy: principal.Subject,
-		})
-		if err != nil {
-			return 0, nil, err
-		}
-
-		resp := toIncidentExecutionResponse(exec)
-		reloadedReplacement, err := a.store.GetIdentity(ctx, tenantID, replacement.ID)
-		if err == nil {
-			ri := toIdentityResponse(reloadedReplacement)
-			resp.ReplacementIdentity = &ri
-		}
-		dr := toConnectorDeliveryResponse(delivery)
-		resp.ConnectorDelivery = &dr
-		return http.StatusCreated, resp, nil
+		return 0, nil, errStatus(http.StatusConflict,
+			"direct single-identity incident execution is retired because it cannot prove trust-before-leaf safety; use POST /api/v1/incidents/fleet-reissuance-runs with explicit H2 cohorts")
 	})
 }
 

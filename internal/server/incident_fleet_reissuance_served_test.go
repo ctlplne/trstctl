@@ -6,361 +6,509 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
 	"net/http"
-	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
-	"trstctl.com/trstctl/internal/api"
+	agentrelay "trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
-	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/orchestrator"
-	"trstctl.com/trstctl/internal/servedstatus"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
-// AUD-31 / D6 acceptance: the request publishes only a canary command. Pause is
-// a real worker gate, unsigned verification cannot release the next batch, a
-// signed failure durably halts it, resume continues at the same cursor, and a
-// restarted receiver cannot duplicate replacement identities or later commands.
-func TestServedFleetReissuanceIsDurableCanaryFirstAcrossPauseHaltResumeAndRestart(t *testing.T) {
-	if testing.Short() {
-		t.Skip("starts embedded PostgreSQL and NATS; skipped in -short")
-	}
+// TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41 is H3's assembled
+// proof. It crosses the authenticated incident API, exact H1 graph edges, H2's
+// durable wave aggregate, signer-backed leaf issuance, a real enrolled host
+// agent, live TLS readback, the internal revocation worker, and signed audit
+// export. No display-only batch state is allowed to authorize an estate effect.
+func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	ctx := context.Background()
-	const tenantID = "11111111-1111-1111-1111-111111111111"
-
-	st := newServerTestStore(t)
-	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "acme"}); err != nil {
-		t.Fatalf("seed tenant: %v", err)
-	}
-	owner, err := st.CreateOwner(ctx, store.Owner{TenantID: tenantID, Kind: store.OwnerWorkload, Name: "payments"})
+	auditKey, err := jose.GenerateRSASigningKey("aud41-incident-evidence")
 	if err != nil {
-		t.Fatalf("seed owner: %v", err)
+		t.Fatalf("generate incident evidence key: %v", err)
 	}
-	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "fleet-incident-commander", []string{
-		string(authz.IdentitiesRead), string(authz.IdentitiesWrite),
-		string(authz.IssuersRead), string(authz.IssuersWrite),
-		string(authz.IncidentsRead), string(authz.IncidentsWrite),
-		string(authz.CertsIssue), string(authz.GraphRead),
-		string(authz.ConnectorsRead), string(authz.AuditRead),
-	})
-
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
-	if err != nil {
-		t.Fatalf("open event log: %v", err)
-	}
-	auditKey, err := jose.GenerateRSASigningKey("aud-31-audit")
-	if err != nil {
-		_ = log.Close()
-		t.Fatalf("generate audit key: %v", err)
-	}
-	srv, err := Build(ctx, Deps{
-		Store: st, Log: log, AuditSigningKey: auditKey, EnableRemediation: true,
-		APIOptions: []api.Option{api.WithAuth(api.AuthConfig{OIDCEnabled: true})},
-	})
-	if err != nil {
-		_ = log.Close()
-		t.Fatalf("build server: %v", err)
-	}
-	defer func() { _ = srv.Shutdown(context.Background()) }()
-	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
-
-	issuerID := createX509IssuerWithToken(t, ts, adminToken)
-	firstID := createIdentityWithIssuerWithToken(t, ts, adminToken, owner.ID, issuerID, "payments-api", "fleet-identity-1")
-	secondID := createIdentityWithIssuerWithToken(t, ts, adminToken, owner.ID, issuerID, "payments-worker", "fleet-identity-2")
-	for _, id := range []string{firstID, secondID} {
-		if code, body := transitionIdentityWithToken(t, ts, adminToken, id, "issued", "fleet-issued-"+id); code != http.StatusOK {
-			t.Fatalf("issue identity %s = %d body=%s", id, code, body)
-		}
-		if code, body := transitionIdentityWithToken(t, ts, adminToken, id, "deployed", "fleet-deployed-"+id); code != http.StatusOK {
-			t.Fatalf("deploy identity %s = %d body=%s", id, code, body)
-		}
+	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost},
+		[]string{agentrelay.KindTrustDistribute, agentrelay.KindEndpointRenew, agentrelay.KindConnectorRollback},
+		func(d *Deps) {
+			d.EnableRemediation = true
+			d.AuditSigningKey = auditKey
+		})
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{
+		AgentID: h.agent, Version: "aud41-test", Status: "active",
+	}); err != nil {
+		t.Fatalf("register active incident agent: %v", err)
 	}
 
-	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs", adminToken, "fleet-run-1", map[string]any{
-		"issuer_id": issuerID, "reason": "intermediate CA private key exposure",
-		"batch_size": 1, "connector": "nginx", "target": "edge/prod",
-		"rollback_ref": "restore previous fullchain on every edge target",
-	})
-	if code != http.StatusCreated {
-		t.Fatalf("start fleet reissuance = %d body=%s", code, body)
+	caOperator := seedScopedTokenSubject(t, h.store, h.tenant, "aud41-ca-operator", "issuers:read", "issuers:write")
+	caApprover := seedScopedTokenSubject(t, h.store, h.tenant, "aud41-ca-custodian", "issuers:read", "issuers:write")
+	rootSpec := map[string]any{
+		"common_name": "AUD41 incident replacement root", "max_path_len": 1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"success-aud41.test", "failure-aud41.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
 	}
-	var started fleetRunTestResponse
-	if err := json.Unmarshal(body, &started); err != nil {
-		t.Fatalf("decode start response: %v body=%s", err, body)
-	}
-	if started.Status != "running" || started.Phase != "canary_queued" || started.NextBatchIndex != 1 {
-		t.Fatalf("start state = %s/%s cursor=%d", started.Status, started.Phase, started.NextBatchIndex)
-	}
-	if len(started.ReplacementIdentityIDs) != 0 || len(started.RevokedIdentityIDs) != 0 {
-		t.Fatalf("request path mutated fleet: replacements=%v revoked=%v", started.ReplacementIdentityIDs, started.RevokedIdentityIDs)
-	}
-	if len(started.Batches) != 2 || started.Batches[0].Status != servedstatus.FleetBatchQueued || started.Batches[1].Status != servedstatus.FleetBatchPlanned {
-		t.Fatalf("start batches = %#v; want only canary queued", started.Batches)
-	}
-	canaryReplacement := started.Batches[0].ReplacementIdentityIDs[0]
-	secondReplacement := started.Batches[1].ReplacementIdentityIDs[0]
-	assertIdentityState(t, st, tenantID, firstID, orchestrator.StateDeployed)
-	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateDeployed)
-	assertIdentityAbsent(t, st, tenantID, canaryReplacement)
-	assertIdentityAbsent(t, st, tenantID, secondReplacement)
+	ceremony := createCACeremony(t, h.servedHarness, caOperator, "create_root", "", rootSpec, 1, "aud41-root-ceremony")
+	approveCACeremony(t, h.servedHarness, caApprover, ceremony.ID, 1, "aud41-root-approval")
+	replacementAuthority := createRootCA(t, h.servedHarness, caOperator, ceremony.ID, rootSpec, "aud41-root-create")
 
-	canaryMessage := fleetBatchMessage(t, st, tenantID, started.ID, 1)
-	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 1); got != 1 {
-		t.Fatalf("canary outbox commands = %d, want exactly 1", got)
-	}
-	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 2); got != 0 {
-		t.Fatalf("later batch was published before canary verification: %d", got)
-	}
+	ordinaryToken := seedScopedTokenSubject(t, h.store, h.tenant, "aud41-incident-operator",
+		string(authz.IncidentsRead), string(authz.IncidentsWrite), string(authz.CertsIssue))
+	gameDayToken := seedScopedTokenSubject(t, h.store, h.tenant, "aud41-game-day-commander",
+		string(authz.IncidentsRead), string(authz.IncidentsWrite), string(authz.CertsIssue), string(authz.IncidentsGameDay))
 
-	code, pauseBody := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+started.ID+"/pause", adminToken, "fleet-pause-1", map[string]string{"reason": "inspect edge"})
-	if code != http.StatusOK || !bytes.Contains(pauseBody, []byte(`"status":"paused"`)) {
-		t.Fatalf("pause = %d body=%s", code, pauseBody)
+	success := newIncidentMigrationFixtureAUD41(t, h, "success", "41410000-0000-4000-8000-000000000041", "production", false)
+	failure := newIncidentMigrationFixtureAUD41(t, h, "failure", "41410000-0000-4000-8000-000000000042", "production", true)
+	profile := connector.LocalOpsConfig{
+		AllowedRoots: []string{success.root, failure.root},
+		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}},
 	}
-	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
-		t.Fatal("paused canary command was acknowledged instead of deferred")
-	}
-	assertIdentityAbsent(t, st, tenantID, canaryReplacement)
+	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
 
-	code, resumeBody := doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+started.ID+"/resume", adminToken, "fleet-resume-1", map[string]string{"reason": "continue canary"})
-	if code != http.StatusOK || !bytes.Contains(resumeBody, []byte(`"phase":"batch_resumed"`)) {
-		t.Fatalf("resume = %d body=%s", code, resumeBody)
+	gameDayBody := success.startBody(replacementAuthority.ID, migration.IncidentModeGameDay)
+	statusCode, body := secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs", ordinaryToken, "aud41-game-day-no-grant", gameDayBody)
+	if statusCode != http.StatusForbidden {
+		t.Fatalf("game-day without dedicated grant = %d %s, want 403", statusCode, body)
 	}
-	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
-		t.Fatal("canary publish should defer while it waits for signed verification")
-	}
-	assertIdentityState(t, st, tenantID, canaryReplacement, orchestrator.StateIssued)
-	assertIdentityAbsent(t, st, tenantID, secondReplacement)
-	assertIdentityState(t, st, tenantID, firstID, orchestrator.StateDeployed)
-	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateDeployed)
-
-	// A delivery row that says verify_failed but has no accepted agent signature
-	// is not evidence and must not halt or advance the state machine.
-	recordFleetVerification(t, st, srv.orch, tenantID, canaryReplacement, "unsigned-canary", servedstatus.ConnectorVerifyFailed, false)
-	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
-		t.Fatal("unsigned canary receipt released the waiting command")
-	}
-	run := mustFleetRun(t, st, tenantID, started.ID)
-	if run.Status != "running" || run.NextBatchIndex != 1 {
-		t.Fatalf("unsigned receipt changed durable run: %s cursor=%d", run.Status, run.NextBatchIndex)
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs", gameDayToken, "aud41-game-day-production", gameDayBody)
+	if statusCode != http.StatusBadRequest || !bytes.Contains(body, []byte("not explicitly non-production")) {
+		t.Fatalf("game-day production binding = %d %s, want structural refusal", statusCode, body)
 	}
 
-	recordFleetVerification(t, st, srv.orch, tenantID, canaryReplacement, "signed-canary-failure", servedstatus.ConnectorVerifyFailed, true)
-	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
-		t.Fatal("failed canary should remain pending for operator resume")
+	// The same frozen member is safe only after BOTH ownership and target
+	// classifications say test. This is not a UI flag: H2 validates the copied
+	// environment inside the aggregate before StartRun can emit any action.
+	success.setEnvironment(t, h, "test")
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs", gameDayToken, "aud41-game-day-start", gameDayBody)
+	if statusCode != http.StatusCreated {
+		t.Fatalf("start safe game-day = %d %s", statusCode, body)
 	}
-	run = mustFleetRun(t, st, tenantID, started.ID)
-	if run.Status != "halted" || run.HaltedReason == "" || run.Batches[0].Status != servedstatus.FleetBatchFailed || run.Batches[1].Status != servedstatus.FleetBatchHalted {
-		t.Fatalf("durable halt = status=%s reason=%q batches=%#v", run.Status, run.HaltedReason, run.Batches)
+	var rehearsed incidentRunResponseAUD41
+	if err := json.Unmarshal(body, &rehearsed); err != nil {
+		t.Fatalf("decode game-day run: %v (%s)", err, body)
 	}
-	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 2); got != 0 {
-		t.Fatalf("failed canary published batch 2: %d", got)
+	if rehearsed.MigrationRunID != rehearsed.ID || rehearsed.Mode != string(migration.IncidentModeGameDay) || rehearsed.PlanDigest == "" {
+		t.Fatalf("game-day execution binding = migration %q mode %q digest %q", rehearsed.MigrationRunID, rehearsed.Mode, rehearsed.PlanDigest)
 	}
-	assertIdentityState(t, st, tenantID, firstID, orchestrator.StateDeployed)
-	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateDeployed)
-
-	// The operator fixes the endpoint and a later signed receipt proves it.
-	recordFleetVerification(t, st, srv.orch, tenantID, canaryReplacement, "signed-canary-success", servedstatus.ConnectorVerified, true)
-	code, _ = doBearer(t, ts, http.MethodPost, "/api/v1/incidents/fleet-reissuance-runs/"+started.ID+"/resume", adminToken, "fleet-resume-2", map[string]string{"reason": "signed canary is healthy"})
-	if code != http.StatusOK {
-		t.Fatalf("resume halted canary = %d", code)
+	if len(rehearsed.ExactTrustStoreIDs) != 1 || !sameMembers(rehearsed.ExactTrustHosts, []string{h.agent}) ||
+		len(rehearsed.CandidateTrustStoreIDs) == 0 || len(rehearsed.CandidateTrustHosts) == 0 {
+		t.Fatalf("H1 plan exact stores/hosts=%v/%v candidates=%v/%v",
+			rehearsed.ExactTrustStoreIDs, rehearsed.ExactTrustHosts,
+			rehearsed.CandidateTrustStoreIDs, rehearsed.CandidateTrustHosts)
 	}
-	if err := srv.obHandler.Deliver(ctx, canaryMessage); err == nil {
-		t.Fatal("resumed canary publish should first return to waiting_verification")
-	}
-	if err := srv.obHandler.Deliver(ctx, canaryMessage); err != nil {
-		t.Fatalf("advance healthy canary: %v", err)
-	}
-	run = mustFleetRun(t, st, tenantID, started.ID)
-	if run.NextBatchIndex != 2 || run.Batches[0].Status != servedstatus.FleetBatchExecuted || run.Batches[1].Status != servedstatus.FleetBatchQueued {
-		t.Fatalf("post-canary cursor/batches = %d %#v", run.NextBatchIndex, run.Batches)
-	}
-	assertIdentityState(t, st, tenantID, firstID, orchestrator.StateRevoked)
-	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateDeployed)
-	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 2); got != 1 {
-		t.Fatalf("batch 2 commands = %d, want exactly 1", got)
+	assertIncidentPlanBeforeMigrationAUD41(t, h, rehearsed.ID)
+	assertMigrationOutboxCountAUD40(t, h, rehearsed.ID, "distribute_trust", 1)
+	assertMigrationOutboxCountAUD40(t, h, rehearsed.ID, "revoke_predecessor", 0)
+	statusCode, _ = secretsReq(t, h.servedHarness, http.MethodGet,
+		"/api/v1/incidents/fleet-reissuance-runs/"+rehearsed.ID+"/evidence", gameDayToken, nil)
+	if statusCode != http.StatusConflict {
+		t.Fatalf("non-terminal evidence = %d, want 409", statusCode)
 	}
 
-	// A new receiver after restart sees the durable cursor. Replaying the old
-	// canary command is an ACK-only no-op and cannot duplicate batch 2.
-	restarted := &issuanceDispatcher{store: st, orch: srv.orch}
-	if err := restarted.Deliver(ctx, canaryMessage); err != nil {
-		t.Fatalf("restart replay of completed canary: %v", err)
+	runAgentPassAUD40(t, channel, profile, success.rollback, transport.JobOutcomeExecuted)
+	assertMigrationStatusAUD40(t, h, rehearsed.ID, migration.RunRunning, migration.PhaseVerifyingLive)
+	assertMigrationOutboxCountAUD40(t, h, rehearsed.ID, "revoke_predecessor", 0)
+	runAgentPassAUD40(t, channel, profile, success.rollback, transport.JobOutcomeVerified)
+	assertMigrationStatusAUD40(t, h, rehearsed.ID, migration.RunRunning, migration.PhaseRevokingPredecessor)
+	preRevocation, err := h.store.GetCertificate(ctx, h.tenant, success.predecessor.ID)
+	if err != nil || preRevocation.Status != "superseded" {
+		t.Fatalf("predecessor before revocation = %+v err=%v; want superseded only", preRevocation, err)
 	}
-	if got := countFleetBatchCommands(t, st, tenantID, started.ID, 2); got != 1 {
-		t.Fatalf("restart duplicated batch 2 command: %d", got)
+	if ledger, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), success.predecessor.Serial); err != nil || !found || ledger.Revoked() {
+		t.Fatalf("ledger mutated before signed live gate worker = %+v found=%v err=%v", ledger, found, err)
+	}
+	assertMigrationOutboxCountAUD40(t, h, rehearsed.ID, "revoke_predecessor", 1)
+	revokeMessage := incidentRevocationMessageAUD41(t, h, rehearsed.ID)
+	if err := h.srv.obHandler.Deliver(ctx, revokeMessage); err != nil {
+		t.Fatalf("deliver exact predecessor revocation: %v", err)
+	}
+	assertMigrationStatusAUD40(t, h, rehearsed.ID, migration.RunComplete, migration.PhaseComplete)
+	assertIncidentTerminalAUD41(t, h, gameDayToken, rehearsed.ID, success.identityID, "executed")
+	if ledger, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), success.predecessor.Serial); err != nil || !found || !ledger.Revoked() {
+		t.Fatalf("verified predecessor was not revoked in responder ledger = %+v found=%v err=%v", ledger, found, err)
 	}
 
-	secondMessage := fleetBatchMessage(t, st, tenantID, started.ID, 2)
-	if err := restarted.Deliver(ctx, secondMessage); err == nil {
-		t.Fatal("batch 2 publish should wait for verification")
+	// The second, live run deliberately probes a static listener that keeps the
+	// predecessor. The agent's signed mismatch must auto-rollback this cohort;
+	// no predecessor-revocation intent may ever be published.
+	liveBody := failure.startBody(replacementAuthority.ID, migration.IncidentModeLive)
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/incidents/fleet-reissuance-runs", ordinaryToken, "aud41-live-failure-start", liveBody)
+	if statusCode != http.StatusCreated {
+		t.Fatalf("start live failure path = %d %s", statusCode, body)
 	}
-	if err := restarted.Deliver(ctx, secondMessage); err == nil {
-		t.Fatal("replayed batch 2 should still wait without creating another identity")
+	var failed incidentRunResponseAUD41
+	if err := json.Unmarshal(body, &failed); err != nil {
+		t.Fatalf("decode failed-path run: %v (%s)", err, body)
 	}
-	assertIdentityState(t, st, tenantID, secondReplacement, orchestrator.StateIssued)
-	if got := countIdentityRows(t, st, tenantID, secondReplacement); got != 1 {
-		t.Fatalf("restart duplicated deterministic replacement: %d", got)
+	runAgentPassAUD40(t, channel, profile, failure.rollback, transport.JobOutcomeExecuted)
+	runAgentPassAUD40(t, channel, profile, failure.rollback, transport.JobOutcomeVerifyFailed)
+	assertMigrationStatusAUD40(t, h, failed.ID, migration.RunRollingBack, migration.PhaseVerifyingLive)
+	assertMigrationOutboxCountAUD40(t, h, failed.ID, "revoke_predecessor", 0)
+	assertMigrationOutboxCountAUD40(t, h, failed.ID, "rollback_successor", 1)
+	runAgentPassAUD40(t, channel, profile, failure.rollback, transport.JobOutcomeVerified)
+	runAgentPassAUD40(t, channel, profile, failure.rollback, transport.JobOutcomeExecuted)
+	assertMigrationStatusAUD40(t, h, failed.ID, migration.RunRolledBack, migration.PhaseRolledBack)
+	assertMigrationOutboxCountAUD40(t, h, failed.ID, "revoke_predecessor", 0)
+	assertIncidentTerminalAUD41(t, h, ordinaryToken, failed.ID, failure.identityID, "rolled_back")
+	restored, err := h.store.GetCertificate(ctx, h.tenant, failure.predecessor.ID)
+	if err != nil || restored.Status != "active" {
+		t.Fatalf("failed cohort predecessor = %+v err=%v; want active after rollback", restored, err)
 	}
-
-	recordFleetVerification(t, st, srv.orch, tenantID, secondReplacement, "signed-batch-2-success", servedstatus.ConnectorVerified, true)
-	if err := restarted.Deliver(ctx, secondMessage); err != nil {
-		t.Fatalf("complete batch 2: %v", err)
+	if ledger, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), failure.predecessor.Serial); err != nil || !found || ledger.Revoked() {
+		t.Fatalf("failed cohort predecessor was revoked = %+v found=%v err=%v", ledger, found, err)
 	}
-	run = mustFleetRun(t, st, tenantID, started.ID)
-	if run.Status != "executed" || run.NextBatchIndex != 3 || len(run.RevokedIdentityIDs) != 2 || len(run.ReplacementIdentityIDs) != 2 {
-		t.Fatalf("completed run = status=%s cursor=%d replacements=%v revoked=%v", run.Status, run.NextBatchIndex, run.ReplacementIdentityIDs, run.RevokedIdentityIDs)
-	}
-	assertIdentityState(t, st, tenantID, secondID, orchestrator.StateRevoked)
 }
 
-type fleetRunTestResponse struct {
+type incidentMigrationFixtureAUD41 struct {
+	root        string
+	dnsName     string
+	identityID  string
+	issuer      store.Issuer
+	owner       store.Owner
+	target      store.DeploymentTarget
+	predecessor store.Certificate
+	trustPath   string
+	rollback    *agentrelay.HostRollbackStore
+}
+
+type incidentRunResponseAUD41 struct {
 	ID                     string   `json:"id"`
-	Status                 string   `json:"status"`
-	Phase                  string   `json:"phase"`
-	NextBatchIndex         int      `json:"next_batch_index"`
-	ReplacementIdentityIDs []string `json:"replacement_identity_ids"`
-	RevokedIdentityIDs     []string `json:"revoked_identity_ids"`
-	Batches                []struct {
-		Index                  int      `json:"index"`
-		Status                 string   `json:"status"`
-		IdentityIDs            []string `json:"identity_ids"`
-		ReplacementIdentityIDs []string `json:"replacement_identity_ids"`
-	} `json:"batches"`
+	MigrationRunID         string   `json:"migration_run_id"`
+	Mode                   string   `json:"mode"`
+	PlanDigest             string   `json:"plan_digest"`
+	ExactTrustStoreIDs     []string `json:"exact_trust_store_ids"`
+	ExactTrustHosts        []string `json:"exact_trust_hosts"`
+	CandidateTrustStoreIDs []string `json:"candidate_trust_store_ids"`
+	CandidateTrustHosts    []string `json:"candidate_trust_hosts"`
 }
 
-func fleetBatchMessage(t *testing.T, st *store.Store, tenantID, runID string, index int) orchestrator.Message {
+func newIncidentMigrationFixtureAUD41(
+	t *testing.T,
+	h *roleHarness,
+	label, identityID, environment string,
+	failLiveGate bool,
+) *incidentMigrationFixtureAUD41 {
 	t.Helper()
-	var m orchestrator.Message
-	err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(t.Context(), `SELECT id, tenant_id::text, destination, idempotency_key, payload, attempts
-			FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`, tenantID,
-			orchestrator.FleetReissuanceBatchIdempotencyKey(runID, index)).
-			Scan(&m.ID, &m.TenantID, &m.Destination, &m.IdempotencyKey, &m.Payload, &m.Attempts)
-	})
-	if err != nil {
-		t.Fatalf("load fleet batch %d message: %v", index, err)
+	ctx := t.Context()
+	root := t.TempDir()
+	dnsName := label + "-aud41.test"
+	certPath := filepath.Join(root, "listener.crt")
+	keyPath := filepath.Join(root, "listener.key")
+	oldCert, oldKey := issueHostPair(t, h, dnsName)
+	t.Cleanup(func() { secret.Wipe(oldCert); secret.Wipe(oldKey) })
+	if err := os.WriteFile(certPath, oldCert, 0o600); err != nil {
+		t.Fatal(err)
 	}
-	return m
-}
+	if err := os.WriteFile(keyPath, oldKey, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-func countFleetBatchCommands(t *testing.T, st *store.Store, tenantID, runID string, index int) int {
-	t.Helper()
-	var count int
-	if err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(t.Context(), `SELECT count(*) FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
-			tenantID, orchestrator.FleetReissuanceBatchIdempotencyKey(runID, index)).Scan(&count)
-	}); err != nil {
-		t.Fatalf("count fleet batch commands: %v", err)
-	}
-	return count
-}
-
-func recordFleetVerification(t *testing.T, st *store.Store, orch *orchestrator.Orchestrator, tenantID, identityID, key, status string, signed bool) {
-	t.Helper()
-	var jobID int64
-	if err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(t.Context(), `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, effect_lane)
-			VALUES ($1, 'connector.deploy', '{}'::bytea, $2, $2) RETURNING id`, tenantID, key).Scan(&jobID)
-	}); err != nil {
-		t.Fatalf("insert verification job: %v", err)
-	}
-	if signed {
-		if err := st.RecordAgentJobReceipt(t.Context(), tenantID, store.AgentJobReceipt{
-			JobID: jobID, Attempt: 1, Agent: "signed-agent", Kind: "connector.deploy",
-			Outcome: status, State: store.AgentJobReceiptVerified,
-			SignerFingerprint: "sha256:test-agent", Statement: "canonical", Signature: "signature",
-			ObservedAt: time.Now().UTC(),
-		}); err != nil {
-			t.Fatalf("record signed verification receipt: %v", err)
+	listener := serveReloadingIncidentListenerAUD41(t, certPath, keyPath)
+	verifyAddress := listener
+	if failLiveGate {
+		staticCertPath := filepath.Join(root, "static-predecessor.crt")
+		staticKeyPath := filepath.Join(root, "static-predecessor.key")
+		if err := os.WriteFile(staticCertPath, oldCert, 0o600); err != nil {
+			t.Fatal(err)
 		}
+		if err := os.WriteFile(staticKeyPath, oldKey, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		verifyAddress = serveReloadingIncidentListenerAUD41(t, staticCertPath, staticKeyPath)
 	}
-	id := identityID
-	if _, err := orch.RecordConnectorDelivery(t.Context(), tenantID, store.ConnectorDeliveryReceipt{
-		IdentityID: &id, Destination: "connector.deploy", Connector: "nginx", Target: "edge/prod",
-		Status: status, Attempts: 1, IdempotencyKey: key + ":verified",
-	}); err != nil {
-		t.Fatalf("record connector verification: %v", err)
-	}
-}
 
-func mustFleetRun(t *testing.T, st *store.Store, tenantID, runID string) store.IncidentFleetReissuanceRun {
-	t.Helper()
-	run, err := st.GetIncidentFleetReissuanceRun(t.Context(), tenantID, runID)
+	targetConfig, err := json.Marshal(map[string]any{
+		"executor": "agent", "cert_path": certPath, "key_path": keyPath,
+		"verify_address": verifyAddress, "verify_server_name": dnsName,
+		"environment": environment,
+	})
 	if err != nil {
-		t.Fatalf("get fleet run: %v", err)
+		t.Fatal(err)
 	}
-	return run
-}
-
-func assertIdentityState(t *testing.T, st *store.Store, tenantID, identityID string, want orchestrator.State) {
-	t.Helper()
-	identity, err := st.GetIdentity(t.Context(), tenantID, identityID)
+	target, err := h.srv.orch.UpsertDeploymentTarget(ctx, h.tenant, store.DeploymentTarget{
+		Name: "host/aud41/" + label, Type: "nginx", Config: targetConfig, Enabled: true,
+	})
 	if err != nil {
-		t.Fatalf("get identity %s: %v", identityID, err)
+		t.Fatal(err)
 	}
-	if identity.Status != string(want) {
-		t.Fatalf("identity %s state = %s, want %s", identityID, identity.Status, want)
+	owner, err := h.srv.orch.CreateOwner(ctx, h.tenant, "workload", "AUD41 "+label+" owner", "")
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func assertIdentityAbsent(t *testing.T, st *store.Store, tenantID, identityID string) {
-	t.Helper()
-	if _, err := st.GetIdentity(t.Context(), tenantID, identityID); err == nil {
-		t.Fatalf("identity %s exists before its batch was published", identityID)
+	owner.Environment = environment
+	if err := h.store.UpdateOwner(ctx, owner); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func countIdentityRows(t *testing.T, st *store.Store, tenantID, identityID string) int {
-	t.Helper()
-	var count int
-	if err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(t.Context(), `SELECT count(*) FROM identities WHERE tenant_id = $1 AND id = $2`, tenantID, identityID).Scan(&count)
+	issuer, err := h.srv.orch.CreateIssuer(ctx, h.tenant, store.Issuer{
+		Kind: store.IssuerX509CA, Name: "AUD41 compromised " + label, Chain: []string{string(h.caPEM)}, Internal: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attributes, err := json.Marshal(map[string]string{
+		"deployment_target_id": target.ID, "connector": target.Type, "target": target.Name,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuerID := issuer.ID
+	if err := h.store.UpsertIdentity(ctx, store.Identity{
+		ID: identityID, TenantID: h.tenant, Kind: store.KindX509Certificate,
+		Name: dnsName, OwnerID: owner.ID, IssuerID: &issuerID, Status: "deployed", Attributes: attributes,
 	}); err != nil {
-		t.Fatalf("count identity rows: %v", err)
+		t.Fatal(err)
+	}
+	oldInfo, err := certinfo.Inspect(oldCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldDER, err := mtls.FirstCertDER(oldCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notBefore, notAfter := oldInfo.NotBefore, oldInfo.NotAfter
+	predecessor, err := h.srv.orch.RecordCertificate(ctx, h.tenant, store.Certificate{
+		OwnerID: &owner.ID, Subject: dnsName, SANs: oldInfo.DNSNames, Issuer: oldInfo.Issuer,
+		Serial: oldInfo.SerialNumber, Fingerprint: oldInfo.SHA256Fingerprint,
+		KeyAlgorithm: oldInfo.KeyAlgorithm, NotBefore: &notBefore, NotAfter: &notAfter,
+		Source: "issued", CertificateDER: oldDER, CertificatePEM: oldCert,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.RecordIssuedCert(ctx, h.tenant, IssuingCAID(), predecessor.Serial, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+
+	caInfo, err := certinfo.Inspect(h.caPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exactMeta, _ := json.Marshal(map[string]string{
+		"trust_store_kind": "os", "host": h.agent, "platform": "linux",
+		"subject": caInfo.Subject, "spki_sha256": caInfo.SPKISHA256,
+	})
+	candidateHost := "candidate-" + label
+	candidateMeta, _ := json.Marshal(map[string]string{
+		"trust_store_kind": "java", "host": candidateHost, "profile": "subject-only",
+		"subject": caInfo.Subject,
+	})
+	if _, recorded, rejected, err := h.srv.orch.RecordAgentInventory(ctx, h.tenant, h.agent, "trust-store-"+label,
+		[]store.DiscoveryFinding{
+			{Kind: "trust-store", Ref: "/etc/ssl/certs/" + label, Fingerprint: caInfo.SHA256Fingerprint, Metadata: exactMeta},
+			{Kind: "trust-store", Ref: "/java/cacerts/" + label, Metadata: candidateMeta},
+		}); err != nil || recorded != 2 || rejected != 0 {
+		t.Fatalf("record H1 inventory = recorded %d rejected %d err=%v", recorded, rejected, err)
+	}
+
+	rollback, err := agentrelay.NewHostRollbackStore(filepath.Join(root, "rollback"), h.tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rollback.RecordDeploy(target.Type, target.ID, predecessor.Fingerprint, oldCert, oldKey); err != nil {
+		t.Fatal(err)
+	}
+	return &incidentMigrationFixtureAUD41{
+		root: root, dnsName: dnsName, identityID: identityID, issuer: issuer, owner: owner,
+		target: target, predecessor: predecessor, trustPath: filepath.Join(root, "replacement-root.pem"), rollback: rollback,
+	}
+}
+
+func serveReloadingIncidentListenerAUD41(t *testing.T, certPath, keyPath string) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tlsServer, err := mtls.ServerCertFromFiles(certPath, keyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tlsServer.SetReloadCheckInterval(time.Millisecond)
+	httpServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})} // #nosec G112 -- loopback test fixture is explicitly closed (CWE-400)
+	done := make(chan error, 1)
+	go func() { done <- tlsServer.ServeHTTPS(httpServer, listener) }()
+	t.Cleanup(func() {
+		_ = httpServer.Close()
+		if serveErr := <-done; serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			t.Errorf("incident listener: %v", serveErr)
+		}
+	})
+	return listener.Addr().String()
+}
+
+func (f *incidentMigrationFixtureAUD41) setEnvironment(t *testing.T, h *roleHarness, environment string) {
+	t.Helper()
+	f.owner.Environment = environment
+	if err := h.store.UpdateOwner(t.Context(), f.owner); err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(f.target.Config, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg["environment"] = environment
+	updated, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.target.Config = updated
+	target, err := h.srv.orch.UpsertDeploymentTarget(t.Context(), h.tenant, f.target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.target = target
+}
+
+func (f *incidentMigrationFixtureAUD41) startBody(authorityID string, mode migration.IncidentMode) map[string]any {
+	return map[string]any{
+		"issuer_id": f.issuer.ID, "replacement_authority_id": authorityID,
+		"mode": mode, "reason": "AUD41 compromised issuer exercise",
+		"rollback_ref": "restore the exact predecessor for this cohort",
+		"cohorts": []any{map[string]any{
+			"id": "canary", "ordinal": 1,
+			"members": []any{map[string]any{
+				"identity_id": f.identityID, "agent_id": agentRowID(f.owner.TenantID, "role-agent"),
+				"trust_anchor_path": f.trustPath,
+			}},
+		}},
+	}
+}
+
+func assertIncidentPlanBeforeMigrationAUD41(t *testing.T, h *roleHarness, runID string) {
+	t.Helper()
+	var planSequence, migrationSequence uint64
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.TenantID != h.tenant || !strings.Contains(string(event.Data), runID) {
+			return nil
+		}
+		switch event.Type {
+		case projections.EventIncidentFleetReissuanceRecorded:
+			if planSequence == 0 && strings.Contains(string(event.Data), "plan_persisted_before_estate_work") {
+				planSequence = event.Sequence
+			}
+		case projections.EventMigrationRunRecorded:
+			if migrationSequence == 0 {
+				migrationSequence = event.Sequence
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if planSequence == 0 || migrationSequence == 0 || planSequence >= migrationSequence {
+		t.Fatalf("plan/migration event sequence = %d/%d; plan must commit first", planSequence, migrationSequence)
+	}
+}
+
+func incidentRevocationMessageAUD41(t *testing.T, h *roleHarness, runID string) orchestrator.Message {
+	t.Helper()
+	var message orchestrator.Message
+	pattern := "migration:" + runID + ":%:revoke_predecessor%"
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT id, tenant_id::text, destination, idempotency_key, payload, attempts
+		   FROM outbox
+		  WHERE tenant_id = $1 AND destination = $2 AND idempotency_key LIKE $3
+		  ORDER BY id
+		  LIMIT 1`,
+		h.tenant, orchestrator.DestinationIncidentMigrationRevoke, pattern).
+		Scan(&message.ID, &message.TenantID, &message.Destination, &message.IdempotencyKey, &message.Payload, &message.Attempts); err != nil {
+		t.Fatalf("load incident revocation message: %v", err)
+	}
+	return message
+}
+
+func assertIncidentTerminalAUD41(t *testing.T, h *roleHarness, token, runID, identityID, wantStatus string) {
+	t.Helper()
+	run, err := h.store.GetIncidentFleetReissuanceRun(t.Context(), h.tenant, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != wantStatus || run.EvidenceBundleFormat != "jws" || strings.Count(run.EvidenceBundle, ".") != 2 {
+		t.Fatalf("terminal incident = status %q format %q bundle segments %d", run.Status, run.EvidenceBundleFormat, strings.Count(run.EvidenceBundle, "."))
+	}
+	if _, err := audit.VerifyBundle(run.EvidenceBundle, h.srv.audit.VerificationKeys()); err != nil {
+		t.Fatalf("verify incident evidence bundle: %v", err)
+	}
+	// A delivery may crash after mirroring the terminal H2 state but before its
+	// outbox ACK. Replaying that same transition must retain one event and the
+	// byte-identical signed bundle; a newly timestamped JWS would make restart
+	// evidence depend on where the process died.
+	migrationRow, err := h.store.GetMigrationRun(t.Context(), h.tenant, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mirrorEventID := orchestrator.MigrationEventID(h.tenant, runID,
+		fmt.Sprintf("incident-mirror:%d", migrationRow.LastEventSequence))
+	if got := countEventIDAUD41(t, h.log, mirrorEventID); got != 1 {
+		t.Fatalf("terminal mirror event count before replay = %d, want 1", got)
+	}
+	sealedBundle := run.EvidenceBundle
+	if err := syncIncidentMigrationState(t.Context(), h.store, h.srv.orch, h.srv.audit, h.tenant, migrationRow); err != nil {
+		t.Fatalf("replay terminal incident transition: %v", err)
+	}
+	replayed, err := h.store.GetIncidentFleetReissuanceRun(t.Context(), h.tenant, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayed.EvidenceBundle != sealedBundle || countEventIDAUD41(t, h.log, mirrorEventID) != 1 {
+		t.Fatal("terminal transition replay changed the sealed bundle or appended duplicate evidence")
+	}
+	tampered := replayed
+	tampered.Phase += ":tampered"
+	if _, err := h.srv.orch.RecordIncidentFleetReissuanceWithEventID(
+		t.Context(), h.tenant, mirrorEventID, tampered,
+	); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("changed terminal evidence under retained event id error = %v, want idempotency conflict", err)
+	}
+	if wantStatus == "executed" {
+		if !sameMembers(run.ReplacementIdentityIDs, []string{identityID}) || !sameMembers(run.RevokedIdentityIDs, []string{identityID}) {
+			t.Fatalf("executed identity evidence replacements=%v revoked=%v", run.ReplacementIdentityIDs, run.RevokedIdentityIDs)
+		}
+	} else if !sameMembers(run.FailedTargets, []string{identityID}) || len(run.RevokedIdentityIDs) != 0 {
+		t.Fatalf("rollback evidence failed=%v revoked=%v", run.FailedTargets, run.RevokedIdentityIDs)
+	}
+	statusCode, body := secretsReq(t, h.servedHarness, http.MethodGet,
+		"/api/v1/incidents/fleet-reissuance-runs/"+runID+"/evidence", token, nil)
+	if statusCode != http.StatusOK || !bytes.Contains(body, []byte(`"evidence_bundle_format":"jws"`)) {
+		t.Fatalf("served terminal evidence = %d %s", statusCode, body)
+	}
+}
+
+func countEventIDAUD41(t *testing.T, log *events.Log, eventID string) int {
+	t.Helper()
+	count := 0
+	if err := log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.ID == eventID {
+			count++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 	return count
-}
-
-func createX509IssuerWithToken(t *testing.T, ts *httptest.Server, token string) string {
-	t.Helper()
-	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/issuers", token, "fleet-issuer", map[string]any{
-		"kind": "x509_ca", "name": "compromised intermediate",
-		"chain": []string{"-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"}, "internal": true,
-	})
-	if code != http.StatusCreated {
-		t.Fatalf("create issuer = %d body=%s", code, body)
-	}
-	var got struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(body, &got); err != nil || got.ID == "" {
-		t.Fatalf("decode issuer id: %v body=%s", err, body)
-	}
-	return got.ID
-}
-
-func createIdentityWithIssuerWithToken(t *testing.T, ts *httptest.Server, token, ownerID, issuerID, name, idem string) string {
-	t.Helper()
-	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/identities", token, idem, map[string]any{
-		"kind": "x509_certificate", "name": name, "owner_id": ownerID, "issuer_id": issuerID,
-	})
-	if code != http.StatusCreated {
-		t.Fatalf("create identity %s = %d body=%s", name, code, body)
-	}
-	var got struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(body, &got); err != nil || got.ID == "" {
-		t.Fatalf("decode identity id: %v body=%s", err, body)
-	}
-	return got.ID
 }
 
 func sameMembers(got, want []string) bool {
@@ -368,14 +516,14 @@ func sameMembers(got, want []string) bool {
 		return false
 	}
 	seen := map[string]int{}
-	for _, v := range got {
-		seen[v]++
+	for _, value := range got {
+		seen[value]++
 	}
-	for _, v := range want {
-		if seen[v] == 0 {
+	for _, value := range want {
+		if seen[value] == 0 {
 			return false
 		}
-		seen[v]--
+		seen[value]--
 	}
 	return true
 }

@@ -3,6 +3,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1649,6 +1650,25 @@ func (o *Orchestrator) RevokeCertificateForCA(ctx context.Context, tenantID, fin
 	return err
 }
 
+// RevokeCertificateForCAWithEventID is the durable receiver form used by H3.
+// The stable event identity closes the worker crash window: a retry may project
+// the same revocation again, but it cannot append a second semantic revocation.
+func (o *Orchestrator) RevokeCertificateForCAWithEventID(ctx context.Context, tenantID, eventID, fingerprint, serial, caID, reason string, reasonCode int) error {
+	if strings.TrimSpace(eventID) == "" {
+		return errors.New("orchestrator: revocation event id is required")
+	}
+	payload, err := json.Marshal(projections.CertificateRevoked{
+		Fingerprint: fingerprint, CAID: caID, Serial: serial, Reason: reason, ReasonCode: reasonCode,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = o.emitPreparedExact(ctx, events.Event{
+		ID: eventID, Type: projections.EventCertificateRevoked, TenantID: tenantID, Data: payload,
+	})
+	return err
+}
+
 // SupersedeCertificate records a certificate.superseded event (keyed by the
 // cert's fingerprint) and projects it, so the inventoried certificate's status
 // becomes superseded and renewed_at is stamped (CORRECT-002). The status change
@@ -2034,6 +2054,29 @@ func (o *Orchestrator) RecordConnectorRightSizeOperation(ctx context.Context, te
 // rollback evidence, rebuild, and snapshot restore all replay from the immutable
 // log instead of mutating read state directly (AN-2).
 func (o *Orchestrator) RecordIncidentFleetReissuance(ctx context.Context, tenantID string, r store.IncidentFleetReissuanceRun) (store.IncidentFleetReissuanceRun, error) {
+	return o.recordIncidentFleetReissuance(ctx, tenantID, "", r)
+}
+
+// RecordIncidentFleetReissuanceWithEventID records a retry-stable H3 mirror of
+// one H2 transition. Duplicate suppression is accepted only when the retained
+// event has the exact same payload, so a crashed receiver cannot silently bind
+// one transition identity to different incident evidence.
+func (o *Orchestrator) RecordIncidentFleetReissuanceWithEventID(
+	ctx context.Context,
+	tenantID, eventID string,
+	r store.IncidentFleetReissuanceRun,
+) (store.IncidentFleetReissuanceRun, error) {
+	if strings.TrimSpace(eventID) == "" {
+		return store.IncidentFleetReissuanceRun{}, errors.New("orchestrator: incident fleet evidence event id is required")
+	}
+	return o.recordIncidentFleetReissuance(ctx, tenantID, eventID, r)
+}
+
+func (o *Orchestrator) recordIncidentFleetReissuance(
+	ctx context.Context,
+	tenantID, eventID string,
+	r store.IncidentFleetReissuanceRun,
+) (store.IncidentFleetReissuanceRun, error) {
 	if r.ID == "" {
 		r.ID = uuid.NewString()
 	}
@@ -2050,7 +2093,11 @@ func (o *Orchestrator) RecordIncidentFleetReissuance(ctx context.Context, tenant
 	}
 	payload, err := json.Marshal(projections.IncidentFleetReissuanceRecorded{
 		ID: r.ID, IssuerID: r.IssuerID, Status: r.Status, Phase: r.Phase,
-		Reason: r.Reason, BatchSize: r.BatchSize, NextBatchIndex: r.NextBatchIndex,
+		MigrationRunID: r.MigrationRunID, ReplacementAuthorityID: r.ReplacementAuthorityID,
+		Mode: r.Mode, PlanDigest: r.PlanDigest, ExactTrustStoreIDs: r.ExactTrustStoreIDs,
+		ExactTrustHosts: r.ExactTrustHosts, CandidateTrustStoreIDs: r.CandidateTrustStoreIDs,
+		CandidateTrustHosts: r.CandidateTrustHosts,
+		Reason:              r.Reason, BatchSize: r.BatchSize, NextBatchIndex: r.NextBatchIndex,
 		HaltedReason: r.HaltedReason, Connector: r.Connector, Target: r.Target,
 		GraphImpact: r.GraphImpact, AffectedIdentityIDs: r.AffectedIdentityIDs,
 		ReplacementIdentityIDs: r.ReplacementIdentityIDs, RevokedIdentityIDs: r.RevokedIdentityIDs,
@@ -2062,7 +2109,20 @@ func (o *Orchestrator) RecordIncidentFleetReissuance(ctx context.Context, tenant
 	if err != nil {
 		return store.IncidentFleetReissuanceRun{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventIncidentFleetReissuanceRecorded, tenantID, payload)
+	var ev events.Event
+	if eventID == "" {
+		ev, err = o.emit(ctx, projections.EventIncidentFleetReissuanceRecorded, tenantID, payload)
+	} else {
+		expected := events.Event{
+			ID: eventID, Type: projections.EventIncidentFleetReissuanceRecorded,
+			TenantID: tenantID, Data: payload,
+		}
+		ev, err = o.emitPrepared(ctx, expected)
+		if err == nil && (ev.ID != expected.ID || ev.Type != expected.Type ||
+			ev.TenantID != expected.TenantID || !bytes.Equal(ev.Data, expected.Data)) {
+			err = fmt.Errorf("%w: canonical incident fleet evidence differs", store.ErrIdempotencyConflict)
+		}
+	}
 	if err != nil {
 		return store.IncidentFleetReissuanceRun{}, err
 	}
@@ -2099,7 +2159,11 @@ func (o *Orchestrator) RecordIncidentFleetReissuanceAndEnqueueBatch(
 	}
 	payload, err := json.Marshal(projections.IncidentFleetReissuanceRecorded{
 		ID: r.ID, IssuerID: r.IssuerID, Status: r.Status, Phase: r.Phase,
-		Reason: r.Reason, BatchSize: r.BatchSize, NextBatchIndex: r.NextBatchIndex,
+		MigrationRunID: r.MigrationRunID, ReplacementAuthorityID: r.ReplacementAuthorityID,
+		Mode: r.Mode, PlanDigest: r.PlanDigest, ExactTrustStoreIDs: r.ExactTrustStoreIDs,
+		ExactTrustHosts: r.ExactTrustHosts, CandidateTrustStoreIDs: r.CandidateTrustStoreIDs,
+		CandidateTrustHosts: r.CandidateTrustHosts,
+		Reason:              r.Reason, BatchSize: r.BatchSize, NextBatchIndex: r.NextBatchIndex,
 		HaltedReason: r.HaltedReason, Connector: r.Connector, Target: r.Target,
 		GraphImpact: r.GraphImpact, AffectedIdentityIDs: r.AffectedIdentityIDs,
 		ReplacementIdentityIDs: r.ReplacementIdentityIDs, RevokedIdentityIDs: r.RevokedIdentityIDs,

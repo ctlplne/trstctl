@@ -56,11 +56,19 @@ var highRiskVerdictProofs = []highRiskVerdictProof{
 		Verdict: "FleetReissuanceBatch.status",
 		NegativeTests: []negativeProofReference{
 			{
-				Test: "internal/server/incident_fleet_reissuance_served_test.go:TestServedFleetReissuanceIsDurableCanaryFirstAcrossPauseHaltResumeAndRestart",
+				Test: "internal/server/incident_fleet_reissuance_served_test.go:TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41",
 				RequiredTokens: []string{
-					"later batch was published before canary verification",
-					"failed canary published batch 2",
-					`run.Status != "halted"`,
+					"ledger mutated before signed live gate worker",
+					"failed cohort predecessor was revoked",
+					"plan/migration event sequence",
+				},
+			},
+			{
+				Test: "internal/migration/run_test.go:TestIncidentRunRevokesOnlyAfterSignedLiveGateBeforeNextCohortAUD41",
+				RequiredTokens: []string{
+					"live gate advanced before exact revocation",
+					"ActionRevokePredecessor",
+					"ActionDistributeTrust",
 				},
 			},
 		},

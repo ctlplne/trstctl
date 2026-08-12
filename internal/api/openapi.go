@@ -2703,11 +2703,9 @@ func componentSchemas() map[string]*Schema {
 		"action":          ref("OwnerRemediationAction"),
 		"remediation_run": ref("RemediationPlaybookRun"),
 	}, "capability", "status", "action", "remediation_run")
-	// A gate trstctl fills in itself is servedstatus.FleetGateNotEvaluated:
-	// nothing re-reads an endpoint to compute a verdict yet (epic D6). The status
-	// stays an open string because an operator may attest a gate in their own
-	// words on the request, and the handler passes that attestation through
-	// unmodified rather than rewriting it into a vocabulary they did not choose.
+	// Legacy D6 rows retain open operator gates. H3 rows use the same response
+	// shape, but their verdicts come only from H2's signed trust/live receipts and
+	// the exact predecessor-revocation receipt.
 	fleetHealthGate := object(map[string]*Schema{
 		"name": str(), "status": str(),
 	}, "name", "status")
@@ -2718,11 +2716,11 @@ func componentSchemas() map[string]*Schema {
 		"health_gate":              str(),
 	}, "index", "status", "identity_ids", "replacement_identity_ids")
 	fleetReissuanceReq := object(map[string]*Schema{
-		"issuer_id": uuid(), "reason": str(), "batch_size": {Type: "integer"},
-		"connector": str(), "target": str(), "rollback_ref": str(),
-		"health_gates":  {Type: "array", Items: ref("FleetReissuanceHealthGate")},
-		"evidence_hint": str(),
-	}, "issuer_id")
+		"issuer_id": uuid(), "replacement_authority_id": uuid(),
+		"mode":   {Type: "string", Enum: []string{"live", "game_day"}},
+		"reason": str(), "cohorts": {Type: "array", Items: ref("MigrationRunStartWave")},
+		"rollback_ref": str(),
+	}, "issuer_id", "replacement_authority_id", "mode", "cohorts")
 	fleetReissuanceActionReq := object(map[string]*Schema{
 		"reason": str(), "rollback_ref": str(),
 	})
@@ -3733,7 +3731,14 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "tenant_id", "compromised_identity_id", "status", "phase", "blast_radius", "failed_targets", "rollback_refs", "created_at", "updated_at")
 	fleetReissuanceRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "issuer_id": uuid(),
-		"status": str(), "phase": str(), "reason": str(), "batch_size": {Type: "integer"},
+		"migration_run_id": uuid(), "replacement_authority_id": uuid(),
+		"mode":                      {Type: "string", Enum: []string{"legacy", "live", "game_day"}},
+		"plan_digest":               str(),
+		"exact_trust_store_ids":     {Type: "array", Items: str()},
+		"exact_trust_hosts":         {Type: "array", Items: str()},
+		"candidate_trust_store_ids": {Type: "array", Items: str()},
+		"candidate_trust_hosts":     {Type: "array", Items: str()},
+		"status":                    str(), "phase": str(), "reason": str(), "batch_size": {Type: "integer"},
 		"batch_count": {Type: "integer"}, "next_batch_index": {Type: "integer"},
 		"halted_reason": str(), "connector": str(), "target": str(),
 		"graph_impact":             ref("GraphImpact"),
@@ -3749,7 +3754,11 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(), "created_by": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"replacement_identities": {Type: "array", Items: ref("Identity")},
 		"connector_deliveries":   {Type: "array", Items: ref("ConnectorDelivery")},
-	}, "id", "tenant_id", "issuer_id", "status", "phase", "batch_size", "batch_count", "next_batch_index", "graph_impact", "affected_identity_ids", "replacement_identity_ids", "revoked_identity_ids", "batches", "health_gates", "rollback_refs", "created_at", "updated_at")
+	}, "id", "tenant_id", "issuer_id", "mode", "exact_trust_store_ids", "exact_trust_hosts",
+		"candidate_trust_store_ids", "candidate_trust_hosts", "status", "phase", "batch_size",
+		"batch_count", "next_batch_index", "graph_impact", "affected_identity_ids",
+		"replacement_identity_ids", "revoked_identity_ids", "batches", "health_gates",
+		"rollback_refs", "created_at", "updated_at")
 	fleetReissuanceEvidence := object(map[string]*Schema{
 		"run_id": uuid(), "evidence_bundle_format": str(), "evidence_bundle": str(),
 		"rollback_refs":  {Type: "array", Items: str()},

@@ -42,8 +42,12 @@ const (
 type ObservationStage string
 
 const (
-	StageTrust             ObservationStage = "trust"
-	StageSuccessor         ObservationStage = "successor"
+	StageTrust     ObservationStage = "trust"
+	StageSuccessor ObservationStage = "successor"
+	// StageRevocation is an incident-only control-plane receipt. It proves the
+	// exact predecessor certificate was revoked after the signed live listener
+	// gate. Ordinary CA migrations do not revoke predecessors and never enter it.
+	StageRevocation        ObservationStage = "revocation"
 	StageRollbackSuccessor ObservationStage = "rollback_successor"
 	StageRollbackTrust     ObservationStage = "rollback_trust"
 )
@@ -54,9 +58,34 @@ type ActionKind string
 const (
 	ActionDistributeTrust   ActionKind = "distribute_trust"
 	ActionIssueSuccessor    ActionKind = "issue_successor"
+	ActionRevokePredecessor ActionKind = "revoke_predecessor"
 	ActionRollbackSuccessor ActionKind = "rollback_successor"
 	ActionRemoveTrust       ActionKind = "remove_trust"
 )
+
+// IncidentMode distinguishes a real compromise response from an isolated
+// rehearsal. The engine treats game-day as a safety boundary, not a display
+// label: every frozen member binding must name a non-production environment.
+type IncidentMode string
+
+const (
+	IncidentModeLive    IncidentMode = "live"
+	IncidentModeGameDay IncidentMode = "game_day"
+)
+
+// IncidentPlan is the immutable H3 authority attached to an H2 run. It records
+// the exact compromised and replacement authorities, the authoritative H1
+// TRUSTS scope, and the complete affected identity set before any estate intent
+// is published. Candidate trust relationships are deliberately absent: they
+// are operator guidance, never automation authority.
+type IncidentPlan struct {
+	Mode                   IncidentMode `json:"mode"`
+	CompromisedIssuerID    string       `json:"compromised_issuer_id"`
+	ReplacementAuthorityID string       `json:"replacement_authority_id"`
+	ExactTrustStoreIDs     []string     `json:"exact_trust_store_ids"`
+	ExactTrustHosts        []string     `json:"exact_trust_hosts"`
+	AffectedIdentityIDs    []string     `json:"affected_identity_ids"`
+}
 
 // Action names one exact member effect. It contains no credential material.
 type Action struct {
@@ -124,7 +153,13 @@ type MemberBinding struct {
 	SubjectDNSNames          []string        `json:"subject_dns_names"`
 	PredecessorCertificateID string          `json:"predecessor_certificate_id"`
 	PredecessorFingerprint   string          `json:"predecessor_fingerprint"`
-	SuccessorFingerprint     string          `json:"successor_fingerprint,omitempty"`
+	// PredecessorCAID is the exact responder/revocation authority. Incident
+	// response requires it; a generic migration may leave it empty.
+	PredecessorCAID string `json:"predecessor_ca_id,omitempty"`
+	// Environment is frozen from the owner and target classification. Game-day
+	// validation accepts only an explicit non-production value.
+	Environment          string `json:"environment,omitempty"`
+	SuccessorFingerprint string `json:"successor_fingerprint,omitempty"`
 }
 
 // RunMember carries gate state beside the immutable command authority that
@@ -135,6 +170,7 @@ type RunMember struct {
 	Binding                  MemberBinding `json:"binding"`
 	TrustVerdict             Verdict       `json:"trust_verdict,omitempty"`
 	SuccessorVerdict         Verdict       `json:"successor_verdict,omitempty"`
+	RevocationVerdict        Verdict       `json:"revocation_verdict,omitempty"`
 	RollbackSuccessorVerdict Verdict       `json:"rollback_successor_verdict,omitempty"`
 	RollbackTrustVerdict     Verdict       `json:"rollback_trust_verdict,omitempty"`
 }
@@ -154,6 +190,7 @@ type RunWave struct {
 type Run struct {
 	ID              string           `json:"id"`
 	PlanID          string           `json:"plan_id,omitempty"`
+	Incident        *IncidentPlan    `json:"incident,omitempty"`
 	Status          RunStatus        `json:"status"`
 	Waves           []RunWave        `json:"waves"`
 	HaltReason      string           `json:"halt_reason,omitempty"`
@@ -196,6 +233,9 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 	}
 	if obs.Verdict != VerdictVerified && obs.Verdict != VerdictFailed {
 		return in, nil, fmt.Errorf("migration: unsupported observation verdict %q", obs.Verdict)
+	}
+	if obs.Stage == StageRevocation && obs.Verdict != VerdictVerified {
+		return in, nil, errors.New("migration: incident revocation accepts only a verified control-plane receipt")
 	}
 	member := &out.Waves[waveIndex].Members[memberIndex]
 	verdict := verdictForStage(member, obs.Stage)
@@ -269,6 +309,19 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 		wave.Phase = PhaseVerifyingLive
 		return out, actionsFor(*wave, ActionIssueSuccessor), nil
 	case StageSuccessor:
+		if out.Incident != nil {
+			wave.Phase = PhaseRevokingPredecessor
+			return out, actionsFor(*wave, ActionRevokePredecessor), nil
+		}
+		wave.Phase = PhaseComplete
+		if next := nextPlannedWave(out, waveIndex); next >= 0 {
+			out.Waves[next].Phase = PhaseVerifyingTrust
+			out.Waves[next].Started = true
+			return out, actionsFor(out.Waves[next], ActionDistributeTrust), nil
+		}
+		out.Status = RunComplete
+		return out, nil, nil
+	case StageRevocation:
 		wave.Phase = PhaseComplete
 		if next := nextPlannedWave(out, waveIndex); next >= 0 {
 			out.Waves[next].Phase = PhaseVerifyingTrust
@@ -325,6 +378,10 @@ func ResumeRun(in Run) (Run, []Action, error) {
 			wave.Phase = PhaseVerifyingLive
 			return out, actionsFor(*wave, ActionIssueSuccessor), nil
 		case wave.Phase == PhaseVerifyingLive && allVerified(*wave, StageSuccessor):
+			if out.Incident != nil {
+				wave.Phase = PhaseRevokingPredecessor
+				return out, actionsFor(*wave, ActionRevokePredecessor), nil
+			}
 			wave.Phase = PhaseComplete
 			if next := nextPlannedWave(out, waveIndex); next >= 0 {
 				out.Waves[next].Phase = PhaseVerifyingTrust
@@ -363,6 +420,8 @@ func ReconcileActions(run Run) []Action {
 			return missingActions(wave, StageTrust, ActionDistributeTrust)
 		case PhaseVerifyingLive:
 			return missingActions(wave, StageSuccessor, ActionIssueSuccessor)
+		case PhaseRevokingPredecessor:
+			return missingActions(wave, StageRevocation, ActionRevokePredecessor)
 		}
 	}
 	return nil
@@ -375,6 +434,13 @@ func StartRollback(in Run) (Run, []Action, error) {
 		return in, nil, fmt.Errorf("migration: run in %q cannot start rollback", in.Status)
 	}
 	out := cloneRun(in)
+	if out.Incident != nil {
+		for _, wave := range out.Waves {
+			if wave.Phase == PhaseRevokingPredecessor || hasVerified(wave, StageRevocation) {
+				return in, nil, errors.New("migration: incident predecessor revocation is irreversible; rollback must start before that gate")
+			}
+		}
+	}
 	if out.Status == RunHalted && out.RollbackWaveID != "" {
 		return retryRollback(out)
 	}
@@ -443,6 +509,40 @@ func validateRun(run Run) error {
 			}
 		}
 	}
+	if err := validateIncidentPlan(run, members); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateIncidentPlan(run Run, members map[string]bool) error {
+	if run.Incident == nil {
+		return nil
+	}
+	p := run.Incident
+	if p.Mode != IncidentModeLive && p.Mode != IncidentModeGameDay {
+		return fmt.Errorf("migration: incident mode %q is unsupported", p.Mode)
+	}
+	if strings.TrimSpace(p.CompromisedIssuerID) == "" || strings.TrimSpace(p.ReplacementAuthorityID) == "" ||
+		len(p.ExactTrustStoreIDs) == 0 || len(p.ExactTrustHosts) == 0 {
+		return errors.New("migration: incident plan requires exact authorities and authoritative H1 trust scope")
+	}
+	affected := map[string]bool{}
+	for _, id := range p.AffectedIdentityIDs {
+		id = strings.TrimSpace(id)
+		if id == "" || affected[id] {
+			return errors.New("migration: incident affected identities must be non-empty and unique")
+		}
+		affected[id] = true
+	}
+	if len(affected) != len(members) {
+		return errors.New("migration: incident cohorts must exactly cover the frozen affected identity set")
+	}
+	for id := range members {
+		if !affected[id] {
+			return errors.New("migration: incident cohort contains an identity outside its frozen scope")
+		}
+	}
 	return nil
 }
 
@@ -495,6 +595,17 @@ func ValidateExecutableRun(run Run) error {
 			} else if b.IssuingAuthorityID != authorityID || b.TrustAnchorFingerprint != anchorFingerprint ||
 				!bytes.Equal(b.TrustAnchorPEM, anchorPEM) {
 				return errors.New("migration: every member must retain the same reviewed CA authority and public anchor")
+			}
+			if run.Incident != nil {
+				if strings.TrimSpace(b.PredecessorCAID) == "" {
+					return fmt.Errorf("migration: incident member %s has no exact predecessor revocation authority", member.IdentityID)
+				}
+				if b.IssuingAuthorityID != run.Incident.ReplacementAuthorityID {
+					return fmt.Errorf("migration: incident member %s replacement authority drifted from the plan", member.IdentityID)
+				}
+				if run.Incident.Mode == IncidentModeGameDay && !nonProductionEnvironment(b.Environment) {
+					return fmt.Errorf("migration: game-day member %s is not explicitly non-production", member.IdentityID)
+				}
 			}
 			if targets[b.TargetID] {
 				return fmt.Errorf("migration: deployment target %s appears more than once", b.TargetID)
@@ -579,6 +690,13 @@ func actionKey(action Action) string {
 
 func cloneRun(in Run) Run {
 	out := in
+	if in.Incident != nil {
+		incident := *in.Incident
+		incident.ExactTrustStoreIDs = append([]string(nil), in.Incident.ExactTrustStoreIDs...)
+		incident.ExactTrustHosts = append([]string(nil), in.Incident.ExactTrustHosts...)
+		incident.AffectedIdentityIDs = append([]string(nil), in.Incident.AffectedIdentityIDs...)
+		out.Incident = &incident
+	}
 	out.Waves = append([]RunWave(nil), in.Waves...)
 	for i := range out.Waves {
 		out.Waves[i].Members = append([]RunMember(nil), in.Waves[i].Members...)
@@ -606,6 +724,8 @@ func verdictForStage(member *RunMember, stage ObservationStage) *Verdict {
 		return &member.TrustVerdict
 	case StageSuccessor:
 		return &member.SuccessorVerdict
+	case StageRevocation:
+		return &member.RevocationVerdict
 	case StageRollbackSuccessor:
 		return &member.RollbackSuccessorVerdict
 	case StageRollbackTrust:
@@ -624,6 +744,10 @@ func requireObservationPhase(run Run, waveIndex int, stage ObservationStage) err
 		}
 	case StageSuccessor:
 		if (run.Status == RunRunning || run.Status == RunPaused) && wave.Phase == PhaseVerifyingLive {
+			return nil
+		}
+	case StageRevocation:
+		if run.Incident != nil && (run.Status == RunRunning || run.Status == RunPaused) && wave.Phase == PhaseRevokingPredecessor {
 			return nil
 		}
 	case StageRollbackSuccessor, StageRollbackTrust:
@@ -704,6 +828,12 @@ func newestStartedWave(run Run) int {
 }
 
 func nextRollbackWave(run Run, from int) int {
+	// An incident revokes each completed cohort's predecessor before advancing.
+	// Those predecessors cannot be made valid again, so an automatic failure
+	// inverse is deliberately bounded to the current cohort.
+	if run.Incident != nil {
+		return -1
+	}
 	best, ordinal := -1, -1
 	current := run.Waves[from].Ordinal
 	for i := range run.Waves {
@@ -719,5 +849,15 @@ func nextRollbackWave(run Run, from int) int {
 }
 
 func successorWorkWasPublished(wave RunWave) bool {
-	return wave.Phase == PhaseVerifyingLive || wave.Phase == PhaseComplete || hasVerified(wave, StageSuccessor)
+	return wave.Phase == PhaseVerifyingLive || wave.Phase == PhaseRevokingPredecessor ||
+		wave.Phase == PhaseComplete || hasVerified(wave, StageSuccessor)
+}
+
+func nonProductionEnvironment(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "test", "testing", "qa", "quality-assurance", "staging", "stage", "development", "dev", "sandbox", "game-day", "game_day", "non-production", "nonproduction":
+		return true
+	default:
+		return false
+	}
 }

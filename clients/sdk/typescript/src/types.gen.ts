@@ -2277,7 +2277,7 @@ export interface paths {
         /** List incident execution evidence packs */
         get: operations["listIncidentExecutions"];
         put?: never;
-        /** Execute a credential-compromise incident remediation */
+        /** Refuse retired single-identity incident execution with H2 guidance */
         post: operations["executeIncident"];
         delete?: never;
         options?: never;
@@ -2312,7 +2312,7 @@ export interface paths {
         /** List compromised-issuer fleet reissuance runs */
         get: operations["listFleetReissuanceRuns"];
         put?: never;
-        /** Run compromised-issuer fleet reissuance */
+        /** Run exact-H1, signed-gate compromised-issuer H2 cohorts */
         post: operations["startFleetReissuance"];
         delete?: never;
         options?: never;
@@ -2363,7 +2363,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record pause evidence for a fleet reissuance run */
+        /** Pause H2 incident advancement without recalling leased work */
         post: operations["pauseFleetReissuance"];
         delete?: never;
         options?: never;
@@ -2380,7 +2380,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record resume evidence for a fleet reissuance run */
+        /** Resume the retained signed H2 incident gate */
         post: operations["resumeFleetReissuance"];
         delete?: never;
         options?: never;
@@ -2397,7 +2397,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record rollback evidence for a fleet reissuance run */
+        /** Roll back the current unrevoked incident cohort */
         post: operations["rollbackFleetReissuance"];
         delete?: never;
         options?: never;
@@ -7705,21 +7705,23 @@ export interface components {
             status: string;
         };
         FleetReissuanceRequest: {
-            batch_size?: number;
-            connector?: string;
-            evidence_hint?: string;
-            health_gates?: components["schemas"]["FleetReissuanceHealthGate"][];
+            cohorts: components["schemas"]["MigrationRunStartWave"][];
             /** Format: uuid */
             issuer_id: string;
+            /** @enum {string} */
+            mode: "live" | "game_day";
             reason?: string;
+            /** Format: uuid */
+            replacement_authority_id: string;
             rollback_ref?: string;
-            target?: string;
         };
         FleetReissuanceRun: {
             affected_identity_ids: string[];
             batch_count: number;
             batch_size: number;
             batches: components["schemas"]["FleetReissuanceBatch"][];
+            candidate_trust_hosts: string[];
+            candidate_trust_store_ids: string[];
             connector?: string;
             connector_deliveries?: components["schemas"]["ConnectorDelivery"][];
             connector_delivery_ids?: string[];
@@ -7728,6 +7730,8 @@ export interface components {
             created_by?: string;
             evidence_bundle?: string;
             evidence_bundle_format?: string;
+            exact_trust_hosts: string[];
+            exact_trust_store_ids: string[];
             failed_targets?: string[];
             graph_impact: components["schemas"]["GraphImpact"];
             halted_reason?: string;
@@ -7737,9 +7741,16 @@ export interface components {
             idempotency_key?: string;
             /** Format: uuid */
             issuer_id: string;
+            /** Format: uuid */
+            migration_run_id?: string;
+            /** @enum {string} */
+            mode: "legacy" | "live" | "game_day";
             next_batch_index: number;
             phase: string;
+            plan_digest?: string;
             reason?: string;
+            /** Format: uuid */
+            replacement_authority_id?: string;
             replacement_identities?: components["schemas"]["Identity"][];
             replacement_identity_ids: string[];
             revoked_identity_ids: string[];

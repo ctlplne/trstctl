@@ -52,7 +52,7 @@ func (s *Server) recordMigrationResult(
 		obs.Verdict = migration.VerdictVerified
 	}
 	eventID := orchestrator.MigrationEventID(tenantID, claim.runID, "receipt:"+idempotencyKey)
-	_, err = s.orch.UpdateMigrationRun(ctx, tenantID, claim.runID, eventID,
+	updated, err := s.orch.UpdateMigrationRun(ctx, tenantID, claim.runID, eventID,
 		func(current migration.Run) (migration.Run, []migration.Action, error) {
 			member, ok := migration.Member(current, claim.waveID, claim.identityID)
 			if !ok {
@@ -63,7 +63,10 @@ func (s *Server) recordMigrationResult(
 			}
 			return migration.Observe(current, obs)
 		})
-	return true, err
+	if err != nil {
+		return true, err
+	}
+	return true, syncIncidentMigrationState(ctx, s.store, s.orch, s.audit, tenantID, updated)
 }
 
 func decodeMigrationReceiptClaim(destination string, payload []byte) (migrationReceiptClaim, bool, error) {

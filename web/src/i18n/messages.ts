@@ -156,6 +156,19 @@ export const messages = {
     defaultMessage: "Review {executions} incident executions and {runs} remediation runs before starting a new action.",
     description: "Incident overview summary of the evidence records already served.",
   },
+  "incidents.fleet.retiredDirectNotice": {
+    defaultMessage:
+      "Direct single-identity mutation is retired because it could revoke before exact trust and live-serving proof. Preview the identity, then freeze H1 consumers, ordered H2 cohorts, rollback, and replacement CA in the fleet plan.",
+    description: "Why incident mutation moved to the gated fleet plan.",
+  },
+  "incidents.fleet.planSummary": {
+    defaultMessage: "Plan first; signed gates before revocation.",
+    description: "Fleet plan safety order.",
+  },
+  "incidents.fleet.modeGameDay": {
+    defaultMessage: "Game day (test only; separate permission)",
+    description: "Non-production rehearsal mode.",
+  },
   "certificates.tabs.inventory": {
     defaultMessage: "Inventory",
     description: "Certificates page tab: the primary certificate table.",
@@ -10377,10 +10390,6 @@ export const messages = {
     defaultMessage: "Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
-  "source.batch.size.8cfe32a041": {
-    defaultMessage: "Batch size",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
   "source.batches.467629e63d": {
     defaultMessage: "batches",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
@@ -11054,10 +11063,6 @@ export const messages = {
     defaultMessage: "Current filters",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx.",
   },
-  "source.current.phase.44c03cecc0": {
-    defaultMessage: "Current phase",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
   "source.current.rotation.version.ede128c23f": {
     defaultMessage: "Current rotation version:",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
@@ -11142,10 +11147,6 @@ export const messages = {
     defaultMessage: "Delivery evidence failed to load",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
   },
-  "source.delivery.method.26b6ab1b68": {
-    defaultMessage: "Delivery method",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
   "source.delivery.mode.c9585346ea": {
     defaultMessage: "Delivery mode",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
@@ -11173,10 +11174,6 @@ export const messages = {
   "source.deployment.model.48b995f6f0": {
     defaultMessage: "Deployment model",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
-  "source.deployment.target.5b274e18ab": {
-    defaultMessage: "Deployment target",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
   },
   "source.destination.293d404a50": {
     defaultMessage: "Destination",
@@ -11296,14 +11293,6 @@ export const messages = {
     defaultMessage:
       "Each protocol requires an enabled flag plus a tenant ID. Startup rejects an enabled protocol with no tenant binding, and issuance refuses requests when no issuing CA/profile can satisfy the protocol request.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
-  },
-  "source.edge.prod.79b3e5ef21": {
-    defaultMessage: "edge/prod",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.edge.prod.payments.178b58c24e": {
-    defaultMessage: "edge/prod/payments",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
   },
   "source.edge.types.396a236285": {
     defaultMessage: "Edge types",
@@ -11847,18 +11836,6 @@ export const messages = {
   },
   "source.incident.execution.evidence.ed369964a3": {
     defaultMessage: "Incident execution evidence",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.incident.execution.failed.70db66b277": {
-    defaultMessage: "Incident execution failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.incident.execution.issues.and.deploys.a.re.c00d70d3f5": {
-    defaultMessage: "Incident execution issues and deploys a replacement identity before revoking the compromised identity.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.incident.execution.recorded.2ea0b1ce57": {
-    defaultMessage: "Incident execution recorded",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
   },
   "source.incident.response.help.7245c4b82c": {
@@ -13775,10 +13752,6 @@ export const messages = {
     defaultMessage: "Replacement",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
   },
-  "source.replacement.identity.name.503334612e": {
-    defaultMessage: "Replacement identity name",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
   "source.replacement.value.81858184c6": {
     defaultMessage: "Replacement value",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -13822,10 +13795,6 @@ export const messages = {
   "source.response.9061383b8e": {
     defaultMessage: "Response",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
-  "source.restore.previous.binding.3e3a4f657d": {
-    defaultMessage: "restore previous binding",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
   },
   "source.restore.previous.bindings.ec8f60be98": {
     defaultMessage: "restore previous bindings",
@@ -15326,14 +15295,6 @@ export const messages = {
   "source.evaluation.only.7e42530821": {
     defaultMessage: "· evaluation only",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:842.",
-  },
-  "source.execute.incident.c74e8b45e9": {
-    defaultMessage: "Execute incident",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:622.",
-  },
-  "source.executing.535a363214": {
-    defaultMessage: "Executing...",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:622.",
   },
   "source.export.audit.evidence.c3f3b4ad52": {
     defaultMessage: "Export audit evidence",

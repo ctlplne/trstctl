@@ -91,7 +91,7 @@ exhaustive subcommand list:
 | `identities`                       | Identity lifecycle: create, list, transition, dual-control approvals, bulk-revoke (`create` · `list` · `get` · `transition` · `approve` · `approve issue` · `approve rotate` · `approve revoke` · `bulk-revoke`) |
 | `incidents executions`             | Execute credential-compromise remediation and inspect evidence packs (`execute` · `list` · `get`)                                                            |
 | `incidents response-integrations`  | Dispatch an incident packet to SIEM/SOAR/chat/ITSM integrations (`dispatch`)                                                                                  |
-| `incidents fleet-reissuance`       | Compromised-issuer fleet reissuance: start, list, get, pause, resume, rollback, evidence (`start` · `list` · `get` · `pause` · `resume` · `rollback` · `evidence`) |
+| `incidents fleet-reissuance`       | Exact-H1, signed-gate H2 compromised-issuer cohorts: start, list, get, pause, resume, current-cohort rollback, evidence (`start` · `list` · `get` · `pause` · `resume` · `rollback` · `evidence`) |
 | `issuers`                          | Create, list, get certificate issuers (`create` · `list` · `get`)                                                                                            |
 | `itsm servicenow tickets`          | Queue a ServiceNow ITSM ticket through the outbox (`create`)                                                                                                 |
 | `kubernetes`                       | Native Kubernetes CertificateSigningRequest and trust-bundle distribution support (`csr` · `trust-bundles`)                                                  |

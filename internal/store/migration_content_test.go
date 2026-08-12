@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	167: true,
 	164: true,
 	161: true,
 	156: true,
@@ -56,6 +57,68 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0167PreservesLegacyIncidentRowsAndAddsFailClosedPlanDefaultsAUD41(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 167)
+	if target.noTx || target.name != "0167_incident_h2_plans.sql" {
+		t.Fatalf("migration 0167 classification = name:%q no_tx:%t, want transactional incident-plan migration", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh 0167 content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	for index, tenantID := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO incident_fleet_reissuance_runs
+			       (id, tenant_id, issuer_id, status, phase, reason, batch_size,
+			        next_batch_index, connector, target, graph_impact,
+			        affected_identity_ids, batches, health_gates, rollback_refs,
+			        idempotency_key, created_by, created_at, updated_at)
+			VALUES ($1, $2, $3, 'running', 'legacy_canary', $4, 1, 1,
+			        'legacy', 'edge', '{"affected":1}'::jsonb, ARRAY[$5],
+			        '[{"index":1,"status":"planned"}]'::jsonb,
+			        '[{"name":"replacement deployment","status":"not_evaluated"}]'::jsonb,
+			        ARRAY['restore:edge'], $6, 'pre-0167-operator',
+			        '2026-08-12T00:00:00Z', '2026-08-12T00:01:00Z')`,
+			uuid(tenantID, 16700+index), tenantID, uuid(tenantID, 16710+index),
+			fmt.Sprintf("legacy incident %d", index), uuid(tenantID, 16720+index),
+			fmt.Sprintf("legacy-incident-%d", index)); err != nil {
+			t.Fatalf("seed pre-0167 incident row %d: %v", index, err)
+		}
+	}
+	const stable = `
+		SELECT id::text, tenant_id::text, issuer_id::text, status, phase, reason,
+		       batch_size::text, next_batch_index::text, connector, target,
+		       graph_impact::text, affected_identity_ids::text, batches::text,
+		       health_gates::text, rollback_refs::text, idempotency_key,
+		       created_by, created_at::text, updated_at::text
+		  FROM incident_fleet_reissuance_runs
+		 ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 2 || afterCount != beforeCount || beforeChecksum != afterChecksum {
+		t.Fatalf("0167 changed legacy incident evidence: before=%d/%s after=%d/%s",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var defaultsOK bool
+	if err := pool.QueryRow(ctx, `
+		SELECT bool_and(migration_run_id = '' AND replacement_authority_id = '' AND
+		       mode = 'legacy' AND plan_digest = '' AND exact_trust_store_ids = '{}' AND
+		       exact_trust_hosts = '{}' AND candidate_trust_store_ids = '{}' AND
+		       candidate_trust_hosts = '{}')
+		  FROM incident_fleet_reissuance_runs`).Scan(&defaultsOK); err != nil || !defaultsOK {
+		t.Fatalf("0167 legacy defaults valid=%t err=%v", defaultsOK, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE incident_fleet_reissuance_runs SET mode = 'production_rehearsal'`); err == nil {
+		t.Fatal("0167 accepted an unsupported incident mode")
+	}
 }
 
 func TestMigration0164PreservesRunsAndFencesRelayExecutorsByTenantAUD28(t *testing.T) {

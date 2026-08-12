@@ -1535,7 +1535,7 @@ that is actually saturating.
 | `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_QUEUE` | inherits outbox | Override transparency publication (`transparency.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_QUEUE` | inherits outbox | Override code-signing commands (`codesign.*`) without sharing transparency workers. |
 | `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_QUEUE` | inherits outbox | Override operator notifications (`notification.*`). |
-| `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_QUEUE` | inherits outbox | Override the durable fleet-reissuance cursor worker (`incident.fleet_reissuance.*`). |
+| `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_QUEUE` | inherits outbox | Override the bounded H2 incident action lane, including exact predecessor revocation (`incident.fleet_reissuance.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_QUEUE` | inherits outbox | Override the zero-egress tenant seal commit worker (`tenantseal.seal`). It proves the accepted result is durable before acquiring the cross-replica seal fence. |
 | `TRSTCTL_BULKHEAD_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_SIGNING_QUEUE` | `4` / `64` | Control-plane work waiting on signer RPC. Do not set this above signer capacity. |
 | `TRSTCTL_BULKHEAD_QUERY_WORKERS` / `TRSTCTL_BULKHEAD_QUERY_QUEUE` | `4` / `64` | Heavy graph/risk/read queries that scale with inventory size. |

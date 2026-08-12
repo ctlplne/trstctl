@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Incidents } from "@/pages/Incidents";
@@ -84,6 +84,14 @@ const fleetRun = {
   id: "fleet-1",
   tenant_id: "tenant-1",
   issuer_id: "issuer-1",
+  migration_run_id: "fleet-1",
+  replacement_authority_id: "replacement-ca-1",
+  mode: "live",
+  plan_digest: "d".repeat(64),
+  exact_trust_store_ids: ["ts:host:os"],
+  exact_trust_hosts: ["host"],
+  candidate_trust_store_ids: [],
+  candidate_trust_hosts: [],
   status: "executed",
   phase: "fleet_reissued_and_compromised_revoked",
   reason: "CA compromise",
@@ -148,10 +156,7 @@ describe("POL-02 incident polish", () => {
     expect(await screen.findByRole("heading", { name: "Incidents" })).toBeInTheDocument();
     expect(screen.getByLabelText("Affected identity")).toBeInTheDocument();
     expect(screen.getAllByLabelText("What happened")[0]).toBeInTheDocument();
-    expect(screen.getByLabelText("Replacement identity name")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Delivery method")[0]).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Deployment target")[0]).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Rollback instructions")[0]).toBeInTheDocument();
+    expect(screen.getByText(/Direct single-identity mutation is retired/i)).toBeInTheDocument();
     expect(screen.queryByLabelText("Connector")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Target")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Rollback reference")).not.toBeInTheDocument();
@@ -159,7 +164,9 @@ describe("POL-02 incident polish", () => {
     const fleetTable = screen.getByRole("table", { name: "Fleet reissuance runs" });
     expect(within(fleetTable).getByText("fleet-1")).toBeInTheDocument();
     expect(screen.getByLabelText("Compromised issuer")).toBeInTheDocument();
-    expect(screen.getByLabelText("Batch size")).toBeInTheDocument();
+    expect(screen.getByLabelText("Replacement CA Authority")).toBeInTheDocument();
+    expect(screen.getByLabelText("Mode")).toBeInTheDocument();
+    expect(screen.getByLabelText("Waves")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Break-glass procedures" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Break-glass help" }));
@@ -170,21 +177,8 @@ describe("POL-02 incident polish", () => {
     await user.type(screen.getByLabelText("Affected identity"), "11111111-1111-1111-1111-111111111111");
     await user.clear(screen.getAllByLabelText("What happened")[0]);
     await user.type(screen.getAllByLabelText("What happened")[0], "key export detected");
-    await user.type(screen.getAllByLabelText("Deployment target")[0], "edge/prod/payments");
-    await user.type(screen.getAllByLabelText("Rollback instructions")[0], "restore previous binding");
-    await user.click(screen.getByRole("button", { name: "Execute incident" }));
-
-    await waitFor(() =>
-      expect(apiMock.executeIncident).toHaveBeenCalledWith({
-        identity_id: "11111111-1111-1111-1111-111111111111",
-        reason: "key export detected",
-        replacement_name: "",
-        connector: "nginx",
-        target: "edge/prod/payments",
-        delivery_rollback_ref: "restore previous binding",
-      }),
-    );
-    expect(await screen.findByText("Incident execution recorded")).toBeInTheDocument();
-    expect(screen.getAllByText("replacement_deployed_and_compromised_revoked").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Plan Fleet re-issuance" }));
+    expect(screen.getByRole("tab", { name: "Fleet & break-glass" })).toHaveAttribute("aria-selected", "true");
+    expect(apiMock.executeIncident).not.toHaveBeenCalled();
   });
 });

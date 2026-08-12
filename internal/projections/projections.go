@@ -2058,6 +2058,14 @@ type FleetReissuanceBatch struct {
 type IncidentFleetReissuanceRecorded struct {
 	ID                     string                      `json:"id"`
 	IssuerID               string                      `json:"issuer_id"`
+	MigrationRunID         string                      `json:"migration_run_id,omitempty"`
+	ReplacementAuthorityID string                      `json:"replacement_authority_id,omitempty"`
+	Mode                   string                      `json:"mode,omitempty"`
+	PlanDigest             string                      `json:"plan_digest,omitempty"`
+	ExactTrustStoreIDs     []string                    `json:"exact_trust_store_ids,omitempty"`
+	ExactTrustHosts        []string                    `json:"exact_trust_hosts,omitempty"`
+	CandidateTrustStoreIDs []string                    `json:"candidate_trust_store_ids,omitempty"`
+	CandidateTrustHosts    []string                    `json:"candidate_trust_hosts,omitempty"`
 	Status                 string                      `json:"status"`
 	Phase                  string                      `json:"phase"`
 	Reason                 string                      `json:"reason,omitempty"`
@@ -4280,7 +4288,11 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyIncidentFleetReissuanceRecordedTx(ctx, tx, store.IncidentFleetReissuanceRun{
 			ID: pl.ID, TenantID: e.TenantID, IssuerID: pl.IssuerID,
-			Status: pl.Status, Phase: pl.Phase, Reason: pl.Reason, BatchSize: pl.BatchSize,
+			MigrationRunID: pl.MigrationRunID, ReplacementAuthorityID: pl.ReplacementAuthorityID,
+			Mode: pl.Mode, PlanDigest: pl.PlanDigest, ExactTrustStoreIDs: pl.ExactTrustStoreIDs,
+			ExactTrustHosts: pl.ExactTrustHosts, CandidateTrustStoreIDs: pl.CandidateTrustStoreIDs,
+			CandidateTrustHosts: pl.CandidateTrustHosts,
+			Status:              pl.Status, Phase: pl.Phase, Reason: pl.Reason, BatchSize: pl.BatchSize,
 			NextBatchIndex: pl.NextBatchIndex, HaltedReason: pl.HaltedReason,
 			Connector: pl.Connector, Target: pl.Target, GraphImpact: pl.GraphImpact,
 			AffectedIdentityIDs: pl.AffectedIdentityIDs, ReplacementIdentityIDs: pl.ReplacementIdentityIDs,

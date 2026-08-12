@@ -9444,18 +9444,9 @@
       },
       "FleetReissuanceRequest": {
         "properties": {
-          "batch_size": {
-            "type": "integer"
-          },
-          "connector": {
-            "type": "string"
-          },
-          "evidence_hint": {
-            "type": "string"
-          },
-          "health_gates": {
+          "cohorts": {
             "items": {
-              "$ref": "#/components/schemas/FleetReissuanceHealthGate"
+              "$ref": "#/components/schemas/MigrationRunStartWave"
             },
             "type": "array"
           },
@@ -9463,18 +9454,29 @@
             "format": "uuid",
             "type": "string"
           },
+          "mode": {
+            "enum": [
+              "live",
+              "game_day"
+            ],
+            "type": "string"
+          },
           "reason": {
+            "type": "string"
+          },
+          "replacement_authority_id": {
+            "format": "uuid",
             "type": "string"
           },
           "rollback_ref": {
             "type": "string"
-          },
-          "target": {
-            "type": "string"
           }
         },
         "required": [
-          "issuer_id"
+          "issuer_id",
+          "replacement_authority_id",
+          "mode",
+          "cohorts"
         ],
         "type": "object"
       },
@@ -9496,6 +9498,18 @@
           "batches": {
             "items": {
               "$ref": "#/components/schemas/FleetReissuanceBatch"
+            },
+            "type": "array"
+          },
+          "candidate_trust_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "candidate_trust_store_ids": {
+            "items": {
+              "type": "string"
             },
             "type": "array"
           },
@@ -9528,6 +9542,18 @@
           "evidence_bundle_format": {
             "type": "string"
           },
+          "exact_trust_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "exact_trust_store_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "failed_targets": {
             "items": {
               "type": "string"
@@ -9557,13 +9583,32 @@
             "format": "uuid",
             "type": "string"
           },
+          "migration_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "legacy",
+              "live",
+              "game_day"
+            ],
+            "type": "string"
+          },
           "next_batch_index": {
             "type": "integer"
           },
           "phase": {
             "type": "string"
           },
+          "plan_digest": {
+            "type": "string"
+          },
           "reason": {
+            "type": "string"
+          },
+          "replacement_authority_id": {
+            "format": "uuid",
             "type": "string"
           },
           "replacement_identities": {
@@ -9611,6 +9656,11 @@
           "id",
           "tenant_id",
           "issuer_id",
+          "mode",
+          "exact_trust_store_ids",
+          "exact_trust_hosts",
+          "candidate_trust_store_ids",
+          "candidate_trust_hosts",
           "status",
           "phase",
           "batch_size",
@@ -32391,7 +32441,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Execute a credential-compromise incident remediation",
+        "summary": "Refuse retired single-identity incident execution with H2 guidance",
         "x-trstctl-permission": "incidents:write"
       }
     },
@@ -32589,7 +32639,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Run compromised-issuer fleet reissuance",
+        "summary": "Run exact-H1, signed-gate compromised-issuer H2 cohorts",
         "x-trstctl-permission": "incidents:write"
       }
     },
@@ -32782,7 +32832,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Record pause evidence for a fleet reissuance run",
+        "summary": "Pause H2 incident advancement without recalling leased work",
         "x-trstctl-permission": "incidents:write"
       }
     },
@@ -32859,7 +32909,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Record resume evidence for a fleet reissuance run",
+        "summary": "Resume the retained signed H2 incident gate",
         "x-trstctl-permission": "incidents:write"
       }
     },
@@ -32936,7 +32986,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Record rollback evidence for a fleet reissuance run",
+        "summary": "Roll back the current unrevoked incident cohort",
         "x-trstctl-permission": "incidents:write"
       }
     },

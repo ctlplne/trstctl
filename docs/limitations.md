@@ -850,10 +850,10 @@ never live in the API process. What you can do end to end against the running bi
   licensed, the targets are the concrete FIPS 203/204/205 algorithms and
   `migration_progress` counts which assets are already post-quantum-ready.
 - Credential-compromise incident execution: when the Enterprise `remediation`
-  feature is licensed, `POST /api/v1/incidents/executions` drives a served,
-  idempotent (deduplicated by `Idempotency-Key`), history-reconstructable
-  single-identity remediation — replacement issue/deploy, revocation,
-  blast-radius capture, and a sealed evidence pack readable via
+  feature is licensed, the old `POST /api/v1/incidents/executions` single-identity
+  mutation refuses with conflict and points to the H2 fleet route; it cannot prove
+  exact trust scope, trust-before-leaf ordering, or signed live health before
+  revocation. Historical evidence remains readable via
   `GET /api/v1/incidents/executions{,/{id}}`. Automated remediation playbooks are
   also served under the same Enterprise feature: `GET /api/v1/remediation/playbooks`,
   `POST /api/v1/remediation/playbooks/{id}/runs`, and
@@ -878,8 +878,13 @@ never live in the API process. What you can do end to end against the running bi
   automation rules, Slack app/channel installation, arbitrary third-party SOAR
   playbook execution, and bidirectional ServiceNow ticket-status sync remain
   customer/operator configuration outside trstctl. Fleet-wide re-issuance is served
-  separately at `POST /api/v1/incidents/fleet-reissuance-runs` with
-  pause/resume/rollback and evidence export routes under
+  separately at `POST /api/v1/incidents/fleet-reissuance-runs`: it freezes exact
+  certificate/SPKI H1 trust consumers and ordered H2 member bindings before work,
+  installs replacement trust before host-CSR issuance, waits for lease-bound signed
+  trust/live receipts, revokes each exact predecessor only after verification, and
+  seals terminal success/rollback as a compact JWS. The separately authorized
+  `game_day` mode structurally refuses production owner/target environments. It has
+  pause/resume/current-cohort rollback and evidence export routes under
   `/api/v1/incidents/fleet-reissuance-runs/{id}`, matching
   `trstctl incidents fleet-reissuance *` CLI commands, and the `/incidents` console.
   Online break-glass at `POST /api/v1/breakglass/issue` is conditionally served when

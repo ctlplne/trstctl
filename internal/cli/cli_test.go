@@ -573,7 +573,7 @@ func TestServiceNowTicketCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 func TestFleetReissuanceCommandsSendBodiesQueriesAndIdempotencyKeys(t *testing.T) {
 	var startCap capture
 	startSrv := mockServer(t, 201, `{"id":"fleet-1","status":"executed"}`, &startCap)
-	startBody := `{"issuer_id":"issuer-1","reason":"compromised intermediate","batch_size":10}`
+	startBody := `{"issuer_id":"issuer-1","replacement_authority_id":"ca-2","mode":"live","reason":"compromised intermediate","cohorts":[{"id":"canary","ordinal":1,"members":[{"identity_id":"identity-1","agent_id":"agent-1","trust_anchor_path":"/etc/trstctl/next-root.pem"}]}]}`
 	code, _, _ := run(t, []string{"incidents", "fleet-reissuance", "start", "-f", "-"}, cli.Env{Server: startSrv.URL, HTTPClient: startSrv.Client()}, startBody)
 	if code != 0 {
 		t.Fatalf("start exit = %d", code)

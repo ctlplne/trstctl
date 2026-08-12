@@ -49,10 +49,20 @@ func (h *roleHarness) report(t *testing.T, jobID int64, attempt int,
 }
 
 func newRoleHarness(t *testing.T, roles []string, claimable ...string) *roleHarness {
+	return newRoleHarnessWithDeps(t, roles, claimable)
+}
+
+// newRoleHarnessWithDeps keeps the standard real signer/agent fixture while
+// allowing an assembled feature test to turn on the same licensed route seam
+// production wiring would enable. Existing role tests use newRoleHarness and
+// therefore retain their exact default dependency set.
+func newRoleHarnessWithDeps(t *testing.T, roles, claimable []string, options ...func(*Deps)) *roleHarness {
 	t.Helper()
-	h := newServedHarness(t, config.Protocols{}, withAgentChannel, func(d *Deps) {
+	deps := []func(*Deps){withAgentChannel, func(d *Deps) {
 		d.AgentClaimableJobKinds = claimable
-	})
+	}}
+	deps = append(deps, options...)
+	h := newServedHarness(t, config.Protocols{}, deps...)
 	if !h.srv.AgentChannelServed() {
 		t.Fatal("agent channel is not served")
 	}

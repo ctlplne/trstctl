@@ -64,6 +64,10 @@ const (
 	// PhaseVerifyingLive: waiting for evidence the endpoints actually serve the
 	// successors (D2's handshake receipts).
 	PhaseVerifyingLive Phase = "verifying_live"
+	// PhaseRevokingPredecessor is incident-only. Every successor in the cohort
+	// has passed its signed live listener gate; the next cohort remains blocked
+	// until the exact predecessor revocations are event-projected.
+	PhaseRevokingPredecessor Phase = "revoking_predecessor"
 	// PhaseComplete: this wave is done and the next may start.
 	PhaseComplete Phase = "complete"
 	// PhaseHalted: a gate failed. The wave stopped where it was.
@@ -83,14 +87,15 @@ const (
 // giving them ordinals would let a comparison accidentally treat "halted" as
 // further along than "issuing".
 var phaseOrder = map[Phase]int{
-	PhasePlanned:           0,
-	PhaseDistributingTrust: 1,
-	PhaseVerifyingTrust:    2,
-	PhaseIssuing:           3,
-	PhaseVerifyingLive:     4,
-	PhaseComplete:          5,
-	PhaseHalted:            -1,
-	PhaseRolledBack:        -1,
+	PhasePlanned:             0,
+	PhaseDistributingTrust:   1,
+	PhaseVerifyingTrust:      2,
+	PhaseIssuing:             3,
+	PhaseVerifyingLive:       4,
+	PhaseRevokingPredecessor: 5,
+	PhaseComplete:            6,
+	PhaseHalted:              -1,
+	PhaseRolledBack:          -1,
 }
 
 // Terminal reports whether a phase ends the wave.

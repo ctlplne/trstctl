@@ -292,6 +292,114 @@ func TestExecutableRunRefusesOneAgentTrustPathAcrossWavesAUD40(t *testing.T) {
 	}
 }
 
+func TestIncidentRunRevokesOnlyAfterSignedLiveGateBeforeNextCohortAUD41(t *testing.T) {
+	first := completeBindingAUD40("target-a", "predecessor-a")
+	first.PredecessorCAID = "compromised-authority"
+	second := completeBindingAUD40("target-b", "predecessor-b")
+	second.PredecessorCAID = "compromised-authority"
+	run, actions, err := migration.StartRun(migration.Run{
+		ID: "incident-run",
+		Incident: &migration.IncidentPlan{
+			Mode: migration.IncidentModeLive, CompromisedIssuerID: "compromised-issuer",
+			ReplacementAuthorityID: "authority", ExactTrustStoreIDs: []string{"trust-store-a"},
+			ExactTrustHosts: []string{"agent-a"}, AffectedIdentityIDs: []string{"leaf-a", "leaf-b"},
+		},
+		Waves: []migration.RunWave{
+			{ID: "canary", Ordinal: 1, Members: []migration.RunMember{{IdentityID: "leaf-a", Binding: first}}},
+			{ID: "fleet", Ordinal: 2, Members: []migration.RunMember{{IdentityID: "leaf-b", Binding: second}}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertActionsAUD40(t, actions, migration.ActionDistributeTrust, "canary", "leaf-a")
+	run, _, err = migration.Observe(run, migration.Observation{
+		WaveID: "canary", IdentityID: "leaf-a", Stage: migration.StageTrust, Verdict: migration.VerdictVerified,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, actions, err = migration.Observe(run, migration.Observation{
+		WaveID: "canary", IdentityID: "leaf-a", Stage: migration.StageSuccessor,
+		Verdict: migration.VerdictVerified, SuccessorFingerprint: "successor-a",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertActionsAUD40(t, actions, migration.ActionRevokePredecessor, "canary", "leaf-a")
+	if run.Waves[0].Phase != migration.PhaseRevokingPredecessor || run.Waves[1].Started {
+		t.Fatalf("live gate advanced before exact revocation: %+v", run)
+	}
+	run, actions, err = migration.Observe(run, migration.Observation{
+		WaveID: "canary", IdentityID: "leaf-a", Stage: migration.StageRevocation, Verdict: migration.VerdictVerified,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertActionsAUD40(t, actions, migration.ActionDistributeTrust, "fleet", "leaf-b")
+}
+
+func TestIncidentFailedCohortRollsBackOnlyThatCohortAUD41(t *testing.T) {
+	first := completeBindingAUD40("target-a", "predecessor-a")
+	first.PredecessorCAID = "compromised-authority"
+	second := completeBindingAUD40("target-b", "predecessor-b")
+	second.PredecessorCAID = "compromised-authority"
+	run := migration.Run{
+		ID: "incident-run", Status: migration.RunRunning,
+		Incident: &migration.IncidentPlan{Mode: migration.IncidentModeLive, CompromisedIssuerID: "issuer",
+			ReplacementAuthorityID: "authority", ExactTrustStoreIDs: []string{"store"}, ExactTrustHosts: []string{"agent"},
+			AffectedIdentityIDs: []string{"leaf-a", "leaf-b"}},
+		Waves: []migration.RunWave{
+			{ID: "canary", Ordinal: 1, Started: true, Phase: migration.PhaseComplete,
+				Members: []migration.RunMember{{IdentityID: "leaf-a", Binding: first,
+					TrustVerdict: migration.VerdictVerified, SuccessorVerdict: migration.VerdictVerified,
+					RevocationVerdict: migration.VerdictVerified}}},
+			{ID: "fleet", Ordinal: 2, Started: true, Phase: migration.PhaseVerifyingLive,
+				Members: []migration.RunMember{{IdentityID: "leaf-b", Binding: second,
+					TrustVerdict: migration.VerdictVerified}}},
+		},
+	}
+	run, actions, err := migration.Observe(run, migration.Observation{
+		WaveID: "fleet", IdentityID: "leaf-b", Stage: migration.StageSuccessor, Verdict: migration.VerdictFailed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertActionsAUD40(t, actions, migration.ActionRollbackSuccessor, "fleet", "leaf-b")
+	run, actions, err = migration.Observe(run, migration.Observation{
+		WaveID: "fleet", IdentityID: "leaf-b", Stage: migration.StageRollbackSuccessor, Verdict: migration.VerdictVerified,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertActionsAUD40(t, actions, migration.ActionRemoveTrust, "fleet", "leaf-b")
+	run, actions, err = migration.Observe(run, migration.Observation{
+		WaveID: "fleet", IdentityID: "leaf-b", Stage: migration.StageRollbackTrust, Verdict: migration.VerdictVerified,
+	})
+	if err != nil || len(actions) != 0 || run.Status != migration.RunRolledBack || run.Waves[0].Phase != migration.PhaseComplete {
+		t.Fatalf("incident rollback touched a completed revoked cohort: run=%+v actions=%+v err=%v", run, actions, err)
+	}
+}
+
+func TestGameDayRunStructurallyRefusesProductionBindingsAUD41(t *testing.T) {
+	binding := completeBindingAUD40("target-a", "predecessor-a")
+	binding.PredecessorCAID = "test-authority"
+	binding.Environment = "production"
+	run := migration.Run{ID: "game-day", Incident: &migration.IncidentPlan{
+		Mode: migration.IncidentModeGameDay, CompromisedIssuerID: "test-issuer",
+		ReplacementAuthorityID: "authority", ExactTrustStoreIDs: []string{"store"},
+		ExactTrustHosts: []string{"agent"}, AffectedIdentityIDs: []string{"leaf-a"},
+	}, Waves: []migration.RunWave{{ID: "test", Ordinal: 1, Members: []migration.RunMember{{IdentityID: "leaf-a", Binding: binding}}}}}
+	if err := migration.ValidateExecutableRunForStart(run); err == nil {
+		t.Fatal("game-day accepted a production member binding")
+	}
+	binding.Environment = "test"
+	run.Waves[0].Members[0].Binding = binding
+	if err := migration.ValidateExecutableRunForStart(run); err != nil {
+		t.Fatalf("explicit test cohort was refused: %v", err)
+	}
+}
+
 func completeBindingAUD40(targetID, predecessorID string) migration.MemberBinding {
 	return migration.MemberBinding{
 		IssuingAuthorityID: "authority", TargetID: targetID, TargetRevision: "revision",

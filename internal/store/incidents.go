@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -60,6 +61,14 @@ type IncidentFleetReissuanceRun struct {
 	ID                     string
 	TenantID               string
 	IssuerID               string
+	MigrationRunID         string
+	ReplacementAuthorityID string
+	Mode                   string
+	PlanDigest             string
+	ExactTrustStoreIDs     []string
+	ExactTrustHosts        []string
+	CandidateTrustStoreIDs []string
+	CandidateTrustHosts    []string
 	Status                 string
 	Phase                  string
 	Reason                 string
@@ -126,6 +135,9 @@ func (s *Store) ApplyIncidentExecutionRecordedTx(ctx context.Context, tx pgx.Tx,
 // incident.fleet_reissuance.recorded event. Re-emitting the same run id for
 // pause/resume/rollback updates the one run row, so replay converges.
 func (s *Store) ApplyIncidentFleetReissuanceRecordedTx(ctx context.Context, tx pgx.Tx, r IncidentFleetReissuanceRun) error {
+	if strings.TrimSpace(r.Mode) == "" {
+		r.Mode = "legacy"
+	}
 	batches, err := json.Marshal(r.Batches)
 	if err != nil {
 		return err
@@ -134,22 +146,24 @@ func (s *Store) ApplyIncidentFleetReissuanceRecordedTx(ctx context.Context, tx p
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO incident_fleet_reissuance_runs
-		        (id, tenant_id, issuer_id, status, phase, reason, batch_size,
+		        (id, tenant_id, issuer_id, migration_run_id, replacement_authority_id,
+		         mode, plan_digest, exact_trust_store_ids, exact_trust_hosts,
+		         candidate_trust_store_ids, candidate_trust_hosts,
+		         status, phase, reason, batch_size,
 		         next_batch_index, halted_reason,
 		         connector, target, graph_impact, affected_identity_ids,
 		         replacement_identity_ids, revoked_identity_ids, connector_delivery_ids,
 		         batches, health_gates, failed_targets, rollback_refs,
 		         evidence_bundle_format, evidence_bundle, idempotency_key, created_by,
 		         created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7,
-		         $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16,
-		         $17::jsonb, $18::jsonb, $19, $20,
-		         $21, $22, $23, $24, $25, $26)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+		         $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24,
+		         $25::jsonb, $26::jsonb, $27, $28,
+		         $29, $30, $31, $32, $33, $34)
 		 ON CONFLICT (id) DO UPDATE
-		    SET issuer_id = EXCLUDED.issuer_id,
-		        status = EXCLUDED.status,
+		    SET status = EXCLUDED.status,
 		        phase = EXCLUDED.phase,
 		        reason = EXCLUDED.reason,
 		        batch_size = EXCLUDED.batch_size,
@@ -170,15 +184,33 @@ func (s *Store) ApplyIncidentFleetReissuanceRecordedTx(ctx context.Context, tx p
 		        evidence_bundle = EXCLUDED.evidence_bundle,
 		        idempotency_key = EXCLUDED.idempotency_key,
 		        created_by = EXCLUDED.created_by,
-		        updated_at = EXCLUDED.updated_at`,
-		r.ID, r.TenantID, r.IssuerID, r.Status, r.Phase, r.Reason, r.BatchSize,
+		        updated_at = EXCLUDED.updated_at
+		  WHERE incident_fleet_reissuance_runs.issuer_id = EXCLUDED.issuer_id
+		    AND incident_fleet_reissuance_runs.migration_run_id = EXCLUDED.migration_run_id
+		    AND incident_fleet_reissuance_runs.replacement_authority_id = EXCLUDED.replacement_authority_id
+		    AND incident_fleet_reissuance_runs.mode = EXCLUDED.mode
+		    AND incident_fleet_reissuance_runs.plan_digest = EXCLUDED.plan_digest
+		    AND incident_fleet_reissuance_runs.exact_trust_store_ids = EXCLUDED.exact_trust_store_ids
+		    AND incident_fleet_reissuance_runs.exact_trust_hosts = EXCLUDED.exact_trust_hosts
+		    AND incident_fleet_reissuance_runs.candidate_trust_store_ids = EXCLUDED.candidate_trust_store_ids
+		    AND incident_fleet_reissuance_runs.candidate_trust_hosts = EXCLUDED.candidate_trust_hosts`,
+		r.ID, r.TenantID, r.IssuerID, r.MigrationRunID, r.ReplacementAuthorityID,
+		r.Mode, r.PlanDigest, stringSliceOrEmpty(r.ExactTrustStoreIDs), stringSliceOrEmpty(r.ExactTrustHosts),
+		stringSliceOrEmpty(r.CandidateTrustStoreIDs), stringSliceOrEmpty(r.CandidateTrustHosts),
+		r.Status, r.Phase, r.Reason, r.BatchSize,
 		r.NextBatchIndex, r.HaltedReason, r.Connector, r.Target, jsonbOrEmpty(r.GraphImpact),
 		stringSliceOrEmpty(r.AffectedIdentityIDs), stringSliceOrEmpty(r.ReplacementIdentityIDs),
 		stringSliceOrEmpty(r.RevokedIdentityIDs), stringSliceOrEmpty(r.ConnectorDeliveryIDs),
 		batches, healthGates, stringSliceOrEmpty(r.FailedTargets), stringSliceOrEmpty(r.RollbackRefs),
 		r.EvidenceBundleFormat, r.EvidenceBundle, r.IdempotencyKey, r.CreatedBy,
 		r.CreatedAt, r.UpdatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrIdempotencyConflict
+	}
+	return nil
 }
 
 func scanIncidentExecution(row pgx.Row, r *IncidentExecution) error {
@@ -216,7 +248,9 @@ func scanIncidentFleetReissuanceRun(row pgx.Row, r *IncidentFleetReissuanceRun) 
 		batches     []byte
 		healthGates []byte
 	)
-	err := row.Scan(&r.ID, &r.TenantID, &r.IssuerID, &r.Status, &r.Phase, &r.Reason,
+	err := row.Scan(&r.ID, &r.TenantID, &r.IssuerID, &r.MigrationRunID, &r.ReplacementAuthorityID,
+		&r.Mode, &r.PlanDigest, &r.ExactTrustStoreIDs, &r.ExactTrustHosts,
+		&r.CandidateTrustStoreIDs, &r.CandidateTrustHosts, &r.Status, &r.Phase, &r.Reason,
 		&r.BatchSize, &r.NextBatchIndex, &r.HaltedReason, &r.Connector, &r.Target, &graphImpact, &r.AffectedIdentityIDs,
 		&r.ReplacementIdentityIDs, &r.RevokedIdentityIDs, &r.ConnectorDeliveryIDs,
 		&batches, &healthGates, &r.FailedTargets, &r.RollbackRefs,
@@ -238,6 +272,18 @@ func scanIncidentFleetReissuanceRun(row pgx.Row, r *IncidentFleetReissuanceRun) 
 	}
 	if r.AffectedIdentityIDs == nil {
 		r.AffectedIdentityIDs = []string{}
+	}
+	if r.ExactTrustStoreIDs == nil {
+		r.ExactTrustStoreIDs = []string{}
+	}
+	if r.ExactTrustHosts == nil {
+		r.ExactTrustHosts = []string{}
+	}
+	if r.CandidateTrustStoreIDs == nil {
+		r.CandidateTrustStoreIDs = []string{}
+	}
+	if r.CandidateTrustHosts == nil {
+		r.CandidateTrustHosts = []string{}
 	}
 	if r.ReplacementIdentityIDs == nil {
 		r.ReplacementIdentityIDs = []string{}
@@ -318,7 +364,10 @@ func (s *Store) ListIncidentFleetReissuanceRunsPage(ctx context.Context, tenantI
 	var out []IncidentFleetReissuanceRun
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, issuer_id::text, status, phase, reason,
+			`SELECT id::text, tenant_id::text, issuer_id::text, migration_run_id,
+			        replacement_authority_id, mode, plan_digest, exact_trust_store_ids,
+			        exact_trust_hosts, candidate_trust_store_ids, candidate_trust_hosts,
+			        status, phase, reason,
 			        batch_size, next_batch_index, halted_reason, connector, target, graph_impact, affected_identity_ids,
 			        replacement_identity_ids, revoked_identity_ids, connector_delivery_ids,
 			        batches, health_gates, failed_targets, rollback_refs,
@@ -350,7 +399,10 @@ func (s *Store) GetIncidentFleetReissuanceRun(ctx context.Context, tenantID, id 
 	var r IncidentFleetReissuanceRun
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanIncidentFleetReissuanceRun(tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, issuer_id::text, status, phase, reason,
+			`SELECT id::text, tenant_id::text, issuer_id::text, migration_run_id,
+			        replacement_authority_id, mode, plan_digest, exact_trust_store_ids,
+			        exact_trust_hosts, candidate_trust_store_ids, candidate_trust_hosts,
+			        status, phase, reason,
 			        batch_size, next_batch_index, halted_reason, connector, target, graph_impact, affected_identity_ids,
 			        replacement_identity_ids, revoked_identity_ids, connector_delivery_ids,
 			        batches, health_gates, failed_targets, rollback_refs,

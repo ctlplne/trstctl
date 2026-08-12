@@ -53,6 +53,23 @@ export function FleetReissuanceTable({
                 <p className="text-xs text-muted-foreground">
                   {run.revoked_identity_ids.length} {translateNow("source.revoked.4bb47f186d")}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  {run.mode} · {translateNow("source.trusted.by.count.h1trust0002", {
+                    value1: run.exact_trust_store_ids?.length ?? 0,
+                    value2: run.exact_trust_hosts?.length ?? 0,
+                  })}
+                </p>
+                {(run.candidate_trust_store_ids?.length ?? 0) > 0 && (
+                  <p className="text-xs text-warning">
+                    {run.candidate_trust_store_ids.length} {translateNow("source.candidate.ca.fingerprint.78e53d126d")} ·{" "}
+                    {translateNow("source.not.verified.j2dr000008")}
+                  </p>
+                )}
+                {run.plan_digest && (
+                  <p className="max-w-[16rem] truncate font-mono text-xs text-muted-foreground">
+                    {translateNow("source.plan.fa8ed0bdab")} {run.plan_digest}
+                  </p>
+                )}
               </td>
               <td>
                 <p>
@@ -75,7 +92,7 @@ export function FleetReissuanceTable({
                     type="button"
                     variant="outline"
                     onClick={() => onAction("pause", run)}
-                    disabled={action === `pause:${run.id}`}
+                    disabled={action === `pause:${run.id}` || Boolean(run.migration_run_id && run.status !== "running")}
                     aria-label={translateNow("source.pause.fleet.run.value1.225d7f781f", { value1: shortId(run.id) })}
                   >
                     <Pause className="h-4 w-4" aria-hidden="true" />
@@ -84,7 +101,7 @@ export function FleetReissuanceTable({
                     type="button"
                     variant="outline"
                     onClick={() => onAction("resume", run)}
-                    disabled={action === `resume:${run.id}`}
+                    disabled={action === `resume:${run.id}` || Boolean(run.migration_run_id && run.status !== "paused")}
                     aria-label={translateNow("source.resume.fleet.run.value1.82d98d67fc", { value1: shortId(run.id) })}
                   >
                     <Play className="h-4 w-4" aria-hidden="true" />
@@ -93,7 +110,7 @@ export function FleetReissuanceTable({
                     type="button"
                     variant="outline"
                     onClick={() => onAction("rollback", run)}
-                    disabled={action === `rollback:${run.id}`}
+                    disabled={action === `rollback:${run.id}` || Boolean(run.migration_run_id && !["running", "paused", "halted"].includes(run.status))}
                     aria-label={translateNow("source.rollback.fleet.run.value1.21446f0a1d", { value1: shortId(run.id) })}
                   >
                     <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -102,7 +119,7 @@ export function FleetReissuanceTable({
                     type="button"
                     variant="outline"
                     onClick={() => onAction("evidence", run)}
-                    disabled={action === `evidence:${run.id}`}
+                    disabled={action === `evidence:${run.id}` || Boolean(run.migration_run_id && run.evidence_bundle_format !== "jws")}
                     aria-label={translateNow("source.export.fleet.run.value1.evidence.6065920a10", { value1: shortId(run.id) })}
                   >
                     <Download className="h-4 w-4" aria-hidden="true" />

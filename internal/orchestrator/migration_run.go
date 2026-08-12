@@ -23,6 +23,11 @@ import (
 
 var migrationEventNamespace = uuid.MustParse("c6bf2f04-3314-5ed8-926d-64fc97f0aa40")
 
+// DestinationIncidentMigrationRevoke is H3's bounded control-plane effect. It
+// is released only by H2 after every member in the cohort has a signed live
+// listener verdict.
+const DestinationIncidentMigrationRevoke = "incident.fleet_reissuance.revoke"
+
 // MigrationEventID gives API commands and signed receipts a retry-stable event
 // identity without retaining a raw Idempotency-Key in the event stream.
 func MigrationEventID(tenantID, runID, purpose string) string {
@@ -275,6 +280,18 @@ type migrationEndpointRenewIntent struct {
 	RequiredAgentID          string          `json:"required_agent_id"`
 }
 
+// IncidentPredecessorRevocationIntent contains only immutable public identity.
+// The worker re-loads the certificate row and refuses any mismatch before it
+// appends the stable revocation event.
+type IncidentPredecessorRevocationIntent struct {
+	RunID                    string `json:"run_id"`
+	WaveID                   string `json:"wave_id"`
+	IdentityID               string `json:"identity_id"`
+	PredecessorCertificateID string `json:"predecessor_certificate_id"`
+	PredecessorFingerprint   string `json:"predecessor_fingerprint"`
+	PredecessorCAID          string `json:"predecessor_ca_id"`
+}
+
 func migrationActionEntry(tenantID string, run migration.Run, action migration.Action) (Entry, error) {
 	member, ok := migration.Member(run, action.WaveID, action.IdentityID)
 	if !ok {
@@ -311,6 +328,16 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 			MigrationRunID:           run.ID, MigrationWaveID: action.WaveID,
 			RequiredAgentID: b.RequiredAgentID,
 		})
+	case migration.ActionRevokePredecessor:
+		if run.Incident == nil {
+			return Entry{}, errors.New("orchestrator: predecessor revocation requires an incident plan")
+		}
+		destination = DestinationIncidentMigrationRevoke
+		payload, err = json.Marshal(IncidentPredecessorRevocationIntent{
+			RunID: run.ID, WaveID: action.WaveID, IdentityID: action.IdentityID,
+			PredecessorCertificateID: b.PredecessorCertificateID,
+			PredecessorFingerprint:   b.PredecessorFingerprint, PredecessorCAID: b.PredecessorCAID,
+		})
 	case migration.ActionRollbackSuccessor:
 		destination = relay.KindConnectorRollback
 		payload, err = json.Marshal(relay.RollbackIntent{
@@ -334,12 +361,17 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 		effectLane = "migration:trust:" + uuid.NewSHA1(migrationEventNamespace,
 			[]byte(b.RequiredAgentID+"\x00"+b.TrustAnchorPath)).String()
 	}
-	return Entry{
+	entry := Entry{
 		TenantID: tenantID, Destination: destination,
 		IdempotencyKey: migrationActionKey(run, action), Payload: payload,
 		EffectLane:        effectLane,
 		RequiredAgentRole: mtls.AgentRoleHost, RequiredAgentID: b.RequiredAgentID,
-	}, nil
+	}
+	if action.Kind == migration.ActionRevokePredecessor {
+		entry.RequiredAgentRole = "control_plane"
+		entry.RequiredAgentID = ""
+	}
+	return entry, nil
 }
 
 func migrationActionKey(run migration.Run, action migration.Action) string {

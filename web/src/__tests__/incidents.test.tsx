@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
@@ -113,13 +113,20 @@ const fleetRun = {
   id: "66666666-6666-6666-6666-666666666666",
   tenant_id: "tenant-1",
   issuer_id: "77777777-7777-7777-7777-777777777777",
-  status: "halted",
-  phase: "batch_1_verification_failed",
+  migration_run_id: "66666666-6666-6666-6666-666666666666",
+  replacement_authority_id: "abababab-abab-4bab-8bab-abababababab",
+  mode: "live",
+  plan_digest: "d".repeat(64),
+  exact_trust_store_ids: ["ts:role-agent:os"],
+  exact_trust_hosts: ["role-agent"],
+  candidate_trust_store_ids: ["ts:candidate:java"],
+  candidate_trust_hosts: ["candidate-host"],
+  status: "running",
+  phase: "canary:verifying_live",
   reason: "intermediate CA private key exposure",
   batch_size: 1,
   batch_count: 2,
   next_batch_index: 1,
-  halted_reason: "batch 1 has one signature-verified endpoint failure; batch 2 remains unpublished",
   connector: "nginx",
   target: "edge/prod",
   graph_impact: {
@@ -129,19 +136,19 @@ const fleetRun = {
   },
   affected_identity_ids: ["11111111-1111-1111-1111-111111111111", "88888888-8888-8888-8888-888888888888"],
   replacement_identity_ids: ["99999999-9999-9999-9999-999999999999", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
-  revoked_identity_ids: ["11111111-1111-1111-1111-111111111111", "88888888-8888-8888-8888-888888888888"],
+  revoked_identity_ids: [],
   connector_delivery_ids: ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "cccccccc-cccc-cccc-cccc-cccccccccccc"],
   batches: [
     {
       index: 1,
-      status: "failed",
+      status: "waiting_verification",
       identity_ids: ["11111111-1111-1111-1111-111111111111"],
       replacement_identity_ids: ["99999999-9999-9999-9999-999999999999"],
       health_gate: "replacement deployed:passed",
     },
     {
       index: 2,
-      status: "halted",
+      status: "planned",
       identity_ids: ["88888888-8888-8888-8888-888888888888"],
       replacement_identity_ids: ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
       health_gate: "revocation published:passed",
@@ -153,8 +160,8 @@ const fleetRun = {
   ],
   failed_targets: [],
   rollback_refs: ["issuer:77777777-7777-7777-7777-777777777777", "restore previous bindings"],
-  evidence_bundle_format: "jws",
-  evidence_bundle: "fleet.audit.bundle",
+  evidence_bundle_format: "",
+  evidence_bundle: "",
   idempotency_key: "fleet-1",
   created_by: "incident-commander",
   created_at: "2026-06-20T12:10:00Z",
@@ -361,9 +368,11 @@ describe("incident response served execution surface", () => {
     apiMock.resumeFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "running", phase: "batch_resumed" });
     apiMock.rollbackFleetReissuance.mockReset().mockResolvedValue({
       ...fleetRun,
-      status: "rollback_recorded",
-      phase: "rollback_evidence_recorded",
+      status: "rolled_back",
+      phase: "failed_cohort_rolled_back",
       rollback_refs: [...fleetRun.rollback_refs, "restore previous credential bindings"],
+      evidence_bundle_format: "jws",
+      evidence_bundle: "fleet.audit.bundle",
     });
     apiMock.exportFleetReissuanceEvidence.mockReset().mockResolvedValue({
       run_id: fleetRun.id,
@@ -410,8 +419,10 @@ describe("incident response served execution surface", () => {
     expect(screen.getByText("a".repeat(64))).toBeInTheDocument();
     expect(screen.getByText("b".repeat(64))).toBeInTheDocument();
     expect(screen.getByText(/new unique idempotency key/i)).toBeInTheDocument();
-    expect(screen.queryByText(/"identity_id"/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/"from":"issued"/)).not.toBeInTheDocument();
+    const recovery = screen.getByRole("heading", { name: "Recovery" }).closest("section");
+    expect(recovery).not.toBeNull();
+    expect(within(recovery as HTMLElement).queryByText(/"identity_id"/)).not.toBeInTheDocument();
+    expect(within(recovery as HTMLElement).queryByText(/"from":"issued"/)).not.toBeInTheDocument();
   });
 
   it("opens an explicit compromised-identity deep link on the execution workspace", async () => {
@@ -421,40 +432,25 @@ describe("incident response served execution surface", () => {
     expect(screen.getByLabelText("Affected identity")).toHaveValue("11111111-1111-1111-1111-111111111111");
   });
 
-  it("loads execution evidence and runs served replacement-before-revoke remediation", async () => {
+  it("loads historical execution evidence and routes new response through the gated H2 planner", async () => {
     const user = userEvent.setup();
     renderIncidents();
 
     expect(screen.getByRole("heading", { name: "Incidents" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Execution evidence" })).toBeInTheDocument();
     expect(await screen.findByText("22222222-2222-2222-2222-222222222222")).toBeInTheDocument();
-    expect(screen.queryByText(/Incident execution is not served/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Direct single-identity mutation is retired/i)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Affected identity"), "11111111-1111-1111-1111-111111111111");
     await user.clear(screen.getAllByLabelText("What happened")[0]);
     await user.type(screen.getAllByLabelText("What happened")[0], "key export detected");
-    await user.type(screen.getAllByLabelText("Deployment target")[0], "edge/prod/payments");
-    await user.type(screen.getAllByLabelText("Rollback instructions")[0], "restore previous fullchain");
     await user.click(screen.getByRole("button", { name: "Preview blast radius" }));
 
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("id:11111111-1111-1111-1111-111111111111"));
     expect(await screen.findByRole("heading", { name: "Blast-radius snapshot" })).toBeInTheDocument();
     expect(screen.getByText("payments service")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Execute incident" }));
-
-    await waitFor(() =>
-      expect(apiMock.executeIncident).toHaveBeenCalledWith({
-        identity_id: "11111111-1111-1111-1111-111111111111",
-        reason: "key export detected",
-        replacement_name: "",
-        connector: "nginx",
-        target: "edge/prod/payments",
-        delivery_rollback_ref: "restore previous fullchain",
-      }),
-    );
-    expect(await screen.findByText("Incident execution recorded")).toBeInTheDocument();
-    expect(screen.queryByText("nginx:edge/prod/payments:unrouted")).not.toBeInTheDocument();
+    expect(apiMock.executeIncident).not.toHaveBeenCalled();
     expect((await screen.findAllByText("queued")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("jws").length).toBeGreaterThan(0);
     expect(screen.getByText("sealed.audit.bundle")).toBeInTheDocument();
@@ -478,6 +474,10 @@ describe("incident response served execution surface", () => {
     );
     expect(await screen.findByText("ServiceNow ticket queued")).toBeInTheDocument();
     expect(screen.getByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Plan Fleet re-issuance" }));
+    expect(screen.getByRole("tab", { name: "Fleet & break-glass" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByLabelText("What happened")[1]).toHaveValue("key export detected");
   });
 
   it("dispatches served SIEM SOAR chat and ITSM response integrations", async () => {
@@ -596,20 +596,36 @@ describe("incident response served execution surface", () => {
     expect(screen.getByText("66666666-6666-6666-6666-666666666666")).toBeInTheDocument();
     expect(screen.getByText("2 affected")).toBeInTheDocument();
     expect(screen.getByText("Batches 1/2")).toBeInTheDocument();
-    expect(screen.getByText(/signature-verified endpoint failure/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Compromised issuer"), "77777777-7777-7777-7777-777777777777");
-    await user.clear(screen.getByLabelText("Batch size"));
-    await user.type(screen.getByLabelText("Batch size"), "1");
-    await user.type(screen.getAllByLabelText("Deployment target")[1], "edge/prod");
-    await user.type(screen.getAllByLabelText("Rollback instructions")[1], "restore previous bindings");
+    expect(screen.getByText(/1 trust stores across 1 hosts/)).toBeInTheDocument();
+    expect(screen.getByText(/1 Candidate CA fingerprint · Not verified/)).toBeInTheDocument();
+    const fleetPanel = document.getElementById("incidents-panel-fleet");
+    expect(fleetPanel).not.toBeNull();
+    await user.clear(within(fleetPanel as HTMLElement).getByLabelText("Compromised issuer"));
+    await user.type(within(fleetPanel as HTMLElement).getByLabelText("Compromised issuer"), "77777777-7777-7777-7777-777777777777");
+    await user.type(within(fleetPanel as HTMLElement).getByLabelText("Replacement CA Authority"), "abababab-abab-4bab-8bab-abababababab");
+    await user.type(within(fleetPanel as HTMLElement).getByLabelText("Rollback instructions"), "restore previous bindings");
+    const cohorts = [
+      {
+        id: "canary",
+        ordinal: 1,
+        members: [
+          {
+            identity_id: "11111111-1111-1111-1111-111111111111",
+            agent_id: "12121212-1212-4212-8212-121212121212",
+            trust_anchor_path: "/etc/trstctl/next-root.pem",
+          },
+        ],
+      },
+    ];
+    fireEvent.change(within(fleetPanel as HTMLElement).getByLabelText("Waves"), { target: { value: JSON.stringify(cohorts) } });
     await user.click(screen.getByRole("button", { name: "Start fleet run" }));
     await waitFor(() =>
       expect(apiMock.startFleetReissuance).toHaveBeenCalledWith(
         expect.objectContaining({
           issuer_id: "77777777-7777-7777-7777-777777777777",
-          batch_size: 1,
-          connector: "nginx",
-          target: "edge/prod",
+          replacement_authority_id: "abababab-abab-4bab-8bab-abababababab",
+          mode: "live",
+          cohorts,
           rollback_ref: "restore previous bindings",
         }),
       ),
@@ -655,7 +671,7 @@ describe("incident response served execution surface", () => {
 // ------------------------------------------------------------------ C-P1 ----
 // DA-10: incident intake stops taking raw UUIDs on faith. Identity fields are
 // datalist pickers fed from the served identity roster (DESIGN rule 13), the
-// delivery-method fields offer the served connector vocabulary, and the
+// the remaining playbook delivery-method field offers the served connector vocabulary, and the
 // inventory field offers the NHI inventory — while free typing keeps working
 // so operators and fixtures can still paste ids directly.
 
@@ -694,15 +710,10 @@ describe("incident intake pickers (C-P1 / DA-10)", () => {
     await waitFor(() => expect(optionValues(datalistFor(input))).toContain("11111111-1111-1111-1111-111111111111"));
   });
 
-  it("offers the served connector vocabulary on every delivery-method field", async () => {
+  it("offers the served connector vocabulary on the remaining playbook delivery method", async () => {
     renderIncidents();
-    // Execute + fleet forms both label their connector field "Delivery method".
-    const deliveryFields = await screen.findAllByLabelText("Delivery method");
-    expect(deliveryFields).toHaveLength(2);
     const playbook = await screen.findByLabelText("Playbook delivery method");
-    for (const input of [...deliveryFields, playbook]) {
-      await waitFor(() => expect(optionValues(datalistFor(input))).toEqual(expect.arrayContaining(["nginx", "aws-iam"])));
-    }
+    await waitFor(() => expect(optionValues(datalistFor(playbook))).toEqual(expect.arrayContaining(["nginx", "aws-iam"])));
   });
 
   it("offers the NHI inventory on the inventory field", async () => {
@@ -716,8 +727,9 @@ describe("incident intake pickers (C-P1 / DA-10)", () => {
     const user = userEvent.setup();
     renderIncidents();
     await user.type(await screen.findByLabelText("Affected identity"), "deaddead-dead-dead-dead-deaddeaddead");
-    await user.click(screen.getByRole("button", { name: "Execute incident" }));
-    await waitFor(() => expect(apiMock.executeIncident).toHaveBeenCalledWith(expect.objectContaining({ identity_id: "deaddead-dead-dead-dead-deaddeaddead" })));
+    await user.click(screen.getByRole("button", { name: "Plan Fleet re-issuance" }));
+    expect(screen.getByRole("tab", { name: "Fleet & break-glass" })).toHaveAttribute("aria-selected", "true");
+    expect(apiMock.executeIncident).not.toHaveBeenCalled();
   });
 
   it("degrades to plain inputs when the rosters are unavailable", async () => {

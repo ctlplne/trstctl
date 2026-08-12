@@ -371,6 +371,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	)
 	incidentFleet := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/issuer_id", opaque),
+		privacyRule("/migration_run_id", opaque), privacyRule("/replacement_authority_id", opaque),
+		privacyRule("/mode", opaque), privacyRule("/plan_digest", opaque),
+		privacyRule("/exact_trust_store_ids/*", opaque), privacyRule("/exact_trust_hosts/*", token),
+		privacyRule("/candidate_trust_store_ids/*", opaque), privacyRule("/candidate_trust_hosts/*", token),
 		privacyRule("/status", opaque), privacyRule("/phase", opaque),
 		privacyRule("/reason", clear), privacyRule("/batch_size", opaque),
 		privacyRule("/next_batch_index", opaque), privacyRule("/halted_reason", clear),
@@ -430,6 +434,12 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	revocationObserved.Rules = append(revocationObserved.Rules, revocationTargets...)
 	migrationRun := privacyRules(
 		privacyRule("/run/id", opaque), privacyRule("/run/plan_id", token),
+		privacyRule("/run/incident/mode", opaque),
+		privacyRule("/run/incident/compromised_issuer_id", opaque),
+		privacyRule("/run/incident/replacement_authority_id", opaque),
+		privacyRule("/run/incident/exact_trust_store_ids/*", opaque),
+		privacyRule("/run/incident/exact_trust_hosts/*", token),
+		privacyRule("/run/incident/affected_identity_ids/*", opaque),
 		privacyRule("/run/status", opaque), privacyRule("/run/halt_reason", clear),
 		privacyRule("/run/rollback_wave_id", token), privacyRule("/run/rollback_stage", opaque),
 		privacyRule("/run/rollback_attempt", opaque), privacyRule("/run/pause_reason", clear),
@@ -439,6 +449,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/run/waves/*/members/*/identity_id", opaque),
 		privacyRule("/run/waves/*/members/*/trust_verdict", opaque),
 		privacyRule("/run/waves/*/members/*/successor_verdict", opaque),
+		privacyRule("/run/waves/*/members/*/revocation_verdict", opaque),
 		privacyRule("/run/waves/*/members/*/rollback_successor_verdict", opaque),
 		privacyRule("/run/waves/*/members/*/rollback_trust_verdict", opaque),
 		privacyRule("/run/waves/*/members/*/binding/issuing_authority_id", opaque),
@@ -457,6 +468,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/run/waves/*/members/*/binding/subject_dns_names/*", token),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_certificate_id", opaque),
 		privacyRule("/run/waves/*/members/*/binding/predecessor_fingerprint", opaque),
+		privacyRule("/run/waves/*/members/*/binding/predecessor_ca_id", opaque),
+		privacyRule("/run/waves/*/members/*/binding/environment", opaque),
 		privacyRule("/run/waves/*/members/*/binding/successor_fingerprint", opaque),
 		privacyRule("/actions/*/kind", opaque), privacyRule("/actions/*/wave_id", token),
 		privacyRule("/actions/*/identity_id", opaque),

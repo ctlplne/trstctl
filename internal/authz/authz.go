@@ -50,10 +50,15 @@ const (
 	LifecycleRead      Permission = "lifecycle:read"
 	IncidentsRead      Permission = "incidents:read"
 	IncidentsWrite     Permission = "incidents:write"
-	PrivateEgress      Permission = "egress:private"
-	AccessRead         Permission = "access:read"
-	AccessWrite        Permission = "access:write"
-	AccessRoleAssign   Permission = "access:role.assign"
+	// IncidentsGameDay is deliberately separate from routine incident write.
+	// A rehearsal can enqueue real estate work, so a principal must be granted
+	// that authority explicitly even though the aggregate later proves every
+	// frozen member is non-production.
+	IncidentsGameDay Permission = "incidents:game-day"
+	PrivateEgress    Permission = "egress:private"
+	AccessRead       Permission = "access:read"
+	AccessWrite      Permission = "access:write"
+	AccessRoleAssign Permission = "access:role.assign"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
 	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
@@ -117,7 +122,7 @@ func allResourcePermissions() []Permission {
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
-		IncidentsRead, IncidentsWrite, PrivateEgress,
+		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress,
 		AccessRead, AccessWrite, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,

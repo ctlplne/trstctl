@@ -263,6 +263,8 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // AUD-41 incident-wave re-pin: reviewed keys explain the retired direct
+      // mutation, plan-first order, and separately authorized game-day boundary.
       // B5 custody re-pin: two source.custody.* keys add the per-certificate key
       // custody line, including the sentence that says unrecorded is not the
       // same as safe. Machine-authored es/de - FLAGGED FOR HUMAN REVIEW.
@@ -577,8 +579,8 @@ describe("i18n boundary", () => {
       // the review labels that authority, and each wave names its signed
       // trust-plus-live verification denominator. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "b961c37b0ac81c059588c5c6b0923184d6f7be3202798961027a73d367aba20f",
-      "de-DE": "c81c933ab082293328861f0ef91f1057a7f54ec652741d6853c48cad3947d5ef",
+      "es-ES": "3f5f27422dcc485fee3f043ee4dbc1e9630d44774c3bed1a73393545a6dd2efe",
+      "de-DE": "80ed503003331b8b606c12fd3157d077d2a51457f3534d835ac52757450dc3c2",
     });
   });
 

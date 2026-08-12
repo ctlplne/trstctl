@@ -45,17 +45,21 @@ type migrationAssessRequest struct {
 }
 
 type migrationStartRequest struct {
-	PlanID         string `json:"plan_id"`
-	NewAuthorityID string `json:"new_authority_id"`
-	Waves          []struct {
-		ID      string `json:"id"`
-		Ordinal int    `json:"ordinal"`
-		Members []struct {
-			IdentityID      string `json:"identity_id"`
-			AgentID         string `json:"agent_id"`
-			TrustAnchorPath string `json:"trust_anchor_path"`
-		} `json:"members"`
-	} `json:"waves"`
+	PlanID         string               `json:"plan_id"`
+	NewAuthorityID string               `json:"new_authority_id"`
+	Waves          []migrationStartWave `json:"waves"`
+}
+
+type migrationStartWave struct {
+	ID      string                 `json:"id"`
+	Ordinal int                    `json:"ordinal"`
+	Members []migrationStartMember `json:"members"`
+}
+
+type migrationStartMember struct {
+	IdentityID      string `json:"identity_id"`
+	AgentID         string `json:"agent_id"`
+	TrustAnchorPath string `json:"trust_anchor_path"`
 }
 
 type migrationActionRequest struct {

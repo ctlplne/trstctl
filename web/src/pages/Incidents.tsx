@@ -35,9 +35,11 @@ import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
-import { IncidentSeverityBadge, IncidentStepper } from "./incidents/IncidentsPageParts";
+import { IncidentSeverityBadge } from "./incidents/IncidentsPageParts";
 import { FleetReissuanceTable } from "./incidents/FleetReissuanceParts";
 import { OutboxRecoveryPanel } from "./incidents/OutboxRecoveryPanel";
 import { formatDateTime } from "@/i18n/format";
@@ -106,17 +108,20 @@ const defaultResponseIntegration: ResponseIntegrationForm = {
 
 const defaultFleetRun: FleetReissuanceRequest = {
   issuer_id: "",
+  replacement_authority_id: "",
+  mode: "live",
   reason: "intermediate CA private key exposure",
-  batch_size: 25,
-  connector: "nginx",
-  target: "",
   rollback_ref: "",
-  health_gates: [
-    { name: "replacement deployed", status: "passed" },
-    { name: "revocation published", status: "passed" },
+  cohorts: [
+    {
+      id: "canary",
+      ordinal: 1,
+      members: [{ identity_id: "", agent_id: "", trust_anchor_path: "/etc/trstctl/next-root.pem" }],
+    },
   ],
-  evidence_hint: "",
 };
+
+const defaultFleetCohorts = JSON.stringify(defaultFleetRun.cohorts, null, 2);
 
 const defaultPlaybookRun: RemediationPlaybookRunRequest = {
   target_identity_id: "",
@@ -165,6 +170,7 @@ export function Incidents() {
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [executions, setExecutions] = useState<IncidentExecution[]>([]);
   const [fleetForm, setFleetForm] = useState<FleetReissuanceRequest>(defaultFleetRun);
+  const [fleetCohorts, setFleetCohorts] = useState(defaultFleetCohorts);
   const [fleetRuns, setFleetRuns] = useState<FleetReissuanceRun[]>([]);
   const [playbookForm, setPlaybookForm] = useState<RemediationPlaybookRunRequest>(defaultPlaybookRun);
   const [responseForm, setResponseForm] = useState<ResponseIntegrationForm>(defaultResponseIntegration);
@@ -174,14 +180,12 @@ export function Incidents() {
   const [removeScopesText, setRemoveScopesText] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [executeError, setExecuteError] = useState<string | null>(null);
   const [fleetError, setFleetError] = useState<string | null>(null);
   const [playbookError, setPlaybookError] = useState<string | null>(null);
   const [ownerRemediationError, setOwnerRemediationError] = useState<string | null>(null);
   const [responseError, setResponseError] = useState<string | null>(null);
   const [ticketForm, setTicketForm] = useState<ServiceNowTicketRequest>(defaultServiceNowTicket);
   const [ticketError, setTicketError] = useState<string | null>(null);
-  const [latestExecution, setLatestExecution] = useState<IncidentExecution | null>(null);
   const [latestFleetRun, setLatestFleetRun] = useState<FleetReissuanceRun | null>(null);
   const [fleetEvidence, setFleetEvidence] = useState<FleetReissuanceEvidence | null>(null);
   const [latestPlaybookRun, setLatestPlaybookRun] = useState<RemediationPlaybookRun | null>(null);
@@ -192,7 +196,6 @@ export function Incidents() {
   const breakGlassCloseRef = useRef<HTMLButtonElement>(null);
   const [loading, setLoading] = useState(true);
   const [previewing, setPreviewing] = useState(false);
-  const [executing, setExecuting] = useState(false);
   const [runningFleet, setRunningFleet] = useState(false);
   const [runningPlaybook, setRunningPlaybook] = useState(false);
   const [acceptingOwnerAction, setAcceptingOwnerAction] = useState<string | null>(null);
@@ -324,29 +327,17 @@ export function Incidents() {
     }
   }
 
-  async function executeIncident(event: FormEvent<HTMLFormElement>) {
+  function openGatedFleetPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.identity_id.trim()) {
-      setExecuteError("Compromised identity ID is required.");
+      setPreviewError("Compromised identity ID is required.");
       return;
     }
-    setExecuting(true);
-    setExecuteError(null);
-    setLatestExecution(null);
-    try {
-      const result = await api.executeIncident({
-        ...form,
-        identity_id: form.identity_id.trim(),
-        reason: form.reason?.trim() || "incident execution",
-      });
-      setExecutions((prev) => [result, ...prev.filter((item) => item.id !== result.id)].slice(0, 10));
-      setImpact(result.blast_radius);
-      setLatestExecution(result);
-    } catch (err) {
-      setExecuteError(apiProblemMessage(err, "Could not execute incident"));
-    } finally {
-      setExecuting(false);
-    }
+    setFleetForm((current) => ({
+      ...current,
+      reason: form.reason?.trim() || current.reason || "verified credential compromise",
+    }));
+    selectTab("fleet");
   }
 
   async function runRightSizePlaybook(event: FormEvent<HTMLFormElement>) {
@@ -499,6 +490,31 @@ export function Incidents() {
       setFleetError("Compromised issuer ID is required.");
       return;
     }
+    if (!fleetForm.replacement_authority_id.trim()) {
+      setFleetError("Replacement CA authority ID is required.");
+      return;
+    }
+    let cohorts: FleetReissuanceRequest["cohorts"];
+    try {
+      cohorts = JSON.parse(fleetCohorts) as FleetReissuanceRequest["cohorts"];
+    } catch {
+      setFleetError("H2 cohorts must be valid JSON.");
+      return;
+    }
+    const complete =
+      Array.isArray(cohorts) &&
+      cohorts.length > 0 &&
+      cohorts.every(
+        (cohort) =>
+          cohort.id?.trim() &&
+          cohort.ordinal > 0 &&
+          cohort.members?.length > 0 &&
+          cohort.members.every((member) => member.identity_id?.trim() && member.agent_id?.trim() && member.trust_anchor_path?.trim()),
+      );
+    if (!complete) {
+      setFleetError("Every H2 cohort needs an id, positive ordinal, and exact identity, agent, and trust-anchor-path members.");
+      return;
+    }
     setRunningFleet(true);
     setFleetError(null);
     setLatestFleetRun(null);
@@ -507,10 +523,10 @@ export function Incidents() {
       const result = await api.startFleetReissuance({
         ...fleetForm,
         issuer_id: fleetForm.issuer_id.trim(),
+        replacement_authority_id: fleetForm.replacement_authority_id.trim(),
         reason: fleetForm.reason?.trim() || "fleet reissuance",
-        connector: fleetForm.connector?.trim() || "nginx",
-        target: fleetForm.target?.trim() || "unconfigured-target",
-        rollback_ref: fleetForm.rollback_ref?.trim() || "restore previous credential binding",
+        cohorts,
+        rollback_ref: fleetForm.rollback_ref?.trim() || "H2 restores the failed cohort before predecessor revocation",
       });
       setFleetRuns((prev) => [result, ...prev.filter((item) => item.id !== result.id)].slice(0, 10));
       setLatestFleetRun(result);
@@ -619,9 +635,11 @@ export function Incidents() {
           <h2 id="execute-heading" className="text-title font-semibold">
             {translateNow("source.credential.compromise.execution.3cfb067780")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.incident.execution.issues.and.deploys.a.re.c00d70d3f5")}</p>
         </div>
-        <form className="grid gap-3 md:grid-cols-2" onSubmit={executeIncident}>
+        <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-muted-foreground">
+          {translateNow("incidents.fleet.retiredDirectNotice")}
+        </div>
+        <form className="grid gap-3 md:grid-cols-2" onSubmit={openGatedFleetPlan}>
           <label className="grid gap-1 text-sm font-medium" htmlFor="incident-affected-identity">
             {translateNow("source.affected.identity.031ba2eb6f")}
             <IdentityPicker
@@ -636,53 +654,18 @@ export function Incidents() {
             {translateNow("source.what.happened.483bd49023")}
             <input className="ui-input" value={form.reason ?? ""} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
           </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.replacement.identity.name.503334612e")}
-            <input
-              className="ui-input"
-              value={form.replacement_name ?? ""}
-              onChange={(event) => setForm({ ...form, replacement_name: event.target.value })}
-              placeholder={translateNow("source.optional.ec91fdd925")}
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.delivery.method.26b6ab1b68")}
-            <input
-              className="ui-input"
-              value={form.connector ?? ""}
-              onChange={(event) => setForm({ ...form, connector: event.target.value })}
-              list="incident-delivery-method-options"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.deployment.target.5b274e18ab")}
-            <input
-              className="ui-input"
-              value={form.target ?? ""}
-              onChange={(event) => setForm({ ...form, target: event.target.value })}
-              placeholder={translateNow("source.edge.prod.payments.178b58c24e")}
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.rollback.instructions.8fb506160a")}
-            <input
-              className="ui-input"
-              value={form.delivery_rollback_ref ?? ""}
-              onChange={(event) => setForm({ ...form, delivery_rollback_ref: event.target.value })}
-              placeholder={translateNow("source.restore.previous.binding.3e3a4f657d")}
-            />
-          </label>
           <div className="flex flex-wrap gap-2 md:col-span-2">
             <Button type="button" variant="outline" onClick={previewBlastRadius} disabled={previewing}>
               {previewing ? translateNow("source.loading.preview.c02130fa90") : translateNow("source.preview.blast.radius.925ac72409")}
             </Button>
-            <Button type="submit" disabled={executing}>
-              {executing ? translateNow("source.executing.535a363214") : translateNow("source.execute.incident.c74e8b45e9")}
+            <Button type="submit">
+              <Play className="h-4 w-4" aria-hidden="true" />
+              {translateNow("source.plan.fa8ed0bdab")} {translateNow("source.fleet.re.issuance.fa35f7921e")}
             </Button>
           </div>
         </form>
-        {/* Shared delivery-method vocabulary (C-P1): one served connector
-            catalog feeds every delivery-method field on this page. */}
+        {/* Shared delivery-method vocabulary (C-P1): the served connector
+            catalog feeds the remaining playbook delivery-method field. */}
         <datalist id="incident-delivery-method-options">
           {connectorRoster.map((item) => (
             <option key={item.name} value={item.name}>
@@ -691,31 +674,6 @@ export function Incidents() {
           ))}
         </datalist>
         {previewError && <ErrorState title={translateNow("source.blast.radius.preview.unavailable.00a241de01")}>{previewError}</ErrorState>}
-        {executeError && <ErrorState title={translateNow("source.incident.execution.failed.70db66b277")}>{executeError}</ErrorState>}
-        {latestExecution && (
-          <section role="status" aria-labelledby="incident-progress-heading" className="ui-panel p-comfortable">
-            <h3 id="incident-progress-heading" className="text-title font-semibold">
-              {translateNow("source.incident.execution.recorded.2ea0b1ce57")}
-            </h3>
-            <dl className="mt-3 grid gap-2 md:grid-cols-3">
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.execution.a45cd4bd09")}</dt>
-                <dd className="font-mono text-xs">{latestExecution.id}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
-                <dd>{latestExecution.status}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">{translateNow("source.current.phase.44c03cecc0")}</dt>
-                <dd className="break-all font-mono text-xs">{latestExecution.phase}</dd>
-              </div>
-            </dl>
-            {/* S-C17: the phase string is precise for a log and unreadable as
-                progress; the stepper reads the same record's concrete fields. */}
-            <IncidentStepper execution={latestExecution} />
-          </section>
-        )}
         {impact && <BlastRadiusPreview impact={impact} />}
       </section>
 
@@ -1290,6 +1248,9 @@ export function Incidents() {
           <h2 id="fleet-heading" className="text-title font-semibold">
             {translateNow("source.fleet.re.issuance.fa35f7921e")}
           </h2>
+          <p className="mt-1 max-w-4xl text-sm text-muted-foreground">
+            {translateNow("incidents.fleet.planSummary")}
+          </p>
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={startFleetReissuance}>
           <label className="grid gap-1 text-sm font-medium">
@@ -1302,14 +1263,12 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.batch.size.8cfe32a041")}
+            {translateNow("source.replacement.cefd665229")} {translateNow("source.adcs.ca.f4adcs0004")} {translateNow("source.authority.c4xr000007")}
             <input
-              className="ui-input"
-              type="number"
-              min={1}
-              max={100}
-              value={fleetForm.batch_size ?? ""}
-              onChange={(event) => setFleetForm({ ...fleetForm, batch_size: event.target.value === "" ? undefined : Number(event.target.value) || undefined })}
+              className="ui-input font-mono"
+              value={fleetForm.replacement_authority_id}
+              onChange={(event) => setFleetForm({ ...fleetForm, replacement_authority_id: event.target.value })}
+              placeholder="00000000-0000-0000-0000-000000000000"
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
@@ -1317,22 +1276,14 @@ export function Incidents() {
             <input className="ui-input" value={fleetForm.reason ?? ""} onChange={(event) => setFleetForm({ ...fleetForm, reason: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.delivery.method.26b6ab1b68")}
-            <input
-              className="ui-input"
-              value={fleetForm.connector ?? ""}
-              onChange={(event) => setFleetForm({ ...fleetForm, connector: event.target.value })}
-              list="incident-delivery-method-options"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.deployment.target.5b274e18ab")}
-            <input
-              className="ui-input"
-              value={fleetForm.target ?? ""}
-              onChange={(event) => setFleetForm({ ...fleetForm, target: event.target.value })}
-              placeholder={translateNow("source.edge.prod.79b3e5ef21")}
-            />
+            {translateNow("secrets.scan.mode")}
+            <Select
+              value={fleetForm.mode}
+              onChange={(event) => setFleetForm({ ...fleetForm, mode: event.target.value as FleetReissuanceRequest["mode"] })}
+            >
+              <option value="live">{translateNow("integrate.gitops.live")}</option>
+              <option value="game_day">{translateNow("incidents.fleet.modeGameDay")}</option>
+            </Select>
           </label>
           <label className="grid gap-1 text-sm font-medium">
             {translateNow("source.rollback.instructions.8fb506160a")}
@@ -1343,6 +1294,18 @@ export function Incidents() {
               placeholder={translateNow("source.restore.previous.bindings.ec8f60be98")}
             />
           </label>
+          <div className="grid gap-1 md:col-span-2">
+            <label className="text-sm font-medium" htmlFor="incident-fleet-cohorts">
+              {translateNow("source.migration.waves.h2mig00009")}
+            </label>
+            <Textarea
+              id="incident-fleet-cohorts"
+              className="min-h-56 font-mono text-xs"
+              value={fleetCohorts}
+              onChange={(event) => setFleetCohorts(event.target.value)}
+              spellCheck={false}
+            />
+          </div>
           <div className="md:col-span-2">
             <Button type="button" onClick={() => void startFleetReissuance()} disabled={runningFleet}>
               <Play className="h-4 w-4" aria-hidden="true" />

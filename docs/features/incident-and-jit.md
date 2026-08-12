@@ -102,31 +102,40 @@ ServiceNow state sync.
 
 ### Fleet re-issuance for CA compromise (F32)
 
-If a *CA* is compromised, every certificate it signed must be replaced. trstctl finds
-them all via the graph, rotates the CA key first (so new certificates sign under a fresh
-key), then re-issues in **health-checked batches**: after each stage it runs a health
-check, and if that fails it **rolls back** that stage and halts rather than charging
-ahead into an outage — batches run in a bounded lane that rejects overload fast rather
-than starving other work. It's **resumable** — a progress store records completed
-credentials so an interrupted run picks up where it left off without re-issuing anything,
-because re-issuance is idempotent and outbound work is journaled first so a crash can't
-drop or duplicate it. For an SSH CA it re-establishes trust and publishes an updated KRL
-*after* confirmed-healthy re-issuance.
+If an X.509 CA is compromised, every active identity issued by its catalog entry must be
+replaced, and every exact trust consumer must be visible before the first estate effect.
+trstctl freezes the compromised issuer, signer-backed replacement authority, exact
+certificate/SPKI `TRUSTS` stores and hosts, ordered cohorts, exact enrolled agents,
+deployment-target revisions, predecessor certificate/revocation authority, and rollback
+paths into one H2 plan. Subject-only trust matches remain visible as candidates but never
+authorize work. The plan's digest and H3 projection commit before H2 can enqueue its first
+agent action.
+
+Each cohort installs the replacement authority, waits for the host agent's lease-bound
+signed trust readback, mints a successor from a host-generated CSR, deploys it, and waits
+for the signed live-listener transcript. Only that proof releases revocation of that
+member's exact predecessor; every revocation receipt must land before the next cohort
+starts. A failed trust/live gate automatically restores only the current unrevoked cohort
+and removes its replacement trust. Completed earlier cohorts are not rolled back after
+their predecessors have been revoked. Every action is idempotent, journaled in the same
+transaction as the H2 event projection, and executed in the bounded fleet lane.
 
 **Status:** compromised-issuer fleet re-issuance is served through
 `POST /api/v1/incidents/fleet-reissuance-runs`, with list/get evidence at
 `GET /api/v1/incidents/fleet-reissuance-runs{,/{id}}`, pause/resume/rollback evidence
 at `POST /api/v1/incidents/fleet-reissuance-runs/{id}/{pause,resume,rollback}`, and a
 signed evidence export at
-`GET /api/v1/incidents/fleet-reissuance-runs/{id}/evidence`. The run enumerates the
-tenant's affected identities by issuer and persists a canary-first cursor. Start
-publishes only batch one. The bounded fleet worker creates deterministic
-replacement identities for the cursor batch, waits for endpoint-verification
-receipts paired with accepted agent signatures, and only then revokes that
-batch's originals and transactionally publishes the next batch. A signed
-failure durably records the halt reason; pause/resume gates the same cursor, and
-restart replay cannot duplicate a replacement or later-batch command. Every
-state snapshot projects from `incident.fleet_reissuance.recorded` evidence. CLI parity is
+`GET /api/v1/incidents/fleet-reissuance-runs/{id}/evidence`. Start accepts
+`issuer_id`, `replacement_authority_id`, `mode`, `reason`, `rollback_ref`, and ordered
+`cohorts`; each member supplies `identity_id`, the exact enrolled `agent_id`, and a
+public `trust_anchor_path`. `live` is the production response. `game_day` additionally
+requires `incidents:game-day`, and H2 refuses any member whose frozen owner/target
+environment is not explicitly non-production. It is therefore a safety boundary, not a
+display label. Terminal success or rollback is mirrored to
+`incident.fleet_reissuance.recorded` only with a compact-JWS audit export that verifies
+offline. Pause/resume and restart retain the same H2 cursor and immutable bindings. The
+legacy `POST /api/v1/incidents/executions` mutation now returns conflict with this H2
+route as guidance; historical execution reads remain available. CLI parity is
 `trstctl-cli incidents fleet-reissuance start|list|get|pause|resume|rollback|evidence`.
 
 ### Just-in-time issuance with approval (F33)
@@ -222,7 +231,34 @@ back into the event log (`/api/v1/breakglass/reconcile`). The self-service appro
 
 Credential compromise is served through REST, CLI, and the console:
 
+`compromised-issuer.json` names the exact reviewed H2 plan; the API rejects a
+caller-supplied subset when it does not equal the issuer's active identity denominator:
+
+```json
+{
+  "issuer_id": "11111111-1111-4111-8111-111111111111",
+  "replacement_authority_id": "22222222-2222-4222-8222-222222222222",
+  "mode": "live",
+  "reason": "intermediate signing key exposure",
+  "rollback_ref": "restore the exact predecessor for the failed cohort",
+  "cohorts": [
+    {
+      "id": "canary",
+      "ordinal": 1,
+      "members": [
+        {
+          "identity_id": "33333333-3333-4333-8333-333333333333",
+          "agent_id": "44444444-4444-4444-8444-444444444444",
+          "trust_anchor_path": "/etc/trstctl/trust/replacement-root.pem"
+        }
+      ]
+    }
+  ]
+}
+```
+
 ```bash
+# This legacy mutation now refuses with H2 guidance; list/get still read history.
 trstctl-cli incidents executions execute -f incident.json
 trstctl-cli incidents fleet-reissuance start -f compromised-issuer.json
 trstctl-cli incidents fleet-reissuance pause 33333333-3333-4333-8333-333333333333 -f pause.json
@@ -428,8 +464,9 @@ notifications use the [notification integrations](policy-and-governance.md).
 
 ## Pitfalls & limits
 
-- **Serving status:** credential-compromise execution (F31) is served through
-  `/api/v1/incidents/executions`, `trstctl-cli incidents executions *`, and `/incidents`;
+- **Serving status:** historical credential-compromise execution evidence (F31) remains
+  readable through `/api/v1/incidents/executions`, `trstctl-cli incidents executions *`,
+  and `/incidents`, while its unsafe direct mutation refuses with H2 fleet guidance;
   automated remediation playbooks (CAP-REM-01) are served through
   `/api/v1/remediation/playbooks`,
   `/api/v1/remediation/playbooks/{id}/runs`,
@@ -486,7 +523,8 @@ notifications use the [notification integrations](policy-and-governance.md).
   `token_ref` only.
 - **Fleet:** `/api/v1/incidents/fleet-reissuance-runs`,
   `trstctl-cli incidents fleet-reissuance *`,
-  `incident.fleet_reissuance.recorded` — staged, health-checked, resumable.
+  `migration.run.recorded`, and `incident.fleet_reissuance.recorded` — exact-H1 planned,
+  trust-before-leaf, signed-live-gated, revoke-after-verify, resumable, and JWS-sealed.
 - **JIT:** `RequestIssuance`, `Approve`, `Deny`; default `RequiredApprovals: 2`,
   self-approval blocked.
 - **PAM-lite:** `/api/v1/access/sessions`; Postgres scoped login roles; OpenSSH user
