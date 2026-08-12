@@ -828,19 +828,29 @@ func reportPrivateKeyInventory(ctx context.Context, a *agent.Agent, ch agent.Cha
 
 func reportFoundInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, sourceKind string, found []agentdiscovery.Found, risk int, label string) error {
 	findings := make([]agent.InventoryFinding, 0, len(found))
+	findingKind := "x509_certificate"
+	if sourceKind == agentdiscovery.SourceTrustStore {
+		// A trust anchor is still an X.509 certificate, but the Graph builder must
+		// distinguish "this public certificate is installed as trusted" from an
+		// ordinary leaf inventory record. The source describes the scan; the kind
+		// describes what each resulting record means.
+		findingKind = agentdiscovery.SourceTrustStore
+	}
 	for _, f := range found {
 		meta := map[string]string{
-			"subject":       f.Cert.Subject,
-			"issuer":        f.Cert.Issuer,
-			"serial":        f.Cert.SerialNumber,
-			"key_algorithm": f.Cert.KeyAlgorithm,
-			"not_after":     f.Cert.NotAfter.Format(time.RFC3339),
+			"subject":        f.Cert.Subject,
+			"issuer":         f.Cert.Issuer,
+			"serial":         f.Cert.SerialNumber,
+			"key_algorithm":  f.Cert.KeyAlgorithm,
+			"not_after":      f.Cert.NotAfter.Format(time.RFC3339),
+			"spki_sha256":    f.Cert.SPKISHA256,
+			"subject_key_id": f.Cert.SubjectKeyID,
 		}
 		for k, v := range f.Metadata {
 			meta[k] = v
 		}
 		findings = append(findings, agent.InventoryFinding{
-			Kind:        "x509_certificate",
+			Kind:        findingKind,
 			Ref:         f.Location,
 			Provenance:  f.Source + ":" + f.Location,
 			Fingerprint: f.Cert.SHA256Fingerprint,

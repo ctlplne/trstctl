@@ -40,10 +40,14 @@ type Info struct {
 	NotBefore         time.Time
 	NotAfter          time.Time
 	SHA256Fingerprint string // hex of the DER
-	KeyAlgorithm      string
-	PublicKeyBits     int // key size in bits (RSA modulus, EC curve, 256 for Ed25519); 0 if unknown
-	IsCA              bool
-	ExtKeyUsages      []string // extended key usages, known names or dotted custom OIDs
+	// SPKISHA256 is SHA-256 over canonical SubjectPublicKeyInfo DER. Unlike the
+	// certificate fingerprint it stays stable across cross-signing, so callers
+	// can correlate the same public CA key without comparing display names.
+	SPKISHA256    string
+	KeyAlgorithm  string
+	PublicKeyBits int // key size in bits (RSA modulus, EC curve, 256 for Ed25519); 0 if unknown
+	IsCA          bool
+	ExtKeyUsages  []string // extended key usages, known names or dotted custom OIDs
 
 	// RFC 5280 profile fields surfaced for served-leaf conformance checks
 	// (PKIGOV-001). Empty/absent extensions yield empty slices.
@@ -101,6 +105,7 @@ func Inspect(raw []byte) (Info, error) {
 	}
 
 	sum := sha256.Sum256(cert.Raw)
+	spkiSum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
 	info := Info{
 		Subject:           cert.Subject.String(),
 		Issuer:            cert.Issuer.String(),
@@ -110,6 +115,7 @@ func Inspect(raw []byte) (Info, error) {
 		NotBefore:         cert.NotBefore,
 		NotAfter:          cert.NotAfter,
 		SHA256Fingerprint: hex.EncodeToString(sum[:]),
+		SPKISHA256:        hex.EncodeToString(spkiSum[:]),
 		KeyAlgorithm:      cert.PublicKeyAlgorithm.String(),
 		PublicKeyBits:     publicKeyBits(cert.PublicKey),
 		IsCA:              cert.IsCA,
@@ -219,6 +225,7 @@ func inspectDER(der []byte) (Info, error) {
 	}
 
 	sum := sha256.Sum256(cert.Raw)
+	spkiSum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
 	info := Info{
 		Subject:           cert.Subject.String(),
 		Issuer:            cert.Issuer.String(),
@@ -228,6 +235,7 @@ func inspectDER(der []byte) (Info, error) {
 		NotBefore:         cert.NotBefore,
 		NotAfter:          cert.NotAfter,
 		SHA256Fingerprint: hex.EncodeToString(sum[:]),
+		SPKISHA256:        hex.EncodeToString(spkiSum[:]),
 		KeyAlgorithm:      cert.PublicKeyAlgorithm.String(),
 		PublicKeyBits:     publicKeyBits(cert.PublicKey),
 		IsCA:              cert.IsCA,

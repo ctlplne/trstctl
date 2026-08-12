@@ -238,6 +238,12 @@ func TestAgentInventoryReportsMetadataOnlyAcrossSources(t *testing.T) {
 	}
 	if got := channel.requests[1]; got.SourceKind != agentdiscovery.SourceTrustStore || len(got.Findings) != 3 {
 		t.Fatalf("trust-store report = %+v", got)
+	} else {
+		for _, finding := range got.Findings {
+			if finding.Kind != agentdiscovery.SourceTrustStore {
+				t.Fatalf("trust-store finding kind = %q, want %q", finding.Kind, agentdiscovery.SourceTrustStore)
+			}
+		}
 	}
 	privateReport := channel.requests[2]
 	if privateReport.SourceKind != agentdiscovery.SourcePrivateKey || len(privateReport.Findings) != 1 {

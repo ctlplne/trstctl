@@ -28,6 +28,8 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jks"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -940,15 +942,50 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 	t.Cleanup(func() { chCancel(); <-chDone })
 
 	dir := t.TempDir()
+	managedCA, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "shared-root.test", TTL: time.Hour})
+	if err != nil {
+		t.Fatalf("create managed CA fixture: %v", err)
+	}
+	t.Cleanup(managedCA.Destroy)
+	crossSigner, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "cross-signer.test", TTL: time.Hour})
+	if err != nil {
+		t.Fatalf("create cross-signing CA fixture: %v", err)
+	}
+	t.Cleanup(crossSigner.Destroy)
+	crossSignedPEM, err := crossSigner.CrossSign(managedCA.CertificateDER())
+	if err != nil {
+		t.Fatalf("cross-sign managed CA fixture: %v", err)
+	}
 	certs := map[string][]byte{
-		"linux":   trustStoreFixturePEM(t, "linux-os-root.test"),
-		"java":    trustStoreFixturePEM(t, "java-cacerts-root.test"),
+		// Different certificate fingerprint, same public CA key: this is exact
+		// trust through SPKI rather than a display-name correlation.
+		"linux": crossSignedPEM,
+		// Same subject in a DIFFERENT store, with a different key: it remains
+		// visible as a candidate without entering authoritative H1/H2/H3 counts.
+		"java":    trustStoreFixturePEM(t, "shared-root.test"),
 		"nss":     trustStoreFixturePEM(t, "nss-profile-root.test"),
 		"browser": trustStoreFixturePEM(t, "browser-profile-root.test"),
 		"windows": trustStoreFixturePEM(t, "windows-root-store.test"),
 	}
 	linuxRoot := filepath.Join(dir, "linux", "anchors")
 	mustWriteFile(t, filepath.Join(linuxRoot, "corp-root.pem"), certs["linux"])
+	managedInfo, err := certinfo.Inspect(managedCA.CertificatePEM())
+	if err != nil {
+		t.Fatalf("inspect managed trust fixture: %v", err)
+	}
+	crossInfo, err := certinfo.Inspect(certs["linux"])
+	if err != nil {
+		t.Fatalf("inspect cross-signed trust fixture: %v", err)
+	}
+	if crossInfo.SHA256Fingerprint == managedInfo.SHA256Fingerprint || crossInfo.SPKISHA256 != managedInfo.SPKISHA256 {
+		t.Fatal("cross-sign fixture does not have different certificate/same SPKI identity")
+	}
+	managedIssuer, err := h.srv.orch.CreateIssuer(context.Background(), h.tenant, store.Issuer{
+		Kind: store.IssuerX509CA, Name: managedInfo.Subject, Chain: []string{string(managedCA.CertificatePEM())}, Internal: true,
+	})
+	if err != nil {
+		t.Fatalf("create managed issuer for exact trust query: %v", err)
+	}
 	javaStore := filepath.Join(dir, "java", "cacerts")
 	javaBlob, err := jks.EncodeTrustStoreDeterministic(map[string][]byte{"corp-java-root": certs["java"]}, "changeit")
 	if err != nil {
@@ -1016,6 +1053,7 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 	}
 	var findings struct {
 		Items []struct {
+			Kind        string            `json:"kind"`
 			Ref         string            `json:"ref"`
 			Provenance  string            `json:"provenance"`
 			Fingerprint string            `json:"fingerprint"`
@@ -1030,11 +1068,20 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 	}
 	seenKinds := map[string]bool{}
 	for _, f := range findings.Items {
+		if f.Kind != agentdiscovery.SourceTrustStore {
+			t.Fatalf("legacy trust-store wire finding was not canonicalized: %+v", f)
+		}
 		if !strings.HasPrefix(f.Provenance, agentdiscovery.SourceTrustStore+":") {
 			t.Fatalf("trust-store finding has wrong provenance: %+v", f)
 		}
 		if f.Fingerprint == "" {
 			t.Fatalf("trust-store finding missing fingerprint: %+v", f)
+		}
+		if f.Metadata["spki_sha256"] == "" {
+			t.Fatalf("trust-store finding missing exact public-key identity: %+v", f)
+		}
+		if f.Metadata["host"] != "edge-agent-truststores" {
+			t.Fatalf("trust-store finding host was not derived from verified agent identity: %+v", f)
 		}
 		seenKinds[f.Metadata["trust_store_kind"]] = true
 		if f.Metadata["private_key_present"] != "false" {
@@ -1062,12 +1109,38 @@ func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
 	}
 	graphTrustAnchors := 0
 	for _, n := range graphResp.Nodes {
-		if n.Kind == "credential" && n.Attrs["credential_kind"] == "x509_certificate" && strings.HasPrefix(n.Attrs["provenance"], agentdiscovery.SourceTrustStore+":") {
+		if n.Kind == "credential" && n.Attrs["credential_kind"] == "trust-anchor" && strings.HasPrefix(n.Attrs["provenance"], agentdiscovery.SourceTrustStore+":") {
 			graphTrustAnchors++
 		}
 	}
 	if graphTrustAnchors != len(certs) {
 		t.Fatalf("credential graph has %d trust-store cert nodes, want %d", graphTrustAnchors, len(certs))
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/graph/trust-stores/iss:"+managedIssuer.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get exact trust-store correlation: status %d body %s", status, body)
+	}
+	var trust struct {
+		Stores []struct {
+			Attrs map[string]string `json:"attrs"`
+		} `json:"stores"`
+		CandidateStores []struct {
+			Attrs map[string]string `json:"attrs"`
+		} `json:"candidate_stores"`
+		StoreCount          int `json:"store_count"`
+		HostCount           int `json:"host_count"`
+		CandidateStoreCount int `json:"candidate_store_count"`
+		CandidateHostCount  int `json:"candidate_host_count"`
+	}
+	if err := json.Unmarshal(body, &trust); err != nil {
+		t.Fatalf("decode exact trust-store correlation: %v body=%s", err, body)
+	}
+	if trust.StoreCount != 1 || trust.HostCount != 1 || trust.CandidateStoreCount != 1 || trust.CandidateHostCount != 1 {
+		t.Fatalf("exact/candidate trust counts = %+v, want 1 exact and 1 same-subject candidate", trust)
+	}
+	if trust.Stores[0].Attrs["host"] != "edge-agent-truststores" || trust.CandidateStores[0].Attrs["host"] != "edge-agent-truststores" {
+		t.Fatalf("trust-store host identities = %+v, want the one verified reporting agent", trust)
 	}
 }
 
@@ -1238,12 +1311,15 @@ func trustStoreInventoryFindings(found []agentdiscovery.Found) []transport.Inven
 			"serial":              f.Cert.SerialNumber,
 			"key_algorithm":       f.Cert.KeyAlgorithm,
 			"not_after":           f.Cert.NotAfter.Format(time.RFC3339),
+			"spki_sha256":         f.Cert.SPKISHA256,
+			"subject_key_id":      f.Cert.SubjectKeyID,
 			"private_key_present": "false",
 		}
 		for k, v := range f.Metadata {
 			meta[k] = v
 		}
 		out = append(out, transport.InventoryFinding{
+			// Exercise receiver compatibility with agents deployed before AUD-43.
 			Kind:        "x509_certificate",
 			Ref:         f.Location,
 			Provenance:  f.Source + ":" + f.Location,

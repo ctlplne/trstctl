@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphBlastRadius: vi.fn(),
     graphReachable: vi.fn(),
     graphQuery: vi.fn(),
+    graphTrustStores: vi.fn(),
   },
 }));
 
@@ -49,6 +50,45 @@ describe("POL-01 graph polish", () => {
       nodes: [{ id: "workload:payments", kind: "workload", name: "payments-api" }],
     });
     apiMock.graphQuery.mockResolvedValue({ rows: [{ credential: "payments-cert", workload: "payments-api" }] });
+    apiMock.graphTrustStores.mockResolvedValue({
+      issuer: "iss:managed",
+      stores: [{ id: "ts:web01:java", kind: "trust-store", name: "Cross-signed Java store", attrs: { host: "web01" } }],
+      hosts: [{ id: "res:web01", kind: "resource", name: "web01" }],
+      store_count: 1,
+      host_count: 1,
+      candidate_stores: [],
+      candidate_hosts: [],
+      candidate_store_count: 0,
+      candidate_host_count: 0,
+      guidance: "Exact certificate or SPKI identity only.",
+    });
+  });
+
+  it("keeps same-subject trust candidates visibly separate from authoritative counts", async () => {
+    const user = userEvent.setup();
+    apiMock.graph.mockResolvedValue({
+      nodes: [{ id: "iss:managed", kind: "issuer", name: "Corp Root" }],
+      edges: [],
+    });
+    apiMock.graphTrustStores.mockResolvedValue({
+      issuer: "iss:managed",
+      stores: [{ id: "ts:web01:java", kind: "trust-store", name: "Cross-signed Java store", attrs: { host: "web01" } }],
+      hosts: [{ id: "res:web01", kind: "resource", name: "web01" }],
+      store_count: 1,
+      host_count: 1,
+      candidate_stores: [{ id: "ts:web01:os", kind: "trust-store", name: "OS store", attrs: { host: "web01" } }],
+      candidate_hosts: [{ id: "res:web01", kind: "resource", name: "web01" }],
+      candidate_store_count: 1,
+      candidate_host_count: 1,
+      guidance: "Exact SPKI trust. 1 unverified subject-only candidate stores across 1 hosts are excluded from authoritative counts and automation.",
+    });
+    renderGraph();
+
+    await user.click(await screen.findByRole("button", { name: "Select graph node Corp Root" }));
+    expect(await screen.findByText(/Exact SPKI trust.*1 unverified subject-only candidate stores across 1 hosts/)).toBeInTheDocument();
+    expect(screen.getByText("1 trust stores across 1 hosts.")).toBeInTheDocument();
+    expect(screen.getByText("Cross-signed Java store")).toBeInTheDocument();
+    expect(apiMock.graphTrustStores).toHaveBeenCalledWith("iss:managed");
   });
 
   it("keeps query controls behind an advanced tab and renders node choices as a list", async () => {

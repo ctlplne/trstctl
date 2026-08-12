@@ -2513,12 +2513,15 @@ than sending an operator looking for a credential that was never there.
   cacerts is two stores and one machine to visit. A store is its own node rather
   than a host attribute on purpose: a machine routinely carries several with
   DIFFERENT contents, so "is this CA trusted on host X" has no single answer.
-  Scope, stated exactly: discovered anchors are matched to a managed issuer by
-  SUBJECT NAME, the only correspondence the two share — a name match is not proof
-  they are the same key, so the anchor node carries the fingerprint for
-  confirmation, and the served guidance says so. Stores nobody has scanned do not
-  appear, which is the honest answer rather than a reassuring one; a CA showing
-  zero trusting stores means none have been observed, not that none exist.
+  Scope, stated exactly: an authoritative store → issuer edge requires either the
+  same certificate SHA-256 fingerprint or the same SPKI SHA-256 public-key
+  identity. The SPKI path deliberately recognizes a cross-signed copy of the same
+  CA key. A subject-name-only match is exposed separately as an unverified
+  candidate and is excluded from authoritative store/host counts, blast-radius
+  traversal, and automation; two roots can share a subject while holding different
+  keys. Stores nobody has scanned do not appear, which is the honest answer rather
+  than a reassuring one; a CA showing zero trusting stores means none have been
+  observed, not that none exist.
 - Third-party secret scanning: CI/CD log, container-registry, Slack, and Jira
   artifact scanning is served through
   `/api/v1/secrets/scans/third-party/{provider}/ingest` and the matching CLI.

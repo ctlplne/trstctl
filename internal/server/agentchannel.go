@@ -84,6 +84,12 @@ const agentMaxConcurrentStreams uint32 = 256
 
 const agentMaxInventoryFindings = 1000
 
+// agentTrustStoreFindingKind is the stable on-wire kind for a certificate that
+// was observed as an installed trust anchor. Agents before AUD-43 sent the source
+// kind correctly but left each finding as x509_certificate, so the receiver keeps
+// a narrow compatibility translation for that one historical shape.
+const agentTrustStoreFindingKind = "trust-store"
+
 type agentChannelService interface {
 	transport.AgentServiceServer
 	transport.AgentJobServiceServer
@@ -618,7 +624,34 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 	}
 	findings := make([]store.DiscoveryFinding, 0, len(req.Findings))
 	for _, f := range req.Findings {
-		meta, err := metadataJSON(f.Metadata)
+		kind := f.Kind
+		if req.SourceKind == agentTrustStoreFindingKind {
+			switch kind {
+			case agentTrustStoreFindingKind:
+				// Current agents already send the canonical kind.
+			case "x509_certificate":
+				// Backward compatibility for already deployed agents. This changes
+				// classification only; the exact certificate/SPKI identity still
+				// decides whether an authoritative Graph edge may exist.
+				kind = agentTrustStoreFindingKind
+			default:
+				return nil, status.Errorf(codes.InvalidArgument, "trust-store inventory finding %q has unsupported kind %q", f.Ref, f.Kind)
+			}
+		} else if kind == agentTrustStoreFindingKind {
+			return nil, status.Errorf(codes.InvalidArgument, "trust-store inventory finding %q requires source kind %q", f.Ref, agentTrustStoreFindingKind)
+		}
+		findingMetadata := f.Metadata
+		if kind == agentTrustStoreFindingKind {
+			// The peer certificate, not client-provided metadata or a certificate
+			// path, names the machine for H1 host counts. Clone before stamping so
+			// request objects remain immutable to interceptors and tests.
+			findingMetadata = make(map[string]string, len(f.Metadata)+1)
+			for key, value := range f.Metadata {
+				findingMetadata[key] = value
+			}
+			findingMetadata["host"] = info.CommonName
+		}
+		meta, err := metadataJSON(findingMetadata)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "inventory finding %q metadata: %v", f.Ref, err)
 		}
@@ -630,7 +663,7 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 			risk = 100
 		}
 		findings = append(findings, store.DiscoveryFinding{
-			Kind: f.Kind, Ref: f.Ref, Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			Kind: kind, Ref: f.Ref, Provenance: f.Provenance, Fingerprint: f.Fingerprint,
 			RiskScore: risk, Metadata: meta,
 		})
 	}

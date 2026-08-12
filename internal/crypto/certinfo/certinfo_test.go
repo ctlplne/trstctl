@@ -76,11 +76,30 @@ func TestInspectExtractsMetadata(t *testing.T) {
 	if len(info.SHA256Fingerprint) != 64 {
 		t.Errorf("SHA256Fingerprint = %q, want 64 hex chars", info.SHA256Fingerprint)
 	}
+	if len(info.SPKISHA256) != 64 {
+		t.Errorf("SPKISHA256 = %q, want 64 hex chars", info.SPKISHA256)
+	}
 	if d := info.NotAfter.Sub(info.NotBefore); d < 24*time.Hour || d > 26*time.Hour {
 		t.Errorf("validity = %v, want ~25h", d)
 	}
 	if info.Subject == "" || info.Issuer == "" {
 		t.Errorf("subject/issuer = %q / %q", info.Subject, info.Issuer)
+	}
+}
+
+func TestInspectAllPreservesSPKIIdentity(t *testing.T) {
+	t.Parallel()
+	pemBytes, _ := testCert(t)
+	direct, err := Inspect(pemBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, err := InspectAll(pemBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chain) != 1 || chain[0].SPKISHA256 == "" || chain[0].SPKISHA256 != direct.SPKISHA256 {
+		t.Fatalf("chain SPKI identity = %+v, want direct identity %q", chain, direct.SPKISHA256)
 	}
 }
 

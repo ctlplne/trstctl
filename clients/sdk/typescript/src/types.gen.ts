@@ -7783,6 +7783,10 @@ export interface components {
             nodes: components["schemas"]["GraphNode"][];
         };
         GraphTrustStores: {
+            candidate_host_count?: number;
+            candidate_hosts?: components["schemas"]["GraphNode"][];
+            candidate_store_count?: number;
+            candidate_stores?: components["schemas"]["GraphNode"][];
             guidance: string;
             host_count: number;
             hosts: components["schemas"]["GraphNode"][];

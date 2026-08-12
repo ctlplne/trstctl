@@ -59,11 +59,20 @@ func TestAnUnobservedCAReportsZeroWithAnHonestExplanation(t *testing.T) {
 	// The served guidance has to close the gap between "we found none" and
 	// "there are none", because acting on the second when you have the first is
 	// how a root gets retired out from under a fleet nobody scanned.
-	for _, phrase := range []string{"observed", "not what exists"} {
-		if !contains(trustStoreGuidance, phrase) {
+	guidance := trustStoreGuidanceForCounts(0, 0)
+	for _, phrase := range []string{"0 unverified subject-only candidate stores across 0 hosts", "observed", "not what exists", "exact certificate", "SPKI SHA-256", "unverified candidate", "excluded from counts and automation"} {
+		if !contains(guidance, phrase) {
 			t.Errorf("the trust-store guidance does not say %q; a zero would read as proof that "+
 				"nothing trusts this CA", phrase)
 		}
+	}
+}
+
+func TestTrustStoreGuidanceSeparatesCandidateCounts(t *testing.T) {
+	t.Parallel()
+	guidance := trustStoreGuidanceForCounts(3, 2)
+	if !contains(guidance, "3 unverified subject-only candidate stores across 2 hosts") {
+		t.Fatalf("candidate guidance did not preserve separate store/host counts: %q", guidance)
 	}
 }
 

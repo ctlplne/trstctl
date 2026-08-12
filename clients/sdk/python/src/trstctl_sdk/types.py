@@ -3593,6 +3593,10 @@ GraphResponse = TypedDict(
 GraphTrustStores = TypedDict(
     'GraphTrustStores',
     {
+        'candidate_host_count': int,
+        'candidate_hosts': list[dict[str, Any]],
+        'candidate_store_count': int,
+        'candidate_stores': list[dict[str, Any]],
         'guidance': str,
         'host_count': int,
         'hosts': list[dict[str, Any]],

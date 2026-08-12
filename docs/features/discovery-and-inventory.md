@@ -148,8 +148,14 @@ same thing as a deployed service certificate. The agent reads public trust ancho
 OS trust directories, Java `cacerts`/JKS files, NSS profile exports, browser profile
 exports, and Windows trust-store enumerators, tagging each finding with
 `trust_store_kind` (`os`, `java`, `nss`, `browser`, or `windows`) and
-`private_key_present=false`, so the control plane can answer "what does this host
-trust?" without ever moving a key.
+`private_key_present=false`. It also reports the certificate SHA-256 fingerprint
+and SPKI SHA-256 public-key identity. The graph counts a store as trusting a managed
+issuer only when one of those exact identities matches; a subject-name-only match
+is a separately visible unverified candidate, not an authoritative edge. This lets
+the control plane answer "what does this host trust?" without ever moving a key or
+mistaking two same-name roots for the same authority. The control plane stamps the
+host from the reporting agent's verified mTLS identity, so several stores or anchor
+paths on one machine remain several stores across one host.
 
 Private-key-material discovery answers the companion question: "what sensitive key
 files exist here?" Point the agent at canary directories with

@@ -53,13 +53,21 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		return nil, err
 	}
 	issuerByName := make(map[string]string, len(issuers)) // issuer name → node ID
+	issuerAnchors := newIssuerAnchorIndex(issuers)
 	for _, is := range issuers {
 		nid := issuerID(is.ID)
+		attrs := map[string]string{"issuer_kind": string(is.Kind)}
+		if info, ok := managedIssuerCertificateInfo(is); ok {
+			attrs["certificate_subject"] = info.Subject
+			attrs["certificate_fingerprint"] = info.SHA256Fingerprint
+			attrs["spki_sha256"] = info.SPKISHA256
+			attrs["subject_key_id"] = info.SubjectKeyID
+		}
 		g.AddNode(Node{
 			ID:    nid,
 			Kind:  KindIssuer,
 			Name:  is.Name,
-			Attrs: map[string]string{"issuer_kind": string(is.Kind)},
+			Attrs: attrs,
 		})
 		issuerByName[is.Name] = nid
 	}
@@ -198,7 +206,7 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		// H1: a trust-store anchor becomes a relationship rather than another
 		// flat credential row. Handled first so the generic path below does not
 		// also emit a duplicate node for it.
-		if addTrustStoreFinding(g, f, issuerByName) {
+		if addTrustStoreFinding(g, f, issuerAnchors) {
 			continue
 		}
 		nid := "disc:" + f.ID

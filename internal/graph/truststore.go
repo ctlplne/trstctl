@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -40,14 +41,83 @@ const trustStoreFindingKind = "trust-store"
 // trustStoreMeta is the subset of a finding's metadata this promotion reads.
 type trustStoreMeta struct {
 	TrustStoreKind string `json:"trust_store_kind"`
-	Platform       string `json:"platform"`
-	Browser        string `json:"browser"`
-	Profile        string `json:"profile"`
-	// Subject is the anchor's subject as the agent read it. It is how an anchor
-	// is matched to a known issuer when no fingerprint correspondence exists.
+	// Host is stamped by the control plane from the reporting agent's verified
+	// mTLS identity. It must not come from client-controlled path metadata.
+	Host     string `json:"host"`
+	Platform string `json:"platform"`
+	Browser  string `json:"browser"`
+	Profile  string `json:"profile"`
+	// Subject is the anchor's display identity as the agent read it. It is only
+	// used to expose an unverified candidate when exact public identity is absent;
+	// it never authorizes a TRUSTS edge.
 	Subject string `json:"subject"`
 	// Issuer names the anchor's issuer for a non-self-signed entry.
 	Issuer string `json:"issuer"`
+	// SPKISHA256 is the stable hash of the anchor's public key. It lets a
+	// cross-signed certificate match the same managed CA key even though the two
+	// certificate fingerprints differ.
+	SPKISHA256   string `json:"spki_sha256"`
+	SubjectKeyID string `json:"subject_key_id"`
+}
+
+// issuerAnchorIndex is the exact public identity shared by managed issuers and
+// discovered trust anchors. Values are slices because a tenant may deliberately
+// register aliases for the same public authority; hiding one would make graph
+// output depend on insertion order.
+type issuerAnchorIndex struct {
+	byCertificate map[string][]string
+	bySPKI        map[string][]string
+	bySubject     map[string][]string
+}
+
+func newIssuerAnchorIndex(issuers []store.Issuer) issuerAnchorIndex {
+	idx := issuerAnchorIndex{
+		byCertificate: map[string][]string{},
+		bySPKI:        map[string][]string{},
+		bySubject:     map[string][]string{},
+	}
+	for _, issuer := range issuers {
+		nodeID := issuerID(issuer.ID)
+		addIssuerAnchorIndex(idx.bySubject, issuer.Name, nodeID)
+		info, ok := managedIssuerCertificateInfo(issuer)
+		if !ok {
+			continue
+		}
+		addIssuerAnchorIndex(idx.byCertificate, info.SHA256Fingerprint, nodeID)
+		addIssuerAnchorIndex(idx.bySPKI, info.SPKISHA256, nodeID)
+		addIssuerAnchorIndex(idx.bySubject, info.Subject, nodeID)
+	}
+	return idx
+}
+
+func managedIssuerCertificateInfo(issuer store.Issuer) (certinfo.Info, bool) {
+	if issuer.Kind != store.IssuerX509CA || len(issuer.Chain) == 0 {
+		return certinfo.Info{}, false
+	}
+	// The first certificate is the issuer itself. Ancestors are deliberately
+	// not indexed: treating a chain root as the intermediate's identity would
+	// recreate the same false blast-radius edge one level higher.
+	info, err := certinfo.Inspect([]byte(issuer.Chain[0]))
+	return info, err == nil
+}
+
+func addIssuerAnchorIndex(index map[string][]string, identity, nodeID string) {
+	identity = normalizeAnchorIdentity(identity)
+	if identity == "" || nodeID == "" {
+		return
+	}
+	for _, existing := range index[identity] {
+		if existing == nodeID {
+			return
+		}
+	}
+	index[identity] = append(index[identity], nodeID)
+}
+
+func normalizeAnchorIdentity(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, ":", "")
+	return value
 }
 
 // trustStoreNodeID keys a store by the host that reported it and the store's
@@ -86,7 +156,7 @@ func trustStoreName(meta trustStoreMeta, host string) string {
 //
 // Returns false when the finding is not a trust-store anchor, so the caller's
 // ordinary credential handling still runs for everything else.
-func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuerByName map[string]string) bool {
+func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuers issuerAnchorIndex) bool {
 	if f.Kind != trustStoreFindingKind {
 		return false
 	}
@@ -101,7 +171,10 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuerByName map[s
 		meta.TrustStoreKind = trustStoreFindingKind
 	}
 
-	host := f.Provenance
+	// Historical findings predate the receiver-stamped host. Provenance fallback
+	// preserves their visibility, but current reports count one verified machine
+	// once even when it carries several stores or anchor paths.
+	host := firstNonEmpty(strings.TrimSpace(meta.Host), f.Provenance)
 	storeNode := trustStoreNodeID(host, meta.TrustStoreKind, meta.Profile)
 	g.AddNode(Node{
 		ID:   storeNode,
@@ -133,6 +206,8 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuerByName map[s
 		Attrs: map[string]string{
 			"credential_kind": "trust-anchor",
 			"fingerprint":     f.Fingerprint,
+			"spki_sha256":     meta.SPKISHA256,
+			"subject_key_id":  meta.SubjectKeyID,
 			"subject":         meta.Subject,
 			"issuer":          meta.Issuer,
 			"discovery_ref":   f.Ref,
@@ -141,17 +216,24 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuerByName map[s
 	})
 	g.AddEdge(Edge{From: storeNode, To: anchorNode, Type: EdgeTrusts})
 
-	// And, when the anchor corresponds to an issuer this tenant knows about, the
-	// edge that makes the inverse query answerable: store → issuer.
-	//
-	// Matching is by NAME, and that deserves saying plainly: it is the only
-	// correspondence available, because a discovered anchor carries a subject
-	// string and a managed issuer carries a name. A name match is not proof the
-	// two are the same key. The edge is therefore a claim about what the estate
-	// APPEARS to trust, and an operator confirming a rollover should check the
-	// fingerprint — which is why it is on the anchor node.
-	if nid, ok := issuerByName[strings.TrimSpace(meta.Subject)]; ok && meta.Subject != "" {
-		g.AddEdge(Edge{From: storeNode, To: nid, Type: EdgeTrusts})
+	// Exact public identity is the only authority for TRUSTS. Certificate
+	// fingerprint handles the ordinary case; SPKI handles cross-signed copies of
+	// the same CA key. A matching subject alone remains visible as a candidate,
+	// but it cannot enter authoritative counts, blast-radius automation, H2, or H3.
+	exact := map[string]bool{}
+	for _, nodeID := range issuers.byCertificate[normalizeAnchorIdentity(f.Fingerprint)] {
+		exact[nodeID] = true
+	}
+	for _, nodeID := range issuers.bySPKI[normalizeAnchorIdentity(meta.SPKISHA256)] {
+		exact[nodeID] = true
+	}
+	for nodeID := range exact {
+		g.AddEdge(Edge{From: storeNode, To: nodeID, Type: EdgeTrusts})
+	}
+	for _, nodeID := range issuers.bySubject[normalizeAnchorIdentity(meta.Subject)] {
+		if !exact[nodeID] {
+			g.AddEdge(Edge{From: storeNode, To: nodeID, Type: EdgeTrustCandidate})
+		}
 	}
 	return true
 }
@@ -163,19 +245,36 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuerByName map[s
 // hosts". Hosts are counted DISTINCTLY, because a host with an OS store and a
 // JVM store contributes two stores and one machine to visit.
 func (g *Graph) TrustStoresForIssuer(issuerNodeID string) (stores []Node, hosts []Node) {
+	return g.trustStoresForIssuerEdge(issuerNodeID, EdgeTrusts, false)
+}
+
+// TrustCandidatesForIssuer returns subject-only correlations that need operator
+// confirmation. A store with an exact edge to the same issuer is excluded even
+// if it also contains another same-subject anchor.
+func (g *Graph) TrustCandidatesForIssuer(issuerNodeID string) (stores []Node, hosts []Node) {
+	return g.trustStoresForIssuerEdge(issuerNodeID, EdgeTrustCandidate, true)
+}
+
+func (g *Graph) trustStoresForIssuerEdge(issuerNodeID string, edgeType EdgeType, excludeExact bool) (stores []Node, hosts []Node) {
 	seenHost := map[string]bool{}
 	for _, n := range g.nodes {
 		if n.Kind != KindTrustStore {
 			continue
 		}
-		trusts := false
+		matches := false
+		exact := false
 		for _, e := range g.out[n.ID] {
-			if e.Type == EdgeTrusts && e.To == issuerNodeID {
-				trusts = true
-				break
+			if e.To != issuerNodeID {
+				continue
+			}
+			if e.Type == edgeType {
+				matches = true
+			}
+			if e.Type == EdgeTrusts {
+				exact = true
 			}
 		}
-		if !trusts {
+		if !matches || (excludeExact && exact) {
 			continue
 		}
 		stores = append(stores, n)

@@ -670,6 +670,10 @@ trstctl-agent --enroll-url https://localhost:8443 \
   --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 trstctl-cli discovery findings list
 
+# Correlate one managed issuer to observed trust stores. Authoritative counts use
+# exact certificate/SPKI identity; name-only candidates are returned separately.
+trstctl-cli graph trust-stores iss:<issuer-id>
+
 # In a cluster, add --inventory-k8s-secrets to inventory the kubernetes.io/tls
 # Secrets in the agent's own namespace (reads tls.crt, never tls.key; needs list
 # access to Secrets in that namespace, and sees only that namespace).

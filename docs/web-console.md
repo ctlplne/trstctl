@@ -220,7 +220,12 @@ create-grant-verify loop in-console.
 
 The credential graph as an explorer: pick a node and see its blast radius — every
 workload and resource that depends on it — backed by
-`/api/v1/graph/blast-radius/{id}`. See [Graph, query & AI](features/graph-query-ai.md).
+`/api/v1/graph/blast-radius/{id}`. Selecting an X.509 issuer also shows trust stores
+and distinct hosts whose discovered anchor has the exact certificate fingerprint or
+SPKI public-key identity. Same-subject/different-key matches appear in a separate
+unverified-candidate count and never inflate authoritative trust or automation.
+Backed by `/api/v1/graph/trust-stores/{id}`. See
+[Graph, query & AI](features/graph-query-ai.md).
 
 ### Compliance, audit & policy (`/policy`, `/audit`)
 

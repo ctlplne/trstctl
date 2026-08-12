@@ -3388,10 +3388,13 @@ func componentSchemas() map[string]*Schema {
 	migrationRunActionRequest := object(map[string]*Schema{"reason": str()})
 	// H1: who trusts a CA, and where those stores live.
 	graphTrustStores := object(map[string]*Schema{
-		"issuer":      str(),
-		"stores":      {Type: "array", Items: ref("GraphNode")},
-		"hosts":       {Type: "array", Items: ref("GraphNode")},
-		"store_count": {Type: "integer"}, "host_count": {Type: "integer"},
+		"issuer":           str(),
+		"stores":           {Type: "array", Items: ref("GraphNode")},
+		"hosts":            {Type: "array", Items: ref("GraphNode")},
+		"candidate_stores": {Type: "array", Items: ref("GraphNode")},
+		"candidate_hosts":  {Type: "array", Items: ref("GraphNode")},
+		"store_count":      {Type: "integer"}, "host_count": {Type: "integer"},
+		"candidate_store_count": {Type: "integer"}, "candidate_host_count": {Type: "integer"},
 		"guidance": str(),
 	}, "issuer", "stores", "hosts", "store_count", "host_count", "guidance")
 

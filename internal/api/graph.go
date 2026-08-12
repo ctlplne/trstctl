@@ -3,6 +3,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"trstctl.com/trstctl/internal/graph"
@@ -125,17 +126,26 @@ type trustStoresResponse struct {
 	Hosts      []graph.Node `json:"hosts"`
 	StoreCount int          `json:"store_count"`
 	HostCount  int          `json:"host_count"`
+	// Candidate stores share only a subject string. They are deliberately
+	// separate from authoritative stores and excluded from automation.
+	CandidateStores     []graph.Node `json:"candidate_stores"`
+	CandidateHosts      []graph.Node `json:"candidate_hosts"`
+	CandidateStoreCount int          `json:"candidate_store_count"`
+	CandidateHostCount  int          `json:"candidate_host_count"`
 	// Guidance travels with the data rather than living in documentation nobody
 	// opens during a rollover.
 	Guidance string `json:"guidance"`
 }
 
 const trustStoreGuidance = "Every row here is a trust store some agent actually read on some host, " +
-	"promoted from a flat finding into a relationship. Anchors are matched to a managed issuer by " +
-	"SUBJECT NAME, which is the only correspondence a discovered anchor and a managed CA share — a " +
-	"name match is not proof the two are the same key, so confirm the anchor's fingerprint before " +
-	"acting on a rollover. Stores nobody has scanned do not appear at all, which is the honest " +
-	"answer rather than a reassuring one: this is what has been observed, not what exists."
+	"promoted from a flat finding into a relationship. Authoritative trust requires an exact certificate " +
+	"fingerprint or SPKI SHA-256 match. A shared subject name is shown only as an unverified candidate " +
+	"and is excluded from counts and automation. Stores nobody has scanned do not appear at all: this " +
+	"is what has been observed, not what exists."
+
+func trustStoreGuidanceForCounts(candidateStores, candidateHosts int) string {
+	return fmt.Sprintf("%d unverified subject-only candidate stores across %d hosts are excluded from authoritative counts and automation. ", candidateStores, candidateHosts) + trustStoreGuidance
+}
 
 // graphTrustStores lists the trust stores that carry a given issuer's anchor.
 func (a *API) graphTrustStores(w http.ResponseWriter, r *http.Request) {
@@ -158,11 +168,14 @@ func (a *API) graphTrustStores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stores, hosts := g.TrustStoresForIssuer(id)
+	candidateStores, candidateHosts := g.TrustCandidatesForIssuer(id)
 	a.writeJSON(w, http.StatusOK, trustStoresResponse{
 		Issuer: id,
 		Stores: nonNilNodes(stores), Hosts: nonNilNodes(hosts),
 		StoreCount: len(stores), HostCount: len(hosts),
-		Guidance: trustStoreGuidance,
+		CandidateStores: nonNilNodes(candidateStores), CandidateHosts: nonNilNodes(candidateHosts),
+		CandidateStoreCount: len(candidateStores), CandidateHostCount: len(candidateHosts),
+		Guidance: trustStoreGuidanceForCounts(len(candidateStores), len(candidateHosts)),
 	})
 }
 

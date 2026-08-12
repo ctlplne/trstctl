@@ -9763,6 +9763,24 @@
       },
       "GraphTrustStores": {
         "properties": {
+          "candidate_host_count": {
+            "type": "integer"
+          },
+          "candidate_hosts": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          },
+          "candidate_store_count": {
+            "type": "integer"
+          },
+          "candidate_stores": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          },
           "guidance": {
             "type": "string"
           },

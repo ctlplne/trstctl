@@ -47,6 +47,10 @@ const (
 	// answers "who breaks if this changes" — which is the question a rollover
 	// or an incident actually asks.
 	EdgeTrusts EdgeType = "TRUSTS"
+	// EdgeTrustCandidate is a subject-only issuer correlation. It is visible in
+	// graph/API/console evidence but excluded from default traversal and every
+	// authoritative trust count. Callers must ask for this edge type explicitly.
+	EdgeTrustCandidate EdgeType = "UNVERIFIED_TRUST_CANDIDATE"
 	// EdgeHosts is resource → trust store located on it (epic H1).
 	//
 	// It is what turns "N stores" into "N stores across M hosts". Without it a
@@ -136,10 +140,12 @@ func (g *Graph) Edges() []Edge {
 }
 
 // allows reports whether an edge of type t is permitted by the (possibly empty)
-// type filter. An empty filter permits every type.
+// type filter. An empty filter permits every authoritative type; an unverified
+// candidate must be requested explicitly so default blast-radius traversal cannot
+// turn a display-name similarity into an automation input.
 func allows(types []EdgeType, t EdgeType) bool {
 	if len(types) == 0 {
-		return true
+		return t != EdgeTrustCandidate
 	}
 	for _, want := range types {
 		if want == t {

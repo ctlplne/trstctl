@@ -2517,6 +2517,10 @@ export interface GraphResponse {
 }
 
 export interface GraphTrustStores {
+  candidate_host_count?: number;
+  candidate_hosts?: GraphNode[];
+  candidate_store_count?: number;
+  candidate_stores?: GraphNode[];
   guidance: string;
   host_count: number;
   hosts: GraphNode[];
