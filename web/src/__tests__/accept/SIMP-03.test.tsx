@@ -50,7 +50,7 @@ function renderAudit(initialEntry = "/audit") {
 
 function evidencePack(framework: "soc2" | "cnsa-2.0") {
   return {
-    format: "trstctl.compliance.evidence-pack.v3",
+    format: "trstctl.compliance.evidence-pack.v4",
     framework,
     public_key_der: "BASE64PUBLICKEY",
     custody: {
@@ -62,6 +62,7 @@ function evidencePack(framework: "soc2" | "cnsa-2.0") {
       exportability: { exportable: 0, non_exportable: 0 },
       unrecorded_certificates: [],
     },
+    adcs: { observations: [], drift: [] },
     signed_export: {
       manifest: {
         framework,
@@ -314,7 +315,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
 
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalledWith("soc2"));
     expect(await screen.findByRole("heading", { name: "SOC 2 evidence pack" })).toBeInTheDocument();
-    expect(screen.getByText("trstctl.compliance.evidence-pack.v3")).toBeInTheDocument();
+    expect(screen.getByText("trstctl.compliance.evidence-pack.v4")).toBeInTheDocument();
     expect(screen.getByText("3 controls")).toBeInTheDocument();
     expect(screen.getByText("2 evidenced")).toBeInTheDocument();
     expect(screen.getByText("1 gap")).toBeInTheDocument();

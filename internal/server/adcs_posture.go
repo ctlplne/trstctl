@@ -93,7 +93,8 @@ func (s *Server) recordADCSInventory(ctx context.Context, tenantID, agentName, i
 		adcs.InventoryObserved{
 			RunID: intent.ID, SourceID: intent.SourceID, Domain: domain,
 			AgentID: agentID, AgentName: agentName, DirectoryVerified: report.DirectoryVerified,
-			Templates: report.Inventory.Templates, Findings: report.Findings,
+			Templates: report.Inventory.Templates, EnrollmentServices: report.Inventory.EnrollmentServices,
+			Findings: report.Findings,
 		}); err != nil {
 		return err
 	}
@@ -123,13 +124,13 @@ func adcsDomainFor(templates []adcs.Template) string {
 }
 
 // adcsPostureView serves source lifecycle and observed template posture to the API.
-func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.ADCSInventorySource, []api.ADCSTemplate, error) {
+func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.ADCSInventorySource, []api.ADCSTemplate, []api.ADCSEnrollmentService, error) {
 	if s.store == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	monitoring, err := s.store.ListDiscoveryMonitoringSources(ctx, tenantID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	sources := make([]api.ADCSInventorySource, 0)
 	for _, source := range monitoring {
@@ -150,7 +151,7 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 	}
 	rows, err := s.store.ListADCSTemplatePosture(ctx, tenantID, 500)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	out := make([]api.ADCSTemplate, 0, len(rows))
 	for _, row := range rows {
@@ -182,7 +183,48 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 			ObservedBy: row.ObservedBy, ObservedAt: row.ObservedAt,
 		})
 	}
-	return sources, out, nil
+	serviceRows, err := s.store.ListADCSEnrollmentServicePosture(ctx, tenantID, 500)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	services := make([]api.ADCSEnrollmentService, 0, len(serviceRows))
+	for _, row := range serviceRows {
+		var observed adcs.EnrollmentService
+		if err := json.Unmarshal(row.ObservedService, &observed); err != nil {
+			return nil, nil, nil, fmt.Errorf("decode projected AD CS enrollment service %s: %w", row.Service, err)
+		}
+		var findings []api.ADCSTemplateFinding
+		if err := json.Unmarshal(row.Findings, &findings); err != nil {
+			return nil, nil, nil, fmt.Errorf("decode projected AD CS service findings %s: %w", row.Service, err)
+		}
+		if findings == nil {
+			findings = []api.ADCSTemplateFinding{}
+		}
+		endpoints := make([]api.ADCSEnrollmentEndpoint, 0, len(observed.Endpoints))
+		for _, endpoint := range observed.Endpoints {
+			authentication := endpoint.Authentication
+			if authentication == nil {
+				authentication = []string{}
+			}
+			endpoints = append(endpoints, api.ADCSEnrollmentEndpoint{
+				Kind: string(endpoint.Kind), URL: endpoint.URL, State: string(endpoint.State),
+				HTTPStatus: endpoint.HTTPStatus, Authentication: authentication,
+				TLSVerified: endpoint.TLSVerified, ExtendedProtection: string(endpoint.ExtendedProtection),
+			})
+		}
+		webServices := row.EnrollmentWebServices
+		if webServices == nil {
+			webServices = []string{}
+		}
+		services = append(services, api.ADCSEnrollmentService{
+			Domain: row.Domain, Service: row.Service, DNSName: row.DNSName,
+			EnrollmentWebServices: webServices, Endpoints: endpoints,
+			AgentRestrictionState: row.AgentRestrictionState, AgentRestrictionSource: row.AgentRestrictionSource,
+			WorstSeverity: row.WorstSeverity, Findings: findings,
+			ObservedBy: row.ObservedBy, ObservedAt: row.ObservedAt,
+		})
+	}
+	return sources, out, services, nil
 }
 
 // adcsDriftView turns the immutable discovery-finding projection back into its

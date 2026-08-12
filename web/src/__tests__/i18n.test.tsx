@@ -272,6 +272,12 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // AUD-37 AD CS evidence re-pin: twenty-three keys expose configured IIS
+      // probes, CA restriction unknown-state honesty, exact endpoint evidence,
+      // signed compliance references, and an explicit private-CIDR SSRF
+      // boundary. Technical endpoint-kind tokens, CIDRs, and HTTP stay
+      // byte-identical. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
+      // REVIEW before release.
       // AUD-41 incident-wave re-pin: reviewed keys explain the retired direct
       // mutation, plan-first order, and separately authorized game-day boundary.
       // B5 custody re-pin: two source.custody.* keys add the per-certificate key
@@ -622,8 +628,8 @@ describe("i18n boundary", () => {
       // name immutable before/after history, dangerous lifecycle facts, and
       // say explicitly that only a worsening change creates a notification.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "e2e0fed3ae13209bfcac7626200f8219f6d04bf12b066bdd15d93a7d63a3a814",
-      "de-DE": "5909b5b4563c994f0e526a631c0df213dcdf84b4635e08ff134a37b5b98ce791",
+      "es-ES": "2666247cce206e27d447da1e585929b27c1fa07c6738d3f5fc0fe61dbcd5e492",
+      "de-DE": "2417f71201ddc6ac73856e38da14d06f7ae1627104d8e36435130df0d39cd1e8",
     });
   });
 

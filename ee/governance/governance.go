@@ -74,6 +74,7 @@ type Report struct {
 	ProductEvidences []string                                   `json:"product_evidences"`
 	OperatorAttests  []string                                   `json:"operator_attests"`
 	FIPSProfile      *compliance.FIPSRegulatedDeploymentProfile `json:"fips_regulated_deployment_profile,omitempty"`
+	ADCS             api.ADCSComplianceEvidence                 `json:"adcs"`
 }
 
 // Reporter generates and signs reports.
@@ -100,6 +101,10 @@ func (r *Reporter) Generate(fw Framework, records []audit.Record, cbom *graph.Gr
 	p := posture(cbom)
 	c := custodyPosture(cbom)
 	idx := newEvidenceIndex(tenantID, records, cbom, window)
+	adcsEvidence, err := buildADCSComplianceEvidence(tenantID, records, window)
+	if err != nil {
+		return Report{}, err
+	}
 	var fipsProfile *compliance.FIPSRegulatedDeploymentProfile
 	if fw == FIPS140 {
 		status, err := crypto.PowerOnSelfTest(false)
@@ -122,7 +127,7 @@ func (r *Reporter) Generate(fw Framework, records []audit.Record, cbom *graph.Gr
 		TenantID: tenantID, Framework: string(fw), GeneratedAt: window.Through,
 		EvidenceWindow: window, Controls: controls, Posture: p, Custody: c,
 		ProductEvidences: productEvidencesFor(controls), OperatorAttests: operatorAttestsFor(fw),
-		FIPSProfile: fipsProfile,
+		FIPSProfile: fipsProfile, ADCS: adcsEvidence,
 	}, nil
 }
 

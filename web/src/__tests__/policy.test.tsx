@@ -34,6 +34,60 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
+const complianceADCSEvidence = {
+  observations: [
+    {
+      reference: {
+        event_id: "evt-adcs-observed",
+        event_type: "adcs.template.inventory.observed",
+        sequence: 47,
+        digest: "sha256:adcs-observed",
+        observed_at: "2026-06-30T13:00:00Z",
+      },
+      run_id: "run-adcs",
+      source_id: "source-adcs",
+      domain: "CORP-CA",
+      agent_id: "agent-adcs",
+      agent_name: "relay-adcs",
+      directory_verified: true,
+      inventory: {
+        templates: [
+          {
+            name: "UserAuth",
+            enrollee_supplies_subject: true,
+            enrollee_supplies_san: false,
+            requires_manager_approval: false,
+            exportable_key: false,
+            enrollment_principals: ["S-1-5-11"],
+            published_by: ["CORP-CA"],
+          },
+        ],
+        enrollment_services: [
+          {
+            name: "CORP-CA",
+            agent_restrictions: { state: "unobserved", source: "requires_windows_relay" },
+            endpoints: [],
+          },
+        ],
+      },
+      findings: [
+        {
+          template: "UserAuth",
+          resource_kind: "template",
+          resource: "UserAuth",
+          id: "ADCS-ESC1",
+          severity: "critical",
+          summary: "Broad enrollment rights can request a certificate naming another account.",
+          remediation: "Remove the supplies-subject bit or require approval.",
+          published: true,
+          evidence: [{ attribute: "nTSecurityDescriptor enrollment trustees", observed: "S-1-5-11" }],
+        },
+      ],
+    },
+  ],
+  drift: [],
+} satisfies ComplianceEvidencePack["adcs"];
+
 function renderPolicy() {
   return render(
     <MemoryRouter>
@@ -342,7 +396,7 @@ describe("policy governance surface", () => {
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.complianceEvidencePack.mockImplementation((framework: ComplianceEvidencePack["framework"]) =>
       Promise.resolve({
-        format: "trstctl.compliance.evidence-pack.v3",
+        format: "trstctl.compliance.evidence-pack.v4",
         framework,
         public_key_der: "BASE64PUBLICKEY",
         custody: {
@@ -356,6 +410,7 @@ describe("policy governance surface", () => {
             { id: "cert-gap", fingerprint: "sha256:gap", subject: "gap.example.test", missing_fields: ["key_storage", "key_exportable"] },
           ],
         },
+        adcs: complianceADCSEvidence,
         signed_export: {
           manifest: {
             tenant_id: "tenant-policy-audit",
@@ -372,6 +427,7 @@ describe("policy governance surface", () => {
                 { id: "cert-gap", fingerprint: "sha256:gap", subject: "gap.example.test", missing_fields: ["key_storage", "key_exportable"] },
               ],
             },
+            adcs: complianceADCSEvidence,
             controls: [
               {
                 id: `${framework}-crypto-inventory`,
@@ -662,7 +718,7 @@ describe("policy governance surface", () => {
     expect(screen.getByText(/CAP-OBS-02/i)).toBeInTheDocument();
     expect(screen.getByText("Quarterly SOC 2 inventory")).toBeInTheDocument();
     expect(screen.getByText("GET /api/v1/compliance/inventory-report")).toBeInTheDocument();
-    expect(screen.getByText("trstctl.compliance.evidence-pack.v3")).toBeInTheDocument();
+    expect(screen.getByText("trstctl.compliance.evidence-pack.v4")).toBeInTheDocument();
     expect(screen.getByText("Certificates with incomplete custody evidence")).toBeInTheDocument();
     expect(screen.getByText("gap.example.test")).toBeInTheDocument();
     expect(screen.getByText("sha256:gap")).toBeInTheDocument();
@@ -672,6 +728,10 @@ describe("policy governance surface", () => {
     expect(screen.getByText("tenant-policy-audit")).toBeInTheDocument();
     expect(screen.getAllByText("event:evt-soc2-review").length).toBeGreaterThan(0);
     expect(screen.getAllByText("sha256:soc2-review").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Signed AD CS posture evidence" })).toBeInTheDocument();
+    expect(screen.getByText("ADCS-ESC1", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.tagName === "SPAN" && element.textContent === "event:evt-adcs-observed · #47")).toBeInTheDocument();
+    expect(screen.getByText("sha256:adcs-observed", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("Missing prerequisites")).toBeInTheDocument();
     expect(screen.getAllByText("independent CPA SOC 2 examination report").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/evidence, not certification/i).length).toBeGreaterThan(0);

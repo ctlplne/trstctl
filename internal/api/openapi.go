@@ -411,6 +411,71 @@ func componentSchemas() map[string]*Schema {
 		"findings":       {Type: "array", Items: ref("ADCSTemplateFinding")},
 		"observed_by":    str(), "observed_at": timestamp(),
 	}, "domain", "template", "published_by", "worst_severity", "findings", "observed_at")
+	adcsEnrollmentEndpoint := object(map[string]*Schema{
+		"kind":                {Type: "string", Enum: []string{"web_enrollment", "ndes", "ndes_admin"}},
+		"url":                 str(),
+		"state":               {Type: "string", Enum: []string{"anonymous_access", "authentication_required", "redirected", "not_found", "unreachable", "reachable_other"}},
+		"http_status":         {Type: "integer"},
+		"authentication":      {Type: "array", Items: str()},
+		"tls_verified":        {Type: "boolean"},
+		"extended_protection": {Type: "string", Enum: []string{"enabled", "disabled", "unobserved"}},
+	}, "kind", "url", "state", "authentication", "tls_verified", "extended_protection")
+	adcsEnrollmentService := object(map[string]*Schema{
+		"domain": str(), "service": str(), "dns_name": str(),
+		"enrollment_web_services":  {Type: "array", Items: str()},
+		"endpoints":                {Type: "array", Items: ref("ADCSEnrollmentEndpoint")},
+		"agent_restriction_state":  {Type: "string", Enum: []string{"enabled", "disabled", "unobserved"}},
+		"agent_restriction_source": str(),
+		"worst_severity":           {Type: "string", Enum: []string{"", "medium", "high", "critical"}},
+		"findings":                 {Type: "array", Items: ref("ADCSTemplateFinding")},
+		"observed_by":              str(), "observed_at": timestamp(),
+	}, "domain", "service", "enrollment_web_services", "endpoints", "agent_restriction_state", "agent_restriction_source", "worst_severity", "findings", "observed_by", "observed_at")
+	adcsObservedTemplate := object(map[string]*Schema{
+		"name": str(), "display_name": str(), "oid": str(), "schema_version": {Type: "integer"},
+		"enrollee_supplies_subject": {Type: "boolean"}, "enrollee_supplies_san": {Type: "boolean"},
+		"requires_manager_approval": {Type: "boolean"}, "exportable_key": {Type: "boolean"},
+		"ekus": {Type: "array", Items: str()}, "enrollment_principals": {Type: "array", Items: str()},
+		"published_by": {Type: "array", Items: str()},
+	}, "name", "enrollee_supplies_subject", "enrollee_supplies_san", "requires_manager_approval", "exportable_key")
+	adcsAgentRestrictions := object(map[string]*Schema{
+		"state": {Type: "string", Enum: []string{"enabled", "disabled", "unobserved"}}, "source": str(),
+	}, "state", "source")
+	adcsObservedService := object(map[string]*Schema{
+		"name": str(), "dns_name": str(), "templates": {Type: "array", Items: str()},
+		"enrollment_web_services": {Type: "array", Items: str()},
+		"endpoints":               {Type: "array", Items: ref("ADCSEnrollmentEndpoint")},
+		"agent_restrictions":      ref("ADCSAgentRestrictions"),
+	}, "name", "agent_restrictions")
+	adcsRuleFinding := object(map[string]*Schema{
+		"template": str(), "resource_kind": {Type: "string", Enum: []string{"template", "enrollment_service"}},
+		"resource": str(), "id": str(),
+		"severity": {Type: "string", Enum: []string{"medium", "high", "critical"}},
+		"summary":  str(), "remediation": str(), "published": {Type: "boolean"},
+		"evidence": {Type: "array", Items: ref("ADCSFindingEvidence")},
+	}, "template", "resource_kind", "resource", "id", "severity", "summary", "remediation", "published")
+	adcsAuditReference := object(map[string]*Schema{
+		"event_id": str(), "event_type": str(), "sequence": {Type: "integer"},
+		"digest": str(), "observed_at": timestamp(),
+	}, "event_id", "event_type", "sequence", "digest", "observed_at")
+	adcsObservedInventory := object(map[string]*Schema{
+		"templates":           {Type: "array", Items: ref("ADCSObservedTemplate")},
+		"enrollment_services": {Type: "array", Items: ref("ADCSObservedService")},
+	}, "templates", "enrollment_services")
+	adcsComplianceObservation := object(map[string]*Schema{
+		"reference": ref("ADCSAuditReference"), "run_id": str(), "source_id": str(), "domain": str(),
+		"agent_id": str(), "agent_name": str(), "directory_verified": {Type: "boolean"},
+		"inventory": ref("ADCSObservedInventory"), "findings": {Type: "array", Items: ref("ADCSRuleFinding")},
+	}, "reference", "run_id", "source_id", "domain", "agent_id", "agent_name", "directory_verified", "inventory", "findings")
+	adcsComplianceDrift := object(map[string]*Schema{
+		"reference": ref("ADCSAuditReference"), "run_id": str(), "source_id": str(), "domain": str(),
+		"agent_id": str(), "observed_by": str(), "direction": {Type: "string", Enum: []string{"worse", "better", "neutral"}},
+		"worsened": {Type: "boolean"}, "changes": {Type: "array", Items: ref("ADCSTemplateDriftChange")},
+		"lifecycle": {Type: "array", Items: ref("ADCSTemplateLifecycleChange")},
+	}, "reference", "run_id", "source_id", "domain", "agent_id", "observed_by", "direction", "worsened", "changes", "lifecycle")
+	adcsComplianceEvidence := object(map[string]*Schema{
+		"observations": {Type: "array", Items: ref("ADCSComplianceObservation")},
+		"drift":        {Type: "array", Items: ref("ADCSComplianceDrift")},
+	}, "observations", "drift")
 	adcsInventorySource := object(map[string]*Schema{
 		"source_id": uuid(), "name": str(), "schedule_id": uuid(),
 		"schedule_enabled": {Type: "boolean"}, "monitoring_interval_seconds": {Type: "integer"},
@@ -421,12 +486,13 @@ func componentSchemas() map[string]*Schema {
 	adcsPosture := object(map[string]*Schema{
 		// observed distinguishes "no AD CS estate" from "nobody has looked",
 		// which are opposite facts an empty list cannot tell apart.
-		"observed":  {Type: "boolean"},
-		"sources":   {Type: "array", Items: ref("ADCSInventorySource")},
-		"templates": {Type: "array", Items: ref("ADCSTemplate")},
-		"critical":  {Type: "integer"}, "high": {Type: "integer"}, "medium": {Type: "integer"},
+		"observed":            {Type: "boolean"},
+		"sources":             {Type: "array", Items: ref("ADCSInventorySource")},
+		"templates":           {Type: "array", Items: ref("ADCSTemplate")},
+		"enrollment_services": {Type: "array", Items: ref("ADCSEnrollmentService")},
+		"critical":            {Type: "integer"}, "high": {Type: "integer"}, "medium": {Type: "integer"},
 		"guidance": str(),
-	}, "observed", "templates", "critical", "high", "medium", "guidance")
+	}, "observed", "templates", "enrollment_services", "critical", "high", "medium", "guidance")
 	adcsTemplateDriftChange := object(map[string]*Schema{
 		"template": str(), "direction": {Type: "string", Enum: []string{"worse", "better", "neutral"}},
 		"change": str(), "attribute": str(), "before": str(), "after": str(),
@@ -2941,7 +3007,8 @@ func componentSchemas() map[string]*Schema {
 		"signed_export":  {Type: "object"},
 		"public_key_der": {Type: "string", Format: "byte"},
 		"custody":        ref("CertificateCustodySummary"),
-	}, "format", "framework", "signed_export", "public_key_der", "custody")
+		"adcs":           ref("ADCSComplianceEvidence"),
+	}, "format", "framework", "signed_export", "public_key_der", "custody", "adcs")
 	complianceReportScheduleReq := object(map[string]*Schema{
 		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
@@ -5159,6 +5226,17 @@ func componentSchemas() map[string]*Schema {
 		"ADCSPosture":                              adcsPosture,
 		"ADCSInventorySource":                      adcsInventorySource,
 		"ADCSTemplate":                             adcsTemplate,
+		"ADCSEnrollmentEndpoint":                   adcsEnrollmentEndpoint,
+		"ADCSEnrollmentService":                    adcsEnrollmentService,
+		"ADCSObservedTemplate":                     adcsObservedTemplate,
+		"ADCSAgentRestrictions":                    adcsAgentRestrictions,
+		"ADCSObservedService":                      adcsObservedService,
+		"ADCSRuleFinding":                          adcsRuleFinding,
+		"ADCSAuditReference":                       adcsAuditReference,
+		"ADCSObservedInventory":                    adcsObservedInventory,
+		"ADCSComplianceObservation":                adcsComplianceObservation,
+		"ADCSComplianceDrift":                      adcsComplianceDrift,
+		"ADCSComplianceEvidence":                   adcsComplianceEvidence,
 		"ADCSTemplateFinding":                      adcsTemplateFinding,
 		"ADCSFindingEvidence":                      adcsFindingEvidence,
 		"ADCSDriftHistory":                         adcsDriftHistory,

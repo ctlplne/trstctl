@@ -14913,6 +14913,99 @@ export const messages = {
     defaultMessage: "Read from the directory:",
     description: "F3: falsifiable evidence references on an AD CS posture finding.",
   },
+  "source.adcs.endpoints.aud370001": {
+    defaultMessage: "Enrollment endpoints (optional)",
+    description: "AUD-37: configured live IIS enrollment endpoint probes on the AD CS source form.",
+  },
+  "source.adcs.endpoints.help.aud370002": {
+    defaultMessage:
+      "One per line: enrollment service | web_enrollment, ndes, or ndes_admin | absolute HTTP(S) URL. The relay does not follow redirects or retain response bodies.",
+    description: "AUD-37: privacy-safe endpoint probe configuration guidance.",
+  },
+  "source.adcs.services.heading.aud370003": {
+    defaultMessage: "Enrollment services and IIS exposure",
+    description: "AUD-37: live AD CS enrollment service posture section.",
+  },
+  "source.adcs.services.help.aud370004": {
+    defaultMessage: "LDAP publication, configured no-body endpoint probes, and CA-side Enrollment Agent Restrictions from the same relay observation.",
+    description: "AUD-37: live AD CS enrollment service evidence explanation.",
+  },
+  "source.adcs.services.empty.aud370005": {
+    defaultMessage: "No enrollment service has been observed yet.",
+    description: "AUD-37: empty enrollment service posture.",
+  },
+  "source.adcs.restrictions.aud370006": {
+    defaultMessage: "Enrollment Agent Restrictions",
+    description: "AUD-37: CA-side restriction evidence label.",
+  },
+  "source.adcs.ces.aud370007": {
+    defaultMessage: "Published enrollment web services",
+    description: "AUD-37: LDAP CES URI evidence label.",
+  },
+  "source.adcs.tls.aud370008": {
+    defaultMessage: "TLS",
+    description: "AUD-37: endpoint TLS evidence label.",
+  },
+  "source.adcs.verified.aud370009": {
+    defaultMessage: "verified",
+    description: "AUD-37: endpoint TLS verified state.",
+  },
+  "source.adcs.unverified.aud370010": {
+    defaultMessage: "not verified",
+    description: "AUD-37: endpoint TLS unverified/plaintext state.",
+  },
+  "source.adcs.epa.aud370011": {
+    defaultMessage: "Extended Protection",
+    description: "AUD-37: IIS Extended Protection evidence label.",
+  },
+  "source.adcs.compliance.observations.aud370012": {
+    defaultMessage: "AD CS observations",
+    description: "AUD-37: signed compliance evidence count.",
+  },
+  "source.adcs.compliance.drift.aud370013": {
+    defaultMessage: "AD CS drift records",
+    description: "AUD-37: signed compliance drift evidence count.",
+  },
+  "source.adcs.compliance.heading.aud370014": {
+    defaultMessage: "Signed AD CS posture evidence",
+    description: "AUD-37: signed compliance AD CS section heading.",
+  },
+  "source.adcs.compliance.help.aud370015": {
+    defaultMessage: "These are the exact latest complete observations inside the signed manifest. Each row carries its immutable tenant audit-chain reference.",
+    description: "AUD-37: signed compliance AD CS evidence explanation.",
+  },
+  "source.adcs.compliance.findings.aud370016": {
+    defaultMessage: "findings",
+    description: "AUD-37: signed compliance AD CS finding count suffix.",
+  },
+  "source.adcs.endpoints.placeholder.aud370017": {
+    defaultMessage: "CORP-CA | web_enrollment | https://ca.corp.example/certsrv/\nCORP-CA | ndes_admin | https://ca.corp.example/certsrv/mscep_admin/",
+    description: "AUD-37: example endpoint target lines.",
+  },
+  "source.adcs.compliance.event.aud370018": {
+    defaultMessage: "event",
+    description: "AUD-37: immutable event reference prefix.",
+  },
+  "source.adcs.http.aud370019": {
+    defaultMessage: "HTTP",
+    description: "AUD-37: endpoint HTTP status prefix.",
+  },
+  "source.adcs.private.allow.aud370020": {
+    defaultMessage: "Allow explicitly bounded private endpoint egress",
+    description: "AUD-37: opt-in for relay probes to operator-owned private enrollment endpoints.",
+  },
+  "source.adcs.private.cidrs.aud370021": {
+    defaultMessage: "Allowed private endpoint CIDRs",
+    description: "AUD-37: private network prefixes allowed for the configured enrollment endpoint probes.",
+  },
+  "source.adcs.private.help.aud370022": {
+    defaultMessage: "Comma or newline separated RFC1918/IPv6 ULA prefixes. Link-local, metadata, loopback, multicast, and CGNAT addresses stay blocked.",
+    description: "AUD-37: SSRF-safe private enrollment endpoint egress guidance.",
+  },
+  "source.adcs.private.placeholder.aud370023": {
+    defaultMessage: "10.42.8.0/24",
+    description: "AUD-37: example private enrollment endpoint network prefix.",
+  },
   "source.adcs.drift.heading.aud360001": {
     defaultMessage: "Template drift history",
     description: "AUD-36: immutable semantic AD CS drift history on Posture.",

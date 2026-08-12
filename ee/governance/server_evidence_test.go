@@ -3,6 +3,7 @@
 package governance
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -15,8 +16,10 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -54,6 +57,44 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 		return event.ID
 	}
 	unrelatedID := appendEvent(servedTenantA, "tenant.member.upserted", `{"subject":"auditor-a"}`, -time.Hour)
+	adcsObservation := func(tenantID, domain string) (string, adcsdiscovery.InventoryObserved) {
+		inv := adcsdiscovery.Inventory{
+			Templates: []adcsdiscovery.Template{{
+				Name: "UserAuth", EnrolleeSuppliesSubject: true, EKUs: []string{adcsdiscovery.EKUClientAuth},
+				EnrollmentPrincipals: []string{"S-1-5-11"}, PublishedBy: []string{"CORP-CA"},
+			}},
+			EnrollmentServices: []adcsdiscovery.EnrollmentService{{
+				Name: "CORP-CA", AgentRestrictions: adcsdiscovery.EnrollmentAgentRestrictions{State: adcsdiscovery.EvidenceUnobserved, Source: "requires_windows_relay"},
+				Endpoints: []adcsdiscovery.EnrollmentEndpoint{{
+					Kind: adcsdiscovery.EndpointNDESAdmin, URL: "http://ca.example/certsrv/mscep_admin/",
+					State: adcsdiscovery.EndpointAnonymousAccess, HTTPStatus: 200, ExtendedProtection: adcsdiscovery.EvidenceUnobserved,
+				}},
+			}},
+		}
+		observed := adcsdiscovery.InventoryObserved{
+			RunID: "run-" + domain, SourceID: "source-" + domain, Domain: domain,
+			AgentID: "agent-" + domain, AgentName: "relay-" + domain, DirectoryVerified: true,
+			Templates: inv.Templates, EnrollmentServices: inv.EnrollmentServices, Findings: adcsdiscovery.Findings(inv),
+		}
+		data, marshalErr := json.Marshal(observed)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		return appendEvent(tenantID, projections.EventADCSInventoryObserved, string(data), -50*time.Minute), observed
+	}
+	adcsAID, observedA := adcsObservation(servedTenantA, "CORP-A")
+	adcsBID, _ := adcsObservation(servedTenantB, "CORP-B")
+	driftPayload := projections.ADCSTemplateDriftObserved{
+		RunID: "run-drift-a", SourceID: "source-CORP-A", Domain: "CORP-A",
+		AgentID: "agent-CORP-A", ObservedBy: "relay-CORP-A",
+		Direction: adcsdiscovery.DriftWorse, Worsened: true,
+		Lifecycle: []adcsdiscovery.LifecycleChange{{Template: "UserAuth", Lifecycle: adcsdiscovery.TemplateAdded, NowDangerous: true}},
+	}
+	driftData, err := json.Marshal(driftPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adcsDriftAID := appendEvent(servedTenantA, projections.EventADCSTemplateDriftWorsened, string(driftData), -49*time.Minute)
 	bPolicyID := appendEvent(servedTenantB, "policy.decision", `{}`, -3*time.Minute)
 	bLifecycleID := appendEvent(servedTenantB, "certificate.recorded", `{}`, -2*time.Minute)
 	bMonitoringID := appendEvent(servedTenantB, "discovery.finding.recorded", `{}`, -time.Minute)
@@ -121,6 +162,18 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 	}
 	assertReportExcludesEventIDs(t, reportA, bPolicyID, bLifecycleID, bMonitoringID)
 	assertReportIncludesEventID(t, reportA, unrelatedID, false)
+	if len(reportA.ADCS.Observations) != 1 || reportA.ADCS.Observations[0].Domain != "CORP-A" ||
+		reportA.ADCS.Observations[0].Reference.EventID != adcsAID ||
+		len(reportA.ADCS.Observations[0].Findings) != len(observedA.Findings) ||
+		len(reportA.ADCS.Drift) != 1 || reportA.ADCS.Drift[0].Reference.EventID != adcsDriftAID {
+		t.Fatalf("tenant A signed AD CS evidence = %+v", reportA.ADCS)
+	}
+	if got, want := mustJSON(t, packA.ADCS), mustJSON(t, reportA.ADCS); string(got) != string(want) {
+		t.Fatalf("outer AD CS convenience copy differs from signed manifest\nouter=%s\nsigned=%s", got, want)
+	}
+	if bytes.Contains(mustJSON(t, reportA.ADCS), []byte(adcsBID)) || bytes.Contains(mustJSON(t, reportA.ADCS), []byte("CORP-B")) {
+		t.Fatal("tenant A signed AD CS evidence contains tenant B facts")
+	}
 
 	_, reportB := serveEvidencePack(t, handler, signer, servedTenantB, servedTenantA)
 	if reportB.TenantID != servedTenantB {
@@ -137,6 +190,15 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 		assertReportIncludesEventID(t, reportB, eventID, true)
 	}
 	assertReportExcludesEventIDs(t, reportB, unrelatedID)
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 func serveEvidencePack(t *testing.T, handler http.Handler, signer crypto.DigestSigner, principalTenant, forgedHeaderTenant string) (api.ComplianceEvidencePack, Report) {

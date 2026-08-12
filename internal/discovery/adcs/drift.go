@@ -154,7 +154,7 @@ func DiffTemplates(previous, current []Template) Drift {
 		if !existed {
 			drift.Lifecycle = append(drift.Lifecycle, LifecycleChange{
 				Template: name, Lifecycle: TemplateAdded,
-				NowDangerous: len(findingsForTemplate(now)) > 0,
+				NowDangerous: len(findingsForTemplate(now, EnrollmentAgentRestrictions{State: EvidenceUnobserved, Source: "drift_template_only"})) > 0,
 			})
 			continue
 		}
@@ -171,7 +171,7 @@ func DiffTemplates(previous, current []Template) Drift {
 	for _, name := range goneNames {
 		drift.Lifecycle = append(drift.Lifecycle, LifecycleChange{
 			Template: name, Lifecycle: TemplateRemoved,
-			WasDangerous: len(findingsForTemplate(before[name])) > 0,
+			WasDangerous: len(findingsForTemplate(before[name], EnrollmentAgentRestrictions{State: EvidenceUnobserved, Source: "drift_template_only"})) > 0,
 		})
 	}
 	return drift
@@ -253,7 +253,7 @@ func compareTemplate(before, after Template) []TemplateChange {
 	if len(newlyPublished) > 0 {
 		direction := DriftNeutral
 		change := "A CA now publishes this template: " + strings.Join(newlyPublished, ", ") + "."
-		if len(findingsForTemplate(after)) > 0 {
+		if len(findingsForTemplate(after, EnrollmentAgentRestrictions{State: EvidenceUnobserved, Source: "drift_template_only"})) > 0 {
 			// A dangerous template that was not offered anywhere has just been
 			// offered somewhere. That is a real escalation of exposure even
 			// though no attribute of the template itself moved.

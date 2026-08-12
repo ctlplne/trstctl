@@ -65,6 +65,35 @@ type ADCSTemplate struct {
 	ObservedAt time.Time `json:"observed_at"`
 }
 
+// ADCSEnrollmentEndpoint is one no-body relay observation of an operator-scoped
+// IIS enrollment surface. The state vocabulary is closed; no response body,
+// redirect target, cookie, or authentication challenge crosses the boundary.
+type ADCSEnrollmentEndpoint struct {
+	Kind               string   `json:"kind"`
+	URL                string   `json:"url"`
+	State              string   `json:"state"`
+	HTTPStatus         int      `json:"http_status,omitempty"`
+	Authentication     []string `json:"authentication"`
+	TLSVerified        bool     `json:"tls_verified"`
+	ExtendedProtection string   `json:"extended_protection"`
+}
+
+// ADCSEnrollmentService is one published CA plus live enrollment-surface and
+// CA-side restriction evidence observed by the same authenticated relay run.
+type ADCSEnrollmentService struct {
+	Domain                 string                   `json:"domain"`
+	Service                string                   `json:"service"`
+	DNSName                string                   `json:"dns_name,omitempty"`
+	EnrollmentWebServices  []string                 `json:"enrollment_web_services"`
+	Endpoints              []ADCSEnrollmentEndpoint `json:"endpoints"`
+	AgentRestrictionState  string                   `json:"agent_restriction_state"`
+	AgentRestrictionSource string                   `json:"agent_restriction_source"`
+	WorstSeverity          string                   `json:"worst_severity"`
+	Findings               []ADCSTemplateFinding    `json:"findings"`
+	ObservedBy             string                   `json:"observed_by"`
+	ObservedAt             time.Time                `json:"observed_at"`
+}
+
 // ADCSInventorySource is the operator-visible lifecycle of one configured
 // directory reader. It carries references and run metadata only; bind
 // credentials and raw directory responses never cross this read surface.
@@ -86,9 +115,10 @@ type ADCSPosture struct {
 	// Observed reports whether any relay has ever read a directory for this
 	// tenant. Without it an empty list is ambiguous between "no AD CS estate"
 	// and "nobody has looked", and those are opposite facts.
-	Observed  bool                  `json:"observed"`
-	Sources   []ADCSInventorySource `json:"sources"`
-	Templates []ADCSTemplate        `json:"templates"`
+	Observed           bool                    `json:"observed"`
+	Sources            []ADCSInventorySource   `json:"sources"`
+	Templates          []ADCSTemplate          `json:"templates"`
+	EnrollmentServices []ADCSEnrollmentService `json:"enrollment_services"`
 	// Counts summarize what the page is about to show, so an operator can tell
 	// at a glance whether to read it now or later.
 	Critical int `json:"critical"`
@@ -142,7 +172,7 @@ type ADCSDriftHistory struct {
 }
 
 // ADCSPostureProvider reads source lifecycle and observed template posture.
-type ADCSPostureProvider func(ctx context.Context, tenantID string) ([]ADCSInventorySource, []ADCSTemplate, error)
+type ADCSPostureProvider func(ctx context.Context, tenantID string) ([]ADCSInventorySource, []ADCSTemplate, []ADCSEnrollmentService, error)
 
 // ADCSDriftProvider reads the tenant's immutable semantic drift history.
 type ADCSDriftProvider func(ctx context.Context, tenantID string, limit int) ([]ADCSTemplateDrift, error)
@@ -159,7 +189,7 @@ func WithADCSDrift(provider ADCSDriftProvider) Option {
 
 // adcsPostureGuidance is the honest caveat, carried on the response so it
 // travels with the data rather than living only in documentation.
-const adcsPostureGuidance = "Enrollment trustees are reported as canonical Windows SIDs from each template DACL. Group expansion, inherited or conditional policy, and a user's effective access remain directory-side decisions; verify those before changing access."
+const adcsPostureGuidance = "Enrollment trustees are canonical SIDs from template DACLs. IIS endpoints are only probed when explicitly configured. CA Enrollment Agent Restrictions require a Windows relay with certutil access; inaccessible evidence stays unobserved. Group expansion, inherited/conditional policy, and effective access remain directory-side decisions."
 
 func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
@@ -167,20 +197,31 @@ func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	out := ADCSPosture{Sources: []ADCSInventorySource{}, Templates: []ADCSTemplate{}, Guidance: adcsPostureGuidance}
+	out := ADCSPosture{Sources: []ADCSInventorySource{}, Templates: []ADCSTemplate{}, EnrollmentServices: []ADCSEnrollmentService{}, Guidance: adcsPostureGuidance}
 	if a.adcsPosture == nil {
 		a.writeJSON(w, http.StatusOK, out)
 		return
 	}
-	sources, templates, err := a.adcsPosture(r.Context(), tenantID)
+	sources, templates, services, err := a.adcsPosture(r.Context(), tenantID)
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
 	out.Sources = sources
-	if len(templates) > 0 {
+	if len(templates) > 0 || len(services) > 0 {
 		out.Observed = true
 		out.Templates = templates
+		out.EnrollmentServices = services
+	}
+	for _, service := range services {
+		switch service.WorstSeverity {
+		case "critical":
+			out.Critical++
+		case "high":
+			out.High++
+		case "medium":
+			out.Medium++
+		}
 	}
 	for _, t := range templates {
 		switch t.WorstSeverity {

@@ -96,7 +96,7 @@ import (
 // Bumped to 26 when event-derived ownership-readiness exceptions joined the
 // read model. A v25 payload cannot carry temporary deployment authority and
 // must not skip its grant/revocation events.
-const SnapshotFormatVersion = 26
+const SnapshotFormatVersion = 27
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -160,6 +160,9 @@ var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
 	// signed inventory observation event instead of an ephemeral SQL callback.
 	"adcs_template_posture",
+	// Format 27: AUD-37 enrollment-service posture is projected by the same
+	// immutable observation as templates and must survive snapshot restore.
+	"adcs_enrollment_service_posture",
 	// Format 21: parent before child keeps restore safe for the decision table's
 	// composite foreign key into the immutable request.
 	"operation_approval_requests", "operation_approval_decisions"}

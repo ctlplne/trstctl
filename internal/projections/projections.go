@@ -2987,7 +2987,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryFindingRecorded:                 {1: true},
 	EventDiscoveryFindingTriageChanged:            {1: true},
 	EventDiscoveryRunCompleted:                    {1: true},
-	EventADCSInventoryObserved:                    {1: true},
+	EventADCSInventoryObserved:                    {1: true, adcsdiscovery.InventoryEventSchemaVersion: true},
 	EventADCSTemplateDriftObserved:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventADCSTemplateDriftWorsened:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventRevocationProbeQueued:                    {1: true},
@@ -4038,22 +4038,45 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.ApplyDiscoveryCoverageRunTx(ctx, tx, e.TenantID, pl.ID, pl.Status, completedAt, e.Sequence)
 	case EventADCSInventoryObserved:
 		var pl adcsdiscovery.InventoryObserved
-		if err := decode(e, &pl); err != nil {
+		if schemaVersionOf(e) == 1 {
+			var legacy adcsdiscovery.InventoryObservedV1
+			if err := decode(e, &legacy); err != nil {
+				return err
+			}
+			pl = adcsdiscovery.InventoryObserved{
+				RunID: legacy.RunID, SourceID: legacy.SourceID, Domain: legacy.Domain,
+				AgentID: legacy.AgentID, AgentName: legacy.AgentName,
+				DirectoryVerified: legacy.DirectoryVerified,
+				Templates:         legacy.Templates, Findings: legacy.Findings,
+			}
+		} else if err := decode(e, &pl); err != nil {
 			return err
 		}
 		if pl.RunID == "" || pl.SourceID == "" || strings.TrimSpace(pl.Domain) == "" ||
 			pl.AgentID == "" || strings.TrimSpace(pl.AgentName) == "" {
 			return errors.New("projections: AD CS inventory observation is missing run/source/domain/agent authority")
 		}
-		if err := adcsdiscovery.ValidateInventoryReport(adcsdiscovery.InventoryIntent{
-			ID: pl.RunID, SourceID: pl.SourceID, JobKind: adcsdiscovery.JobKind,
-			Execution:         adcsdiscovery.ExecutionRelay,
-			RequiredAgentRole: adcsdiscovery.RequiredRoleNetwork,
-		}, adcsdiscovery.InventoryReport{
-			Status: "succeeded", DirectoryVerified: pl.DirectoryVerified,
-			Inventory: adcsdiscovery.Inventory{Templates: pl.Templates}, Findings: pl.Findings,
-		}); err != nil {
-			return fmt.Errorf("projections: validate AD CS inventory observation: %w", err)
+		if schemaVersionOf(e) == adcsdiscovery.InventoryEventSchemaVersion {
+			endpoints := make([]adcsdiscovery.EnrollmentEndpointTarget, 0)
+			for _, service := range pl.EnrollmentServices {
+				for _, endpoint := range service.Endpoints {
+					endpoints = append(endpoints, adcsdiscovery.EnrollmentEndpointTarget{
+						EnrollmentService: service.Name, Kind: endpoint.Kind, URL: endpoint.URL,
+					})
+				}
+			}
+			if err := adcsdiscovery.ValidateInventoryReport(adcsdiscovery.InventoryIntent{
+				ID: pl.RunID, SourceID: pl.SourceID, JobKind: adcsdiscovery.JobKind,
+				Execution: adcsdiscovery.ExecutionRelay, RequiredAgentRole: adcsdiscovery.RequiredRoleNetwork,
+				EnrollmentEndpoints: endpoints,
+			}, adcsdiscovery.InventoryReport{
+				Status: "succeeded", DirectoryVerified: pl.DirectoryVerified,
+				Inventory: adcsdiscovery.Inventory{Templates: pl.Templates, EnrollmentServices: pl.EnrollmentServices}, Findings: pl.Findings,
+			}); err != nil {
+				return fmt.Errorf("projections: validate AD CS inventory observation: %w", err)
+			}
+		} else if len(pl.Templates) == 0 || len(pl.Templates) > adcsdiscovery.MaxTemplates {
+			return errors.New("projections: legacy AD CS inventory has an invalid template bound")
 		}
 		byTemplate := make(map[string][]adcsdiscovery.Finding, len(pl.Templates))
 		for _, finding := range pl.Findings {
@@ -4080,7 +4103,35 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 				FindingCount: len(findings), Findings: encodedFindings, ObservedTemplate: observedTemplate,
 			})
 		}
-		return p.store.ApplyADCSTemplatePostureObservedTx(ctx, tx, e.TenantID, pl.Domain, pl.AgentName, rows, e.Time)
+		byService := make(map[string][]adcsdiscovery.Finding, len(pl.EnrollmentServices))
+		for _, finding := range pl.Findings {
+			if finding.ResourceKind == "enrollment_service" {
+				byService[finding.Resource] = append(byService[finding.Resource], finding)
+			}
+		}
+		serviceRows := make([]store.ADCSEnrollmentServicePosture, 0, len(pl.EnrollmentServices))
+		for _, service := range pl.EnrollmentServices {
+			findings := byService[service.Name]
+			encodedFindings, err := json.Marshal(findings)
+			if err != nil {
+				return err
+			}
+			if findings == nil {
+				encodedFindings = []byte("[]")
+			}
+			observedService, err := json.Marshal(service)
+			if err != nil {
+				return err
+			}
+			serviceRows = append(serviceRows, store.ADCSEnrollmentServicePosture{
+				TenantID: e.TenantID, Domain: pl.Domain, Service: service.Name, DNSName: service.DNSName,
+				EnrollmentWebServices: service.EnrollmentWebServices,
+				AgentRestrictionState: string(service.AgentRestrictions.State), AgentRestrictionSource: service.AgentRestrictions.Source,
+				WorstSeverity: projectionADCSWorstSeverity(findings), FindingCount: len(findings),
+				Findings: encodedFindings, ObservedService: observedService,
+			})
+		}
+		return p.store.ApplyADCSPostureObservedTx(ctx, tx, e.TenantID, pl.Domain, pl.AgentName, rows, serviceRows, e.Time)
 	case EventADCSTemplateDriftObserved, EventADCSTemplateDriftWorsened:
 		// V1 was emitted before this read model existed and omitted run/source
 		// authority. Ignoring it is the only honest replay: attaching it to a

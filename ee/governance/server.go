@@ -76,6 +76,7 @@ func (s *evidenceService) ExportEvidencePack(ctx context.Context, tenantID strin
 		SignedExport: json.RawMessage(append([]byte(nil), signed...)),
 		PublicKeyDER: append([]byte(nil), s.signer.Public().DER...),
 		Custody:      report.Custody,
+		ADCS:         report.ADCS,
 	}, nil
 }
 

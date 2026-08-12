@@ -49,6 +49,7 @@ import type {
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
   ADCSInventorySource as GenADCSInventorySource,
+  ADCSEnrollmentService as GenADCSEnrollmentService,
   ADCSPosture as GenADCSPosture,
   ADCSDriftHistory as GenADCSDriftHistory,
   ADCSDatabaseList as GenADCSDatabaseList,
@@ -492,6 +493,7 @@ export type Identity = GenIdentity;
 export type ADCSPosture = GenADCSPosture;
 export type ADCSDriftHistory = GenADCSDriftHistory;
 export type ADCSInventorySource = GenADCSInventorySource;
+export type ADCSEnrollmentService = GenADCSEnrollmentService;
 export type ADCSDatabaseList = GenADCSDatabaseList;
 export type ADCSTemplate = GenADCSTemplate;
 export type Agent = GenAgent;

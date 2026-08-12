@@ -11,16 +11,17 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/store"
 )
 
 // ComplianceEvidencePackFormat is the stable wire marker for signed compliance
-// evidence packs. Version 3 binds the signed manifest to a tenant and bounded
+// evidence packs. Version 4 binds the signed manifest to a tenant and bounded
 // evidence window, carries exact immutable event/object references plus
 // missing prerequisites, and includes certificate-custody counts plus explicit
-// incomplete rows. The signed_export field is self-verifying;
+// incomplete rows and complete AD CS posture/drift evidence. The signed_export field is self-verifying;
 // public_key_der is the verifier material an auditor needs offline.
-const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v3"
+const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v4"
 
 // ComplianceFramework is the stable path/API value for a governance evidence pack.
 type ComplianceFramework string
@@ -118,6 +119,57 @@ type ComplianceEvidencePack struct {
 	// authoritative; the outer copy lets API and console clients render it
 	// without implementing envelope decoding first.
 	Custody custody.CertificateSummary `json:"custody"`
+	// ADCS is the convenience copy of signed_export.manifest.adcs. The signed
+	// manifest is authoritative; this copy lets API/console clients render the
+	// exact relay findings without first decoding the signed envelope.
+	ADCS ADCSComplianceEvidence `json:"adcs"`
+}
+
+// ADCSAuditReference binds a rendered posture fact to its immutable tenant
+// audit-chain entry. Digest is the record's chain hash, not a mutable row hash.
+type ADCSAuditReference struct {
+	EventID    string    `json:"event_id"`
+	EventType  string    `json:"event_type"`
+	Sequence   uint64    `json:"sequence"`
+	Digest     string    `json:"digest"`
+	ObservedAt time.Time `json:"observed_at"`
+}
+
+// ADCSComplianceObservation is the latest complete v2 relay observation for a
+// domain within the signed evidence window.
+type ADCSComplianceObservation struct {
+	Reference         ADCSAuditReference `json:"reference"`
+	RunID             string             `json:"run_id"`
+	SourceID          string             `json:"source_id"`
+	Domain            string             `json:"domain"`
+	AgentID           string             `json:"agent_id"`
+	AgentName         string             `json:"agent_name"`
+	DirectoryVerified bool               `json:"directory_verified"`
+	Inventory         adcs.Inventory     `json:"inventory"`
+	Findings          []adcs.Finding     `json:"findings"`
+}
+
+// ADCSComplianceDrift is one source/run-bound semantic change in the same
+// signed window. It intentionally repeats the human-checkable before/after
+// facts served by the Posture console.
+type ADCSComplianceDrift struct {
+	Reference  ADCSAuditReference            `json:"reference"`
+	RunID      string                        `json:"run_id"`
+	SourceID   string                        `json:"source_id"`
+	Domain     string                        `json:"domain"`
+	AgentID    string                        `json:"agent_id"`
+	ObservedBy string                        `json:"observed_by"`
+	Direction  string                        `json:"direction"`
+	Worsened   bool                          `json:"worsened"`
+	Changes    []ADCSTemplateDriftChange     `json:"changes"`
+	Lifecycle  []ADCSTemplateLifecycleChange `json:"lifecycle"`
+}
+
+// ADCSComplianceEvidence is the tenant-scoped posture/drift artifact copied
+// inside and outside the signed manifest.
+type ADCSComplianceEvidence struct {
+	Observations []ADCSComplianceObservation `json:"observations"`
+	Drift        []ADCSComplianceDrift       `json:"drift"`
 }
 
 type complianceReportScheduleRequest struct {

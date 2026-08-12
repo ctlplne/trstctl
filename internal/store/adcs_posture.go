@@ -49,17 +49,95 @@ type ADCSTemplatePosture struct {
 	ObservedTemplate json.RawMessage
 }
 
+// ADCSEnrollmentServicePosture is one CA's normalized LDAP, HTTP, and CA-policy
+// evidence. ObservedService is the exact privacy-safe event fragment used to
+// derive the row; raw HTTP/certutil output never enters this model.
+type ADCSEnrollmentServicePosture struct {
+	TenantID               string
+	Domain                 string
+	Service                string
+	DNSName                string
+	EnrollmentWebServices  []string
+	AgentRestrictionState  string
+	AgentRestrictionSource string
+	WorstSeverity          string
+	FindingCount           int
+	Findings               json.RawMessage
+	ObservedService        json.RawMessage
+	ObservedBy             string
+	ObservedAt             time.Time
+}
+
+// ApplyADCSPostureObservedTx atomically replaces both halves of one domain's
+// posture from a single immutable observation. A reader can therefore never see
+// new templates beside stale enrollment services, including during replay.
+func (s *Store) ApplyADCSPostureObservedTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, domain, observedBy string,
+	templates []ADCSTemplatePosture,
+	services []ADCSEnrollmentServicePosture,
+	at time.Time,
+) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "adcs-posture\x1f"+tenantID+"\x1f"+domain); err != nil {
+		return fmt.Errorf("store: lock AD CS posture domain: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM adcs_template_posture WHERE tenant_id = $1 AND domain = $2`, tenantID, domain); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM adcs_enrollment_service_posture WHERE tenant_id = $1 AND domain = $2`, tenantID, domain); err != nil {
+		return err
+	}
+	if err := s.insertADCSTemplatePostureObservedTx(ctx, tx, tenantID, domain, observedBy, templates, at); err != nil {
+		return err
+	}
+	for _, row := range services {
+		findings := row.Findings
+		if len(findings) == 0 {
+			findings = json.RawMessage("[]")
+		}
+		webServices := row.EnrollmentWebServices
+		if webServices == nil {
+			webServices = []string{}
+		}
+		observed := row.ObservedService
+		if len(observed) == 0 {
+			observed = json.RawMessage("{}")
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO adcs_enrollment_service_posture
+			     (tenant_id, domain, service, dns_name, enrollment_web_services,
+			      agent_restriction_state, agent_restriction_source,
+			      worst_severity, finding_count, findings, observed_service,
+			      observed_by, observed_at)
+			 VALUES ($1, $2, $3, $4, $5::text[], $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12, $13)`,
+			tenantID, domain, row.Service, row.DNSName, webServices,
+			row.AgentRestrictionState, row.AgentRestrictionSource,
+			row.WorstSeverity, row.FindingCount, string(findings), string(observed), observedBy, at.UTC()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ApplyADCSTemplatePostureObservedTx is the projector-only writer for one
 // immutable adcs.template.inventory.observed event. Delete+insert is atomic, so
 // a removed directory template disappears on replay without a partial domain
 // ever becoming visible. There is deliberately no non-projector wrapper: all
 // state changes must enter through the event log (AN-2).
 func (s *Store) ApplyADCSTemplatePostureObservedTx(ctx context.Context, tx pgx.Tx, tenantID, domain, observedBy string, rows []ADCSTemplatePosture, at time.Time) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "adcs-posture\x1f"+tenantID+"\x1f"+domain); err != nil {
+		return fmt.Errorf("store: lock AD CS posture domain: %w", err)
+	}
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM adcs_template_posture WHERE tenant_id = $1 AND domain = $2`,
 		tenantID, domain); err != nil {
 		return err
 	}
+	return s.insertADCSTemplatePostureObservedTx(ctx, tx, tenantID, domain, observedBy, rows, at)
+}
+
+func (s *Store) insertADCSTemplatePostureObservedTx(ctx context.Context, tx pgx.Tx, tenantID, domain, observedBy string, rows []ADCSTemplatePosture, at time.Time) error {
 	for _, row := range rows {
 		findings := row.Findings
 		if len(findings) == 0 {
@@ -126,6 +204,46 @@ func (s *Store) ListADCSTemplatePosture(ctx context.Context, tenantID string, li
 			}
 			row.Findings = json.RawMessage(findings)
 			row.ObservedTemplate = json.RawMessage(observed)
+			out = append(out, row)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ListADCSEnrollmentServicePosture returns a tenant's latest observed service
+// facts, worst first. tenant_id is explicit even though RLS is the floor (AN-1).
+func (s *Store) ListADCSEnrollmentServicePosture(ctx context.Context, tenantID string, limit int) ([]ADCSEnrollmentServicePosture, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	var out []ADCSEnrollmentServicePosture
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, domain, service, dns_name, enrollment_web_services,
+			        agent_restriction_state, agent_restriction_source,
+			        worst_severity, finding_count, findings, observed_service,
+			        observed_by, observed_at
+			   FROM adcs_enrollment_service_posture
+			  WHERE tenant_id = $1
+			  ORDER BY CASE worst_severity
+			             WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3
+			           END, domain, service
+			  LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var row ADCSEnrollmentServicePosture
+			var findings, observed []byte
+			if err := rows.Scan(&row.TenantID, &row.Domain, &row.Service, &row.DNSName,
+				&row.EnrollmentWebServices, &row.AgentRestrictionState, &row.AgentRestrictionSource,
+				&row.WorstSeverity, &row.FindingCount, &findings, &observed,
+				&row.ObservedBy, &row.ObservedAt); err != nil {
+				return err
+			}
+			row.Findings, row.ObservedService = json.RawMessage(findings), json.RawMessage(observed)
 			out = append(out, row)
 		}
 		return rows.Err()

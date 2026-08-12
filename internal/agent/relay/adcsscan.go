@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // AD CS template inventory from inside the domain (epic F1).
@@ -42,6 +45,12 @@ type ADCSReport = adcs.InventoryReport
 // adcsDialTimeout bounds the connection. A domain controller that does not
 // answer promptly is one an operator needs told about, not waited on.
 const adcsDialTimeout = 20 * time.Second
+
+type adcsHTTPDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+type agentRestrictionObserver func(context.Context, adcs.EnrollmentService) adcs.EnrollmentAgentRestrictions
 
 // ldapSearcher adapts a live LDAP connection to the adcs package's read-only
 // interface. It exposes Search and nothing else — the connection's mutating
@@ -155,6 +164,13 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	if len(inventory.Templates) == 0 {
 		return ADCSReport{}, errors.New("relay: AD CS directory returned no templates")
 	}
+	endpointClient, err := newADCSEndpointClient(intent)
+	if err != nil {
+		return ADCSReport{}, err
+	}
+	if err := enrichADCSInventory(ctx, intent, &inventory, endpointClient, observeCAAgentRestrictions); err != nil {
+		return ADCSReport{}, err
+	}
 	report := ADCSReport{
 		Status:            "succeeded",
 		Inventory:         inventory,
@@ -165,6 +181,122 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 		return ADCSReport{}, err
 	}
 	return report, nil
+}
+
+func newADCSEndpointClient(intent ADCSInventoryIntent) (*http.Client, error) {
+	prefixes, err := intent.PrivateEgressPrefixes()
+	if err != nil {
+		return nil, fmt.Errorf("relay: invalid AD CS endpoint egress boundary: %w", err)
+	}
+	client := netsec.SafeClientWithOptions(adcsDialTimeout, netsec.SafeClientOptions{AllowPrivateCIDRs: prefixes})
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("relay: AD CS endpoint client has an unexpected safe transport")
+	}
+	// Keep the resolved-address SSRF dialer while routing TLS policy through the
+	// crypto boundary. Redirects are evidence, not instructions: following one
+	// could leave the exact operator-scoped endpoint and erase its real status.
+	transport.TLSClientConfig = mtls.DirectoryClientTLSConfig(false)
+	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+	return client, nil
+}
+
+func enrichADCSInventory(
+	ctx context.Context,
+	intent ADCSInventoryIntent,
+	inventory *adcs.Inventory,
+	client adcsHTTPDoer,
+	restrictions agentRestrictionObserver,
+) error {
+	if inventory == nil || client == nil || restrictions == nil {
+		return errors.New("relay: AD CS live-evidence collector is incomplete")
+	}
+	services := make(map[string]*adcs.EnrollmentService, len(inventory.EnrollmentServices))
+	for i := range inventory.EnrollmentServices {
+		service := &inventory.EnrollmentServices[i]
+		services[service.Name] = service
+		service.AgentRestrictions = restrictions(ctx, *service)
+		if service.AgentRestrictions.State == "" || strings.TrimSpace(service.AgentRestrictions.Source) == "" {
+			service.AgentRestrictions = adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceUnobserved, Source: "ca_policy_collector_failed_closed"}
+		}
+	}
+	for _, target := range intent.EnrollmentEndpoints {
+		service := services[target.EnrollmentService]
+		if service == nil {
+			return fmt.Errorf("relay: configured enrollment endpoint names unknown service %q", target.EnrollmentService)
+		}
+		service.Endpoints = append(service.Endpoints, observeEnrollmentEndpoint(ctx, client, target))
+	}
+	for i := range inventory.EnrollmentServices {
+		sort.Slice(inventory.EnrollmentServices[i].Endpoints, func(a, b int) bool {
+			left, right := inventory.EnrollmentServices[i].Endpoints[a], inventory.EnrollmentServices[i].Endpoints[b]
+			if left.Kind != right.Kind {
+				return left.Kind < right.Kind
+			}
+			return left.URL < right.URL
+		})
+	}
+	return nil
+}
+
+func observeEnrollmentEndpoint(ctx context.Context, client adcsHTTPDoer, target adcs.EnrollmentEndpointTarget) adcs.EnrollmentEndpoint {
+	observed := adcs.EnrollmentEndpoint{
+		Kind: target.Kind, URL: target.URL, State: adcs.EndpointUnreachable,
+		ExtendedProtection: adcs.EvidenceUnobserved,
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.URL, nil)
+	if err != nil {
+		return observed
+	}
+	// A range makes a cooperative server send only one byte. A server that
+	// ignores it is still safe because the body is closed without being read.
+	req.Header.Set("Range", "bytes=0-0")
+	response, err := client.Do(req)
+	if err != nil {
+		return observed
+	}
+	defer response.Body.Close()
+	observed.HTTPStatus = response.StatusCode
+	observed.TLSVerified = strings.HasPrefix(strings.ToLower(target.URL), "https://")
+	observed.Authentication = authenticationSchemes(response.Header.Values("WWW-Authenticate"))
+	switch {
+	case response.StatusCode >= 200 && response.StatusCode < 300:
+		observed.State = adcs.EndpointAnonymousAccess
+	case response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden:
+		observed.State = adcs.EndpointAuthenticationNeeded
+	case response.StatusCode >= 300 && response.StatusCode < 400:
+		observed.State = adcs.EndpointRedirected
+	case response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone:
+		observed.State = adcs.EndpointNotFound
+	default:
+		observed.State = adcs.EndpointReachableOther
+	}
+	return observed
+}
+
+func authenticationSchemes(headers []string) []string {
+	allowed := map[string]string{
+		"basic": "Basic", "digest": "Digest", "negotiate": "Negotiate",
+		"ntlm": "NTLM", "bearer": "Bearer",
+	}
+	seen := map[string]bool{}
+	for _, header := range headers {
+		for _, part := range strings.Split(header, ",") {
+			fields := strings.Fields(strings.TrimSpace(part))
+			if len(fields) == 0 {
+				continue
+			}
+			if normalized, ok := allowed[strings.ToLower(fields[0])]; ok {
+				seen[normalized] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for scheme := range seen {
+		out = append(out, scheme)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // runADCSInventory executes an adcs.inventory job.

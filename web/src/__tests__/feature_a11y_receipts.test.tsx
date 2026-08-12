@@ -518,7 +518,7 @@ const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
         };
       case "complianceEvidencePack":
         return {
-          format: "trstctl.compliance.evidence-pack.v3",
+          format: "trstctl.compliance.evidence-pack.v4",
           framework: "soc2",
           public_key_der: "BASE64PUBLICKEY",
           custody: {
@@ -530,6 +530,7 @@ const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
             exportability: { exportable: 0, non_exportable: 0 },
             unrecorded_certificates: [],
           },
+          adcs: { observations: [], drift: [] },
           signed_export: {
             manifest: {
               framework: "soc2",

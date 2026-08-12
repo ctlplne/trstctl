@@ -686,6 +686,179 @@
         ],
         "type": "object"
       },
+      "ADCSAgentRestrictions": {
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "enabled",
+              "disabled",
+              "unobserved"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "source"
+        ],
+        "type": "object"
+      },
+      "ADCSAuditReference": {
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "event_id",
+          "event_type",
+          "sequence",
+          "digest",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "ADCSComplianceDrift": {
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSTemplateDriftChange"
+            },
+            "type": "array"
+          },
+          "direction": {
+            "enum": [
+              "worse",
+              "better",
+              "neutral"
+            ],
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSTemplateLifecycleChange"
+            },
+            "type": "array"
+          },
+          "observed_by": {
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/ADCSAuditReference"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "worsened": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reference",
+          "run_id",
+          "source_id",
+          "domain",
+          "agent_id",
+          "observed_by",
+          "direction",
+          "worsened",
+          "changes",
+          "lifecycle"
+        ],
+        "type": "object"
+      },
+      "ADCSComplianceEvidence": {
+        "properties": {
+          "drift": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSComplianceDrift"
+            },
+            "type": "array"
+          },
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSComplianceObservation"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "observations",
+          "drift"
+        ],
+        "type": "object"
+      },
+      "ADCSComplianceObservation": {
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "agent_name": {
+            "type": "string"
+          },
+          "directory_verified": {
+            "type": "boolean"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSRuleFinding"
+            },
+            "type": "array"
+          },
+          "inventory": {
+            "$ref": "#/components/schemas/ADCSObservedInventory"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/ADCSAuditReference"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "run_id",
+          "source_id",
+          "domain",
+          "agent_id",
+          "agent_name",
+          "directory_verified",
+          "inventory",
+          "findings"
+        ],
+        "type": "object"
+      },
       "ADCSDatabaseIngest": {
         "properties": {
           "ca_config": {
@@ -805,6 +978,132 @@
         ],
         "type": "object"
       },
+      "ADCSEnrollmentEndpoint": {
+        "properties": {
+          "authentication": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "extended_protection": {
+            "enum": [
+              "enabled",
+              "disabled",
+              "unobserved"
+            ],
+            "type": "string"
+          },
+          "http_status": {
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "web_enrollment",
+              "ndes",
+              "ndes_admin"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "anonymous_access",
+              "authentication_required",
+              "redirected",
+              "not_found",
+              "unreachable",
+              "reachable_other"
+            ],
+            "type": "string"
+          },
+          "tls_verified": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "url",
+          "state",
+          "authentication",
+          "tls_verified",
+          "extended_protection"
+        ],
+        "type": "object"
+      },
+      "ADCSEnrollmentService": {
+        "properties": {
+          "agent_restriction_source": {
+            "type": "string"
+          },
+          "agent_restriction_state": {
+            "enum": [
+              "enabled",
+              "disabled",
+              "unobserved"
+            ],
+            "type": "string"
+          },
+          "dns_name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSEnrollmentEndpoint"
+            },
+            "type": "array"
+          },
+          "enrollment_web_services": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSTemplateFinding"
+            },
+            "type": "array"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_by": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "worst_severity": {
+            "enum": [
+              "",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "service",
+          "enrollment_web_services",
+          "endpoints",
+          "agent_restriction_state",
+          "agent_restriction_source",
+          "worst_severity",
+          "findings",
+          "observed_by",
+          "observed_at"
+        ],
+        "type": "object"
+      },
       "ADCSFindingEvidence": {
         "properties": {
           "attribute": {
@@ -872,10 +1171,127 @@
         ],
         "type": "object"
       },
+      "ADCSObservedInventory": {
+        "properties": {
+          "enrollment_services": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSObservedService"
+            },
+            "type": "array"
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSObservedTemplate"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "templates",
+          "enrollment_services"
+        ],
+        "type": "object"
+      },
+      "ADCSObservedService": {
+        "properties": {
+          "agent_restrictions": {
+            "$ref": "#/components/schemas/ADCSAgentRestrictions"
+          },
+          "dns_name": {
+            "type": "string"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSEnrollmentEndpoint"
+            },
+            "type": "array"
+          },
+          "enrollment_web_services": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "templates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "agent_restrictions"
+        ],
+        "type": "object"
+      },
+      "ADCSObservedTemplate": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "ekus": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enrollee_supplies_san": {
+            "type": "boolean"
+          },
+          "enrollee_supplies_subject": {
+            "type": "boolean"
+          },
+          "enrollment_principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "exportable_key": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "oid": {
+            "type": "string"
+          },
+          "published_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requires_manager_approval": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "enrollee_supplies_subject",
+          "enrollee_supplies_san",
+          "requires_manager_approval",
+          "exportable_key"
+        ],
+        "type": "object"
+      },
       "ADCSPosture": {
         "properties": {
           "critical": {
             "type": "integer"
+          },
+          "enrollment_services": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSEnrollmentService"
+            },
+            "type": "array"
           },
           "guidance": {
             "type": "string"
@@ -905,10 +1321,65 @@
         "required": [
           "observed",
           "templates",
+          "enrollment_services",
           "critical",
           "high",
           "medium",
           "guidance"
+        ],
+        "type": "object"
+      },
+      "ADCSRuleFinding": {
+        "properties": {
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSFindingEvidence"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "remediation": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "enum": [
+              "template",
+              "enrollment_service"
+            ],
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "template": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "template",
+          "resource_kind",
+          "resource",
+          "id",
+          "severity",
+          "summary",
+          "remediation",
+          "published"
         ],
         "type": "object"
       },
@@ -5627,6 +6098,9 @@
       },
       "ComplianceEvidencePack": {
         "properties": {
+          "adcs": {
+            "$ref": "#/components/schemas/ADCSComplianceEvidence"
+          },
           "custody": {
             "$ref": "#/components/schemas/CertificateCustodySummary"
           },
@@ -5666,7 +6140,8 @@
           "framework",
           "signed_export",
           "public_key_der",
-          "custody"
+          "custody",
+          "adcs"
         ],
         "type": "object"
       },

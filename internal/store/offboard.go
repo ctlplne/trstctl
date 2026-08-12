@@ -139,6 +139,7 @@ var TenantScopedTables = []string{
 	// F1: AD CS template posture is a tenant's own directory observation and
 	// leaves with the tenant.
 	"adcs_template_posture",
+	"adcs_enrollment_service_posture",
 	"policy_bindings",
 	"tenant_members",
 	"api_tokens",

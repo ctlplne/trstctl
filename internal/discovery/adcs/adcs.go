@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -165,6 +166,67 @@ type EnrollmentService struct {
 	Name      string   `json:"name"`
 	DNSName   string   `json:"dns_name,omitempty"`
 	Templates []string `json:"templates,omitempty"`
+	// EnrollmentWebServices are the CES URIs published in the directory's
+	// msPKI-Enrollment-Servers attribute. They are not legacy /certsrv or NDES
+	// endpoints; keeping the three concepts separate prevents a CES record from
+	// being mislabelled as evidence that those IIS role services are absent.
+	EnrollmentWebServices []string `json:"enrollment_web_services,omitempty"`
+	// Endpoints are live, configured relay probes for IIS enrollment surfaces.
+	// Only normalized URL/status/authentication facts cross the agent boundary;
+	// response bodies and cookies are never retained.
+	Endpoints []EnrollmentEndpoint `json:"endpoints,omitempty"`
+	// AgentRestrictions is CA-side policy evidence. Template LDAP cannot answer
+	// it. A collector that cannot read the CA policy reports unobserved rather
+	// than turning missing evidence into an unsafe or safe guess.
+	AgentRestrictions EnrollmentAgentRestrictions `json:"agent_restrictions"`
+}
+
+// EnrollmentEndpointKind is a closed IIS enrollment surface vocabulary.
+type EnrollmentEndpointKind string
+
+const (
+	EndpointWebEnrollment EnrollmentEndpointKind = "web_enrollment"
+	EndpointNDES          EnrollmentEndpointKind = "ndes"
+	EndpointNDESAdmin     EnrollmentEndpointKind = "ndes_admin"
+)
+
+// EnrollmentEndpointState says what one bounded, no-body relay probe observed.
+type EnrollmentEndpointState string
+
+const (
+	EndpointAnonymousAccess      EnrollmentEndpointState = "anonymous_access"
+	EndpointAuthenticationNeeded EnrollmentEndpointState = "authentication_required"
+	EndpointRedirected           EnrollmentEndpointState = "redirected"
+	EndpointNotFound             EnrollmentEndpointState = "not_found"
+	EndpointUnreachable          EnrollmentEndpointState = "unreachable"
+	EndpointReachableOther       EnrollmentEndpointState = "reachable_other"
+)
+
+// EvidenceState is used for controls that require host/CA-side inspection.
+type EvidenceState string
+
+const (
+	EvidenceEnabled    EvidenceState = "enabled"
+	EvidenceDisabled   EvidenceState = "disabled"
+	EvidenceUnobserved EvidenceState = "unobserved"
+)
+
+// EnrollmentEndpoint is one normalized live enrollment-service observation.
+type EnrollmentEndpoint struct {
+	Kind               EnrollmentEndpointKind  `json:"kind"`
+	URL                string                  `json:"url"`
+	State              EnrollmentEndpointState `json:"state"`
+	HTTPStatus         int                     `json:"http_status,omitempty"`
+	Authentication     []string                `json:"authentication,omitempty"`
+	TLSVerified        bool                    `json:"tls_verified"`
+	ExtendedProtection EvidenceState           `json:"extended_protection"`
+}
+
+// EnrollmentAgentRestrictions is the normalized CA policy result. Source is a
+// non-secret collector label, never raw certutil/registry/RPC output.
+type EnrollmentAgentRestrictions struct {
+	State  EvidenceState `json:"state"`
+	Source string        `json:"source"`
 }
 
 // Inventory is one domain's AD CS posture.
@@ -193,6 +255,7 @@ var enrollmentServiceAttributes = []string{
 	"cn",
 	"dNSHostName",
 	"certificateTemplates",
+	"msPKI-Enrollment-Servers",
 }
 
 // Collect reads the templates and enrollment services under the given
@@ -235,9 +298,11 @@ func Collect(ctx context.Context, s Searcher, configurationDN string) (Inventory
 	publishedBy := map[string][]string{}
 	for _, entry := range serviceEntries {
 		service := EnrollmentService{
-			Name:      first(entry.Attributes["cn"]),
-			DNSName:   first(entry.Attributes["dNSHostName"]),
-			Templates: append([]string(nil), entry.Attributes["certificateTemplates"]...),
+			Name:                  first(entry.Attributes["cn"]),
+			DNSName:               first(entry.Attributes["dNSHostName"]),
+			Templates:             append([]string(nil), entry.Attributes["certificateTemplates"]...),
+			EnrollmentWebServices: enrollmentWebServiceURLs(entry.Attributes["msPKI-Enrollment-Servers"]),
+			AgentRestrictions:     EnrollmentAgentRestrictions{State: EvidenceUnobserved, Source: "ca_policy_not_observed"},
 		}
 		sort.Strings(service.Templates)
 		for _, name := range service.Templates {
@@ -264,6 +329,29 @@ func Collect(ctx context.Context, s Searcher, configurationDN string) (Inventory
 		return inventory.Templates[i].Name < inventory.Templates[j].Name
 	})
 	return inventory, nil
+}
+
+// enrollmentWebServiceURLs extracts only absolute HTTP(S) URIs from the
+// multi-line msPKI-Enrollment-Servers values. Microsoft encodes priority and
+// authentication metadata beside the URI; those fields are not guessed into
+// security controls here. The URI is the stable fact this LDAP attribute owns.
+func enrollmentWebServiceURLs(values []string) []string {
+	seen := make(map[string]bool)
+	for _, value := range values {
+		for _, line := range strings.FieldsFunc(value, func(r rune) bool { return r == '\r' || r == '\n' }) {
+			candidate := strings.TrimSpace(line)
+			parsed, err := url.Parse(candidate)
+			if err == nil && parsed.Hostname() != "" && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.User == nil {
+				seen[parsed.String()] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for value := range seen {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // templateFromEntry decodes one template object.

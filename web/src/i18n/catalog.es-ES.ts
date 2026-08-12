@@ -4534,6 +4534,35 @@ const esESCatalog = {
   "connectors.relayPlugins.noLoadedPlugins": "No hay plugins cargados",
   "connectors.relayPlugins.unrestricted": "Sin restricciones",
   "connectors.relayPlugins.loadMore": "Cargar más runtimes de relay",
+  // AUD-37 AD CS complete posture evidence — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "source.adcs.endpoints.aud370001": "Endpoints de inscripción (opcionales)",
+  "source.adcs.endpoints.help.aud370002":
+    "Uno por línea: servicio de inscripción | web_enrollment, ndes o ndes_admin | URL HTTP(S) absoluta. El relay no sigue redirecciones ni conserva cuerpos de respuesta.",
+  "source.adcs.services.heading.aud370003": "Servicios de inscripción y exposición de IIS",
+  "source.adcs.services.help.aud370004":
+    "Publicación LDAP, sondeos configurados sin cuerpo y Restricciones del agente de inscripción del lado de la CA en la misma observación del relay.",
+  "source.adcs.services.empty.aud370005": "Aún no se ha observado ningún servicio de inscripción.",
+  "source.adcs.restrictions.aud370006": "Restricciones del agente de inscripción",
+  "source.adcs.ces.aud370007": "Servicios web de inscripción publicados",
+  "source.adcs.tls.aud370008": "TLS",
+  "source.adcs.verified.aud370009": "verificado",
+  "source.adcs.unverified.aud370010": "no verificado",
+  "source.adcs.epa.aud370011": "Protección extendida",
+  "source.adcs.compliance.observations.aud370012": "Observaciones de AD CS",
+  "source.adcs.compliance.drift.aud370013": "Registros de deriva de AD CS",
+  "source.adcs.compliance.heading.aud370014": "Evidencia firmada de postura de AD CS",
+  "source.adcs.compliance.help.aud370015":
+    "Estas son las últimas observaciones completas exactas dentro del manifiesto firmado. Cada fila incluye su referencia inmutable de la cadena de auditoría del inquilino.",
+  "source.adcs.compliance.findings.aud370016": "hallazgos",
+  "source.adcs.endpoints.placeholder.aud370017":
+    "CORP-CA | web_enrollment | https://ca.corp.example/certsrv/\nCORP-CA | ndes_admin | https://ca.corp.example/certsrv/mscep_admin/",
+  "source.adcs.compliance.event.aud370018": "evento",
+  "source.adcs.http.aud370019": "HTTP",
+  "source.adcs.private.allow.aud370020": "Permitir salida a endpoints privados con límites explícitos",
+  "source.adcs.private.cidrs.aud370021": "CIDR de endpoints privados permitidos",
+  "source.adcs.private.help.aud370022":
+    "Prefijos RFC1918/ULA de IPv6 separados por comas o saltos de línea. Las direcciones link-local, de metadatos, loopback, multicast y CGNAT permanecen bloqueadas.",
+  "source.adcs.private.placeholder.aud370023": "10.42.8.0/24",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

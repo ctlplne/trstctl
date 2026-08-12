@@ -39,6 +39,40 @@ describe("AD CS inventory posture", () => {
           observed_by: "network-relay-1",
         },
       ],
+      enrollment_services: [
+        {
+          domain: "CORP-CA",
+          service: "CORP-CA",
+          dns_name: "ca01.corp.example",
+          enrollment_web_services: ["https://ca01.corp.example/CES/"],
+          endpoints: [
+            {
+              kind: "ndes_admin",
+              url: "http://ca01.corp.example/certsrv/mscep_admin/",
+              state: "anonymous_access",
+              http_status: 200,
+              authentication: [],
+              tls_verified: false,
+              extended_protection: "unobserved",
+            },
+          ],
+          agent_restriction_state: "unobserved",
+          agent_restriction_source: "requires_windows_relay",
+          worst_severity: "critical",
+          findings: [
+            {
+              id: "ADCS-NDES-ADMIN-ANONYMOUS",
+              severity: "critical",
+              summary: "The administration endpoint returned content without an authentication challenge.",
+              remediation: "Require authenticated access and verified TLS.",
+              published: true,
+              evidence: [{ attribute: "NDES administration endpoint", observed: "anonymous_access HTTP 200" }],
+            },
+          ],
+          observed_at: "2026-08-11T23:40:00Z",
+          observed_by: "network-relay-1",
+        },
+      ],
       critical: 0,
       high: 0,
       medium: 0,
@@ -77,6 +111,22 @@ describe("AD CS inventory posture", () => {
         },
       ],
     });
+  });
+
+  it("shows live IIS exposure and honest CA restriction evidence", async () => {
+    render(
+      <AppQueryProvider>
+        <ADCSTemplatePanel />
+      </AppQueryProvider>,
+    );
+
+    const heading = await screen.findByRole("heading", { name: "Enrollment services and IIS exposure" });
+    const section = heading.closest("section");
+    expect(section).not.toBeNull();
+    expect(within(section!).getByText("requires_windows_relay", { exact: false })).toBeInTheDocument();
+    expect(within(section!).getAllByText("anonymous_access", { exact: false }).length).toBeGreaterThan(0);
+    expect(within(section!).getByText("ADCS-NDES-ADMIN-ANONYMOUS", { exact: true })).toBeInTheDocument();
+    expect(within(section!).getByText(/NDES administration endpoint = anonymous_access HTTP 200/)).toBeInTheDocument();
   });
 
   it("shows source failure lifecycle and enrollment trustees in the shared data grid", async () => {

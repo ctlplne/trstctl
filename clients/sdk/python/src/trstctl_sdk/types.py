@@ -244,6 +244,69 @@ ACMEUpstreamAuthorizationList = TypedDict(
     total=False,
 )
 
+ADCSAgentRestrictions = TypedDict(
+    'ADCSAgentRestrictions',
+    {
+        'source': str,
+        'state': str,
+    },
+    total=False,
+)
+
+ADCSAuditReference = TypedDict(
+    'ADCSAuditReference',
+    {
+        'digest': str,
+        'event_id': str,
+        'event_type': str,
+        'observed_at': str,
+        'sequence': int,
+    },
+    total=False,
+)
+
+ADCSComplianceDrift = TypedDict(
+    'ADCSComplianceDrift',
+    {
+        'agent_id': str,
+        'changes': list[dict[str, Any]],
+        'direction': str,
+        'domain': str,
+        'lifecycle': list[dict[str, Any]],
+        'observed_by': str,
+        'reference': dict[str, Any],
+        'run_id': str,
+        'source_id': str,
+        'worsened': bool,
+    },
+    total=False,
+)
+
+ADCSComplianceEvidence = TypedDict(
+    'ADCSComplianceEvidence',
+    {
+        'drift': list[dict[str, Any]],
+        'observations': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ADCSComplianceObservation = TypedDict(
+    'ADCSComplianceObservation',
+    {
+        'agent_id': str,
+        'agent_name': str,
+        'directory_verified': bool,
+        'domain': str,
+        'findings': list[dict[str, Any]],
+        'inventory': dict[str, Any],
+        'reference': dict[str, Any],
+        'run_id': str,
+        'source_id': str,
+    },
+    total=False,
+)
+
 ADCSDatabaseIngest = TypedDict(
     'ADCSDatabaseIngest',
     {
@@ -293,6 +356,38 @@ ADCSDriftHistory = TypedDict(
     total=False,
 )
 
+ADCSEnrollmentEndpoint = TypedDict(
+    'ADCSEnrollmentEndpoint',
+    {
+        'authentication': list[str],
+        'extended_protection': str,
+        'http_status': int,
+        'kind': str,
+        'state': str,
+        'tls_verified': bool,
+        'url': str,
+    },
+    total=False,
+)
+
+ADCSEnrollmentService = TypedDict(
+    'ADCSEnrollmentService',
+    {
+        'agent_restriction_source': str,
+        'agent_restriction_state': str,
+        'dns_name': str,
+        'domain': str,
+        'endpoints': list[dict[str, Any]],
+        'enrollment_web_services': list[str],
+        'findings': list[dict[str, Any]],
+        'observed_at': str,
+        'observed_by': str,
+        'service': str,
+        'worst_severity': str,
+    },
+    total=False,
+)
+
 ADCSFindingEvidence = TypedDict(
     'ADCSFindingEvidence',
     {
@@ -319,16 +414,73 @@ ADCSInventorySource = TypedDict(
     total=False,
 )
 
+ADCSObservedInventory = TypedDict(
+    'ADCSObservedInventory',
+    {
+        'enrollment_services': list[dict[str, Any]],
+        'templates': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ADCSObservedService = TypedDict(
+    'ADCSObservedService',
+    {
+        'agent_restrictions': dict[str, Any],
+        'dns_name': str,
+        'endpoints': list[dict[str, Any]],
+        'enrollment_web_services': list[str],
+        'name': str,
+        'templates': list[str],
+    },
+    total=False,
+)
+
+ADCSObservedTemplate = TypedDict(
+    'ADCSObservedTemplate',
+    {
+        'display_name': str,
+        'ekus': list[str],
+        'enrollee_supplies_san': bool,
+        'enrollee_supplies_subject': bool,
+        'enrollment_principals': list[str],
+        'exportable_key': bool,
+        'name': str,
+        'oid': str,
+        'published_by': list[str],
+        'requires_manager_approval': bool,
+        'schema_version': int,
+    },
+    total=False,
+)
+
 ADCSPosture = TypedDict(
     'ADCSPosture',
     {
         'critical': int,
+        'enrollment_services': list[dict[str, Any]],
         'guidance': str,
         'high': int,
         'medium': int,
         'observed': bool,
         'sources': list[dict[str, Any]],
         'templates': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ADCSRuleFinding = TypedDict(
+    'ADCSRuleFinding',
+    {
+        'evidence': list[dict[str, Any]],
+        'id': str,
+        'published': bool,
+        'remediation': str,
+        'resource': str,
+        'resource_kind': str,
+        'severity': str,
+        'summary': str,
+        'template': str,
     },
     total=False,
 )
@@ -2126,6 +2278,7 @@ CodeSigningSignature = TypedDict(
 ComplianceEvidencePack = TypedDict(
     'ComplianceEvidencePack',
     {
+        'adcs': dict[str, Any],
         'custody': dict[str, Any],
         'format': str,
         'framework': str,

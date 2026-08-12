@@ -5455,6 +5455,47 @@ export interface components {
             items: components["schemas"]["ACMEUpstreamAuthorization"][];
             never_validated_count: number;
         };
+        ADCSAgentRestrictions: {
+            source: string;
+            /** @enum {string} */
+            state: "enabled" | "disabled" | "unobserved";
+        };
+        ADCSAuditReference: {
+            digest: string;
+            event_id: string;
+            event_type: string;
+            /** Format: date-time */
+            observed_at: string;
+            sequence: number;
+        };
+        ADCSComplianceDrift: {
+            agent_id: string;
+            changes: components["schemas"]["ADCSTemplateDriftChange"][];
+            /** @enum {string} */
+            direction: "worse" | "better" | "neutral";
+            domain: string;
+            lifecycle: components["schemas"]["ADCSTemplateLifecycleChange"][];
+            observed_by: string;
+            reference: components["schemas"]["ADCSAuditReference"];
+            run_id: string;
+            source_id: string;
+            worsened: boolean;
+        };
+        ADCSComplianceEvidence: {
+            drift: components["schemas"]["ADCSComplianceDrift"][];
+            observations: components["schemas"]["ADCSComplianceObservation"][];
+        };
+        ADCSComplianceObservation: {
+            agent_id: string;
+            agent_name: string;
+            directory_verified: boolean;
+            domain: string;
+            findings: components["schemas"]["ADCSRuleFinding"][];
+            inventory: components["schemas"]["ADCSObservedInventory"];
+            reference: components["schemas"]["ADCSAuditReference"];
+            run_id: string;
+            source_id: string;
+        };
         ADCSDatabaseIngest: {
             ca_config: string;
             last_error?: string;
@@ -5486,6 +5527,34 @@ export interface components {
         ADCSDriftHistory: {
             items: components["schemas"]["ADCSTemplateDrift"][];
         };
+        ADCSEnrollmentEndpoint: {
+            authentication: string[];
+            /** @enum {string} */
+            extended_protection: "enabled" | "disabled" | "unobserved";
+            http_status?: number;
+            /** @enum {string} */
+            kind: "web_enrollment" | "ndes" | "ndes_admin";
+            /** @enum {string} */
+            state: "anonymous_access" | "authentication_required" | "redirected" | "not_found" | "unreachable" | "reachable_other";
+            tls_verified: boolean;
+            url: string;
+        };
+        ADCSEnrollmentService: {
+            agent_restriction_source: string;
+            /** @enum {string} */
+            agent_restriction_state: "enabled" | "disabled" | "unobserved";
+            dns_name?: string;
+            domain: string;
+            endpoints: components["schemas"]["ADCSEnrollmentEndpoint"][];
+            enrollment_web_services: string[];
+            findings: components["schemas"]["ADCSTemplateFinding"][];
+            /** Format: date-time */
+            observed_at: string;
+            observed_by: string;
+            service: string;
+            /** @enum {string} */
+            worst_severity: "" | "medium" | "high" | "critical";
+        };
         ADCSFindingEvidence: {
             attribute: string;
             observed: string;
@@ -5508,14 +5577,53 @@ export interface components {
             /** Format: uuid */
             source_id: string;
         };
+        ADCSObservedInventory: {
+            enrollment_services: components["schemas"]["ADCSObservedService"][];
+            templates: components["schemas"]["ADCSObservedTemplate"][];
+        };
+        ADCSObservedService: {
+            agent_restrictions: components["schemas"]["ADCSAgentRestrictions"];
+            dns_name?: string;
+            endpoints?: components["schemas"]["ADCSEnrollmentEndpoint"][];
+            enrollment_web_services?: string[];
+            name: string;
+            templates?: string[];
+        };
+        ADCSObservedTemplate: {
+            display_name?: string;
+            ekus?: string[];
+            enrollee_supplies_san: boolean;
+            enrollee_supplies_subject: boolean;
+            enrollment_principals?: string[];
+            exportable_key: boolean;
+            name: string;
+            oid?: string;
+            published_by?: string[];
+            requires_manager_approval: boolean;
+            schema_version?: number;
+        };
         ADCSPosture: {
             critical: number;
+            enrollment_services: components["schemas"]["ADCSEnrollmentService"][];
             guidance: string;
             high: number;
             medium: number;
             observed: boolean;
             sources?: components["schemas"]["ADCSInventorySource"][];
             templates: components["schemas"]["ADCSTemplate"][];
+        };
+        ADCSRuleFinding: {
+            evidence?: components["schemas"]["ADCSFindingEvidence"][];
+            id: string;
+            published: boolean;
+            remediation: string;
+            resource: string;
+            /** @enum {string} */
+            resource_kind: "template" | "enrollment_service";
+            /** @enum {string} */
+            severity: "medium" | "high" | "critical";
+            summary: string;
+            template: string;
         };
         ADCSTemplate: {
             display_name?: string;
@@ -6792,6 +6900,7 @@ export interface components {
             transparency_destination?: string;
         };
         ComplianceEvidencePack: {
+            adcs: components["schemas"]["ADCSComplianceEvidence"];
             custody: components["schemas"]["CertificateCustodySummary"];
             format: string;
             /** @enum {string} */

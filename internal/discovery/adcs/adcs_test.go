@@ -74,9 +74,10 @@ func TestCollectReadsTemplatesAndBindsThemToPublishingCAs(t *testing.T) {
 		},
 		[]adcs.Entry{
 			{DN: "CN=CORP-CA,...", Attributes: map[string][]string{
-				"cn":                   {"CORP-CA"},
-				"dNSHostName":          {"ca01.corp.example"},
-				"certificateTemplates": {"WebServer"},
+				"cn":                       {"CORP-CA"},
+				"dNSHostName":              {"ca01.corp.example"},
+				"certificateTemplates":     {"WebServer"},
+				"msPKI-Enrollment-Servers": {"0\n0\nhttps://ca01.corp.example/CES_Kerberos/service.svc"},
 			}},
 		},
 	)
@@ -96,6 +97,11 @@ func TestCollectReadsTemplatesAndBindsThemToPublishingCAs(t *testing.T) {
 	}
 	if len(byName["Unpublished"].PublishedBy) != 0 {
 		t.Errorf("an unpublished template reports publishers: %v", byName["Unpublished"].PublishedBy)
+	}
+	service := inv.EnrollmentServices[0]
+	if !reflect.DeepEqual(service.EnrollmentWebServices, []string{"https://ca01.corp.example/CES_Kerberos/service.svc"}) ||
+		service.AgentRestrictions.State != adcs.EvidenceUnobserved {
+		t.Fatalf("enrollment service lost CES/closed CA-policy evidence: %+v", service)
 	}
 }
 
@@ -317,6 +323,7 @@ func TestESC1IsFoundOnlyWhenEveryElementIsPresent(t *testing.T) {
 		Name: "VulnTemplate", SchemaVersion: 4,
 		EnrolleeSuppliesSubject: true,
 		EKUs:                    []string{adcs.EKUClientAuth},
+		EnrollmentPrincipals:    []string{"S-1-5-11"},
 		PublishedBy:             []string{"CORP-CA"},
 	}
 	if !hasFinding(adcs.Findings(adcs.Inventory{Templates: []adcs.Template{esc1}}), "ADCS-ESC1") {
@@ -350,12 +357,89 @@ func TestESC1IsFoundOnlyWhenEveryElementIsPresent(t *testing.T) {
 	}
 }
 
+// TestESC1RequiresObservedLowPrivilegeEnrollmentAUD37 closes the rule/input
+// mismatch from the audit. Supplies-subject is not a domain escalation path for
+// "anyone" unless the observed DACL actually names a broad/low-privileged
+// trustee. Custom groups are not guessed low privilege from their RID.
+func TestESC1RequiresObservedLowPrivilegeEnrollmentAUD37(t *testing.T) {
+	base := adcs.Template{
+		Name: "UserAuth", SchemaVersion: 4, EnrolleeSuppliesSubject: true,
+		EKUs: []string{adcs.EKUClientAuth}, PublishedBy: []string{"CORP-CA"},
+	}
+	for name, principals := range map[string][]string{
+		"everyone":            {"S-1-1-0"},
+		"authenticated-users": {"S-1-5-11"},
+		"builtin-users":       {"S-1-5-32-545"},
+		"domain-users":        {"S-1-5-21-111-222-333-513"},
+		"domain-computers":    {"S-1-5-21-111-222-333-515"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			template := base
+			template.EnrollmentPrincipals = principals
+			findings := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{template}})
+			finding := findingByID(findings, "ADCS-ESC1")
+			if finding == nil || !evidenceContains(finding.Evidence, "nTSecurityDescriptor enrollment trustees", principals[0]) {
+				t.Fatalf("low-privilege trustee %v did not produce falsifiable ESC1: %+v", principals, findings)
+			}
+		})
+	}
+	for name, principals := range map[string][]string{
+		"no-grant":      {},
+		"custom-group":  {"S-1-5-21-111-222-333-1001"},
+		"domain-admins": {"S-1-5-21-111-222-333-512"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			template := base
+			template.EnrollmentPrincipals = principals
+			if findings := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{template}}); hasFinding(findings, "ADCS-ESC1") {
+				t.Fatalf("trustees %v were guessed low privilege: %+v", principals, findings)
+			}
+		})
+	}
+}
+
+// TestEnrollmentServiceRulesUseClosedLiveEvidenceAUD37 proves three distinct
+// facts stay distinct: CES publication, live legacy IIS probes, and CA-side
+// Enrollment Agent Restrictions. Unreachable/unobserved never becomes safe.
+func TestEnrollmentServiceRulesUseClosedLiveEvidenceAUD37(t *testing.T) {
+	vulnerable := adcs.EnrollmentService{
+		Name: "CORP-CA", DNSName: "ca01.corp.example",
+		EnrollmentWebServices: []string{"http://ca01.corp.example/CES_Kerberos/service.svc"},
+		AgentRestrictions:     adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceDisabled, Source: "windows_ca_policy"},
+		Endpoints: []adcs.EnrollmentEndpoint{
+			{Kind: adcs.EndpointWebEnrollment, URL: "http://webenroll.corp.example/certsrv/", State: adcs.EndpointAuthenticationNeeded, HTTPStatus: 401, Authentication: []string{"Negotiate", "NTLM"}, ExtendedProtection: adcs.EvidenceDisabled},
+			{Kind: adcs.EndpointNDESAdmin, URL: "https://ndes.corp.example/certsrv/mscep_admin/", State: adcs.EndpointAnonymousAccess, HTTPStatus: 200, TLSVerified: true, ExtendedProtection: adcs.EvidenceUnobserved},
+		},
+	}
+	findings := adcs.Findings(adcs.Inventory{EnrollmentServices: []adcs.EnrollmentService{vulnerable}})
+	for _, id := range []string{"ADCS-CES-PLAINTEXT", "ADCS-WEB-ENROLLMENT-PLAINTEXT", "ADCS-WEB-ENROLLMENT-EPA-DISABLED", "ADCS-NDES-ADMIN-ANONYMOUS"} {
+		finding := findingByID(findings, id)
+		if finding == nil || finding.ResourceKind != "enrollment_service" || finding.Resource != "CORP-CA" || len(finding.Evidence) == 0 {
+			t.Fatalf("service rule %s missing exact resource/evidence: %+v", id, findings)
+		}
+	}
+
+	hardened := adcs.EnrollmentService{
+		Name:                  "CORP-CA",
+		EnrollmentWebServices: []string{"https://ca01.corp.example/CES_Kerberos/service.svc"},
+		AgentRestrictions:     adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceEnabled, Source: "windows_ca_policy"},
+		Endpoints: []adcs.EnrollmentEndpoint{
+			{Kind: adcs.EndpointWebEnrollment, URL: "https://webenroll.corp.example/certsrv/", State: adcs.EndpointAuthenticationNeeded, HTTPStatus: 401, Authentication: []string{"Negotiate"}, TLSVerified: true, ExtendedProtection: adcs.EvidenceEnabled},
+			{Kind: adcs.EndpointNDESAdmin, URL: "https://ndes.corp.example/certsrv/mscep_admin/", State: adcs.EndpointAuthenticationNeeded, HTTPStatus: 401, TLSVerified: true, ExtendedProtection: adcs.EvidenceEnabled},
+		},
+	}
+	if got := adcs.Findings(adcs.Inventory{EnrollmentServices: []adcs.EnrollmentService{hardened}}); len(got) != 0 {
+		t.Fatalf("hardened enrollment service produced false alarms: %+v", got)
+	}
+}
+
 // TestNoEKUCountsAsAuthentication: an empty EKU list is unrestricted, not
 // harmless. Treating it as harmless is the mistake worth not making.
 func TestNoEKUCountsAsAuthentication(t *testing.T) {
 	unrestricted := adcs.Template{
 		Name: "Unrestricted", SchemaVersion: 2,
 		EnrolleeSuppliesSubject: true,
+		EnrollmentPrincipals:    []string{"S-1-5-21-111-222-333-513"},
 	}
 	if !unrestricted.AllowsClientAuthentication() {
 		t.Fatal("a template with no EKU restriction was treated as unable to authenticate")
@@ -375,7 +459,7 @@ func TestNoEKUCountsAsAuthentication(t *testing.T) {
 func TestFindingsAreActionable(t *testing.T) {
 	inv := adcs.Inventory{Templates: []adcs.Template{
 		{Name: "A", SchemaVersion: 1, EnrolleeSuppliesSubject: true, EnrolleeSuppliesSAN: true,
-			ExportableKey: true, EKUs: []string{adcs.EKUAnyPurpose}, PublishedBy: []string{"CA"}},
+			ExportableKey: true, EKUs: []string{adcs.EKUAnyPurpose}, EnrollmentPrincipals: []string{"S-1-1-0"}, PublishedBy: []string{"CA"}},
 	}}
 	findings := adcs.Findings(inv)
 	if len(findings) == 0 {
@@ -402,8 +486,22 @@ func TestFindingsAreActionable(t *testing.T) {
 }
 
 func hasFinding(findings []adcs.Finding, id string) bool {
+	return findingByID(findings, id) != nil
+}
+
+func findingByID(findings []adcs.Finding, id string) *adcs.Finding {
 	for _, f := range findings {
 		if f.ID == id {
+			finding := f
+			return &finding
+		}
+	}
+	return nil
+}
+
+func evidenceContains(evidence []adcs.EvidenceRef, attribute, fragment string) bool {
+	for _, ref := range evidence {
+		if ref.Attribute == attribute && strings.Contains(ref.Observed, fragment) {
 			return true
 		}
 	}
@@ -451,14 +549,17 @@ func TestEnrollmentAgentIsItsOwnFinding(t *testing.T) {
 		EKUs:        []string{adcs.EKUCertificateRequestAgent},
 		PublishedBy: []string{"CORP-CA"},
 	}
-	got := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{agent}})
+	service := adcs.EnrollmentService{Name: "CORP-CA", AgentRestrictions: adcs.EnrollmentAgentRestrictions{
+		State: adcs.EvidenceDisabled, Source: "windows_ca_policy",
+	}}
+	got := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{agent}, EnrollmentServices: []adcs.EnrollmentService{service}})
 	if !hasFinding(got, "ADCS-ESC3-AGENT") {
 		t.Fatalf("an unapproved enrollment-agent template produced no ESC3 finding: %+v", got)
 	}
 
 	approved := agent
 	approved.RequiresManagerApproval = true
-	gotApproved := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{approved}})
+	gotApproved := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{approved}, EnrollmentServices: []adcs.EnrollmentService{service}})
 	if hasFinding(gotApproved, "ADCS-ESC3-AGENT") {
 		t.Error("ESC3 reported despite manager approval")
 	}
@@ -466,6 +567,23 @@ func TestEnrollmentAgentIsItsOwnFinding(t *testing.T) {
 	// on whoever approves, and the CA's agent restrictions.
 	if !hasFinding(gotApproved, "ADCS-ESC3-AGENT-APPROVED") {
 		t.Error("an approved enrollment-agent template produced no finding at all")
+	}
+}
+
+func TestEnrollmentAgentRestrictionEvidenceNeverDefaultsSafeAUD37(t *testing.T) {
+	agent := adcs.Template{
+		Name: "EnrollmentAgent", SchemaVersion: 4,
+		EKUs: []string{adcs.EKUCertificateRequestAgent}, PublishedBy: []string{"CORP-CA"},
+	}
+	unobserved := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{agent}})
+	if hasFinding(unobserved, "ADCS-ESC3-AGENT") || !hasFinding(unobserved, "ADCS-ESC3-RESTRICTIONS-UNOBSERVED") {
+		t.Fatalf("unobserved CA policy became a vulnerable/safe guess: %+v", unobserved)
+	}
+	enabled := adcs.EnrollmentService{Name: "CORP-CA", AgentRestrictions: adcs.EnrollmentAgentRestrictions{
+		State: adcs.EvidenceEnabled, Source: "windows_ca_policy",
+	}}
+	if findings := adcs.Findings(adcs.Inventory{Templates: []adcs.Template{agent}, EnrollmentServices: []adcs.EnrollmentService{enabled}}); len(findings) != 0 {
+		t.Fatalf("observed enabled agent restrictions produced a false alarm: %+v", findings)
 	}
 }
 
@@ -477,12 +595,15 @@ func TestEveryFindingCarriesFalsifiableEvidence(t *testing.T) {
 	inv := adcs.Inventory{Templates: []adcs.Template{
 		{Name: "Everything", SchemaVersion: 1, EnrolleeSuppliesSubject: true,
 			EnrolleeSuppliesSAN: true, ExportableKey: true,
-			EKUs:        []string{adcs.EKUAnyPurpose, adcs.EKUCertificateRequestAgent},
-			PublishedBy: []string{"CORP-CA"}},
+			EKUs:                 []string{adcs.EKUAnyPurpose, adcs.EKUCertificateRequestAgent},
+			EnrollmentPrincipals: []string{"S-1-5-11"},
+			PublishedBy:          []string{"CORP-CA"}},
 		{Name: "Approved", SchemaVersion: 4, EnrolleeSuppliesSubject: true,
 			RequiresManagerApproval: true, EKUs: []string{adcs.EKUClientAuth}},
 		{Name: "NoEKU", SchemaVersion: 2},
-	}}
+	}, EnrollmentServices: []adcs.EnrollmentService{{
+		Name: "CORP-CA", AgentRestrictions: adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceDisabled, Source: "windows_ca_policy"},
+	}}}
 	findings := adcs.Findings(inv)
 	if len(findings) == 0 {
 		t.Fatal("no findings to check")
@@ -619,7 +740,7 @@ func TestFirstSweepIsNotDrift(t *testing.T) {
 func TestPublishingADangerousTemplateIsDrift(t *testing.T) {
 	vuln := adcs.Template{
 		Name: "Vuln", SchemaVersion: 4, EnrolleeSuppliesSubject: true,
-		EKUs: []string{adcs.EKUClientAuth},
+		EKUs: []string{adcs.EKUClientAuth}, EnrollmentPrincipals: []string{"S-1-5-11"},
 	}
 	published := vuln
 	published.PublishedBy = []string{"CORP-CA"}
@@ -642,6 +763,7 @@ func TestNewDangerousTemplateIsTheLoudestSignal(t *testing.T) {
 	after := append(append([]adcs.Template(nil), before...), adcs.Template{
 		Name: "BrandNew", SchemaVersion: 4, EnrolleeSuppliesSubject: true,
 		EKUs: []string{adcs.EKUClientAuth}, PublishedBy: []string{"CORP-CA"},
+		EnrollmentPrincipals: []string{"S-1-5-11"},
 	})
 	drift := adcs.DiffTemplates(before, after)
 	if !drift.Worsened() {

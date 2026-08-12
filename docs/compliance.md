@@ -70,17 +70,18 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 Use `pci-dss`, `hipaa`, `soc2`, `nist-800-53`, `nist-csf-2.0`, `fedramp`,
 `cmmc-2.0`, `cnsa-2.0`, `fips-140`, `common-criteria`, `cabf-br`, `webtrust`,
 `etsi`, `eidas`, or `nis2` as the framework path value. The JSON response
-has five stable fields:
+has six stable fields:
 
 | Field | Meaning |
 | --- | --- |
-| `format` | Wire marker: `trstctl.compliance.evidence-pack.v3`; v3 adds the signed certificate-custody estate summary. |
+| `format` | Wire marker: `trstctl.compliance.evidence-pack.v4`; v4 adds signed AD CS posture/drift evidence while retaining the v3 certificate-custody summary. |
 | `framework` | The normalized framework id used to build the report. |
 | `signed_export` | A signed envelope whose manifest binds `tenant_id`, `generated_at`, the inclusive `evidence_window`, per-control verdicts/windows, exact evidence references, missing prerequisites, CBOM crypto posture, and operator-attestation gaps. |
 | `public_key_der` | PKIX DER public key bytes for offline verification. |
 | `custody` | Convenience copy of the tenant certificate-custody summary. The authoritative copy is `signed_export.manifest.custody`; offline verification must verify that manifest before trusting any count or row. |
+| `adcs` | Convenience copy of the latest complete per-domain AD CS v2 observations and bounded semantic drift. The authoritative copy is `signed_export.manifest.adcs`; each row carries its immutable audit reference. |
 
-The v3 manifest is derived from tenant-scoped facts, not static product
+The v4 manifest is derived from tenant-scoped facts, not static product
 capability labels. An audit-event reference contains the immutable event ID,
 tenant-local sequence, event type, observation time, and audit-chain digest;
 current inventory references name the exact tenant graph object and snapshot
@@ -89,6 +90,16 @@ the signed window. Missing, stale, malformed, or wrong-tenant input becomes an
 explicit `gap` with `missing` prerequisites. The signature authenticates these
 bounded claims; it does not prove that an external auditor agrees with their
 sufficiency.
+
+`adcs` includes the exact normalized templates, enrollment services, configured
+IIS endpoint observations, CA restriction states, and rule findings that the
+Posture console serves. Only v2 observations containing the service-evidence
+field qualify; historical template-only v1 events stay audit history rather
+than being presented as complete posture. Before signing, findings are
+recomputed from the event facts. The latest complete observation per domain and
+every source/run/relay-bound v2 drift event in the 90-day window carry event ID,
+type, tenant-local sequence, chain digest, and observation time. The convenience
+copy is for rendering; offline users verify `signed_export.manifest.adcs`.
 
 `custody` counts every tenant certificate by origin, storage class, and
 exportability. `recorded` means all required custody facts are present;

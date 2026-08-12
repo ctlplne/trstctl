@@ -36,6 +36,7 @@ interface ComplianceManifest {
     post_quantum?: number;
   };
   custody?: ComplianceEvidencePack["custody"];
+  adcs?: ComplianceEvidencePack["adcs"];
   product_evidences?: string[];
   operator_attests?: string[];
 }
@@ -50,6 +51,10 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
   const custody = manifest.custody;
   const productEvidence = manifest.product_evidences ?? [];
   const operatorAttests = manifest.operator_attests ?? [];
+  // V4 always serves this field, but keeping the renderer tolerant of older
+  // cached packs prevents a schema upgrade from turning historical evidence
+  // into a blank page before the operator downloads a fresh artifact.
+  const adcsEvidence = manifest.adcs ?? pack.adcs ?? { observations: [], drift: [] };
   const payload = JSON.stringify(pack, null, 2);
 
   return (
@@ -91,7 +96,36 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
         <EvidenceMetric label={t("policy.compliance.custodyRecorded")} value={String(custody?.recorded ?? 0)} />
         <EvidenceMetric label={t("policy.compliance.custodyUnrecorded")} value={String(custody?.unrecorded ?? 0)} />
         <EvidenceMetric label="Public key DER" value={`${pack.public_key_der.length} bytes`} />
+        <EvidenceMetric label={translateNow("source.adcs.compliance.observations.aud370012")} value={String(adcsEvidence.observations.length)} />
+        <EvidenceMetric label={translateNow("source.adcs.compliance.drift.aud370013")} value={String(adcsEvidence.drift.length)} />
       </dl>
+
+      {adcsEvidence.observations.length > 0 ? (
+        <section aria-labelledby="compliance-adcs-heading" className="mt-4 grid gap-2 rounded-md border border-border p-3">
+          <h4 id="compliance-adcs-heading" className="font-medium">
+            {translateNow("source.adcs.compliance.heading.aud370014")}
+          </h4>
+          <p className="text-xs text-muted-foreground">{translateNow("source.adcs.compliance.help.aud370015")}</p>
+          <ul className="grid gap-2">
+            {adcsEvidence.observations.map((observation) => (
+              <li key={observation.reference.event_id} className="grid gap-1 border-l-2 border-status-info pl-2 text-xs">
+                <span className="font-medium">
+                  {observation.domain} · {observation.findings.length} {translateNow("source.adcs.compliance.findings.aud370016")}
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {translateNow("source.adcs.compliance.event.aud370018")}:{observation.reference.event_id} · #{observation.reference.sequence}
+                </span>
+                <span className="break-all font-mono text-muted-foreground">{observation.reference.digest}</span>
+                {observation.findings.map((finding) => (
+                  <span key={`${finding.resource_kind}/${finding.resource}/${finding.id}`}>
+                    <span className="font-mono">{finding.id}</span> · {finding.resource}: {finding.summary}
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {custody && custody.unrecorded_certificates.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-md border border-border">

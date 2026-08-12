@@ -182,6 +182,49 @@ export interface ACMEUpstreamAuthorizationList {
   never_validated_count: number;
 }
 
+export interface ADCSAgentRestrictions {
+  source: string;
+  state: "enabled" | "disabled" | "unobserved";
+}
+
+export interface ADCSAuditReference {
+  digest: string;
+  event_id: string;
+  event_type: string;
+  observed_at: string;
+  sequence: number;
+}
+
+export interface ADCSComplianceDrift {
+  agent_id: string;
+  changes: ADCSTemplateDriftChange[];
+  direction: "worse" | "better" | "neutral";
+  domain: string;
+  lifecycle: ADCSTemplateLifecycleChange[];
+  observed_by: string;
+  reference: ADCSAuditReference;
+  run_id: string;
+  source_id: string;
+  worsened: boolean;
+}
+
+export interface ADCSComplianceEvidence {
+  drift: ADCSComplianceDrift[];
+  observations: ADCSComplianceObservation[];
+}
+
+export interface ADCSComplianceObservation {
+  agent_id: string;
+  agent_name: string;
+  directory_verified: boolean;
+  domain: string;
+  findings: ADCSRuleFinding[];
+  inventory: ADCSObservedInventory;
+  reference: ADCSAuditReference;
+  run_id: string;
+  source_id: string;
+}
+
 export interface ADCSDatabaseIngest {
   ca_config: string;
   last_error?: string;
@@ -215,6 +258,30 @@ export interface ADCSDriftHistory {
   items: ADCSTemplateDrift[];
 }
 
+export interface ADCSEnrollmentEndpoint {
+  authentication: string[];
+  extended_protection: "enabled" | "disabled" | "unobserved";
+  http_status?: number;
+  kind: "web_enrollment" | "ndes" | "ndes_admin";
+  state: "anonymous_access" | "authentication_required" | "redirected" | "not_found" | "unreachable" | "reachable_other";
+  tls_verified: boolean;
+  url: string;
+}
+
+export interface ADCSEnrollmentService {
+  agent_restriction_source: string;
+  agent_restriction_state: "enabled" | "disabled" | "unobserved";
+  dns_name?: string;
+  domain: string;
+  endpoints: ADCSEnrollmentEndpoint[];
+  enrollment_web_services: string[];
+  findings: ADCSTemplateFinding[];
+  observed_at: string;
+  observed_by: string;
+  service: string;
+  worst_severity: "" | "medium" | "high" | "critical";
+}
+
 export interface ADCSFindingEvidence {
   attribute: string;
   observed: string;
@@ -233,14 +300,55 @@ export interface ADCSInventorySource {
   source_id: string;
 }
 
+export interface ADCSObservedInventory {
+  enrollment_services: ADCSObservedService[];
+  templates: ADCSObservedTemplate[];
+}
+
+export interface ADCSObservedService {
+  agent_restrictions: ADCSAgentRestrictions;
+  dns_name?: string;
+  endpoints?: ADCSEnrollmentEndpoint[];
+  enrollment_web_services?: string[];
+  name: string;
+  templates?: string[];
+}
+
+export interface ADCSObservedTemplate {
+  display_name?: string;
+  ekus?: string[];
+  enrollee_supplies_san: boolean;
+  enrollee_supplies_subject: boolean;
+  enrollment_principals?: string[];
+  exportable_key: boolean;
+  name: string;
+  oid?: string;
+  published_by?: string[];
+  requires_manager_approval: boolean;
+  schema_version?: number;
+}
+
 export interface ADCSPosture {
   critical: number;
+  enrollment_services: ADCSEnrollmentService[];
   guidance: string;
   high: number;
   medium: number;
   observed: boolean;
   sources?: ADCSInventorySource[];
   templates: ADCSTemplate[];
+}
+
+export interface ADCSRuleFinding {
+  evidence?: ADCSFindingEvidence[];
+  id: string;
+  published: boolean;
+  remediation: string;
+  resource: string;
+  resource_kind: "template" | "enrollment_service";
+  severity: "medium" | "high" | "critical";
+  summary: string;
+  template: string;
 }
 
 export interface ADCSTemplate {
@@ -1482,6 +1590,7 @@ export interface CodeSigningSignature {
 }
 
 export interface ComplianceEvidencePack {
+  adcs: ADCSComplianceEvidence;
   custody: CertificateCustodySummary;
   format: string;
   framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";

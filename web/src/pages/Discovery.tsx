@@ -7,6 +7,7 @@ import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type SourceActivity } from "./discovery/DiscoveryPageParts";
+import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -81,9 +82,6 @@ const sourceKindLabels: Record<SourceKind, string> = {
   nhi_behavior: "NHI behavior",
   credential_compromise: "Compromised credentials",
   k8s_ingress_gateway: "Kubernetes TLS",
-};
-const adcsExamples = {
-  configurationDN: "CN=Configuration,DC=corp,DC=example",
 };
 const structuredSourceKinds = [
   "nhi_cross_surface",
@@ -580,6 +578,9 @@ export function Discovery() {
   const [adcsConfigurationDN, setADCSConfigurationDN] = useState("");
   const [adcsBindDN, setADCSBindDN] = useState("");
   const [adcsPasswordRef, setADCSPasswordRef] = useState("");
+  const [adcsEnrollmentEndpoints, setADCSEnrollmentEndpoints] = useState("");
+  const [adcsAllowPrivateEndpoint, setADCSAllowPrivateEndpoint] = useState(false);
+  const [adcsPrivateEgressCIDRs, setADCSPrivateEgressCIDRs] = useState("");
   const [structuredRows, setStructuredRows] = useState<Record<StructuredSourceKind, StructuredRow[]>>(() => initialStructuredRows());
   const [structuredTemplates, setStructuredTemplates] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredTemplates());
   const [structuredJSONImports, setStructuredJSONImports] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredJSONImports());
@@ -696,6 +697,8 @@ export function Discovery() {
               configuration_dn: adcsConfigurationDN.trim(),
               bind_dn: adcsBindDN.trim(),
               password_ref: adcsPasswordRef.trim(),
+              ...(adcsEnrollmentEndpoints.trim() ? { enrollment_endpoints: parseADCSEnrollmentEndpoints(adcsEnrollmentEndpoints) } : {}),
+              ...(adcsAllowPrivateEndpoint ? { allow_private_endpoint: true, private_egress_cidrs: parseADCSPrivateEgressCIDRs(adcsPrivateEgressCIDRs) } : {}),
               ...(relayAgentID.trim() ? { relay_agent_id: relayAgentID.trim() } : {}),
             }
           : sourceKind === "network" || sourceKind === "ssh"
@@ -716,6 +719,9 @@ export function Discovery() {
       setADCSConfigurationDN("");
       setADCSBindDN("");
       setADCSPasswordRef("");
+      setADCSEnrollmentEndpoints("");
+      setADCSAllowPrivateEndpoint(false);
+      setADCSPrivateEgressCIDRs("");
       setStructuredRows(initialStructuredRows());
       setStructuredTemplates(initialStructuredTemplates());
       setStructuredJSONImports(initialStructuredJSONImports());
@@ -900,26 +906,24 @@ export function Discovery() {
               </div>
             )}
             {sourceKind === "adcs" && (
-              <div className="grid gap-3 md:grid-cols-2">
-                <ADCSField label={translateNow("source.directory.url.2029b746ff")} value={adcsURL} onValue={setADCSURL} className="md:col-span-2" />
-                <ADCSField
-                  label={translateNow("protocols.dns01.config")}
-                  value={adcsConfigurationDN}
-                  onValue={setADCSConfigurationDN}
-                  placeholder={adcsExamples.configurationDN}
-                  className="md:col-span-2"
-                />
-                <ADCSField label={translateNow("source.bind.56b9b63d28")} value={adcsBindDN} onValue={setADCSBindDN} />
-                <ADCSField label={translateNow("notifications.routing.credentialRef")} value={adcsPasswordRef} onValue={setADCSPasswordRef} />
-                <ADCSField
-                  label={t("discovery.source.relayAgent")}
-                  value={relayAgentID}
-                  onValue={setRelayAgentID}
-                  placeholder={t("discovery.source.relayAgentPlaceholder")}
-                  className="md:col-span-2"
-                  required={false}
-                />
-              </div>
+              <ADCSSourceFields
+                url={adcsURL}
+                configurationDN={adcsConfigurationDN}
+                bindDN={adcsBindDN}
+                passwordRef={adcsPasswordRef}
+                relayAgentID={relayAgentID}
+                enrollmentEndpoints={adcsEnrollmentEndpoints}
+                allowPrivateEndpoint={adcsAllowPrivateEndpoint}
+                privateEgressCIDRs={adcsPrivateEgressCIDRs}
+                onURL={setADCSURL}
+                onConfigurationDN={setADCSConfigurationDN}
+                onBindDN={setADCSBindDN}
+                onPasswordRef={setADCSPasswordRef}
+                onRelayAgentID={setRelayAgentID}
+                onEnrollmentEndpoints={setADCSEnrollmentEndpoints}
+                onAllowPrivateEndpoint={setADCSAllowPrivateEndpoint}
+                onPrivateEgressCIDRs={setADCSPrivateEgressCIDRs}
+              />
             )}
             {isStructuredSourceKind(sourceKind) && (
               <StructuredSourceForm
@@ -1208,37 +1212,6 @@ export function Discovery() {
         </section>
       )}
     </section>
-  );
-}
-
-function ADCSField({
-  label,
-  value,
-  onValue,
-  placeholder,
-  className,
-  required = true,
-}: {
-  label: string;
-  value: string;
-  onValue: (value: string) => void;
-  placeholder?: string;
-  className?: string;
-  required?: boolean;
-}) {
-  return (
-    <Field label={label} className={className} required={required}>
-      {(control) => (
-        <Input
-          {...control}
-          className="font-mono text-xs"
-          value={value}
-          onChange={(event) => onValue(event.target.value)}
-          placeholder={placeholder}
-          required={required}
-        />
-      )}
-    </Field>
   );
 }
 

@@ -1337,16 +1337,48 @@ because a domain controller's LDAP is not reachable from a hosted control plane
 and should not be — an in-domain relay is the only vantage from which this
 inventory exists.
 
+The source may also name at most 24 enrollment endpoints, each bound to the
+exact LDAP enrollment-service name and one closed kind: `web_enrollment`,
+`ndes`, or `ndes_admin`. The relay performs one bounded GET from inside the
+domain, requests at most one response byte from cooperative servers, never
+follows a redirect, and closes the body without reading or retaining it. Only
+the configured URL, closed reachability/authentication state, HTTP status,
+authentication scheme names, verified-HTTPS fact, and Extended Protection
+state cross the relay boundary. Cookies, redirect targets, authentication
+challenge bytes, and response bodies do not. An endpoint not named in source
+configuration is not scanned and cannot be reported by the signed result.
+Public addresses are accepted through the shared resolved-address SSRF guard.
+Private endpoints require the source's explicit `allow_private_endpoint` opt-in
+and a bounded `private_egress_cidrs` list limited to RFC1918 or IPv6 ULA
+sub-prefixes. The resolved address must fall inside that list; link-local/cloud
+metadata, loopback, multicast, unspecified, and CGNAT addresses remain blocked.
+
 **The combinations are named, not the flags.** Nobody spots an escalation path
 by scanning four boolean columns across ninety templates, so the analysis reports
 consequences: `ADCS-ESC1` fires only when supplies-subject, an authenticating
-EKU, and the absence of manager approval are all present, because removing any
-one of them changes the answer. Enrollment-agent templates get their own rule
+EKU, the absence of manager approval, and an observed broad/low-privilege
+enrollment trustee are all present, because removing any one of them changes
+the answer. Everyone, Authenticated Users, Builtin Users, Domain Users, and
+Domain Computers are recognized by canonical SID; an unknown custom SID is
+never guessed broad. Enrollment-agent templates get their own rule
 (`ADCS-ESC3-AGENT`) rather than being folded into the client-auth checks,
 because the primitive is different — an agent certificate requests on behalf of
 *any* principal, so one of them is a master key rather than an impersonation of
 one account — and so is the remediation: restricting who may enrol is not
 enough, the CA must also bound which templates accept agent-signed requests.
+
+The same sweep checks the surfaces outside template LDAP. Plaintext published
+CES URIs, reachable plaintext Web Enrollment/NDES, anonymous `mscep_admin`, and
+Windows-authenticated Web Enrollment whose Extended Protection is disabled or
+unobserved produce separate findings with the exact endpoint/status/header
+facts. `msPKI-Enrollment-Servers` is treated only as the CES metadata it is; it
+is never mislabelled as proof that legacy `/certsrv` or NDES exists or is absent.
+On Windows relays, `certutil.exe` queries each publishing CA's
+`CA\\EnrollmentAgentRights`: a present policy is `enabled`, Microsoft's stable
+missing-value result is `disabled`, and access/transport/tool failures are
+`unobserved`. A non-Windows relay reports `requires_windows_relay`. Missing
+evidence therefore produces an explicit visibility finding instead of becoming
+either a vulnerable or hardened guess.
 
 **Every finding carries the attributes and values it was derived from.** A
 posture finding an operator cannot check against the template's own property
@@ -1381,11 +1413,17 @@ The Posture console shows it: configured directory readers with
 pending/running/succeeded/failed lifecycle, templates worst-first, what each one
 permits and the specific fix, whether a CA publishes it, canonical Windows SIDs
 granted the enrollment extended right, and which relay observed it when.
+It also shows each enrollment service, its published CES URIs, configured live
+endpoint probes, CA restriction state/source, exact finding evidence, and the
+same observation time/relay. The Discovery form exposes the bounded endpoint
+targets; the control plane never probes them.
 The empty state distinguishes "no relay has read a directory yet" from "no AD CS
 estate", because those are opposite facts an empty table cannot tell apart. The
 posture table is only an event projection. The immutable
-`adcs.template.inventory.observed` event is the authority, snapshot/restore
-includes the projection, and a cold replay rebuilds the same rows. Observation
+`adcs.template.inventory.observed` v2 event is the authority, snapshot/restore
+includes both template and enrollment-service projections, and a cold replay
+rebuilds the same rows atomically. Historical v1 template-only events remain
+replayable but cannot masquerade as complete service evidence. Observation
 time and relay identity stay visible so restored evidence cannot masquerade as
 a fresh directory read.
 
@@ -1415,6 +1453,15 @@ outbox-key replay guards keep a retried signed receipt from duplicating either.
 Pre-v2 drift events lacked run/source authority and therefore replay as audit
 history only rather than being attached to a guessed source.
 
+Licensed compliance evidence packs copy the latest complete v2 observation for
+each domain in the bounded window plus every authoritative v2 drift record into
+the signed manifest. Each carries tenant-local event ID, type, sequence, chain
+digest, source, run, relay, and observation time. The outer API copy is the same
+semantic object for the console; offline verification still treats the signed
+manifest as authority. Template/service findings are recomputed from normalized
+event facts before export, so an agent cannot omit an uncomfortable verdict
+while keeping the facts that require it.
+
 A first sweep is deliberately not drift. Reporting an entire estate as "added"
 the first time anyone looks would bury the real change that comes next under
 ninety notifications. The template is stored exactly as the directory reported
@@ -1442,8 +1489,10 @@ development environment does not contain a licensed Windows Server forest with
 AD DS and AD CS, so forest policy, domain-controller authorization, and Microsoft
 implementation interoperability still require the release lab. A release must
 run the same read-only account against that lab and retain the domain-controller
-audit showing Bind/Search only; the repository does not claim that external
-receipt exists here.
+audit showing Bind/Search only, certutil read evidence, and IIS probe outcomes.
+Repository tests use live-shaped HTTP/certutil outcomes and cross-compile the
+Windows collector; they do not claim a real CA's registry encoding or IIS
+Extended Protection configuration was observed here.
 
 ### Segment sweeps run from inside the segment
 

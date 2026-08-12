@@ -279,3 +279,16 @@ func TestMigrationRunsAreRebuiltAndSnapshotSafeAUD40(t *testing.T) {
 		t.Fatalf("SnapshotFormatVersion = %d; a v24 payload cannot restore migration runs", SnapshotFormatVersion)
 	}
 }
+
+func TestADCSEnrollmentServicePostureIsRebuiltAndSnapshotSafeAUD37(t *testing.T) {
+	const table = "adcs_enrollment_service_posture"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Fatalf("%s is event-derived but missing from the cold-rebuild truncate set", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s is missing from snapshots, so restore would erase enrollment-service posture", table)
+	}
+	if SnapshotFormatVersion < 27 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v26 payload cannot restore enrollment-service posture", SnapshotFormatVersion)
+	}
+}

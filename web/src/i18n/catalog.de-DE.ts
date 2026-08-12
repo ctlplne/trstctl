@@ -4549,6 +4549,35 @@ const deDECatalog = {
   "connectors.relayPlugins.noLoadedPlugins": "Keine geladenen Plugins",
   "connectors.relayPlugins.unrestricted": "Unbeschränkt",
   "connectors.relayPlugins.loadMore": "Weitere Relay-Laufzeiten laden",
+  // AUD-37 AD CS complete posture evidence — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "source.adcs.endpoints.aud370001": "Registrierungsendpunkte (optional)",
+  "source.adcs.endpoints.help.aud370002":
+    "Einer pro Zeile: Registrierungsdienst | web_enrollment, ndes oder ndes_admin | absolute HTTP(S)-URL. Das Relay folgt keinen Weiterleitungen und speichert keine Antwortinhalte.",
+  "source.adcs.services.heading.aud370003": "Registrierungsdienste und IIS-Exposition",
+  "source.adcs.services.help.aud370004":
+    "LDAP-Veröffentlichung, konfigurierte Prüfungen ohne Antwortinhalt und CA-seitige Registrierungsagent-Einschränkungen aus derselben Relay-Beobachtung.",
+  "source.adcs.services.empty.aud370005": "Noch wurde kein Registrierungsdienst beobachtet.",
+  "source.adcs.restrictions.aud370006": "Registrierungsagent-Einschränkungen",
+  "source.adcs.ces.aud370007": "Veröffentlichte Registrierungs-Webdienste",
+  "source.adcs.tls.aud370008": "TLS",
+  "source.adcs.verified.aud370009": "verifiziert",
+  "source.adcs.unverified.aud370010": "nicht verifiziert",
+  "source.adcs.epa.aud370011": "Erweiterter Schutz",
+  "source.adcs.compliance.observations.aud370012": "AD-CS-Beobachtungen",
+  "source.adcs.compliance.drift.aud370013": "AD-CS-Abweichungsdatensätze",
+  "source.adcs.compliance.heading.aud370014": "Signierter AD-CS-Posturnachweis",
+  "source.adcs.compliance.help.aud370015":
+    "Dies sind die exakten neuesten vollständigen Beobachtungen im signierten Manifest. Jede Zeile enthält ihren unveränderlichen Verweis auf die Mandanten-Prüfkette.",
+  "source.adcs.compliance.findings.aud370016": "Befunde",
+  "source.adcs.endpoints.placeholder.aud370017":
+    "CORP-CA | web_enrollment | https://ca.corp.example/certsrv/\nCORP-CA | ndes_admin | https://ca.corp.example/certsrv/mscep_admin/",
+  "source.adcs.compliance.event.aud370018": "Ereignis",
+  "source.adcs.http.aud370019": "HTTP",
+  "source.adcs.private.allow.aud370020": "Explizit begrenzten Zugriff auf private Endpunkte erlauben",
+  "source.adcs.private.cidrs.aud370021": "Erlaubte private Endpunkt-CIDRs",
+  "source.adcs.private.help.aud370022":
+    "Durch Kommas oder Zeilenumbrüche getrennte RFC1918-/IPv6-ULA-Präfixe. Link-lokale, Metadaten-, Loopback-, Multicast- und CGNAT-Adressen bleiben gesperrt.",
+  "source.adcs.private.placeholder.aud370023": "10.42.8.0/24",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

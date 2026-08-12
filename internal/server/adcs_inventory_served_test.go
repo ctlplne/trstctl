@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -58,6 +59,10 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 			"bind_dn":          "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example",
 			"password_ref":     secretRef,
 			"relay_agent_id":   relayID,
+			"enrollment_endpoints": []map[string]any{
+				{"enrollment_service": "CORP-CA", "kind": "web_enrollment", "url": "https://ca01.corp.example/certsrv/"},
+				{"enrollment_service": "CORP-CA", "kind": "ndes_admin", "url": "http://ca01.corp.example/certsrv/mscep_admin/"},
+			},
 		},
 	}
 	var sourceBodies [2][]byte
@@ -213,18 +218,15 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 		t.Fatal("AD CS bind credential redeemed twice for one claim")
 	}
 
-	report := map[string]any{
-		"status": "succeeded", "directory_verified": true,
-		"inventory": map[string]any{
-			"templates": []map[string]any{{
-				"name": "UserAuth", "display_name": "User Authentication", "schema_version": 4,
-				"ekus":                  []string{"1.3.6.1.5.5.7.3.2"},
-				"enrollment_principals": []string{"S-1-5-11", "S-1-5-21-111-222-333-1001"},
-				"published_by":          []string{"CORP-CA"},
-			}},
-			"enrollment_services": []map[string]any{{"name": "CORP-CA", "dns_name": "ca01.corp.example", "templates": []string{"UserAuth"}}},
-		},
-		"findings": []any{},
+	inventory := aud37Inventory([]adcsdiscovery.Template{{
+		Name: "UserAuth", DisplayName: "User Authentication", SchemaVersion: 4,
+		EKUs:                 []string{adcsdiscovery.EKUClientAuth},
+		EnrollmentPrincipals: []string{"S-1-5-11", "S-1-5-21-111-222-333-1001"},
+		PublishedBy:          []string{"CORP-CA"},
+	}})
+	report := adcsdiscovery.InventoryReport{
+		Status: "succeeded", DirectoryVerified: true, Inventory: inventory,
+		Findings: adcsdiscovery.Findings(inventory),
 	}
 	reportJSON, err := json.Marshal(report)
 	if err != nil {
@@ -262,13 +264,23 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 		!h.hasEvent(t, "adcs.template.inventory.observed") {
 		t.Fatal("AD CS receipt did not append lifecycle and posture events")
 	}
+	var sawCompletePostureEvent bool
 	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
 		if event.TenantID == h.tenant && (bytes.Contains(event.Data, []byte(secretBody)) || bytes.Contains(event.Data, []byte("nTSecurityDescriptor"))) {
 			t.Fatalf("event %s persisted bind material or raw security descriptor", event.Type)
 		}
+		if event.TenantID == h.tenant && event.Type == projections.EventADCSInventoryObserved {
+			if event.SchemaVersion != adcsdiscovery.InventoryEventSchemaVersion || !bytes.Contains(event.Data, []byte(`"enrollment_services"`)) {
+				t.Fatalf("AD CS observation is not complete v%d evidence: schema=%d data=%s", adcsdiscovery.InventoryEventSchemaVersion, event.SchemaVersion, event.Data)
+			}
+			sawCompletePostureEvent = true
+		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+	if !sawCompletePostureEvent {
+		t.Fatal("AD CS receipt emitted no complete posture event")
 	}
 
 	// Cold replay is the authority. If posture existed only because the warm
@@ -317,20 +329,13 @@ func assertADCSDriftHistoryAndAlertAUD36(t *testing.T, h *roleHarness, token, ot
 	if err := json.Unmarshal(job.Payload, &driftIntent); err != nil || driftIntent.ID == "" {
 		t.Fatalf("decode AUD-36 drift command: id=%q err=%v", driftIntent.ID, err)
 	}
-	report := map[string]any{
-		"status": "succeeded", "directory_verified": true,
-		"inventory": map[string]any{
-			"templates": []map[string]any{{
-				"name": "UserAuth", "display_name": "User Authentication", "schema_version": 4,
-				"enrollee_supplies_subject": true,
-				"ekus":                      []string{"1.3.6.1.5.5.7.3.2"},
-				"enrollment_principals":     []string{"S-1-5-11", "S-1-5-21-111-222-333-1001", "S-1-5-21-111-222-333-2002"},
-				"published_by":              []string{"CORP-CA"},
-			}},
-			"enrollment_services": []map[string]any{{"name": "CORP-CA", "dns_name": "ca01.corp.example", "templates": []string{"UserAuth"}}},
-		},
-		"findings": []any{},
-	}
+	inventory := aud37Inventory([]adcsdiscovery.Template{{
+		Name: "UserAuth", DisplayName: "User Authentication", SchemaVersion: 4,
+		EnrolleeSuppliesSubject: true, EKUs: []string{adcsdiscovery.EKUClientAuth},
+		EnrollmentPrincipals: []string{"S-1-5-11", "S-1-5-21-111-222-333-1001", "S-1-5-21-111-222-333-2002"},
+		PublishedBy:          []string{"CORP-CA"},
+	}})
+	report := adcsdiscovery.InventoryReport{Status: "succeeded", DirectoryVerified: true, Inventory: inventory, Findings: adcsdiscovery.Findings(inventory)}
 	reportJSON, err := json.Marshal(report)
 	if err != nil {
 		t.Fatal(err)
@@ -429,35 +434,23 @@ func assertADCSDriftHistoryAndAlertAUD36(t *testing.T, h *roleHarness, token, ot
 	// A neutral EKU edit that preserves client authentication and a real hardening
 	// sweep stay readable but do not page. The identical sweep after them produces
 	// no fourth history row.
-	neutralReport := map[string]any{
-		"status": "succeeded", "directory_verified": true,
-		"inventory": map[string]any{
-			"templates": []map[string]any{{
-				"name": "UserAuth", "display_name": "Renamed User Authentication", "schema_version": 4,
-				"enrollee_supplies_subject": true,
-				"ekus":                      []string{"1.3.6.1.5.5.7.3.1", "1.3.6.1.5.5.7.3.2"},
-				"enrollment_principals":     []string{"S-1-5-11", "S-1-5-21-111-222-333-1001", "S-1-5-21-111-222-333-2002"},
-				"published_by":              []string{"CORP-CA"},
-			}},
-			"enrollment_services": []map[string]any{{"name": "CORP-CA", "dns_name": "ca01.corp.example", "templates": []string{"UserAuth"}}},
-		},
-		"findings": []any{},
-	}
+	neutralInventory := aud37Inventory([]adcsdiscovery.Template{{
+		Name: "UserAuth", DisplayName: "Renamed User Authentication", SchemaVersion: 4,
+		EnrolleeSuppliesSubject: true,
+		EKUs:                    []string{"1.3.6.1.5.5.7.3.1", adcsdiscovery.EKUClientAuth},
+		EnrollmentPrincipals:    []string{"S-1-5-11", "S-1-5-21-111-222-333-1001", "S-1-5-21-111-222-333-2002"},
+		PublishedBy:             []string{"CORP-CA"},
+	}})
+	neutralReport := adcsdiscovery.InventoryReport{Status: "succeeded", DirectoryVerified: true, Inventory: neutralInventory, Findings: adcsdiscovery.Findings(neutralInventory)}
 	runADCSSweepAUD36(t, h, token, sourceID, "aud36-neutral-run", "sha256:aud36-directory-neutral", neutralReport)
-	improvedReport := map[string]any{
-		"status": "succeeded", "directory_verified": true,
-		"inventory": map[string]any{
-			"templates": []map[string]any{{
-				"name": "UserAuth", "display_name": "Renamed User Authentication", "schema_version": 4,
-				"requires_manager_approval": true,
-				"ekus":                      []string{"1.3.6.1.5.5.7.3.1", "1.3.6.1.5.5.7.3.2"},
-				"enrollment_principals":     []string{"S-1-5-11", "S-1-5-21-111-222-333-1001"},
-				"published_by":              []string{"CORP-CA"},
-			}},
-			"enrollment_services": []map[string]any{{"name": "CORP-CA", "dns_name": "ca01.corp.example", "templates": []string{"UserAuth"}}},
-		},
-		"findings": []any{},
-	}
+	improvedInventory := aud37Inventory([]adcsdiscovery.Template{{
+		Name: "UserAuth", DisplayName: "Renamed User Authentication", SchemaVersion: 4,
+		RequiresManagerApproval: true,
+		EKUs:                    []string{"1.3.6.1.5.5.7.3.1", adcsdiscovery.EKUClientAuth},
+		EnrollmentPrincipals:    []string{"S-1-5-11", "S-1-5-21-111-222-333-1001"},
+		PublishedBy:             []string{"CORP-CA"},
+	}})
+	improvedReport := adcsdiscovery.InventoryReport{Status: "succeeded", DirectoryVerified: true, Inventory: improvedInventory, Findings: adcsdiscovery.Findings(improvedInventory)}
 	runADCSSweepAUD36(t, h, token, sourceID, "aud36-improved-run", "sha256:aud36-directory-hardened", improvedReport)
 	runADCSSweepAUD36(t, h, token, sourceID, "aud36-unchanged-run", "sha256:aud36-directory-unchanged", improvedReport)
 	code, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/posture/adcs/drift", token, nil)
@@ -502,7 +495,7 @@ func runADCSSweepAUD36(
 	t *testing.T,
 	h *roleHarness,
 	token, sourceID, requestKey, digest string,
-	report map[string]any,
+	report adcsdiscovery.InventoryReport,
 ) {
 	t.Helper()
 	ctx := context.Background()
@@ -527,6 +520,20 @@ func runADCSSweepAUD36(
 		transport.JobOutcomeExecuted, string(reportJSON), digest))
 	if err != nil || response == nil || !response.Accepted {
 		t.Fatalf("report %s AD CS sweep: response=%+v err=%v", requestKey, response, err)
+	}
+}
+
+func aud37Inventory(templates []adcsdiscovery.Template) adcsdiscovery.Inventory {
+	return adcsdiscovery.Inventory{
+		Templates: templates,
+		EnrollmentServices: []adcsdiscovery.EnrollmentService{{
+			Name: "CORP-CA", DNSName: "ca01.corp.example", Templates: []string{"UserAuth"},
+			AgentRestrictions: adcsdiscovery.EnrollmentAgentRestrictions{State: adcsdiscovery.EvidenceEnabled, Source: "windows_certutil"},
+			Endpoints: []adcsdiscovery.EnrollmentEndpoint{
+				{Kind: adcsdiscovery.EndpointNDESAdmin, URL: "http://ca01.corp.example/certsrv/mscep_admin/", State: adcsdiscovery.EndpointAnonymousAccess, HTTPStatus: 200, ExtendedProtection: adcsdiscovery.EvidenceUnobserved},
+				{Kind: adcsdiscovery.EndpointWebEnrollment, URL: "https://ca01.corp.example/certsrv/", State: adcsdiscovery.EndpointAuthenticationNeeded, HTTPStatus: 401, Authentication: []string{"Negotiate"}, TLSVerified: true, ExtendedProtection: adcsdiscovery.EvidenceEnabled},
+			},
+		}},
 	}
 }
 
@@ -637,6 +644,19 @@ func assertADCSServedProjectionAUD35(t *testing.T, h *roleHarness, token, source
 			Template             string   `json:"template"`
 			EnrollmentPrincipals []string `json:"enrollment_principals"`
 		} `json:"templates"`
+		EnrollmentServices []struct {
+			Service                string `json:"service"`
+			AgentRestrictionState  string `json:"agent_restriction_state"`
+			AgentRestrictionSource string `json:"agent_restriction_source"`
+			Endpoints              []struct {
+				Kind        string `json:"kind"`
+				State       string `json:"state"`
+				TLSVerified bool   `json:"tls_verified"`
+			} `json:"endpoints"`
+			Findings []struct {
+				ID string `json:"id"`
+			} `json:"findings"`
+		} `json:"enrollment_services"`
 		Guidance string `json:"guidance"`
 	}
 	if err := json.Unmarshal(body, &posture); err != nil {
@@ -650,6 +670,12 @@ func assertADCSServedProjectionAUD35(t *testing.T, h *roleHarness, token, source
 	if len(posture.Templates) != 1 || posture.Templates[0].Template != "UserAuth" ||
 		!slices.Equal(posture.Templates[0].EnrollmentPrincipals, wantPrincipals) {
 		t.Fatalf("served enrollment principals = %+v, want %v", posture.Templates, wantPrincipals)
+	}
+	if len(posture.EnrollmentServices) != 1 || posture.EnrollmentServices[0].Service != "CORP-CA" ||
+		posture.EnrollmentServices[0].AgentRestrictionState != "enabled" ||
+		posture.EnrollmentServices[0].AgentRestrictionSource != "windows_certutil" ||
+		len(posture.EnrollmentServices[0].Endpoints) != 2 || len(posture.EnrollmentServices[0].Findings) != 2 {
+		t.Fatalf("served enrollment-service evidence = %+v", posture.EnrollmentServices)
 	}
 	if strings.Contains(strings.ToLower(posture.Guidance), "not yet decoded") {
 		t.Fatalf("served guidance still denies the proven ACL capability: %q", posture.Guidance)

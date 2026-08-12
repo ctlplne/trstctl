@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { StatusBadge } from "@/components/StatusBadge";
-import { api, type ADCSInventorySource, type ADCSTemplate } from "@/lib/api";
+import { api, type ADCSEnrollmentService, type ADCSInventorySource, type ADCSTemplate } from "@/lib/api";
 import { formatDateTime } from "@/i18n/format";
 import { translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -21,6 +21,7 @@ export function ADCSTemplatePanel() {
   const posture = query.data;
   const templates = posture?.templates ?? [];
   const sources = posture?.sources ?? [];
+  const services = posture?.enrollment_services ?? [];
 
   const columns = useMemo<Array<DataGridColumn<ADCSTemplate>>>(
     () => [
@@ -132,6 +133,8 @@ export function ADCSTemplatePanel() {
         virtualization={false}
       />
 
+      {!query.loading && !query.error ? <ADCSEnrollmentServices services={services} /> : null}
+
       {templates[0]?.observed_at ? (
         <p className="text-xs text-muted-foreground">
           {translateNow("source.adcs.observed.f1adcs0017")} {formatDateTime(templates[0].observed_at)}
@@ -148,6 +151,93 @@ export function ADCSTemplatePanel() {
 
       {posture?.guidance ? <p className="text-xs text-status-warning">{posture.guidance}</p> : null}
     </div>
+  );
+}
+
+function ADCSEnrollmentServices({ services }: { services: ADCSEnrollmentService[] }) {
+  return (
+    <section aria-labelledby="adcs-services-heading" className="grid gap-2 border-t border-border pt-4">
+      <div>
+        <h3 id="adcs-services-heading" className="text-sm font-semibold">
+          {translateNow("source.adcs.services.heading.aud370003")}
+        </h3>
+        <p className="text-xs text-muted-foreground">{translateNow("source.adcs.services.help.aud370004")}</p>
+      </div>
+      {services.length === 0 ? <p className="text-sm text-muted-foreground">{translateNow("source.adcs.services.empty.aud370005")}</p> : null}
+      <ul className="grid gap-2">
+        {services.map((service) => (
+          <li key={`${service.domain}/${service.service}`} className="grid gap-3 rounded-panel border border-border bg-card p-3 shadow-elevation1">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <span>
+                <span className="block font-mono text-xs font-semibold">{service.service}</span>
+                {service.dns_name ? <span className="block font-mono text-xs text-muted-foreground">{service.dns_name}</span> : null}
+              </span>
+              <StatusBadge value={service.worst_severity || "none"} vocabulary="risk" />
+            </div>
+            <dl className="grid gap-2 text-xs sm:grid-cols-2">
+              <div>
+                <dt className="text-muted-foreground">{translateNow("source.adcs.restrictions.aud370006")}</dt>
+                <dd>
+                  <span className="font-mono">{service.agent_restriction_state}</span> · {service.agent_restriction_source}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{translateNow("source.adcs.ces.aud370007")}</dt>
+                <dd className="break-all font-mono">{service.enrollment_web_services.join(", ") || translateNow("source.none.dc937b5989")}</dd>
+              </div>
+            </dl>
+            <ul className="grid gap-1">
+              {service.endpoints.map((endpoint) => (
+                <li key={`${endpoint.kind}/${endpoint.url}`} className="grid gap-1 border-l-2 border-status-info pl-2 text-xs">
+                  <span className="font-medium">
+                    {endpoint.kind} · <span className="font-mono">{endpoint.state}</span>
+                    {endpoint.http_status ? (
+                      <>
+                        {" · "}
+                        {translateNow("source.adcs.http.aud370019")} {endpoint.http_status}
+                      </>
+                    ) : null}
+                  </span>
+                  <span className="break-all font-mono text-muted-foreground">{endpoint.url}</span>
+                  <span className="text-muted-foreground">
+                    {translateNow("source.adcs.tls.aud370008")}:{" "}
+                    {endpoint.tls_verified ? translateNow("source.adcs.verified.aud370009") : translateNow("source.adcs.unverified.aud370010")} ·{" "}
+                    {translateNow("source.adcs.epa.aud370011")}: {endpoint.extended_protection}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <ADCSFindingList findings={service.findings} />
+            <p className="text-xs text-muted-foreground">
+              {formatDateTime(service.observed_at)} · {translateNow("source.adcs.observedby.f1adcs0022")}{" "}
+              <span className="font-mono">{service.observed_by}</span>
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ADCSFindingList({ findings }: { findings: ADCSEnrollmentService["findings"] }) {
+  if (findings.length === 0) return <p className="text-xs text-muted-foreground">{translateNow("source.adcs.clean.f1adcs0015")}</p>;
+  return (
+    <ul className="grid gap-2">
+      {findings.map((finding) => (
+        <li key={finding.id} className="text-xs">
+          <span className="font-mono">{finding.id}</span>
+          <span className="block">{finding.summary}</span>
+          <span className="block text-muted-foreground">
+            {translateNow("source.adcs.remediation.f1adcs0016")} {finding.remediation}
+          </span>
+          {finding.evidence && finding.evidence.length > 0 ? (
+            <span className="block text-muted-foreground">
+              {translateNow("source.adcs.evidence.f3adcs0001")} {finding.evidence.map((ref) => `${ref.attribute} = ${ref.observed}`).join(" · ")}
+            </span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
   );
 }
 

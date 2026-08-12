@@ -31,7 +31,7 @@ func (o *Orchestrator) RecordADCSInventoryObservedWithEventID(
 	}
 	_, err = o.emitPreparedExact(ctx, events.Event{
 		ID: eventID, Type: projections.EventADCSInventoryObserved,
-		TenantID: tenantID, Data: payload,
+		TenantID: tenantID, SchemaVersion: adcsdiscovery.InventoryEventSchemaVersion, Data: payload,
 	})
 	return err
 }
