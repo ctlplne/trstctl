@@ -111,7 +111,7 @@ exhaustive subcommand list:
 | `privacy`                          | Subject erasure, retention runs, archive-erasure attestations, export, personal-data catalog (`erasures` · `retention` · `archives` · `export` · `catalog`)  |
 | `profiles`                         | Certificate profile versions (`create` · `list` · `get-version`)                                                                                             |
 | `remediation`                      | Automated remediation playbooks/runs and owner-driven self-remediation actions (`playbooks` · `playbooks run` · `playbook-runs list/get` · `owner-actions list/accept`) |
-| `revocation`                       | Published CRLs, rogue-certificate findings, CT-log submission (`crls` · `rogue-certificates` · `ct-submit`)                                                  |
+| `revocation`                       | Published CRLs, signed relay endpoint health, rogue-certificate findings, CT-log submission (`crls` · `health` · `rogue-certificates` · `ct-submit`)                               |
 | `risk`                             | Rank credentials by risk score, with blast-radius-aware prioritization (`credentials` · `contextual-priorities`)                                             |
 | `run`                              | Local wrapper: run a child process with fetched secrets injected into its environment                                                                        |
 | `scale`                            | High-volume orchestration and multi-region HA issuance posture (`orchestration` · `ha-issuance`)                                                             |
@@ -326,6 +326,9 @@ trstctl-cli certificates list --limit 50
 
 # Show full, sharded, and delta CRL distribution artifacts for the tenant.
 trstctl-cli revocation crls
+
+# Show signed network-relay CRL and OCSP endpoint health evidence.
+trstctl-cli revocation health
 
 # List rogue and non-compliant certificate posture findings.
 trstctl-cli revocation rogue-certificates

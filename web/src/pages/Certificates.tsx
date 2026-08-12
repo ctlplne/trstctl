@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Activity, AlertTriangle, FilePlus2, Layers3, PlugZap, Send, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, FilePlus2, PlugZap, Send, ShieldCheck } from "lucide-react";
 import {
   ApiError,
   UnauthorizedError,
@@ -10,6 +10,7 @@ import {
   type CertificateHealthDashboard,
   type ConnectorDelivery,
   type CRLDistribution,
+  type RevocationHealth,
   type CTSubmission,
   type Identity,
   type Owner,
@@ -257,88 +258,64 @@ function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard
 
 function CRLDistributionPanel({ distributions }: { distributions: CRLDistribution[] }) {
   const { t } = useTranslation();
-  const first = distributions[0];
   const totalShards = distributions.reduce((sum, item) => sum + item.shards.length, 0);
   const totalRevoked = distributions.reduce((sum, item) => sum + item.revoked_count, 0);
   return (
     <section aria-labelledby="crl-distribution-heading" className="border-y border-border py-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 id="crl-distribution-heading" className="text-base font-semibold">
-            {t("certificates.crl.heading")}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {distributions.length > 0
-              ? t("certificates.crl.summary", {
-                  caCount: formatCount(distributions.length),
-                  shardCount: formatCount(totalShards),
-                  revokedCount: formatCount(totalRevoked),
-                })
-              : t("certificates.crl.empty")}
-          </p>
-        </div>
-        <span className="inline-flex min-h-8 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-sm font-medium text-primary">
-          <Layers3 className="h-4 w-4" aria-hidden="true" />
-          {first ? t("certificates.crl.shardPlan", { shardCount: formatCount(first.shard_count) }) : t("certificates.crl.awaiting")}
-        </span>
-      </div>
+      <h2 id="crl-distribution-heading" className="text-base font-semibold">{t("certificates.crl.heading")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {distributions.length > 0
+          ? t("certificates.crl.summary", {
+              caCount: formatCount(distributions.length),
+              shardCount: formatCount(totalShards),
+              revokedCount: formatCount(totalRevoked),
+            })
+          : t("certificates.crl.empty")}
+      </p>
       {distributions.length > 0 && (
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
-              <tr>
-                <th scope="col" className="py-2 pr-4 font-medium">
-                  {t("certificates.crl.ca")}
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  {t("certificates.crl.full")}
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  {t("certificates.crl.shards")}
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  {t("certificates.crl.delta")}
-                </th>
-                <th scope="col" className="pl-4 py-2 font-medium">
-                  {t("certificates.crl.window")}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {distributions.map((item) => (
-                <tr key={item.ca_id}>
-                  <td className="py-2 pr-4 align-top">
-                    <span className="block max-w-[18rem] truncate font-medium">{item.ca_id}</span>
-                    <span className="text-xs text-muted-foreground">{t("certificates.crl.revokedCount", { count: formatCount(item.revoked_count) })}</span>
-                  </td>
-                  <td className="px-4 py-2 align-top">
-                    <a className="font-mono text-xs text-primary underline" href={item.full_url}>
-                      #{item.full_number}
-                    </a>
-                  </td>
-                  <td className="px-4 py-2 align-top">
-                    <span className="block">{t("certificates.crl.servedCount", { count: formatCount(item.shards.length) })}</span>
-                    <span className="text-xs text-muted-foreground">{t("certificates.crl.plannedCount", { count: formatCount(item.shard_count) })}</span>
-                  </td>
-                  <td className="px-4 py-2 align-top">
-                    {item.delta_url ? (
-                      <a className="font-mono text-xs text-primary underline" href={item.delta_url}>
-                        {t("certificates.crl.deltaBase", { base: item.delta_base_number ?? "" })}
-                      </a>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                  <td className="pl-4 py-2 align-top">
-                    <span className="block">{formatDate(item.this_update)}</span>
-                    <span className="text-xs text-muted-foreground">{t("certificates.crl.nextUpdate", { date: formatDate(item.next_update) })}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="mt-4 grid gap-2">
+          {distributions.map((item) => (
+            <li key={item.ca_id} className="rounded-md border border-border p-3 text-sm">
+              <span className="font-medium">{item.ca_id}</span>
+              <div className="mt-1 flex flex-wrap gap-3 text-xs">
+                <a className="font-mono text-primary underline" href={item.full_url}>#{item.full_number}</a>
+                <span>{formatCount(item.shards.length)} · {t("certificates.crl.shardPlan", { shardCount: formatCount(item.shard_count) })}</span>
+                {item.delta_url && <a className="font-mono text-primary underline" href={item.delta_url}>{t("certificates.crl.deltaBase", { base: item.delta_base_number ?? "" })}</a>}
+                <span>{formatDate(item.this_update)} → {formatDate(item.next_update)}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
+    </section>
+  );
+}
+
+function RevocationHealthPanel({ health }: { health: RevocationHealth }) {
+  const { t } = useTranslation();
+  const statusLabel = (status: RevocationHealth["items"][number]["status"]): string =>
+    t(status === "fresh" ? "certificates.health.stateOk" : status === "expiring" ? "nav.task.expiringSoon.label" : status === "stale" ? "secrets.rotationHealth.stale" : status === "unparseable" ? "integrate.gitops.invalid" : "protocols.ari.failed");
+  const statusTone = (status: RevocationHealth["items"][number]["status"]) =>
+    status === "fresh" ? "success" : status === "expiring" || status === "unreachable" ? "warning" : "critical";
+  return (
+    <section aria-labelledby="revocation-health-heading" className="border-y border-border py-4">
+      <h2 id="revocation-health-heading" className="text-base font-semibold">{t("source.revocation.r2cap00001")}</h2>
+      {health.observed && (
+        <ul className="mt-4 grid gap-2">
+          {health.items.map((item) => (
+            <li key={item.target_key} className="rounded-md border border-border p-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0 truncate font-mono text-xs">{item.endpoint}</span>
+                <StatusBadge value={item.status} tone={statusTone(item.status)} label={statusLabel(item.status)} />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {item.protocol.toUpperCase()} · {item.issuer_subject} · {item.signature_verified ? t("source.verified.j2dr000007") : item.detail_code} · {item.next_update ? formatDate(item.next_update) : formatDate(item.observed_at)} · {item.observed_by_agent_name} · <span className="font-mono">{item.evidence_digest.slice(0, 12)}…</span>
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 text-xs text-muted-foreground">{health.guidance}</p>
     </section>
   );
 }
@@ -642,6 +619,7 @@ export function Certificates() {
   const [renewingIds, setRenewingIds] = useState<Set<string>>(() => new Set());
   const [health, setHealth] = useState<CertificateHealthDashboard | null>(null);
   const [crlDistributions, setCRLDistributions] = useState<CRLDistribution[]>([]);
+  const [revocationHealth, setRevocationHealth] = useState<RevocationHealth | null>(null);
   const [roguePosture, setRoguePosture] = useState<RogueCertificatePosture | null>(null);
   const [ctCertificatePEM, setCTCertificatePEM] = useState("");
   const [ctPrecertificatePEM, setCTPrecertificatePEM] = useState("");
@@ -665,16 +643,18 @@ export function Certificates() {
     Promise.all([
       settleOptional(() => api.certificateHealth()),
       settleOptional(() => api.crlDistributions()),
+      settleOptional(() => api.revocationHealth()),
       settleOptional(() => api.rogueCertificates()),
       settleOptional(() => api.risk({ sort: "score" })),
       settleOptional(() => api.rotationRuns({ limit: 100 })),
       settleOptional(() => api.connectorDeliveries({ limit: 50 })),
       settleOptional(() => api.owners()),
       settleOptional(() => api.identities()),
-    ]).then(([healthResult, crlResult, rogueResult, riskResult, rotationResult, deliveryResult, ownerResult, identityResult]) => {
+    ]).then(([healthResult, crlResult, revocationResult, rogueResult, riskResult, rotationResult, deliveryResult, ownerResult, identityResult]) => {
       if (cancelled) return;
       if (healthResult) setHealth(healthResult);
       if (crlResult) setCRLDistributions(crlResult.items ?? []);
+      if (revocationResult) setRevocationHealth(revocationResult);
       if (rogueResult) setRoguePosture(rogueResult);
       if (riskResult) setRisks(riskResult);
       if (rotationResult) setRotationRuns(rotationResult.items ?? []);
@@ -1193,6 +1173,7 @@ export function Certificates() {
           )}
           {tab === "crlct" && (
             <div {...tabPanelProps("certs", "crlct")} className="grid gap-4">
+              {revocationHealth && <RevocationHealthPanel health={revocationHealth} />}
               <CRLDistributionPanel distributions={crlDistributions} />
               <section aria-labelledby="ct-launch-heading" className="border-y border-border py-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">

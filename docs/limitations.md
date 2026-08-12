@@ -1398,12 +1398,22 @@ soft-fail and stop checking revocation at all. Neither appears on any dashboard
 until an incident, while the CA's operator believes revocation works because
 publishing succeeded once.
 
-`revocation.probe` is now a relay job. It fetches each distinct distribution
-point, parses the CRL, verifies its signature against the issuer when one is
-supplied, and reports `thisUpdate`/`nextUpdate`, latency, and revoked count.
-Endpoints are deduplicated before probing: one CA's CDP is named by every
-certificate it issued, and walking the raw list would be monitoring that causes
-the outage it watches for.
+`revocation.probe` is now an hourly, database-clocked relay job. The leader
+scheduler derives distinct CRL distribution points and OCSP responders from
+inventory, matches every leaf to its real issuer key, and carries the exact
+public leaf/issuer certificate context needed to verify the answer. It queues
+at most 32 endpoints per bounded network-role command through the event/outbox
+transaction. Concurrent leaders converge on the same command ID; if the
+representative leaf changes, its OCSP serial changes the ID and creates new work
+instead of colliding with an old command.
+
+The relay performs a real fetch. For CRLs it parses the signed list, verifies the
+issuer signature, and records `thisUpdate`/`nextUpdate`, latency, and revoked
+count. For OCSP it builds a request for the exact leaf, POSTs the RFC 6960 media
+type, verifies the signed response, checks the serial and response status, and
+applies the same freshness window. Endpoints are deduplicated before probing:
+one CA's endpoint is named by every certificate it issued, and walking the raw
+list would be monitoring that causes the outage it watches for.
 
 It is a RELAY job deliberately. The distribution points that matter most are
 internal — an AD CS CRL on `http://pki.corp.internal/certenroll/` is unreachable
@@ -1419,12 +1429,29 @@ captive portal answering 200 with HTML. An LDAP CDP reports unparseable with its
 scheme named, rather than unreachable, because sending someone to check a
 network path that was never the problem wastes the hour that mattered. Whether
 the signature was checked is reported explicitly — "we did not check" and "it
-verified" must never read the same.
+verified" must never read the same. The signed terminal receipt is accepted only
+for the live lease and exact command. It emits immutable queue and observation
+events, projects tenant-scoped endpoint health, and queues one warning/critical
+notification per unhealthy endpoint. `GET /api/v1/revocation/health` and
+Certificates → CRL & CT show the endpoint, issuer/certificate context, relay,
+evidence digest, status, latency and freshness window. Before a signed
+observation exists, the API says `observed:false` and the console says unknown;
+an empty projection never reads as healthy.
 
-**What is not served:** OCSP responder probing. This walks CRL distribution
-points only. The AIA OCSP URLs are parsed and stored but not yet fetched, so an
-estate that relies on OCSP rather than CRLs is not yet covered by this, and the
-revocation health view says so rather than showing an empty list as clean.
+The view gives client-context guidance, not a universal recommendation. CRLs and
+OCSP are different relying-party mechanisms. A fresh responder proves the relay
+could validate that answer at that time; it does not prove every client is
+configured to check it, nor whether a client fails closed or soft-fails when the
+endpoint disappears. Operators must test those client policies separately.
+
+**External lab boundary:** the repository acceptance test uses a real embedded
+PostgreSQL/JetStream/signer stack, an enrolled network relay, and controlled
+cryptographically valid CRL and OCSP responders. It does **not** claim a run
+against a domain-joined Windows AD CS CDP/OCSP estate. That externally served AD
+CS lab remains infrastructure evidence to collect when the Windows lab described
+under F4 is available. LDAP CDP fetching is also not implemented; such an
+endpoint is reported as an unsupported scheme instead of as fresh or merely
+unreachable.
 
 ### Just-in-time credential leases: the brain ships references, not secrets
 

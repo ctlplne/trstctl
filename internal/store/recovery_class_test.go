@@ -240,3 +240,16 @@ func TestEveryTruncatedReadModelTableIsRestoredBySnapshots(t *testing.T) {
 			"must invalidate older payloads that do not carry them", SnapshotFormatVersion)
 	}
 }
+
+func TestRevocationEndpointHealthIsRebuiltAndSnapshotSafe(t *testing.T) {
+	const table = "revocation_endpoint_health"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Fatalf("%s is event-derived but missing from the cold-rebuild truncate set", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s is missing from snapshots, so restore would erase signed endpoint observations", table)
+	}
+	if SnapshotFormatVersion < 24 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v23 payload cannot restore revocation endpoint health", SnapshotFormatVersion)
+	}
+}

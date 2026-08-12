@@ -36,6 +36,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventDiscoverySegmentUpserted:                 "EventDiscoverySegmentUpserted",
 	projections.EventDiscoveryScheduleUpserted:                "EventDiscoveryScheduleUpserted",
 	projections.EventDiscoveryRunQueued:                       "EventDiscoveryRunQueued",
+	projections.EventRevocationProbeQueued:                    "EventRevocationProbeQueued",
+	projections.EventRevocationHealthObserved:                 "EventRevocationHealthObserved",
 	projections.EventDiscoveryFindingTriageChanged:            "EventDiscoveryFindingTriageChanged",
 	projections.EventACMEDNS01ProviderConfigUpserted:          "EventACMEDNS01ProviderConfigUpserted",
 	projections.EventACMEDNS01ProviderConfigDeleted:           "EventACMEDNS01ProviderConfigDeleted",

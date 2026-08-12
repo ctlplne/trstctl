@@ -1195,6 +1195,10 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// the acceptance criterion "a renewal that never lands is detected
 			// within one interval" could not be met by any running binary.
 			startRuntimeWorker(workCtx, srv.RunEndpointVerificationScheduler),
+			// R1: CRL/OCSP endpoint freshness is an observation loop. Without
+			// this registered producer, the relay executor and health view remain
+			// library-only and no running binary ever asks an internal relay to look.
+			startRuntimeWorker(workCtx, srv.RunRevocationHealthScheduler),
 			startRuntimeWorker(workCtx, srv.RunLicensedBackgroundWorkers),
 		}
 		<-workCtx.Done()

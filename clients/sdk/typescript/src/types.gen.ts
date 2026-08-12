@@ -4027,6 +4027,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List relay-verified CRL and OCSP endpoint reachability, signature, status, and freshness */
+        get: operations["listRevocationHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/revocation/rogue-certificates": {
         parameters: {
             query?: never;
@@ -9853,6 +9870,51 @@ export interface components {
             detail?: string;
             kind: string;
             ref: string;
+        };
+        RevocationEndpointHealth: {
+            certificate_fingerprint: string;
+            certificate_id: string;
+            certificate_serial: string;
+            certificate_subject: string;
+            detail_code: string;
+            endpoint: string;
+            evidence_digest: string;
+            issuer_fingerprint?: string;
+            issuer_subject: string;
+            latency_ms: number;
+            /** Format: date-time */
+            next_update?: string;
+            /** Format: date-time */
+            observed_at: string;
+            observed_by_agent_id: string;
+            observed_by_agent_name: string;
+            probe_id: string;
+            /** @enum {string} */
+            protocol: "crl" | "ocsp";
+            responder_subject?: string;
+            /** @enum {string} */
+            response_status?: "good" | "revoked" | "unknown";
+            revoked_count?: number;
+            signature_verified: boolean;
+            /** @enum {string} */
+            status: "fresh" | "expiring" | "stale" | "unreachable" | "unparseable";
+            target_key: string;
+            /** Format: date-time */
+            this_update?: string;
+        };
+        RevocationHealth: {
+            guidance: string;
+            items: components["schemas"]["RevocationEndpointHealth"][];
+            observed: boolean;
+            summary: components["schemas"]["RevocationHealthSummary"];
+        };
+        RevocationHealthSummary: {
+            endpoints: number;
+            expiring: number;
+            fresh: number;
+            stale: number;
+            unparseable: number;
+            unreachable: number;
         };
         RiskComponents: {
             age: number;
@@ -22888,6 +22950,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CTLogSubmission"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listRevocationHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevocationHealth"];
                 };
             };
             /** @description client error */

@@ -487,6 +487,12 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		} else {
 			ingestErr = a.recordADCSInventory(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
 		}
+	case relay.KindRevocationProbe:
+		if a.recordRevocationHealth == nil {
+			ingestErr = errors.New("revocation health result receiver is not configured")
+		} else {
+			ingestErr = a.recordRevocationHealth(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail, req.EvidenceDigest)
+		}
 	}
 	if ingestErr != nil {
 		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)

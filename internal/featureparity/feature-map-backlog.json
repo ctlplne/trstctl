@@ -3059,10 +3059,10 @@
             "phase": "P1",
             "priority": 21,
             "served_state": "served",
-            "backend_status": "served for trstctl hierarchy with OCSP, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture",
-            "current_frontend_mapping": "Certificates page shows rogue/non-compliant certificate posture, CRL distribution status, full/shard/delta URLs, CT precert/cert submission queueing, and identity revoke/audit evidence",
+            "backend_status": "served for trstctl hierarchy plus signed network-relay CRL/OCSP endpoint monitoring, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture",
+            "current_frontend_mapping": "Certificates page shows signed relay CRL/OCSP endpoint freshness evidence, rogue/non-compliant certificate posture, CRL distribution status, full/shard/delta URLs, CT precert/cert submission queueing, and identity revoke/audit evidence",
             "target_gui_mapping": "Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence.",
-            "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, OCSP/CRL unavailable, audit link, the Certificates page CRL distribution status, rogue/non-compliant certificate posture, and CT submission queueing; served tests prove CAP-REV-05 detection and CAP-REV-06 CT add-pre-chain/add-chain through the outbox worker.",
+            "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, signed relay CRL/OCSP freshness and unknown-before-observation states, audit link, the Certificates page CRL distribution status, rogue/non-compliant certificate posture, and CT submission queueing; served tests prove the AUD-38 scheduled relay journey, CAP-REV-05 detection, and CAP-REV-06 CT add-pre-chain/add-chain through the outbox worker.",
             "source_docs": [
                 "docs/features/issuance-and-cas.md"
             ],
@@ -3073,7 +3073,10 @@
                 "internal/server/ct_submission.go",
                 "internal/server/issuance.go",
                 "/api/v1/revocation/rogue-certificates",
-                "internal/api/rogue_certificates.go"
+                "internal/api/rogue_certificates.go",
+                "/api/v1/revocation/health",
+                "internal/api/revocation_health.go",
+                "internal/server/revocation_health_scheduler.go"
             ],
             "source_frontend": [
                 "web/src/pages/Identities.tsx",
@@ -3083,7 +3086,7 @@
                 "web/src/__tests__/search_and_empty.test.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. COMPETE-043 update: CAP-REV-02 now serves published full CRLs, partitioned/sharded CRLs, delta CRLs with deltaCRLIndicator, public manifest/shard/delta URLs, and an authenticated CRL distribution API/CLI/UI status surface. COMPETE-067 update: CAP-REV-06 now serves CT precertificate/final-certificate submission via POST /api/v1/revocation/ct-submissions, CLI revocation ct-submit, Certificates UI controls, ct.submit outbox rows, and ct.submission queued/delivered audit events. Test evidence includes TestServedPartitionedAndDeltaCRLsCAPREV02, TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06, api.crlDistributions contract coverage, and the Certificates console CRL distribution plus CT submission acceptance checks. COMPETE-066 update: CAP-REV-05 now serves rogue and non-compliant certificate posture via GET /api/v1/revocation/rogue-certificates, CLI revocation rogue-certificates, Certificates UI posture evidence, and TestServedRogueCertificateDetectionCAPREV05EndToEnd. It combines CT unexpected-issuance discovery findings with active inventory policy checks for weak keys, expired active state, over-long lifetimes, missing owners, and missing issuers while returning metadata-only evidence refs.",
+            "notes": "Closed by route-level feature-map evidence. COMPETE-043 update: CAP-REV-02 now serves published full CRLs, partitioned/sharded CRLs, delta CRLs with deltaCRLIndicator, public manifest/shard/delta URLs, and an authenticated CRL distribution API/CLI/UI status surface. COMPETE-067 update: CAP-REV-06 now serves CT precertificate/final-certificate submission via POST /api/v1/revocation/ct-submissions, CLI revocation ct-submit, Certificates UI controls, ct.submit outbox rows, and ct.submission queued/delivered audit events. Test evidence includes TestServedPartitionedAndDeltaCRLsCAPREV02, TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06, api.crlDistributions contract coverage, and the Certificates console CRL distribution plus CT submission acceptance checks. COMPETE-066 update: CAP-REV-05 now serves rogue and non-compliant certificate posture via GET /api/v1/revocation/rogue-certificates, CLI revocation rogue-certificates, Certificates UI posture evidence, and TestServedRogueCertificateDetectionCAPREV05EndToEnd. AUD-38 serves scheduled, bounded network-relay CRL/OCSP probes, exact issuer/leaf verification context, lease-bound signed ingestion, immutable queue/observation events, replay-safe projection and alert recovery, GET /api/v1/revocation/health, and the Certificates CRL & CT health view. The repository test uses controlled signed responders; a domain-joined Windows AD CS CDP/OCSP run remains honestly external lab evidence.",
             "api_surface": [
                 "transitionIdentity",
                 "searchAudit",
@@ -3091,7 +3094,8 @@
                 "bulkRevokeCertificates",
                 "listCRLDistributions",
                 "submitCertificateTransparency",
-                "listRogueCertificates"
+                "listRogueCertificates",
+                "listRevocationHealth"
             ],
             "api_na": "",
             "cli_surface": [
@@ -3100,6 +3104,7 @@
                 "identities bulk-revoke",
                 "certificates bulk-revoke",
                 "revocation crls",
+                "revocation health",
                 "revocation ct-submit",
                 "revocation rogue-certificates"
             ],
@@ -3110,8 +3115,9 @@
                         "CAP-REV-02 served public routes: /crl/{tenant}, /crl/{tenant}/manifest.json, /crl/{tenant}/shards/{shard}, and /crl/{tenant}/delta/{base}.",
                         "CAP-REV-06 served mutation: POST /api/v1/revocation/ct-submissions validates public certificate PEM and CT log URLs, records ct.submit outbox rows, and the worker posts RFC 6962 add-pre-chain/add-chain.",
                         "CAP-REV-05 served read route: GET /api/v1/revocation/rogue-certificates enumerates CT unexpected-issuance findings plus active inventory violations for weak keys, expired active state, lifetime policy, owner attribution, and issuer metadata.",
+                        "AUD-38 served path schedules distinct CRL/OCSP endpoints, requires a network-role relay, verifies signed freshness/status, ingests a lease-bound receipt, projects endpoint health, and queues non-fresh alerts.",
                         "served_state=served",
-                        "backend_status=served for trstctl hierarchy with OCSP, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture"
+                        "backend_status=served for trstctl hierarchy plus signed network-relay CRL/OCSP endpoint monitoring, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture"
                     ],
                     "refs": [
                         "internal/server/ct_submission.go",
@@ -3119,7 +3125,9 @@
                         "internal/server/revocation.go",
                         "internal/server/revocation_public_test.go",
                         "internal/api/rogue_certificates.go",
-                        "internal/server/ct_drift_served_test.go"
+                        "internal/server/ct_drift_served_test.go",
+                        "internal/server/revocation_health_scheduler.go",
+                        "internal/server/revocation_health_served_test.go"
                     ],
                     "commands": [
                         "make test"
@@ -3127,12 +3135,12 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Certificates page shows CRL distribution status, full/shard/delta URLs, CT precert/cert submission queueing, and identity revoke/audit evidence",
+                        "current_frontend_mapping: Certificates page shows signed relay CRL/OCSP endpoint freshness evidence, rogue/non-compliant certificate posture, CRL distribution status, full/shard/delta URLs, CT precert/cert submission queueing, and identity revoke/audit evidence",
                         "target_gui_mapping: Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence.",
                         "Certificates page renders the served CRL distribution status, full CRL link, shard count, delta base link, and freshness window.",
                         "Certificates page renders the CT submission form and calls api.submitCertificateTransparency with certificate_pem, precertificate_pem, chain_pem, logs, and allow_private_endpoint.",
-                        "current_frontend_mapping: Certificates page shows rogue/non-compliant certificate posture, CRL distribution status, full/shard/delta URLs, CT precert/cert submission queueing, and identity revoke/audit evidence",
-                        "Certificates page renders CAP-REV-05 summary counts, rogue/non-compliant finding rows, severity, recommendations, and projection evidence refs from api.rogueCertificates."
+                        "Certificates page renders CAP-REV-05 summary counts, rogue/non-compliant finding rows, severity, recommendations, and projection evidence refs from api.rogueCertificates.",
+                        "Certificates → CRL & CT renders each signed relay CRL/OCSP observation with freshness status, signature evidence, relay identity, evidence digest, nextUpdate, and explicit unknown-before-observation copy."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
@@ -3151,6 +3159,7 @@
                         "CLI command: identities bulk-revoke",
                         "CLI command: certificates bulk-revoke",
                         "CLI command: revocation crls",
+                        "CLI command: revocation health",
                         "CLI command: revocation ct-submit",
                         "CLI command: revocation rogue-certificates"
                     ],
@@ -3167,7 +3176,8 @@
                         "OpenAPI operationId: bulkRevokeCertificates",
                         "OpenAPI operationId: listCRLDistributions",
                         "OpenAPI operationId: submitCertificateTransparency",
-                        "OpenAPI operationId: listRogueCertificates"
+                        "OpenAPI operationId: listRogueCertificates",
+                        "OpenAPI operationId: listRevocationHealth"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -3178,7 +3188,7 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: UI covers revoke confirmation, reason selection, success, failure, OCSP/CRL unavailable, audit link, the Certificates page CRL distribution status, and CT submission queueing; served test proves CAP-REV-06 posts add-pre-chain and add-chain through the outbox worker.",
+                        "acceptance_test: UI covers revoke confirmation, reason selection, success, failure, signed relay CRL/OCSP freshness and unknown-before-observation states, audit link, the Certificates page CRL distribution status, rogue/non-compliant certificate posture, and CT submission queueing; served tests prove the AUD-38 scheduled relay journey, CAP-REV-05 detection, and CAP-REV-06 CT add-pre-chain/add-chain through the outbox worker.",
                         "TestServedPartitionedAndDeltaCRLsCAPREV02 proves CAP-REV-02 full, sharded, and delta CRLs are served and verify against the CA.",
                         "TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06 proves CAP-REV-06 queues precert+cert submissions, idempotency replays, and the worker delivers both CT log endpoints.",
                         "web/src/lib/api.test.ts asserts api.crlDistributions calls /api/v1/revocation/crls and preserves shard/delta URLs.",
@@ -3188,7 +3198,9 @@
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
                         "TestServedRogueCertificateDetectionCAPREV05EndToEnd proves CAP-REV-05 returns CT rogue findings, active inventory non-compliance, webhook notification evidence, and no PEM/key material.",
                         "web/src/__tests__/search_and_empty.test.tsx asserts the Certificates console renders rogue and non-compliant certificate posture from api.rogueCertificates.",
-                        "web/src/lib/api.test.ts asserts api.rogueCertificates calls /api/v1/revocation/rogue-certificates as a read-only GET."
+                        "web/src/lib/api.test.ts asserts api.rogueCertificates calls /api/v1/revocation/rogue-certificates as a read-only GET.",
+                        "TestServedRevocationHealthSchedulesRelayAndProjectsSignedCRLOCSPAUD38 proves concurrent scheduling, role selection, real signed CRL/OCSP validation, signed receipt ingestion, notification, API, cold replay, and cross-tenant isolation.",
+                        "web/src/lib/api.test.ts and web/src/__tests__/search_and_empty.test.tsx prove the revocation health client route and operator evidence view."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
@@ -3199,7 +3211,8 @@
                         "web/src/__tests__/search_and_empty.test.tsx",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx",
-                        "internal/server/ct_drift_served_test.go"
+                        "internal/server/ct_drift_served_test.go",
+                        "internal/server/revocation_health_served_test.go"
                     ]
                 },
                 "docs": {
@@ -3208,7 +3221,8 @@
                         "operator limits and CDP/AIA responsibilities documented in docs/limitations.md",
                         "CLI and console surfaces documented in docs/cli.md and docs/web-console.md",
                         "CT submission surface documented in docs/features/issuance-and-cas.md, docs/limitations.md, docs/cli.md, and docs/web-console.md",
-                        "CAP-REV-05 route, CLI command, UI surface, metadata-only response, and residual CT/provider-native limits are documented in docs/features/issuance-and-cas.md, docs/cli.md, and docs/limitations.md."
+                        "CAP-REV-05 route, CLI command, UI surface, metadata-only response, and residual CT/provider-native limits are documented in docs/features/issuance-and-cas.md, docs/cli.md, and docs/limitations.md.",
+                        "AUD-38 scheduling, signed CRL/OCSP evidence, client soft-fail guidance, LDAP limit, and external Windows AD CS lab boundary are documented in docs/features/issuance-and-cas.md and docs/limitations.md."
                     ],
                     "refs": [
                         "docs/features/issuance-and-cas.md",
@@ -3222,7 +3236,7 @@
                         "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: transitionIdentity, searchAudit, bulkRevokeIdentities, bulkRevokeCertificates, listCRLDistributions, submitCertificateTransparency",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
                         "CT submission is guarded by certs:write and all mutations require Idempotency-Key.",
-                        "feature authz manifest maps listRogueCertificates to certs:read; OpenAPI publishes x-trstctl-permission on the guarded read route."
+                        "feature authz manifest maps listRogueCertificates and listRevocationHealth to certs:read; OpenAPI publishes x-trstctl-permission on the guarded read routes."
                     ],
                     "refs": [
                         "internal/featureparity/authz_manifest.go",
@@ -3237,7 +3251,8 @@
                         "mutating served surface requires audit/event evidence: transitionIdentity, searchAudit",
                         "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export.",
                         "ct.submission.queued and ct.submission.delivered events record CT submission queue and delivery evidence without private key material.",
-                        "CAP-REV-05 is read-only and returns projection evidence refs for certificates, discovery findings, and CT notification outbox rows; mutating revocation and CT submission paths retain event/audit evidence."
+                        "CAP-REV-05 is read-only and returns projection evidence refs for certificates, discovery findings, and CT notification outbox rows; mutating revocation and CT submission paths retain event/audit evidence.",
+                        "AUD-38 retains revocation.probe.queued and revocation.health.observed events and binds each projected row to the verified terminal-receipt evidence digest."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -3246,7 +3261,8 @@
                         "internal/server/ct_submission.go",
                         "internal/server/ct_submission_served_test.go",
                         "internal/api/rogue_certificates.go",
-                        "internal/server/ct_drift_served_test.go"
+                        "internal/server/ct_drift_served_test.go",
+                        "internal/server/revocation_health_served_test.go"
                     ]
                 },
                 "telemetry": {

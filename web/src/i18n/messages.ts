@@ -2096,49 +2096,9 @@ export const messages = {
     defaultMessage: "{shardCount}-way shard plan",
     description: "Badge showing the current planned CRL shard count.",
   },
-  "certificates.crl.awaiting": {
-    defaultMessage: "Awaiting CRL",
-    description: "Badge shown before the first CRL artifact is published.",
-  },
-  "certificates.crl.ca": {
-    defaultMessage: "CA",
-    description: "CRL distribution table column header for the CA identifier.",
-  },
-  "certificates.crl.full": {
-    defaultMessage: "Full CRL",
-    description: "CRL distribution table column header for the full CRL artifact.",
-  },
-  "certificates.crl.shards": {
-    defaultMessage: "Shards",
-    description: "CRL distribution table column header for shard artifacts.",
-  },
-  "certificates.crl.delta": {
-    defaultMessage: "Delta",
-    description: "CRL distribution table column header for delta CRL artifacts.",
-  },
-  "certificates.crl.window": {
-    defaultMessage: "Window",
-    description: "CRL distribution table column header for the publication freshness window.",
-  },
-  "certificates.crl.revokedCount": {
-    defaultMessage: "{count} revoked",
-    description: "CRL distribution row label for revoked serial count.",
-  },
-  "certificates.crl.servedCount": {
-    defaultMessage: "{count} available",
-    description: "CRL distribution row label for available shard count.",
-  },
-  "certificates.crl.plannedCount": {
-    defaultMessage: "{count} planned",
-    description: "CRL distribution row label for planned shard count.",
-  },
   "certificates.crl.deltaBase": {
     defaultMessage: "base #{base}",
     description: "CRL distribution row label for a delta CRL base number.",
-  },
-  "certificates.crl.nextUpdate": {
-    defaultMessage: "next {date}",
-    description: "CRL distribution row label for the next-update timestamp.",
   },
   "certificates.ct.heading": {
     defaultMessage: "Certificate Transparency",

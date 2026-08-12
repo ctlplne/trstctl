@@ -117,6 +117,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("RemediationPlaybook", "status", configurationPredicate, "internal/api/remediation_playbooks.go:remediationPlaybookCatalog"),
 	evidence("RemediationPlaybookCatalog", "status", configurationPredicate, "internal/api/remediation_playbooks.go:remediationPlaybookCatalog"),
 	evidence("RemediationPlaybookRun", "status", eventProjectionPredicate, "internal/store/remediation_playbooks.go:Store.ApplyRemediationPlaybookRunRecordedTx"),
+	evidence("RevocationEndpointHealth", "status", predicate(evidenceObservation, "fresh requires a lease-bound agent signature plus successful CRL or OCSP signature, status, and freshness verification; stale, invalid, and unreachable preserve the exact failed check, while a missing observation is not projected as healthy"), "internal/projections/projections.go:Projector.Apply"),
 	evidence("ResponseIntegrationDispatch", "status", observationPredicate, "internal/api/response_integrations.go:toResponseIntegrationDispatchResponse"),
 	evidence("ResponseIntegrationQueuedDestination", "status", workflowPredicate, "internal/api/response_integrations.go:API.responseIntegrationDestinationCommand"),
 	evidence("RogueCertificateFinding", "status", observationPredicate, "internal/api/rogue_certificates.go:rogueCertificateFindingForCertificate"),

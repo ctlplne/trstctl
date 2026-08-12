@@ -416,6 +416,16 @@ describe("api compliance evidence packs", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/compliance/evidence-packs/soc2");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
   });
+
+  it("fetches signed CRL and OCSP endpoint health from the served route", async () => {
+    mockFetch(200, JSON.stringify({ observed: true, summary: { endpoints: 1, fresh: 1 }, items: [], guidance: "Verify clients." }));
+
+    const result = await api.revocationHealth();
+
+    expect(result.observed).toBe(true);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/revocation/health");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+  });
 });
 
 describe("api CA hierarchy and managed keys", () => {

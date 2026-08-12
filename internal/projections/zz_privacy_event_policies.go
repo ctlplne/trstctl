@@ -11,6 +11,7 @@ import (
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -397,6 +398,36 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/initial_response", clear), privacyRule("/terminal_reason", clear),
 		privacyRule("/outbox_idempotency_key", opaque), privacyRule("/created_by", exact),
 	)
+	revocationTargets := []events.PrivacyFieldRule{
+		privacyRule("/targets/*/key", opaque), privacyRule("/targets/*/protocol", opaque),
+		privacyRule("/targets/*/endpoint", opaque), privacyRule("/targets/*/issuer_subject", token),
+		privacyRule("/targets/*/issuer_fingerprint", opaque), privacyRule("/targets/*/issuer_der", opaque),
+		privacyRule("/targets/*/certificate_id", opaque), privacyRule("/targets/*/certificate_subject", token),
+		privacyRule("/targets/*/certificate_fingerprint", opaque), privacyRule("/targets/*/certificate_serial", opaque),
+		privacyRule("/targets/*/certificate_der", opaque),
+	}
+	revocationProbe := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/bucket", opaque),
+		privacyRule("/batch_index", opaque), privacyRule("/batch_count", opaque),
+		privacyRule("/stale_within_seconds", opaque), privacyRule("/required_agent_role", opaque),
+		privacyRule("/required_agent_id", opaque), privacyRule("/endpoints/*", opaque),
+		privacyRule("/issuer_der", opaque),
+	)
+	revocationProbe.Rules = append(revocationProbe.Rules, revocationTargets...)
+	revocationObserved := privacyRules(
+		privacyRule("/probe_id", opaque), privacyRule("/bucket", opaque),
+		privacyRule("/batch_index", opaque), privacyRule("/batch_count", opaque),
+		privacyRule("/agent_id", opaque), privacyRule("/agent_name", token),
+		privacyRule("/evidence_digest", opaque),
+		privacyRule("/findings/*/target_key", opaque), privacyRule("/findings/*/protocol", opaque),
+		privacyRule("/findings/*/endpoint", opaque), privacyRule("/findings/*/status", opaque),
+		privacyRule("/findings/*/detail_code", opaque), privacyRule("/findings/*/detail", clear),
+		privacyRule("/findings/*/latency_ms", opaque), privacyRule("/findings/*/this_update", opaque),
+		privacyRule("/findings/*/next_update", opaque), privacyRule("/findings/*/signature_verified", opaque),
+		privacyRule("/findings/*/revoked_count", opaque), privacyRule("/findings/*/response_status", opaque),
+		privacyRule("/findings/*/responder_subject", token),
+	)
+	revocationObserved.Rules = append(revocationObserved.Rules, revocationTargets...)
 	policies := map[privacyEventPolicyKey]events.PrivacyEventPolicy{
 		{EventOwnerCreated, 1}:             owner,
 		{EventOwnerUpdated, 1}:             owner,
@@ -431,6 +462,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventDiscoverySegmentUpserted, 1}:                                           discoverySegment,
 		{EventDiscoverySourceUpserted, 1}:                                            discoverySource,
 		{EventDiscoveryRunQueued, 1}:                                                 discoveryRunQueued,
+		{EventRevocationProbeQueued, 1}:                                              revocationProbe,
+		{EventRevocationHealthObserved, 1}:                                           revocationObserved,
 		{EventDiscoveryFindingRecorded, 1}:                                           discoveryFinding,
 		{EventDiscoveryFindingTriageChanged, 1}:                                      discoveryTriage,
 		{EventComplianceReportScheduleUpserted, 1}:                                   complianceSchedule,
@@ -940,6 +973,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventDiscoverySegmentUpserted, 1}:                                           privacyPayloadShape[DiscoverySegmentUpserted](),
 		{EventDiscoverySourceUpserted, 1}:                                            privacyPayloadShape[DiscoverySourceUpserted](),
 		{EventDiscoveryRunQueued, 1}:                                                 privacyPayloadShape[privacyDiscoveryRunQueued](),
+		{EventRevocationProbeQueued, 1}:                                              privacyPayloadShape[revocationhealth.Intent](),
+		{EventRevocationHealthObserved, 1}:                                           privacyPayloadShape[revocationhealth.Observed](),
 		{EventDiscoveryFindingRecorded, 1}:                                           privacyPayloadShape[DiscoveryFindingRecorded](),
 		{EventDiscoveryFindingTriageChanged, 1}:                                      privacyPayloadShape[DiscoveryFindingTriageChanged](),
 		{EventComplianceReportScheduleUpserted, 1}:                                   privacyPayloadShape[ComplianceReportScheduleUpserted](),

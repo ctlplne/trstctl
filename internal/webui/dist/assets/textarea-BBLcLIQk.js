@@ -1,0 +1,1 @@
+import{_ as e,h as t,t as n,y as r}from"./utils-Daw9Au-R.js";var i=r(e(),1),a=t(),o=(0,i.forwardRef)(function({className:e,...t},r){return(0,a.jsx)(`textarea`,{ref:r,className:n(`ui-input`,e),...t})});export{o as t};

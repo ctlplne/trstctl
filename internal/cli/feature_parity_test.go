@@ -177,9 +177,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// genuine immutable request list plus exact request-ID/digest approve and deny
 	// decisions onto the JIT approval-flow feature row. AUD-105 removes the
 	// application-secret bulk-import command because that compatibility route is
-	// explicitly unavailable, leaving 360 commands.
-	if len(out) != 360 {
-		t.Fatalf("CLI commands = %d, want 360", len(out))
+	// explicitly unavailable, leaving 360 commands. AUD-38's read-only
+	// `revocation health` command raises it to 361 and exposes the same signed
+	// relay evidence as the API and console.
+	if len(out) != 361 {
+		t.Fatalf("CLI commands = %d, want 361", len(out))
 	}
 	return out
 }

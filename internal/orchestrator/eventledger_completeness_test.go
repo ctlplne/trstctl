@@ -62,6 +62,8 @@ var orchestratorCommandEventTypes = []string{
 	eventledger.EventDiscoverySourceUpserted,
 	eventledger.EventDiscoveryScheduleUpserted,
 	eventledger.EventDiscoveryRunQueued,
+	eventledger.EventRevocationProbeQueued,
+	eventledger.EventRevocationHealthObserved,
 	eventledger.EventComplianceReportScheduleUpserted,
 	eventledger.EventSecretRotationScheduleUpserted,
 	eventledger.EventSecretRotationScheduleRan,

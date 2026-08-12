@@ -46,6 +46,10 @@ const (
 	// migration this year". Routing them separately lets an operator page on one
 	// and file the other.
 	DestinationCAHorizon = "notification.ca_horizon"
+	// DestinationRevocation carries relay-verified CRL/OCSP freshness and
+	// reachability failures (R1). It is separate so network and PKI teams can
+	// route endpoint incidents independently from certificate expiry.
+	DestinationRevocation = "notification.revocation"
 )
 
 // Alert kinds.
@@ -90,6 +94,9 @@ const (
 	// succeeding and the certificates just get quietly shorter, so this is the
 	// only warning an operator gets before something downstream rejects one.
 	KindCAValidityCompression = "ca.validity_compression"
+	// KindRevocationHealth marks a CRL or OCSP endpoint whose signed evidence is
+	// stale, nearing expiry, unreachable, or invalid.
+	KindRevocationHealth = "revocation.health"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

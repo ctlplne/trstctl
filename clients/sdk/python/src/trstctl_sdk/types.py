@@ -6468,6 +6468,60 @@ RetirementDependent = TypedDict(
     total=False,
 )
 
+RevocationEndpointHealth = TypedDict(
+    'RevocationEndpointHealth',
+    {
+        'certificate_fingerprint': str,
+        'certificate_id': str,
+        'certificate_serial': str,
+        'certificate_subject': str,
+        'detail_code': str,
+        'endpoint': str,
+        'evidence_digest': str,
+        'issuer_fingerprint': str,
+        'issuer_subject': str,
+        'latency_ms': int,
+        'next_update': str,
+        'observed_at': str,
+        'observed_by_agent_id': str,
+        'observed_by_agent_name': str,
+        'probe_id': str,
+        'protocol': str,
+        'responder_subject': str,
+        'response_status': str,
+        'revoked_count': int,
+        'signature_verified': bool,
+        'status': str,
+        'target_key': str,
+        'this_update': str,
+    },
+    total=False,
+)
+
+RevocationHealth = TypedDict(
+    'RevocationHealth',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'observed': bool,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+RevocationHealthSummary = TypedDict(
+    'RevocationHealthSummary',
+    {
+        'endpoints': int,
+        'expiring': int,
+        'fresh': int,
+        'stale': int,
+        'unparseable': int,
+        'unreachable': int,
+    },
+    total=False,
+)
+
 RiskComponents = TypedDict(
     'RiskComponents',
     {

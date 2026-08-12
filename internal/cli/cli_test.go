@@ -176,6 +176,39 @@ func TestACMEARIPostureCommandSendsAuthAndPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestRevocationHealthCommandIsReadOnlyAndPreservesSignedEvidence(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, http.StatusOK, `{"items":[{"endpoint":"https://ca.example/ocsp","status":"fresh","signature_verified":true,"evidence_digest":"sha256:abc"}],"guidance":"Signed relay observations report endpoint health."}`, &cap)
+	env := cli.Env{Server: srv.URL, Token: "tok-revocation", Tenant: "tenant-revocation", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"revocation", "health"}, env, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0; stderr=%s", code, stderr)
+	}
+	if cap.Method != http.MethodGet || cap.Path != "/api/v1/revocation/health" || cap.Query != "" {
+		t.Fatalf("request = %s %s?%s, want exact read-only revocation-health route", cap.Method, cap.Path, cap.Query)
+	}
+	if cap.Header.Get("Authorization") != "Bearer tok-revocation" || cap.Header.Get("X-Tenant-ID") != "tenant-revocation" {
+		t.Fatalf("request lost tenant authentication: authorization=%q tenant=%q", cap.Header.Get("Authorization"), cap.Header.Get("X-Tenant-ID"))
+	}
+	if len(cap.Body) != 0 || cap.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("read-only revocation-health command sent mutation material: body=%q idempotency=%q", cap.Body, cap.Header.Get("Idempotency-Key"))
+	}
+	var decoded struct {
+		Items []struct {
+			Status            string `json:"status"`
+			SignatureVerified bool   `json:"signature_verified"`
+			EvidenceDigest    string `json:"evidence_digest"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+	if len(decoded.Items) != 1 || decoded.Items[0].Status != "fresh" || !decoded.Items[0].SignatureVerified || decoded.Items[0].EvidenceDigest != "sha256:abc" {
+		t.Fatalf("stdout lost signed revocation evidence: %s", stdout)
+	}
+}
+
 func TestGetSubstitutesPathParam(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"id":"abc-123"}`, &cap)

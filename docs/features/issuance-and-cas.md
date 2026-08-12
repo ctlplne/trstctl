@@ -280,6 +280,20 @@ CRL serving returns weak ETag validators and honors `If-None-Match` with `304 No
 Modified` so relying parties don't refetch an unchanged CRL. `GET
 /api/v1/revocation/crls` / `trstctl-cli revocation crls` and the Certificates console
 expose the same distribution state (full CRL, shards, delta base, freshness window).
+
+External distribution health is monitored separately from trstctl's own
+publication state. An hourly leader derives distinct CDP and AIA OCSP URLs from
+the certificate inventory and queues bounded `revocation.probe` work for a
+network relay, so private PKI endpoints are checked from the network that uses
+them. The relay verifies CRL/OCSP signatures and exact certificate context, then
+returns a signed lease-bound report. `GET /api/v1/revocation/health` and
+Certificates → CRL & CT expose fresh, expiring, stale, unreachable, and invalid
+answers with latency, `nextUpdate`, relay identity, and evidence digest; non-fresh
+answers create notifications. A missing observation is shown as unknown, never healthy.
+This proves the relay's observation, not every relying party's fail-closed or
+soft-fail configuration. Controlled CRL/OCSP responders cover repository CI; a
+real Windows AD CS lab run remains external infrastructure evidence.
+
 CT submission is served at `POST /api/v1/revocation/ct-submissions` /
 `trstctl-cli revocation ct-submit`: the outbox queues a precertificate and final
 certificate to configured RFC 6962 CT logs, recording `ct.submission.queued` then

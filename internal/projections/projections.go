@@ -29,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/privacyref"
+	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/rotationcommand"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -145,6 +146,8 @@ const (
 	EventDiscoveryFindingTriageChanged            = "discovery.finding.triage_changed"
 	EventDiscoveryRunCompleted                    = "discovery.run.completed"
 	EventADCSInventoryObserved                    = "adcs.template.inventory.observed"
+	EventRevocationProbeQueued                    = "revocation.probe.queued"
+	EventRevocationHealthObserved                 = "revocation.health.observed"
 	EventACMEDNS01ProviderConfigUpserted          = "acme.dns01.provider_config.upserted"
 	EventACMEDNS01ProviderConfigDeleted           = "acme.dns01.provider_config.deleted"
 	EventACMEDNS01Preflighted                     = "acme.dns01.preflighted"
@@ -1428,6 +1431,11 @@ type DiscoveryScheduleUpserted struct {
 // empty and execute on the control plane.
 type DiscoveryRunQueued = segmentscan.Intent
 
+// RevocationProbeQueued and RevocationHealthObserved use the same bounded
+// public contract at producer, relay, ingestion, and replay boundaries.
+type RevocationProbeQueued = revocationhealth.Intent
+type RevocationHealthObserved = revocationhealth.Observed
+
 // DiscoveryRunStarted is the payload of discovery.run.started.
 type DiscoveryRunStarted struct {
 	ID string `json:"id"`
@@ -2691,6 +2699,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryFindingTriageChanged:            {1: true},
 	EventDiscoveryRunCompleted:                    {1: true},
 	EventADCSInventoryObserved:                    {1: true},
+	EventRevocationProbeQueued:                    {1: true},
+	EventRevocationHealthObserved:                 {1: true},
 	EventACMEDNS01ProviderConfigUpserted:          {1: true},
 	EventACMEDNS01ProviderConfigDeleted:           {1: true},
 	EventACMEDNS01Preflighted:                     {1: true},
@@ -3667,6 +3677,46 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			})
 		}
 		return p.store.ApplyADCSTemplatePostureObservedTx(ctx, tx, e.TenantID, pl.Domain, pl.AgentName, rows, e.Time)
+	case EventRevocationProbeQueued:
+		var pl RevocationProbeQueued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if err := revocationhealth.ValidateIntent(pl); err != nil {
+			return fmt.Errorf("projections: validate revocation probe command: %w", err)
+		}
+		return nil
+	case EventRevocationHealthObserved:
+		var pl RevocationHealthObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if err := revocationhealth.ValidateObserved(pl); err != nil {
+			return fmt.Errorf("projections: validate revocation health observation: %w", err)
+		}
+		byTarget := make(map[string]revocationhealth.Target, len(pl.Targets))
+		for _, target := range pl.Targets {
+			byTarget[target.Key] = target
+		}
+		rows := make([]store.RevocationEndpointHealth, 0, len(pl.Findings))
+		for _, finding := range pl.Findings {
+			target := byTarget[finding.TargetKey]
+			rows = append(rows, store.RevocationEndpointHealth{
+				TenantID: e.TenantID, TargetKey: target.Key, Protocol: target.Protocol,
+				Endpoint: target.Endpoint, IssuerSubject: target.IssuerSubject,
+				IssuerFingerprint: target.IssuerFingerprint, CertificateID: target.CertificateID,
+				CertificateSubject: target.CertificateSubject, CertificateFingerprint: target.CertificateFingerprint,
+				CertificateSerial: target.CertificateSerial, Status: string(finding.Status),
+				DetailCode: finding.DetailCode, LatencyMS: finding.LatencyMS,
+				ThisUpdate: finding.ThisUpdate, NextUpdate: finding.NextUpdate,
+				SignatureVerified: finding.SignatureVerified, RevokedCount: finding.RevokedCount,
+				ResponseStatus: finding.ResponseStatus, ResponderSubject: finding.ResponderSubject,
+				ProbeID: pl.ProbeID, Bucket: pl.Bucket, BatchIndex: pl.BatchIndex,
+				BatchCount: pl.BatchCount, ObservedByAgentID: pl.AgentID,
+				ObservedByAgentName: pl.AgentName, EvidenceDigest: pl.EvidenceDigest, ObservedAt: e.Time,
+			})
+		}
+		return p.store.ApplyRevocationEndpointHealthObservedTx(ctx, tx, rows)
 	case EventACMEDNS01ProviderConfigUpserted:
 		var pl ACMEDNS01ProviderConfigUpserted
 		if err := decode(e, &pl); err != nil {

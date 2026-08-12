@@ -280,6 +280,9 @@ type agentService struct {
 	// recordADCSInventory validates and projects a signed AD CS result before
 	// the exact job claim closes (AUD-35/F1).
 	recordADCSInventory func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
+	// recordRevocationHealth validates a signed CRL/OCSP relay report and
+	// projects endpoint health before the exact claim closes (AUD-38/R1).
+	recordRevocationHealth func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report, evidenceDigest string) error
 
 	// recordEndpointVerification turns a relay's verification sweep into
 	// observed endpoint state (epic D2). Without it the sweep's report would

@@ -17910,6 +17910,175 @@
         ],
         "type": "object"
       },
+      "RevocationEndpointHealth": {
+        "properties": {
+          "certificate_fingerprint": {
+            "type": "string"
+          },
+          "certificate_id": {
+            "type": "string"
+          },
+          "certificate_serial": {
+            "type": "string"
+          },
+          "certificate_subject": {
+            "type": "string"
+          },
+          "detail_code": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "evidence_digest": {
+            "type": "string"
+          },
+          "issuer_fingerprint": {
+            "type": "string"
+          },
+          "issuer_subject": {
+            "type": "string"
+          },
+          "latency_ms": {
+            "type": "integer"
+          },
+          "next_update": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_by_agent_id": {
+            "type": "string"
+          },
+          "observed_by_agent_name": {
+            "type": "string"
+          },
+          "probe_id": {
+            "type": "string"
+          },
+          "protocol": {
+            "enum": [
+              "crl",
+              "ocsp"
+            ],
+            "type": "string"
+          },
+          "responder_subject": {
+            "type": "string"
+          },
+          "response_status": {
+            "enum": [
+              "good",
+              "revoked",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "revoked_count": {
+            "type": "integer"
+          },
+          "signature_verified": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "fresh",
+              "expiring",
+              "stale",
+              "unreachable",
+              "unparseable"
+            ],
+            "type": "string"
+          },
+          "target_key": {
+            "type": "string"
+          },
+          "this_update": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_key",
+          "protocol",
+          "endpoint",
+          "issuer_subject",
+          "certificate_id",
+          "certificate_subject",
+          "certificate_fingerprint",
+          "certificate_serial",
+          "status",
+          "detail_code",
+          "latency_ms",
+          "signature_verified",
+          "probe_id",
+          "observed_by_agent_id",
+          "observed_by_agent_name",
+          "evidence_digest",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "RevocationHealth": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RevocationEndpointHealth"
+            },
+            "type": "array"
+          },
+          "observed": {
+            "type": "boolean"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/RevocationHealthSummary"
+          }
+        },
+        "required": [
+          "observed",
+          "items",
+          "summary",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "RevocationHealthSummary": {
+        "properties": {
+          "endpoints": {
+            "type": "integer"
+          },
+          "expiring": {
+            "type": "integer"
+          },
+          "fresh": {
+            "type": "integer"
+          },
+          "stale": {
+            "type": "integer"
+          },
+          "unparseable": {
+            "type": "integer"
+          },
+          "unreachable": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "endpoints",
+          "fresh",
+          "expiring",
+          "stale",
+          "unreachable",
+          "unparseable"
+        ],
+        "type": "object"
+      },
       "RiskComponents": {
         "properties": {
           "age": {
@@ -39566,6 +39735,53 @@
         ],
         "summary": "Queue precertificate and certificate submission to Certificate Transparency logs",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/revocation/health": {
+      "get": {
+        "operationId": "listRevocationHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationHealth"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List relay-verified CRL and OCSP endpoint reachability, signature, status, and freshness",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/revocation/rogue-certificates": {

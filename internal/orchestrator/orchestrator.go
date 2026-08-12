@@ -791,6 +791,24 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == projections.EventRevocationProbeQueued {
+			inserted, err := o.reconcileRevocationProbe(ctx, ev)
+			if err != nil {
+				return err
+			}
+			if inserted {
+				healed++
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
+		if ev.Type == projections.EventRevocationHealthObserved {
+			inserted, err := o.reconcileRevocationAlerts(ctx, ev)
+			if err != nil {
+				return err
+			}
+			healed += inserted
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventIncidentFleetReissuanceRecorded {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err

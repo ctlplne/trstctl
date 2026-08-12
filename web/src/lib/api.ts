@@ -130,6 +130,7 @@ import type {
   CredentialRiskList,
   CRLDistribution,
   CRLDistributionList,
+  RevocationHealth,
   CTLogSubmission,
   CTLogSubmissionRequest,
   CTMonitoring,
@@ -691,6 +692,7 @@ export type {
   ConnectorTargetActionRequest,
   CRLDistribution,
   CRLDistributionList,
+  RevocationHealth,
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
@@ -1339,6 +1341,7 @@ export interface Api {
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
   certificateHealth(): Promise<CertificateHealthDashboard>;
   crlDistributions(): Promise<CRLDistributionList>;
+  revocationHealth(): Promise<RevocationHealth>;
   rogueCertificates(): Promise<RogueCertificatePosture>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
   ctMonitoring(): Promise<CTMonitoring>;
@@ -1753,6 +1756,7 @@ const liveApi: Api = {
   certificates: () => api.certificatePage().then((r) => r.items ?? []),
   certificateHealth: () => req<CertificateHealthDashboard>("/api/v1/certificates/health"),
   crlDistributions: () => req<CRLDistributionList>("/api/v1/revocation/crls"),
+  revocationHealth: () => req<RevocationHealth>("/api/v1/revocation/health"),
   rogueCertificates: () => req<RogueCertificatePosture>("/api/v1/revocation/rogue-certificates"),
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
   ctMonitoring: () => req<CTMonitoring>("/api/v1/discovery/ct-monitoring"),

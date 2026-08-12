@@ -1594,6 +1594,29 @@ func componentSchemas() map[string]*Schema {
 		"summary":  ref("EndpointVerificationSummary"),
 		"guidance": str(),
 	}, "items", "summary", "guidance")
+	// R1: signed CRL/OCSP endpoint evidence observed from a network relay.
+	revocationEndpointHealth := object(map[string]*Schema{
+		"target_key": str(), "protocol": {Type: "string", Enum: []string{"crl", "ocsp"}},
+		"endpoint": str(), "issuer_subject": str(), "issuer_fingerprint": str(),
+		"certificate_id": str(), "certificate_subject": str(), "certificate_fingerprint": str(),
+		"certificate_serial": str(),
+		"status":             {Type: "string", Enum: []string{"fresh", "expiring", "stale", "unreachable", "unparseable"}},
+		"detail_code":        str(), "latency_ms": {Type: "integer"},
+		"this_update": timestamp(), "next_update": timestamp(), "signature_verified": {Type: "boolean"},
+		"revoked_count": {Type: "integer"}, "response_status": {Type: "string", Enum: []string{"good", "revoked", "unknown"}},
+		"responder_subject": str(), "probe_id": str(), "observed_by_agent_id": str(),
+		"observed_by_agent_name": str(), "evidence_digest": str(), "observed_at": timestamp(),
+	}, "target_key", "protocol", "endpoint", "issuer_subject", "certificate_id", "certificate_subject",
+		"certificate_fingerprint", "certificate_serial", "status", "detail_code", "latency_ms",
+		"signature_verified", "probe_id", "observed_by_agent_id", "observed_by_agent_name", "evidence_digest", "observed_at")
+	revocationHealthSummary := object(map[string]*Schema{
+		"endpoints": {Type: "integer"}, "fresh": {Type: "integer"}, "expiring": {Type: "integer"},
+		"stale": {Type: "integer"}, "unreachable": {Type: "integer"}, "unparseable": {Type: "integer"},
+	}, "endpoints", "fresh", "expiring", "stale", "unreachable", "unparseable")
+	revocationHealth := object(map[string]*Schema{
+		"observed": {Type: "boolean"}, "items": {Type: "array", Items: ref("RevocationEndpointHealth")},
+		"summary": ref("RevocationHealthSummary"), "guidance": str(),
+	}, "observed", "items", "summary", "guidance")
 	// B2: where each deployment target's private key is generated.
 	endpointKeyCustody := object(map[string]*Schema{
 		"target_id": str(), "name": str(), "connector": str(),
@@ -4599,6 +4622,9 @@ func componentSchemas() map[string]*Schema {
 		"EndpointVerification":                     endpointVerification,
 		"EndpointVerificationSummary":              endpointVerificationSummary,
 		"EndpointVerificationList":                 endpointVerificationList,
+		"RevocationEndpointHealth":                 revocationEndpointHealth,
+		"RevocationHealthSummary":                  revocationHealthSummary,
+		"RevocationHealth":                         revocationHealth,
 		"EndpointKeyCustody":                       endpointKeyCustody,
 		"EndpointCustodySummary":                   endpointCustodySummary,
 		"EndpointKeyCustodyList":                   endpointKeyCustodyList,

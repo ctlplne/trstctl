@@ -74,7 +74,7 @@ func TestLegacyReadModelSnapshotPayloadsArePurgedOnUpgradeAndEveryStartupAUD114(
 			Scan(&constraintType, &validated, &expression); err != nil {
 			t.Fatalf("inspect snapshot format floor after %s: %v", stage, err)
 		}
-		if constraintType != "c" || !validated || expression != "format_version>=23" {
+		if constraintType != "c" || !validated || expression != "format_version>=24" {
 			t.Fatalf("snapshot format floor after %s = type:%q validated:%t expression:%q",
 				stage, constraintType, validated, expression)
 		}
@@ -227,7 +227,7 @@ func TestMigrateReplacesMalformedValidatedSnapshotFloorAUD114(t *testing.T) {
 		Scan(&constraintType, &validated, &expression); err != nil {
 		t.Fatalf("inspect repaired snapshot floor: %v", err)
 	}
-	if constraintType != "c" || !validated || expression != "format_version>=23" {
+	if constraintType != "c" || !validated || expression != "format_version>=24" {
 		t.Fatalf("repaired snapshot floor = type:%q validated:%t expression:%q",
 			constraintType, validated, expression)
 	}

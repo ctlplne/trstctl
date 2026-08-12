@@ -4590,6 +4590,48 @@ export interface RetirementDependent {
   ref: string;
 }
 
+export interface RevocationEndpointHealth {
+  certificate_fingerprint: string;
+  certificate_id: string;
+  certificate_serial: string;
+  certificate_subject: string;
+  detail_code: string;
+  endpoint: string;
+  evidence_digest: string;
+  issuer_fingerprint?: string;
+  issuer_subject: string;
+  latency_ms: number;
+  next_update?: string;
+  observed_at: string;
+  observed_by_agent_id: string;
+  observed_by_agent_name: string;
+  probe_id: string;
+  protocol: "crl" | "ocsp";
+  responder_subject?: string;
+  response_status?: "good" | "revoked" | "unknown";
+  revoked_count?: number;
+  signature_verified: boolean;
+  status: "fresh" | "expiring" | "stale" | "unreachable" | "unparseable";
+  target_key: string;
+  this_update?: string;
+}
+
+export interface RevocationHealth {
+  guidance: string;
+  items: RevocationEndpointHealth[];
+  observed: boolean;
+  summary: RevocationHealthSummary;
+}
+
+export interface RevocationHealthSummary {
+  endpoints: number;
+  expiring: number;
+  fresh: number;
+  stale: number;
+  unparseable: number;
+  unreachable: number;
+}
+
 export interface RiskComponents {
   age: number;
   exposure: number;

@@ -13,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
     getCertificate: vi.fn(),
     ingestCertificate: vi.fn(),
     rogueCertificates: vi.fn(),
+    revocationHealth: vi.fn(),
     submitCertificateTransparency: vi.fn(),
   },
 }));
@@ -43,6 +44,7 @@ describe("inventory search", () => {
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
     apiMock.rogueCertificates.mockReset();
+    apiMock.revocationHealth.mockReset();
     apiMock.submitCertificateTransparency.mockReset();
   });
 
@@ -214,6 +216,43 @@ describe("inventory search", () => {
     expect(within(posture).getByText("Weak key, Owner missing")).toBeInTheDocument();
     expect(within(posture).getByText("Reissue with an approved key algorithm.")).toBeInTheDocument();
   });
+
+  it("shows signed CRL and OCSP freshness evidence in the CRL and CT workspace", async () => {
+    apiMock.certificatePage.mockResolvedValue({
+      items: [{ id: "c1", subject: "CN=service.example.com", issuer: "CN=Root CA", status: "active", fingerprint: "fp1" }],
+    });
+    apiMock.revocationHealth.mockResolvedValue({
+      observed: true,
+      summary: { endpoints: 2, fresh: 1, expiring: 0, stale: 1, unreachable: 0, unparseable: 0 },
+      items: [
+        {
+          target_key: "crl-key", protocol: "crl", endpoint: "https://pki.example.test/root.crl",
+          certificate_id: "c1", certificate_subject: "CN=service.example.com", certificate_fingerprint: "fp1", certificate_serial: "01",
+          issuer_subject: "CN=Root CA", status: "stale", detail_code: "next_update_passed", latency_ms: 12,
+          signature_verified: true, next_update: "2026-08-11T00:00:00Z", probe_id: "probe-1",
+          observed_by_agent_id: "agent-1", observed_by_agent_name: "corp-relay", evidence_digest: "a".repeat(64), observed_at: "2026-08-12T00:00:00Z",
+        },
+        {
+          target_key: "ocsp-key", protocol: "ocsp", endpoint: "https://ocsp.example.test",
+          certificate_id: "c1", certificate_subject: "CN=service.example.com", certificate_fingerprint: "fp1", certificate_serial: "01",
+          issuer_subject: "CN=Root CA", status: "fresh", detail_code: "fresh", latency_ms: 8,
+          signature_verified: true, response_status: "good", next_update: "2026-08-13T00:00:00Z", probe_id: "probe-1",
+          observed_by_agent_id: "agent-1", observed_by_agent_name: "corp-relay", evidence_digest: "b".repeat(64), observed_at: "2026-08-12T00:00:00Z",
+        },
+      ],
+      guidance: "CRL and OCSP failures affect clients differently; verify fail-closed and soft-fail behavior.",
+    });
+    const user = userEvent.setup();
+    renderCerts();
+
+    await user.click(await screen.findByRole("tab", { name: /CRL & CT/i }));
+    const panel = await screen.findByRole("region", { name: "Revocation" });
+    expect(within(panel).getByText("Stale")).toBeInTheDocument();
+    expect(within(panel).getByText("ok")).toBeInTheDocument();
+    expect(within(panel).getByText(/root\.crl/)).toBeInTheDocument();
+    expect(within(panel).getByText(/ocsp\.example/)).toBeInTheDocument();
+    expect(within(panel).getByText(/fail-closed and soft-fail/)).toBeInTheDocument();
+  });
 });
 
 describe("guiding empty states", () => {
@@ -223,6 +262,7 @@ describe("guiding empty states", () => {
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
     apiMock.rogueCertificates.mockReset();
+    apiMock.revocationHealth.mockReset();
     apiMock.submitCertificateTransparency.mockReset();
   });
 
@@ -265,6 +305,7 @@ describe("certificate inventory gap closure", () => {
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
     apiMock.rogueCertificates.mockReset();
+    apiMock.revocationHealth.mockReset();
     apiMock.submitCertificateTransparency.mockReset();
   });
 
