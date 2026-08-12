@@ -298,7 +298,7 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 		{name: "approval request", eventType: EventApprovalRequested, version: 1,
 			data:   completePrivacyFixture[ApprovalRequested](t, `{"resource_name":"team/privacy-policy-subject","requester":"privacy-policy-subject","reason":"for privacy-policy-subject","evidence_refs":["ticket:privacy-policy-subject"]}`),
 			decode: decodePrivacyFixture[ApprovalRequested], wantPlaceholder: true,
-			want: []string{`"reason":""`, `"evidence_refs":[]`}},
+			want: []string{`"reason":""`, `"evidence_refs":[""]`}},
 		{name: "approval decision", eventType: EventApprovalDecisionRecorded, version: 1,
 			data:   completePrivacyFixture[ApprovalDecisionRecorded](t, `{"approver":"privacy-policy-subject","reason":"reviewed privacy-policy-subject"}`),
 			decode: decodePrivacyFixture[ApprovalDecisionRecorded], wantPlaceholder: true,

@@ -406,6 +406,94 @@ func pseudonymizeDataBytes(data []byte, subject, placeholder string) ([]byte, bo
 	return next, !bytes.Equal(next, data)
 }
 
+func canonicalNestedJSONFixture(subject string) (string, error) {
+	payload, err := json.Marshal(map[string]string{
+		"identity": subject,
+		"profile":  "fixture/" + subject,
+	})
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(payload), nil
+}
+
+func rewritePrivacyNestedJSONBytes(value any, subject, placeholder string) (any, bool, error) {
+	encoded, ok := value.(string)
+	if !ok {
+		return nil, false, errors.New("nested JSON bytes value is not a base64 string")
+	}
+	nested, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || base64.StdEncoding.EncodeToString(nested) != encoded {
+		return nil, false, errors.New("nested JSON bytes value is not canonical base64")
+	}
+	if !json.Valid(nested) {
+		return nil, false, errors.New("nested JSON bytes value is not JSON")
+	}
+	if err := validatePrivacyJSONUniqueKeys(nested); err != nil {
+		return nil, false, fmt.Errorf("nested JSON bytes value: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(nested))
+	decoder.UseNumber()
+	var document any
+	if err := decoder.Decode(&document); err != nil {
+		return nil, false, fmt.Errorf("decode nested JSON bytes value: %w", err)
+	}
+	rewrittenDocument, changed, err := rewritePrivacyNestedJSONValue(document, subject, placeholder)
+	if err != nil {
+		return nil, false, err
+	}
+	if !changed {
+		return encoded, false, nil
+	}
+	rewritten, err := json.Marshal(rewrittenDocument)
+	if err != nil {
+		return nil, false, fmt.Errorf("encode rewritten nested JSON bytes value: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(rewritten), true, nil
+}
+
+func rewritePrivacyNestedJSONValue(value any, subject, placeholder string) (any, bool, error) {
+	switch typed := value.(type) {
+	case string:
+		rewritten, changed := replaceSubjectTokens(typed, subject, placeholder)
+		return rewritten, changed, nil
+	case []any:
+		out := make([]any, len(typed))
+		changed := false
+		for index, child := range typed {
+			next, childChanged, err := rewritePrivacyNestedJSONValue(child, subject, placeholder)
+			if err != nil {
+				return nil, false, err
+			}
+			out[index] = next
+			changed = changed || childChanged
+		}
+		return out, changed, nil
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		sources := make(map[string]string, len(typed))
+		changed := false
+		for key, child := range typed {
+			nextKey, keyChanged := replaceSubjectTokens(key, subject, placeholder)
+			if prior, collision := sources[nextKey]; collision && prior != key {
+				return nil, false, fmt.Errorf(
+					"nested JSON bytes key rewrite collides between %q and %q", prior, key,
+				)
+			}
+			sources[nextKey] = key
+			next, childChanged, err := rewritePrivacyNestedJSONValue(child, subject, placeholder)
+			if err != nil {
+				return nil, false, err
+			}
+			out[nextKey] = next
+			changed = changed || keyChanged || childChanged
+		}
+		return out, changed, nil
+	default:
+		return value, false, nil
+	}
+}
+
 // PseudonymizeDataForSubject rewrites non-event durable JSON copies that do not
 // have a registered event/schema policy. Canonical event payloads must use
 // PseudonymizeEventDataForSubject so closed-shape and command-identity rules are

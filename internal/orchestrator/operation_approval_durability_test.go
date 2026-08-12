@@ -93,7 +93,7 @@ func TestOperationApprovalRequestRecoversRetainedPrivacyEventAfterFiniteDedupe(t
 		t.Fatalf("rolled-back request projection = %v, want not found", err)
 	}
 
-	if err := log.PseudonymizeSubject(ctx, tenantID, subject, lifecycleRewriteProofOptions()...); err != nil {
+	if err := log.PseudonymizeSubject(ctx, tenantID, subject, lifecycleRewriteProofOptions(nil)...); err != nil {
 		t.Fatalf("privacy-shape retained request: %v", err)
 	}
 	time.Sleep(4 * approvalDurabilityDuplicateWindow)
@@ -190,7 +190,7 @@ func TestOperationApprovalDecisionRecoversRetainedPrivacyEventAfterFiniteDedupe(
 	if _, err := log.Append(decisionCtx, decisionEvent); err != nil {
 		t.Fatalf("append orphaned decision: %v", err)
 	}
-	if err := log.PseudonymizeSubject(ctx, tenantA, subject, lifecycleRewriteProofOptions()...); err != nil {
+	if err := log.PseudonymizeSubject(ctx, tenantA, subject, lifecycleRewriteProofOptions(nil)...); err != nil {
 		t.Fatalf("privacy-shape retained decision: %v", err)
 	}
 	time.Sleep(4 * approvalDurabilityDuplicateWindow)

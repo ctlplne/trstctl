@@ -39,12 +39,15 @@ type lifecycleAuthorityFixture struct {
 
 func newLifecycleAuthorityFixture(
 	t *testing.T,
+	st *store.Store,
 	log *events.Log,
 	key, csr, reason, requester string,
 	extraEvidence ...string,
 ) lifecycleAuthorityFixture {
 	t.Helper()
-	st := newStore(t)
+	if st == nil {
+		st = newStore(t)
+	}
 	resetOrchestratorOperationApprovals(t, st)
 	if log == nil {
 		log = openLog(t)
@@ -115,7 +118,7 @@ func TestApprovedLifecycleCommandBindsAttemptReasonAndGenericEvidence(t *testing
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newLifecycleAuthorityFixture(t, nil, "approved-attempt", "public-csr",
+			fixture := newLifecycleAuthorityFixture(t, nil, nil, "approved-attempt", "public-csr",
 				"reviewed reason", "requester@example.test", "ticket:INC-770")
 			headBefore, err := fixture.log.LastSequence(context.Background())
 			if err != nil {
@@ -179,7 +182,7 @@ func retainedEventByID(t *testing.T, log *events.Log, eventID string) events.Eve
 }
 
 func TestApprovedLifecycleCanonicalOuterEventIsTheOnlyOutboxBody(t *testing.T) {
-	fixture := newLifecycleAuthorityFixture(t, nil, "canonical-outbox", "", "canonical reason",
+	fixture := newLifecycleAuthorityFixture(t, nil, nil, "canonical-outbox", "", "canonical reason",
 		"requester@example.test", "ticket:canonical")
 	ctx := context.Background()
 	if err := fixture.orch.TransitionWithSubjectCSRAndApproval(ctx, tenantA, fixture.identity.ID,
@@ -323,7 +326,7 @@ func TestUnapprovedProfileIssuanceCanonicalV5RebuildAndReconcile(t *testing.T) {
 }
 
 func TestApprovedLifecycleConsumedReplayRevalidatesRetainedCommand(t *testing.T) {
-	fixture := newLifecycleAuthorityFixture(t, nil, "replay-command", "public-csr", "replay reason",
+	fixture := newLifecycleAuthorityFixture(t, nil, nil, "replay-command", "public-csr", "replay reason",
 		"requester@example.test", "ticket:replay")
 	ctx := context.Background()
 	if err := fixture.orch.TransitionWithSubjectCSRAndApproval(ctx, tenantA, fixture.identity.ID,
@@ -388,11 +391,15 @@ func lifecycleRewriteLog(t *testing.T, options ...events.OpenOption) *events.Log
 	return log
 }
 
-func lifecycleRewriteProofOptions() []events.TenantDataRewriteOption {
+func lifecycleRewriteProofOptions(st *store.Store) []events.TenantDataRewriteOption {
+	prepare := func(ctx context.Context, _ events.TenantDataRewriteReport, proceed func(context.Context) error) error {
+		return proceed(ctx)
+	}
+	if st != nil {
+		prepare = st.PrepareTenantDataCutover
+	}
 	return []events.TenantDataRewriteOption{
-		events.WithTenantDataCutoverPreparation(func(ctx context.Context, _ events.TenantDataRewriteReport, proceed func(context.Context) error) error {
-			return proceed(ctx)
-		}),
+		events.WithTenantDataCutoverPreparation(prepare),
 		events.WithTenantDataAuditContinuity(func(context.Context, events.TenantDataAuditView) (events.TenantDataAuditCheckpoint, error) {
 			return events.TenantDataAuditCheckpoint{IdentityDigest: strings.Repeat("d", 64)}, nil
 		}),
@@ -407,9 +414,14 @@ func lifecycleRewriteProofOptions() []events.TenantDataRewriteOption {
 
 func TestApprovedLifecyclePrivacyRewriteRebuildAndRecoveryContainNoRawSubject(t *testing.T) {
 	const subject = "alice.lifecycle@example.test"
-	log := lifecycleRewriteLog(t)
-	fixture := newLifecycleAuthorityFixture(t, log, "privacy-lifecycle", "",
+	st := newStore(t)
+	log := lifecycleRewriteLog(t,
+		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)))
+	fixture := newLifecycleAuthorityFixture(t, st, log, "privacy-lifecycle", "",
 		"issue for "+subject, subject, "profile-owner:"+subject)
+	if fixture.store != st {
+		t.Fatal("lifecycle authority fixture did not reuse the rewrite coordinator store")
+	}
 	ctx := context.Background()
 	if err := fixture.orch.TransitionWithSubjectCSRAndApproval(ctx, tenantA, fixture.identity.ID,
 		orchestrator.StateIssued, fixture.reason, fixture.key, fixture.csr, fixture.use); err != nil {
@@ -479,7 +491,7 @@ func TestApprovedLifecyclePrivacyRewriteRebuildAndRecoveryContainNoRawSubject(t 
 	}
 
 	privacyOrch := orchestrator.NewOrchestrator(log, fixture.store, orchestrator.NewOutbox(fixture.store),
-		orchestrator.WithTenantDataRewriteOptions(lifecycleRewriteProofOptions()...))
+		orchestrator.WithTenantDataRewriteOptions(lifecycleRewriteProofOptions(st)...))
 	if _, err := privacyOrch.ErasePrivacySubject(ctx, tenantA, subject, "erase lifecycle authority for "+subject); err != nil {
 		t.Fatalf("erase lifecycle privacy subject: %v", err)
 	}

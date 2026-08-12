@@ -43,11 +43,12 @@ func privacyRule(path string, mode events.PrivacyFieldMode) events.PrivacyFieldR
 // an authority field when a new decoder path was not classified.
 func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEventPolicy {
 	const (
-		exact  = events.PrivacyFieldIdentityExact
-		token  = events.PrivacyFieldSubjectToken
-		clear  = events.PrivacyFieldFreeTextClear
-		jsonID = events.PrivacyFieldJSONIdentityValues
-		opaque = events.PrivacyFieldOpaqueExact
+		exact      = events.PrivacyFieldIdentityExact
+		token      = events.PrivacyFieldSubjectToken
+		clear      = events.PrivacyFieldFreeTextClear
+		jsonID     = events.PrivacyFieldJSONIdentityValues
+		nestedJSON = events.PrivacyFieldNestedJSONBytes
+		opaque     = events.PrivacyFieldOpaqueExact
 	)
 	owner := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/kind", opaque),
@@ -59,7 +60,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/resource_name", token), privacyRule("/action", opaque),
 		privacyRule("/requester", exact), privacyRule("/from_state", opaque),
 		privacyRule("/to_state", opaque), privacyRule("/target_version", opaque),
-		privacyRule("/reason", clear), privacyRule("/evidence_refs", clear),
+		privacyRule("/reason", clear), privacyRule("/evidence_refs/*", clear),
 		privacyRule("/required_approvals", opaque), privacyRule("/created_at", opaque),
 		privacyRule("/expires_at", opaque),
 	)
@@ -167,7 +168,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/idempotency_key", opaque), privacyRule("/subject_csr_pem", opaque),
 		privacyRule("/side_effect/destination", opaque),
 		privacyRule("/side_effect/idempotency_key", opaque),
-		privacyRule("/side_effect/payload", opaque),
+		privacyRule("/side_effect/payload", nestedJSON),
 		privacyRule("/side_effect/required_agent_role", opaque),
 	)
 	identityTransitionV4 := privacyRules(

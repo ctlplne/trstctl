@@ -1111,6 +1111,66 @@ func TestPseudonymizeDataBytesRewritesBase64EncodedNestedJSON(t *testing.T) {
 	}
 }
 
+func TestNestedJSONBytesPolicyRewritesCanonicalCommandAndRejectsMalformedHistory(t *testing.T) {
+	const (
+		eventType = "privacy.policy.nested-json-bytes.test"
+		tenantID  = "11111111-1111-1111-1111-111111111111"
+		subject   = "alice@example.com"
+	)
+	type envelope struct {
+		Payload []byte `json:"payload"`
+	}
+	if err := RegisterPrivacyEventPolicy(eventType, 1, PrivacyEventPolicy{
+		Rules:        []PrivacyFieldRule{{Path: "/payload", Mode: PrivacyFieldNestedJSONBytes}},
+		PayloadShape: PrivacyPayloadShapeOf[envelope](),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	input, err := json.Marshal(envelope{Payload: []byte(
+		`{"requester":"alice@example.com","profile":"prod/alice@example.com","keep":"unchanged"}`,
+	)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewritten, changed, err := applyRegisteredPrivacyEventPolicy(input, tenantID, subject, eventType, 1)
+	if err != nil || !changed {
+		t.Fatalf("nested command rewrite = changed %t err %v", changed, err)
+	}
+	var got envelope
+	if err := json.Unmarshal(rewritten, &got); err != nil {
+		t.Fatal(err)
+	}
+	placeholder := privacyref.Placeholder(privacyref.SubjectRef(tenantID, subject))
+	if bytes.Contains(got.Payload, []byte(subject)) ||
+		!bytes.Contains(got.Payload, []byte(`"profile":"prod/`+placeholder+`"`)) ||
+		!bytes.Contains(got.Payload, []byte(`"keep":"unchanged"`)) {
+		t.Fatalf("rewritten nested command = %s", got.Payload)
+	}
+
+	malformed := []byte(`{"payload":"e30=\n"}`)
+	if _, _, err := applyRegisteredPrivacyEventPolicy(malformed, tenantID, subject, eventType, 1); err == nil ||
+		!strings.Contains(err.Error(), "canonical base64") {
+		t.Fatalf("malformed nested command error = %v, want canonical base64 refusal", err)
+	}
+
+	shortInput, err := json.Marshal(envelope{Payload: []byte(`{"destination":"ca.issue","requester":"a"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortRewritten, changed, err := applyRegisteredPrivacyEventPolicy(shortInput, tenantID, "a", eventType, 1)
+	if err != nil || !changed {
+		t.Fatalf("short-subject nested rewrite = changed %t err %v", changed, err)
+	}
+	if err := json.Unmarshal(shortRewritten, &got); err != nil {
+		t.Fatal(err)
+	}
+	shortPlaceholder := privacyref.Placeholder(privacyref.SubjectRef(tenantID, "a"))
+	if !bytes.Contains(got.Payload, []byte(`"destination":"ca.issue"`)) ||
+		!bytes.Contains(got.Payload, []byte(`"requester":"`+shortPlaceholder+`"`)) {
+		t.Fatalf("short-subject nested rewrite corrupted opaque token: %s", got.Payload)
+	}
+}
+
 func TestSubjectErasurePseudonymizeSubjectSecureRewritesHotLogStorage(t *testing.T) {
 	ctx := context.Background()
 	const (

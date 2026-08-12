@@ -40,6 +40,11 @@ const (
 	// cataloged schemaless metadata fields such as discovery config/metadata;
 	// dynamic object keys remain closed and cannot carry personal data.
 	PrivacyFieldJSONIdentityValues PrivacyFieldMode = "json_identity_values"
+	// PrivacyFieldNestedJSONBytes rewrites one encoding/json []byte field whose
+	// canonical base64 value contains a complete JSON command. It exists for
+	// historical replayable envelopes such as lifecycle v3. Invalid base64,
+	// non-canonical encoding, duplicate JSON keys, and non-JSON bytes fail closed.
+	PrivacyFieldNestedJSONBytes PrivacyFieldMode = "nested_json_bytes"
 	// PrivacyFieldOpaqueExact declares a digest, UUID, HMAC, ciphertext, DER, or
 	// protocol value. The value and its complete subtree are never inspected or
 	// rewritten, even when a short subject happens to occur in its encoding.
@@ -174,7 +179,7 @@ func RegisterPrivacyEventPolicy(eventType string, schemaVersion int, policy Priv
 		switch rule.Mode {
 		case PrivacyFieldIdentityExact, PrivacyFieldSubjectToken,
 			PrivacyFieldFreeTextClear, PrivacyFieldJSONIdentityValues,
-			PrivacyFieldOpaqueExact:
+			PrivacyFieldNestedJSONBytes, PrivacyFieldOpaqueExact:
 		default:
 			return fmt.Errorf("events: privacy field path %q has unsupported mode %q", rule.Path, rule.Mode)
 		}
@@ -421,7 +426,7 @@ func privacyPayloadShapeNodeAt(
 
 func validatePrivacyRuleNodeMode(mode PrivacyFieldMode, node *privacyPayloadShapeNode) error {
 	switch mode {
-	case PrivacyFieldIdentityExact, PrivacyFieldSubjectToken:
+	case PrivacyFieldIdentityExact, PrivacyFieldSubjectToken, PrivacyFieldNestedJSONBytes:
 		if node.kind != privacyPayloadShapeOpen &&
 			(node.kind != privacyPayloadShapeScalar || node.scalar != privacyPayloadScalarString) {
 			return fmt.Errorf("%s requires a string leaf", mode)
@@ -773,6 +778,23 @@ func ValidatePrivacyEventPolicySubjectFixtures(eventType string, schemaVersion i
 			return covered, fmt.Errorf("events: build %s v%d fixture for %s: %w",
 				eventType, schemaVersion, rule.Path, err)
 		}
+		for _, declared := range policy.Rules {
+			if declared.Mode != PrivacyFieldNestedJSONBytes {
+				continue
+			}
+			if _, present, pathErr := privacyPayloadShapeNodeAt(root, parsePrivacyPath(declared.Path)); pathErr != nil {
+				return covered, fmt.Errorf("events: locate %s v%d nested fixture for %s: %w",
+					eventType, schemaVersion, declared.Path, pathErr)
+			} else if !present {
+				continue
+			}
+			if err := setPrivacyPayloadFixtureSubject(
+				&document, root, parsePrivacyPath(declared.Path), declared.Mode, "fixture-safe-nested-json",
+			); err != nil {
+				return covered, fmt.Errorf("events: seed %s v%d nested fixture for %s: %w",
+					eventType, schemaVersion, declared.Path, err)
+			}
+		}
 		if err := setPrivacyPayloadFixtureSubject(
 			&document, root, parsePrivacyPath(rule.Path), rule.Mode, subject,
 		); err != nil {
@@ -975,6 +997,8 @@ func privacyPayloadSubjectFixtureValue(
 			return nil, errors.New("declared subtree has no string value")
 		}
 		return value, nil
+	case PrivacyFieldNestedJSONBytes:
+		return canonicalNestedJSONFixture(subject)
 	case PrivacyFieldOpaqueExact:
 		return nil, errors.New("opaque paths are not subject-bearing fixtures")
 	default:
@@ -1230,7 +1254,7 @@ func validatePrivacyClosingNodeShape(value any, path []string, shape *privacyPay
 
 func validatePrivacyClosingModeShape(value any, path []string, mode PrivacyFieldMode) error {
 	switch mode {
-	case PrivacyFieldIdentityExact, PrivacyFieldSubjectToken:
+	case PrivacyFieldIdentityExact, PrivacyFieldSubjectToken, PrivacyFieldNestedJSONBytes:
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("%s path /%s is not a string", mode, strings.Join(path, "/"))
 		}
@@ -1278,15 +1302,18 @@ func applyRegisteredPrivacyEventPolicy(
 		}
 		return data, false, nil
 	}
-	if !privacyJSONContainsSubject(document, subject) {
-		return data, false, nil
-	}
 	policy, ok := registeredPrivacyEventPolicy(eventType, schemaVersion)
 	if !ok {
+		if !privacyJSONContainsSubject(document, subject) {
+			return data, false, nil
+		}
 		return nil, false, fmt.Errorf(
 			"events: no privacy policy for subject-bearing event %s v%d",
 			eventType, schemaVersion,
 		)
+	}
+	if !privacyJSONContainsSubject(document, subject) && !privacyPolicyHasNestedJSONBytes(policy) {
+		return data, false, nil
 	}
 	// A rewrite policy is meaningful only for the exact payload vocabulary it
 	// was registered against. Validate the complete closed/OneOf shape before a
@@ -1330,6 +1357,15 @@ func applyRegisteredPrivacyEventPolicy(
 		)
 	}
 	return encoded, true, nil
+}
+
+func privacyPolicyHasNestedJSONBytes(policy PrivacyEventPolicy) bool {
+	for _, rule := range policy.Rules {
+		if rule.Mode == PrivacyFieldNestedJSONBytes {
+			return true
+		}
+	}
+	return false
 }
 
 func validatePrivacyJSONUniqueKeys(data []byte) error {
@@ -1491,6 +1527,8 @@ func rewritePrivacyJSONValue(
 			return rewritten, changed, nil
 		case PrivacyFieldJSONIdentityValues:
 			return rewritePrivacyJSONIdentityValues(value, subject, placeholder)
+		case PrivacyFieldNestedJSONBytes:
+			return rewritePrivacyNestedJSONBytes(value, subject, placeholder)
 		case PrivacyFieldFreeTextClear:
 			if !privacyJSONContainsSubject(value, subject) {
 				switch value.(type) {
@@ -1533,7 +1571,7 @@ func rewritePrivacyJSONValue(
 					}
 				case PrivacyFieldSubjectToken:
 					nextKey, _ = replaceSubjectTokens(key, subject, placeholder)
-				case PrivacyFieldOpaqueExact, PrivacyFieldJSONIdentityValues:
+				case PrivacyFieldOpaqueExact, PrivacyFieldJSONIdentityValues, PrivacyFieldNestedJSONBytes:
 				case PrivacyFieldFreeTextClear:
 					return nil, false, errors.New("free-text object keys cannot be cleared")
 				}
@@ -1564,7 +1602,7 @@ func rewritePrivacyJSONValue(
 					var keyChanged bool
 					nextKey, keyChanged = replaceSubjectTokens(key, subject, placeholder)
 					changed = changed || keyChanged
-				case PrivacyFieldOpaqueExact, PrivacyFieldJSONIdentityValues:
+				case PrivacyFieldOpaqueExact, PrivacyFieldJSONIdentityValues, PrivacyFieldNestedJSONBytes:
 				case PrivacyFieldFreeTextClear:
 					return nil, false, errors.New("free-text object keys cannot be cleared")
 				}
