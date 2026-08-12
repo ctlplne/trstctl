@@ -201,6 +201,29 @@ func (s *JWKSet) VerifyArtifact(token, expectedArtifact string) ([]byte, error) 
 	return s.verify(token, expectedArtifact)
 }
 
+// VerifyArtifactWithKeyID returns the protected kid alongside the verified
+// payload. Evidence envelopes use it to prove the human-readable signer identity
+// is the same identity the JWS actually selected.
+func (s *JWKSet) VerifyArtifactWithKeyID(token, expectedArtifact string) ([]byte, string, error) {
+	payload, err := s.VerifyArtifact(token, expectedArtifact)
+	if err != nil {
+		return nil, "", err
+	}
+	parts := strings.Split(token, ".")
+	hdrRaw, err := b64.DecodeString(parts[0])
+	if err != nil {
+		return nil, "", fmt.Errorf("jose: bad header encoding: %w", err)
+	}
+	var hdr jwsHeader
+	if err := json.Unmarshal(hdrRaw, &hdr); err != nil {
+		return nil, "", fmt.Errorf("jose: bad header: %w", err)
+	}
+	if hdr.Kid == "" {
+		return nil, "", errors.New("jose: artifact JWS has no protected kid")
+	}
+	return payload, hdr.Kid, nil
+}
+
 func (s *JWKSet) verify(token, expectedArtifact string) ([]byte, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -278,6 +301,7 @@ const (
 	ArtifactBillingInvoice     = "trstctl.audit-evidence/billing-invoice/v1"
 	ArtifactDoctorReceipt      = "trstctl.audit-evidence/doctor-receipt/v1"
 	ArtifactPQCCampaignClosure = "trstctl.audit-evidence/pqc-campaign-closure/v1"
+	ArtifactRestoreDrill       = "trstctl.audit-evidence/restore-drill/v1"
 )
 
 // GenerateRSASigningKey generates a 2048-bit RSA signing key tagged with kid.

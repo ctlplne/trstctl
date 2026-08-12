@@ -917,6 +917,10 @@ func TestFullBackupEncryptionConfigurable(t *testing.T) {
 	env := map[string]string{
 		"TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE": "/secure/backup.key",
 		"TRSTCTL_BACKUP_ALLOW_UNENCRYPTED":   "true",
+		"TRSTCTL_BACKUP_DIRECTORY":           "/backups/current",
+		"TRSTCTL_BACKUP_DRILL_INTERVAL":      "12h",
+		"TRSTCTL_BACKUP_DRILL_RPO":           "4h",
+		"TRSTCTL_BACKUP_DRILL_RTO":           "45m",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -927,5 +931,11 @@ func TestFullBackupEncryptionConfigurable(t *testing.T) {
 	}
 	if !cfg.Backup.AllowUnencrypted {
 		t.Error("Backup.AllowUnencrypted must be settable via env")
+	}
+	if cfg.Backup.Directory != "/backups/current" || cfg.Backup.DrillInterval != "12h" {
+		t.Fatalf("backup drill env did not apply: %+v", cfg.Backup)
+	}
+	if rpo, rto, err := cfg.Backup.DrillObjectiveDurations(); err != nil || rpo != 4*time.Hour || rto != 45*time.Minute {
+		t.Fatalf("backup objectives = %v/%v err=%v", rpo, rto, err)
 	}
 }

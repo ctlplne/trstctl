@@ -53,6 +53,9 @@ const (
 	// DestinationOwnership carries initial and cadence-driven ownership
 	// attestation requests (I1/AUD-44).
 	DestinationOwnership = "notification.ownership"
+	// DestinationRestoreDrill carries failed, skipped, or objective-breaching
+	// disaster-recovery drill alerts (J2/AUD-54).
+	DestinationRestoreDrill = "notification.restore_drill"
 )
 
 // Alert kinds.
@@ -101,6 +104,9 @@ const (
 	// stale, nearing expiry, unreachable, or invalid.
 	KindRevocationHealth       = "revocation.health"
 	KindOwnershipReattestation = "ownership.reattestation_requested"
+	KindRestoreDrillFailed     = "backup.restore_drill_failed"
+	KindRestoreDrillSkipped    = "backup.restore_drill_skipped"
+	KindRestoreDrillObjective  = "backup.restore_drill_objective_breached"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

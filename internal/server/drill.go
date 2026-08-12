@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -12,10 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -68,7 +72,9 @@ func (s *Server) RunRestoreDrillScheduler(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			_, _ = s.RunRestoreDrillOnce(ctx)
+			if _, err := s.RunRestoreDrillOnce(ctx); err != nil && s.logger != nil {
+				s.logger.Error("scheduled restore drill failed", "error", err)
+			}
 		}
 	}
 }
@@ -108,6 +114,84 @@ func (s *Server) RunRestoreDrillOnce(ctx context.Context) (backup.DrillAttestati
 	if s.restoreDrill == nil {
 		return backup.DrillAttestation{}, ErrDrillTargetUnavailable
 	}
+	// Small embedded compositions that wire only the old callback retain the
+	// compatibility behavior. Once any durable dependency is present, all four
+	// are required: partial assembly must fail instead of silently falling back
+	// to the volatile result that this remediation removes from production.
+	if s.store == nil && s.log == nil && s.proj == nil && s.restoreDrillSigner == nil {
+		return s.runVolatileRestoreDrill(ctx)
+	}
+	if s.store == nil || s.log == nil || s.proj == nil || s.restoreDrillSigner == nil {
+		return backup.DrillAttestation{}, errors.New("server: restore-drill durable evidence dependencies are incomplete")
+	}
+	s.restoreDrillRunMu.Lock()
+	defer s.restoreDrillRunMu.Unlock()
+
+	attestation, err := s.restoreDrill(ctx)
+	if attestation.Outcome == "" {
+		now := time.Now().UTC()
+		attestation = backup.DrillAttestation{
+			Outcome: backup.DrillFailed, StartedAt: now, CompletedAt: now,
+			Detail: "The scheduled restore drill could not start far enough to inspect a backup. " +
+				"This failed outcome is recorded and alerted rather than leaving the previous green result visible.",
+			Limitations: []string{"No recovery evidence was produced because the drill could not start."},
+		}
+	}
+	drillID := events.NewID()
+	evidence, signErr := backup.SignDrillEvidence(
+		ctx, s.restoreDrillSigner, drillID, attestation, s.restoreDrillRPO, s.restoreDrillRTO,
+	)
+	if signErr != nil {
+		return backup.DrillAttestation{}, errors.Join(err, signErr)
+	}
+	tenants, listErr := s.store.ListTenants(ctx)
+	if listErr != nil {
+		return backup.DrillAttestation{}, errors.Join(err, fmt.Errorf("server: list restore-drill tenants: %w", listErr))
+	}
+	if len(tenants) == 0 {
+		return backup.DrillAttestation{}, errors.Join(err, errors.New("server: restore drill has no tenant history to record"))
+	}
+	var recordErr error
+	for _, tenant := range tenants {
+		attestationID := projections.RestoreDrillAttestationID(tenant.TenantID, drillID)
+		payload, marshalErr := json.Marshal(projections.RestoreDrillRecorded{
+			AttestationID: attestationID, Evidence: evidence,
+		})
+		if marshalErr != nil {
+			recordErr = errors.Join(recordErr, marshalErr)
+			continue
+		}
+		eventID := uuid.NewSHA1(restoreDrillEventNamespace, []byte(tenant.TenantID+"\x1f"+drillID)).String()
+		stored, appendErr := s.log.Append(ctx, events.Event{
+			ID: eventID, Type: projections.EventRestoreDrillRecorded,
+			TenantID: tenant.TenantID, Time: attestation.CompletedAt.UTC(),
+			SchemaVersion: 1, Data: payload,
+		})
+		if appendErr != nil {
+			recordErr = errors.Join(recordErr, fmt.Errorf("server: append restore-drill evidence for tenant %s: %w", tenant.TenantID, appendErr))
+			continue
+		}
+		if projectErr := s.proj.Apply(ctx, stored); projectErr != nil {
+			recordErr = errors.Join(recordErr, fmt.Errorf("server: project restore-drill evidence for tenant %s: %w", tenant.TenantID, projectErr))
+		}
+	}
+	if recordErr == nil {
+		s.restoreDrillMu.Lock()
+		s.lastRestoreDrill = &attestation
+		s.restoreDrillMu.Unlock()
+	}
+	return attestation, errors.Join(err, recordErr)
+}
+
+var (
+	restoreDrillEventNamespace = uuid.MustParse("9d52bb3c-b404-5a6d-b857-ac3d5259470c")
+)
+
+func restoreDrillAlertReason(att backup.DrillAttestation, rpo, rto time.Duration) projections.RestoreDrillAlertReason {
+	return backup.DrillAlertReasonFor(att, rpo, rto)
+}
+
+func (s *Server) runVolatileRestoreDrill(ctx context.Context) (backup.DrillAttestation, error) {
 	attestation, err := s.restoreDrill(ctx)
 	// An attestation that names an outcome is recorded even when an error came
 	// back with it, and the case that matters is the SKIPPED one: RunDrill

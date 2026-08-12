@@ -74,6 +74,7 @@ var auditEvidenceKinds = map[string]bool{
 	jose.ArtifactBillingInvoice:     true,
 	jose.ArtifactDoctorReceipt:      true,
 	jose.ArtifactPQCCampaignClosure: true,
+	jose.ArtifactRestoreDrill:       true,
 }
 
 // signAuditEvidenceArtifact is the core, signer-owned evidence admission path.

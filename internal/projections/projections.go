@@ -18,9 +18,11 @@ import (
 
 	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/connector"
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/custody"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
@@ -224,6 +226,7 @@ const (
 	EventTenantKeyDomainSealed                    = "tenant.key_domain.sealed"
 	EventTenantKeyDomainUnsealRequested           = "tenant.key_domain.unseal_requested"
 	EventTenantKeyDomainUnsealed                  = "tenant.key_domain.unsealed"
+	EventRestoreDrillRecorded                     = "backup.restore_drill.recorded"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -2207,6 +2210,40 @@ type ResponseIntegrationDispatchedDestination struct {
 	AllowPrivateEndpoint bool   `json:"allow_private_endpoint,omitempty"`
 }
 
+// RestoreDrillAttestationKind is the immutable evidence projection discriminator.
+// It is not credential-issuance attestation data even though it shares the
+// generic append-only evidence table.
+const RestoreDrillAttestationKind = "backup.restore_drill"
+
+type RestoreDrillAlertReason = backup.DrillAlertReason
+
+const (
+	RestoreDrillAlertFailed   = backup.DrillAlertFailed
+	RestoreDrillAlertSkipped  = backup.DrillAlertSkipped
+	RestoreDrillAlertOverRPO  = backup.DrillAlertOverRPO
+	RestoreDrillAlertOverRTO  = backup.DrillAlertOverRTO
+	RestoreDrillAlertOverBoth = backup.DrillAlertOverBoth
+)
+
+// RestoreDrillRecorded is the v1 immutable event payload. The tenant lives in
+// the envelope; the signed evidence is deployment-scoped because one physical
+// recovery exercise proves the shared control plane and is projected once into
+// each tenant's isolated operational history.
+type RestoreDrillRecorded struct {
+	AttestationID string                     `json:"attestation_id"`
+	Evidence      backup.SignedDrillEvidence `json:"evidence"`
+}
+
+var restoreDrillAttestationNamespace = uuid.MustParse("0aa27380-373f-5e0f-97a7-ef3027281c36")
+
+// RestoreDrillAttestationID binds one deployment drill to exactly one history
+// row per tenant. The signed DrillID supplies the immutable command identity;
+// deriving the row ID prevents replaying the same proof under arbitrary IDs to
+// manufacture duplicate history or notification intents.
+func RestoreDrillAttestationID(tenantID, drillID string) string {
+	return uuid.NewSHA1(restoreDrillAttestationNamespace, []byte(tenantID+"\x1f"+drillID)).String()
+}
+
 // identityTransition decodes the orchestrator's lifecycle event payload. The
 // projector applies the new status to the identity row AND appends the full
 // transition to the identity_transitions read model (SPINE-001), so History/State
@@ -2244,6 +2281,7 @@ type Projector struct {
 	eventProjections                 []EventProjection
 	allowSecretSyncRecoveryBootstrap bool
 	ownershipAttestationCadence      time.Duration
+	restoreDrillVerificationKeys     *jose.JWKSet
 }
 
 // Option customizes the generic projector without coupling MPL core to any
@@ -2337,6 +2375,13 @@ func WithOwnershipAttestationCadence(cadence time.Duration) Option {
 			p.ownershipAttestationCadence = cadence
 		}
 	}
+}
+
+// WithRestoreDrillVerificationKeys supplies deployment-trusted public keys for
+// immutable restore-drill evidence. Embedded record keys remain portability
+// material and can never choose projection authority.
+func WithRestoreDrillVerificationKeys(keys *jose.JWKSet) Option {
+	return func(p *Projector) { p.restoreDrillVerificationKeys = keys }
 }
 
 // New returns a Projector that writes into s.
@@ -2723,6 +2768,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
 	EventTenantRegistered:                         {1: true},
 	EventTenantOffboarded:                         {1: true},
+	EventRestoreDrillRecorded:                     {1: true},
 	EventOwnerCreated:                             {1: true, OwnerDepthEventSchemaVersion: true},
 	EventOwnerUpdated:                             {1: true, OwnerDepthEventSchemaVersion: true},
 	EventOwnershipAttested:                        {1: true},
@@ -2948,6 +2994,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: apply %s: %w", e.Type, err)
 		}
 		return nil
+	case EventRestoreDrillRecorded:
+		return p.applyRestoreDrillRecordedTx(ctx, tx, e)
 	}
 	if handled, err := p.applyOperationApprovalTx(ctx, tx, e); handled {
 		return err
@@ -5005,6 +5053,74 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return nil
 	}
+}
+
+func (p *Projector) applyRestoreDrillRecordedTx(ctx context.Context, tx pgx.Tx, e events.Event) error {
+	if p.restoreDrillVerificationKeys == nil {
+		return errors.New("projections: restore-drill verification keys are not configured")
+	}
+	var payload RestoreDrillRecorded
+	if err := json.Unmarshal(e.Data, &payload); err != nil {
+		return fmt.Errorf("projections: decode %s: %w", e.Type, err)
+	}
+	if payload.AttestationID != RestoreDrillAttestationID(e.TenantID, payload.Evidence.DrillID) ||
+		!payload.Evidence.Attestation.CompletedAt.Equal(e.Time) {
+		return errors.New("projections: restore-drill event identity/time does not match signed evidence")
+	}
+	if err := backup.VerifyDrillEvidence(payload.Evidence, p.restoreDrillVerificationKeys); err != nil {
+		return fmt.Errorf("projections: reject restore-drill evidence: %w", err)
+	}
+	evidenceJSON, err := json.Marshal(payload.Evidence)
+	if err != nil {
+		return fmt.Errorf("projections: encode restore-drill evidence: %w", err)
+	}
+	verifiedAt := e.Time.UTC()
+	row := store.Attestation{
+		ID: payload.AttestationID, TenantID: e.TenantID,
+		Kind: RestoreDrillAttestationKind, Evidence: evidenceJSON,
+		VerifiedAt: &verifiedAt, CreatedAt: e.Time.UTC(),
+	}
+	var destination, alertKey string
+	var alertJSON []byte
+	if payload.Evidence.AlertReason != "" {
+		kind, severity := restoreDrillAlertVocabulary(payload.Evidence.AlertReason)
+		alert := restoreDrillAlert{
+			Kind: kind, TenantID: e.TenantID,
+			OperationID: "restore-drill:" + payload.AttestationID,
+			Subject:     "restore drill " + string(payload.Evidence.AlertReason),
+			Detail:      payload.Evidence.Attestation.Detail, Severity: severity,
+		}
+		alertJSON, err = json.Marshal(alert)
+		if err != nil {
+			return fmt.Errorf("projections: encode restore-drill alert: %w", err)
+		}
+		destination = "notification.restore_drill"
+		alertKey = "restore-drill-alert:" + payload.AttestationID
+	}
+	return p.store.ApplyRestoreDrillAttestationTx(ctx, tx, row, destination, alertJSON, alertKey)
+}
+
+func restoreDrillAlertVocabulary(reason RestoreDrillAlertReason) (string, string) {
+	switch reason {
+	case RestoreDrillAlertFailed:
+		return "backup.restore_drill_failed", "critical"
+	case RestoreDrillAlertSkipped:
+		return "backup.restore_drill_skipped", "warning"
+	default:
+		return "backup.restore_drill_objective_breached", "warning"
+	}
+}
+
+// restoreDrillAlert mirrors only the credential-free notification vocabulary
+// this projector emits. The notify package consumes projections, so importing it
+// here would create a cycle; JSON is the stable outbox contract between them.
+type restoreDrillAlert struct {
+	Kind        string `json:"kind"`
+	TenantID    string `json:"tenant_id"`
+	OperationID string `json:"operation_id,omitempty"`
+	Subject     string `json:"subject,omitempty"`
+	Detail      string `json:"detail,omitempty"`
+	Severity    string `json:"severity,omitempty"`
 }
 
 // validateLifecycleApprovalShape checks the immutable event bytes before any

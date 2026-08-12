@@ -1019,9 +1019,18 @@ production full backups require an operator-held encryption key.
 | --- | --- | --- |
 | `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` | unset | Raw key-material file (normally 32 random bytes, never itself copied into the backup) used to AES-256-GCM-encrypt every sensitive full-backup artifact. Required for `--full-backup-dir` unless the override below is set. |
 | `TRSTCTL_BACKUP_ALLOW_UNENCRYPTED` | `false` | Break-glass override that permits an unencrypted full backup for a lab/export case. The choice is recorded in the backup manifest so an auditor can see the locked box was not used. |
+| `TRSTCTL_BACKUP_DIRECTORY` | unset | Full-backup directory the served integrity check and scheduled full-set restore drill read. Empty means the control plane reports backup automation as externally managed. |
+| `TRSTCTL_BACKUP_DRILL_INTERVAL` | `24h` | Scheduled full restore cadence. `0` explicitly disables scheduling; malformed durations fail startup. Equivalent config key: `backup.drill_interval`. |
+| `TRSTCTL_BACKUP_DRILL_RPO` | `24h` | Largest measured backup age accepted without an objective-breach alert. Equivalent config key: `backup.drill_rpo`. |
+| `TRSTCTL_BACKUP_DRILL_RTO` | `1h` | Largest isolated-target restore duration accepted without an objective-breach alert. This is a floor for a real incident, not an RTO promise. Equivalent config key: `backup.drill_rto`. |
 
 See the [disaster-recovery runbook](disaster-recovery.md) for the full backup/restore
 procedure, including what each artifact covers and how to restore a signer host.
+Every scheduled result is signed by the isolated `audit-export` signer handle,
+appended to tenant-isolated history, and available through
+`trstctl platform dr-posture`. Failed, skipped, and objective-breaching results
+create an idempotent `notification.restore_drill` intent in the same PostgreSQL
+transaction as that history row.
 
 ## License
 

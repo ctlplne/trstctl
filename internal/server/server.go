@@ -124,6 +124,8 @@ type Deps struct {
 	// RestoreDrillInterval is how often it runs. Zero takes the default;
 	// negative disables it.
 	RestoreDrillInterval time.Duration
+	RestoreDrillRPO      time.Duration
+	RestoreDrillRTO      time.Duration
 	Store                *store.Store
 	Log                  *events.Log
 	Signer               SignerProvider            // may be nil → issuance is unavailable (fail closed)
@@ -808,6 +810,10 @@ type Server struct {
 	// surface tell "never drilled" from "drilled and found nothing wrong".
 	restoreDrill         func(context.Context) (backup.DrillAttestation, error)
 	restoreDrillInterval time.Duration
+	restoreDrillRPO      time.Duration
+	restoreDrillRTO      time.Duration
+	restoreDrillSigner   *jose.SigningKey
+	restoreDrillRunMu    sync.Mutex
 	restoreDrillMu       sync.Mutex
 	lastRestoreDrill     *backup.DrillAttestation
 	// maintenanceWindows restrict when the scheduler may renew (D6). Empty
@@ -867,6 +873,9 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")
 	}
+	if d.RestoreDrill != nil && d.AuditSigningKey == nil {
+		return nil, errors.New("server: restore drill requires the isolated audit-evidence signer")
+	}
 	signProvider := d.SignTokenProvider
 	if signProvider == nil && d.SignAuthorizer != nil {
 		signProvider = d.SignAuthorizer
@@ -898,6 +907,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		telemetry:                 d.TelemetryReporter,
 		cloudTokenMinter:          d.CloudTokenMinter,
 		tenantCrypto:              d.TenantCrypto,
+		restoreDrillSigner:        d.AuditSigningKey,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",
@@ -986,6 +996,9 @@ func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, erro
 	options := append([]projections.Option(nil), d.LicensedProjectionOptions...)
 	if d.OwnershipAttestationCadence > 0 {
 		options = append(options, projections.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence))
+	}
+	if d.AuditSigningKey != nil {
+		options = append(options, projections.WithRestoreDrillVerificationKeys(d.AuditSigningKey.JWKS()))
 	}
 	proj := projections.New(d.Store, options...)
 	if _, err := proj.RestoreFromSnapshot(ctx, d.Log); err != nil {
@@ -1245,6 +1258,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		// J2: the last drill's attestation, or nil when none has run. The API
 		// distinguishes the two; a zero attestation would read as a perfect one.
 		api.WithRestoreDrill(s.LastRestoreDrill),
+		api.WithRestoreDrillSigningKey(d.AuditSigningKey),
 		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
 		api.WithSSHWorkflow(s),
@@ -1835,6 +1849,8 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.endpointVerificationInterval = d.EndpointVerificationInterval
 	s.restoreDrill = d.RestoreDrill
 	s.restoreDrillInterval = d.RestoreDrillInterval
+	s.restoreDrillRPO = d.RestoreDrillRPO
+	s.restoreDrillRTO = d.RestoreDrillRTO
 	s.maintenanceWindows = d.MaintenanceWindows
 	s.mLifecycleQueued = s.registry.CounterVec("trstctl_lifecycle_renewals_queued_total", "Identities queued by the lifecycle renewal scheduler.", nil).WithLabelValues()
 	s.mLifecycleAlerts = s.registry.CounterVec("trstctl_lifecycle_expiry_alerts_queued_total", "Expiry notifications queued by the lifecycle scheduler.", nil).WithLabelValues()

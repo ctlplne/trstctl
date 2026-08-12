@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/jose"
 )
 
 // Proving a backup restores, by restoring it (epic J2).
@@ -44,6 +47,18 @@ const (
 	// DrillSkipped: no drill ran. Recorded rather than left absent, so a
 	// deployment that never drills cannot be mistaken for one whose drills pass.
 	DrillSkipped DrillOutcome = "skipped"
+)
+
+// DrillAlertReason is the closed operational verdict derived from the signed
+// measurements and signed recovery objectives.
+type DrillAlertReason string
+
+const (
+	DrillAlertFailed   DrillAlertReason = "failed"
+	DrillAlertSkipped  DrillAlertReason = "skipped"
+	DrillAlertOverRPO  DrillAlertReason = "over_rpo"
+	DrillAlertOverRTO  DrillAlertReason = "over_rto"
+	DrillAlertOverBoth DrillAlertReason = "over_rpo_and_rto"
 )
 
 // DrillAttestation is the signed record of one restore drill.
@@ -245,4 +260,176 @@ func humaniseAge(seconds int64) string {
 // part somebody quoting this in a compliance pack would most like to lose.
 func (a DrillAttestation) Signable() ([]byte, error) {
 	return json.Marshal(a)
+}
+
+const DrillEvidenceSchemaVersion = 1
+
+// DrillEvidenceBody is the complete statement authorized by the isolated
+// audit-evidence key. Signer identity and public verification material live
+// inside the signed body, so neither can be swapped beside a still-valid JWS.
+type DrillEvidenceBody struct {
+	SchemaVersion           int              `json:"schema_version"`
+	DrillID                 string           `json:"drill_id"`
+	Scope                   string           `json:"scope"`
+	Attestation             DrillAttestation `json:"attestation"`
+	RPOObjectiveNanoseconds int64            `json:"rpo_objective_nanoseconds"`
+	RTOObjectiveNanoseconds int64            `json:"rto_objective_nanoseconds"`
+	AlertReason             DrillAlertReason `json:"alert_reason,omitempty"`
+	SignerKeyID             string           `json:"signer_key_id"`
+	SignerAlgorithm         string           `json:"signer_algorithm"`
+	VerificationJWKS        json.RawMessage  `json:"verification_jwks"`
+}
+
+// SignedDrillEvidence is one portable restore-drill proof. Verification accepts
+// a deployment-trusted key set separately; VerificationJWKS is carried so an
+// exported record is self-describing, never so the record can choose its trust
+// root.
+type SignedDrillEvidence struct {
+	DrillEvidenceBody
+	Signature string `json:"signature"`
+}
+
+// SignDrillEvidence signs one deployment-scoped drill through the supplied
+// SigningKey. In production that key is a public wrapper around the narrow
+// trstctl-signer artifact RPC, so the control plane never sees private material.
+func SignDrillEvidence(
+	ctx context.Context,
+	key *jose.SigningKey,
+	drillID string,
+	att DrillAttestation,
+	rpoObjective time.Duration,
+	rtoObjective time.Duration,
+) (SignedDrillEvidence, error) {
+	if err := ctx.Err(); err != nil {
+		return SignedDrillEvidence{}, err
+	}
+	if key == nil || drillID == "" {
+		return SignedDrillEvidence{}, errors.New("backup: restore-drill signing key and drill id are required")
+	}
+	if err := validateDrillAttestation(att); err != nil {
+		return SignedDrillEvidence{}, err
+	}
+	if rpoObjective < 0 || rtoObjective < 0 {
+		return SignedDrillEvidence{}, errors.New("backup: restore-drill recovery objectives must not be negative")
+	}
+	jwks, err := key.PublicJWKS()
+	if err != nil {
+		return SignedDrillEvidence{}, fmt.Errorf("backup: render restore-drill verification key: %w", err)
+	}
+	body := DrillEvidenceBody{
+		SchemaVersion:           DrillEvidenceSchemaVersion,
+		DrillID:                 drillID,
+		Scope:                   "deployment",
+		Attestation:             att,
+		RPOObjectiveNanoseconds: int64(rpoObjective),
+		RTOObjectiveNanoseconds: int64(rtoObjective),
+		AlertReason:             DrillAlertReasonFor(att, rpoObjective, rtoObjective),
+		SignerKeyID:             key.KeyID(),
+		SignerAlgorithm:         "RS256",
+		VerificationJWKS:        append(json.RawMessage(nil), jwks...),
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return SignedDrillEvidence{}, fmt.Errorf("backup: encode restore-drill evidence: %w", err)
+	}
+	signature, err := key.SignArtifact(jose.ArtifactRestoreDrill, payload)
+	if err != nil {
+		return SignedDrillEvidence{}, fmt.Errorf("backup: sign restore-drill evidence: %w", err)
+	}
+	return SignedDrillEvidence{DrillEvidenceBody: body, Signature: signature}, nil
+}
+
+// VerifyDrillEvidence verifies both cryptographic authority and canonical body.
+// trusted is configured by the deployment; the JWKS carried in evidence is
+// checked for portability but cannot grant itself authority.
+func VerifyDrillEvidence(evidence SignedDrillEvidence, trusted *jose.JWKSet) error {
+	if trusted == nil {
+		return errors.New("backup: trusted restore-drill verification keys are required")
+	}
+	if evidence.SchemaVersion != DrillEvidenceSchemaVersion || evidence.DrillID == "" ||
+		evidence.Scope != "deployment" || evidence.SignerKeyID == "" ||
+		evidence.SignerAlgorithm != "RS256" || len(evidence.VerificationJWKS) == 0 ||
+		evidence.Signature == "" {
+		return errors.New("backup: restore-drill evidence is incomplete or has an unsupported schema")
+	}
+	if err := validateDrillAttestation(evidence.Attestation); err != nil {
+		return err
+	}
+	if evidence.RPOObjectiveNanoseconds < 0 || evidence.RTOObjectiveNanoseconds < 0 {
+		return errors.New("backup: restore-drill evidence has negative recovery objectives")
+	}
+	wantReason := DrillAlertReasonFor(evidence.Attestation,
+		time.Duration(evidence.RPOObjectiveNanoseconds), time.Duration(evidence.RTOObjectiveNanoseconds))
+	if evidence.AlertReason != wantReason {
+		return fmt.Errorf("backup: restore-drill alert reason %q does not match signed outcome, measurements, and objectives", evidence.AlertReason)
+	}
+	payload, err := json.Marshal(evidence.DrillEvidenceBody)
+	if err != nil {
+		return fmt.Errorf("backup: encode restore-drill evidence body: %w", err)
+	}
+	verified, keyID, err := trusted.VerifyArtifactWithKeyID(evidence.Signature, jose.ArtifactRestoreDrill)
+	if err != nil {
+		return fmt.Errorf("backup: verify trusted restore-drill signature: %w", err)
+	}
+	if !sameJSONValue(verified, payload) {
+		return errors.New("backup: restore-drill signature payload does not match evidence body")
+	}
+	if keyID != evidence.SignerKeyID {
+		return fmt.Errorf("backup: restore-drill signer identity %q does not match protected JWS kid %q", evidence.SignerKeyID, keyID)
+	}
+	embedded, err := jose.ParseJWKSet(evidence.VerificationJWKS)
+	if err != nil {
+		return fmt.Errorf("backup: parse embedded restore-drill verification material: %w", err)
+	}
+	if _, err := embedded.VerifyArtifact(evidence.Signature, jose.ArtifactRestoreDrill); err != nil {
+		return fmt.Errorf("backup: embedded restore-drill verification material does not match signer: %w", err)
+	}
+	return nil
+}
+
+// DrillAlertReasonFor deterministically maps the measured result and configured
+// objectives to the alert that must be emitted. Because all inputs and the result
+// are signed together, event tampering cannot silence or manufacture the alert.
+func DrillAlertReasonFor(att DrillAttestation, rpo, rto time.Duration) DrillAlertReason {
+	switch att.Outcome {
+	case DrillFailed:
+		return DrillAlertFailed
+	case DrillSkipped:
+		return DrillAlertSkipped
+	}
+	overRPO := time.Duration(att.RPOSeconds)*time.Second > rpo
+	overRTO := time.Duration(att.RTOSeconds)*time.Second > rto
+	switch {
+	case overRPO && overRTO:
+		return DrillAlertOverBoth
+	case overRPO:
+		return DrillAlertOverRPO
+	case overRTO:
+		return DrillAlertOverRTO
+	default:
+		return ""
+	}
+}
+
+func sameJSONValue(a, b []byte) bool {
+	var left, right any
+	if json.Unmarshal(a, &left) != nil || json.Unmarshal(b, &right) != nil {
+		return false
+	}
+	return reflect.DeepEqual(left, right)
+}
+
+func validateDrillAttestation(att DrillAttestation) error {
+	switch att.Outcome {
+	case DrillRestored, DrillFailed, DrillSkipped:
+	default:
+		return fmt.Errorf("backup: unsupported restore-drill outcome %q", att.Outcome)
+	}
+	if att.StartedAt.IsZero() || att.CompletedAt.IsZero() || att.CompletedAt.Before(att.StartedAt) {
+		return errors.New("backup: restore-drill evidence has invalid attempt times")
+	}
+	if att.RPOSeconds < 0 || att.RTOSeconds < 0 {
+		return errors.New("backup: restore-drill evidence has negative recovery measurements")
+	}
+	return nil
 }

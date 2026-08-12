@@ -8,6 +8,12 @@ import type { MessageKey } from "@/i18n/messages";
  * error, so every new message key still ships with its translation in the
  * same commit. */
 const esESCatalog = {
+  "platform.dr.history.title": "Historial de simulacros firmados",
+  "platform.dr.history.aria": "Historial de simulacros de restauración firmados",
+  "platform.dr.history.completed": "Completado",
+  "platform.dr.history.signer": "Firmante",
+  "platform.dr.history.signed": "Firmado",
+  "platform.dr.history.download": "Descargar evidencia",
   "app.loading": "Cargando...",
   "app.brand.name": "trstctl",
   "app.brand.subtitle": "plano de control",

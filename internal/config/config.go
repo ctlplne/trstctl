@@ -1434,6 +1434,12 @@ type Backup struct {
 	// configuration oversight, which is exactly the confusion this surface
 	// exists to remove.
 	DrillInterval string `json:"drill_interval,omitempty"`
+	// DrillRPO and DrillRTO are the largest measured recovery-point loss and
+	// isolated-target restore time accepted without an operational alert.
+	// Empty values use the explicit defaults below; "0" means every positive
+	// measurement breaches the objective, not disabled alerting.
+	DrillRPO string `json:"drill_rpo,omitempty"`
+	DrillRTO string `json:"drill_rto,omitempty"`
 }
 
 // DrillIntervalDuration is how often the restore drill runs, and whether it runs
@@ -1460,6 +1466,38 @@ func (b Backup) DrillIntervalDuration() (time.Duration, error) {
 // the drill daily instead. With the default resolved at parse time, a zero
 // reaching the scheduler can only mean disabled.
 const DefaultBackupDrillInterval = 24 * time.Hour
+
+const (
+	DefaultBackupDrillRPO = 24 * time.Hour
+	DefaultBackupDrillRTO = time.Hour
+)
+
+// DrillObjectiveDurations parses the alert thresholds. Negative objectives are
+// nonsensical and fail startup instead of silently disabling an alarm.
+func (b Backup) DrillObjectiveDurations() (time.Duration, time.Duration, error) {
+	parse := func(raw string, fallback time.Duration) (time.Duration, error) {
+		if strings.TrimSpace(raw) == "" {
+			return fallback, nil
+		}
+		value, err := time.ParseDuration(raw)
+		if err != nil {
+			return 0, err
+		}
+		if value < 0 {
+			return 0, errors.New("recovery objective must not be negative")
+		}
+		return value, nil
+	}
+	rpo, err := parse(b.DrillRPO, DefaultBackupDrillRPO)
+	if err != nil {
+		return 0, 0, fmt.Errorf("drill_rpo: %w", err)
+	}
+	rto, err := parse(b.DrillRTO, DefaultBackupDrillRTO)
+	if err != nil {
+		return 0, 0, fmt.Errorf("drill_rto: %w", err)
+	}
+	return rpo, rto, nil
+}
 
 // RateLimit configures the PostgreSQL-backed per-tenant rate limiter (R2.3 /
 // AN-7): each tenant may make Requests calls per Window (a token bucket admitting
@@ -2175,6 +2213,10 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	applyPrivacyEnv(getenv, &c.Privacy)
 	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &c.Backup.EncryptionKeyFile)
 	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &c.Backup.AllowUnencrypted)
+	setString(getenv, "TRSTCTL_BACKUP_DIRECTORY", &c.Backup.Directory)
+	setString(getenv, "TRSTCTL_BACKUP_DRILL_INTERVAL", &c.Backup.DrillInterval)
+	setString(getenv, "TRSTCTL_BACKUP_DRILL_RPO", &c.Backup.DrillRPO)
+	setString(getenv, "TRSTCTL_BACKUP_DRILL_RTO", &c.Backup.DrillRTO)
 	setString(getenv, "TRSTCTL_LICENSE_FILE", &c.License.File)
 	setBool(getenv, "TRSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
 	setInt(getenv, "TRSTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
@@ -3017,6 +3059,9 @@ func validateOptionalServices(c *Config) []error {
 		errs = append(errs, fmt.Errorf("audit.retention %q is invalid: %w", c.Audit.Retention, err))
 	} else if d < 0 {
 		errs = append(errs, errors.New("audit.retention must not be negative"))
+	}
+	if _, _, err := c.Backup.DrillObjectiveDurations(); err != nil {
+		errs = append(errs, fmt.Errorf("backup recovery objectives are invalid: %w", err))
 	}
 	if d, err := c.Privacy.Retention.IntervalDuration(); err != nil {
 		errs = append(errs, fmt.Errorf("privacy.retention.interval %q is invalid: %w", c.Privacy.Retention.Interval, err))

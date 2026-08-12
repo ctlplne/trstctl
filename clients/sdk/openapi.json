@@ -6316,6 +6316,10 @@
             },
             "type": "array"
           },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "detail": {
             "type": "string"
           },
@@ -6327,6 +6331,9 @@
           },
           "full_set_restored": {
             "type": "boolean"
+          },
+          "id": {
+            "type": "string"
           },
           "limitations": {
             "items": {
@@ -6364,11 +6371,31 @@
           "server_healthy": {
             "type": "boolean"
           },
+          "signature": {
+            "type": "string"
+          },
+          "signature_verified": {
+            "type": "boolean"
+          },
+          "signed_evidence": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "signer_algorithm": {
+            "type": "string"
+          },
           "signer_healthy": {
             "type": "boolean"
           },
+          "signer_key_id": {
+            "type": "string"
+          },
           "store_healthy": {
             "type": "boolean"
+          },
+          "verification_jwks": {
+            "additionalProperties": {},
+            "type": "object"
           }
         },
         "required": [
@@ -6403,6 +6430,12 @@
           },
           "detail": {
             "type": "string"
+          },
+          "drill_history": {
+            "items": {
+              "$ref": "#/components/schemas/DRDrill"
+            },
+            "type": "array"
           },
           "failures": {
             "items": {

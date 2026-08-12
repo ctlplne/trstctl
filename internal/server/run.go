@@ -446,12 +446,16 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 // Silently defaulting would give an operator who typed "24hours" a daily drill
 // they never asked to confirm, and give one who typed it meaning to DISABLE the
 // drill a drill that runs anyway.
-func runRestoreDrill(cfg *config.Config) (func(context.Context) (backup.DrillAttestation, error), time.Duration, error) {
+func runRestoreDrill(cfg *config.Config) (func(context.Context) (backup.DrillAttestation, error), time.Duration, time.Duration, time.Duration, error) {
 	interval, err := cfg.Backup.DrillIntervalDuration()
 	if err != nil {
-		return nil, 0, fmt.Errorf("backup drill_interval: %w", err)
+		return nil, 0, 0, 0, fmt.Errorf("backup drill_interval: %w", err)
 	}
-	return restoreDrillRunner(cfg), interval, nil
+	rpo, rto, err := cfg.Backup.DrillObjectiveDurations()
+	if err != nil {
+		return nil, 0, 0, 0, fmt.Errorf("backup recovery objectives: %w", err)
+	}
+	return restoreDrillRunner(cfg), interval, rpo, rto, nil
 }
 
 // runLeafPluginAndModelConfig resolves the four independent configuration
@@ -553,7 +557,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	drill, drillInterval, err := runRestoreDrill(cfg)
+	drill, drillInterval, drillRPO, drillRTO, err := runRestoreDrill(cfg)
 	if err != nil {
 		return Deps{}, err
 	}
@@ -568,6 +572,8 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		// nobody chose would fail nightly and mean nothing.
 		RestoreDrill:         drill,
 		RestoreDrillInterval: drillInterval,
+		RestoreDrillRPO:      drillRPO,
+		RestoreDrillRTO:      drillRTO,
 		Store:                st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:  cfg.Signer.KeyStoreDir,
 		EgressGuard:        egressGuard,

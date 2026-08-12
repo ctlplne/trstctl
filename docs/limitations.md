@@ -616,6 +616,22 @@ never live in the API process. What you can do end to end against the running bi
   off a document whose signature still verifies. A deployment that has never drilled
   serves no drill rather than a zero-valued one, since zeros render as an instant,
   complete recovery.
+  Each scheduled result now becomes a versioned
+  `backup.restore_drill.recorded` event per live tenant. The deployment-wide
+  attestation is signed through the isolated signer's purpose-constrained
+  `audit-export` handle with the exact `restore-drill/v1` evidence domain; the
+  signed body includes the complete attestation, recovery-objective thresholds,
+  derived alert reason, signer key id, algorithm, and public JWKS. The projector
+  verifies against the deployment-trusted key before
+  writing an immutable `backup.restore_drill` evidence row, so changing an
+  outcome, detail, limitation, metric, threshold, required alert, signer, or
+  verification key is rejected.
+  `last_drill` is derived from the newest durable row and `drill_history` exposes
+  the newest 50 through the authenticated tenant API, generated SDKs,
+  `trstctl platform dr-posture`, and the Platform console. A cold projection
+  rebuild reproduces the history; it is no longer a process-memory pointer.
+  The console shows signature status and signer identity and downloads the whole
+  portable signed JSON evidence object.
   The drill RUNS: `RunRestoreDrillScheduler` is registered as a runtime worker and
   fires on `backup.drill_interval` (daily by default, `"0"` to disable, and an
   unparseable value fails startup rather than silently defaulting; the default is
@@ -635,6 +651,14 @@ never live in the API process. What you can do end to end against the running bi
   database in — records a skipped attestation saying so, rather than reporting that
   it has never drilled. Those are different facts, and the second is the one an
   operator would read as an oversight worth chasing.
+  Failed and skipped outcomes create critical/warning alerts respectively.
+  A successful restore whose measured backup age exceeds `backup.drill_rpo`
+  (default 24 hours), whose isolated restore time exceeds `backup.drill_rto`
+  (default one hour), or both, creates an objective-breach warning. The signed
+  evidence row and its idempotent `notification.restore_drill` outbox intent are
+  projected in one tenant transaction, so a crash cannot commit a red drill while
+  silently dropping its alert. The scheduler logs structural/signing failures
+  instead of discarding its returned error.
   Enrolment diagnostics (I4): a refused ACME enrolment now produces a diagnosis
   naming the protocol, the step that failed, a cause from a CLOSED set, and a
   remediation. The hook sits at the single point every ACME refusal passes through,

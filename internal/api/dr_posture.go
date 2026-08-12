@@ -3,10 +3,13 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
 	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 // Whether this deployment could actually be restored (epic J2).
@@ -54,6 +57,9 @@ type DRPosture struct {
 	// for one whose drills pass, and an absent field says so where a false
 	// boolean would not.
 	LastDrill *DRDrill `json:"last_drill,omitempty"`
+	// DrillHistory is newest first and survives process and read-model restarts.
+	// Each row carries the exact portable evidence needed for offline checking.
+	DrillHistory []DRDrill `json:"drill_history,omitempty"`
 	// Detail is the operator-facing sentence for the current posture.
 	Detail   string `json:"detail"`
 	Guidance string `json:"guidance"`
@@ -61,10 +67,12 @@ type DRPosture struct {
 
 // DRDrill is the served summary of a restore drill.
 type DRDrill struct {
+	ID string `json:"id,omitempty"`
 	// Outcome is restored, failed or skipped.
 	Outcome string `json:"outcome"`
 	// RanAt is when the drill started.
-	RanAt string `json:"ran_at"`
+	RanAt       string `json:"ran_at"`
+	CompletedAt string `json:"completed_at,omitempty"`
 	// RPOSeconds is how old the restored state was — measured from the backup's
 	// own manifest, so it is what was achievable rather than what was intended.
 	RPOSeconds int64 `json:"rpo_seconds"`
@@ -75,16 +83,22 @@ type DRDrill struct {
 	EventsRestored int   `json:"events_restored"`
 	// Full-set and health evidence comes from the isolated recovered target. A
 	// restored outcome cannot be emitted unless all of these are true.
-	PostgresRecordsRestored int            `json:"postgres_records_restored"`
-	PostgresTablesRestored  map[string]int `json:"postgres_tables_restored"`
-	ArtifactsRestored       []string       `json:"artifacts_restored"`
-	FullSetRestored         bool           `json:"full_set_restored"`
-	StoreHealthy            bool           `json:"store_healthy"`
-	EventLogHealthy         bool           `json:"event_log_healthy"`
-	SignerHealthy           bool           `json:"signer_healthy"`
-	ServerHealthy           bool           `json:"server_healthy"`
-	Detail                  string         `json:"detail"`
-	Limitations             []string       `json:"limitations"`
+	PostgresRecordsRestored int             `json:"postgres_records_restored"`
+	PostgresTablesRestored  map[string]int  `json:"postgres_tables_restored"`
+	ArtifactsRestored       []string        `json:"artifacts_restored"`
+	FullSetRestored         bool            `json:"full_set_restored"`
+	StoreHealthy            bool            `json:"store_healthy"`
+	EventLogHealthy         bool            `json:"event_log_healthy"`
+	SignerHealthy           bool            `json:"signer_healthy"`
+	ServerHealthy           bool            `json:"server_healthy"`
+	Detail                  string          `json:"detail"`
+	Limitations             []string        `json:"limitations"`
+	SignatureVerified       bool            `json:"signature_verified"`
+	SignerKeyID             string          `json:"signer_key_id,omitempty"`
+	SignerAlgorithm         string          `json:"signer_algorithm,omitempty"`
+	Signature               string          `json:"signature,omitempty"`
+	VerificationJWKS        json.RawMessage `json:"verification_jwks,omitempty"`
+	SignedEvidence          json.RawMessage `json:"signed_evidence,omitempty"`
 }
 
 // DRArtifactFailure is one artifact that did not verify.
@@ -108,26 +122,39 @@ const drGuidance = "This page reports when a backup was last VERIFIED, not when 
 type drVerifier func() (backup.VerifyReport, error)
 
 func (a *API) listDRPosture(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.tenant(r); !ok {
+	tenantID, ok := a.tenant(r)
+	if !ok {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
 	out := DRPosture{Guidance: drGuidance}
+	if a.store != nil && a.restoreDrillKeys != nil {
+		rows, err := a.store.ListAttestationsByKind(r.Context(), tenantID, projections.RestoreDrillAttestationKind, 50)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		for _, row := range rows {
+			var evidence backup.SignedDrillEvidence
+			if err := json.Unmarshal(row.Evidence, &evidence); err != nil {
+				a.writeError(w, err)
+				return
+			}
+			if err := backup.VerifyDrillEvidence(evidence, a.restoreDrillKeys); err != nil {
+				a.writeError(w, err)
+				return
+			}
+			out.DrillHistory = append(out.DrillHistory, drDrillFromEvidence(row.ID, evidence))
+		}
+		if len(out.DrillHistory) > 0 {
+			latest := out.DrillHistory[0]
+			out.LastDrill = &latest
+		}
+	}
 	if a.lastDrill != nil {
-		if att := a.lastDrill(); att != nil {
-			out.LastDrill = &DRDrill{
-				Outcome: string(att.Outcome), RanAt: att.StartedAt.UTC().Format(time.RFC3339),
-				RPOSeconds: att.RPOSeconds, RTOSeconds: att.RTOSeconds,
-				EventsRestored: att.EventsRestored, Detail: att.Detail,
-				PostgresRecordsRestored: att.PostgresRecordsRestored,
-				PostgresTablesRestored:  att.PostgresTablesRestored,
-				ArtifactsRestored:       att.ArtifactsRestored,
-				FullSetRestored:         att.FullSetRestored,
-				StoreHealthy:            att.StoreHealthy,
-				EventLogHealthy:         att.EventLogHealthy,
-				SignerHealthy:           att.SignerHealthy,
-				ServerHealthy:           att.ServerHealthy,
-				Limitations:             att.Limitations,
+		if out.LastDrill == nil {
+			if att := a.lastDrill(); att != nil {
+				out.LastDrill = drDrillFromAttestation(*att)
 			}
 		}
 	}
@@ -182,6 +209,33 @@ func (a *API) listDRPosture(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, out)
 }
 
+func drDrillFromEvidence(id string, evidence backup.SignedDrillEvidence) DRDrill {
+	out := *drDrillFromAttestation(evidence.Attestation)
+	out.ID = id
+	out.SignatureVerified = true
+	out.SignerKeyID = evidence.SignerKeyID
+	out.SignerAlgorithm = evidence.SignerAlgorithm
+	out.Signature = evidence.Signature
+	out.VerificationJWKS = append(json.RawMessage(nil), evidence.VerificationJWKS...)
+	out.SignedEvidence, _ = json.Marshal(evidence)
+	return out
+}
+
+func drDrillFromAttestation(att backup.DrillAttestation) *DRDrill {
+	return &DRDrill{
+		Outcome: string(att.Outcome), RanAt: att.StartedAt.UTC().Format(time.RFC3339),
+		CompletedAt: att.CompletedAt.UTC().Format(time.RFC3339),
+		RPOSeconds:  att.RPOSeconds, RTOSeconds: att.RTOSeconds,
+		EventsRestored: att.EventsRestored, Detail: att.Detail,
+		PostgresRecordsRestored: att.PostgresRecordsRestored,
+		PostgresTablesRestored:  att.PostgresTablesRestored,
+		ArtifactsRestored:       att.ArtifactsRestored, FullSetRestored: att.FullSetRestored,
+		StoreHealthy: att.StoreHealthy, EventLogHealthy: att.EventLogHealthy,
+		SignerHealthy: att.SignerHealthy, ServerHealthy: att.ServerHealthy,
+		Limitations: att.Limitations,
+	}
+}
+
 // WithBackupDirectory configures the backup directory this API reports on.
 //
 // An option rather than a constructor argument so a deployment that does not
@@ -212,4 +266,20 @@ func backupVerifierFor(dir string) drVerifier {
 // show.
 func WithRestoreDrill(fn func() *backup.DrillAttestation) Option {
 	return func(c *config) { c.lastDrill = fn }
+}
+
+// WithRestoreDrillVerificationKeys enables tenant-scoped durable history and
+// fail-closed signature verification on every read.
+func WithRestoreDrillVerificationKeys(keys *jose.JWKSet) Option {
+	return func(c *config) { c.restoreDrillKeys = keys }
+}
+
+// WithRestoreDrillSigningKey is the composition-root convenience that exposes
+// only the public verification half. Nil keeps durable history unavailable.
+func WithRestoreDrillSigningKey(key *jose.SigningKey) Option {
+	return func(c *config) {
+		if key != nil {
+			c.restoreDrillKeys = key.JWKS()
+		}
+	}
 }

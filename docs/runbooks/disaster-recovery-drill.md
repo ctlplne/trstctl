@@ -38,6 +38,30 @@ attestation cannot say `restored` unless all of those checks pass. The separate
 event-log-only restore remains useful for projection recovery, but it is never a
 full DR verdict.
 
+The scheduled result is not a volatile health flag. The control plane signs a
+versioned JSON statement through the isolated `audit-export` signer handle. The
+signed statement includes the measured result, configured RPO/RTO thresholds,
+and the alert reason derived from them, so event tampering cannot silence a red
+drill. The control plane then
+appends `backup.restore_drill.recorded`, verifies it while projecting, and keeps a
+newest-first tenant history. Failed, skipped, over-RPO, and over-RTO results also
+enqueue `notification.restore_drill` through the ordinary notification fanout in
+the same transaction as the history row.
+
+Configure the cadence and measured-objective alert thresholds explicitly when the
+defaults do not match the recovery plan:
+
+```sh
+export TRSTCTL_BACKUP_DIRECTORY=/backups/trstctl-current
+export TRSTCTL_BACKUP_DRILL_INTERVAL=24h
+export TRSTCTL_BACKUP_DRILL_RPO=24h
+export TRSTCTL_BACKUP_DRILL_RTO=1h
+```
+
+`TRSTCTL_BACKUP_DRILL_INTERVAL=0` disables the automatic drill. A zero RPO or
+RTO objective does not disable alerting; it makes every positive measurement a
+breach. Negative or malformed objective durations fail configuration validation.
+
 ## Prerequisites
 
 - A healthy source environment: `/readyz` returns `200`, NATS durability is not
@@ -208,6 +232,21 @@ Attach these to the drill ticket:
 6. Before/after inventory counts.
 7. Smoke-test request IDs and idempotency keys.
 8. Any rollback, retry, or manual step needed to finish the drill.
+
+For the built-in scheduled drill, retain the product evidence rather than a
+screenshot:
+
+```sh
+trstctl platform dr-posture > restore-drill-history.json
+```
+
+The `drill_history` array is newest first. Each row reports
+`signature_verified`, `signer_key_id`, and `signer_algorithm`, and its
+`signed_evidence` member contains the complete compact JWS plus public JWKS for
+auditor handoff. The Platform console exposes the same rows and downloads that
+exact JSON evidence. A tampered projected row makes the API fail closed instead
+of rendering a green badge; replaying the retained event rebuilds the original
+verified row.
 
 ## Passing result
 

@@ -524,6 +524,25 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/actions/*/identity_id", opaque),
 	)
 	policies := map[privacyEventPolicyKey]events.PrivacyEventPolicy{
+		{EventRestoreDrillRecorded, 1}: privacyRules(
+			privacyRule("/attestation_id", opaque),
+			privacyRule("/evidence/schema_version", opaque),
+			privacyRule("/evidence/drill_id", opaque),
+			privacyRule("/evidence/scope", opaque),
+			privacyRule("/evidence/attestation/outcome", opaque),
+			privacyRule("/evidence/attestation/started_at", opaque),
+			privacyRule("/evidence/attestation/completed_at", opaque),
+			privacyRule("/evidence/attestation/backup_created_at", opaque),
+			privacyRule("/evidence/attestation/postgres_tables_restored", opaque),
+			privacyRule("/evidence/attestation/artifacts_restored/*", opaque),
+			privacyRule("/evidence/attestation/detail", opaque),
+			privacyRule("/evidence/attestation/limitations/*", opaque),
+			privacyRule("/evidence/alert_reason", opaque),
+			privacyRule("/evidence/signer_key_id", opaque),
+			privacyRule("/evidence/signer_algorithm", opaque),
+			privacyRule("/evidence/verification_jwks", opaque),
+			privacyRule("/evidence/signature", opaque),
+		),
 		{EventOwnerCreated, 1}:                            owner,
 		{EventOwnerUpdated, 1}:                            owner,
 		{EventOwnerCreated, OwnerDepthEventSchemaVersion}: ownerDepth,
@@ -1066,6 +1085,7 @@ func privacyPayloadShape[T any]() events.PrivacyPayloadShape {
 
 func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	shapes := map[privacyEventPolicyKey]events.PrivacyPayloadShape{
+		{EventRestoreDrillRecorded, 1}:                                               privacyPayloadShape[RestoreDrillRecorded](),
 		{EventOwnerCreated, 1}:                                                       privacyPayloadShape[privacyOwnerV1](),
 		{EventOwnerUpdated, 1}:                                                       privacyPayloadShape[privacyOwnerV1](),
 		{EventOwnerCreated, OwnerDepthEventSchemaVersion}:                            privacyPayloadShape[OwnerCreated](),

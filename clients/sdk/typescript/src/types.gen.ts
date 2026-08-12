@@ -6934,10 +6934,13 @@ export interface components {
         };
         DRDrill: {
             artifacts_restored: string[];
+            /** Format: date-time */
+            completed_at?: string;
             detail: string;
             event_log_healthy: boolean;
             events_restored: number;
             full_set_restored: boolean;
+            id?: string;
             limitations: string[];
             /** @enum {string} */
             outcome: "restored" | "failed" | "skipped";
@@ -6950,14 +6953,25 @@ export interface components {
             rpo_seconds: number;
             rto_seconds: number;
             server_healthy: boolean;
+            signature?: string;
+            signature_verified?: boolean;
+            signed_evidence?: {
+                [key: string]: unknown;
+            };
+            signer_algorithm?: string;
             signer_healthy: boolean;
+            signer_key_id?: string;
             store_healthy: boolean;
+            verification_jwks?: {
+                [key: string]: unknown;
+            };
         };
         DRPosture: {
             artifacts_checked: number;
             artifacts_unverifiable: number;
             backup_configured: boolean;
             detail: string;
+            drill_history?: components["schemas"]["DRDrill"][];
             failures?: components["schemas"]["DRArtifactFailure"][];
             guidance: string;
             /** Format: date-time */

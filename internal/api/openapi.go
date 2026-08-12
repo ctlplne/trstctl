@@ -2187,9 +2187,11 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "required": {Type: "boolean"}, "detail": str(),
 	}, "name", "required", "detail")
 	drDrill := object(map[string]*Schema{
-		"outcome":     {Type: "string", Enum: []string{"restored", "failed", "skipped"}},
-		"ran_at":      timestamp(),
-		"rpo_seconds": {Type: "integer"}, "rto_seconds": {Type: "integer"},
+		"id":           str(),
+		"outcome":      {Type: "string", Enum: []string{"restored", "failed", "skipped"}},
+		"ran_at":       timestamp(),
+		"completed_at": timestamp(),
+		"rpo_seconds":  {Type: "integer"}, "rto_seconds": {Type: "integer"},
 		"events_restored":           {Type: "integer"},
 		"postgres_records_restored": {Type: "integer"},
 		"postgres_tables_restored":  {Type: "object", AdditionalProperties: &Schema{Type: "integer"}},
@@ -2201,6 +2203,12 @@ func componentSchemas() map[string]*Schema {
 		"server_healthy":            {Type: "boolean"},
 		"detail":                    str(),
 		"limitations":               {Type: "array", Items: str()},
+		"signature_verified":        {Type: "boolean"},
+		"signer_key_id":             str(),
+		"signer_algorithm":          str(),
+		"signature":                 str(),
+		"verification_jwks":         {Type: "object", AdditionalProperties: &Schema{}},
+		"signed_evidence":           {Type: "object", AdditionalProperties: &Schema{}},
 	}, "outcome", "ran_at", "rpo_seconds", "rto_seconds", "events_restored",
 		"postgres_records_restored", "postgres_tables_restored", "artifacts_restored",
 		"full_set_restored", "store_healthy", "event_log_healthy", "signer_healthy", "server_healthy",
@@ -2217,7 +2225,8 @@ func componentSchemas() map[string]*Schema {
 		// J2: absent until a drill has run, and absent is the point — an
 		// always-present object would give a never-drilled deployment a
 		// zero-valued drill that reads as a clean one.
-		"last_drill": ref("DRDrill"),
+		"last_drill":    ref("DRDrill"),
+		"drill_history": {Type: "array", Items: ref("DRDrill")},
 	}, "backup_configured", "verified", "artifacts_checked", "artifacts_unverifiable", "detail", "guidance")
 	// I4: recent enrolment refusals, classified.
 	enrollmentDiagnostic := object(map[string]*Schema{

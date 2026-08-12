@@ -5867,6 +5867,30 @@ export const messages = {
     defaultMessage: "Restore drill",
     description: "J2: sub-heading \u2014 what the last actual restore into a throwaway target established.",
   },
+  "platform.dr.history.title": {
+    defaultMessage: "Signed drill history",
+    description: "AUD-54: heading for durable newest-first restore-drill evidence.",
+  },
+  "platform.dr.history.aria": {
+    defaultMessage: "Signed restore-drill history",
+    description: "AUD-54: accessible label for the durable restore-drill evidence grid.",
+  },
+  "platform.dr.history.completed": {
+    defaultMessage: "Completed",
+    description: "AUD-54: completion timestamp column for one restore drill.",
+  },
+  "platform.dr.history.signer": {
+    defaultMessage: "Signer",
+    description: "AUD-54: cryptographic signer identity column for one restore drill.",
+  },
+  "platform.dr.history.signed": {
+    defaultMessage: "Signed",
+    description: "AUD-54: verified signature status for one restore-drill evidence row.",
+  },
+  "platform.dr.history.download": {
+    defaultMessage: "Download evidence",
+    description: "AUD-54: download the complete portable signed restore-drill JSON evidence.",
+  },
   "source.no.drill.yet.j2dr000010": {
     defaultMessage:
       "No restore drill has run on this deployment. Verification proves the bytes on disk still match what was recorded; only a drill proves they reproduce state.",

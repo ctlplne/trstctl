@@ -92,6 +92,16 @@ func TestAuditEvidenceOverRealSignerBinary(t *testing.T) {
 	if got, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactAuditExport); err != nil || !bytes.Equal(got, payload) {
 		t.Fatalf("verify restart evidence: payload=%q err=%v", got, err)
 	}
+	res, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
+		Kind: jose.ArtifactRestoreDrill, TenantID: "deployment", AuthorityID: "audit-evidence",
+		KeyID: "audit-export", Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("sign restore-drill evidence through isolated signer: %v", err)
+	}
+	if got, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactRestoreDrill); err != nil || !bytes.Equal(got, payload) {
+		t.Fatalf("verify restore-drill evidence: payload=%q err=%v", got, err)
+	}
 	_, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
 		Kind: "trstctl.audit-evidence/forged-kind/v1", TenantID: "deployment", AuthorityID: "audit-evidence",
 		KeyID: "audit-export", Payload: payload,

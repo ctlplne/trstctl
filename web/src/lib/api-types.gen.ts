@@ -1640,10 +1640,12 @@ export interface DRArtifactFailure {
 
 export interface DRDrill {
   artifacts_restored: string[];
+  completed_at?: string;
   detail: string;
   event_log_healthy: boolean;
   events_restored: number;
   full_set_restored: boolean;
+  id?: string;
   limitations: string[];
   outcome: "restored" | "failed" | "skipped";
   postgres_records_restored: number;
@@ -1652,8 +1654,14 @@ export interface DRDrill {
   rpo_seconds: number;
   rto_seconds: number;
   server_healthy: boolean;
+  signature?: string;
+  signature_verified?: boolean;
+  signed_evidence?: Record<string, unknown>;
+  signer_algorithm?: string;
   signer_healthy: boolean;
+  signer_key_id?: string;
   store_healthy: boolean;
+  verification_jwks?: Record<string, unknown>;
 }
 
 export interface DRPosture {
@@ -1661,6 +1669,7 @@ export interface DRPosture {
   artifacts_unverifiable: number;
   backup_configured: boolean;
   detail: string;
+  drill_history?: DRDrill[];
   failures?: DRArtifactFailure[];
   guidance: string;
   last_backup_at?: string;

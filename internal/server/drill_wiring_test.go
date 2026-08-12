@@ -13,6 +13,8 @@ import (
 
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Is the restore drill REACHABLE from the running binary? (epic J2)
@@ -88,6 +90,19 @@ func TestARunDrillBecomesTheServedAttestation(t *testing.T) {
 	}
 }
 
+func TestRestoreDrillPartialDurableAssemblyFailsClosed(t *testing.T) {
+	t.Parallel()
+	s := &Server{
+		store: new(store.Store),
+		restoreDrill: func(context.Context) (backup.DrillAttestation, error) {
+			return backup.DrillAttestation{Outcome: backup.DrillRestored}, nil
+		},
+	}
+	if _, err := s.RunRestoreDrillOnce(context.Background()); err == nil || !strings.Contains(err.Error(), "dependencies are incomplete") {
+		t.Fatalf("partial durable restore-drill assembly error = %v, want fail-closed dependency error", err)
+	}
+}
+
 // A failed drill must be RECORDED, not dropped.
 //
 // This is the case worth protecting. A drill that fails means the backup exists
@@ -111,6 +126,33 @@ func TestAFailedDrillReplacesASucceededOne(t *testing.T) {
 	if got := s.LastRestoreDrill(); got == nil || got.Outcome != backup.DrillFailed {
 		t.Fatalf("after a failed drill the surface reports %+v; a stale success is the one "+
 			"answer this endpoint must never give", got)
+	}
+}
+
+func TestRestoreDrillAlertReasonCoversEveryClosedOutcomeAndObjective(t *testing.T) {
+	t.Parallel()
+	const (
+		rpo = 24 * time.Hour
+		rto = time.Hour
+	)
+	tests := []struct {
+		name string
+		att  backup.DrillAttestation
+		want projections.RestoreDrillAlertReason
+	}{
+		{name: "restored within objectives", att: backup.DrillAttestation{Outcome: backup.DrillRestored, RPOSeconds: 1, RTOSeconds: 1}},
+		{name: "failed", att: backup.DrillAttestation{Outcome: backup.DrillFailed}, want: projections.RestoreDrillAlertFailed},
+		{name: "skipped", att: backup.DrillAttestation{Outcome: backup.DrillSkipped}, want: projections.RestoreDrillAlertSkipped},
+		{name: "over RPO", att: backup.DrillAttestation{Outcome: backup.DrillRestored, RPOSeconds: int64((rpo + time.Second) / time.Second), RTOSeconds: 1}, want: projections.RestoreDrillAlertOverRPO},
+		{name: "over RTO", att: backup.DrillAttestation{Outcome: backup.DrillRestored, RPOSeconds: 1, RTOSeconds: int64((rto + time.Second) / time.Second)}, want: projections.RestoreDrillAlertOverRTO},
+		{name: "over both", att: backup.DrillAttestation{Outcome: backup.DrillRestored, RPOSeconds: int64((rpo + time.Second) / time.Second), RTOSeconds: int64((rto + time.Second) / time.Second)}, want: projections.RestoreDrillAlertOverBoth},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := restoreDrillAlertReason(tt.att, rpo, rto); got != tt.want {
+				t.Fatalf("restoreDrillAlertReason(%+v) = %q, want %q", tt.att, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -307,4 +349,19 @@ func TestABadDrillIntervalIsAConfigurationError(t *testing.T) {
 	// Parsing to zero is only half the promise; that zero DISABLES the drill is
 	// asserted by TestAZeroDrillIntervalStopsTheDrillRatherThanDefaultingIt,
 	// because this assertion alone passed happily while the drill ran daily.
+}
+
+func TestRestoreDrillObjectivesDefaultParseAndRejectNegativeValues(t *testing.T) {
+	t.Parallel()
+	rpo, rto, err := (config.Backup{}).DrillObjectiveDurations()
+	if err != nil || rpo != config.DefaultBackupDrillRPO || rto != config.DefaultBackupDrillRTO {
+		t.Fatalf("default objectives = %v/%v err=%v", rpo, rto, err)
+	}
+	configured := config.Backup{DrillRPO: "8h", DrillRTO: "20m"}
+	if rpo, rto, err = configured.DrillObjectiveDurations(); err != nil || rpo != 8*time.Hour || rto != 20*time.Minute {
+		t.Fatalf("configured objectives = %v/%v err=%v", rpo, rto, err)
+	}
+	if _, _, err := (config.Backup{DrillRPO: "-1s"}).DrillObjectiveDurations(); err == nil {
+		t.Fatal("negative RPO objective was accepted and would disable threshold alerting")
+	}
 }

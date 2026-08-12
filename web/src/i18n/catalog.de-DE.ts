@@ -12,6 +12,12 @@ import type { MessageKey } from "@/i18n/messages";
  * clause turns a missing key into a type error, so every new message key
  * ships with an es-ES AND a de-DE entry from the same commit. */
 const deDECatalog = {
+  "platform.dr.history.title": "Signierter Übungsverlauf",
+  "platform.dr.history.aria": "Verlauf signierter Wiederherstellungsübungen",
+  "platform.dr.history.completed": "Abgeschlossen",
+  "platform.dr.history.signer": "Signierer",
+  "platform.dr.history.signed": "Signiert",
+  "platform.dr.history.download": "Nachweis herunterladen",
   "app.loading": "Wird geladen...",
   "app.brand.name": "trstctl",
   "app.brand.subtitle": "Control Plane",

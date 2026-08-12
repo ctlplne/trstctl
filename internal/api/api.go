@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
@@ -62,6 +63,7 @@ type API struct {
 	// (J2). Nil-returning rather than a zero value: "no drill has run" and "a
 	// drill ran and failed" must not render the same way.
 	lastDrill               func() *backup.DrillAttestation
+	restoreDrillKeys        *jose.JWKSet
 	roles                   *authz.Registry
 	principal               func(*http.Request) (authz.Principal, error)
 	audit                   *audit.Service
@@ -160,10 +162,11 @@ type config struct {
 	// (J2). Empty means none is configured.
 	backupDir string
 	// lastDrill supplies the most recent restore drill (J2).
-	lastDrill   func() *backup.DrillAttestation
-	customRoles []authz.Role
-	eventLog    *events.Log
-	principalFn func(*http.Request) (authz.Principal, error)
+	lastDrill        func() *backup.DrillAttestation
+	restoreDrillKeys *jose.JWKSet
+	customRoles      []authz.Role
+	eventLog         *events.Log
+	principalFn      func(*http.Request) (authz.Principal, error)
 	// principalFromReg is a resolver factory the test-only header resolver uses.
 	// It is built against the API's role registry (so custom roles work) and the
 	// real authenticated resolver (so test servers still accept bearer tokens and
@@ -435,6 +438,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		tenantFn:                    tenantFromHeader,
 		drVerify:                    backupVerifierFor(cfg.backupDir),
 		lastDrill:                   cfg.lastDrill,
+		restoreDrillKeys:            cfg.restoreDrillKeys,
 		roles:                       reg,
 		audit:                       cfg.audit,
 		auditTimestamper:            cfg.auditTimestamper,
