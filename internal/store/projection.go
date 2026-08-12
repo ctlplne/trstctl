@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/custody"
 )
 
 // This file holds the read-model projection sinks (AN-2). They are the ONLY
@@ -486,6 +488,39 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		return nil
 	}
 	return fmt.Errorf("certificate successor %s did not supersede predecessor %s in status %q", c.ID, *c.ReplacesID, status)
+}
+
+// ApplyCertificateCustodyAttestedTx projects a verified agent receipt onto the
+// one certificate it names. Existing non-empty values are immutable: replaying
+// the same fact converges, while a different second claim fails closed.
+func (s *Store) ApplyCertificateCustodyAttestedTx(ctx context.Context, tx pgx.Tx, tenantID,
+	fingerprint string, record custody.Record) error {
+	tag, err := tx.Exec(ctx,
+		`UPDATE certificates
+		    SET key_origin = $3, key_storage = $4, key_exportable = $5, key_generated_by = $6
+		  WHERE tenant_id = $1 AND fingerprint = $2
+		    AND key_origin IN ('', $3)
+		    AND key_storage IN ('', $4)
+		    AND key_exportable IN ('', $5)
+		    AND key_generated_by IN ('', $6)`,
+		tenantID, fingerprint, string(record.Origin), string(record.Storage),
+		string(record.Exportable), record.GeneratedBy)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM certificates WHERE tenant_id = $1 AND fingerprint = $2)`,
+		tenantID, fingerprint).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return pgx.ErrNoRows
+	}
+	return fmt.Errorf("store: certificate custody attestation conflicts with retained custody")
 }
 
 // SetCertificateRevokedTx projects a certificate.revoked event: it marks the

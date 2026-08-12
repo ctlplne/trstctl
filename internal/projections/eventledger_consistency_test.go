@@ -16,6 +16,7 @@ import (
 // constants so the two can never silently drift (COVER-008).
 var projectionEventConstants = map[string]string{
 	projections.EventCertificateRecorded:                      "EventCertificateRecorded",
+	projections.EventCertificateCustodyAttested:               "EventCertificateCustodyAttested",
 	projections.EventCertificateRevoked:                       "EventCertificateRevoked",
 	projections.EventCertificateSuperseded:                    "EventCertificateSuperseded",
 	projections.EventCACeremonyStarted:                        "EventCACeremonyStarted",

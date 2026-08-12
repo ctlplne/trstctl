@@ -1835,6 +1835,33 @@ func TestMigration0153RefusesUnsafeInheritedSecretSyncState(t *testing.T) {
 	}
 }
 
+func TestMigration0171AddsServiceCertificateStorageWithoutOpeningVocabulary(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 171)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	id := uuid(tenantA, 171)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO certificates (id, tenant_id, subject, sans, fingerprint)
+		 VALUES ($1, $2, 'CN=sds', ARRAY['sds.example.test']::text[], 'fp-sds')`, id, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	if _, err := pool.Exec(ctx,
+		`UPDATE certificates SET key_storage = 'service' WHERE tenant_id = $1 AND id = $2`, tenantA, id); err != nil {
+		t.Fatalf("0171 does not accept the service storage locus: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE certificates SET key_storage = 'somewhere' WHERE tenant_id = $1 AND id = $2`, tenantA, id); err == nil {
+		t.Fatal("0171 accepted an unknown certificate storage locus")
+	}
+}
+
 func TestMigration0153AcceptsTerminalRowsAndBlocksAmbiguousPredecessor(t *testing.T) {
 	ctx := context.Background()
 	prefix, target := splitMigrationsAtVersion(t, 153)

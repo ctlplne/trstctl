@@ -70,16 +70,17 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 Use `pci-dss`, `hipaa`, `soc2`, `nist-800-53`, `nist-csf-2.0`, `fedramp`,
 `cmmc-2.0`, `cnsa-2.0`, `fips-140`, `common-criteria`, `cabf-br`, `webtrust`,
 `etsi`, `eidas`, or `nis2` as the framework path value. The JSON response
-has four stable fields:
+has five stable fields:
 
 | Field | Meaning |
 | --- | --- |
-| `format` | Wire marker: `trstctl.compliance.evidence-pack.v2`. |
+| `format` | Wire marker: `trstctl.compliance.evidence-pack.v3`; v3 adds the signed certificate-custody estate summary. |
 | `framework` | The normalized framework id used to build the report. |
 | `signed_export` | A signed envelope whose manifest binds `tenant_id`, `generated_at`, the inclusive `evidence_window`, per-control verdicts/windows, exact evidence references, missing prerequisites, CBOM crypto posture, and operator-attestation gaps. |
 | `public_key_der` | PKIX DER public key bytes for offline verification. |
+| `custody` | Convenience copy of the tenant certificate-custody summary. The authoritative copy is `signed_export.manifest.custody`; offline verification must verify that manifest before trusting any count or row. |
 
-The v2 manifest is derived from tenant-scoped facts, not static product
+The v3 manifest is derived from tenant-scoped facts, not static product
 capability labels. An audit-event reference contains the immutable event ID,
 tenant-local sequence, event type, observation time, and audit-chain digest;
 current inventory references name the exact tenant graph object and snapshot
@@ -88,6 +89,15 @@ the signed window. Missing, stale, malformed, or wrong-tenant input becomes an
 explicit `gap` with `missing` prerequisites. The signature authenticates these
 bounded claims; it does not prove that an external auditor agrees with their
 sufficiency.
+
+`custody` counts every tenant certificate by origin, storage class, and
+exportability. `recorded` means all required custody facts are present;
+`unrecorded` includes both wholly empty and partially recorded legacy rows. Every
+unrecorded row is listed under `unrecorded_certificates` with its certificate ID,
+fingerprint, subject, and exact `missing_fields`. A total can therefore never hide
+which certificate needs remediation. These bytes are inside the signed manifest:
+changing a count, deleting a gap row, or changing a storage locus invalidates the
+export signature.
 
 The manifest also includes CBOM-derived post-quantum and quantum-vulnerable
 counts and separates what trstctl can prove from what your organization must

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 // The canonical job receipt statement (epic A1).
@@ -33,7 +34,10 @@ import (
 // receiptStatementVersion prefixes every statement. A future change to the
 // field set changes this line, so an old signature can never be mistaken for a
 // new statement's — it simply fails to verify, which is the correct outcome.
-const receiptStatementVersion = "trstctl-agent-job-receipt/v1"
+const (
+	receiptStatementVersionV1 = "trstctl-agent-job-receipt/v1"
+	receiptStatementVersionV2 = "trstctl-agent-job-receipt/v2"
+)
 
 // JobReceiptStatement is everything a receipt commits to.
 type JobReceiptStatement struct {
@@ -52,6 +56,11 @@ type JobReceiptStatement struct {
 	EvidenceDigest string
 	// DetailDigest commits to the operator-facing text without carrying it.
 	DetailDigest string
+	// CredentialFingerprint and Custody turn a successful agent-generated
+	// issuance into a per-certificate custody attestation (B5). They are absent
+	// on every non-issuance job, preserving the v1 statement byte-for-byte.
+	CredentialFingerprint string
+	Custody               custody.Record
 	// IssuedAtUnix is when the agent signed. The server bounds it against its
 	// own clock so an old signed receipt cannot be held and replayed later.
 	IssuedAtUnix int64
@@ -69,7 +78,7 @@ type JobReceiptStatement struct {
 // never fake a field boundary.
 func (s JobReceiptStatement) Canonical() []byte {
 	var b strings.Builder
-	b.WriteString(receiptStatementVersion)
+	b.WriteString(s.version())
 	b.WriteByte('\n')
 	write := func(name, value string) {
 		b.WriteString(name)
@@ -84,6 +93,13 @@ func (s JobReceiptStatement) Canonical() []byte {
 	write("outcome", s.Outcome)
 	write("evidence", s.EvidenceDigest)
 	write("detail", s.DetailDigest)
+	if s.hasCustody() {
+		write("credential_fingerprint", s.CredentialFingerprint)
+		write("key_origin", string(s.Custody.Origin))
+		write("key_storage", string(s.Custody.Storage))
+		write("key_exportable", string(s.Custody.Exportable))
+		write("key_generated_by", s.Custody.GeneratedBy)
+	}
 	write("issued_at", strconv.FormatInt(s.IssuedAtUnix, 10))
 	return []byte(b.String())
 }
@@ -112,12 +128,34 @@ func (s JobReceiptStatement) Validate() error {
 	if strings.TrimSpace(s.Outcome) == "" {
 		return errors.New("transport: receipt statement has no outcome")
 	}
-	for _, v := range []string{s.TenantID, s.AgentCommonName, s.Outcome, s.EvidenceDigest, s.DetailDigest} {
+	if s.hasCustody() {
+		if strings.TrimSpace(s.CredentialFingerprint) == "" || !s.Custody.Complete() ||
+			!custody.ValidOrigin(s.Custody.Origin) || !custody.ValidStorage(s.Custody.Storage) ||
+			!custody.ValidExportability(s.Custody.Exportable) {
+			return errors.New("transport: receipt statement has incomplete credential custody")
+		}
+	}
+	for _, v := range []string{
+		s.TenantID, s.AgentCommonName, s.Outcome, s.EvidenceDigest, s.DetailDigest,
+		s.CredentialFingerprint, string(s.Custody.Origin), string(s.Custody.Storage),
+		string(s.Custody.Exportable), s.Custody.GeneratedBy,
+	} {
 		if strings.ContainsAny(v, "\n\r") {
 			return ErrReceiptStatementInvalid
 		}
 	}
 	return nil
+}
+
+func (s JobReceiptStatement) hasCustody() bool {
+	return s.CredentialFingerprint != "" || s.Custody.Recorded() || s.Custody.GeneratedBy != ""
+}
+
+func (s JobReceiptStatement) version() string {
+	if s.hasCustody() {
+		return receiptStatementVersionV2
+	}
+	return receiptStatementVersionV1
 }
 
 // DetailDigest is the commitment to a report's operator-facing text.

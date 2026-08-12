@@ -33,6 +33,15 @@ beforeEach(() => {
     framework: "soc2",
     format: "application/json",
     public_key_der: "BASE64DER",
+    custody: {
+      total: 0,
+      recorded: 0,
+      unrecorded: 0,
+      origins: { requester: 0, host_agent: 0, device: 0, control_plane: 0, signer: 0 },
+      storage: { locked_memory: 0, file: 0, os_store: 0, pkcs11: 0, device_bound: 0, service: 0 },
+      exportability: { exportable: 0, non_exportable: 0 },
+      unrecorded_certificates: [],
+    },
     signed_export: { controls: 12, posture: "pass" },
   });
   apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());

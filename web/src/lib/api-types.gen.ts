@@ -1248,7 +1248,7 @@ export interface Certificate {
   key_exportable?: "" | "exportable" | "non_exportable";
   key_generated_by?: string;
   key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
-  key_storage?: "" | "locked_memory" | "file" | "os_store" | "pkcs11" | "device_bound";
+  key_storage?: "" | "locked_memory" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
   not_after?: string;
   not_before?: string;
   owner_id?: string;
@@ -1260,6 +1260,16 @@ export interface Certificate {
   status: "active" | "superseded" | "revoked";
   subject: string;
   tenant_id: string;
+}
+
+export interface CertificateCustodySummary {
+  exportability: CustodyExportabilityCounts;
+  origins: CustodyOriginCounts;
+  recorded: number;
+  storage: CustodyStorageCounts;
+  total: number;
+  unrecorded: number;
+  unrecorded_certificates: UnrecordedCustodyCertificate[];
 }
 
 export interface CertificateExpiryBucket {
@@ -1438,6 +1448,7 @@ export interface CodeSigningSignature {
 }
 
 export interface ComplianceEvidencePack {
+  custody: CertificateCustodySummary;
   format: string;
   framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
   public_key_der: string;
@@ -1647,6 +1658,28 @@ export interface CryptoReadinessRow {
   quantum_vulnerable: boolean;
   recommendation: string;
   unlocated: boolean;
+}
+
+export interface CustodyExportabilityCounts {
+  exportable: number;
+  non_exportable: number;
+}
+
+export interface CustodyOriginCounts {
+  control_plane: number;
+  device: number;
+  host_agent: number;
+  requester: number;
+  signer: number;
+}
+
+export interface CustodyStorageCounts {
+  device_bound: number;
+  file: number;
+  locked_memory: number;
+  os_store: number;
+  pkcs11: number;
+  service: number;
 }
 
 export interface DRArtifactFailure {
@@ -5777,6 +5810,13 @@ export interface UnownedQueue {
   guidance: string;
   items: UnownedIdentity[];
   total: number;
+}
+
+export interface UnrecordedCustodyCertificate {
+  fingerprint: string;
+  id: string;
+  missing_fields: string[];
+  subject: string;
 }
 
 export interface UnvaultedSecretDetectionSource {

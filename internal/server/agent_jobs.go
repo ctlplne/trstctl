@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -19,9 +20,11 @@ import (
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -451,6 +454,9 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if a.outbox == nil {
 		return nil, status.Error(codes.Internal, "agent job outbox completion is not configured")
 	}
+	if err := a.recordCertificateCustodyFromJob(ctx, info, claim, req); err != nil {
+		return nil, status.Errorf(codes.Internal, "record signed certificate custody: %v", err)
+	}
 
 	// Apply structured observations before closing the lease. A failed or
 	// interrupted projection leaves the durable job claim retryable. Receivers
@@ -754,23 +760,69 @@ func (a *agentService) verifyJobReceipt(ctx context.Context, info mtls.PeerCertI
 	if delta := now.Sub(issued); delta > receiptSkew || delta < -receiptSkew {
 		return reject("issued-at outside the accepted window")
 	}
-	statement := transport.JobReceiptStatement{
-		TenantID:        info.TenantID,
-		AgentCommonName: info.CommonName,
-		JobID:           req.JobID,
-		Attempt:         req.Attempt,
-		Outcome:         strings.TrimSpace(req.Outcome),
-		EvidenceDigest:  req.EvidenceDigest,
-		DetailDigest:    transport.DetailDigest(req.Detail),
-		IssuedAtUnix:    req.IssuedAtUnix,
-	}
+	statement := jobReceiptStatement(info, req)
 	if err := statement.Validate(); err != nil {
 		return reject("statement is not canonicalizable")
 	}
 	if err := mtls.VerifyStatement(info.LeafDER, statement.Canonical(), req.Signature); err != nil {
 		return reject("signature does not verify against the presented certificate")
 	}
+	if reason := a.validateCertificateCustodyReceipt(ctx, info, req); reason != "" {
+		return reject(reason)
+	}
 	return nil
+}
+
+func jobReceiptStatement(info mtls.PeerCertInfo, req *transport.ReportJobResultRequest) transport.JobReceiptStatement {
+	record := custody.Record{}
+	if req.Custody != nil {
+		record = *req.Custody
+	}
+	return transport.JobReceiptStatement{
+		TenantID: info.TenantID, AgentCommonName: info.CommonName, JobID: req.JobID,
+		Attempt: req.Attempt, Outcome: strings.TrimSpace(req.Outcome), EvidenceDigest: req.EvidenceDigest,
+		DetailDigest: transport.DetailDigest(req.Detail), CredentialFingerprint: req.CredentialFingerprint,
+		Custody: record, IssuedAtUnix: req.IssuedAtUnix,
+	}
+}
+
+func (a *agentService) validateCertificateCustodyReceipt(ctx context.Context, info mtls.PeerCertInfo,
+	req *transport.ReportJobResultRequest) string {
+	outcome := strings.TrimSpace(req.Outcome)
+	if outcome != transport.JobOutcomeExecuted && outcome != transport.JobOutcomeVerified &&
+		outcome != transport.JobOutcomeVerifyFailed {
+		return ""
+	}
+	destination, err := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID)
+	if err != nil {
+		return "certificate custody cannot be matched to the reported job"
+	}
+	if destination != agentJobKindEndpointRenew {
+		return ""
+	}
+	if req.Custody == nil || strings.TrimSpace(req.CredentialFingerprint) == "" {
+		return "certificate custody is required for a successful host renewal"
+	}
+	payload, _, err := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
+	if err != nil {
+		return "certificate custody cannot be matched to the renewal job"
+	}
+	var intent RelayDeployIntent
+	if err := decodeStrictJSON(payload, &intent); err != nil {
+		return "certificate custody cannot be matched to the renewal connector"
+	}
+	expected, err := relay.HostRenewCustody(intent.Connector, info.CommonName)
+	if err != nil || *req.Custody != expected {
+		return "certificate custody differs from the renewal connector and authenticated agent"
+	}
+	cert, err := a.store.GetCertificateByFingerprint(ctx, info.TenantID, req.CredentialFingerprint)
+	if err != nil || cert.KeyOrigin != string(custody.OriginHostAgent) ||
+		cert.KeyGeneratedBy != info.CommonName ||
+		!strings.HasPrefix(cert.IssuanceIdempotencyKey,
+			fmt.Sprintf("agentcsr:%d:%d:", req.JobID, req.Attempt)) {
+		return "certificate custody names no certificate issued for this renewal attempt"
+	}
+	return ""
 }
 
 // attachJobReceipt adds the verified receipt to an event payload.
@@ -787,16 +839,7 @@ func (a *agentService) attachJobReceipt(payload map[string]any, info mtls.PeerCe
 	if len(req.Signature) == 0 {
 		return
 	}
-	statement := transport.JobReceiptStatement{
-		TenantID:        info.TenantID,
-		AgentCommonName: info.CommonName,
-		JobID:           req.JobID,
-		Attempt:         req.Attempt,
-		Outcome:         strings.TrimSpace(req.Outcome),
-		EvidenceDigest:  req.EvidenceDigest,
-		DetailDigest:    transport.DetailDigest(req.Detail),
-		IssuedAtUnix:    req.IssuedAtUnix,
-	}
+	statement := jobReceiptStatement(info, req)
 	payload["receipt_statement"] = string(statement.Canonical())
 	payload["receipt_signature"] = base64.StdEncoding.EncodeToString(req.Signature)
 	// The certificate fingerprint names WHICH key to verify against. An agent
@@ -837,16 +880,7 @@ func (a *agentService) recordVerifiedReceipt(ctx context.Context, info mtls.Peer
 	if a.store == nil || len(req.Signature) == 0 {
 		return
 	}
-	statement := transport.JobReceiptStatement{
-		TenantID:        info.TenantID,
-		AgentCommonName: info.CommonName,
-		JobID:           req.JobID,
-		Attempt:         req.Attempt,
-		Outcome:         strings.TrimSpace(req.Outcome),
-		EvidenceDigest:  req.EvidenceDigest,
-		DetailDigest:    transport.DetailDigest(req.Detail),
-		IssuedAtUnix:    req.IssuedAtUnix,
-	}
+	statement := jobReceiptStatement(info, req)
 	_ = a.store.RecordAgentJobReceipt(ctx, info.TenantID, store.AgentJobReceipt{
 		JobID: req.JobID, Attempt: req.Attempt, Agent: info.CommonName, Kind: kind,
 		Outcome: strings.TrimSpace(req.Outcome), State: store.AgentJobReceiptVerified,
@@ -854,6 +888,26 @@ func (a *agentService) recordVerifiedReceipt(ctx context.Context, info mtls.Peer
 		Statement:         string(statement.Canonical()),
 		Signature:         base64.StdEncoding.EncodeToString(req.Signature),
 		ObservedAt:        now,
+	})
+}
+
+func (a *agentService) recordCertificateCustodyFromJob(ctx context.Context, info mtls.PeerCertInfo,
+	claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) error {
+	if claim.Destination != agentJobKindEndpointRenew {
+		return nil
+	}
+	if a.orch == nil || req.Custody == nil {
+		return errors.New("host renewal custody projector is not configured")
+	}
+	statement := jobReceiptStatement(info, req)
+	return a.orch.AttestCertificateCustody(ctx, info.TenantID, projections.CertificateCustodyAttested{
+		Fingerprint: req.CredentialFingerprint,
+		KeyOrigin:   string(req.Custody.Origin), KeyStorage: string(req.Custody.Storage),
+		KeyExportable: string(req.Custody.Exportable), KeyGeneratedBy: req.Custody.GeneratedBy,
+		Agent: info.CommonName, JobID: req.JobID, Attempt: req.Attempt,
+		ReceiptStatement:         string(statement.Canonical()),
+		ReceiptSignature:         base64.StdEncoding.EncodeToString(req.Signature),
+		ReceiptSignerFingerprint: info.FingerprintSHA256,
 	})
 }
 

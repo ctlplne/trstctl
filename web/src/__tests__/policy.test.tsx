@@ -342,14 +342,36 @@ describe("policy governance surface", () => {
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.complianceEvidencePack.mockImplementation((framework: ComplianceEvidencePack["framework"]) =>
       Promise.resolve({
-        format: "trstctl.compliance.evidence-pack.v2",
+        format: "trstctl.compliance.evidence-pack.v3",
         framework,
         public_key_der: "BASE64PUBLICKEY",
+        custody: {
+          total: 2,
+          recorded: 1,
+          unrecorded: 1,
+          origins: { requester: 0, host_agent: 2, device: 0, control_plane: 0, signer: 0 },
+          storage: { locked_memory: 0, file: 1, os_store: 0, pkcs11: 0, device_bound: 0, service: 0 },
+          exportability: { exportable: 1, non_exportable: 0 },
+          unrecorded_certificates: [
+            { id: "cert-gap", fingerprint: "sha256:gap", subject: "gap.example.test", missing_fields: ["key_storage", "key_exportable"] },
+          ],
+        },
         signed_export: {
           manifest: {
             tenant_id: "tenant-policy-audit",
             generated_at: "2026-07-01T12:00:00Z",
             evidence_window: { from: "2026-04-02T12:00:00Z", through: "2026-07-01T12:00:00Z" },
+            custody: {
+              total: 2,
+              recorded: 1,
+              unrecorded: 1,
+              origins: { requester: 0, host_agent: 2, device: 0, control_plane: 0, signer: 0 },
+              storage: { locked_memory: 0, file: 1, os_store: 0, pkcs11: 0, device_bound: 0, service: 0 },
+              exportability: { exportable: 1, non_exportable: 0 },
+              unrecorded_certificates: [
+                { id: "cert-gap", fingerprint: "sha256:gap", subject: "gap.example.test", missing_fields: ["key_storage", "key_exportable"] },
+              ],
+            },
             controls: [
               {
                 id: `${framework}-crypto-inventory`,
@@ -640,7 +662,10 @@ describe("policy governance surface", () => {
     expect(screen.getByText(/CAP-OBS-02/i)).toBeInTheDocument();
     expect(screen.getByText("Quarterly SOC 2 inventory")).toBeInTheDocument();
     expect(screen.getByText("GET /api/v1/compliance/inventory-report")).toBeInTheDocument();
-    expect(screen.getByText("trstctl.compliance.evidence-pack.v2")).toBeInTheDocument();
+    expect(screen.getByText("trstctl.compliance.evidence-pack.v3")).toBeInTheDocument();
+    expect(screen.getByText("Certificates with incomplete custody evidence")).toBeInTheDocument();
+    expect(screen.getByText("gap.example.test")).toBeInTheDocument();
+    expect(screen.getByText("sha256:gap")).toBeInTheDocument();
     expect(screen.getByText("5 controls")).toBeInTheDocument();
     expect(screen.getByText("3 evidenced")).toBeInTheDocument();
     expect(screen.getByText("2 gaps")).toBeInTheDocument();

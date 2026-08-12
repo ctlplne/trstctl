@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/projections"
@@ -252,6 +253,7 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	assertMigrationStatusAUD40(t, h, started.ID, migration.RunRunning, migration.PhaseVerifyingLive)
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 1)
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerified) // signer + deploy + live probe
+	assertHostRenewCustodyReceiptAUD25(t, channel)
 	assertMigrationStatusAUD40(t, h, started.ID, migration.RunComplete, migration.PhaseComplete)
 	successorPEM, err := os.ReadFile(certPath) // #nosec G304 -- test-owned fixture path (CWE-22)
 	if err != nil {
@@ -356,6 +358,7 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	}
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeExecuted)
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerifyFailed)
+	assertHostRenewCustodyReceiptAUD25(t, channel)
 	assertMigrationStatusAUD40(t, h, failedRun.ID, migration.RunRollingBack, migration.PhaseVerifyingLive)
 	assertMigrationOutboxCountAUD40(t, h, failedRun.ID, "issue_successor", 1)
 	assertMigrationOutboxCountAUD40(t, h, failedRun.ID, "rollback_successor", 1)
@@ -374,6 +377,16 @@ func runAgentPassAUD40(t *testing.T, channel *servedHostRelayChannel, profile co
 		t.Fatalf("agent pass = executed %d outcome %q accepted %v reportErr %v detail %q err %v; want 1/%q",
 			executed, channel.lastOutcome, channel.lastAccepted, channel.lastReportErr,
 			channel.lastDetail, err, wantOutcome)
+	}
+}
+
+func assertHostRenewCustodyReceiptAUD25(t *testing.T, channel *servedHostRelayChannel) {
+	t.Helper()
+	if channel.lastCredentialFingerprint == "" || channel.lastCustody == nil || !channel.lastCustody.Complete() ||
+		channel.lastCustody.Origin != custody.OriginHostAgent || channel.lastCustody.Storage != custody.StorageFile ||
+		channel.lastCustody.Exportable != custody.Exportable ||
+		channel.lastCustody.GeneratedBy != channel.identity.Identity().CommonName() {
+		t.Fatalf("host-renew custody receipt = fingerprint %q record %+v", channel.lastCredentialFingerprint, channel.lastCustody)
 	}
 }
 

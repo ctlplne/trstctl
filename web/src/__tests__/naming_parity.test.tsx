@@ -90,6 +90,15 @@ vi.mock("@/lib/api", async (orig) => {
       telemetry: { allowed: 0, denied: 0, replay_rejected: 0 },
       signed_export: { manifest: { controls: [] } },
       public_key_der: "",
+      custody: {
+        total: 0,
+        recorded: 0,
+        unrecorded: 0,
+        origins: { requester: 0, host_agent: 0, device: 0, control_plane: 0, signer: 0 },
+        storage: { locked_memory: 0, file: 0, os_store: 0, pkcs11: 0, device_bound: 0, service: 0 },
+        exportability: { exportable: 0, non_exportable: 0 },
+        unrecorded_certificates: [],
+      },
       next_cursor: undefined,
     });
   const base: Record<string, unknown> = {};

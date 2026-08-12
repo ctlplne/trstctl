@@ -34,12 +34,28 @@ what the issuing code actually did: origin, storage class, exportability, and
 the actor where one is known. The certificate detail page shows it, and the
 served API carries it on every certificate response.
 
+For host-agent renewal, issuance initially records the facts known at CSR signing:
+the key originated on the authenticated host agent and which agent generated it.
+The control plane does not guess the final storage location before installation.
+After the connector installs the certificate, the agent's v2 terminal receipt
+signs the certificate fingerprint, origin, storage class, exportability, and
+generator with the same key behind its mTLS certificate. Missing, partial,
+connector-inconsistent, wrong-attempt, or altered custody is refused; the job is
+not completed. The verified receipt appends `certificate.custody.attested`, and
+that event projects the final four fields so replay reconstructs the same inventory.
+
 Empty means **unrecorded**, and that is a third answer rather than a default. A
 certificate a network scan found has an origin nobody observed, and the console
 says so in words — "unrecorded is not the same as safe" — rather than letting a
 blank field read as reassurance. Custody written at issuance is never overwritten
 by a later discovery upsert, so a scan re-finding a certificate cannot quietly
 turn an audit fact back into an unknown.
+
+Framework evidence packs aggregate those tenant-scoped rows. Their signed
+manifest contains counts by the closed custody vocabulary and explicitly lists
+every incomplete certificate plus the fields it lacks. The Policy console renders
+the same gap list. A legacy row with only `key_origin` is incomplete evidence, not
+silently counted as a complete custody record.
 
 ## The table
 

@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -39,11 +40,13 @@ import (
 // this assembled test package so the proof crosses the real served gRPC/mTLS
 // boundary while executing the same relay runtime as cmd/trstctl-agent.
 type servedHostRelayChannel struct {
-	client                  *transport.AgentClient
-	identity                *agent.Agent
-	lastOutcome, lastDetail string
-	lastAccepted            bool
-	lastReportErr           error
+	client                    *transport.AgentClient
+	identity                  *agent.Agent
+	lastOutcome, lastDetail   string
+	lastAccepted              bool
+	lastReportErr             error
+	lastCredentialFingerprint string
+	lastCustody               *custody.Record
 }
 
 func (c servedHostRelayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leaseSeconds int) ([]agentrelay.Job, error) {
@@ -73,9 +76,34 @@ func (c servedHostRelayChannel) RedeemJobCredential(ctx context.Context, jobID i
 func (c *servedHostRelayChannel) ReportJobResult(ctx context.Context, jobID int64, attempt int, outcome, detail, evidenceDigest string) (bool, error) {
 	c.lastOutcome, c.lastDetail = outcome, detail
 	c.lastAccepted, c.lastReportErr = false, nil
+	c.lastCredentialFingerprint, c.lastCustody = "", nil
 	id := c.identity.Identity()
 	req, err := transport.SignedReport(id, id.TenantID(), id.CommonName(), jobID, attempt,
 		outcome, detail, evidenceDigest, time.Now().UTC().Unix())
+	if err != nil {
+		return false, err
+	}
+	resp, err := c.client.ReportJobResult(ctx, req)
+	if err != nil {
+		c.lastReportErr = err
+		return false, err
+	}
+	c.lastAccepted = resp.Accepted
+	return resp.Accepted, nil
+}
+
+func (c *servedHostRelayChannel) ReportJobResultWithCustody(ctx context.Context, jobID int64, attempt int,
+	outcome, detail, evidenceDigest, credentialFingerprint string, record custody.Record) (bool, error) {
+	c.lastOutcome, c.lastDetail = outcome, detail
+	c.lastAccepted, c.lastReportErr = false, nil
+	id := c.identity.Identity()
+	if record.Origin == custody.OriginHostAgent && record.GeneratedBy == "" {
+		record.GeneratedBy = id.CommonName()
+	}
+	recordCopy := record
+	c.lastCredentialFingerprint, c.lastCustody = credentialFingerprint, &recordCopy
+	req, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), jobID, attempt,
+		outcome, detail, evidenceDigest, credentialFingerprint, record, time.Now().UTC().Unix())
 	if err != nil {
 		return false, err
 	}

@@ -73,74 +73,26 @@
         }
       ]
     },
-    "FetchWorkloadSVIDRequest": {
-      "fields": [
-        {
-          "go_type": "bytes_base64",
-          "name": "public_key_der",
-          "presence": "required"
-        },
-        {
-          "go_type": "[]string",
-          "name": "selectors",
-          "presence": "optional"
-        },
-        {
-          "go_type": "[]string",
-          "name": "audience",
-          "presence": "optional"
-        }
-      ]
-    },
-    "FetchWorkloadSVIDResponse": {
-      "fields": [
-        {
-          "go_type": "[]transport.WorkloadX509SVID",
-          "name": "x509_svids",
-          "presence": "optional"
-        },
-        {
-          "go_type": "[]transport.WorkloadJWTSVID",
-          "name": "jwt_svids",
-          "presence": "optional"
-        },
-        {
-          "go_type": "[][]uint8",
-          "name": "bundle",
-          "presence": "optional"
-        }
-      ]
-    },
-    "HeartbeatRequest": {
+    "CustodyRecord": {
       "fields": [
         {
           "go_type": "string",
-          "name": "agent_id",
-          "presence": "required"
-        },
-        {
-          "go_type": "string",
-          "name": "version",
-          "presence": "required"
-        },
-        {
-          "go_type": "string",
-          "name": "status",
-          "presence": "required"
-        },
-        {
-          "go_type": "string",
-          "name": "cert_serial",
+          "name": "key_origin",
           "presence": "optional"
         },
         {
-          "go_type": "map<string,int64>",
-          "name": "inventory",
+          "go_type": "string",
+          "name": "key_storage",
           "presence": "optional"
         },
         {
-          "go_type": "*transport.EnrollmentProxyReport",
-          "name": "enrollment_proxy",
+          "go_type": "string",
+          "name": "key_exportable",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "key_generated_by",
           "presence": "optional"
         }
       ]
@@ -204,6 +156,78 @@
         }
       ]
     },
+    "FetchWorkloadSVIDRequest": {
+      "fields": [
+        {
+          "go_type": "bytes_base64",
+          "name": "public_key_der",
+          "presence": "required"
+        },
+        {
+          "go_type": "[]string",
+          "name": "selectors",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[]string",
+          "name": "audience",
+          "presence": "optional"
+        }
+      ]
+    },
+    "FetchWorkloadSVIDResponse": {
+      "fields": [
+        {
+          "go_type": "[]transport.WorkloadX509SVID",
+          "name": "x509_svids",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[]transport.WorkloadJWTSVID",
+          "name": "jwt_svids",
+          "presence": "optional"
+        },
+        {
+          "go_type": "[][]uint8",
+          "name": "bundle",
+          "presence": "optional"
+        }
+      ]
+    },
+    "HeartbeatRequest": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "agent_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "version",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "status",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "cert_serial",
+          "presence": "optional"
+        },
+        {
+          "go_type": "map\u003cstring,int64\u003e",
+          "name": "inventory",
+          "presence": "optional"
+        },
+        {
+          "go_type": "*transport.EnrollmentProxyReport",
+          "name": "enrollment_proxy",
+          "presence": "optional"
+        }
+      ]
+    },
     "HeartbeatResponse": {
       "fields": [
         {
@@ -246,7 +270,7 @@
           "presence": "optional"
         },
         {
-          "go_type": "map<string,string>",
+          "go_type": "map\u003cstring,string\u003e",
           "name": "metadata",
           "presence": "optional"
         }
@@ -439,6 +463,16 @@
         {
           "go_type": "string",
           "name": "evidence_digest",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "credential_fingerprint",
+          "presence": "optional"
+        },
+        {
+          "go_type": "*custody.Record",
+          "name": "custody",
           "presence": "optional"
         },
         {

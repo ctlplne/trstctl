@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 // Channel is the slice of the agent channel a relay uses. It is an interface
@@ -32,6 +33,15 @@ type Channel interface {
 	// one attempt at a job would verify against a later attempt at the same job
 	// after a lease lapse requeued it.
 	ReportJobResult(ctx context.Context, jobID int64, attempt int, outcome, detail, evidenceDigest string) (bool, error)
+}
+
+// CustodyReceiptChannel is the v2 report capability used only by
+// host-generated certificate issuance. Keeping it separate preserves the v1
+// report contract for every non-issuance executor while making a build that
+// cannot sign custody fail before it generates a key.
+type CustodyReceiptChannel interface {
+	ReportJobResultWithCustody(ctx context.Context, jobID int64, attempt int, outcome, detail,
+		evidenceDigest, credentialFingerprint string, record custody.Record) (bool, error)
 }
 
 // Job is one claimed unit of work as the relay sees it.
@@ -580,6 +590,12 @@ func reportWithEvidence(ctx context.Context, ch Channel, job Job, outcome, detai
 	// A failed report is not retried here: the claim lease is the safety net.
 	// If the control plane never hears, the lease lapses and the work returns.
 	_, _ = ch.ReportJobResult(ctx, job.JobID, job.Attempt, outcome, detail, evidence)
+}
+
+func reportWithEvidenceAndCustody(ctx context.Context, ch CustodyReceiptChannel, job Job,
+	outcome, detail, evidence, fingerprint string, record custody.Record) {
+	_, _ = ch.ReportJobResultWithCustody(ctx, job.JobID, job.Attempt, outcome, detail,
+		evidence, fingerprint, record)
 }
 
 func decodeIntent(payload []byte, out *DeployIntent) error {

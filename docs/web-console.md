@@ -240,7 +240,8 @@ Backed by `/api/v1/graph/trust-stores/{id}`. See
 Policy renders the policy gate, a compliance evidence-pack dashboard (pick a
 framework — PCI-DSS, HIPAA, SOC 2, FedRAMP, FIPS 140, CA/B Forum BR, and more — and
 inspect the signed tenant/window, exact event/object references, and missing
-prerequisites before exporting the pack), the
+prerequisites before exporting the pack). It also shows signed certificate-custody
+totals and the exact fingerprint/fields for every incomplete custody row, the
 CAP-OBS-02 inventory report, report schedules, and the dry-run workbench. The audit
 explorer filters the tamper-evident event stream and exports a signed evidence
 bundle. The evidence panel names the exact chain head, RFC 3161 kind, authority

@@ -447,10 +447,19 @@ describe("api compliance evidence packs", () => {
     mockFetch(
       200,
       JSON.stringify({
-        format: "trstctl.compliance.evidence-pack.v2",
+        format: "trstctl.compliance.evidence-pack.v3",
         framework: "soc2",
         signed_export: { manifest: { framework: "soc2", controls: [] }, signature: "sig" },
         public_key_der: "BASE64PUBLICKEY",
+        custody: {
+          total: 0,
+          recorded: 0,
+          unrecorded: 0,
+          origins: { requester: 0, host_agent: 0, device: 0, control_plane: 0, signer: 0 },
+          storage: { locked_memory: 0, file: 0, os_store: 0, pkcs11: 0, device_bound: 0, service: 0 },
+          exportability: { exportable: 0, non_exportable: 0 },
+          unrecorded_certificates: [],
+        },
       }),
     );
 

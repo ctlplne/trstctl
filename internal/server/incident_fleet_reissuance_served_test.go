@@ -128,6 +128,7 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	assertMigrationStatusAUD40(t, h, rehearsed.ID, migration.RunRunning, migration.PhaseVerifyingLive)
 	assertMigrationOutboxCountAUD40(t, h, rehearsed.ID, "revoke_predecessor", 0)
 	runAgentPassAUD40(t, channel, profile, success.rollback, transport.JobOutcomeVerified)
+	assertHostRenewCustodyReceiptAUD25(t, channel)
 	assertMigrationStatusAUD40(t, h, rehearsed.ID, migration.RunRunning, migration.PhaseRevokingPredecessor)
 	preRevocation, err := h.store.GetCertificate(ctx, h.tenant, success.predecessor.ID)
 	if err != nil || preRevocation.Status != "superseded" {
@@ -162,6 +163,7 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	}
 	runAgentPassAUD40(t, channel, profile, failure.rollback, transport.JobOutcomeExecuted)
 	runAgentPassAUD40(t, channel, profile, failure.rollback, transport.JobOutcomeVerifyFailed)
+	assertHostRenewCustodyReceiptAUD25(t, channel)
 	assertMigrationStatusAUD40(t, h, failed.ID, migration.RunRollingBack, migration.PhaseVerifyingLive)
 	assertMigrationOutboxCountAUD40(t, h, failed.ID, "revoke_predecessor", 0)
 	assertMigrationOutboxCountAUD40(t, h, failed.ID, "rollback_successor", 1)

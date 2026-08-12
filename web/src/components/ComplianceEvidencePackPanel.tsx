@@ -35,6 +35,7 @@ interface ComplianceManifest {
     quantum_vulnerable?: number;
     post_quantum?: number;
   };
+  custody?: ComplianceEvidencePack["custody"];
   product_evidences?: string[];
   operator_attests?: string[];
 }
@@ -46,6 +47,7 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
   const evidenced = controls.filter((control) => control.status === "evidenced").length;
   const gaps = controls.filter((control) => control.status === "gap").length;
   const posture = manifest.posture ?? {};
+  const custody = manifest.custody;
   const productEvidence = manifest.product_evidences ?? [];
   const operatorAttests = manifest.operator_attests ?? [];
   const payload = JSON.stringify(pack, null, 2);
@@ -85,8 +87,38 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
         <EvidenceMetric label="Crypto assets" value={String(posture.total_crypto_assets ?? 0)} />
         <EvidenceMetric label="Quantum vulnerable" value={`${posture.quantum_vulnerable ?? 0} quantum vulnerable`} />
         <EvidenceMetric label="Post-quantum" value={String(posture.post_quantum ?? 0)} />
+        <EvidenceMetric label={t("policy.compliance.custodyTotal")} value={String(custody?.total ?? 0)} />
+        <EvidenceMetric label={t("policy.compliance.custodyRecorded")} value={String(custody?.recorded ?? 0)} />
+        <EvidenceMetric label={t("policy.compliance.custodyUnrecorded")} value={String(custody?.unrecorded ?? 0)} />
         <EvidenceMetric label="Public key DER" value={`${pack.public_key_der.length} bytes`} />
       </dl>
+
+      {custody && custody.unrecorded_certificates.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+          <table className="ui-table min-w-[48rem]">
+            <caption className="text-left font-medium">{t("policy.compliance.custodyGaps")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("policy.compliance.certificate")}</th>
+                <th scope="col">{t("policy.compliance.fingerprint")}</th>
+                <th scope="col">{t("policy.compliance.missingCustodyFields")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {custody.unrecorded_certificates.map((certificate) => (
+                <tr key={certificate.id}>
+                  <td>
+                    <p>{certificate.subject}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{certificate.id}</p>
+                  </td>
+                  <td className="break-all font-mono text-xs">{certificate.fingerprint}</td>
+                  <td>{certificate.missing_fields.join(", ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {controls.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-md border border-border">

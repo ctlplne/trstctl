@@ -1232,6 +1232,30 @@ func (o *Orchestrator) RecordCertificate(ctx context.Context, tenantID string, i
 	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
 }
 
+// CertificateCustodyAttestationEventID gives one installed certificate on one
+// claim attempt a retry-stable immutable receipt identity.
+func CertificateCustodyAttestationEventID(tenantID, fingerprint string, jobID int64, attempt int) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(fmt.Sprintf(
+		"certificate-custody-attestation\x00%s\x00%s\x00%d\x00%d",
+		tenantID, fingerprint, jobID, attempt))).String()
+}
+
+// AttestCertificateCustody records and projects the exact verified terminal
+// receipt. A retry may replay the same bytes; changed custody under the same
+// job attempt is an idempotency conflict rather than a mutable correction.
+func (o *Orchestrator) AttestCertificateCustody(ctx context.Context, tenantID string,
+	in projections.CertificateCustodyAttested) error {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	_, err = o.emitPreparedExact(ctx, events.Event{
+		ID:   CertificateCustodyAttestationEventID(tenantID, in.Fingerprint, in.JobID, in.Attempt),
+		Type: projections.EventCertificateCustodyAttested, TenantID: tenantID, Data: payload,
+	})
+	return err
+}
+
 // RecordCertificateWithApproval records an approval-gated certificate and
 // consumes the exact immutable authority in the same tenant transaction as the
 // certificate projection. Its event and inventory IDs are deterministic from

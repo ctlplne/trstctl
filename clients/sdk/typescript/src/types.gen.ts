@@ -6531,7 +6531,7 @@ export interface components {
             /** @enum {string} */
             key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
             /** @enum {string} */
-            key_storage?: "" | "locked_memory" | "file" | "os_store" | "pkcs11" | "device_bound";
+            key_storage?: "" | "locked_memory" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
             /** Format: date-time */
             not_after?: string;
             /** Format: date-time */
@@ -6549,6 +6549,15 @@ export interface components {
             subject: string;
             /** Format: uuid */
             tenant_id: string;
+        };
+        CertificateCustodySummary: {
+            exportability: components["schemas"]["CustodyExportabilityCounts"];
+            origins: components["schemas"]["CustodyOriginCounts"];
+            recorded: number;
+            storage: components["schemas"]["CustodyStorageCounts"];
+            total: number;
+            unrecorded: number;
+            unrecorded_certificates: components["schemas"]["UnrecordedCustodyCertificate"][];
         };
         CertificateExpiryBucket: {
             count: number;
@@ -6728,6 +6737,7 @@ export interface components {
             transparency_destination?: string;
         };
         ComplianceEvidencePack: {
+            custody: components["schemas"]["CertificateCustodySummary"];
             format: string;
             /** @enum {string} */
             framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
@@ -6946,6 +6956,25 @@ export interface components {
             quantum_vulnerable: boolean;
             recommendation: string;
             unlocated: boolean;
+        };
+        CustodyExportabilityCounts: {
+            exportable: number;
+            non_exportable: number;
+        };
+        CustodyOriginCounts: {
+            control_plane: number;
+            device: number;
+            host_agent: number;
+            requester: number;
+            signer: number;
+        };
+        CustodyStorageCounts: {
+            device_bound: number;
+            file: number;
+            locked_memory: number;
+            os_store: number;
+            pkcs11: number;
+            service: number;
         };
         DRArtifactFailure: {
             detail: string;
@@ -11266,6 +11295,13 @@ export interface components {
             guidance: string;
             items: components["schemas"]["UnownedIdentity"][];
             total: number;
+        };
+        UnrecordedCustodyCertificate: {
+            fingerprint: string;
+            /** Format: uuid */
+            id: string;
+            missing_fields: string[];
+            subject: string;
         };
         UnvaultedSecretDetectionSource: {
             capabilities: string[];

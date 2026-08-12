@@ -3512,6 +3512,34 @@ export const messages = {
     defaultMessage: "Unbound",
     description: "A legacy compliance manifest does not bind its claims to a tenant.",
   },
+  "policy.compliance.custodyTotal": {
+    defaultMessage: "Certificates in custody evidence",
+    description: "Total certificate rows included in the signed custody summary.",
+  },
+  "policy.compliance.custodyRecorded": {
+    defaultMessage: "Complete custody records",
+    description: "Certificate rows with every custody fact recorded.",
+  },
+  "policy.compliance.custodyUnrecorded": {
+    defaultMessage: "Incomplete custody records",
+    description: "Certificate rows missing at least one custody fact.",
+  },
+  "policy.compliance.custodyGaps": {
+    defaultMessage: "Certificates with incomplete custody evidence",
+    description: "Caption for explicit certificate custody gaps in a signed evidence pack.",
+  },
+  "policy.compliance.certificate": {
+    defaultMessage: "Certificate",
+    description: "Certificate column in the compliance custody-gap table.",
+  },
+  "policy.compliance.fingerprint": {
+    defaultMessage: "Fingerprint",
+    description: "Certificate fingerprint column in the compliance custody-gap table.",
+  },
+  "policy.compliance.missingCustodyFields": {
+    defaultMessage: "Missing custody fields",
+    description: "Missing-field column in the compliance custody-gap table.",
+  },
   "policy.versions.heading": {
     defaultMessage: "Policy versions",
     description: "Heading for lifecycle policy versions.",

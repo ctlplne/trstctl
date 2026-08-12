@@ -39,7 +39,7 @@ import (
 // signAgentSubjectCSR signs a CSR an agent generated for a renewal job it holds.
 func (d *issuanceDispatcher) signAgentSubjectCSR(
 	ctx context.Context,
-	tenantID string,
+	tenantID, agentName string,
 	job store.AgentJobForRedemption,
 	jobID int64,
 	csrDER []byte,
@@ -116,6 +116,7 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 		// the kind of understatement that makes a custody column useless for
 		// deciding which credentials still need migrating.
 		cert.KeyOrigin = string(custody.OriginHostAgent)
+		cert.KeyGeneratedBy = agentName
 		if predecessor := strings.TrimSpace(intent.PredecessorCertificateID); predecessor != "" {
 			// RecordSuccessorCertificate, not RecordCertificate. The difference
 			// is ReplacesID, and without it the projector never runs the
@@ -298,7 +299,7 @@ func splitAgentCSRResult(raw []byte) (string, []byte, []byte, bool) {
 // rather than a panic on the first renewal an agent attempts.
 func (s *Server) signAgentSubjectCSR(
 	ctx context.Context,
-	tenantID string,
+	tenantID, agentName string,
 	job store.AgentJobForRedemption,
 	jobID int64,
 	csrDER []byte,
@@ -310,5 +311,5 @@ func (s *Server) signAgentSubjectCSR(
 		return nil, status.Error(codes.FailedPrecondition,
 			"this control plane has no issuing CA, so it cannot sign a host-generated request")
 	}
-	return d.signAgentSubjectCSR(ctx, tenantID, job, jobID, csrDER, permitted, attempt)
+	return d.signAgentSubjectCSR(ctx, tenantID, agentName, job, jobID, csrDER, permitted, attempt)
 }

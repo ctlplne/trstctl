@@ -50,9 +50,18 @@ function renderAudit(initialEntry = "/audit") {
 
 function evidencePack(framework: "soc2" | "cnsa-2.0") {
   return {
-    format: "trstctl.compliance.evidence-pack.v2",
+    format: "trstctl.compliance.evidence-pack.v3",
     framework,
     public_key_der: "BASE64PUBLICKEY",
+    custody: {
+      total: 0,
+      recorded: 0,
+      unrecorded: 0,
+      origins: { requester: 0, host_agent: 0, device: 0, control_plane: 0, signer: 0 },
+      storage: { locked_memory: 0, file: 0, os_store: 0, pkcs11: 0, device_bound: 0, service: 0 },
+      exportability: { exportable: 0, non_exportable: 0 },
+      unrecorded_certificates: [],
+    },
     signed_export: {
       manifest: {
         framework,
@@ -62,6 +71,15 @@ function evidencePack(framework: "soc2" | "cnsa-2.0") {
           { id: `${framework}-operator-attest`, title: "Operator attestation needed", status: "gap", evidence: ["operator attestation"] },
         ],
         posture: { total_crypto_assets: 4, quantum_vulnerable: framework === "cnsa-2.0" ? 1 : 0, post_quantum: framework === "cnsa-2.0" ? 3 : 1 },
+        custody: {
+          total: 0,
+          recorded: 0,
+          unrecorded: 0,
+          origins: { requester: 0, host_agent: 0, device: 0, control_plane: 0, signer: 0 },
+          storage: { locked_memory: 0, file: 0, os_store: 0, pkcs11: 0, device_bound: 0, service: 0 },
+          exportability: { exportable: 0, non_exportable: 0 },
+          unrecorded_certificates: [],
+        },
         product_evidences: ["FIPS 203/204/205 migration posture from the CBOM"],
         operator_attests: ["organizational policies & governance"],
       },
@@ -296,7 +314,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
 
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalledWith("soc2"));
     expect(await screen.findByRole("heading", { name: "SOC 2 evidence pack" })).toBeInTheDocument();
-    expect(screen.getByText("trstctl.compliance.evidence-pack.v2")).toBeInTheDocument();
+    expect(screen.getByText("trstctl.compliance.evidence-pack.v3")).toBeInTheDocument();
     expect(screen.getByText("3 controls")).toBeInTheDocument();
     expect(screen.getByText("2 evidenced")).toBeInTheDocument();
     expect(screen.getByText("1 gap")).toBeInTheDocument();

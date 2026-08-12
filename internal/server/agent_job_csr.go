@@ -97,7 +97,7 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 			"this renewal job names no subject, so there is nothing it authorizes")
 	}
 
-	resp, err := a.signSubjectCSR(ctx, info.TenantID, job, req.JobID, req.CSRDER, permitted, job.ClaimAttempts)
+	resp, err := a.signSubjectCSR(ctx, info.TenantID, info.CommonName, job, req.JobID, req.CSRDER, permitted, job.ClaimAttempts)
 	if err != nil {
 		return nil, err
 	}

@@ -76,6 +76,11 @@ const (
 	StoragePKCS11 StorageClass = "pkcs11"
 	// StorageDeviceBound: hardware that will not export the key at all.
 	StorageDeviceBound StorageClass = "device_bound"
+	// StorageService: a credential service on the serving host holds the key.
+	// Envoy SDS is the first such holder. This is intentionally not called
+	// locked memory: the agent can prove which service accepted the key, but it
+	// cannot prove how that service protects its heap.
+	StorageService StorageClass = "service"
 	// StorageUnrecorded: not recorded. Same discipline as OriginUnrecorded.
 	StorageUnrecorded StorageClass = ""
 )
@@ -105,7 +110,7 @@ type Record struct {
 	// GeneratedBy names the specific actor when one is known — an agent common
 	// name, a relay, a device identifier. It is what turns "a host agent made
 	// it" into an answer an auditor can follow up.
-	GeneratedBy string `json:"generated_by,omitempty"`
+	GeneratedBy string `json:"key_generated_by,omitempty"`
 }
 
 // ControlPlaneHeldKey reports whether the control plane ever held this
@@ -122,6 +127,39 @@ func (r Record) ControlPlaneHeldKey() bool { return r.Origin == OriginControlPla
 func (r Record) Recorded() bool {
 	return r.Origin != OriginUnrecorded || r.Storage != StorageUnrecorded ||
 		r.Exportable != ExportabilityUnrecorded
+}
+
+// Complete reports whether the record answers all four custody questions.
+//
+// Recorded is deliberately weaker for backwards compatibility: an old event
+// may truthfully establish origin and nothing else. Evidence packs use Complete
+// because a partial answer must stay in the explicit-unrecorded list rather
+// than being rounded up to a complete attestation.
+func (r Record) Complete() bool {
+	if r.Origin == OriginUnrecorded || !ValidOrigin(r.Origin) ||
+		r.Storage == StorageUnrecorded || !ValidStorage(r.Storage) ||
+		r.Exportable == ExportabilityUnrecorded || !ValidExportability(r.Exportable) {
+		return false
+	}
+	return r.Origin != OriginHostAgent || strings.TrimSpace(r.GeneratedBy) != ""
+}
+
+// MissingFields names every unanswered part using the stable JSON vocabulary.
+func (r Record) MissingFields() []string {
+	var out []string
+	if r.Origin == OriginUnrecorded || !ValidOrigin(r.Origin) {
+		out = append(out, "key_origin")
+	}
+	if r.Storage == StorageUnrecorded || !ValidStorage(r.Storage) {
+		out = append(out, "key_storage")
+	}
+	if r.Exportable == ExportabilityUnrecorded || !ValidExportability(r.Exportable) {
+		out = append(out, "key_exportable")
+	}
+	if r.Origin == OriginHostAgent && strings.TrimSpace(r.GeneratedBy) == "" {
+		out = append(out, "key_generated_by")
+	}
+	return out
 }
 
 // Summary is the operator-facing sentence.
@@ -161,6 +199,8 @@ func (r Record) Summary() string {
 		parts = append(parts, "stored on a PKCS#11 token")
 	case StorageDeviceBound:
 		parts = append(parts, "bound to hardware that will not export it")
+	case StorageService:
+		parts = append(parts, "held by a credential service on the serving host")
 	}
 	switch r.Exportable {
 	case Exportable:
@@ -184,11 +224,118 @@ func ValidOrigin(v KeyOrigin) bool {
 // ValidStorage reports whether v is a value this system records.
 func ValidStorage(v StorageClass) bool {
 	switch v {
-	case StorageLockedMemory, StorageFile, StorageOSStore, StoragePKCS11, StorageDeviceBound, StorageUnrecorded:
+	case StorageLockedMemory, StorageFile, StorageOSStore, StoragePKCS11, StorageDeviceBound, StorageService, StorageUnrecorded:
 		return true
 	default:
 		return false
 	}
+}
+
+// CertificateEvidence is the public inventory material needed to aggregate
+// custody. It contains no private key bytes and no cross-tenant identifier.
+type CertificateEvidence struct {
+	ID          string `json:"id"`
+	Fingerprint string `json:"fingerprint"`
+	Subject     string `json:"subject"`
+	Record
+}
+
+// OriginCounts is a closed, reviewable count for every non-empty origin.
+type OriginCounts struct {
+	Requester    int `json:"requester"`
+	HostAgent    int `json:"host_agent"`
+	Device       int `json:"device"`
+	ControlPlane int `json:"control_plane"`
+	Signer       int `json:"signer"`
+}
+
+// StorageCounts is a closed, reviewable count for every non-empty storage class.
+type StorageCounts struct {
+	LockedMemory int `json:"locked_memory"`
+	File         int `json:"file"`
+	OSStore      int `json:"os_store"`
+	PKCS11       int `json:"pkcs11"`
+	DeviceBound  int `json:"device_bound"`
+	Service      int `json:"service"`
+}
+
+// ExportabilityCounts preserves the tri-state boundary by counting only facts.
+type ExportabilityCounts struct {
+	Exportable    int `json:"exportable"`
+	NonExportable int `json:"non_exportable"`
+}
+
+// UnrecordedCertificate is an explicit inventory row whose custody is partial.
+type UnrecordedCertificate struct {
+	ID            string   `json:"id"`
+	Fingerprint   string   `json:"fingerprint"`
+	Subject       string   `json:"subject"`
+	MissingFields []string `json:"missing_fields"`
+}
+
+// CertificateSummary is the tenant-scoped estate custody manifest.
+//
+// Counts make posture cheap to read. UnrecordedCertificates prevents a count
+// from hiding which exact inventory rows need repair.
+type CertificateSummary struct {
+	Total                  int                     `json:"total"`
+	Recorded               int                     `json:"recorded"`
+	Unrecorded             int                     `json:"unrecorded"`
+	Origins                OriginCounts            `json:"origins"`
+	Storage                StorageCounts           `json:"storage"`
+	Exportability          ExportabilityCounts     `json:"exportability"`
+	UnrecordedCertificates []UnrecordedCertificate `json:"unrecorded_certificates"`
+}
+
+// SummarizeCertificates deterministically aggregates one tenant's inventory.
+func SummarizeCertificates(certificates []CertificateEvidence) CertificateSummary {
+	out := CertificateSummary{UnrecordedCertificates: []UnrecordedCertificate{}}
+	for _, certificate := range certificates {
+		out.Total++
+		r := certificate.Record
+		switch r.Origin {
+		case OriginRequester:
+			out.Origins.Requester++
+		case OriginHostAgent:
+			out.Origins.HostAgent++
+		case OriginDevice:
+			out.Origins.Device++
+		case OriginControlPlane:
+			out.Origins.ControlPlane++
+		case OriginSigner:
+			out.Origins.Signer++
+		}
+		switch r.Storage {
+		case StorageLockedMemory:
+			out.Storage.LockedMemory++
+		case StorageFile:
+			out.Storage.File++
+		case StorageOSStore:
+			out.Storage.OSStore++
+		case StoragePKCS11:
+			out.Storage.PKCS11++
+		case StorageDeviceBound:
+			out.Storage.DeviceBound++
+		case StorageService:
+			out.Storage.Service++
+		}
+		switch r.Exportable {
+		case Exportable:
+			out.Exportability.Exportable++
+		case NonExportable:
+			out.Exportability.NonExportable++
+		}
+		if r.Complete() {
+			out.Recorded++
+			continue
+		}
+		out.Unrecorded++
+		out.UnrecordedCertificates = append(out.UnrecordedCertificates, UnrecordedCertificate{
+			ID: certificate.ID, Fingerprint: certificate.Fingerprint, Subject: certificate.Subject,
+			MissingFields: r.MissingFields(),
+		})
+	}
+	return out
 }
 
 // ValidExportability reports whether v is a value this system records.

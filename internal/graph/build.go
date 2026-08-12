@@ -118,12 +118,9 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 	}
 	for _, c := range certs {
 		nid := credentialID("cert", c.ID)
-		g.AddNode(Node{
-			ID:    nid,
-			Kind:  KindCredential,
-			Name:  c.Subject,
-			Attrs: map[string]string{"fingerprint": c.Fingerprint, "status": c.Status, "serial": c.Serial},
-		})
+		node := certificateNode(c)
+		node.ID = nid
+		g.AddNode(node)
 		if c.OwnerID != nil {
 			g.AddEdge(Edge{From: workloadID(*c.OwnerID), To: nid, Type: EdgeOwns})
 		}
@@ -231,6 +228,28 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 	}
 
 	return g, nil
+}
+
+// certificateNode is the one certificate-to-graph mapping. Governance exports
+// consume these attributes, so dropping a custody column here would otherwise
+// make the interactive inventory truthful and the signed estate summary false.
+func certificateNode(c store.Certificate) Node {
+	return Node{
+		Kind: KindCredential,
+		Name: c.Subject,
+		Attrs: map[string]string{
+			"credential_kind":  "certificate",
+			"certificate_id":   c.ID,
+			"fingerprint":      c.Fingerprint,
+			"subject":          c.Subject,
+			"status":           c.Status,
+			"serial":           c.Serial,
+			"key_origin":       c.KeyOrigin,
+			"key_storage":      c.KeyStorage,
+			"key_exportable":   c.KeyExportable,
+			"key_generated_by": c.KeyGeneratedBy,
+		},
+	}
 }
 
 // firstNonEmpty returns the first non-empty string, or "".

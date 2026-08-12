@@ -145,6 +145,14 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/key_storage", opaque), privacyRule("/key_exportable", opaque),
 		privacyRule("/key_generated_by", opaque),
 	)
+	certificateCustodyAttested := privacyRules(
+		privacyRule("/fingerprint", opaque), privacyRule("/key_origin", opaque),
+		privacyRule("/key_storage", opaque), privacyRule("/key_exportable", opaque),
+		privacyRule("/key_generated_by", opaque), privacyRule("/agent", exact),
+		privacyRule("/job_id", opaque), privacyRule("/attempt", opaque),
+		privacyRule("/receipt_statement", opaque), privacyRule("/receipt_signature", opaque),
+		privacyRule("/receipt_signer_fingerprint", opaque),
+	)
 	approvedCertificate := certificateRecorded
 	approvedCertificate.Rules = append(append([]events.PrivacyFieldRule{}, certificateRecorded.Rules...),
 		privacyRule("/approval/request_id", opaque),
@@ -614,6 +622,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventCertificateRevoked, 1}:                                                 certificateRevoked,
 		{EventCertificateRecorded, 1}:                                                certificateRecorded,
 		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            approvedCertificate,
+		{EventCertificateCustodyAttested, 1}:                                         certificateCustodyAttested,
 		{EventPrivacySubjectErased, 1}:                                               privacyErasedV1,
 		{EventPrivacySubjectErased, PrivacySubjectErasedOperationEventSchemaVersion}: privacyErasedV2,
 		{EventPrivacySubjectErased, PrivacySubjectErasedEventSchemaVersion}:          privacyErasedV3,
@@ -1150,6 +1159,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventCertificateRevoked, 1}:                                                 privacyPayloadShape[CertificateRevoked](),
 		{EventCertificateRecorded, 1}:                                                privacyPayloadShape[privacyCertificateRecordedV1](),
 		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            privacyPayloadShape[CertificateRecorded](),
+		{EventCertificateCustodyAttested, 1}:                                         privacyPayloadShape[CertificateCustodyAttested](),
 		{EventPrivacySubjectErased, 1}:                                               privacyPayloadShape[privacySubjectErasedV1](),
 		{EventPrivacySubjectErased, PrivacySubjectErasedOperationEventSchemaVersion}: privacyPayloadShape[privacySubjectErasedV2](),
 		{EventPrivacySubjectErased, PrivacySubjectErasedEventSchemaVersion}:          privacyPayloadShape[privacySubjectErasedV3](),

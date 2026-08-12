@@ -1820,6 +1820,20 @@ Certificate = TypedDict(
     total=False,
 )
 
+CertificateCustodySummary = TypedDict(
+    'CertificateCustodySummary',
+    {
+        'exportability': dict[str, Any],
+        'origins': dict[str, Any],
+        'recorded': int,
+        'storage': dict[str, Any],
+        'total': int,
+        'unrecorded': int,
+        'unrecorded_certificates': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 CertificateExpiryBucket = TypedDict(
     'CertificateExpiryBucket',
     {
@@ -2062,6 +2076,7 @@ CodeSigningSignature = TypedDict(
 ComplianceEvidencePack = TypedDict(
     'ComplianceEvidencePack',
     {
+        'custody': dict[str, Any],
         'format': str,
         'framework': str,
         'public_key_der': str,
@@ -2351,6 +2366,40 @@ CryptoReadinessRow = TypedDict(
         'quantum_vulnerable': bool,
         'recommendation': str,
         'unlocated': bool,
+    },
+    total=False,
+)
+
+CustodyExportabilityCounts = TypedDict(
+    'CustodyExportabilityCounts',
+    {
+        'exportable': int,
+        'non_exportable': int,
+    },
+    total=False,
+)
+
+CustodyOriginCounts = TypedDict(
+    'CustodyOriginCounts',
+    {
+        'control_plane': int,
+        'device': int,
+        'host_agent': int,
+        'requester': int,
+        'signer': int,
+    },
+    total=False,
+)
+
+CustodyStorageCounts = TypedDict(
+    'CustodyStorageCounts',
+    {
+        'device_bound': int,
+        'file': int,
+        'locked_memory': int,
+        'os_store': int,
+        'pkcs11': int,
+        'service': int,
     },
     total=False,
 )
@@ -8129,6 +8178,17 @@ UnownedQueue = TypedDict(
         'guidance': str,
         'items': list[dict[str, Any]],
         'total': int,
+    },
+    total=False,
+)
+
+UnrecordedCustodyCertificate = TypedDict(
+    'UnrecordedCustodyCertificate',
+    {
+        'fingerprint': str,
+        'id': str,
+        'missing_fields': list[str],
+        'subject': str,
     },
     total=False,
 )

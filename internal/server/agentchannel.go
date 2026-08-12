@@ -257,7 +257,7 @@ type agentService struct {
 	//
 	// The permitted set is passed in already derived from the job payload, so
 	// the signing side cannot be handed names the caller did not authorize.
-	signSubjectCSR func(ctx context.Context, tenantID string, job store.AgentJobForRedemption, jobID int64, csrDER []byte, permitted []string, attempt int) (*transport.SignJobCSRResponse, error)
+	signSubjectCSR func(ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption, jobID int64, csrDER []byte, permitted []string, attempt int) (*transport.SignJobCSRResponse, error)
 	// completeHostRenewal moves an identity out of StateRenewing once a host
 	// agent reports its renewal finished (epic B2). Nil means the transition is
 	// not completed and the identity would stay in renewing forever, so this is

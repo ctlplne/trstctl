@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/graph"
 )
 
@@ -69,6 +70,7 @@ type Report struct {
 	EvidenceWindow   EvidenceWindow                             `json:"evidence_window"`
 	Controls         []Control                                  `json:"controls"`
 	Posture          Posture                                    `json:"posture"`
+	Custody          custody.CertificateSummary                 `json:"custody"`
 	ProductEvidences []string                                   `json:"product_evidences"`
 	OperatorAttests  []string                                   `json:"operator_attests"`
 	FIPSProfile      *compliance.FIPSRegulatedDeploymentProfile `json:"fips_regulated_deployment_profile,omitempty"`
@@ -96,6 +98,7 @@ func (r *Reporter) Generate(fw Framework, records []audit.Record, cbom *graph.Gr
 		return Report{}, fmt.Errorf("governance: report requires a bounded evidence window")
 	}
 	p := posture(cbom)
+	c := custodyPosture(cbom)
 	idx := newEvidenceIndex(tenantID, records, cbom, window)
 	var fipsProfile *compliance.FIPSRegulatedDeploymentProfile
 	if fw == FIPS140 {
@@ -117,10 +120,32 @@ func (r *Reporter) Generate(fw Framework, records []audit.Record, cbom *graph.Gr
 	controls := controlsFor(fw, p, idx)
 	return Report{
 		TenantID: tenantID, Framework: string(fw), GeneratedAt: window.Through,
-		EvidenceWindow: window, Controls: controls, Posture: p,
+		EvidenceWindow: window, Controls: controls, Posture: p, Custody: c,
 		ProductEvidences: productEvidencesFor(controls), OperatorAttests: operatorAttestsFor(fw),
 		FIPSProfile: fipsProfile,
 	}, nil
+}
+
+func custodyPosture(g *graph.Graph) custody.CertificateSummary {
+	var certificates []custody.CertificateEvidence
+	if g != nil {
+		for _, node := range g.Nodes() {
+			if node.Kind != graph.KindCredential || node.Attrs["credential_kind"] != "certificate" {
+				continue
+			}
+			certificates = append(certificates, custody.CertificateEvidence{
+				ID: node.Attrs["certificate_id"], Fingerprint: node.Attrs["fingerprint"],
+				Subject: node.Attrs["subject"],
+				Record: custody.Record{
+					Origin:      custody.KeyOrigin(node.Attrs["key_origin"]),
+					Storage:     custody.StorageClass(node.Attrs["key_storage"]),
+					Exportable:  custody.Exportability(node.Attrs["key_exportable"]),
+					GeneratedBy: node.Attrs["key_generated_by"],
+				},
+			})
+		}
+	}
+	return custody.SummarizeCertificates(certificates)
 }
 
 func posture(g *graph.Graph) Posture {

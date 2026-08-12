@@ -4691,7 +4691,8 @@
               "file",
               "os_store",
               "pkcs11",
-              "device_bound"
+              "device_bound",
+              "service"
             ],
             "type": "string"
           },
@@ -4748,6 +4749,44 @@
           "subject",
           "fingerprint",
           "status"
+        ],
+        "type": "object"
+      },
+      "CertificateCustodySummary": {
+        "properties": {
+          "exportability": {
+            "$ref": "#/components/schemas/CustodyExportabilityCounts"
+          },
+          "origins": {
+            "$ref": "#/components/schemas/CustodyOriginCounts"
+          },
+          "recorded": {
+            "type": "integer"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/CustodyStorageCounts"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "unrecorded": {
+            "type": "integer"
+          },
+          "unrecorded_certificates": {
+            "items": {
+              "$ref": "#/components/schemas/UnrecordedCustodyCertificate"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "total",
+          "recorded",
+          "unrecorded",
+          "origins",
+          "storage",
+          "exportability",
+          "unrecorded_certificates"
         ],
         "type": "object"
       },
@@ -5449,6 +5488,9 @@
       },
       "ComplianceEvidencePack": {
         "properties": {
+          "custody": {
+            "$ref": "#/components/schemas/CertificateCustodySummary"
+          },
           "format": {
             "type": "string"
           },
@@ -5484,7 +5526,8 @@
           "format",
           "framework",
           "signed_export",
-          "public_key_der"
+          "public_key_der",
+          "custody"
         ],
         "type": "object"
       },
@@ -6355,6 +6398,79 @@
           "out_of_policy",
           "unlocated",
           "recommendation"
+        ],
+        "type": "object"
+      },
+      "CustodyExportabilityCounts": {
+        "properties": {
+          "exportable": {
+            "type": "integer"
+          },
+          "non_exportable": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "exportable",
+          "non_exportable"
+        ],
+        "type": "object"
+      },
+      "CustodyOriginCounts": {
+        "properties": {
+          "control_plane": {
+            "type": "integer"
+          },
+          "device": {
+            "type": "integer"
+          },
+          "host_agent": {
+            "type": "integer"
+          },
+          "requester": {
+            "type": "integer"
+          },
+          "signer": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requester",
+          "host_agent",
+          "device",
+          "control_plane",
+          "signer"
+        ],
+        "type": "object"
+      },
+      "CustodyStorageCounts": {
+        "properties": {
+          "device_bound": {
+            "type": "integer"
+          },
+          "file": {
+            "type": "integer"
+          },
+          "locked_memory": {
+            "type": "integer"
+          },
+          "os_store": {
+            "type": "integer"
+          },
+          "pkcs11": {
+            "type": "integer"
+          },
+          "service": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "locked_memory",
+          "file",
+          "os_store",
+          "pkcs11",
+          "device_bound",
+          "service"
         ],
         "type": "object"
       },
@@ -22494,6 +22610,33 @@
           "counts",
           "total",
           "guidance"
+        ],
+        "type": "object"
+      },
+      "UnrecordedCustodyCertificate": {
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fingerprint",
+          "subject",
+          "missing_fields"
         ],
         "type": "object"
       },

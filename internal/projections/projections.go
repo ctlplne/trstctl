@@ -112,6 +112,7 @@ const (
 	EventIdentityRenewed              = "identity.renewed"
 	EventIdentityRetired              = "identity.retired"
 	EventCertificateRecorded          = "certificate.recorded"
+	EventCertificateCustodyAttested   = "certificate.custody.attested"
 	// CertificateApprovalEventSchemaVersion adds both the exact one-shot
 	// approval and the privacy-stable command binding recomputed from the issued
 	// certificate. Version 1 remains replayable for ordinary inventory and
@@ -747,6 +748,23 @@ type CertificateRecorded struct {
 	KeyStorage     string `json:"key_storage,omitempty"`
 	KeyExportable  string `json:"key_exportable,omitempty"`
 	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
+}
+
+// CertificateCustodyAttested is the signed host-agent terminal receipt that
+// upgrades an issued certificate from partial origin evidence to a complete
+// post-install custody record.
+type CertificateCustodyAttested struct {
+	Fingerprint              string `json:"fingerprint"`
+	KeyOrigin                string `json:"key_origin"`
+	KeyStorage               string `json:"key_storage"`
+	KeyExportable            string `json:"key_exportable"`
+	KeyGeneratedBy           string `json:"key_generated_by"`
+	Agent                    string `json:"agent"`
+	JobID                    int64  `json:"job_id"`
+	Attempt                  int    `json:"attempt"`
+	ReceiptStatement         string `json:"receipt_statement"`
+	ReceiptSignature         string `json:"receipt_signature"`
+	ReceiptSignerFingerprint string `json:"receipt_signer_fingerprint"`
 }
 
 // CertificateApprovalEventID is the only target-event identity allowed to
@@ -2826,6 +2844,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
 	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true},
+	EventCertificateCustodyAttested:               {1: true},
 	EventCertificateRevoked:                       {1: true},
 	EventCertificateSuperseded:                    {1: true},
 	EventCAIssuedCertificate:                      {1: true},
@@ -3430,6 +3449,25 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 				e.ID, e.Type, schemaVersionOf(e), e.Time, []byte(semanticDigest))
 		}
 		return nil
+	case EventCertificateCustodyAttested:
+		var pl CertificateCustodyAttested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		record := custody.Record{
+			Origin: custody.KeyOrigin(pl.KeyOrigin), Storage: custody.StorageClass(pl.KeyStorage),
+			Exportable: custody.Exportability(pl.KeyExportable), GeneratedBy: pl.KeyGeneratedBy,
+		}
+		if strings.TrimSpace(pl.Fingerprint) == "" || strings.TrimSpace(pl.Agent) == "" ||
+			pl.JobID <= 0 || pl.Attempt <= 0 || !record.Complete() ||
+			record.Origin != custody.OriginHostAgent || record.GeneratedBy != pl.Agent ||
+			!custody.ValidOrigin(record.Origin) || !custody.ValidStorage(record.Storage) ||
+			!custody.ValidExportability(record.Exportable) ||
+			strings.TrimSpace(pl.ReceiptStatement) == "" || strings.TrimSpace(pl.ReceiptSignature) == "" ||
+			strings.TrimSpace(pl.ReceiptSignerFingerprint) == "" {
+			return errors.New("projections: certificate custody attestation is incomplete")
+		}
+		return p.store.ApplyCertificateCustodyAttestedTx(ctx, tx, e.TenantID, pl.Fingerprint, record)
 	case EventCertificateRevoked:
 		var pl CertificateRevoked
 		if err := decode(e, &pl); err != nil {

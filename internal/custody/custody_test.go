@@ -100,10 +100,42 @@ func TestVocabularyIsClosed(t *testing.T) {
 	if custody.ValidOrigin("somewhere") {
 		t.Error("an unknown origin was accepted")
 	}
+	for _, v := range []custody.StorageClass{
+		custody.StorageLockedMemory, custody.StorageFile, custody.StorageOSStore,
+		custody.StoragePKCS11, custody.StorageDeviceBound, custody.StorageService,
+		custody.StorageUnrecorded,
+	} {
+		if !custody.ValidStorage(v) {
+			t.Errorf("declared storage class %q is not valid", v)
+		}
+	}
 	if custody.ValidStorage("a drawer") {
 		t.Error("an unknown storage class was accepted")
 	}
 	if custody.ValidExportability("maybe") {
 		t.Error("an unknown exportability was accepted")
+	}
+}
+
+func TestCertificateSummaryKeepsPartialRowsExplicitAUD25(t *testing.T) {
+	t.Parallel()
+	summary := custody.SummarizeCertificates([]custody.CertificateEvidence{
+		{ID: "complete", Fingerprint: "sha256:complete", Subject: "complete.example.test", Record: custody.Record{
+			Origin: custody.OriginHostAgent, Storage: custody.StorageService,
+			Exportable: custody.Exportable, GeneratedBy: "agent-1",
+		}},
+		{ID: "partial", Fingerprint: "sha256:partial", Subject: "partial.example.test", Record: custody.Record{
+			Origin: custody.OriginRequester,
+		}},
+	})
+	if summary.Total != 2 || summary.Recorded != 1 || summary.Unrecorded != 1 ||
+		summary.Storage.Service != 1 || summary.Origins.Requester != 1 ||
+		len(summary.UnrecordedCertificates) != 1 {
+		t.Fatalf("certificate custody summary = %+v", summary)
+	}
+	gap := summary.UnrecordedCertificates[0]
+	if gap.ID != "partial" || len(gap.MissingFields) != 2 ||
+		gap.MissingFields[0] != "key_storage" || gap.MissingFields[1] != "key_exportable" {
+		t.Fatalf("partial custody gap = %+v", gap)
 	}
 }

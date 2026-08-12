@@ -1262,7 +1262,7 @@ func componentSchemas() map[string]*Schema {
 		// B5: per-certificate key custody. Empty means UNRECORDED, which is a
 		// distinct answer from any observation.
 		"key_origin":       {Type: "string", Enum: []string{"", "requester", "host_agent", "device", "control_plane", "signer"}},
-		"key_storage":      {Type: "string", Enum: []string{"", "locked_memory", "file", "os_store", "pkcs11", "device_bound"}},
+		"key_storage":      {Type: "string", Enum: []string{"", "locked_memory", "file", "os_store", "pkcs11", "device_bound", "service"}},
 		"key_exportable":   {Type: "string", Enum: []string{"", "exportable", "non_exportable"}},
 		"key_generated_by": str(),
 		"custody_summary":  str(),
@@ -2877,12 +2877,34 @@ func componentSchemas() map[string]*Schema {
 		"chain_head":     str(),
 		"anchor":         ref("AuditAnchor"),
 	}, "schema_version", "format", "bundle", "chain_head", "anchor")
+	custodyOriginCounts := object(map[string]*Schema{
+		"requester": {Type: "integer"}, "host_agent": {Type: "integer"},
+		"device": {Type: "integer"}, "control_plane": {Type: "integer"}, "signer": {Type: "integer"},
+	}, "requester", "host_agent", "device", "control_plane", "signer")
+	custodyStorageCounts := object(map[string]*Schema{
+		"locked_memory": {Type: "integer"}, "file": {Type: "integer"}, "os_store": {Type: "integer"},
+		"pkcs11": {Type: "integer"}, "device_bound": {Type: "integer"}, "service": {Type: "integer"},
+	}, "locked_memory", "file", "os_store", "pkcs11", "device_bound", "service")
+	custodyExportabilityCounts := object(map[string]*Schema{
+		"exportable": {Type: "integer"}, "non_exportable": {Type: "integer"},
+	}, "exportable", "non_exportable")
+	unrecordedCustodyCertificate := object(map[string]*Schema{
+		"id": uuid(), "fingerprint": str(), "subject": str(),
+		"missing_fields": {Type: "array", Items: str()},
+	}, "id", "fingerprint", "subject", "missing_fields")
+	certificateCustodySummary := object(map[string]*Schema{
+		"total": {Type: "integer"}, "recorded": {Type: "integer"}, "unrecorded": {Type: "integer"},
+		"origins": ref("CustodyOriginCounts"), "storage": ref("CustodyStorageCounts"),
+		"exportability":           ref("CustodyExportabilityCounts"),
+		"unrecorded_certificates": {Type: "array", Items: ref("UnrecordedCustodyCertificate")},
+	}, "total", "recorded", "unrecorded", "origins", "storage", "exportability", "unrecorded_certificates")
 	complianceEvidencePack := object(map[string]*Schema{
 		"format":         str(),
 		"framework":      {Type: "string", Enum: complianceFrameworkValues()},
 		"signed_export":  {Type: "object"},
 		"public_key_der": {Type: "string", Format: "byte"},
-	}, "format", "framework", "signed_export", "public_key_der")
+		"custody":        ref("CertificateCustodySummary"),
+	}, "format", "framework", "signed_export", "public_key_der", "custody")
 	complianceReportScheduleReq := object(map[string]*Schema{
 		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
@@ -4916,6 +4938,11 @@ func componentSchemas() map[string]*Schema {
 		"AuditAnchor":                              auditAnchor,
 		"AuditBundle":                              auditBundle,
 		"ComplianceEvidencePack":                   complianceEvidencePack,
+		"CertificateCustodySummary":                certificateCustodySummary,
+		"CustodyOriginCounts":                      custodyOriginCounts,
+		"CustodyStorageCounts":                     custodyStorageCounts,
+		"CustodyExportabilityCounts":               custodyExportabilityCounts,
+		"UnrecordedCustodyCertificate":             unrecordedCustodyCertificate,
 		"ComplianceReportScheduleRequest":          complianceReportScheduleReq,
 		"ComplianceReportSchedule":                 complianceReportSchedule,
 		"ComplianceReportScheduleList":             list("ComplianceReportSchedule"),

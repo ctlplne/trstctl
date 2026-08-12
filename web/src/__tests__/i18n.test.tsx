@@ -603,8 +603,13 @@ describe("i18n boundary", () => {
       // durable evidence, completion time, exact signer, signature state, and
       // download action. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
       // REVIEW BEFORE RELEASE.
-      "es-ES": "ba868133fa4a3aaccd6f2440c592e3834540672f0a3abff69d69f591742c34de",
-      "de-DE": "ae50483b6b712a84a926b1188d4ca4c44603c26a52b6d0b43c270ea7401043d4",
+      // AUD-25 custody-evidence re-pin: seven policy.compliance.custody* keys
+      // name complete versus incomplete custody and the exact missing fields.
+      // The es/de wording preserves that incomplete means missing evidence,
+      // never a safe or inferred custody state. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "9f6dc41cda383a48a4eb81ae037342e80dc904cc5fcd448dca408da9dbf082eb",
+      "de-DE": "f21c4aee0a4c7b04ae229f74038193758fc55f4f7e2b481167e7c84142603aab",
     });
   });
 

@@ -37,6 +37,7 @@ import "sort"
 // shapes the projector actually decodes.
 const (
 	EventCertificateRecorded                      = "certificate.recorded"
+	EventCertificateCustodyAttested               = "certificate.custody.attested"
 	EventCertificateRevoked                       = "certificate.revoked"
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCACeremonyStarted                        = "ca.ceremony.started"
@@ -159,6 +160,7 @@ type FeatureEvent struct {
 var ledger = []FeatureEvent{
 	// F1 — Certificate inventory.
 	{"F1", "Certificate inventory", "ingest", "ingestCertificate", []string{EventCertificateRecorded}},
+	{"B5", "Certificate key custody", "attest", "agent job receipt", []string{EventCertificateCustodyAttested}},
 	// F47 — X.509 revocation infrastructure (served revocation of an inventoried cert).
 	{"F47", "X.509 revocation infrastructure", "revoke", "transitionIdentity", []string{EventCertificateRevoked}},
 	{"F47", "X.509 revocation infrastructure", "supersede", "transitionIdentity", []string{EventCertificateSuperseded}},

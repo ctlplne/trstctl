@@ -4,12 +4,14 @@ package relay
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 // Host-generated renewal: the key is born here and dies here (epic B2).
@@ -63,6 +65,12 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		// memory with no purpose and no consumer.
 		report(ctx, ch, job, OutcomeFailed,
 			"this agent build cannot request signing for a locally generated key")
+		return false
+	}
+	custodyReporter, ok := ch.(CustodyReceiptChannel)
+	if !ok {
+		report(ctx, ch, job, OutcomeFailed,
+			"this agent build cannot sign certificate custody receipts")
 		return false
 	}
 	if !ExecutesOnHost(intent.Connector) {
@@ -180,8 +188,36 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	// not serve is not a success, and the whole reason this pipeline reports
 	// three outcomes rather than two is so it can say which happened.
 	outcome, detail, evidence := postDeployVerification(ctx, installIntent, material)
-	reportWithEvidence(ctx, ch, job, outcome, detail, evidence)
+	record, err := HostRenewCustody(intent.Connector, "")
+	if err != nil {
+		report(ctx, ch, job, OutcomeFailed, "the installed key custody could not be classified")
+		return false
+	}
+	reportWithEvidenceAndCustody(ctx, custodyReporter, job, outcome, detail, evidence, fingerprint, record)
 	return outcome != OutcomeFailed
+}
+
+// HostRenewCustody maps a host connector to the storage boundary it actually
+// uses after a successful deploy. The caller supplies generatedBy when it knows
+// the certificate identity; the relay runtime leaves it empty and the channel
+// adapter fills it from the same mTLS identity that signs the receipt.
+func HostRenewCustody(connectorName, generatedBy string) (custody.Record, error) {
+	if !ExecutesOnHost(connectorName) {
+		return custody.Record{}, errors.New("relay: connector is not a host renewal target")
+	}
+	record := custody.Record{Origin: custody.OriginHostAgent, GeneratedBy: generatedBy}
+	switch connectorName {
+	case "iis":
+		record.Storage = custody.StorageOSStore
+		record.Exportable = custody.NonExportable
+	case "envoy":
+		record.Storage = custody.StorageService
+		record.Exportable = custody.Exportable
+	default:
+		record.Storage = custody.StorageFile
+		record.Exportable = custody.Exportable
+	}
+	return record, nil
 }
 
 // renewalSubjectNames is the set the intent asks to certify.

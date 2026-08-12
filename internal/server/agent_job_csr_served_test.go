@@ -4,9 +4,11 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -16,6 +18,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -217,6 +221,150 @@ func TestServedHostGeneratedRenewalLeavesNoKeyMaterialBehind(t *testing.T) {
 		t.Errorf("private key material found in %s.%s (row %s, marker %q) after a renewal whose "+
 			"key was generated on the host; B2's claim is that the control plane never holds it",
 			f.Table, f.Column, f.RowRef, f.Marker)
+	}
+}
+
+// The successful terminal report is the first moment the control plane can
+// truthfully say where the host-generated key LIVES. Signing the CSR proves
+// only where it was born; stamping "file" before the agent actually installs
+// it would turn an install failure into false custody evidence.
+func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
+	seedRenewalJob(t, ctx, h, "renew:custody-receipt", []string{"custody.example.test"})
+	job := claimOneRenewal(t, ctx, h)
+
+	key, err := crypto.GenerateHostSubjectKey("custody.example.test", []string{"custody.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	issued, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: job.JobID, Attempt: job.Attempt, CSRDER: key.CSRDER,
+	})
+	if err != nil {
+		t.Fatalf("sign renewal CSR: %v", err)
+	}
+
+	id := h.identity.Identity()
+	omitted, err := transport.SignedReport(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+		transport.JobOutcomeVerified, "", "sha256:probe", time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.client.ReportJobResult(ctx, omitted); err == nil || !strings.Contains(err.Error(), "custody") {
+		t.Fatalf("successful renewal without custody = %v, want custody refusal", err)
+	}
+
+	record := custody.Record{
+		Origin: custody.OriginHostAgent, Storage: custody.StorageFile,
+		Exportable: custody.Exportable, GeneratedBy: id.CommonName(),
+	}
+	wrongRecord := record
+	wrongRecord.Storage = custody.StorageOSStore
+	wrongRecord.Exportable = custody.NonExportable
+	wrong, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+		transport.JobOutcomeVerified, "", "sha256:probe", issued.Fingerprint, wrongRecord, time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.client.ReportJobResult(ctx, wrong); err == nil || !strings.Contains(err.Error(), "differs") {
+		t.Fatalf("agent-signed custody inconsistent with connector = %v, want semantic refusal", err)
+	}
+
+	tampered, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+		transport.JobOutcomeVerified, "", "sha256:probe", issued.Fingerprint, record, time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered.Custody.Storage = custody.StorageOSStore
+	if _, err := h.client.ReportJobResult(ctx, tampered); err == nil || !strings.Contains(err.Error(), "signature") {
+		t.Fatalf("tampered custody receipt = %v, want signature refusal", err)
+	}
+
+	valid, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+		transport.JobOutcomeVerified, "", "sha256:probe", issued.Fingerprint, record, time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := h.client.ReportJobResult(ctx, valid)
+	if err != nil || !accepted.Accepted {
+		t.Fatalf("valid custody receipt = %+v, err=%v", accepted, err)
+	}
+
+	cert, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, issued.Fingerprint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cert.KeyOrigin != string(record.Origin) || cert.KeyStorage != string(record.Storage) ||
+		cert.KeyExportable != string(record.Exportable) || cert.KeyGeneratedBy != record.GeneratedBy {
+		t.Fatalf("projected certificate custody = origin=%q storage=%q exportable=%q generated_by=%q",
+			cert.KeyOrigin, cert.KeyStorage, cert.KeyExportable, cert.KeyGeneratedBy)
+	}
+
+	var statement, signature string
+	var custodyEvent events.Event
+	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
+		if event.TenantID != h.tenant {
+			return nil
+		}
+		if event.Type == projections.EventCertificateCustodyAttested {
+			custodyEvent = event
+		}
+		if event.Type != "agent.job.executed" {
+			return nil
+		}
+		var payload map[string]any
+		if json.Unmarshal(event.Data, &payload) == nil {
+			statement, _ = payload["receipt_statement"].(string)
+			signature, _ = payload["receipt_signature"].(string)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"credential_fingerprint=" + issued.Fingerprint,
+		"key_origin=host_agent", "key_storage=file", "key_exportable=exportable",
+		"key_generated_by=" + id.CommonName(),
+	} {
+		if !strings.Contains(statement, want) {
+			t.Errorf("durable signed receipt statement missing %q:\n%s", want, statement)
+		}
+	}
+	if custodyEvent.ID == "" {
+		t.Fatal("verified receipt did not append certificate.custody.attested")
+	}
+	sig, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mtls.VerifyStatement(id.CertificateDER(), []byte(statement), sig); err != nil {
+		t.Fatalf("persisted custody statement is not independently verifiable: %v", err)
+	}
+	// Replay the immutable custody event after clearing only its read-model
+	// projection. The owner/identity fixture predates this event and is seeded
+	// directly, so a whole-store Rebuild would correctly reject that unrelated
+	// non-event-sourced test fixture before reaching the custody event.
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`UPDATE certificates
+			    SET key_origin = '', key_storage = '', key_exportable = '', key_generated_by = ''
+			  WHERE tenant_id = $1 AND fingerprint = $2`, h.tenant, issued.Fingerprint)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(h.store).Apply(ctx, custodyEvent); err != nil {
+		t.Fatalf("replay custody attestation: %v", err)
+	}
+	rebuilt, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, issued.Fingerprint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rebuilt.KeyOrigin != cert.KeyOrigin || rebuilt.KeyStorage != cert.KeyStorage ||
+		rebuilt.KeyExportable != cert.KeyExportable || rebuilt.KeyGeneratedBy != cert.KeyGeneratedBy {
+		t.Fatalf("cold rebuild custody = %+v, want %+v", rebuilt, cert)
 	}
 }
 

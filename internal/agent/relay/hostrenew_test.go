@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 // Host-generated renewal: what goes up, and what never does (epic B2).
@@ -42,6 +43,11 @@ func (r *renewChannel) SignJobCSR(_ context.Context, _ int64, _ int, csrDER []by
 		return nil, nil, "", r.signErr
 	}
 	return r.certPEM, r.chainPEM, r.fpr, nil
+}
+
+func (r *renewChannel) ReportJobResultWithCustody(ctx context.Context, jobID int64, attempt int,
+	outcome, detail, evidence, _ string, _ custody.Record) (bool, error) {
+	return r.ReportJobResult(ctx, jobID, attempt, outcome, detail, evidence)
 }
 
 func renewJob(t *testing.T, intent relay.DeployIntent) relay.Job {
@@ -232,5 +238,33 @@ func TestRenewalIsClaimedAndCensusedAsShipped(t *testing.T) {
 	if !shipped {
 		t.Error("the renewal kind is claimed but absent from the shipped census; C1a's rule is " +
 			"that a claimed kind must be one this build can execute end to end")
+	}
+}
+
+func TestEveryHostRenewalConnectorHasCompleteTruthfulCustodyAUD25(t *testing.T) {
+	t.Parallel()
+	for _, connectorName := range relay.HostConnectorKinds() {
+		record, err := relay.HostRenewCustody(connectorName, "host-agent-7")
+		if err != nil {
+			t.Errorf("HostRenewCustody(%q): %v", connectorName, err)
+			continue
+		}
+		if !record.Complete() || record.Origin != custody.OriginHostAgent || record.GeneratedBy != "host-agent-7" {
+			t.Errorf("HostRenewCustody(%q) = %+v", connectorName, record)
+		}
+		switch connectorName {
+		case "iis":
+			if record.Storage != custody.StorageOSStore || record.Exportable != custody.NonExportable {
+				t.Errorf("IIS custody = %+v", record)
+			}
+		case "envoy":
+			if record.Storage != custody.StorageService || record.Exportable != custody.Exportable {
+				t.Errorf("Envoy SDS custody = %+v", record)
+			}
+		default:
+			if record.Storage != custody.StorageFile || record.Exportable != custody.Exportable {
+				t.Errorf("file connector %q custody = %+v", connectorName, record)
+			}
+		}
 	}
 }

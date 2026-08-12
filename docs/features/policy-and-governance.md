@@ -310,7 +310,10 @@ for the row-level map and erasure/retention behavior.
 The `/policy` screen is a compliance evidence-pack dashboard: pick any of the 15
 supported frameworks (list under [Reference](#reference)), inspect its signed tenant,
 coverage window, exact per-control references and missing prerequisites, and export the
-pack or audit evidence, alongside the compliance inventory report, audit-export
+pack or audit evidence. The signed manifest also counts certificate custody by
+origin, storage, and exportability and lists every incomplete certificate with its
+missing fields; the dashboard renders that gap list instead of reducing it to a
+percentage. This sits alongside the compliance inventory report, audit-export
 schedule form, NHI compliance mapping, and an NHI access certification panel for
 campaigns and reviewer decisions. The policy authoring workbench calls `POST
 /api/v1/policy/dry-run` to compile a candidate lifecycle or ABAC Rego module against the

@@ -1,0 +1,1 @@
+import{V as e}from"./index-B5jf__oN.js";function t(t,n){let r=e[t];return typeof r==`function`?r():Promise.resolve(n)}export{t};

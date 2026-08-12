@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/protocol"
 )
 
@@ -213,6 +214,7 @@ func currentAgentContract() agentContract {
 			"KubernetesPostureResponse": {Fields: jsonFieldsOf(KubernetesPostureResponse{})},
 			"ClaimJobsRequest":          {Fields: jsonFieldsOf(ClaimJobsRequest{})},
 			"ClaimedJob":                {Fields: jsonFieldsOf(ClaimedJob{})},
+			"CustodyRecord":             {Fields: jsonFieldsOf(custody.Record{})},
 			"ClaimJobsResponse":         {Fields: jsonFieldsOf(ClaimJobsResponse{})},
 			"ReportJobResultRequest":    {Fields: jsonFieldsOf(ReportJobResultRequest{})},
 			"ReportJobResultResponse":   {Fields: jsonFieldsOf(ReportJobResultResponse{})},

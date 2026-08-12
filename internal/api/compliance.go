@@ -10,15 +10,17 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/store"
 )
 
 // ComplianceEvidencePackFormat is the stable wire marker for signed compliance
-// evidence packs. Version 2 binds the signed manifest to a tenant and bounded
-// evidence window and carries exact immutable event/object references plus
-// missing prerequisites. The signed_export field is self-verifying;
+// evidence packs. Version 3 binds the signed manifest to a tenant and bounded
+// evidence window, carries exact immutable event/object references plus
+// missing prerequisites, and includes certificate-custody counts plus explicit
+// incomplete rows. The signed_export field is self-verifying;
 // public_key_der is the verifier material an auditor needs offline.
-const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v2"
+const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v3"
 
 // ComplianceFramework is the stable path/API value for a governance evidence pack.
 type ComplianceFramework string
@@ -111,6 +113,11 @@ type ComplianceEvidencePack struct {
 	Framework    string          `json:"framework"`
 	SignedExport json.RawMessage `json:"signed_export"`
 	PublicKeyDER []byte          `json:"public_key_der"`
+	// Custody is a convenience projection of the exact summary inside the
+	// signed manifest. Offline verifiers treat signed_export.manifest.custody as
+	// authoritative; the outer copy lets API and console clients render it
+	// without implementing envelope decoding first.
+	Custody custody.CertificateSummary `json:"custody"`
 }
 
 type complianceReportScheduleRequest struct {

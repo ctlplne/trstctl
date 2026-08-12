@@ -67,12 +67,24 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 		audit:  audit.NewService(log, nil),
 		signer: signer,
 		now:    func() time.Time { return through },
-		buildGraph: func(_ context.Context, _ *store.Store, _ string) (*graph.Graph, error) {
+		buildGraph: func(_ context.Context, _ *store.Store, tenantID string) (*graph.Graph, error) {
 			g := graph.New()
 			g.AddNode(graph.Node{ID: "asset:rsa", Kind: graph.KindCryptoAsset, Attrs: map[string]string{"algorithm": string(crypto.RSA2048)}})
 			g.AddNode(graph.Node{ID: "workload:api", Kind: graph.KindWorkload})
 			g.AddNode(graph.Node{ID: "credential:api", Kind: graph.KindCredential})
 			g.AddEdge(graph.Edge{From: "workload:api", To: "credential:api", Type: graph.EdgeOwns})
+			if tenantID == servedTenantA {
+				g.AddNode(graph.Node{ID: "cert:a", Kind: graph.KindCredential, Name: "a.example.test", Attrs: map[string]string{
+					"credential_kind": "certificate", "certificate_id": "cert-a", "fingerprint": "sha256:a",
+					"subject": "a.example.test", "key_origin": "host_agent",
+				}})
+			} else {
+				g.AddNode(graph.Node{ID: "cert:b", Kind: graph.KindCredential, Name: "b.example.test", Attrs: map[string]string{
+					"credential_kind": "certificate", "certificate_id": "cert-b", "fingerprint": "sha256:b",
+					"subject": "b.example.test", "key_origin": "host_agent", "key_storage": "file",
+					"key_exportable": "exportable", "key_generated_by": "agent-b",
+				}})
+			}
 			return g, nil
 		},
 	}
@@ -99,6 +111,11 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 	if reportA.EvidenceWindow != (EvidenceWindow{From: through.Add(-DefaultEvidenceWindow), Through: through}) {
 		t.Fatalf("tenant A evidence window = %+v", reportA.EvidenceWindow)
 	}
+	if reportA.Custody.Total != 1 || reportA.Custody.Unrecorded != 1 ||
+		len(reportA.Custody.UnrecordedCertificates) != 1 ||
+		reportA.Custody.UnrecordedCertificates[0].ID != "cert-a" || packA.Custody.Unrecorded != 1 {
+		t.Fatalf("tenant A custody evidence = report=%+v outer=%+v", reportA.Custody, packA.Custody)
+	}
 	for _, id := range []string{"soc2-key-management", "soc2-cc6-access-control", "soc2-cc7-monitoring-audit-evidence", "soc2-cc8-change-management-evidence"} {
 		mustHaveControl(t, reportA.Controls, id, "gap")
 	}
@@ -108,6 +125,9 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 	_, reportB := serveEvidencePack(t, handler, signer, servedTenantB, servedTenantA)
 	if reportB.TenantID != servedTenantB {
 		t.Fatalf("tenant B signed manifest tenant = %q", reportB.TenantID)
+	}
+	if reportB.Custody.Total != 1 || reportB.Custody.Recorded != 1 || reportB.Custody.Unrecorded != 0 {
+		t.Fatalf("tenant B custody evidence = %+v", reportB.Custody)
 	}
 	mustHaveControl(t, reportB.Controls, "soc2-cc7-monitoring-audit-evidence", "evidenced")
 	for _, id := range []string{"soc2-key-management", "soc2-cc6-access-control", "soc2-cc8-change-management-evidence"} {

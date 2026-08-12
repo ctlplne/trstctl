@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 // relayChannel adapts the transport client to the relay runtime's Channel
@@ -82,6 +83,29 @@ func (r relayChannel) ReportJobResult(ctx context.Context, jobID int64, attempt 
 	}
 	return resp.Accepted, nil
 }
+
+func (r relayChannel) ReportJobResultWithCustody(ctx context.Context, jobID int64, attempt int,
+	outcome, detail, evidenceDigest, credentialFingerprint string, record custody.Record) (bool, error) {
+	id := r.id()
+	if id == nil {
+		return false, errors.New("trstctl-agent: cannot sign a job receipt before enrollment")
+	}
+	if record.Origin == custody.OriginHostAgent && record.GeneratedBy == "" {
+		record.GeneratedBy = id.CommonName()
+	}
+	req, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(),
+		jobID, attempt, outcome, detail, evidenceDigest, credentialFingerprint, record, r.clock().Unix())
+	if err != nil {
+		return false, err
+	}
+	resp, err := r.c.ReportJobResult(ctx, req)
+	if err != nil {
+		return false, err
+	}
+	return resp.Accepted, nil
+}
+
+var _ relay.CustodyReceiptChannel = relayChannel{}
 
 func (r relayChannel) clock() time.Time {
 	if r.now != nil {
