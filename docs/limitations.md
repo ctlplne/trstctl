@@ -719,11 +719,18 @@ never live in the API process. What you can do end to end against the running bi
   keeps a still-valid cached list rather than discarding it. Both fail-closed
   properties are mutation-verified, and the heartbeat reports cached-but-stale as its
   own state — it is working as designed and looks exactly like an outage.
-  Enrolment proxy for dark segments (A4): a relay started with
-  `--enroll-proxy-listen` serves ACME, EST and SCEP on the LAN so hosts and devices
-  with no route to the control plane can enrol through the one outbound pipe the
-  relay already has. Stock clients (certbot, sscep, estclient) point at it
-  unmodified.
+  Enrolment proxy for dark segments (A4): a network-role relay started with
+  `--enroll-proxy-listen`, `--enroll-proxy-segment`,
+  `--enroll-proxy-public-url`, and `--enroll-proxy-upstream` serves ACME, EST and
+  SCEP on the LAN so hosts and devices with no route to the control plane can enrol
+  through the one outbound pipe the relay already has. Stock clients (certbot,
+  sscep, estclient) point at the stable public URL unmodified. The agent listener is
+  HTTP; the public URL is HTTPS, so the segment's TLS-terminating load balancer
+  terminates that public TLS connection before selecting a relay. Every redundant
+  relay for one segment uses the SAME public URL. That detail is load-bearing for
+  ACME: directory, account, order, authorization, challenge, finalize, and
+  certificate resources are absolute URLs, and a different authority would send
+  the stock client outside the relay path or strand it on the process that died.
   IT MAKES NO TRUST DECISION, and that is the design rather than a caveat. The relay
   sits inside the customer's network, which is where an attacker with a foothold
   already is, so a proxy that interpreted a challenge, cached an authorization, or
@@ -736,12 +743,23 @@ never live in the API process. What you can do end to end against the running bi
   The forwarded paths are an allowlist, not a catch-all: a segment able to reach
   /api/v1 through a relay would hold the control plane's entire administrative
   surface, which is a far larger grant than "devices here can enrol".
-  Failover: several `--enroll-proxy-upstream` endpoints give automatic failover when
-  one stops answering. It works because the proxy is stateless — an ACME order lives
-  in the control plane, not in a relay — so a client whose endpoint dies simply
-  retries and its order is still there. A 5xx FROM the control plane is NOT a
-  failover trigger: it is an answer, and retrying elsewhere would ask a second
-  endpoint the same question while hiding the real error from the client.
+  Two kinds of failover stay separate. Several `--enroll-proxy-upstream` values let
+  ONE relay choose another control-plane endpoint after a transport failure. Several
+  relay processes behind the SAME public URL let the segment frontend select a
+  secondary relay after the primary process dies. Both work because the proxy is
+  stateless — an ACME order lives in the control plane, not in a relay — so the
+  client retries through another path and its order is still there. A 5xx FROM the
+  control plane is NOT a failover trigger: it is an answer, and retrying elsewhere
+  would ask a second endpoint the same question while hiding the real error.
+  Every heartbeat preserves the relay's segment, public URL, verified,
+  unavailable, and not-yet-verified upstream counts,
+  forwarded/refused/failure counters, and last-forward/last-upstream-failover times
+  in the immutable event stream. The authenticated agents API and Protocols console
+  group those certificate-bound rows by segment AND public URL. That lets an
+  operator distinguish no report, proxy off, no verified upstream, degraded
+  upstreams, one relay, and actual relay redundancy. Counters reset when the relay
+  process restarts; the projected timestamps remain durable evidence of the last
+  observed activity.
   Third-party connectors in the relay (E4): a relay started with
   `--connector-plugin-dir` executes signature-verified WASM connectors inside the
   customer's network, under a capability grant its own operator sets. The control

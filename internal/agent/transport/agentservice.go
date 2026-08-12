@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -86,6 +87,30 @@ type HeartbeatRequest struct {
 	// of certificates/keys it manages). Kept coarse; the rich inventory flows over
 	// the discovery path.
 	Inventory map[string]int64 `json:"inventory,omitempty"`
+	// EnrollmentProxy is the relay's measured dark-segment enrollment posture.
+	// Nil means this agent build cannot report the feature; a non-nil report with
+	// Serving=false means the current build explicitly says it is off.
+	// Nothing is authorized from these values. The server derives tenant, agent
+	// identity, and relay role from the verified client certificate.
+	EnrollmentProxy *EnrollmentProxyReport `json:"enrollment_proxy,omitempty"`
+}
+
+// EnrollmentProxyReport is metadata-only evidence from one relay process.
+// Counters are process-lifetime values. Timestamps let the event-sourced control
+// plane preserve which relay most recently carried traffic and when its own
+// control-plane endpoint pool last failed over, even after that process exits.
+type EnrollmentProxyReport struct {
+	Serving            bool       `json:"serving"`
+	Segment            string     `json:"segment,omitempty"`
+	PublicURL          string     `json:"public_url,omitempty"`
+	HealthyUpstreams   int        `json:"healthy_upstreams"`
+	UnhealthyUpstreams int        `json:"unhealthy_upstreams"`
+	UnknownUpstreams   int        `json:"unknown_upstreams"`
+	UpstreamFailures   int64      `json:"upstream_failures"`
+	ForwardedRequests  int64      `json:"forwarded_requests"`
+	RefusedRequests    int64      `json:"refused_requests"`
+	LastForwardedAt    *time.Time `json:"last_forwarded_at,omitempty"`
+	LastFailoverAt     *time.Time `json:"last_failover_at,omitempty"`
 }
 
 // HeartbeatResponse acknowledges a beat and tells the agent when the control plane

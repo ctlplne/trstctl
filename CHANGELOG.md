@@ -13,6 +13,32 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Dark-segment enrollment relay failover is observable and stock-ACME-safe (A4, 2026-08-12)
+
+- **A relay returned an ACME directory whose absolute URLs named the control
+  plane.** A stock client followed the second URL directly, so the claimed dark-
+  segment path failed even though isolated `/directory` and `/acme/*` proxy tests
+  passed. Relays now require one stable `--enroll-proxy-public-url` and preserve
+  that HTTP authority while the socket still dials only the configured control-
+  plane endpoint. Signed request bodies and protocol responses remain byte-for-
+  byte pass-through, and the proxy still attaches no agent credential.
+- **Control-plane endpoint failover was mistaken for relay redundancy.** Each
+  certificate-bound network relay now reports its operator-named
+  `--enroll-proxy-segment`, public URL, verified/unavailable/unverified upstream counts,
+  process-lifetime forwarded/refused/failure counters, and last forward/failover
+  times on its authenticated heartbeat. The immutable event stream rebuilds the
+  tenant projection; `GET /api/v1/agents`, generated SDKs, and the Protocols
+  console show the exact per-segment relay rows and redundancy count.
+- A configured endpoint starts **unverified**, not healthy. Only a completed
+  response proves health; retry-cooldown expiry merely permits another probe.
+  A real HTTP 502 from the control plane remains the client's response, while
+  only an out-of-band transport failure changes upstreams.
+- The assembled acceptance starts two relay subprocesses behind one segment URL.
+  A stock `golang.org/x/crypto/acme` client registers through the primary, the
+  primary process dies, and the same client completes a real signer-backed order
+  through the secondary. Its transport refuses the control-plane authority and
+  records zero attempted direct routes.
+
 ### The repository has an intake path and a code of conduct (2026-08-02)
 - **README.md and CONTRIBUTING.md told readers to open an issue; nothing was
   behind that invitation.** `.github/ISSUE_TEMPLATE/` now carries a bug report

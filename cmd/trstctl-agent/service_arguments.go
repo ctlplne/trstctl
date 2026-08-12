@@ -66,5 +66,16 @@ func serviceArguments(o agentOptions) []string {
 			args = append(args, "--relay-poll-every", o.relayPollEvery.String())
 		}
 	}
+	// A4: a Windows network relay must keep serving the same dark segment and
+	// stable public authority after SCM restart. Dropping any one of these flags
+	// either turns the proxy off or makes stock ACME URLs leave the relay path.
+	if o.enrollProxyListen != "" {
+		args = append(args,
+			"--enroll-proxy-listen", o.enrollProxyListen,
+			"--enroll-proxy-upstream", o.enrollProxyUpstream,
+			"--enroll-proxy-segment", o.enrollProxySegment,
+			"--enroll-proxy-public-url", o.enrollProxyPublicURL,
+		)
+	}
 	return args
 }

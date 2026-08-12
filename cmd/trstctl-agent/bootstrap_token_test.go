@@ -145,9 +145,31 @@ func TestAgentK8sIdentityFlagsAreExposed(t *testing.T) {
 		"-prepare-identity-uid int",
 		"-prepare-identity-gid int",
 		"-k8s",
+		"-enroll-proxy-segment string",
+		"-enroll-proxy-public-url string",
 	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("trstctl-agent --help missing %q; output:\n%s", want, help)
+		}
+	}
+}
+
+func TestWindowsServiceArgumentsPreserveEnrollmentRelayTopology(t *testing.T) {
+	args := serviceArguments(agentOptions{
+		enrollProxyListen:    "0.0.0.0:8443",
+		enrollProxyUpstream:  "https://cp-a.example,https://cp-b.example",
+		enrollProxySegment:   "plant-7",
+		enrollProxyPublicURL: "https://enrol.plant-7.example",
+	})
+	joined := strings.Join(args, "\x00")
+	for _, want := range []string{
+		"--enroll-proxy-listen\x000.0.0.0:8443",
+		"--enroll-proxy-upstream\x00https://cp-a.example,https://cp-b.example",
+		"--enroll-proxy-segment\x00plant-7",
+		"--enroll-proxy-public-url\x00https://enrol.plant-7.example",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("Windows service arguments lost enrollment relay topology %q: %q", want, args)
 		}
 	}
 }
@@ -443,7 +465,7 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 			http.Error(w, "bad csr", http.StatusBadRequest)
 			return
 		}
-		chain, err := agentCA.SignClientCSRWithTenant(csr, "tenant-a", nil, time.Hour)
+		chain, err := agentCA.SignClientCSRWithTenant(csr, "tenant-a", []string{mtls.AgentRoleNetwork}, time.Hour)
 		if err != nil {
 			http.Error(w, "sign csr", http.StatusBadRequest)
 			return
@@ -478,15 +500,19 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := agentOptions{
-		enrollURL:   "https://" + enrollmentListener.Addr().String(),
-		tokenFile:   tokenPath,
-		caBundle:    caPath,
-		serverAddr:  grpcListener.Addr().String(),
-		serverName:  "agent.trstctl.local",
-		commonName:  "agent-one",
-		keyPath:     filepath.Join(dir, "agent.key"),
-		certPath:    filepath.Join(dir, "agent.crt"),
-		rotateEvery: time.Hour,
+		enrollURL:            "https://" + enrollmentListener.Addr().String(),
+		tokenFile:            tokenPath,
+		caBundle:             caPath,
+		serverAddr:           grpcListener.Addr().String(),
+		serverName:           "agent.trstctl.local",
+		commonName:           "agent-one",
+		keyPath:              filepath.Join(dir, "agent.key"),
+		certPath:             filepath.Join(dir, "agent.crt"),
+		rotateEvery:          time.Hour,
+		enrollProxyListen:    "127.0.0.1:0",
+		enrollProxyUpstream:  "https://" + enrollmentListener.Addr().String(),
+		enrollProxySegment:   "plant-7",
+		enrollProxyPublicURL: "https://enrol.plant-7.example",
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	result := make(chan error, 1)
@@ -496,6 +522,10 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 	case heartbeat := <-channelService.heartbeats:
 		if heartbeat.AgentID != "agent-one" || heartbeat.Status != "active" || heartbeat.CertSerial == "" {
 			t.Fatalf("initial heartbeat = %+v", heartbeat)
+		}
+		if proxy := heartbeat.EnrollmentProxy; proxy == nil || !proxy.Serving || proxy.Segment != "plant-7" ||
+			proxy.PublicURL != "https://enrol.plant-7.example" || proxy.HealthyUpstreams != 0 || proxy.UnknownUpstreams != 1 {
+			t.Fatalf("initial heartbeat enrollment proxy = %+v, want assembled serving topology", proxy)
 		}
 		cancel()
 	case <-time.After(10 * time.Second):

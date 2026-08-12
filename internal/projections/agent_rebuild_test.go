@@ -44,8 +44,16 @@ func TestAgentHeartbeatRebuildFeedsAgentsAPI(t *testing.T) {
 	log := openLog(t)
 
 	appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "Acme"})
+	forwardedAt := time.Date(2026, 8, 12, 13, 58, 0, 0, time.UTC)
+	failoverAt := time.Date(2026, 8, 12, 13, 57, 0, 0, time.UTC)
 	appendJSONEvent(t, log, projections.EventAgentHeartbeat, tenantA, projections.AgentHeartbeat{
 		ID: replayAgentID, Agent: "edge-replay-1", Version: "1.2.3", Status: "active", CertSerial: "01",
+		EnrollmentProxy: &projections.EnrollmentProxyReport{
+			Serving: true, Segment: "plant-7", PublicURL: "https://enrol.plant-7.example",
+			HealthyUpstreams: 1, UnhealthyUpstreams: 1, UpstreamFailures: 2,
+			ForwardedRequests: 41, RefusedRequests: 3,
+			LastForwardedAt: &forwardedAt, LastFailoverAt: &failoverAt,
+		},
 	})
 	appendJSONEvent(t, log, projections.EventAgentHeartbeat, tenantA, projections.AgentHeartbeat{
 		ID: replayAgentID, Agent: "edge-replay-1", Version: "1.2.4", Status: "degraded", CertSerial: "02",
@@ -73,10 +81,21 @@ func TestAgentHeartbeatRebuildFeedsAgentsAPI(t *testing.T) {
 
 	var body struct {
 		Agents []struct {
-			ID      string `json:"id"`
-			Name    string `json:"name"`
-			Status  string `json:"status"`
-			Version string `json:"version"`
+			ID              string `json:"id"`
+			Name            string `json:"name"`
+			Status          string `json:"status"`
+			Version         string `json:"version"`
+			EnrollmentProxy struct {
+				State             string `json:"state"`
+				Segment           string `json:"segment"`
+				PublicURL         string `json:"public_url"`
+				UpstreamFailures  int64  `json:"upstream_failures"`
+				UnknownUpstreams  int    `json:"unknown_upstreams"`
+				ForwardedRequests int64  `json:"forwarded_requests"`
+				RefusedRequests   int64  `json:"refused_requests"`
+				LastForwardedAt   string `json:"last_forwarded_at"`
+				LastFailoverAt    string `json:"last_failover_at"`
+			} `json:"enrollment_proxy"`
 		} `json:"agents"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
@@ -88,6 +107,12 @@ func TestAgentHeartbeatRebuildFeedsAgentsAPI(t *testing.T) {
 	got := body.Agents[0]
 	if got.ID != replayAgentID || got.Name != "edge-replay-1" || got.Status != "degraded" || got.Version != "1.2.4" {
 		t.Fatalf("rebuilt agent = %+v, want id/name/status/version from heartbeat projection", got)
+	}
+	proxy := got.EnrollmentProxy
+	if proxy.State != "degraded" || proxy.Segment != "plant-7" || proxy.PublicURL != "https://enrol.plant-7.example" ||
+		proxy.UpstreamFailures != 2 || proxy.ForwardedRequests != 41 || proxy.RefusedRequests != 3 ||
+		proxy.LastForwardedAt == "" || proxy.LastFailoverAt == "" {
+		t.Fatalf("rebuilt enrollment relay evidence = %+v, want exact durable topology and failover facts", proxy)
 	}
 
 	agents, err := s.ListAgentsPage(ctx, tenantA, nil, store.ZeroUUID, 20)

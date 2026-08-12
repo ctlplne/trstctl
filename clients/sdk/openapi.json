@@ -1618,6 +1618,9 @@
             },
             "type": "array"
           },
+          "enrollment_proxy": {
+            "$ref": "#/components/schemas/AgentEnrollmentProxyStatus"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -1684,7 +1687,8 @@
           "roles",
           "role_source",
           "relay_capabilities",
-          "workload_api"
+          "workload_api",
+          "enrollment_proxy"
         ],
         "type": "object"
       },
@@ -1764,6 +1768,71 @@
           "reported_over",
           "metadata_only",
           "private_key_bytes"
+        ],
+        "type": "object"
+      },
+      "AgentEnrollmentProxyStatus": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "forwarded_requests": {
+            "type": "integer"
+          },
+          "healthy_upstreams": {
+            "type": "integer"
+          },
+          "last_failover_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_forwarded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "public_url": {
+            "type": "string"
+          },
+          "refused_requests": {
+            "type": "integer"
+          },
+          "reported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "segment": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "serving",
+              "degraded",
+              "unavailable",
+              "unverified",
+              "not_serving",
+              "unreported"
+            ],
+            "type": "string"
+          },
+          "unhealthy_upstreams": {
+            "type": "integer"
+          },
+          "unknown_upstreams": {
+            "type": "integer"
+          },
+          "upstream_failures": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "healthy_upstreams",
+          "unhealthy_upstreams",
+          "unknown_upstreams",
+          "upstream_failures",
+          "forwarded_requests",
+          "refused_requests",
+          "detail"
         ],
         "type": "object"
       },

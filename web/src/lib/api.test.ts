@@ -862,6 +862,15 @@ describe("api CSRF contract (SEC-001)", () => {
 });
 
 describe("agent contract", () => {
+  it("reads an exact agent page so topology callers can follow every cursor", async () => {
+    mockFetch(200, JSON.stringify({ agents: [], next_cursor: "cursor-3" }));
+
+    const page = await api.agentPage({ limit: 100, cursor: "cursor-2" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/agents?limit=100&cursor=cursor-2");
+    expect(page.next_cursor).toBe("cursor-3");
+  });
+
   it("lists agents from the served envelope", async () => {
     mockFetch(
       200,

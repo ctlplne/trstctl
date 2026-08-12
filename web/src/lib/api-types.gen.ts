@@ -417,6 +417,7 @@ export interface ActiveActiveIssuancePlan {
 
 export interface Agent {
   discovery_capabilities: AgentDiscoveryCapability[];
+  enrollment_proxy: AgentEnrollmentProxyStatus;
   id: string;
   inventory_report_path: string;
   last_seen_at?: string;
@@ -455,6 +456,22 @@ export interface AgentDiscoveryCapability {
   private_key_bytes: boolean;
   reported_over: string;
   source_kind: string;
+}
+
+export interface AgentEnrollmentProxyStatus {
+  detail: string;
+  forwarded_requests: number;
+  healthy_upstreams: number;
+  last_failover_at?: string;
+  last_forwarded_at?: string;
+  public_url?: string;
+  refused_requests: number;
+  reported_at?: string;
+  segment?: string;
+  state: "serving" | "degraded" | "unavailable" | "unverified" | "not_serving" | "unreported";
+  unhealthy_upstreams: number;
+  unknown_upstreams: number;
+  upstream_failures: number;
 }
 
 export interface AgentJobPosture {

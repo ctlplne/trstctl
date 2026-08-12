@@ -137,6 +137,70 @@
           "go_type": "map<string,int64>",
           "name": "inventory",
           "presence": "optional"
+        },
+        {
+          "go_type": "*transport.EnrollmentProxyReport",
+          "name": "enrollment_proxy",
+          "presence": "optional"
+        }
+      ]
+    },
+    "EnrollmentProxyReport": {
+      "fields": [
+        {
+          "go_type": "bool",
+          "name": "serving",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "segment",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "public_url",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int",
+          "name": "healthy_upstreams",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "unhealthy_upstreams",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "unknown_upstreams",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "upstream_failures",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "forwarded_requests",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "refused_requests",
+          "presence": "required"
+        },
+        {
+          "go_type": "*time.Time",
+          "name": "last_forwarded_at",
+          "presence": "optional"
+        },
+        {
+          "go_type": "*time.Time",
+          "name": "last_failover_at",
+          "presence": "optional"
         }
       ]
     },

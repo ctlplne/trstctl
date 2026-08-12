@@ -267,6 +267,17 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/cert_serial", opaque), privacyRule("/roles", opaque),
 		privacyRule("/workload_api_served", opaque),
 		privacyRule("/workload_api_svids", opaque),
+		privacyRule("/enrollment_proxy/serving", opaque),
+		privacyRule("/enrollment_proxy/segment", opaque),
+		privacyRule("/enrollment_proxy/public_url", opaque),
+		privacyRule("/enrollment_proxy/healthy_upstreams", opaque),
+		privacyRule("/enrollment_proxy/unhealthy_upstreams", opaque),
+		privacyRule("/enrollment_proxy/unknown_upstreams", opaque),
+		privacyRule("/enrollment_proxy/upstream_failures", opaque),
+		privacyRule("/enrollment_proxy/forwarded_requests", opaque),
+		privacyRule("/enrollment_proxy/refused_requests", opaque),
+		privacyRule("/enrollment_proxy/last_forwarded_at", opaque),
+		privacyRule("/enrollment_proxy/last_failover_at", opaque),
 	)
 	agentCertRenewed := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),

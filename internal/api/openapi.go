@@ -3842,7 +3842,8 @@ func componentSchemas() map[string]*Schema {
 		// census so the console cannot advertise an executor the binary lacks.
 		"relay_capabilities": {Type: "array", Items: ref("AgentRelayCapability")},
 		"workload_api":       ref("AgentWorkloadAPIStatus"),
-	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities", "workload_api")
+		"enrollment_proxy":   ref("AgentEnrollmentProxyStatus"),
+	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities", "workload_api", "enrollment_proxy")
 	// B3: whether this host serves the SPIFFE Workload API for its own workloads.
 	agentWorkloadAPIStatus := object(map[string]*Schema{
 		"state":        {Type: "string", Enum: []string{"serving", "not_serving", "unreported"}},
@@ -3850,6 +3851,21 @@ func componentSchemas() map[string]*Schema {
 		"reported_at":  timestamp(),
 		"detail":       str(),
 	}, "state", "svids_issued", "detail")
+	agentEnrollmentProxyStatus := object(map[string]*Schema{
+		"state":               {Type: "string", Enum: []string{"serving", "degraded", "unavailable", "unverified", "not_serving", "unreported"}},
+		"segment":             str(),
+		"public_url":          str(),
+		"healthy_upstreams":   {Type: "integer"},
+		"unhealthy_upstreams": {Type: "integer"},
+		"unknown_upstreams":   {Type: "integer"},
+		"upstream_failures":   {Type: "integer"},
+		"forwarded_requests":  {Type: "integer"},
+		"refused_requests":    {Type: "integer"},
+		"last_forwarded_at":   timestamp(),
+		"last_failover_at":    timestamp(),
+		"reported_at":         timestamp(),
+		"detail":              str(),
+	}, "state", "healthy_upstreams", "unhealthy_upstreams", "unknown_upstreams", "upstream_failures", "forwarded_requests", "refused_requests", "detail")
 	agentRelayCapability := object(map[string]*Schema{
 		"kind":         str(),
 		"connectors":   {Type: "array", Items: str()},
@@ -4653,6 +4669,7 @@ func componentSchemas() map[string]*Schema {
 		"AgentDiscoveryCapability":                 agentDiscoveryCapability,
 		"Agent":                                    agent,
 		"AgentWorkloadAPIStatus":                   agentWorkloadAPIStatus,
+		"AgentEnrollmentProxyStatus":               agentEnrollmentProxyStatus,
 		"AgentRelayCapability":                     agentRelayCapability,
 		"AgentList":                                agentList,
 		"EnrollmentTokenRequest":                   enrollmentTokenReq,

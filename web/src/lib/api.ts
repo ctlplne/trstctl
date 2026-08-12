@@ -53,6 +53,7 @@ import type {
   ADCSDatabaseList as GenADCSDatabaseList,
   ADCSTemplate as GenADCSTemplate,
   Agent as GenAgent,
+  AgentList as GenAgentList,
   AgentCertRevocation,
   AgentCertRevocationRequest,
   AgentOffboardRequest,
@@ -491,6 +492,7 @@ export type ADCSInventorySource = GenADCSInventorySource;
 export type ADCSDatabaseList = GenADCSDatabaseList;
 export type ADCSTemplate = GenADCSTemplate;
 export type Agent = GenAgent;
+export type AgentList = GenAgentList;
 export type EnrollmentToken = GenEnrollmentToken;
 export type EnrollmentTokenRequest = GenEnrollmentTokenRequest;
 export type Attestation = GenAttestation;
@@ -1451,6 +1453,7 @@ export interface Api {
    * action use: it ensures an owner, creates the identity, and issues it. */
   issueCertificate(input: IssueCertificateInput): Promise<Identity>;
   agents(): Promise<Agent[]>;
+  agentPage(options?: { limit?: number; cursor?: string }): Promise<AgentList>;
   createEnrollmentToken(input?: EnrollmentTokenRequest): Promise<EnrollmentToken>;
   offboardAgent(id: string, input: AgentOffboardRequest): Promise<AgentOffboardResponse>;
   discoverySources(options?: { limit?: number; cursor?: string }): Promise<DiscoverySourceList>;
@@ -1884,6 +1887,7 @@ const liveApi: Api = {
     );
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
+  agentPage: (options) => req<AgentList>(`/api/v1/agents${pageQueryString(options)}`),
   createEnrollmentToken: (input) => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens", enrollmentTokenRequest(input)),
   offboardAgent: (id, input) => mutate<AgentOffboardResponse>("POST", `/api/v1/agents/${encodeURIComponent(id)}/offboard`, input),
   discoverySources: (options) => req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),

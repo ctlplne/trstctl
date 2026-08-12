@@ -569,6 +569,7 @@ Agent = TypedDict(
     'Agent',
     {
         'discovery_capabilities': list[dict[str, Any]],
+        'enrollment_proxy': dict[str, Any],
         'id': str,
         'inventory_report_path': str,
         'last_seen_at': str,
@@ -619,6 +620,26 @@ AgentDiscoveryCapability = TypedDict(
         'private_key_bytes': bool,
         'reported_over': str,
         'source_kind': str,
+    },
+    total=False,
+)
+
+AgentEnrollmentProxyStatus = TypedDict(
+    'AgentEnrollmentProxyStatus',
+    {
+        'detail': str,
+        'forwarded_requests': int,
+        'healthy_upstreams': int,
+        'last_failover_at': str,
+        'last_forwarded_at': str,
+        'public_url': str,
+        'refused_requests': int,
+        'reported_at': str,
+        'segment': str,
+        'state': str,
+        'unhealthy_upstreams': int,
+        'unknown_upstreams': int,
+        'upstream_failures': int,
     },
     total=False,
 )

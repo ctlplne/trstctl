@@ -118,6 +118,76 @@ type agentResponse struct {
 	RelayCapabilities []agentRelayCapabilityResponse `json:"relay_capabilities"`
 	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
 	WorkloadAPI agentWorkloadAPIStatus `json:"workload_api"`
+	// EnrollmentProxy is this certificate-bound relay's measured A4 topology
+	// and health. It is evidence only; no capability is granted from the report.
+	EnrollmentProxy agentEnrollmentProxyStatus `json:"enrollment_proxy"`
+}
+
+type agentEnrollmentProxyStatus struct {
+	State              string `json:"state"`
+	Segment            string `json:"segment,omitempty"`
+	PublicURL          string `json:"public_url,omitempty"`
+	HealthyUpstreams   int    `json:"healthy_upstreams"`
+	UnhealthyUpstreams int    `json:"unhealthy_upstreams"`
+	UnknownUpstreams   int    `json:"unknown_upstreams"`
+	UpstreamFailures   int64  `json:"upstream_failures"`
+	ForwardedRequests  int64  `json:"forwarded_requests"`
+	RefusedRequests    int64  `json:"refused_requests"`
+	LastForwardedAt    string `json:"last_forwarded_at,omitempty"`
+	LastFailoverAt     string `json:"last_failover_at,omitempty"`
+	ReportedAt         string `json:"reported_at,omitempty"`
+	Detail             string `json:"detail"`
+}
+
+const (
+	enrollmentProxyServing     = "serving"
+	enrollmentProxyDegraded    = "degraded"
+	enrollmentProxyUnavailable = "unavailable"
+	enrollmentProxyUnverified  = "unverified"
+	enrollmentProxyNotServing  = "not_serving"
+	enrollmentProxyUnreported  = "unreported"
+)
+
+func agentEnrollmentProxyFor(a store.Agent) agentEnrollmentProxyStatus {
+	out := agentEnrollmentProxyStatus{
+		Segment: a.EnrollmentProxySegment, PublicURL: a.EnrollmentProxyPublicURL,
+		HealthyUpstreams:   a.EnrollmentProxyHealthyUpstreams,
+		UnhealthyUpstreams: a.EnrollmentProxyUnhealthyUpstreams,
+		UnknownUpstreams:   a.EnrollmentProxyUnknownUpstreams,
+		UpstreamFailures:   a.EnrollmentProxyUpstreamFailures,
+		ForwardedRequests:  a.EnrollmentProxyForwarded,
+		RefusedRequests:    a.EnrollmentProxyRefused,
+	}
+	if a.EnrollmentProxyLastForwardedAt != nil {
+		out.LastForwardedAt = a.EnrollmentProxyLastForwardedAt.UTC().Format(time.RFC3339)
+	}
+	if a.EnrollmentProxyLastFailoverAt != nil {
+		out.LastFailoverAt = a.EnrollmentProxyLastFailoverAt.UTC().Format(time.RFC3339)
+	}
+	if a.EnrollmentProxyReportedAt != nil {
+		out.ReportedAt = a.EnrollmentProxyReportedAt.UTC().Format(time.RFC3339)
+	}
+	switch {
+	case a.EnrollmentProxyReportedAt == nil:
+		out.State = enrollmentProxyUnreported
+		out.Detail = "This agent has never reported enrollment-relay posture. Upgrade it before treating the segment as uncovered."
+	case !a.EnrollmentProxyServing:
+		out.State = enrollmentProxyNotServing
+		out.Detail = "This agent explicitly reports that its enrollment proxy is not serving."
+	case a.EnrollmentProxyHealthyUpstreams == 0 && a.EnrollmentProxyUnknownUpstreams > 0:
+		out.State = enrollmentProxyUnverified
+		out.Detail = "The relay is serving, but no configured control-plane endpoint has completed a response in this process yet."
+	case a.EnrollmentProxyHealthyUpstreams == 0:
+		out.State = enrollmentProxyUnavailable
+		out.Detail = "The relay process is serving, but no configured control-plane endpoint currently answers."
+	case a.EnrollmentProxyUnhealthyUpstreams > 0 || a.EnrollmentProxyUnknownUpstreams > 0:
+		out.State = enrollmentProxyDegraded
+		out.Detail = "The relay has a verified control-plane route, but at least one other endpoint is unavailable or has not answered yet."
+	default:
+		out.State = enrollmentProxyServing
+		out.Detail = "The relay is serving and every configured control-plane endpoint currently answers."
+	}
+	return out
 }
 
 // agentWorkloadAPIStatus is what a host reports about the Workload API it
@@ -222,6 +292,7 @@ func toAgentResponse(a store.Agent) agentResponse {
 		RoleSource:            agentRoleSourceCertificate,
 		RelayCapabilities:     agentRelayCapabilities(),
 		WorkloadAPI:           agentWorkloadAPIFor(a),
+		EnrollmentProxy:       agentEnrollmentProxyFor(a),
 	}
 	if len(out.Roles) == 0 {
 		out.Roles = []string{}

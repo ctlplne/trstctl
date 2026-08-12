@@ -54,6 +54,7 @@ public final class OpenApiSchemas {
       "AgentCertRevocation",
       "AgentCertRevocationRequest",
       "AgentDiscoveryCapability",
+      "AgentEnrollmentProxyStatus",
       "AgentJobPosture",
       "AgentJobQueue",
       "AgentJobReceipts",

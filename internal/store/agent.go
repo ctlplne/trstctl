@@ -36,10 +36,25 @@ type Agent struct {
 	WorkloadAPIServed     bool
 	WorkloadAPISVIDs      int64
 	WorkloadAPIReportedAt *time.Time
-	CreatedAt             time.Time
-	OffboardedAt          *time.Time
-	OffboardedBy          string
-	OffboardReason        string
+	// EnrollmentProxy* is the latest measured relay topology plus durable
+	// last-activity timestamps. ReportedAt nil means this agent predates the
+	// report. Serving false with ReportedAt set is an explicit current answer.
+	EnrollmentProxyServing            bool
+	EnrollmentProxySegment            string
+	EnrollmentProxyPublicURL          string
+	EnrollmentProxyHealthyUpstreams   int
+	EnrollmentProxyUnhealthyUpstreams int
+	EnrollmentProxyUnknownUpstreams   int
+	EnrollmentProxyUpstreamFailures   int64
+	EnrollmentProxyForwarded          int64
+	EnrollmentProxyRefused            int64
+	EnrollmentProxyLastForwardedAt    *time.Time
+	EnrollmentProxyLastFailoverAt     *time.Time
+	EnrollmentProxyReportedAt         *time.Time
+	CreatedAt                         time.Time
+	OffboardedAt                      *time.Time
+	OffboardedBy                      string
+	OffboardReason                    string
 }
 
 // AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
@@ -80,8 +95,14 @@ func (s *Store) UpsertAgent(ctx context.Context, a Agent) error {
 func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO agents (id, tenant_id, name, status, version, roles, last_seen_at,
-		                     workload_api_served, workload_api_svids, workload_api_reported_at)
-		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10)
+		                     workload_api_served, workload_api_svids, workload_api_reported_at,
+		                     enrollment_proxy_serving, enrollment_proxy_segment, enrollment_proxy_public_url,
+		                     enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams, enrollment_proxy_unknown_upstreams,
+		                     enrollment_proxy_upstream_failures, enrollment_proxy_forwarded,
+		                     enrollment_proxy_refused, enrollment_proxy_last_forwarded_at,
+		                     enrollment_proxy_last_failover_at, enrollment_proxy_reported_at)
+		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10,
+		         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
 		        status = CASE WHEN agents.status = 'offboarded' THEN agents.status ELSE EXCLUDED.status END,
@@ -103,9 +124,53 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		        workload_api_reported_at = CASE
 		            WHEN EXCLUDED.workload_api_reported_at IS NULL THEN agents.workload_api_reported_at
 		            WHEN agents.status = 'offboarded' THEN agents.workload_api_reported_at
-		            ELSE EXCLUDED.workload_api_reported_at END`,
+		            ELSE EXCLUDED.workload_api_reported_at END,
+		        enrollment_proxy_serving = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_serving
+		            ELSE EXCLUDED.enrollment_proxy_serving END,
+		        enrollment_proxy_segment = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_segment
+		            WHEN EXCLUDED.enrollment_proxy_segment = '' THEN agents.enrollment_proxy_segment
+		            ELSE EXCLUDED.enrollment_proxy_segment END,
+		        enrollment_proxy_public_url = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_public_url
+		            WHEN EXCLUDED.enrollment_proxy_public_url = '' THEN agents.enrollment_proxy_public_url
+		            ELSE EXCLUDED.enrollment_proxy_public_url END,
+		        enrollment_proxy_healthy_upstreams = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_healthy_upstreams
+		            ELSE EXCLUDED.enrollment_proxy_healthy_upstreams END,
+		        enrollment_proxy_unhealthy_upstreams = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_unhealthy_upstreams
+		            ELSE EXCLUDED.enrollment_proxy_unhealthy_upstreams END,
+		        enrollment_proxy_unknown_upstreams = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_unknown_upstreams
+		            ELSE EXCLUDED.enrollment_proxy_unknown_upstreams END,
+		        enrollment_proxy_upstream_failures = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_upstream_failures
+		            ELSE EXCLUDED.enrollment_proxy_upstream_failures END,
+		        enrollment_proxy_forwarded = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_forwarded
+		            ELSE EXCLUDED.enrollment_proxy_forwarded END,
+		        enrollment_proxy_refused = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_refused
+		            ELSE EXCLUDED.enrollment_proxy_refused END,
+		        enrollment_proxy_last_forwarded_at = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_last_forwarded_at
+		            WHEN EXCLUDED.enrollment_proxy_last_forwarded_at IS NULL THEN agents.enrollment_proxy_last_forwarded_at
+		            ELSE GREATEST(agents.enrollment_proxy_last_forwarded_at, EXCLUDED.enrollment_proxy_last_forwarded_at) END,
+		        enrollment_proxy_last_failover_at = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_last_failover_at
+		            WHEN EXCLUDED.enrollment_proxy_last_failover_at IS NULL THEN agents.enrollment_proxy_last_failover_at
+		            ELSE GREATEST(agents.enrollment_proxy_last_failover_at, EXCLUDED.enrollment_proxy_last_failover_at) END,
+		        enrollment_proxy_reported_at = CASE
+		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_reported_at
+		            ELSE EXCLUDED.enrollment_proxy_reported_at END`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt,
-		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt)
+		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt,
+		a.EnrollmentProxyServing, a.EnrollmentProxySegment, a.EnrollmentProxyPublicURL,
+		a.EnrollmentProxyHealthyUpstreams, a.EnrollmentProxyUnhealthyUpstreams, a.EnrollmentProxyUnknownUpstreams,
+		a.EnrollmentProxyUpstreamFailures, a.EnrollmentProxyForwarded, a.EnrollmentProxyRefused,
+		a.EnrollmentProxyLastForwardedAt, a.EnrollmentProxyLastFailoverAt, a.EnrollmentProxyReportedAt)
 	return err
 }
 
@@ -275,11 +340,19 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 		return tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, status, version, roles, last_seen_at, created_at,
 			        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, ''),
-			        workload_api_served, workload_api_svids, workload_api_reported_at
+			        workload_api_served, workload_api_svids, workload_api_reported_at,
+			        enrollment_proxy_serving, enrollment_proxy_segment, enrollment_proxy_public_url,
+			        enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams, enrollment_proxy_unknown_upstreams,
+			        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
+			        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at
 			   FROM agents WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
 				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
-				&a.WorkloadAPIServed, &a.WorkloadAPISVIDs, &a.WorkloadAPIReportedAt)
+				&a.WorkloadAPIServed, &a.WorkloadAPISVIDs, &a.WorkloadAPIReportedAt,
+				&a.EnrollmentProxyServing, &a.EnrollmentProxySegment, &a.EnrollmentProxyPublicURL,
+				&a.EnrollmentProxyHealthyUpstreams, &a.EnrollmentProxyUnhealthyUpstreams, &a.EnrollmentProxyUnknownUpstreams,
+				&a.EnrollmentProxyUpstreamFailures, &a.EnrollmentProxyForwarded, &a.EnrollmentProxyRefused,
+				&a.EnrollmentProxyLastForwardedAt, &a.EnrollmentProxyLastFailoverAt, &a.EnrollmentProxyReportedAt)
 	})
 	return a, err
 }
@@ -299,7 +372,11 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 			rows, err = tx.Query(ctx,
 				`SELECT id::text, tenant_id::text, name, status, version, roles, last_seen_at, created_at,
 				        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, ''),
-				        workload_api_served, workload_api_svids, workload_api_reported_at
+				        workload_api_served, workload_api_svids, workload_api_reported_at,
+				        enrollment_proxy_serving, enrollment_proxy_segment, enrollment_proxy_public_url,
+				        enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams, enrollment_proxy_unknown_upstreams,
+				        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
+				        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1 AND (created_at, id) > ($2, $3)
 				  ORDER BY created_at, id
@@ -309,7 +386,11 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 			rows, err = tx.Query(ctx,
 				`SELECT id::text, tenant_id::text, name, status, version, roles, last_seen_at, created_at,
 				        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, ''),
-				        workload_api_served, workload_api_svids, workload_api_reported_at
+				        workload_api_served, workload_api_svids, workload_api_reported_at,
+				        enrollment_proxy_serving, enrollment_proxy_segment, enrollment_proxy_public_url,
+				        enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams, enrollment_proxy_unknown_upstreams,
+				        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
+				        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1
 				  ORDER BY created_at, id
@@ -324,7 +405,11 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 			var a Agent
 			if err := rows.Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
 				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
-				&a.WorkloadAPIServed, &a.WorkloadAPISVIDs, &a.WorkloadAPIReportedAt); err != nil {
+				&a.WorkloadAPIServed, &a.WorkloadAPISVIDs, &a.WorkloadAPIReportedAt,
+				&a.EnrollmentProxyServing, &a.EnrollmentProxySegment, &a.EnrollmentProxyPublicURL,
+				&a.EnrollmentProxyHealthyUpstreams, &a.EnrollmentProxyUnhealthyUpstreams, &a.EnrollmentProxyUnknownUpstreams,
+				&a.EnrollmentProxyUpstreamFailures, &a.EnrollmentProxyForwarded, &a.EnrollmentProxyRefused,
+				&a.EnrollmentProxyLastForwardedAt, &a.EnrollmentProxyLastFailoverAt, &a.EnrollmentProxyReportedAt); err != nil {
 				return err
 			}
 			out = append(out, a)

@@ -199,6 +199,7 @@ func currentAgentContract() agentContract {
 			Methods:  methods,
 		},
 		Messages: map[string]agentMessage{
+			"EnrollmentProxyReport":     {Fields: jsonFieldsOf(EnrollmentProxyReport{})},
 			"HeartbeatRequest":          {Fields: jsonFieldsOf(HeartbeatRequest{})},
 			"HeartbeatResponse":         {Fields: jsonFieldsOf(HeartbeatResponse{})},
 			"RenewRequest":              {Fields: jsonFieldsOf(RenewRequest{})},

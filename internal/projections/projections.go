@@ -1414,6 +1414,26 @@ type AgentHeartbeat struct {
 	// operator their host declined to serve when it simply cannot say.
 	WorkloadAPIServed *bool  `json:"workload_api_served,omitempty"`
 	WorkloadAPISVIDs  *int64 `json:"workload_api_svids,omitempty"`
+	// EnrollmentProxy is nil for an older agent and present for a current build,
+	// including when that build explicitly reports that its relay is off.
+	EnrollmentProxy *EnrollmentProxyReport `json:"enrollment_proxy,omitempty"`
+}
+
+// EnrollmentProxyReport is the durable, replayable topology/health evidence
+// carried by one agent. It authorizes nothing; the heartbeat's authenticated
+// tenant and agent identity remain envelope/transport facts.
+type EnrollmentProxyReport struct {
+	Serving            bool       `json:"serving"`
+	Segment            string     `json:"segment,omitempty"`
+	PublicURL          string     `json:"public_url,omitempty"`
+	HealthyUpstreams   int        `json:"healthy_upstreams"`
+	UnhealthyUpstreams int        `json:"unhealthy_upstreams"`
+	UnknownUpstreams   int        `json:"unknown_upstreams"`
+	UpstreamFailures   int64      `json:"upstream_failures"`
+	ForwardedRequests  int64      `json:"forwarded_requests"`
+	RefusedRequests    int64      `json:"refused_requests"`
+	LastForwardedAt    *time.Time `json:"last_forwarded_at,omitempty"`
+	LastFailoverAt     *time.Time `json:"last_failover_at,omitempty"`
 }
 
 // AgentCertRenewed is the payload of an agent.cert.renewed event. The projector
@@ -3644,6 +3664,21 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			}
 			reported := e.Time
 			row.WorkloadAPIReportedAt = &reported
+		}
+		if report := pl.EnrollmentProxy; report != nil {
+			row.EnrollmentProxyServing = report.Serving
+			row.EnrollmentProxySegment = report.Segment
+			row.EnrollmentProxyPublicURL = report.PublicURL
+			row.EnrollmentProxyHealthyUpstreams = report.HealthyUpstreams
+			row.EnrollmentProxyUnhealthyUpstreams = report.UnhealthyUpstreams
+			row.EnrollmentProxyUnknownUpstreams = report.UnknownUpstreams
+			row.EnrollmentProxyUpstreamFailures = report.UpstreamFailures
+			row.EnrollmentProxyForwarded = report.ForwardedRequests
+			row.EnrollmentProxyRefused = report.RefusedRequests
+			row.EnrollmentProxyLastForwardedAt = report.LastForwardedAt
+			row.EnrollmentProxyLastFailoverAt = report.LastFailoverAt
+			reported := e.Time
+			row.EnrollmentProxyReportedAt = &reported
 		}
 		return p.store.ApplyAgentHeartbeatTx(ctx, tx, row)
 	case EventAgentCertRenewed:

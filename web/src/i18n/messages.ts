@@ -5746,6 +5746,57 @@ export const messages = {
     defaultMessage: "The server could not return ARI renewal posture.",
     description: "Error-state body for the ARI posture grid.",
   },
+  "protocols.relays.heading": {
+    defaultMessage: "Enrollment relay topology",
+    description: "Heading for the dark-segment enrollment relay topology panel.",
+  },
+  "protocols.relays.description": {
+    defaultMessage:
+      "Each row is one certificate-bound network relay. Segment and URL are configuration; health, request counts, and timestamps are measurements preserved by authenticated heartbeats.",
+    description: "Explanation of enrollment relay topology evidence.",
+  },
+  "protocols.relays.caption": {
+    defaultMessage: "Enrollment relay health and failover evidence by dark segment",
+    description: "Accessible caption for the enrollment relay topology table.",
+  },
+  "protocols.relays.segment": { defaultMessage: "Segment", description: "Enrollment relay table segment column." },
+  "protocols.relays.redundancy": { defaultMessage: "Redundancy", description: "Enrollment relay table redundancy column." },
+  "protocols.relays.relay": { defaultMessage: "Relay", description: "Enrollment relay table relay column." },
+  "protocols.relays.publicURL": { defaultMessage: "Public URL", description: "Enrollment relay table public URL column." },
+  "protocols.relays.state": { defaultMessage: "State", description: "Enrollment relay table state column." },
+  "protocols.relays.upstreams": { defaultMessage: "Control-plane endpoints", description: "Enrollment relay table upstream health column." },
+  "protocols.relays.evidence": { defaultMessage: "Durable evidence", description: "Enrollment relay table evidence column." },
+  "protocols.relays.oneRelay": { defaultMessage: "1 relay", description: "Single enrollment relay redundancy count." },
+  "protocols.relays.manyRelays": { defaultMessage: "{count} relays", description: "Multiple enrollment relays redundancy count." },
+  "protocols.relays.upstreamHealth": {
+    defaultMessage: "{healthy} verified / {unhealthy} unavailable / {unknown} unverified",
+    description: "Enrollment relay control-plane endpoint health counts.",
+  },
+  "protocols.relays.upstreamFailures": {
+    defaultMessage: "{count} upstream failures",
+    description: "Enrollment relay process-lifetime upstream failure count.",
+  },
+  "protocols.relays.forwarded": { defaultMessage: "{count} forwarded", description: "Enrollment relay process-lifetime forwarded request count." },
+  "protocols.relays.refused": { defaultMessage: "{count} refused", description: "Enrollment relay process-lifetime refused request count." },
+  "protocols.relays.lastForwarded": {
+    defaultMessage: "Last forwarded: {at}",
+    description: "Timestamp of the last request completed by this enrollment relay.",
+  },
+  "protocols.relays.lastFailover": {
+    defaultMessage: "Last control-plane failover: {at}",
+    description: "Timestamp of the last upstream failover performed by this enrollment relay.",
+  },
+  "protocols.relays.reported": { defaultMessage: "Heartbeat: {at}", description: "Timestamp of the enrollment relay topology heartbeat." },
+  "protocols.relays.never": { defaultMessage: "Never observed", description: "Enrollment relay evidence timestamp empty state." },
+  "protocols.relays.emptyTitle": { defaultMessage: "No enrollment relay topology reported", description: "Empty enrollment relay topology title." },
+  "protocols.relays.emptyBody": {
+    defaultMessage: "No current network relay has reported a segment and stable public enrollment URL. This does not prove that dark segments are covered.",
+    description: "Empty enrollment relay topology explanation.",
+  },
+  "protocols.relays.loadFailed": {
+    defaultMessage: "Enrollment relay topology could not be loaded",
+    description: "Enrollment relay topology read failure title.",
+  },
   "protocols.dns01.heading": {
     defaultMessage: "DNS-01 providers",
     description: "Heading for the ACME DNS-01 provider catalog section.",

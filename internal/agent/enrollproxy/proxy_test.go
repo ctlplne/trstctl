@@ -50,7 +50,7 @@ func newUpstream(t *testing.T) *upstream {
 func newProxy(t *testing.T, up *upstream) *httptest.Server {
 	t.Helper()
 	client := up.srv.Client()
-	p, err := enrollproxy.New(up.srv.URL, client)
+	p, err := enrollproxy.NewWithPublicURL(up.srv.URL, "https://enrol.segment.test", client)
 	if err != nil {
 		t.Fatalf("build proxy: %v", err)
 	}
@@ -96,6 +96,57 @@ func TestAnEnrolmentRequestReachesTheControlPlaneUnaltered(t *testing.T) {
 	if resp.Header.Get("Replay-Nonce") != "upstream-nonce" {
 		t.Error("the ACME replay nonce did not survive the proxy; a client cannot make its " +
 			"next request without it")
+	}
+}
+
+// A stock ACME client follows the absolute URLs returned by /directory. The
+// control plane therefore has to see the relay's stable public authority while
+// the TCP connection still goes to the operator-configured control-plane host.
+// If these two names are conflated, the second stock-client request leaves the
+// dark segment and dials the control plane directly.
+func TestThePublicRelayAuthoritySurvivesTheControlPlaneHop(t *testing.T) {
+	t.Parallel()
+	var gotHost string
+	up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHost = r.Host
+		_, _ = io.WriteString(w, `{"newNonce":"https://`+r.Host+`/acme/new-nonce"}`)
+	}))
+	defer up.Close()
+
+	proxy, err := enrollproxy.NewWithPublicURL(up.URL, "https://enrol.plant-7.example", up.Client())
+	if err != nil {
+		t.Fatalf("build public relay proxy: %v", err)
+	}
+	front := httptest.NewServer(proxy)
+	defer front.Close()
+
+	resp, err := http.Get(front.URL + "/directory")
+	if err != nil {
+		t.Fatalf("discover through relay: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if gotHost != "enrol.plant-7.example" {
+		t.Fatalf("control plane authority = %q, want stable public relay authority", gotHost)
+	}
+	if !strings.Contains(string(body), "https://enrol.plant-7.example/acme/new-nonce") {
+		t.Fatalf("directory escaped the relay: %s", body)
+	}
+}
+
+func TestPublicRelayURLMustBeAStableHTTPSAuthority(t *testing.T) {
+	t.Parallel()
+	for _, publicURL := range []string{
+		"",
+		"http://enrol.plant-7.example",
+		"https://",
+		"https://user@enrol.plant-7.example",
+		"https://enrol.plant-7.example/a/path",
+		"https://enrol.plant-7.example?query=1",
+	} {
+		if _, err := enrollproxy.NewWithPublicURL("https://control-plane.example", publicURL, http.DefaultClient); err == nil {
+			t.Errorf("accepted unsafe public relay URL %q", publicURL)
+		}
 	}
 }
 
@@ -188,11 +239,16 @@ func TestTheProxyIsNotATunnelToTheAPI(t *testing.T) {
 // because nobody trusts.
 func TestAPlaintextUpstreamIsRefused(t *testing.T) {
 	t.Parallel()
-	if _, err := enrollproxy.New("http://control-plane.internal", nil); err == nil {
-		t.Fatal("a plaintext upstream was accepted")
-	}
-	if _, err := enrollproxy.New("https://", nil); err == nil {
-		t.Fatal("an upstream naming no host was accepted")
+	for _, upstream := range []string{
+		"http://control-plane.internal",
+		"https://",
+		"https://relay-user:secret@control-plane.internal",
+		"https://control-plane.internal/base",
+		"https://control-plane.internal?credential=secret",
+	} {
+		if _, err := enrollproxy.New(upstream, nil); err == nil {
+			t.Errorf("unsafe upstream %q was accepted", upstream)
+		}
 	}
 }
 
@@ -291,8 +347,9 @@ func TestKillingThePrimaryEndpointLetsTheNextAttemptSucceed(t *testing.T) {
 		t.Errorf("the surviving endpoint never saw the failed-over request; it saw %q",
 			primary.gotPath)
 	}
-	if h := pool.Health(); h.Unhealthy != 1 {
-		t.Errorf("health reports %d unhealthy endpoints after one died, want 1", h.Unhealthy)
+	if h := pool.Health(); h.Unhealthy != 1 || h.Failures != 1 || h.Forwarded != 2 ||
+		h.LastForwardedAt.IsZero() || h.LastFailoverAt.IsZero() {
+		t.Errorf("health after endpoint loss = %+v, want one failed endpoint, two completed requests, and durable activity times", h)
 	}
 }
 
@@ -303,35 +360,91 @@ func TestKillingThePrimaryEndpointLetsTheNextAttemptSucceed(t *testing.T) {
 // control plane's actual response from the client that needs to see it.
 func TestAControlPlaneErrorIsNotTreatedAsAFailover(t *testing.T) {
 	t.Parallel()
-	refusing := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"type":"urn:ietf:params:acme:error:serverInternal"}`))
-	}))
-	defer refusing.Close()
+	for _, responseCode := range []int{http.StatusInternalServerError, http.StatusBadGateway} {
+		responseCode := responseCode
+		t.Run(http.StatusText(responseCode), func(t *testing.T) {
+			t.Parallel()
+			refusing := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(responseCode)
+				_, _ = w.Write([]byte(`{"type":"urn:ietf:params:acme:error:serverInternal"}`))
+			}))
+			defer refusing.Close()
 
-	pool, err := enrollproxy.NewPool([]string{refusing.URL}, refusing.Client(), time.Second)
+			pool, err := enrollproxy.NewPool([]string{refusing.URL}, refusing.Client(), time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			front := httptest.NewServer(pool)
+			defer front.Close()
+
+			resp, err := http.Get(front.URL + "/directory")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != responseCode {
+				t.Errorf("status = %d, want the control plane's own %d response", resp.StatusCode, responseCode)
+			}
+			body, _ := io.ReadAll(resp.Body)
+			if !strings.Contains(string(body), "acme:error") {
+				t.Errorf("the control plane's problem document did not reach the client: %s", body)
+			}
+			if h := pool.Health(); h.Unhealthy != 0 {
+				t.Errorf("a control-plane error marked %d endpoints unhealthy; only a transport failure should", h.Unhealthy)
+			}
+		})
+	}
+}
+
+func TestPoolRefusalsAreDurableHealthEvidence(t *testing.T) {
+	t.Parallel()
+	up := newUpstream(t)
+	pool, err := enrollproxy.NewPool([]string{up.srv.URL}, up.srv.Client(), time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	front := httptest.NewServer(pool)
-	defer front.Close()
+	rec := httptest.NewRecorder()
+	pool.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://relay.local/api/v1/certificates", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("administrative path status = %d, want 404", rec.Code)
+	}
+	if got := pool.Health().Refused; got != 1 {
+		t.Fatalf("durable refused count = %d, want 1", got)
+	}
+}
 
-	resp, err := http.Get(front.URL + "/directory")
+func TestConfiguredEndpointStartsUnverifiedRatherThanFabricatedHealthy(t *testing.T) {
+	t.Parallel()
+	up := newUpstream(t)
+	pool, err := enrollproxy.NewPool([]string{up.srv.URL}, up.srv.Client(), time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Errorf("status = %d; the control plane's own error must reach the client rather than "+
-			"being retried away", resp.StatusCode)
+	if health := pool.Health(); health.Healthy != 0 || health.Unhealthy != 0 || health.Unknown != 1 {
+		t.Fatalf("health before any response = %+v, want one unverified endpoint", health)
 	}
-	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "acme:error") {
-		t.Errorf("the control plane's problem document did not reach the client: %s", body)
+	traversal := httptest.NewRequest(http.MethodGet, "http://relay.local/directory", nil)
+	traversal.URL.Path = "/acme/../api/v1/certificates"
+	pool.ServeHTTP(httptest.NewRecorder(), traversal)
+	if health := pool.Health(); health.Healthy != 0 || health.Unknown != 1 {
+		t.Fatalf("local path refusal fabricated upstream health: %+v", health)
 	}
-	if h := pool.Health(); h.Unhealthy != 0 {
-		t.Errorf("a control-plane error marked %d endpoints unhealthy; only a transport failure "+
-			"should", h.Unhealthy)
+}
+
+func TestCooldownExpiryDoesNotInventAHealthyEndpoint(t *testing.T) {
+	t.Parallel()
+	dead := newUpstream(t)
+	upstreamURL := dead.srv.URL
+	client := dead.srv.Client()
+	dead.srv.Close()
+	pool, err := enrollproxy.NewPool([]string{upstreamURL}, client, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "http://relay.local/directory", nil))
+	time.Sleep(10 * time.Millisecond)
+	if health := pool.Health(); health.Healthy != 0 || health.Unhealthy != 1 || health.Unknown != 0 {
+		t.Fatalf("health after cooldown but before a successful probe = %+v, want endpoint still unhealthy", health)
 	}
 }
 

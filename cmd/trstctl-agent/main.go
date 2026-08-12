@@ -67,6 +67,8 @@ func main() {
 	hostRollbackDir := flag.String("host-rollback-dir", "", "directory for this host agent's encrypted, two-generation connector predecessor bundles (AUD32/G1). Empty stores them beside --key under host-rollbacks. The bundles never return to the control plane and are required for host rollback after restart")
 	enrollProxyListen := flag.String("enroll-proxy-listen", "", "serve a LAN-local ACME/EST/SCEP proxy on this address for hosts and devices in this segment that have no route to the control plane (epic A4). The proxy is pass-through: it forwards protocol traffic unaltered, adds no credential of its own, and makes no trust decision — the control plane's validators and policy still decide. Empty disables it")
 	enrollProxyUpstream := flag.String("enroll-proxy-upstream", "", "comma-separated https control-plane endpoints the enrolment proxy forwards to. More than one gives automatic failover when an endpoint stops answering; a control-plane ERROR is passed back to the client rather than retried, because it is an answer")
+	enrollProxySegment := flag.String("enroll-proxy-segment", "", "stable operator name for the dark segment this relay serves; required with --enroll-proxy-listen and reported as tenant-scoped topology evidence")
+	enrollProxyPublicURL := flag.String("enroll-proxy-public-url", "", "stable HTTPS URL stock enrollment clients use for this segment; required with --enroll-proxy-listen and shared by redundant relays so ACME absolute URLs remain on the relay path")
 	revCacheListen := flag.String("crl-cache-listen", "", "serve the control plane's CRL to relying parties in this segment on this address (epic R3). The relay holds the CA's signed bytes and hands them over — it signs nothing — and REFUSES to serve a list past its nextUpdate, because a stale CRL still verifies and would have a relying party trust a certificate revoked yesterday. Empty disables it")
 	revCacheUpstream := flag.String("crl-cache-upstream", "", "the control plane CRL URL this relay caches, e.g. https://cp.example/crl/<tenant>.crl")
 	revCacheIssuer := flag.String("crl-cache-issuer", "", "PEM file holding the issuing CA certificate the cached CRL must verify against. Required with --crl-cache-listen: without it the relay cannot tell a CRL from a captive portal's login page")
@@ -263,6 +265,8 @@ func main() {
 		workloadAPISocket:                 *workloadAPISocket,
 		enrollProxyListen:                 *enrollProxyListen,
 		enrollProxyUpstream:               *enrollProxyUpstream,
+		enrollProxySegment:                *enrollProxySegment,
+		enrollProxyPublicURL:              *enrollProxyPublicURL,
 		revCacheListen:                    *revCacheListen,
 		revCacheUpstream:                  *revCacheUpstream,
 		revCacheIssuer:                    *revCacheIssuer,
@@ -367,8 +371,10 @@ type agentOptions struct {
 	// the module or from the control plane, because a publisher who could widen
 	// their own grant would make the sandbox decorative.
 	// A4: the LAN-local enrolment proxy for dark segments.
-	enrollProxyListen   string
-	enrollProxyUpstream string
+	enrollProxyListen    string
+	enrollProxyUpstream  string
+	enrollProxySegment   string
+	enrollProxyPublicURL string
 
 	// R3: the LAN revocation cache.
 	revCacheListen   string
@@ -450,6 +456,9 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if err := a.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
+	if strings.TrimSpace(o.enrollProxyListen) != "" && !agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
+		return fmt.Errorf("--enroll-proxy-listen requires a certificate carrying the %q role; re-enroll this agent with a network-role bootstrap token", mtls.AgentRoleNetwork)
+	}
 	creds, err := a.Credentials()
 	if err != nil {
 		return err
@@ -462,7 +471,19 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	// The agent steady-state channel (WIRE-004): the agent heartbeats and renews its
 	// own certificate over this mTLS gRPC connection. A successful first heartbeat
 	// confirms the served channel is reachable and the agent is tenant-attributed.
-	ch := channelAdapter{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))}
+	// Start the relay before the first heartbeat. Otherwise the most important
+	// boot-time observation says "not serving" and the truthful topology does
+	// not arrive until the next server-selected interval.
+	// The relay trusts the same operator-supplied control-plane CA bundle as
+	// bootstrap. Its protocol client attaches NO agent certificate; sharing the
+	// trust-only HTTP client cannot accidentally lend the relay's identity to a
+	// device request.
+	reportEnrollmentProxy, stopEnrollProxy := startEnrollProxy(ctx, o, enrollClient)
+	defer stopEnrollProxy()
+	ch := channelAdapter{
+		c:               transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())),
+		enrollmentProxy: reportEnrollmentProxy,
+	}
 	fmt.Printf("trstctl-agent: connected to %s as %s (cert serial %s, expires %s)\n",
 		o.serverAddr, o.commonName, a.CertificateSerial(), a.CertificateNotAfter().Format(time.RFC3339))
 	rng := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404 -- reconnect jitter, not a security decision (CWE-338)
@@ -575,11 +596,6 @@ func runAgent(ctx context.Context, o agentOptions) error {
 		}
 	}
 
-	// A4: the enrolment proxy, so devices in this segment can reach the control
-	// plane through the one outbound pipe this relay already has.
-	stopEnrollProxy := startEnrollProxy(ctx, o)
-	defer stopEnrollProxy()
-
 	// R3: the revocation cache, so relying parties in this segment can check
 	// revocation without a route to the control plane.
 	stopRevCache := startRevocationCache(ctx, o)
@@ -655,6 +671,15 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			resetTimer(rotateTimer, nextRotationDelay(o.rotateEvery, a.CertificateNotAfter(), time.Now(), rng))
 		}
 	}
+}
+
+func agentCarriesRole(roles []string, want string) bool {
+	for _, role := range roles {
+		if role == want {
+			return true
+		}
+	}
+	return false
 }
 
 func bootstrapToken(o agentOptions) ([]byte, error) {
@@ -987,13 +1012,20 @@ func agentIdentityFilesExist(o agentOptions) bool {
 // ChannelClient interface, translating between the transport wire messages and the
 // agent core's message types so the agent library has no hard dependency on the
 // transport message structs.
-type channelAdapter struct{ c *transport.AgentClient }
+type channelAdapter struct {
+	c               *transport.AgentClient
+	enrollmentProxy func() *transport.EnrollmentProxyReport
+}
 
 func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatRequest) (*agent.HeartbeatResponse, error) {
-	resp, err := a.c.Heartbeat(ctx, &transport.HeartbeatRequest{
+	wire := &transport.HeartbeatRequest{
 		AgentID: req.AgentID, Version: req.Version, Status: req.Status,
 		CertSerial: req.CertSerial, Inventory: workloadAPICounters(req.Inventory),
-	})
+	}
+	if a.enrollmentProxy != nil {
+		wire.EnrollmentProxy = a.enrollmentProxy()
+	}
+	resp, err := a.c.Heartbeat(ctx, wire)
 	if err != nil {
 		return nil, err
 	}

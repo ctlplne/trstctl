@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -44,6 +45,14 @@ type Pool struct {
 	// reduced capacity, and the retry costs one request.
 	cooldown time.Duration
 	now      func() time.Time
+	// lastFailoverUnixNano records a transport failure that made this relay
+	// choose another control-plane endpoint. The timestamp survives as evidence
+	// in the control plane's immutable heartbeat stream.
+	lastFailoverUnixNano int64
+	// refused counts attempts to turn the pool into a general control-plane
+	// tunnel. Pool-level allowlisting happens before any target Proxy sees the
+	// request, so this counter must live here rather than only on each target.
+	refused atomic.Int64
 }
 
 type poolTarget struct {
@@ -59,6 +68,20 @@ var ErrNoHealthyUpstream = errors.New("enrollproxy: no control-plane endpoint is
 
 // NewPool builds a pool over the given control-plane endpoints.
 func NewPool(upstreams []string, client *http.Client, cooldown time.Duration) (*Pool, error) {
+	return newPool(upstreams, "", client, cooldown)
+}
+
+// NewPoolWithPublicURL builds a pool whose every endpoint presents the same
+// stable segment URL to the control plane. Multiple relay processes behind the
+// same segment URL can therefore continue one stock-client ACME flow.
+func NewPoolWithPublicURL(upstreams []string, publicURL string, client *http.Client, cooldown time.Duration) (*Pool, error) {
+	if publicURL == "" {
+		return nil, errors.New("enrollproxy: public URL is required")
+	}
+	return newPool(upstreams, publicURL, client, cooldown)
+}
+
+func newPool(upstreams []string, publicURL string, client *http.Client, cooldown time.Duration) (*Pool, error) {
 	if len(upstreams) == 0 {
 		return nil, errors.New("enrollproxy: a proxy pool needs at least one control-plane endpoint")
 	}
@@ -67,7 +90,13 @@ func NewPool(upstreams []string, client *http.Client, cooldown time.Duration) (*
 	}
 	p := &Pool{cooldown: cooldown, now: time.Now}
 	for _, u := range upstreams {
-		proxy, err := New(u, client)
+		var proxy *Proxy
+		var err error
+		if publicURL == "" {
+			proxy, err = New(u, client)
+		} else {
+			proxy, err = NewWithPublicURL(u, publicURL, client)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -85,6 +114,7 @@ func NewPool(upstreams []string, client *http.Client, cooldown time.Duration) (*
 // nothing answered — moves to the next endpoint.
 func (p *Pool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !Proxied(r.URL.Path) {
+		p.refused.Add(1)
 		http.Error(w, "not an enrolment protocol path", http.StatusNotFound)
 		return
 	}
@@ -96,7 +126,9 @@ func (p *Pool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rec := &failoverRecorder{ResponseWriter: w}
 		target.proxy.ServeHTTP(rec, r)
 		if !rec.transportFailed {
-			p.markHealthy(target)
+			if rec.upstreamResponded {
+				p.markHealthy(target)
+			}
 			return
 		}
 		// Nothing answered. Take this endpoint out and try the next; the client
@@ -135,13 +167,19 @@ func (p *Pool) markUnhealthy(t *poolTarget) {
 	t.unhealthy = true
 	t.failures++
 	t.recoverAt = p.now().Add(p.cooldown)
+	p.lastFailoverUnixNano = p.now().UTC().UnixNano()
 }
 
 // Health reports per-endpoint state for the agent's heartbeat.
 type Health struct {
-	Healthy   int
-	Unhealthy int
-	Failures  int
+	Healthy         int
+	Unhealthy       int
+	Unknown         int
+	Failures        int
+	Forwarded       int64
+	Refused         int64
+	LastForwardedAt time.Time
+	LastFailoverAt  time.Time
 }
 
 // Health snapshots the pool.
@@ -152,43 +190,57 @@ func (p *Pool) Health() Health {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	var h Health
-	now := p.now()
+	h.Refused = p.refused.Load()
 	for _, t := range p.targets {
 		h.Failures += t.failures
-		if t.unhealthy && now.Before(t.recoverAt) {
+		forwarded, refused := t.proxy.Stats()
+		h.Forwarded += forwarded
+		h.Refused += refused
+		if at := t.proxy.LastForwardedAt(); at.After(h.LastForwardedAt) {
+			h.LastForwardedAt = at
+		}
+		if t.successes == 0 && t.failures == 0 {
+			h.Unknown++
+			continue
+		}
+		// Cooldown expiry means "eligible for a probe", not "healthy". Only a
+		// completed response can clear the unhealthy bit; otherwise the durable
+		// topology would claim an endpoint answered when nobody had asked it.
+		if t.unhealthy {
 			h.Unhealthy++
 			continue
 		}
 		h.Healthy++
 	}
+	if p.lastFailoverUnixNano != 0 {
+		h.LastFailoverAt = time.Unix(0, p.lastFailoverUnixNano).UTC()
+	}
 	return h
 }
 
 // failoverRecorder notices whether the proxy produced a real response or a
-// transport failure.
-//
-// It distinguishes them by the status the proxy writes on an unreachable
-// upstream. A 502 that the proxy itself generated means nothing answered; a 502
-// FROM the control plane would have a body it wrote, and is an answer. The two
-// are told apart by whether the proxy short-circuited before any upstream bytes
-// arrived, which is exactly what this records.
+// transport failure. Proxy marks the transport failure out of band, so a real
+// HTTP 502 from the control plane remains an ordinary response.
 type failoverRecorder struct {
 	http.ResponseWriter
-	wrote           bool
-	transportFailed bool
+	wrote             bool
+	transportFailed   bool
+	upstreamResponded bool
 }
 
 func (f *failoverRecorder) WriteHeader(code int) {
 	if !f.wrote {
 		f.wrote = true
-		if code == http.StatusBadGateway {
-			// The proxy writes 502 only when it could not reach upstream. Hold
-			// the header back so a retry can still produce the real response.
-			f.transportFailed = true
-			return
-		}
 	}
 	f.ResponseWriter.WriteHeader(code)
+}
+
+func (f *failoverRecorder) markTransportFailure() {
+	f.transportFailed = true
+}
+
+func (f *failoverRecorder) markUpstreamResponse() {
+	f.upstreamResponded = true
 }
 
 func (f *failoverRecorder) Write(b []byte) (int, error) {

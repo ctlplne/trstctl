@@ -21,6 +21,7 @@ import {
   type ACMEDNS01ProviderCatalogItem,
   type ACMEDNS01ProviderConfig,
   type ACMEUpstreamAuthorizationList,
+  type Agent,
   type ACMEDNS01ProviderConfigRequest,
   type EnrollmentDiagnosticList,
   type MDMSCEPPolicy,
@@ -42,6 +43,30 @@ interface ProtocolSurface {
   requirements: string[];
   profile: string;
   snippets: ProtocolSnippet[];
+}
+
+interface EnrollmentRelaySegment {
+  name: string;
+  publicURL: string;
+  relays: Agent[];
+}
+
+function enrollmentRelaySegments(agents: Agent[]): EnrollmentRelaySegment[] {
+  const grouped = new Map<string, EnrollmentRelaySegment>();
+  for (const agent of agents) {
+    const proxy = agent.enrollment_proxy;
+    if (agent.status === "offboarded" || !agent.roles.includes("network") || !proxy?.segment || !proxy.public_url) continue;
+    // Two processes are redundant only when a stock client can use the same
+    // authority through either one. A shared segment label with different
+    // public URLs is two one-relay topologies, not one healthy two-relay pair.
+    const key = JSON.stringify([proxy.segment, proxy.public_url]);
+    const group = grouped.get(key) ?? { name: proxy.segment, publicURL: proxy.public_url, relays: [] };
+    group.relays.push(agent);
+    grouped.set(key, group);
+  }
+  return [...grouped.values()]
+    .map((group) => ({ ...group, relays: group.relays.sort((left, right) => left.name.localeCompare(right.name)) }))
+    .sort((left, right) => left.name.localeCompare(right.name) || left.publicURL.localeCompare(right.publicURL));
 }
 
 const protocolSurfaces: ProtocolSurface[] = [
@@ -178,6 +203,8 @@ export function Protocols() {
   const { t } = useTranslation();
   const [copied, setCopied] = useState<string | null>(null);
   const [protocolStatuses, setProtocolStatuses] = useState<ProtocolRuntimeStatus[]>([]);
+  const [relayAgents, setRelayAgents] = useState<Agent[]>([]);
+  const [relayTopologyError, setRelayTopologyError] = useState<string | null>(null);
   // I4: recent enrolment refusals, classified. Loaded separately so a
   // deployment without the surface still renders the rest of the page.
   const [diagnostics, setDiagnostics] = useState<EnrollmentDiagnosticList | null>(null);
@@ -225,6 +252,37 @@ export function Protocols() {
 
   useEffect(() => {
     let active = true;
+    void (async () => {
+      const rows: Agent[] = [];
+      const seen = new Set<string>();
+      let cursor = "";
+      do {
+        const page = await api.agentPage({ limit: 100, ...(cursor ? { cursor } : {}) });
+        rows.push(...(page.agents ?? []));
+        const next = page.next_cursor ?? "";
+        if (next && seen.has(next)) throw new Error("agent topology returned a repeated cursor");
+        if (next) seen.add(next);
+        cursor = next;
+      } while (cursor);
+      return rows;
+    })()
+      .then((rows) => {
+        if (!active) return;
+        setRelayAgents(rows);
+        setRelayTopologyError(null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setRelayAgents([]);
+        setRelayTopologyError(protocolStatusError(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     setStatusLoading(true);
     setStatusError(null);
     Promise.all([api.protocolStatuses(), api.acmeDNS01Providers(), api.acmeDNS01ProviderConfigs(), api.mdmSCEPStatus()])
@@ -249,6 +307,7 @@ export function Protocols() {
   }, []);
 
   const statusByProtocol = new Map(protocolStatuses.map((status) => [status.protocol, status]));
+  const relaySegments = enrollmentRelaySegments(relayAgents);
 
   async function copySnippet(protocol: ProtocolSurface, snippet: ProtocolSnippet) {
     try {
@@ -389,6 +448,96 @@ export function Protocols() {
           </div>
         </section>
       ) : null}
+
+      <section aria-labelledby="enrollment-relay-topology-heading" aria-label={t("protocols.relays.heading")}>
+        <h2 id="enrollment-relay-topology-heading" className="text-title font-semibold">
+          {t("protocols.relays.heading")}
+        </h2>
+        <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{t("protocols.relays.description")}</p>
+        {relayTopologyError ? (
+          <div className="mt-3">
+            <ErrorState title={t("protocols.relays.loadFailed")}>{relayTopologyError}</ErrorState>
+          </div>
+        ) : relaySegments.length === 0 ? (
+          <div className="mt-3">
+            <ErrorState title={t("protocols.relays.emptyTitle")}>{t("protocols.relays.emptyBody")}</ErrorState>
+          </div>
+        ) : (
+          <div className="ui-panel mt-3 overflow-x-auto">
+            <table className="ui-table min-w-[76rem]">
+              <caption className="sr-only">{t("protocols.relays.caption")}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{t("protocols.relays.segment")}</th>
+                  <th scope="col">{t("protocols.relays.redundancy")}</th>
+                  <th scope="col">{t("protocols.relays.relay")}</th>
+                  <th scope="col">{t("protocols.relays.publicURL")}</th>
+                  <th scope="col">{t("protocols.relays.state")}</th>
+                  <th scope="col">{t("protocols.relays.upstreams")}</th>
+                  <th scope="col">{t("protocols.relays.evidence")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {relaySegments.flatMap((segment) =>
+                  segment.relays.map((relay, index) => {
+                    const proxy = relay.enrollment_proxy;
+                    return (
+                      <tr key={relay.id} className="align-top">
+                        {index === 0 ? (
+                          <td rowSpan={segment.relays.length} className="font-medium">
+                            {segment.name}
+                          </td>
+                        ) : null}
+                        {index === 0 ? (
+                          <td rowSpan={segment.relays.length}>
+                            {segment.relays.length === 1 ? t("protocols.relays.oneRelay") : t("protocols.relays.manyRelays", { count: segment.relays.length })}
+                          </td>
+                        ) : null}
+                        <td>
+                          <p className="font-medium">{relay.name}</p>
+                          <p className="mt-1 font-mono text-xs text-muted-foreground">{relay.id}</p>
+                        </td>
+                        <td className="font-mono text-xs">{proxy.public_url}</td>
+                        <td>
+                          <StatusBadge value={proxy.state} />
+                          <p className="mt-1 max-w-[18rem] text-caption text-muted-foreground">{proxy.detail}</p>
+                        </td>
+                        <td className="text-xs">
+                          <p>
+                            {t("protocols.relays.upstreamHealth", {
+                              healthy: proxy.healthy_upstreams,
+                              unhealthy: proxy.unhealthy_upstreams,
+                              unknown: proxy.unknown_upstreams,
+                            })}
+                          </p>
+                          <p className="mt-1 text-muted-foreground">{t("protocols.relays.upstreamFailures", { count: proxy.upstream_failures })}</p>
+                        </td>
+                        <td className="text-xs">
+                          <p>{t("protocols.relays.forwarded", { count: proxy.forwarded_requests })}</p>
+                          <p>{t("protocols.relays.refused", { count: proxy.refused_requests })}</p>
+                          <p className="mt-1 text-muted-foreground">
+                            {proxy.last_forwarded_at
+                              ? t("protocols.relays.lastForwarded", { at: formatDateTimePolicy(proxy.last_forwarded_at) })
+                              : t("protocols.relays.lastForwarded", { at: t("protocols.relays.never") })}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {proxy.last_failover_at
+                              ? t("protocols.relays.lastFailover", { at: formatDateTimePolicy(proxy.last_failover_at) })
+                              : t("protocols.relays.lastFailover", { at: t("protocols.relays.never") })}
+                          </p>
+                          {proxy.reported_at ? (
+                            <p className="text-muted-foreground">{t("protocols.relays.reported", { at: formatDateTimePolicy(proxy.reported_at) })}</p>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  }),
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
         <h2 id="protocol-status-heading" className="text-title font-semibold">

@@ -23,6 +23,7 @@ const { apiMock } = vi.hoisted(() => ({
     acmeDNS01Preflight: vi.fn(),
     acmeUpstreamAuthorizations: vi.fn(),
     enrollmentDiagnostics: vi.fn(),
+    agentPage: vi.fn(),
   },
 }));
 
@@ -86,8 +87,64 @@ describe("protocol surface", () => {
     apiMock.acmeDNS01Preflight.mockReset();
     apiMock.acmeUpstreamAuthorizations.mockReset();
     apiMock.enrollmentDiagnostics.mockReset();
+    apiMock.agentPage.mockReset();
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
     apiMock.enrollmentDiagnostics.mockResolvedValue({ items: [], unknown_count: 0, guidance: "" });
+    apiMock.agentPage.mockResolvedValue({
+      agents: [
+        {
+          id: "relay-primary",
+          name: "plant-7-relay-a",
+          status: "active",
+          roles: ["network"],
+          role_source: "certificate",
+          inventory_report_path: "agent.mtls.ReportInventory",
+          discovery_capabilities: [],
+          relay_capabilities: [],
+          workload_api: { state: "unreported", svids_issued: 0, detail: "Not reported." },
+          enrollment_proxy: {
+            state: "degraded",
+            segment: "plant-7",
+            public_url: "https://enrol.plant-7.example",
+            healthy_upstreams: 1,
+            unhealthy_upstreams: 1,
+            unknown_upstreams: 0,
+            upstream_failures: 2,
+            forwarded_requests: 41,
+            refused_requests: 3,
+            last_forwarded_at: "2026-08-12T13:58:00Z",
+            last_failover_at: "2026-08-12T13:57:00Z",
+            reported_at: "2026-08-12T14:00:00Z",
+            detail: "One configured control-plane endpoint is in cooldown.",
+          },
+        },
+        {
+          id: "relay-secondary",
+          name: "plant-7-relay-b",
+          status: "active",
+          roles: ["network"],
+          role_source: "certificate",
+          inventory_report_path: "agent.mtls.ReportInventory",
+          discovery_capabilities: [],
+          relay_capabilities: [],
+          workload_api: { state: "unreported", svids_issued: 0, detail: "Not reported." },
+          enrollment_proxy: {
+            state: "serving",
+            segment: "plant-7",
+            public_url: "https://enrol.plant-7.example",
+            healthy_upstreams: 2,
+            unhealthy_upstreams: 0,
+            unknown_upstreams: 0,
+            upstream_failures: 0,
+            forwarded_requests: 9,
+            refused_requests: 0,
+            last_forwarded_at: "2026-08-12T13:59:00Z",
+            reported_at: "2026-08-12T14:00:00Z",
+            detail: "All configured control-plane endpoints are reachable.",
+          },
+        },
+      ],
+    });
     apiMock.acmeARIPosture.mockResolvedValue(ariPosture());
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
@@ -296,6 +353,36 @@ describe("protocol surface", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--server https://trstctl.example.test/directory")));
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/Bearer|token|password/i));
     expect(screen.getByText("Copied command without token material.")).toBeInTheDocument();
+  });
+
+  it("renders exact per-segment enrollment relay topology and durable failover evidence", async () => {
+    await renderProtocols();
+
+    const panel = await screen.findByRole("region", { name: "Enrollment relay topology" });
+    expect(within(panel).getByText("plant-7")).toBeInTheDocument();
+    expect(within(panel).getByText("2 relays")).toBeInTheDocument();
+    expect(within(panel).getByText("plant-7-relay-a")).toBeInTheDocument();
+    expect(within(panel).getByText("plant-7-relay-b")).toBeInTheDocument();
+    expect(within(panel).getAllByText("https://enrol.plant-7.example")).toHaveLength(2);
+    expect(within(panel).getByText("1 verified / 1 unavailable / 0 unverified")).toBeInTheDocument();
+    expect(within(panel).getByText("2 upstream failures")).toBeInTheDocument();
+    expect(within(panel).getByText("Last forwarded: Aug 12, 2026, 1:59 PM")).toBeInTheDocument();
+    expect(within(panel).getByText("Last control-plane failover: Aug 12, 2026, 1:57 PM")).toBeInTheDocument();
+  });
+
+  it("does not call relays redundant when their stock-client authorities differ", async () => {
+    const page = await apiMock.agentPage();
+    apiMock.agentPage.mockResolvedValue({
+      ...page,
+      agents: page.agents.map((agent: { id: string; enrollment_proxy: { public_url: string } }) =>
+        agent.id === "relay-secondary" ? { ...agent, enrollment_proxy: { ...agent.enrollment_proxy, public_url: "https://other.plant-7.example" } } : agent,
+      ),
+    });
+    await renderProtocols();
+
+    const panel = await screen.findByRole("region", { name: "Enrollment relay topology" });
+    expect(within(panel).queryByText("2 relays")).not.toBeInTheDocument();
+    expect(within(panel).getAllByText("1 relay")).toHaveLength(2);
   });
 
   it("renders the authenticated tenant's durable diagnosis, count, timestamp, and remediation", async () => {

@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	170: true,
 	167: true,
 	164: true,
 	161: true,
@@ -933,6 +934,46 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 		if serving != 0 {
 			t.Errorf("%d existing agents came out marked as serving a Workload API socket they "+
 				"were never asked to serve", serving)
+		}
+	})
+
+	t.Run("0170_agent_enrollment_proxy_topology", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 170)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+		applyMigrationFiles(t, ctx, pool, prefix)
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
+			 VALUES (gen_random_uuid(), $1, 'old-relay', 'active', '1.0.0', now())`, tenantA); err != nil {
+			t.Fatalf("seed pre-0170 agent: %v", err)
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+		var reported bool
+		var serving bool
+		var segment, publicURL string
+		var healthy, unhealthy, unknown int
+		if err := pool.QueryRow(ctx,
+			`SELECT enrollment_proxy_reported_at IS NOT NULL, enrollment_proxy_serving,
+			        enrollment_proxy_segment, enrollment_proxy_public_url,
+			        enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams,
+			        enrollment_proxy_unknown_upstreams
+			   FROM agents WHERE tenant_id = $1`, tenantA).
+			Scan(&reported, &serving, &segment, &publicURL, &healthy, &unhealthy, &unknown); err != nil {
+			t.Fatalf("read post-0170 relay topology: %v", err)
+		}
+		if reported || serving || segment != "" || publicURL != "" || healthy != 0 || unhealthy != 0 || unknown != 0 {
+			t.Fatalf("existing agent was fabricated into relay topology: reported=%v serving=%v segment=%q public=%q healthy=%d unhealthy=%d unknown=%d",
+				reported, serving, segment, publicURL, healthy, unhealthy, unknown)
+		}
+		if _, err := pool.Exec(ctx,
+			`UPDATE agents SET enrollment_proxy_forwarded = -1 WHERE tenant_id = $1`, tenantA); err == nil {
+			t.Fatal("0170 accepted a negative relay evidence counter")
 		}
 	})
 

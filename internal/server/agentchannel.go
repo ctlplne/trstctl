@@ -38,6 +38,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -514,6 +515,16 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 		beatPayload.WorkloadAPIServed = &served
 		beatPayload.WorkloadAPISVIDs = &svids
 	}
+	if req.EnrollmentProxy != nil {
+		if req.EnrollmentProxy.Serving && !agentHasRole(info.Roles, "network") {
+			return nil, status.Error(codes.PermissionDenied, "only a certificate-bound network relay may report a serving enrollment proxy")
+		}
+		report, err := validatedEnrollmentProxyReport(req.EnrollmentProxy)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid enrollment proxy report: %v", err)
+		}
+		beatPayload.EnrollmentProxy = report
+	}
 	payload, err := json.Marshal(beatPayload)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
@@ -532,6 +543,55 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 	return &transport.HeartbeatResponse{
 		TenantID:             info.TenantID,
 		NextHeartbeatSeconds: int64(beat / time.Second),
+	}, nil
+}
+
+func agentHasRole(roles []string, want string) bool {
+	for _, role := range roles {
+		if role == want {
+			return true
+		}
+	}
+	return false
+}
+
+func validatedEnrollmentProxyReport(report *transport.EnrollmentProxyReport) (*projections.EnrollmentProxyReport, error) {
+	if report == nil {
+		return nil, nil
+	}
+	segment := strings.TrimSpace(report.Segment)
+	publicURL := strings.TrimSpace(report.PublicURL)
+	if len(segment) > 128 {
+		return nil, errors.New("segment exceeds 128 bytes")
+	}
+	if len(publicURL) > 2048 {
+		return nil, errors.New("public_url exceeds 2048 bytes")
+	}
+	if report.HealthyUpstreams < 0 || report.UnhealthyUpstreams < 0 || report.UnknownUpstreams < 0 ||
+		report.UpstreamFailures < 0 || report.ForwardedRequests < 0 || report.RefusedRequests < 0 {
+		return nil, errors.New("health and request counters must be non-negative")
+	}
+	if report.Serving {
+		if segment == "" || publicURL == "" {
+			return nil, errors.New("a serving relay requires segment and public_url")
+		}
+		if report.HealthyUpstreams+report.UnhealthyUpstreams+report.UnknownUpstreams == 0 {
+			return nil, errors.New("a serving relay requires at least one configured upstream")
+		}
+		u, err := url.Parse(publicURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil ||
+			(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+			return nil, errors.New("public_url must be one HTTPS authority with no credentials, path, query, or fragment")
+		}
+		publicURL = "https://" + u.Host
+	}
+	return &projections.EnrollmentProxyReport{
+		Serving: report.Serving, Segment: segment, PublicURL: publicURL,
+		HealthyUpstreams: report.HealthyUpstreams, UnhealthyUpstreams: report.UnhealthyUpstreams,
+		UnknownUpstreams: report.UnknownUpstreams,
+		UpstreamFailures: report.UpstreamFailures, ForwardedRequests: report.ForwardedRequests,
+		RefusedRequests: report.RefusedRequests, LastForwardedAt: report.LastForwardedAt,
+		LastFailoverAt: report.LastFailoverAt,
 	}, nil
 }
 

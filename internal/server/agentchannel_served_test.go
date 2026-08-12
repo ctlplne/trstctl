@@ -760,7 +760,7 @@ func TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd(t *testing.T) {
 	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
 	t.Cleanup(func() { chCancel(); <-chDone })
 
-	a := enrollAgent(t, h, "edge-agent-cap-disc-02", "agent.trstctl.local")
+	a := enrollAgentWithRoles(t, h, "edge-agent-cap-disc-02", "agent.trstctl.local", []string{"network"})
 	creds, err := a.Credentials()
 	if err != nil {
 		t.Fatal(err)
@@ -780,6 +780,19 @@ func TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd(t *testing.T) {
 	}
 	if hb.TenantID != h.tenant {
 		t.Fatalf("heartbeat tenant = %q, want %s", hb.TenantID, h.tenant)
+	}
+	forwardedAt := time.Date(2026, 8, 12, 13, 58, 0, 0, time.UTC)
+	failoverAt := time.Date(2026, 8, 12, 13, 57, 0, 0, time.UTC)
+	if _, err := client.Heartbeat(ctx, &transport.HeartbeatRequest{
+		AgentID: "edge-agent-cap-disc-02", Version: "relay-test", Status: "active",
+		EnrollmentProxy: &transport.EnrollmentProxyReport{
+			Serving: true, Segment: "plant-7", PublicURL: "https://enrol.plant-7.example",
+			HealthyUpstreams: 1, UnhealthyUpstreams: 1, UpstreamFailures: 2,
+			ForwardedRequests: 41, RefusedRequests: 3,
+			LastForwardedAt: &forwardedAt, LastFailoverAt: &failoverAt,
+		},
+	}); err != nil {
+		t.Fatalf("heartbeat enrollment relay topology: %v", err)
 	}
 	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
 		SourceKind: agentdiscovery.SourceFilesystem,
@@ -806,8 +819,21 @@ func TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd(t *testing.T) {
 	}
 	var agents struct {
 		Agents []struct {
-			Name                  string `json:"name"`
-			InventoryReportPath   string `json:"inventory_report_path"`
+			Name                string `json:"name"`
+			InventoryReportPath string `json:"inventory_report_path"`
+			EnrollmentProxy     struct {
+				State              string `json:"state"`
+				Segment            string `json:"segment"`
+				PublicURL          string `json:"public_url"`
+				LastForwardedAt    string `json:"last_forwarded_at"`
+				LastFailoverAt     string `json:"last_failover_at"`
+				HealthyUpstreams   int    `json:"healthy_upstreams"`
+				UnhealthyUpstreams int    `json:"unhealthy_upstreams"`
+				UnknownUpstreams   int    `json:"unknown_upstreams"`
+				UpstreamFailures   int64  `json:"upstream_failures"`
+				ForwardedRequests  int64  `json:"forwarded_requests"`
+				RefusedRequests    int64  `json:"refused_requests"`
+			} `json:"enrollment_proxy"`
 			DiscoveryCapabilities []struct {
 				SourceKind      string `json:"source_kind"`
 				ReportedOver    string `json:"reported_over"`
@@ -824,6 +850,12 @@ func TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd(t *testing.T) {
 	}
 	if agents.Agents[0].InventoryReportPath != "agent.mtls.ReportInventory" {
 		t.Fatalf("agent inventory report path = %q, want served mTLS report path", agents.Agents[0].InventoryReportPath)
+	}
+	proxy := agents.Agents[0].EnrollmentProxy
+	if proxy.State != "degraded" || proxy.Segment != "plant-7" || proxy.PublicURL != "https://enrol.plant-7.example" ||
+		proxy.HealthyUpstreams != 1 || proxy.UnhealthyUpstreams != 1 || proxy.UpstreamFailures != 2 ||
+		proxy.ForwardedRequests != 41 || proxy.RefusedRequests != 3 || proxy.LastForwardedAt == "" || proxy.LastFailoverAt == "" {
+		t.Fatalf("served authenticated relay topology = %+v, want exact durable heartbeat evidence", proxy)
 	}
 	caps := map[string]struct {
 		reportedOver    string

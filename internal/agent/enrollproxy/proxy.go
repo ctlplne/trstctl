@@ -51,8 +51,9 @@ var proxiedPrefixes = []string{
 
 // Proxy forwards enrolment protocol traffic to the control plane.
 type Proxy struct {
-	upstream *url.URL
-	client   *http.Client
+	upstream  *url.URL
+	publicURL *url.URL
+	client    *http.Client
 	// forwarded counts requests passed upstream, for the agent's heartbeat.
 	forwarded atomic.Int64
 	// refused counts requests rejected because their path is not a protocol
@@ -60,10 +61,31 @@ type Proxy struct {
 	// segment is trying to reach the control plane's API through this relay,
 	// which an operator should know about.
 	refused atomic.Int64
+	// lastForwardedUnixNano makes "which relay most recently carried an
+	// enrollment request?" evidence, not an inference from a process being up.
+	lastForwardedUnixNano atomic.Int64
 }
 
 // New builds a proxy forwarding to the control plane at upstream.
 func New(upstream string, client *http.Client) (*Proxy, error) {
+	return newProxy(upstream, "", client)
+}
+
+// NewWithPublicURL builds a proxy whose clients reach one stable HTTPS URL.
+//
+// The socket still dials upstream. Only the HTTP authority presented to the
+// control plane is publicURL. ACME responses contain absolute URLs and ACME
+// account IDs are URLs, so without this split a /directory request through a
+// relay returns control-plane addresses and a stock client immediately leaves
+// the dark-segment path.
+func NewWithPublicURL(upstream, publicURL string, client *http.Client) (*Proxy, error) {
+	if strings.TrimSpace(publicURL) == "" {
+		return nil, errors.New("enrollproxy: public URL is required")
+	}
+	return newProxy(upstream, publicURL, client)
+}
+
+func newProxy(upstream, publicURL string, client *http.Client) (*Proxy, error) {
 	u, err := url.Parse(strings.TrimSpace(upstream))
 	if err != nil {
 		return nil, fmt.Errorf("enrollproxy: parse upstream: %w", err)
@@ -77,6 +99,27 @@ func New(upstream string, client *http.Client) (*Proxy, error) {
 	}
 	if u.Host == "" {
 		return nil, errors.New("enrollproxy: upstream names no host")
+	}
+	if u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		// A userinfo component would make net/http synthesize Basic
+		// Authorization. That would violate the relay's most important rule:
+		// it forwards the enrollment client's credential and adds none of its
+		// own. Paths and queries are rejected because the request supplies those
+		// components and the configured authority must not silently rewrite them.
+		return nil, errors.New("enrollproxy: upstream must be one HTTPS authority with no credentials, path, query, or fragment")
+	}
+	u.Path = ""
+	var public *url.URL
+	if strings.TrimSpace(publicURL) != "" {
+		public, err = url.Parse(strings.TrimSpace(publicURL))
+		if err != nil {
+			return nil, fmt.Errorf("enrollproxy: parse public URL: %w", err)
+		}
+		if public.Scheme != "https" || public.Host == "" || public.User != nil ||
+			(public.Path != "" && public.Path != "/") || public.RawQuery != "" || public.Fragment != "" {
+			return nil, errors.New("enrollproxy: public URL must be one HTTPS authority with no credentials, path, query, or fragment")
+		}
+		public.Path = ""
 	}
 	if client == nil {
 		// SSRF-checked, like every other outbound surface in this tree (SEC-005).
@@ -94,7 +137,7 @@ func New(upstream string, client *http.Client) (*Proxy, error) {
 		// than a second one invented here.
 		client = netsec.SafeClient(60 * time.Second)
 	}
-	return &Proxy{upstream: u, client: client}, nil
+	return &Proxy{upstream: u, publicURL: public, client: client}, nil
 }
 
 // Proxied reports whether a path is one this proxy forwards.
@@ -143,7 +186,16 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	copyProxiedHeaders(out.Header, r.Header)
-	out.Header.Set("X-Forwarded-Proto", schemeOf(r))
+	if p.publicURL != nil {
+		// Host is deliberately NOT a dial target here. net/http dials out.URL,
+		// which still names the operator-configured control plane. Host is the
+		// stable relay authority ACME uses to construct absolute response URLs
+		// and to name the account/order resources a stock client signs.
+		out.Host = p.publicURL.Host
+		out.Header.Set("X-Forwarded-Proto", p.publicURL.Scheme)
+	} else {
+		out.Header.Set("X-Forwarded-Proto", schemeOf(r))
+	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		// The client's address, so the control plane's audit records who
 		// actually enrolled rather than recording every device in a segment as
@@ -159,15 +211,26 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// endpoint it reaches and cannot redirect the relay (CWE-918).
 	resp, err := p.client.Do(out)
 	if err != nil {
+		if marker, ok := w.(interface{ markTransportFailure() }); ok {
+			// The pool needs an out-of-band fact here. Guessing from HTTP 502
+			// would turn a real 502 response from the control plane into a fake
+			// transport outage and hide that response from the client.
+			marker.markTransportFailure()
+			return
+		}
 		http.Error(w, "the control plane could not be reached", http.StatusBadGateway)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if marker, ok := w.(interface{ markUpstreamResponse() }); ok {
+		marker.markUpstreamResponse()
+	}
 
 	copyProxiedHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
 	p.forwarded.Add(1)
+	p.lastForwardedUnixNano.Store(time.Now().UTC().UnixNano())
 }
 
 // hopByHopHeaders are stripped in both directions per RFC 7230.
@@ -210,4 +273,16 @@ func (p *Proxy) Stats() (forwarded, refused int64) {
 		return 0, 0
 	}
 	return p.forwarded.Load(), p.refused.Load()
+}
+
+// LastForwardedAt reports when this process last completed a proxied response.
+func (p *Proxy) LastForwardedAt() time.Time {
+	if p == nil {
+		return time.Time{}
+	}
+	ns := p.lastForwardedUnixNano.Load()
+	if ns == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, ns).UTC()
 }

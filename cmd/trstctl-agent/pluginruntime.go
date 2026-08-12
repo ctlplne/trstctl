@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/enrollproxy"
 	"trstctl.com/trstctl/internal/agent/revcache"
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/netsec"
 
@@ -148,46 +150,84 @@ func pluginCapability(name string) (pluginhost.Capability, bool) {
 
 // startEnrollProxy serves the LAN-local enrolment proxy, if configured.
 //
-// Returns a stop function that is always safe to call. A failure to bind is
+// Returns a report function and a stop function that are always safe to call. A failure to bind is
 // reported and does NOT bring the agent down: the proxy is one of several things
 // this process does, and an address already in use must not also stop this
 // segment's connector deploys and inventory.
-func startEnrollProxy(ctx context.Context, o agentOptions) func() {
+func startEnrollProxy(ctx context.Context, o agentOptions, client *http.Client) (func() *transport.EnrollmentProxyReport, func()) {
+	_ = ctx
 	listen := strings.TrimSpace(o.enrollProxyListen)
+	segment := strings.TrimSpace(o.enrollProxySegment)
+	publicURL := strings.TrimSpace(o.enrollProxyPublicURL)
+	notServing := func() *transport.EnrollmentProxyReport {
+		return &transport.EnrollmentProxyReport{Serving: false, Segment: segment, PublicURL: publicURL}
+	}
 	if listen == "" {
-		return func() {}
+		return notServing, func() {}
 	}
 	upstreams := splitList(o.enrollProxyUpstream)
 	if len(upstreams) == 0 {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: --enroll-proxy-listen is set but "+
 			"--enroll-proxy-upstream is not; the proxy has nowhere to forward to and will not start")
-		return func() {}
+		return notServing, func() {}
 	}
-	pool, err := enrollproxy.NewPool(upstreams, nil, 0)
+	if segment == "" || publicURL == "" {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: --enroll-proxy-listen requires both "+
+			"--enroll-proxy-segment and --enroll-proxy-public-url; without them redundant relays cannot share a stable ACME authority or produce an explicit topology")
+		return notServing, func() {}
+	}
+	pool, err := enrollproxy.NewPoolWithPublicURL(upstreams, publicURL, client, 0)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: enrolment proxy:", err)
-		return func() {}
+		return notServing, func() {}
+	}
+	listener, err := net.Listen("tcp", listen)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: enrolment proxy cannot bind:", err)
+		return notServing, func() {}
 	}
 	srv := &http.Server{
-		Addr:              listen,
 		Handler:           pool,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	done := make(chan struct{})
+	var serving atomic.Bool
+	serving.Store(true)
 	go func() {
 		defer close(done)
-		fmt.Printf("trstctl-agent: enrolment proxy serving on %s -> %v\n", listen, upstreams)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		defer serving.Store(false)
+		fmt.Printf("trstctl-agent: enrolment proxy serving segment %s at %s on %s -> %v\n", segment, publicURL, listener.Addr(), upstreams)
+		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: enrolment proxy stopped:", err)
 		}
 	}()
 	enrollProxyPool.Store(pool)
-	return func() {
+	report := func() *transport.EnrollmentProxyReport {
+		health := pool.Health()
+		out := &transport.EnrollmentProxyReport{
+			Serving: serving.Load(), Segment: segment, PublicURL: publicURL,
+			HealthyUpstreams: health.Healthy, UnhealthyUpstreams: health.Unhealthy, UnknownUpstreams: health.Unknown,
+			UpstreamFailures: int64(health.Failures), ForwardedRequests: health.Forwarded,
+			RefusedRequests: health.Refused,
+		}
+		if !health.LastForwardedAt.IsZero() {
+			at := health.LastForwardedAt
+			out.LastForwardedAt = &at
+		}
+		if !health.LastFailoverAt.IsZero() {
+			at := health.LastFailoverAt
+			out.LastFailoverAt = &at
+		}
+		return out
+	}
+	stop := func() {
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutCtx)
 		<-done
+		enrollProxyPool.CompareAndSwap(pool, nil)
 	}
+	return report, stop
 }
 
 // enrollProxyPool holds the running pool so the heartbeat can report its health.

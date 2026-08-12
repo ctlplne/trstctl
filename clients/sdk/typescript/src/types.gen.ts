@@ -5686,6 +5686,7 @@ export interface components {
         };
         Agent: {
             discovery_capabilities: components["schemas"]["AgentDiscoveryCapability"][];
+            enrollment_proxy: components["schemas"]["AgentEnrollmentProxyStatus"];
             /** Format: uuid */
             id: string;
             inventory_report_path: string;
@@ -5727,6 +5728,25 @@ export interface components {
             private_key_bytes: boolean;
             reported_over: string;
             source_kind: string;
+        };
+        AgentEnrollmentProxyStatus: {
+            detail: string;
+            forwarded_requests: number;
+            healthy_upstreams: number;
+            /** Format: date-time */
+            last_failover_at?: string;
+            /** Format: date-time */
+            last_forwarded_at?: string;
+            public_url?: string;
+            refused_requests: number;
+            /** Format: date-time */
+            reported_at?: string;
+            segment?: string;
+            /** @enum {string} */
+            state: "serving" | "degraded" | "unavailable" | "unverified" | "not_serving" | "unreported";
+            unhealthy_upstreams: number;
+            unknown_upstreams: number;
+            upstream_failures: number;
         };
         AgentJobPosture: {
             claimable_kinds: string[];
