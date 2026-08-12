@@ -78,6 +78,24 @@ func TestReceiptVerifierRejectsSignatureTamperEvidenceMismatchAndWrongKey(t *tes
 		}
 	})
 
+	t.Run("same key wrong artifact domain", func(t *testing.T) {
+		tampered := evidence
+		tampered.Receipt = cloneEvent(receipt)
+		claims := claimsFor(receipt, report)
+		payload, err := json.Marshal(claims)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wrongDomain, err := key.SignArtifact(jose.ArtifactDoctorReceipt, payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tampered.Receipt.Data, _ = json.Marshal(receiptData{JWS: wrongDomain})
+		if err := NewReceiptVerifier(key)(context.Background(), tampered); err == nil {
+			t.Fatal("verifier accepted same-key doctor evidence as a continuity receipt")
+		}
+	})
+
 	t.Run("unsigned receipt field", func(t *testing.T) {
 		tampered := evidence
 		tampered.Receipt = cloneEvent(receipt)

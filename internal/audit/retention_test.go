@@ -218,7 +218,7 @@ func TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := audit.VerifyBundle(string(signed), svc.VerificationKeys())
+	bundle, err := audit.VerifyRetentionBundle(string(signed), svc.VerificationKeys())
 	if err != nil {
 		t.Fatalf("archived bundle failed verification: %v", err)
 	}

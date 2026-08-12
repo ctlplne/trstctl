@@ -210,7 +210,7 @@ func TestPQCMigrationCampaignServedManualClosureSignedEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse offline verifier: %v", err)
 	}
-	payload, err := keys.Verify(closed.Closure.SignedClosure)
+	payload, err := keys.VerifyArtifact(closed.Closure.SignedClosure, jose.ArtifactPQCCampaignClosure)
 	if err != nil {
 		t.Fatalf("verify closure offline: %v", err)
 	}

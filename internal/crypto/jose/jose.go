@@ -187,6 +187,21 @@ func MarshalPublicJWKS(kid string, pub stdcrypto.PublicKey) ([]byte, error) {
 // Verify checks a compact JWS against the set (selecting the key by "kid", or the
 // sole key if the token carries no kid) and returns the decoded payload.
 func (s *JWKSet) Verify(token string) ([]byte, error) {
+	return s.verify(token, "")
+}
+
+// VerifyArtifact checks a compact JWS and requires the protected artifact
+// domain to match expectedArtifact exactly. The audit-evidence key signs several
+// statement families; key and signature validity alone therefore do not prove
+// which statement the signer authorized.
+func (s *JWKSet) VerifyArtifact(token, expectedArtifact string) ([]byte, error) {
+	if expectedArtifact == "" {
+		return nil, errors.New("jose: expected artifact domain is required")
+	}
+	return s.verify(token, expectedArtifact)
+}
+
+func (s *JWKSet) verify(token, expectedArtifact string) ([]byte, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return nil, errors.New("jose: token is not a compact JWS")
@@ -201,6 +216,9 @@ func (s *JWKSet) Verify(token string) ([]byte, error) {
 	}
 	if hdr.Alg != "RS256" {
 		return nil, fmt.Errorf("jose: unsupported alg %q", hdr.Alg)
+	}
+	if expectedArtifact != "" && hdr.ArtifactDomain != expectedArtifact {
+		return nil, fmt.Errorf("jose: artifact domain %q does not match expected %q", hdr.ArtifactDomain, expectedArtifact)
 	}
 	pub, err := s.selectKey(hdr.Kid)
 	if err != nil {

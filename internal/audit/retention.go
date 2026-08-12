@@ -230,7 +230,7 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 		}
 		// 2) Verify it recovers and its chain checks out BEFORE advancing the
 		// served-view checkpoint.
-		if _, err := VerifyBundle(signed, w.svc.VerificationKeys()); err != nil {
+		if _, err := VerifyRetentionBundle(signed, w.svc.VerificationKeys()); err != nil {
 			return fmt.Errorf("archived segment failed verification — checkpoint not advanced: %w", err)
 		}
 		uri, err = w.archiver.Archive(readCtx, tenantID, boundary.Sequence, signed)

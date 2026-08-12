@@ -87,7 +87,7 @@ func TestLegacyAuditKeyMigratesInsidePersistentSigner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignArtifact doctor receipt: %v", err)
 	}
-	gotPayload, err := legacy.JWKS().Verify(string(artifact.GetSignature()))
+	gotPayload, err := legacy.JWKS().VerifyArtifact(string(artifact.GetSignature()), jose.ArtifactDoctorReceipt)
 	if err != nil {
 		t.Fatalf("verify artifact JWS: %v", err)
 	}

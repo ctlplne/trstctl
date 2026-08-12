@@ -1356,7 +1356,7 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 	}
 	retention := read(t, "../internal/audit/retention.go")
 	for _, want := range []string{
-		"VerifyBundle(signed",
+		"VerifyRetentionBundle(signed",
 		"SaveAuditCheckpoint",
 		"VerifyCheckpointSourceRetained",
 		"SourceHistoryRetained",

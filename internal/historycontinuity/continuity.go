@@ -157,7 +157,7 @@ func VerifyReceipt(key *jose.SigningKey, receipt events.Event) (events.TenantDat
 	if strings.TrimSpace(envelope.JWS) == "" {
 		return events.TenantDataRewriteReport{}, errors.New("history continuity: receipt JWS is empty")
 	}
-	payload, err := key.JWKS().Verify(envelope.JWS)
+	payload, err := key.JWKS().VerifyArtifact(envelope.JWS, jose.ArtifactHistoryContinuity)
 	if err != nil {
 		return events.TenantDataRewriteReport{}, fmt.Errorf("history continuity: verify receipt JWS: %w", err)
 	}

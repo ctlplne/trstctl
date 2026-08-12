@@ -333,7 +333,7 @@ func TestDoctorSignsReceiptWithAuditKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := key.JWKS().Verify(r.Signature.JWS)
+	payload, err := key.JWKS().VerifyArtifact(r.Signature.JWS, jose.ArtifactDoctorReceipt)
 	if err != nil {
 		t.Fatalf("receipt signature does not verify against the audit key: %v", err)
 	}

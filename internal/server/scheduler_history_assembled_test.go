@@ -216,7 +216,7 @@ func assertAuditArchivesSecretFree(t *testing.T, dir string, service *audit.Serv
 		if err != nil {
 			return err
 		}
-		bundle, err := audit.VerifyBundle(string(signed), service.VerificationKeys())
+		bundle, err := audit.VerifyRetentionBundle(string(signed), service.VerificationKeys())
 		if err != nil {
 			t.Fatalf("verify retention archive %s: %v", path, err)
 		}

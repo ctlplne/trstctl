@@ -4,6 +4,7 @@ package audit_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -209,6 +210,24 @@ func TestEvidenceBundleVerifies(t *testing.T) {
 // verifies its signature and hash chain, and a tampered one does not.
 func TestVerifyBundle(t *testing.T) {
 	testVerifyBundle(t)
+}
+
+func TestVerifyBundleRejectsSameKeyWrongArtifactDomainAUD120(t *testing.T) {
+	key, err := jose.GenerateRSASigningKey("audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(audit.Bundle{TenantID: tenantA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongKind, err := key.SignArtifact(jose.ArtifactDoctorReceipt, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := audit.VerifyBundle(wrongKind, key.JWKS()); err == nil {
+		t.Fatal("doctor receipt with a bundle-shaped body verified as an audit export")
+	}
 }
 
 func testVerifyBundle(t *testing.T) {

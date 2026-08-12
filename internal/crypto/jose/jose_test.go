@@ -78,6 +78,40 @@ func TestVerifyRejectsTamperedPayload(t *testing.T) {
 	}
 }
 
+func TestVerifyArtifactRejectsSameKeyCrossDomainSubstitutionAUD120(t *testing.T) {
+	sk, err := GenerateRSASigningKey("audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte(`{"format":"looks-compatible"}`)
+	signed, err := sk.SignArtifact(ArtifactDoctorReceipt, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sk.JWKS().VerifyArtifact(signed, ArtifactAuditExport); err == nil {
+		t.Fatal("trusted doctor receipt verified as an audit export under the same key")
+	}
+	got, err := sk.JWKS().VerifyArtifact(signed, ArtifactDoctorReceipt)
+	if err != nil || string(got) != string(payload) {
+		t.Fatalf("exact artifact domain did not verify: payload=%q err=%v", got, err)
+	}
+	if _, err := sk.JWKS().VerifyArtifact(signed, ""); err == nil {
+		t.Fatal("artifact verification accepted an empty expected domain")
+	}
+	ordinary, err := sk.Sign(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sk.JWKS().VerifyArtifact(ordinary, ArtifactDoctorReceipt); err == nil {
+		t.Fatal("artifact verification accepted a signed token with no artifact domain")
+	}
+	// Ordinary JWS consumers intentionally remain signature-only. Identity
+	// tokens do not carry a trstctl artifact domain.
+	if _, err := sk.JWKS().Verify(signed); err != nil {
+		t.Fatalf("ordinary JWS verification changed behavior: %v", err)
+	}
+}
+
 func TestParseJWKSetAndVerify(t *testing.T) {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	token, _ := SignRS256(key, "kid-9", []byte(`{"sub":"carol"}`))

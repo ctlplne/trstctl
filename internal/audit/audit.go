@@ -364,7 +364,18 @@ func (s *Service) VerificationKeys() *jose.JWKSet {
 // do not reproduce the signed ChainHead), which catches tampering with the
 // bundle's records that somehow passed the signature check.
 func VerifyBundle(signed string, keys *jose.JWKSet) (Bundle, error) {
-	payload, err := keys.Verify(signed)
+	return verifyBundle(signed, keys, jose.ArtifactAuditExport)
+}
+
+// VerifyRetentionBundle verifies an archive segment under its distinct signer
+// domain. Retention and interactive exports share a payload schema but are not
+// interchangeable statements.
+func VerifyRetentionBundle(signed string, keys *jose.JWKSet) (Bundle, error) {
+	return verifyBundle(signed, keys, jose.ArtifactAuditRetention)
+}
+
+func verifyBundle(signed string, keys *jose.JWKSet, artifact string) (Bundle, error) {
+	payload, err := keys.VerifyArtifact(signed, artifact)
 	if err != nil {
 		return Bundle{}, err
 	}

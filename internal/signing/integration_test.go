@@ -71,7 +71,7 @@ func TestAuditEvidenceOverRealSignerBinary(t *testing.T) {
 		stop()
 		t.Fatalf("SignArtifact boot 1: %v", err)
 	}
-	if got, err := legacy.JWKS().Verify(string(res.Signature)); err != nil || !bytes.Equal(got, payload) {
+	if got, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactAuditExport); err != nil || !bytes.Equal(got, payload) {
 		stop()
 		t.Fatalf("verify boot-1 evidence: payload=%q err=%v", got, err)
 	}
@@ -89,7 +89,7 @@ func TestAuditEvidenceOverRealSignerBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignArtifact boot 2: %v", err)
 	}
-	if got, err := legacy.JWKS().Verify(string(res.Signature)); err != nil || !bytes.Equal(got, payload) {
+	if got, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactAuditExport); err != nil || !bytes.Equal(got, payload) {
 		t.Fatalf("verify restart evidence: payload=%q err=%v", got, err)
 	}
 	_, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
