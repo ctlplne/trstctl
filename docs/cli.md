@@ -83,7 +83,7 @@ exhaustive subcommand list:
 | `compliance`                       | Compliance/inventory reporting and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules` · `evidence-pack`)                   |
 | `connector target`                 | Deployment connector targets: create, bind, test, deploy, roll back (`create` · `list` · `get` · `update` · `delete` · `bind` · `test` · `deploy` · `rollback`) |
 | `connectors`                       | Connector catalog, outbox circuit-breaker state, delivery receipts (`catalog` · `outbox-circuits` · `deliveries`)                                            |
-| `discovery`                        | Discovery sources, schedules, runs, findings, CT monitoring, drift remediation, continuous monitoring (`sources` · `schedules` · `runs` · `findings` · `ct-monitoring` · `drift-remediation` · `monitoring`) |
+| `discovery`                        | Discovery segments, sources, schedules, runs, findings, CT monitoring, drift remediation, continuous monitoring (`segments create` · `sources` · `schedules` · `runs` · `findings` · `ct-monitoring` · `drift-remediation` · `monitoring`) |
 | `editions`                         | Show edition, license, and FIPS posture (`status`)                                                                                                           |
 | `ephemeral`                        | Approval-gated JIT credentials and short-TTL API keys (`issue` · `api-keys issue` · `approve`)                                                               |
 | `external-cas`                     | List and issue through configured upstream CA integrations (`list` · `issue`)                                                                                |

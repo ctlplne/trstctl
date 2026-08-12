@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -37,6 +38,90 @@ func TestEveryAPIOperationHasACLICommand(t *testing.T) {
 			t.Errorf("no CLI command for API operation %s %s", r.Method, r.Path)
 		}
 	}
+}
+
+func TestDiscoverySegmentCreateEnablesHeadlessSourceWorkflowAUD118(t *testing.T) {
+	segmentBody := `{"name":"edge-prod","ranges":["10.24.0.0/16"],"staleness_hours":24,"excluded":false}`
+	sourceBody := `{"kind":"network","name":"edge-tls","config":{"segment":"edge-prod","targets":["10.24.1.10:443"]}}`
+	var (
+		segmentCreated bool
+		segmentKey     string
+		sourceKey      string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer discovery-token" || r.Header.Get("X-Tenant-ID") != "tenant-a" {
+			t.Errorf("auth headers = Authorization %q tenant %q", r.Header.Get("Authorization"), r.Header.Get("X-Tenant-ID"))
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Content-Type = %q", r.Header.Get("Content-Type"))
+		}
+		switch r.URL.Path {
+		case "/api/v1/discovery/segments":
+			if r.Method != http.MethodPost || !sameJSON(body, []byte(segmentBody)) {
+				t.Errorf("segment request = %s %s body=%s", r.Method, r.URL.Path, body)
+			}
+			segmentKey = r.Header.Get("Idempotency-Key")
+			segmentCreated = true
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"id":"segment-1","name":"edge-prod","ranges":["10.24.0.0/16"]}`)
+		case "/api/v1/discovery/sources":
+			if !segmentCreated {
+				t.Error("source create arrived before segment declaration")
+			}
+			if r.Method != http.MethodPost || !sameJSON(body, []byte(sourceBody)) {
+				t.Errorf("source request = %s %s body=%s", r.Method, r.URL.Path, body)
+			}
+			sourceKey = r.Header.Get("Idempotency-Key")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"id":"source-1","kind":"network","name":"edge-tls"}`)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	env := cli.Env{Server: srv.URL, Token: "discovery-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+
+	if code, _, stderr := run(t, []string{"discovery", "segments", "create", "-f", "-"}, env, segmentBody); code != 0 {
+		t.Fatalf("segment create exit = %d, stderr = %q", code, stderr)
+	}
+	if code, _, stderr := run(t, []string{"discovery", "sources", "create", "-f", "-"}, env, sourceBody); code != 0 {
+		t.Fatalf("source create exit = %d, stderr = %q", code, stderr)
+	}
+	if segmentKey == "" || sourceKey == "" || segmentKey == sourceKey {
+		t.Fatalf("mutation keys = segment %q source %q; want two unique non-empty keys", segmentKey, sourceKey)
+	}
+}
+
+func TestDiscoverySegmentCreatePropagatesStructuredFailureAUD118(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusUnprocessableEntity,
+		`{"type":"https://trstctl.dev/problems/invalid-segment","title":"Invalid segment","status":422,"detail":"range is outside the approved estate"}`,
+		&captured)
+	env := cli.Env{Server: srv.URL, Token: "discovery-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"discovery", "segments", "create", "-f", "-"}, env,
+		`{"name":"outside","ranges":["203.0.113.0/24"]}`)
+	var problem map[string]any
+	decodeErr := json.Unmarshal([]byte(stdout), &problem)
+	if code != 1 || decodeErr != nil || problem["type"] != "https://trstctl.dev/problems/invalid-segment" ||
+		problem["detail"] != "range is outside the approved estate" || !strings.Contains(stderr, "server returned status 422") {
+		t.Fatalf("failure = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if captured.Path != "/api/v1/discovery/segments" || captured.Header.Get("Idempotency-Key") == "" {
+		t.Fatalf("captured failure request = %s key=%q", captured.Path, captured.Header.Get("Idempotency-Key"))
+	}
+}
+
+func sameJSON(left, right []byte) bool {
+	var l, r any
+	return json.Unmarshal(left, &l) == nil && json.Unmarshal(right, &r) == nil && reflect.DeepEqual(l, r)
 }
 
 func TestExecutableMigrationCommandsCoverEveryDurableControlAUD40(t *testing.T) {

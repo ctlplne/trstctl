@@ -181,9 +181,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `revocation health` command raises it to 361 and exposes the same signed
 	// relay evidence as the API and console. AUD-40's six `migrations`
 	// start/list/show/pause/resume/rollback commands raise it to 367 and map the
-	// complete durable CA-wave control surface onto F48.
-	if len(out) != 367 {
-		t.Fatalf("CLI commands = %d, want 367", len(out))
+	// complete durable CA-wave control surface onto F48. AUD-118's `discovery
+	// segments create` raises it to 368 and closes the prerequisite already
+	// served by GUI-F002's createDiscoverySegment API operation.
+	if len(out) != 368 {
+		t.Fatalf("CLI commands = %d, want 368", len(out))
 	}
 	return out
 }

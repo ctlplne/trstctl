@@ -358,8 +358,13 @@ requires an `Idempotency-Key` header).
 Network discovery is live too:
 
 ```sh
+cat > segment.json <<'JSON'
+{"name":"edge","ranges":["10.0.0.0/24"],"staleness_hours":24,"excluded":false}
+JSON
+trstctl-cli discovery segments create -f segment.json
+
 cat > source.json <<'JSON'
-{"kind":"network","name":"edge","config":{"targets":["10.0.0.10:443"]}}
+{"kind":"network","name":"edge-tls","config":{"segment":"edge","targets":["10.0.0.10:443"]}}
 JSON
 trstctl-cli discovery sources create -f source.json
 trstctl-cli discovery sources list
@@ -373,7 +378,9 @@ trstctl-cli discovery findings list --run_id <run-id>
 trstctl-cli nhi posture shadow
 ```
 
-Those map to `POST|GET /api/v1/discovery/sources`,
+The segment command maps to `POST /api/v1/discovery/segments`; declare that
+bounded estate scope before creating any network or SSH source. The remaining
+commands map to `POST|GET /api/v1/discovery/sources`,
 `POST|GET /api/v1/discovery/schedules`, `POST|GET /api/v1/discovery/runs`,
 `GET /api/v1/discovery/runs/{id}`, `GET /api/v1/discovery/findings`,
 `POST /api/v1/discovery/findings/{id}/claim`, and

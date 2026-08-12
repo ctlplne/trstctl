@@ -265,7 +265,7 @@
                 "web/src/lib/api.ts"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence and COMPETE-031. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings. COMPETE-031 update: service_account sources now require both AD/on-prem and cloud account observations and record CAP-NHI-03 service_account findings without credential bodies. COMPETE-019 update: GET /api/v1/discovery/monitoring and trstctl discovery monitoring expose CAP-DISC-06 continuous monitoring posture by rolling up tenant sources, enabled schedules, last runs, findings, and certificate inventory counts. F1/AUD-35: Discovery creates tenant AD CS sources and schedules whose same-transaction adcs.inventory outbox intents bind a network-role relay and credential reference; the bounded read-only LDAP collector requests the DACL security descriptor, normalizes certificate-enrollment trustees as SIDs, and projects signed success/failure lifecycle plus cold-replayable Posture evidence. A BER wire fixture proves exact Search-only operations and the Microsoft DACL control; live Windows forest interoperability remains an explicitly recorded release-lab boundary.",
+            "notes": "Closed by route-level feature-map evidence and COMPETE-031. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery segment/source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings. AUD-118: terminal-only operators can declare the exact segment prerequisite with `discovery segments create` before creating a network or SSH source; focused tests prove tenant/auth/body/idempotency, structured failure propagation, and the ordered segment-to-source workflow. COMPETE-031 update: service_account sources now require both AD/on-prem and cloud account observations and record CAP-NHI-03 service_account findings without credential bodies. COMPETE-019 update: GET /api/v1/discovery/monitoring and trstctl discovery monitoring expose CAP-DISC-06 continuous monitoring posture by rolling up tenant sources, enabled schedules, last runs, findings, and certificate inventory counts. F1/AUD-35: Discovery creates tenant AD CS sources and schedules whose same-transaction adcs.inventory outbox intents bind a network-role relay and credential reference; the bounded read-only LDAP collector requests the DACL security descriptor, normalizes certificate-enrollment trustees as SIDs, and projects signed success/failure lifecycle plus cold-replayable Posture evidence. A BER wire fixture proves exact Search-only operations and the Microsoft DACL control; live Windows forest interoperability remains an explicitly recorded release-lab boundary.",
             "api_surface": [
                 "claimDiscoveryFinding",
                 "createDiscoverySchedule",
@@ -287,6 +287,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "discovery segments create",
                 "discovery sources create",
                 "discovery sources list",
                 "discovery schedules create",
@@ -338,6 +339,7 @@
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: discovery segments create",
                         "CLI command: discovery sources create",
                         "CLI command: discovery sources list",
                         "CLI command: discovery schedules create",
@@ -358,6 +360,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: createDiscoverySegment",
                         "OpenAPI operationId: createDiscoverySource",
                         "OpenAPI operationId: listDiscoverySources",
                         "OpenAPI operationId: createDiscoverySchedule",
@@ -379,6 +382,7 @@
                 },
                 "test": {
                     "evidence": [
+                        "TestDiscoverySegmentCreateEnablesHeadlessSourceWorkflowAUD118 covers exact segment request body, tenant/auth headers, unique mutation keys, and ordered source creation after declaration; TestDiscoverySegmentCreatePropagatesStructuredFailureAUD118 preserves problem details and non-zero exit status.",
                         "TestServedDiscoveryNetworkScanEndToEnd covers source creation, run queueing, outbox execution, discovery findings, and certificate inventory projection.",
                         "TestServedContinuousMonitoringCentralizedInventoryCAPDISC06 covers source scheduling, outbox execution, discovery findings, certificate inventory projection, and the served continuous monitoring rollup.",
                         "TestServedServiceAccountDiscoveryCAPNHI03EndToEnd covers source creation, run queueing, outbox execution, AD/cloud service-account findings, capability metadata, and metadata-only evidence.",
@@ -413,7 +417,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
+                        "Discovery mutations append discovery.segment.upserted, discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
                         "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
                     ],
                     "refs": [
