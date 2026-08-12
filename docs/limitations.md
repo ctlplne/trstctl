@@ -1226,12 +1226,23 @@ that looks, in every console the organization owns, like an ordinary certificate
 template. Nobody has an inventory of these, because the information lives in the
 directory rather than anywhere a PKI product looked.
 
-`adcs.inventory` is a relay job that reads it: `pKICertificateTemplate` and
-`pKIEnrollmentService` objects under `CN=Public Key Services`, capturing schema
-version, `msPKI-Certificate-Name-Flag`, the enrollment and private-key flags,
-EKUs, and which CAs publish each template. It runs in-domain because a domain
-controller's LDAP is not reachable from a hosted control plane and should not
-be — an in-domain relay is the only vantage from which this inventory exists.
+An operator creates an `adcs` discovery source and schedule with an LDAP/LDAPS
+authority, configuration naming context, read-only bind DN, `secret://`
+credential reference, and optional exact relay UUID. The mutation emits the
+immutable discovery source/run events and writes one `adcs.inventory` outbox
+intent in the same transaction. Only a network-role relay can claim it; an
+exact UUID pins it further. The control-plane worker recognizes the job as
+estate-owned and performs no directory I/O. Concurrent schedule leaders use a
+database transaction lock and database-clock due check, so one due interval
+produces one run rather than two.
+
+`adcs.inventory` reads `pKICertificateTemplate` and `pKIEnrollmentService`
+objects under `CN=Public Key Services`, capturing schema version,
+`msPKI-Certificate-Name-Flag`, the enrollment and private-key flags, EKUs,
+which CAs publish each template, and the template DACL. It runs in-domain
+because a domain controller's LDAP is not reachable from a hosted control plane
+and should not be — an in-domain relay is the only vantage from which this
+inventory exists.
 
 **The combinations are named, not the flags.** Nobody spots an escalation path
 by scanning four boolean columns across ninety templates, so the analysis reports
@@ -1260,22 +1271,30 @@ nobody publishes is a latent risk an operator can fix calmly.
 **Read-only, structurally.** The directory interface has exactly one method and
 it is `Search`; a test asserts that. An inventory tool pointed at a domain
 controller must be incapable of modifying one, not merely careful. The queries
-name the attributes they use rather than requesting a wildcard, and are scoped to
-the Public Key Services container. A plain `ldap://` connection is upgraded with
-StartTLS or the read does not happen: a template inventory is the map of a
-domain's escalation paths, and reading it in the clear publishes that map to
-anyone on the segment. Anonymous binds are refused rather than attempted —
-where they would succeed, the directory is misconfigured in a way worth
-reporting rather than quietly relying on.
+name the attributes they use rather than requesting a wildcard, are bounded to
+2,048 templates and 512 enrollment services, and are scoped to the Public Key
+Services container. The template query requests `nTSecurityDescriptor` with
+Microsoft's critical `LDAP_SERVER_SD_FLAGS_OID` (`1.2.840.113556.1.4.801`) and
+the DACL-only flag; owner, group, and SACL data are not requested. A plain
+`ldap://` connection is upgraded with StartTLS or the read does not happen: a
+template inventory is the map of a domain's escalation paths, and reading it in
+the clear publishes that map to anyone on the segment. Anonymous binds are
+refused rather than attempted — where they would succeed, the directory is
+misconfigured in a way worth reporting rather than quietly relying on. The
+redeemed bind credential is attempt-scoped and never enters the intent, event,
+report, or posture row.
 
-The Posture console shows it: templates worst-first, what each one permits and
-the specific fix, whether a CA publishes it, and which relay observed it when.
+The Posture console shows it: configured directory readers with
+pending/running/succeeded/failed lifecycle, templates worst-first, what each one
+permits and the specific fix, whether a CA publishes it, canonical Windows SIDs
+granted the enrollment extended right, and which relay observed it when.
 The empty state distinguishes "no relay has read a directory yet" from "no AD CS
 estate", because those are opposite facts an empty table cannot tell apart. The
-posture read model is **ephemeral by classification** — a restore does not bring
-it back, deliberately: a relay re-reads the directory on its next sweep, and
-restoring yesterday's template list as current would keep a template someone has
-since fixed reading dangerous.
+posture table is only an event projection. The immutable
+`adcs.template.inventory.observed` event is the authority, snapshot/restore
+includes the projection, and a cold replay rebuilds the same rows. Observation
+time and relay identity stay visible so restored evidence cannot masquerade as
+a fresh directory read.
 
 **Changes between sweeps are reported semantically.** A textual diff of two
 directory dumps is useless — attribute values are bit fields, and
@@ -1297,14 +1316,27 @@ that column existed is skipped and re-baselines on one quiet sweep, rather than
 being reconstructed into a template whose flags all read false and reported as
 having just turned dangerous.
 
-**What is not served:** enrollment ACLs. The template's security descriptor
-(`nTSecurityDescriptor`) says *who* holds the enrollment right, and that is most
-of how dangerous a template is — a supplies-subject template restricted to two
-PKI admins is a different risk from the same template open to Domain Users. It
-is not yet decoded, so findings report what a template PERMITS without reporting
-who may use it. The console carries that caveat on the page itself rather than
-only here, because an operator reading a critical finding needs to know what it
-does not account for at the moment they read it.
+**What is not inferred:** effective user access. The descriptor parser handles
+self-relative DACLs, standard and object allow/deny ACEs, Generic All, the
+certificate-enrollment extended-right GUID, SID byte order, exact-trustee deny,
+null DACLs, and malformed-value refusal. It reports stable ACL trustees as
+canonical SIDs. It does not expand nested groups, evaluate conditional ACEs, or
+invent a user's effective token; those are directory-side authorization
+decisions and the console says so.
+
+**External Windows-lab boundary.** The repository fixture runs the real LDAP
+client over a BER wire, accepts exactly the two bounded SearchRequest operations,
+checks the critical DACL-only control and named attributes, returns a binary
+self-relative descriptor, and proves the normalized enrollment SID reaches the
+inventory. The served journey separately proves real PostgreSQL, JetStream,
+out-of-process signer, mTLS relay claim, single-use credential redemption,
+signed result, event projection, cold replay, and console/API readback. This
+development environment does not contain a licensed Windows Server forest with
+AD DS and AD CS, so forest policy, domain-controller authorization, and Microsoft
+implementation interoperability still require the release lab. A release must
+run the same read-only account against that lab and retain the domain-controller
+audit showing Bind/Search only; the repository does not claim that external
+receipt exists here.
 
 ### Segment sweeps run from inside the segment
 

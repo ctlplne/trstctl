@@ -277,9 +277,9 @@ type agentService struct {
 	// recordDiscoveryScan validates and projects a network relay's signed scan
 	// report before the exact job claim is closed (AUD-28/C2).
 	recordDiscoveryScan func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
-	// recordADCSPosture turns a relay's AD CS observation into the Posture
-	// console's read model (epic F1).
-	recordADCSPosture func(ctx context.Context, tenantID, agent, idempotencyKey, report string)
+	// recordADCSInventory validates and projects a signed AD CS result before
+	// the exact job claim closes (AUD-35/F1).
+	recordADCSInventory func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
 
 	// recordEndpointVerification turns a relay's verification sweep into
 	// observed endpoint state (epic D2). Without it the sweep's report would

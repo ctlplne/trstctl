@@ -89,8 +89,21 @@ const (
 // analysis testable without a directory, and keeps the wire library at one
 // well-defined edge.
 type Entry struct {
-	DN         string
-	Attributes map[string][]string
+	DN               string
+	Attributes       map[string][]string
+	BinaryAttributes map[string][][]byte
+}
+
+// SearchRequest is one bounded, read-only LDAP query. DACLOnly asks the wire
+// adapter to attach LDAP_SERVER_SD_FLAGS_OID with DACL_SECURITY_INFORMATION;
+// keeping that request explicit is what lets tests prove the directory reader
+// neither pulls SACLs nor relies on a server default.
+type SearchRequest struct {
+	BaseDN     string
+	Filter     string
+	Attributes []string
+	MaxEntries int
+	DACLOnly   bool
 }
 
 // Searcher is the narrow LDAP surface this package depends on.
@@ -100,7 +113,7 @@ type Entry struct {
 // structurally incapable of changing one, not merely careful not to. A test
 // asserts this interface has exactly one method for that reason.
 type Searcher interface {
-	Search(ctx context.Context, baseDN string, filter string, attributes []string) ([]Entry, error)
+	Search(ctx context.Context, request SearchRequest) ([]Entry, error)
 }
 
 // Template is one certificate template and the facts that decide whether it is
@@ -173,6 +186,7 @@ var templateAttributes = []string{
 	"msPKI-Enrollment-Flag",
 	"msPKI-Private-Key-Flag",
 	"pKIExtendedKeyUsage",
+	"nTSecurityDescriptor",
 }
 
 var enrollmentServiceAttributes = []string{
@@ -198,17 +212,21 @@ func Collect(ctx context.Context, s Searcher, configurationDN string) (Inventory
 	}
 	base := PublicKeyServicesRDN + "," + strings.TrimSpace(configurationDN)
 
-	templateEntries, err := s.Search(ctx,
-		"CN=Certificate Templates,"+base,
-		"(objectClass="+ClassCertificateTemplate+")",
-		templateAttributes)
+	templateEntries, err := s.Search(ctx, SearchRequest{
+		BaseDN:     "CN=Certificate Templates," + base,
+		Filter:     "(objectClass=" + ClassCertificateTemplate + ")",
+		Attributes: append([]string(nil), templateAttributes...),
+		MaxEntries: MaxTemplates, DACLOnly: true,
+	})
 	if err != nil {
 		return Inventory{}, fmt.Errorf("adcs: read certificate templates: %w", err)
 	}
-	serviceEntries, err := s.Search(ctx,
-		"CN=Enrollment Services,"+base,
-		"(objectClass="+ClassEnrollmentService+")",
-		enrollmentServiceAttributes)
+	serviceEntries, err := s.Search(ctx, SearchRequest{
+		BaseDN:     "CN=Enrollment Services," + base,
+		Filter:     "(objectClass=" + ClassEnrollmentService + ")",
+		Attributes: append([]string(nil), enrollmentServiceAttributes...),
+		MaxEntries: MaxEnrollmentServices,
+	})
 	if err != nil {
 		return Inventory{}, fmt.Errorf("adcs: read enrollment services: %w", err)
 	}
@@ -232,7 +250,10 @@ func Collect(ctx context.Context, s Searcher, configurationDN string) (Inventory
 	})
 
 	for _, entry := range templateEntries {
-		t := templateFromEntry(entry)
+		t, err := templateFromEntry(entry)
+		if err != nil {
+			return Inventory{}, fmt.Errorf("adcs: decode certificate template %q: %w", entry.DN, err)
+		}
 		if names := publishedBy[t.Name]; len(names) > 0 {
 			sort.Strings(names)
 			t.PublishedBy = names
@@ -246,12 +267,20 @@ func Collect(ctx context.Context, s Searcher, configurationDN string) (Inventory
 }
 
 // templateFromEntry decodes one template object.
-func templateFromEntry(entry Entry) Template {
+func templateFromEntry(entry Entry) (Template, error) {
 	nameFlag := intAttr(entry.Attributes["msPKI-Certificate-Name-Flag"])
 	enrollFlag := intAttr(entry.Attributes["msPKI-Enrollment-Flag"])
 	keyFlag := intAttr(entry.Attributes["msPKI-Private-Key-Flag"])
 	ekus := append([]string(nil), entry.Attributes["pKIExtendedKeyUsage"]...)
 	sort.Strings(ekus)
+	descriptors := entry.BinaryAttributes["nTSecurityDescriptor"]
+	if len(descriptors) != 1 {
+		return Template{}, errors.New("directory returned no single nTSecurityDescriptor")
+	}
+	principals, err := EnrollmentPrincipalsFromSecurityDescriptor(descriptors[0])
+	if err != nil {
+		return Template{}, err
+	}
 	return Template{
 		Name:                    first(entry.Attributes["cn"]),
 		DisplayName:             first(entry.Attributes["displayName"]),
@@ -262,7 +291,8 @@ func templateFromEntry(entry Entry) Template {
 		RequiresManagerApproval: enrollFlag&EnrollmentFlagPendManagerApproval != 0,
 		ExportableKey:           keyFlag&PrivateKeyFlagExportableKey != 0,
 		EKUs:                    ekus,
-	}
+		EnrollmentPrincipals:    principals,
+	}, nil
 }
 
 func first(values []string) string {

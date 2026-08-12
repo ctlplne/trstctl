@@ -178,16 +178,6 @@ var Ephemeral = []string{
 	// fenced, while a full restore clears the target's row only after importing and
 	// validating exact receiver authority.
 	"secret_sync_recovery_authority",
-	// F1 AD CS template posture is an OBSERVATION of an external system, not a
-	// fact this system owns. Nothing in the event log can rebuild it, but
-	// nothing needs to: a relay re-reads the directory on its next sweep and the
-	// row set is replaced wholesale. Restoring a stale copy would be actively
-	// worse than an empty page — it would show yesterday's template list as
-	// current, and a template someone has since fixed would keep reading
-	// dangerous. Empty until the next sweep is the honest post-restore state,
-	// and the console's "no relay has read a directory yet" empty state says so
-	// rather than implying the estate is clean.
-	"adcs_template_posture",
 	// projection_checkpoint is the read-model projection watermark (SPINE-007). On
 	// restore the read model is truncated and re-derived by projections.Rebuild,
 	// which resets the checkpoint to head — so it is regenerated, never depended on.

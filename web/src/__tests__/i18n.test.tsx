@@ -567,8 +567,13 @@ describe("i18n boundary", () => {
       // and verified terminal executor. “Unbound” must remain an absence state,
       // and control-plane execution must not translate as relay execution.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "7046761be15320158fe78e1efed1faff36a3ffc5fcba2f494001f7e4770c8ac4",
-      "de-DE": "6a64cbcae5a079c0107d988e2a5f9bd70a2af66c2fc2e367316f43e7f7761728",
+      // AUD-35 AD CS inventory re-pin: source creation, exact network-relay
+      // selection, reference-only bind credentials, source lifecycle, and the
+      // enrollment-principal SID column are named in every locale. The console
+      // stays TLS-verifying; the lab-only API override remains documented.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "ec6a52351cc0b8b4b7578de638590f403631f1cfed8e535786b4d1421b48d464",
+      "de-DE": "94820f55d8b59686dbc7ca0aa1637f088b55b76642741aa02746300928650119",
     });
   });
 

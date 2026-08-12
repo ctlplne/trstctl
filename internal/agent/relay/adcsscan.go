@@ -33,42 +33,11 @@ import (
 // KindADCSInventory is the job kind for a template sweep.
 const KindADCSInventory = "adcs.inventory"
 
-// ADCSInventoryIntent is the job payload.
-type ADCSInventoryIntent struct {
-	// URL is the directory to read, ldap:// or ldaps://. StartTLS is used on a
-	// plain ldap:// URL, because a template inventory carries the map of a
-	// domain's escalation paths and reading it in the clear would publish that
-	// map to anyone on the segment.
-	URL string `json:"url"`
-	// ConfigurationDN is the forest configuration naming context. It is required
-	// rather than derived from the domain, because a forest root and a domain
-	// are not the same thing and guessing gets it wrong in exactly the
-	// multi-domain estates where this matters most.
-	ConfigurationDN string `json:"configuration_dn"`
-	// BindDN and the credential reference authenticate the read. Anonymous LDAP
-	// is refused: it usually fails against a hardened DC anyway, and where it
-	// succeeds it means the directory is misconfigured in a way worth reporting
-	// rather than quietly relying on.
-	BindDN string `json:"bind_dn"`
-	// PasswordRef names the credential the relay redeems for this attempt, the
-	// same way a connector deploy does. The value never travels in this payload.
-	PasswordRef string `json:"password_ref"`
-	// InsecureSkipVerify is a lab escape hatch for a DC using a self-signed
-	// certificate. It is off by default and reported in the result, so an
-	// inventory taken without verifying the directory's identity is never
-	// mistaken for one taken with it.
-	InsecureSkipVerify bool `json:"insecure_skip_verify,omitempty"`
-}
+// ADCSInventoryIntent is the shared reference-only job payload.
+type ADCSInventoryIntent = adcs.InventoryIntent
 
 // ADCSReport is what the relay returns.
-type ADCSReport struct {
-	Inventory adcs.Inventory `json:"inventory"`
-	Findings  []adcs.Finding `json:"findings"`
-	// DirectoryVerified reports whether the directory's TLS identity was
-	// checked. A template inventory taken over an unverified connection is
-	// weaker evidence and says so rather than reading identically.
-	DirectoryVerified bool `json:"directory_verified"`
-}
+type ADCSReport = adcs.InventoryReport
 
 // adcsDialTimeout bounds the connection. A domain controller that does not
 // answer promptly is one an operator needs told about, not waited on.
@@ -79,11 +48,34 @@ const adcsDialTimeout = 20 * time.Second
 // methods are not reachable through this type.
 type ldapSearcher struct{ conn *ldap.Conn }
 
-func (l ldapSearcher) Search(_ context.Context, baseDN, filter string, attributes []string) ([]adcs.Entry, error) {
+const ldapServerSDFlagsOID = "1.2.840.113556.1.4.801"
+
+// ldapSearchControls returns the exact Microsoft control that asks for only the
+// DACL portion of nTSecurityDescriptor. Without it a default AD search may ask
+// for owner/group/SACL too, which is more privilege and data than this reader
+// needs. The value is BER(SEQUENCE(INTEGER(0x4))).
+func ldapSearchControls(request adcs.SearchRequest) []ldap.Control {
+	if !request.DACLOnly {
+		return nil
+	}
+	return []ldap.Control{&ldap.ControlString{
+		ControlType:  ldapServerSDFlagsOID,
+		Criticality:  true,
+		ControlValue: string([]byte{0x30, 0x03, 0x02, 0x01, 0x04}),
+	}}
+}
+
+func (l ldapSearcher) Search(ctx context.Context, request adcs.SearchRequest) ([]adcs.Entry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if request.MaxEntries <= 0 || request.MaxEntries > adcs.MaxTemplates {
+		return nil, errors.New("relay: AD CS LDAP search has an invalid entry bound")
+	}
 	req := ldap.NewSearchRequest(
-		baseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
-		0, int(adcsDialTimeout.Seconds()), false,
-		filter, attributes, nil,
+		request.BaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
+		request.MaxEntries, int(adcsDialTimeout.Seconds()), false,
+		request.Filter, request.Attributes, ldapSearchControls(request),
 	)
 	res, err := l.conn.Search(req)
 	if err != nil {
@@ -92,16 +84,31 @@ func (l ldapSearcher) Search(_ context.Context, baseDN, filter string, attribute
 	out := make([]adcs.Entry, 0, len(res.Entries))
 	for _, entry := range res.Entries {
 		attrs := make(map[string][]string, len(entry.Attributes))
+		binaryAttrs := make(map[string][][]byte, 1)
 		for _, a := range entry.Attributes {
-			attrs[a.Name] = a.Values
+			if strings.EqualFold(a.Name, "nTSecurityDescriptor") {
+				values := make([][]byte, 0, len(a.ByteValues))
+				for _, value := range a.ByteValues {
+					values = append(values, append([]byte(nil), value...))
+				}
+				binaryAttrs["nTSecurityDescriptor"] = values
+				continue
+			}
+			attrs[a.Name] = append([]string(nil), a.Values...)
 		}
-		out = append(out, adcs.Entry{DN: entry.DN, Attributes: attrs})
+		out = append(out, adcs.Entry{DN: entry.DN, Attributes: attrs, BinaryAttributes: binaryAttrs})
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
 // InventoryADCS reads one domain's template posture.
 func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Material) (ADCSReport, error) {
+	if intent.DryRun {
+		return ADCSReport{}, errors.New("relay: AD CS inventory is already read-only and does not support dry-run")
+	}
 	url := strings.TrimSpace(intent.URL)
 	if url == "" {
 		return ADCSReport{}, errors.New("relay: AD CS inventory needs a directory URL")
@@ -145,11 +152,19 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	if err != nil {
 		return ADCSReport{}, err
 	}
-	return ADCSReport{
+	if len(inventory.Templates) == 0 {
+		return ADCSReport{}, errors.New("relay: AD CS directory returned no templates")
+	}
+	report := ADCSReport{
+		Status:            "succeeded",
 		Inventory:         inventory,
 		Findings:          adcs.Findings(inventory),
 		DirectoryVerified: !intent.InsecureSkipVerify,
-	}, nil
+	}
+	if err := adcs.ValidateInventoryReport(intent, report); err != nil {
+		return ADCSReport{}, err
+	}
+	return report, nil
 }
 
 // runADCSInventory executes an adcs.inventory job.
@@ -162,10 +177,9 @@ func runADCSInventory(ctx context.Context, ch Channel, job Job, material Materia
 	adcsReport, err := InventoryADCS(ctx, intent, material)
 	if err != nil {
 		// The directory's own error text can name accounts and DNs. It stays
-		// local; the control plane gets a closed phrase and the operator reads
-		// the detail on the relay.
-		report(ctx, ch, job, OutcomeFailed, "the AD CS inventory could not be read from this relay")
-		return false
+		// local. The signed semantic report carries only a closed code; transport
+		// outcome is executed because the relay did execute this read attempt.
+		adcsReport = ADCSReport{Status: "failed", ErrorCode: "directory_read_failed"}
 	}
 	detail, err := json.Marshal(adcsReport)
 	if err != nil {

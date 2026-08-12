@@ -35,8 +35,12 @@ const (
 // Intent is the immutable discovery.run command. For relay-owned source kinds,
 // the queued event and the outbox payload are the same bytes.
 type Intent struct {
-	ID            string   `json:"id"`
-	SourceID      string   `json:"source_id"`
+	ID       string `json:"id"`
+	SourceID string `json:"source_id"`
+	// JobKind is empty for historical/control-plane and ordinary segment-scan
+	// events. Specialized relay commands set it so boot reconciliation restores
+	// the same destination instead of guessing from mutable source state.
+	JobKind       string   `json:"job_kind,omitempty"`
 	ScheduleID    *string  `json:"schedule_id,omitempty"`
 	DryRun        bool     `json:"dry_run"`
 	RequestedBy   string   `json:"requested_by,omitempty"`

@@ -84,7 +84,10 @@ import (
 // the sorted tenant IDs. A v21 row cannot prove that a privacy-erased tenant's row
 // was not deleted while another tenant's positive offset survived, so it is never
 // allowed to move a cold restore above sequence zero.
-const SnapshotFormatVersion = 22
+// Bumped to 23 when AD CS template posture became a real immutable-event
+// projection. A v22 snapshot cannot carry that table and therefore must not skip
+// the inventory observation events that rebuild it.
+const SnapshotFormatVersion = 23
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -145,6 +148,9 @@ var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme
 	"adcs_ca_databases",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
+	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
+	// signed inventory observation event instead of an ephemeral SQL callback.
+	"adcs_template_posture",
 	// Format 21: parent before child keeps restore safe for the decision table's
 	// composite foreign key into the immutable request.
 	"operation_approval_requests", "operation_approval_decisions"}

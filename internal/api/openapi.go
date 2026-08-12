@@ -387,18 +387,27 @@ func componentSchemas() map[string]*Schema {
 	}, "attribute", "observed")
 	adcsTemplate := object(map[string]*Schema{
 		"domain": str(), "template": str(), "display_name": str(),
-		"schema_version": {Type: "integer"},
-		"published_by":   {Type: "array", Items: str()},
+		"schema_version":        {Type: "integer"},
+		"published_by":          {Type: "array", Items: str()},
+		"enrollment_principals": {Type: "array", Items: str()},
 		// Empty severity means no findings, which is a real state; the console
 		// renders it clean rather than unknown.
 		"worst_severity": {Type: "string", Enum: []string{"", "medium", "high", "critical"}},
 		"findings":       {Type: "array", Items: ref("ADCSTemplateFinding")},
 		"observed_by":    str(), "observed_at": timestamp(),
 	}, "domain", "template", "published_by", "worst_severity", "findings", "observed_at")
+	adcsInventorySource := object(map[string]*Schema{
+		"source_id": uuid(), "name": str(), "schedule_id": uuid(),
+		"schedule_enabled": {Type: "boolean"}, "monitoring_interval_seconds": {Type: "integer"},
+		"last_run_id":     uuid(),
+		"last_run_status": {Type: "string", Enum: []string{"pending", "running", "succeeded", "failed"}},
+		"last_run_error":  str(), "last_run_created_at": timestamp(), "last_run_completed_at": timestamp(),
+	}, "source_id", "name", "schedule_enabled", "last_run_status")
 	adcsPosture := object(map[string]*Schema{
 		// observed distinguishes "no AD CS estate" from "nobody has looked",
 		// which are opposite facts an empty list cannot tell apart.
 		"observed":  {Type: "boolean"},
+		"sources":   {Type: "array", Items: ref("ADCSInventorySource")},
 		"templates": {Type: "array", Items: ref("ADCSTemplate")},
 		"critical":  {Type: "integer"}, "high": {Type: "integer"}, "medium": {Type: "integer"},
 		"guidance": str(),
@@ -1401,7 +1410,7 @@ func componentSchemas() map[string]*Schema {
 		"residuals":  {Type: "array", Items: ref("CTLogSubmissionNote")},
 	}, "capability", "queued", "logs")
 
-	discoverySourceKinds := []string{"network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", "nhi_cross_surface", "oauth_grant", "service_account", "nhi_behavior", "credential_compromise", "k8s_ingress_gateway"}
+	discoverySourceKinds := []string{"network", "ssh", "adcs", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", "nhi_cross_surface", "oauth_grant", "service_account", "nhi_behavior", "credential_compromise", "k8s_ingress_gateway"}
 	discoverySource := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: discoverySourceKinds},
 		"name": str(), "config": {Type: "object"}, "created_at": timestamp(), "updated_at": timestamp(),
@@ -4911,6 +4920,7 @@ func componentSchemas() map[string]*Schema {
 		"AgentJobRedemptions":                      agentJobRedemptions,
 		"AgentJobReceipts":                         agentJobReceipts,
 		"ADCSPosture":                              adcsPosture,
+		"ADCSInventorySource":                      adcsInventorySource,
 		"ADCSTemplate":                             adcsTemplate,
 		"ADCSTemplateFinding":                      adcsTemplateFinding,
 		"ADCSFindingEvidence":                      adcsFindingEvidence,

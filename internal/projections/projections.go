@@ -22,6 +22,7 @@ import (
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/custody"
+	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
@@ -143,6 +144,7 @@ const (
 	EventDiscoveryFindingRecorded                 = "discovery.finding.recorded"
 	EventDiscoveryFindingTriageChanged            = "discovery.finding.triage_changed"
 	EventDiscoveryRunCompleted                    = "discovery.run.completed"
+	EventADCSInventoryObserved                    = "adcs.template.inventory.observed"
 	EventACMEDNS01ProviderConfigUpserted          = "acme.dns01.provider_config.upserted"
 	EventACMEDNS01ProviderConfigDeleted           = "acme.dns01.provider_config.deleted"
 	EventACMEDNS01Preflighted                     = "acme.dns01.preflighted"
@@ -2688,6 +2690,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryFindingRecorded:                 {1: true},
 	EventDiscoveryFindingTriageChanged:            {1: true},
 	EventDiscoveryRunCompleted:                    {1: true},
+	EventADCSInventoryObserved:                    {1: true},
 	EventACMEDNS01ProviderConfigUpserted:          {1: true},
 	EventACMEDNS01ProviderConfigDeleted:           {1: true},
 	EventACMEDNS01Preflighted:                     {1: true},
@@ -3619,6 +3622,51 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		// same transaction; the run row just applied supplies the source
 		// identity (AN-2, idempotent by event sequence).
 		return p.store.ApplyDiscoveryCoverageRunTx(ctx, tx, e.TenantID, pl.ID, pl.Status, completedAt, e.Sequence)
+	case EventADCSInventoryObserved:
+		var pl adcsdiscovery.InventoryObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RunID == "" || pl.SourceID == "" || strings.TrimSpace(pl.Domain) == "" ||
+			pl.AgentID == "" || strings.TrimSpace(pl.AgentName) == "" {
+			return errors.New("projections: AD CS inventory observation is missing run/source/domain/agent authority")
+		}
+		if err := adcsdiscovery.ValidateInventoryReport(adcsdiscovery.InventoryIntent{
+			ID: pl.RunID, SourceID: pl.SourceID, JobKind: adcsdiscovery.JobKind,
+			Execution:         adcsdiscovery.ExecutionRelay,
+			RequiredAgentRole: adcsdiscovery.RequiredRoleNetwork,
+		}, adcsdiscovery.InventoryReport{
+			Status: "succeeded", DirectoryVerified: pl.DirectoryVerified,
+			Inventory: adcsdiscovery.Inventory{Templates: pl.Templates}, Findings: pl.Findings,
+		}); err != nil {
+			return fmt.Errorf("projections: validate AD CS inventory observation: %w", err)
+		}
+		byTemplate := make(map[string][]adcsdiscovery.Finding, len(pl.Templates))
+		for _, finding := range pl.Findings {
+			byTemplate[finding.Template] = append(byTemplate[finding.Template], finding)
+		}
+		rows := make([]store.ADCSTemplatePosture, 0, len(pl.Templates))
+		for _, template := range pl.Templates {
+			findings := byTemplate[template.Name]
+			encodedFindings, err := json.Marshal(findings)
+			if err != nil {
+				return err
+			}
+			if findings == nil {
+				encodedFindings = []byte("[]")
+			}
+			observedTemplate, err := json.Marshal(template)
+			if err != nil {
+				return err
+			}
+			rows = append(rows, store.ADCSTemplatePosture{
+				TenantID: e.TenantID, Domain: pl.Domain, Template: template.Name,
+				DisplayName: template.DisplayName, SchemaVersion: template.SchemaVersion,
+				PublishedBy: template.PublishedBy, WorstSeverity: projectionADCSWorstSeverity(findings),
+				FindingCount: len(findings), Findings: encodedFindings, ObservedTemplate: observedTemplate,
+			})
+		}
+		return p.store.ApplyADCSTemplatePostureObservedTx(ctx, tx, e.TenantID, pl.Domain, pl.AgentName, rows, e.Time)
 	case EventACMEDNS01ProviderConfigUpserted:
 		var pl ACMEDNS01ProviderConfigUpserted
 		if err := decode(e, &pl); err != nil {
@@ -5639,4 +5687,24 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 		}
 		return p.ApplyTx(ctx, tx, e)
 	}
+}
+
+func projectionADCSWorstSeverity(findings []adcsdiscovery.Finding) string {
+	worst := ""
+	best := 0
+	for _, finding := range findings {
+		rank := 0
+		switch finding.Severity {
+		case adcsdiscovery.SeverityMedium:
+			rank = 1
+		case adcsdiscovery.SeverityHigh:
+			rank = 2
+		case adcsdiscovery.SeverityCritical:
+			rank = 3
+		}
+		if rank > best {
+			best, worst = rank, string(finding.Severity)
+		}
+	}
+	return worst
 }

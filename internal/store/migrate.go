@@ -153,7 +153,8 @@ func (s *Store) Migrate(ctx context.Context) error {
 		}
 	}
 	// A migration performs the first format-22 cutover and installs a database
-	// floor that rejects writes from rolling pre-v22 snapshot workers. Repeat the
+	// floor. Startup raises that floor to the current format (23 includes the AD
+	// CS event projection), rejecting writes from rolling older snapshot workers. Repeat the
 	// check on every startup to repair an externally restored missing,
 	// unvalidated, or same-name-but-weaker floor. Snapshots are disposable, so
 	// finding even one legacy row physically purges the whole mixed relation;
@@ -173,8 +174,8 @@ func purgeLegacyReadModelSnapshots(ctx context.Context, conn *pgxpool.Conn) erro
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Hold the table still from inspection through constraint repair. A rolling
-	// v21 writer either commits before this lock and is purged below, or waits for
-	// commit and then meets the repaired v22 floor. It can never slip into the gap
+	// older writer either commits before this lock and is purged below, or waits for
+	// commit and then meets the repaired current floor. It can never slip into the gap
 	// between the purge and the replacement constraint.
 	if _, err := tx.Exec(ctx,
 		`LOCK TABLE read_model_snapshots IN ACCESS EXCLUSIVE MODE`); err != nil {
@@ -182,7 +183,7 @@ func purgeLegacyReadModelSnapshots(ctx context.Context, conn *pgxpool.Conn) erro
 	}
 
 	var legacy bool
-	//trstctl:system-query — startup inspects only whether any cross-tenant disposable snapshot uses a pre-v22 format; no tenant ID or payload leaves PostgreSQL (AN-1 exemption).
+	//trstctl:system-query — startup inspects only whether any cross-tenant disposable snapshot uses a pre-current format; no tenant ID or payload leaves PostgreSQL (AN-1 exemption).
 	if err := tx.QueryRow(ctx,
 		`SELECT EXISTS (
 			SELECT 1 FROM read_model_snapshots WHERE format_version < $1

@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -759,12 +760,24 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			if err := json.Unmarshal(ev.Data, &pl); err != nil {
 				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
 			}
+			destination := discoveryRunDestination
+			switch pl.JobKind {
+			case "":
+				// Historical network/SSH/control-plane events predate the explicit
+				// job-kind discriminator and always used discovery.run.
+			case adcsdiscovery.JobKind:
+				destination = adcsdiscovery.JobKind
+			default:
+				return fmt.Errorf("orchestrator: reconcile %s (seq %d): unsupported job_kind %q", ev.Type, ev.Sequence, pl.JobKind)
+			}
 			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
-					TenantID:       ev.TenantID,
-					Destination:    discoveryRunDestination,
-					IdempotencyKey: ev.ID,
-					Payload:        ev.Data,
+					TenantID:          ev.TenantID,
+					Destination:       destination,
+					IdempotencyKey:    ev.ID,
+					Payload:           ev.Data,
+					RequiredAgentRole: pl.RequiredAgentRole,
+					RequiredAgentID:   pl.RequiredAgentID,
 				})
 				if err != nil {
 					return err

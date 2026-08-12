@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/discovery"
+	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
@@ -21,6 +22,11 @@ import (
 )
 
 const discoveryRunDestination = "discovery.run"
+
+// ErrDiscoveryScheduleNotDue is the benign loser of a concurrent scheduler
+// race. The winner already committed the run/outbox pair; callers should not
+// count or log the loser as a failed delivery.
+var ErrDiscoveryScheduleNotDue = errors.New("orchestrator: discovery schedule is no longer due")
 
 var agentInventorySourceNamespace = uuid.MustParse("d5e0734a-9cc6-53a4-92f3-4f99387f8c3a")
 var secretScanSourceNamespace = uuid.MustParse("f2a0de71-857b-5a96-83be-0e65a0f2f107")
@@ -161,6 +167,8 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		ID: id, SourceID: in.SourceID, ScheduleID: in.ScheduleID, DryRun: in.DryRun, RequestedBy: requestedBy,
 		Execution: segmentscan.ExecutionControlPlane,
 	}
+	destination := discoveryRunDestination
+	var command any = queued
 	if source.Kind == "network" || source.Kind == "ssh" {
 		resolved, err := segmentscan.Resolve(source.Kind, source.Config)
 		if err != nil {
@@ -173,27 +181,67 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		if segment.Excluded {
 			return store.DiscoveryRun{}, fmt.Errorf("orchestrator: discovery segment %q is declared out of scope", segment.Name)
 		}
-		if resolved.RequiredAgentID != "" {
-			agent, err := o.store.GetAgent(ctx, tenantID, resolved.RequiredAgentID)
-			if err != nil {
-				return store.DiscoveryRun{}, fmt.Errorf("orchestrator: resolve discovery relay: %w", err)
-			}
-			if agent.Status == "offboarded" || !containsString(agent.Roles, segmentscan.RequiredRoleNetwork) {
-				return store.DiscoveryRun{}, fmt.Errorf("orchestrator: selected discovery relay is not an active network-role agent")
-			}
+		if err := o.validateDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
+			return store.DiscoveryRun{}, err
 		}
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
 		resolved.DryRun, resolved.RequestedBy = in.DryRun, requestedBy
 		queued = resolved
+		command = resolved
+	} else if source.Kind == adcsdiscovery.SourceKind {
+		if in.DryRun {
+			return store.DiscoveryRun{}, errors.New("orchestrator: AD CS inventory is already read-only and does not support dry-run")
+		}
+		resolved, err := adcsdiscovery.ResolveInventoryIntent(source.Config)
+		if err != nil {
+			return store.DiscoveryRun{}, err
+		}
+		if err := o.validateDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
+			return store.DiscoveryRun{}, err
+		}
+		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
+		resolved.RequestedBy = requestedBy
+		queued = projections.DiscoveryRunQueued{
+			ID: id, SourceID: in.SourceID, JobKind: resolved.JobKind,
+			ScheduleID: in.ScheduleID, RequestedBy: requestedBy,
+			Execution: resolved.Execution, RequiredAgentRole: resolved.RequiredAgentRole,
+			RequiredAgentID: resolved.RequiredAgentID,
+		}
+		command = resolved
+		destination = adcsdiscovery.JobKind
 	}
-	payload, err := json.Marshal(queued)
+	commandPayload, err := json.Marshal(command)
 	if err != nil {
 		return store.DiscoveryRun{}, err
 	}
 	var ev events.Event
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if in.OnlyIfDue && in.ScheduleID != nil {
+			if _, err := tx.Exec(ctx,
+				`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+				"discovery-schedule-due\x1f"+tenantID+"\x1f"+*in.ScheduleID); err != nil {
+				return fmt.Errorf("orchestrator: lock discovery schedule due decision: %w", err)
+			}
+			var due bool
+			if err := tx.QueryRow(ctx,
+				`SELECT NOT EXISTS (
+				   SELECT 1
+				     FROM discovery_runs r
+				     JOIN discovery_schedules s
+				       ON s.tenant_id = r.tenant_id AND s.id = $2::uuid
+				    WHERE r.tenant_id = $1::uuid
+				      AND r.source_id = s.source_id
+				      AND (r.status IN ('queued', 'running')
+				           OR r.created_at > clock_timestamp() - make_interval(secs => GREATEST(s.interval_seconds, 1)))
+				 )`, tenantID, *in.ScheduleID).Scan(&due); err != nil {
+				return fmt.Errorf("orchestrator: recheck discovery schedule due decision: %w", err)
+			}
+			if !due {
+				return ErrDiscoveryScheduleNotDue
+			}
+		}
 		var err error
-		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventDiscoveryRunQueued, TenantID: tenantID, Data: payload})
+		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventDiscoveryRunQueued, TenantID: tenantID, Data: commandPayload})
 		if err != nil {
 			return err
 		}
@@ -202,9 +250,9 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		}
 		_, err = o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 			TenantID:          tenantID,
-			Destination:       discoveryRunDestination,
+			Destination:       destination,
 			IdempotencyKey:    ev.ID,
-			Payload:           payload,
+			Payload:           commandPayload,
 			RequiredAgentRole: queued.RequiredAgentRole,
 			RequiredAgentID:   queued.RequiredAgentID,
 		})
@@ -218,6 +266,20 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		Execution: queued.Execution, Segment: queued.Segment, RequiredAgentRole: queued.RequiredAgentRole,
 		RequiredAgentID: queued.RequiredAgentID, CreatedAt: ev.Time,
 	}, nil
+}
+
+func (o *Orchestrator) validateDiscoveryNetworkRelay(ctx context.Context, tenantID, agentID string) error {
+	if strings.TrimSpace(agentID) == "" {
+		return nil
+	}
+	agent, err := o.store.GetAgent(ctx, tenantID, agentID)
+	if err != nil {
+		return fmt.Errorf("orchestrator: resolve discovery relay: %w", err)
+	}
+	if agent.Status == "offboarded" || !containsString(agent.Roles, segmentscan.RequiredRoleNetwork) {
+		return errors.New("orchestrator: selected discovery relay is not an active network-role agent")
+	}
+	return nil
 }
 
 func containsString(values []string, want string) bool {

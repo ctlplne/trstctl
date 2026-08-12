@@ -10,16 +10,18 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"trstctl.com/trstctl/internal/agent/relay"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -123,9 +125,10 @@ var agentJobKindVantage = map[string][]string{
 	// question — the ranges worth scanning are the ones behind a firewall that
 	// only a relay sits inside. A host agent's own filesystem inventory travels
 	// on the inventory path, not as a claimed job.
-	"discovery.run":    {mtls.AgentRoleNetwork},
-	"trust.distribute": {mtls.AgentRoleHost},
-	"endpoint.verify":  {mtls.AgentRoleNetwork},
+	"discovery.run":         {mtls.AgentRoleNetwork},
+	relay.KindADCSInventory: {mtls.AgentRoleNetwork},
+	"trust.distribute":      {mtls.AgentRoleHost},
+	"endpoint.verify":       {mtls.AgentRoleNetwork},
 	// R1: reads public distribution points from a vantage inside the segment,
 	// because the CDPs that matter most are internal ones a SaaS control plane
 	// cannot reach by design.
@@ -252,6 +255,16 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 			})
 			continue
 		}
+		if job.Destination == relay.KindADCSInventory {
+			if startErr := a.startClaimedADCSRun(ctx, info.TenantID, info.CommonName, job.IdempotencyKey, payload); startErr != nil {
+				// A run that cannot enter running is not handed out. Its lease
+				// expires and the same event ID converges on the next claim.
+				a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.envelope_refused", map[string]any{
+					"agent": info.CommonName, "job_id": job.ID, "kind": job.Destination,
+				})
+				continue
+			}
+		}
 		out.Jobs = append(out.Jobs, transport.ClaimedJob{
 			JobID: job.ID, Kind: job.Destination, Payload: payload,
 			IdempotencyKey: job.IdempotencyKey, Attempt: job.ClaimAttempts,
@@ -267,6 +280,40 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		})
 	}
 	return out, nil
+}
+
+// startClaimedADCSRun makes running mean what it says: the exact network relay
+// now holds the lease and can begin the directory read. The event ID comes from
+// the durable outbox key, so an expired lease and reclaimed job cannot append a
+// second start transition.
+func (a *agentService) startClaimedADCSRun(ctx context.Context, tenantID, agentName, idempotencyKey string, payload []byte) error {
+	if a.orch == nil || a.store == nil {
+		return errors.New("AD CS discovery lifecycle is not configured")
+	}
+	var intent adcs.InventoryIntent
+	if err := decodeStrictJSON(payload, &intent); err != nil {
+		return err
+	}
+	agentID := agentRowID(tenantID, agentName)
+	if intent.RequiredAgentID != "" && intent.RequiredAgentID != agentID {
+		return errors.New("AD CS inventory claim does not match the selected relay")
+	}
+	run, err := a.store.GetDiscoveryRun(ctx, tenantID, intent.ID)
+	if err != nil {
+		return err
+	}
+	if run.SourceID != intent.SourceID || run.Execution != adcs.ExecutionRelay ||
+		run.RequiredAgentRole != adcs.RequiredRoleNetwork || run.RequiredAgentID != intent.RequiredAgentID {
+		return errors.New("AD CS inventory claim does not match its projected run")
+	}
+	if run.Status == "running" {
+		return nil
+	}
+	if run.Status != "queued" {
+		return errors.New("AD CS inventory claim references a terminal run")
+	}
+	return a.orch.StartDiscoveryRunWithEventID(ctx, tenantID, intent.ID,
+		orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-run-started"))
 }
 
 // ReportJobResult records what the claiming agent did.
@@ -434,6 +481,12 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		} else {
 			ingestErr = a.recordDiscoveryScan(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
 		}
+	case relay.KindADCSInventory:
+		if a.recordADCSInventory == nil {
+			ingestErr = errors.New("AD CS inventory result receiver is not configured")
+		} else {
+			ingestErr = a.recordADCSInventory(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+		}
 	}
 	if ingestErr != nil {
 		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
@@ -490,13 +543,6 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// succeeded would bury the answer the operator asked for.
 	if destination == "connector.test" && a.recordDryRun != nil {
 		a.recordDryRun(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
-	}
-	// F1: an AD CS observation becomes the Posture console's template view.
-	// Same shape as the dry-run receipt: the relay produced an answer, and
-	// it belongs somewhere an operator will look tomorrow rather than only
-	// in the report from the run that found it.
-	if destination == "adcs.inventory" && a.recordADCSPosture != nil {
-		a.recordADCSPosture(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
 	}
 	// D2: a verification sweep becomes observed endpoint state. The report is
 	// the whole point of the job — a sweep whose findings stayed in the job row

@@ -213,7 +213,7 @@ const esESCatalog = {
   "discovery.source.segmentPlaceholder": "dmz-producción",
   "discovery.source.relayAgent": "ID del agente de retransmisión",
   "discovery.source.relayAgentPlaceholder": "UUID de agente opcional",
-  "discovery.source.relayHint": "Déjelo vacío para permitir que cualquier retransmisor inscrito con rol de red reclame este escaneo de segmento.",
+  "discovery.source.relayHint": "Déjelo vacío para que cualquier relé inscrito con rol de red reclame este trabajo.",
   "discovery.source.executionBinding": "Vinculación de ejecución",
   "discovery.run.executor": "Ejecutor",
   "discovery.run.relay": "Retransmisor",
@@ -3743,12 +3743,12 @@ const esESCatalog = {
   "source.dry.run.blocked.d5dry00003": "El despliegue fallaría (sin cambios)",
   "source.adcs.heading.f1adcs0001": "Plantillas de certificado de AD CS",
   "source.adcs.description.f1adcs0002":
-    "La verdadera superficie de ataque de una PKI de Windows es su lista de plantillas. Estas son las plantillas que encontró un relé del dominio, con lo que permite cada una, no quién puede usarla.",
+    "Las plantillas definen lo que puede emitir una PKI de Windows. Un relé de red del dominio lee cada plantilla, las CA que la publican y los SID con derechos de inscripción.",
   "source.adcs.loading.f1adcs0003": "Cargando el estado de las plantillas",
   "source.adcs.error.f1adcs0004": "No se pudo cargar el estado de las plantillas de AD CS",
   "source.adcs.unobserved.title.f1adcs0005": "Ningún relé ha leído aún un directorio",
   "source.adcs.unobserved.body.f1adcs0006":
-    "Esto no equivale a no tener un entorno de AD CS. Habilite adcs.inventory e inscriba un agente con rol de red dentro del dominio; el directorio de un controlador de dominio no es accesible desde aquí.",
+    "Esto no equivale a no tener un entorno de AD CS. Cree una fuente y una programación de descubrimiento de AD CS para un agente con rol de red dentro del dominio; el plano de control nunca lee el directorio.",
   "source.adcs.critical.f1adcs0007": "Plantillas críticas",
   "source.adcs.high.f1adcs0008": "Plantillas de alto riesgo",
   "source.adcs.templates.f1adcs0009": "Plantillas observadas",

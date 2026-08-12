@@ -294,6 +294,23 @@ ADCSFindingEvidence = TypedDict(
     total=False,
 )
 
+ADCSInventorySource = TypedDict(
+    'ADCSInventorySource',
+    {
+        'last_run_completed_at': str,
+        'last_run_created_at': str,
+        'last_run_error': str,
+        'last_run_id': str,
+        'last_run_status': str,
+        'monitoring_interval_seconds': int,
+        'name': str,
+        'schedule_enabled': bool,
+        'schedule_id': str,
+        'source_id': str,
+    },
+    total=False,
+)
+
 ADCSPosture = TypedDict(
     'ADCSPosture',
     {
@@ -302,6 +319,7 @@ ADCSPosture = TypedDict(
         'high': int,
         'medium': int,
         'observed': bool,
+        'sources': list[dict[str, Any]],
         'templates': list[dict[str, Any]],
     },
     total=False,
@@ -312,6 +330,7 @@ ADCSTemplate = TypedDict(
     {
         'display_name': str,
         'domain': str,
+        'enrollment_principals': list[str],
         'findings': list[dict[str, Any]],
         'observed_at': str,
         'observed_by': str,

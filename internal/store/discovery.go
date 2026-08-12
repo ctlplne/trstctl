@@ -62,6 +62,10 @@ type DiscoveryRun struct {
 	StartedAt         *time.Time
 	CompletedAt       *time.Time
 	CreatedAt         time.Time
+	// OnlyIfDue is command-side scheduling policy and is never projected. The
+	// scheduler sets it so concurrent leader sweeps serialize and re-check the
+	// database clock before appending a second run for one schedule.
+	OnlyIfDue bool
 }
 
 // DiscoveryFinding is a metadata-only credential reference produced by a run.

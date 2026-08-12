@@ -673,8 +673,8 @@ export const messages = {
     description: "C2: placeholder for the optional exact relay selector.",
   },
   "discovery.source.relayHint": {
-    defaultMessage: "Leave empty to allow any enrolled network-role relay to claim this segment scan.",
-    description: "C2: explains the empty exact-agent selector while retaining the mandatory role boundary.",
+    defaultMessage: "Leave empty to allow any enrolled network-role relay to claim this work.",
+    description: "C2/AUD-35: empty exact-agent selector retains the network-role boundary.",
   },
   "discovery.source.executionBinding": {
     defaultMessage: "Execution binding",
@@ -14635,7 +14635,7 @@ export const messages = {
   },
   "source.adcs.description.f1adcs0002": {
     defaultMessage:
-      "A Windows PKI's real attack surface is its template list. These are the templates an in-domain relay found, with what each one permits — not who may use it.",
+      "Templates define what a Windows PKI may issue. An in-domain network relay reads each template, its publishing CAs, and the SIDs granted enrollment rights.",
     description: "F1: AD CS certificate template posture panel on the Posture page.",
   },
   "source.adcs.loading.f1adcs0003": {
@@ -14652,7 +14652,7 @@ export const messages = {
   },
   "source.adcs.unobserved.body.f1adcs0006": {
     defaultMessage:
-      "This is not the same as having no AD CS estate. Enable adcs.inventory and enrol a network-role agent inside the domain; a domain controller's directory is not reachable from here.",
+      "This is not the same as having no AD CS estate. Create an AD CS discovery source and schedule for a network-role agent inside the domain; the control plane never reads the directory itself.",
     description: "F1: AD CS certificate template posture panel on the Posture page.",
   },
   "source.adcs.critical.f1adcs0007": {

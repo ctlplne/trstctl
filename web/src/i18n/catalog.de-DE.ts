@@ -222,7 +222,7 @@ const deDECatalog = {
   "discovery.source.segmentPlaceholder": "produktions-dmz",
   "discovery.source.relayAgent": "Relay-Agent-ID",
   "discovery.source.relayAgentPlaceholder": "Optionale Agent-UUID",
-  "discovery.source.relayHint": "Leer lassen, damit jeder registrierte Relay mit Netzwerkrolle diesen Segment-Scan übernehmen kann.",
+  "discovery.source.relayHint": "Leer lassen, damit jeder registrierte Relay mit Netzwerkrolle diese Arbeit übernehmen kann.",
   "discovery.source.executionBinding": "Ausführungsbindung",
   "discovery.run.executor": "Ausführer",
   "discovery.run.relay": "Relay",
@@ -3755,12 +3755,12 @@ const deDECatalog = {
   "source.dry.run.blocked.d5dry00003": "Bereitstellung würde fehlschlagen (nichts geändert)",
   "source.adcs.heading.f1adcs0001": "AD CS-Zertifikatvorlagen",
   "source.adcs.description.f1adcs0002":
-    "Die eigentliche Angriffsfläche einer Windows-PKI ist ihre Vorlagenliste. Dies sind die Vorlagen, die ein Relais in der Domäne gefunden hat, mit dem, was jede erlaubt — nicht, wer sie verwenden darf.",
+    "Vorlagen legen fest, was eine Windows-PKI ausstellen darf. Ein Netzwerk-Relais in der Domäne liest jede Vorlage, ihre veröffentlichenden CAs und die SIDs mit Registrierungsrechten.",
   "source.adcs.loading.f1adcs0003": "Vorlagenstatus wird geladen",
   "source.adcs.error.f1adcs0004": "AD CS-Vorlagenstatus konnte nicht geladen werden",
   "source.adcs.unobserved.title.f1adcs0005": "Noch hat kein Relais ein Verzeichnis gelesen",
   "source.adcs.unobserved.body.f1adcs0006":
-    "Das ist nicht dasselbe wie keine AD CS-Umgebung. Aktivieren Sie adcs.inventory und registrieren Sie einen Agenten mit Netzwerkrolle in der Domäne; das Verzeichnis eines Domänencontrollers ist von hier nicht erreichbar.",
+    "Das ist nicht dasselbe wie keine AD CS-Umgebung. Erstellen Sie eine AD CS-Ermittlungsquelle und einen Zeitplan für einen Agenten mit Netzwerkrolle in der Domäne; die Steuerungsebene liest das Verzeichnis niemals selbst.",
   "source.adcs.critical.f1adcs0007": "Kritische Vorlagen",
   "source.adcs.high.f1adcs0008": "Vorlagen mit hohem Risiko",
   "source.adcs.templates.f1adcs0009": "Beobachtete Vorlagen",

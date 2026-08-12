@@ -4,9 +4,11 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -59,7 +61,11 @@ func (s *Server) RunDiscoverySchedulerOnce(ctx context.Context) (int, error) {
 				SourceID:    sched.SourceID,
 				ScheduleID:  &scheduleID,
 				RequestedBy: discoverySchedulerActor,
+				OnlyIfDue:   true,
 			}); err != nil {
+				if errors.Is(err, orchestrator.ErrDiscoveryScheduleNotDue) {
+					continue
+				}
 				if firstErr == nil {
 					firstErr = err
 				}

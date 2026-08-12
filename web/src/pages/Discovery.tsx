@@ -8,6 +8,8 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type SourceActivity } from "./discovery/DiscoveryPageParts";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn, type DataGridToolbarControls } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
@@ -45,6 +47,7 @@ const remediationPlaybookRotateIdentity = "credential-rotate";
 const sourceKinds: SourceKind[] = [
   "network",
   "ssh",
+  "adcs",
   "cloud_certificate",
   "cloud_secret",
   "ct_log",
@@ -63,6 +66,7 @@ const sourceKinds: SourceKind[] = [
 const sourceKindLabels: Record<SourceKind, string> = {
   network: "Network",
   ssh: "SSH",
+  adcs: translateNow("source.adcs.heading.f1adcs0001"),
   cloud_certificate: "Cloud certificates",
   cloud_secret: "Cloud secrets",
   ct_log: "Certificate Transparency",
@@ -77,6 +81,9 @@ const sourceKindLabels: Record<SourceKind, string> = {
   nhi_behavior: "NHI behavior",
   credential_compromise: "Compromised credentials",
   k8s_ingress_gateway: "Kubernetes TLS",
+};
+const adcsExamples = {
+  configurationDN: "CN=Configuration,DC=corp,DC=example",
 };
 const structuredSourceKinds = [
   "nhi_cross_surface",
@@ -569,6 +576,10 @@ export function Discovery() {
   const [targets, setTargets] = useState("");
   const [segment, setSegment] = useState("");
   const [relayAgentID, setRelayAgentID] = useState("");
+  const [adcsURL, setADCSURL] = useState("ldaps://");
+  const [adcsConfigurationDN, setADCSConfigurationDN] = useState("");
+  const [adcsBindDN, setADCSBindDN] = useState("");
+  const [adcsPasswordRef, setADCSPasswordRef] = useState("");
   const [structuredRows, setStructuredRows] = useState<Record<StructuredSourceKind, StructuredRow[]>>(() => initialStructuredRows());
   const [structuredTemplates, setStructuredTemplates] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredTemplates());
   const [structuredJSONImports, setStructuredJSONImports] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredJSONImports());
@@ -679,20 +690,32 @@ export function Discovery() {
     setNotice(null);
     try {
       const config =
-        sourceKind === "network" || sourceKind === "ssh"
+        sourceKind === "adcs"
           ? {
-              targets: parseTargets(targets),
-              segment: segment.trim(),
+              url: adcsURL.trim(),
+              configuration_dn: adcsConfigurationDN.trim(),
+              bind_dn: adcsBindDN.trim(),
+              password_ref: adcsPasswordRef.trim(),
               ...(relayAgentID.trim() ? { relay_agent_id: relayAgentID.trim() } : {}),
             }
-          : isStructuredSourceKind(sourceKind)
-            ? buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind])
-            : {};
+          : sourceKind === "network" || sourceKind === "ssh"
+            ? {
+                targets: parseTargets(targets),
+                segment: segment.trim(),
+                ...(relayAgentID.trim() ? { relay_agent_id: relayAgentID.trim() } : {}),
+              }
+            : isStructuredSourceKind(sourceKind)
+              ? buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind])
+              : {};
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
       setTargets("");
       setSegment("");
       setRelayAgentID("");
+      setADCSURL("ldaps://");
+      setADCSConfigurationDN("");
+      setADCSBindDN("");
+      setADCSPasswordRef("");
       setStructuredRows(initialStructuredRows());
       setStructuredTemplates(initialStructuredTemplates());
       setStructuredJSONImports(initialStructuredJSONImports());
@@ -828,17 +851,9 @@ export function Discovery() {
               </h2>
             </div>
             <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
-              <label className="grid gap-1 text-sm font-medium">
-                {translateNow("source.name.dcd1d5223f")}
-                <input
-                  id="discovery-source-name"
-                  ref={sourceNameRef}
-                  className="ui-input"
-                  value={sourceName}
-                  onChange={(event) => setSourceName(event.target.value)}
-                  required
-                />
-              </label>
+              <Field label={translateNow("source.name.dcd1d5223f")} required>
+                {(control) => <Input {...control} ref={sourceNameRef} value={sourceName} onChange={(event) => setSourceName(event.target.value)} required />}
+              </Field>
               <label className="grid gap-1 text-sm font-medium">
                 {translateNow("source.kind.f5387f9bb6")}
                 <select className="ui-input" value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)}>
@@ -882,6 +897,28 @@ export function Discovery() {
                     required
                   />
                 </label>
+              </div>
+            )}
+            {sourceKind === "adcs" && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <ADCSField label={translateNow("source.directory.url.2029b746ff")} value={adcsURL} onValue={setADCSURL} className="md:col-span-2" />
+                <ADCSField
+                  label={translateNow("protocols.dns01.config")}
+                  value={adcsConfigurationDN}
+                  onValue={setADCSConfigurationDN}
+                  placeholder={adcsExamples.configurationDN}
+                  className="md:col-span-2"
+                />
+                <ADCSField label={translateNow("source.bind.56b9b63d28")} value={adcsBindDN} onValue={setADCSBindDN} />
+                <ADCSField label={translateNow("notifications.routing.credentialRef")} value={adcsPasswordRef} onValue={setADCSPasswordRef} />
+                <ADCSField
+                  label={t("discovery.source.relayAgent")}
+                  value={relayAgentID}
+                  onValue={setRelayAgentID}
+                  placeholder={t("discovery.source.relayAgentPlaceholder")}
+                  className="md:col-span-2"
+                  required={false}
+                />
               </div>
             )}
             {isStructuredSourceKind(sourceKind) && (
@@ -1171,6 +1208,37 @@ export function Discovery() {
         </section>
       )}
     </section>
+  );
+}
+
+function ADCSField({
+  label,
+  value,
+  onValue,
+  placeholder,
+  className,
+  required = true,
+}: {
+  label: string;
+  value: string;
+  onValue: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+  required?: boolean;
+}) {
+  return (
+    <Field label={label} className={className} required={required}>
+      {(control) => (
+        <Input
+          {...control}
+          className="font-mono text-xs"
+          value={value}
+          onChange={(event) => onValue(event.target.value)}
+          placeholder={placeholder}
+          required={required}
+        />
+      )}
+    </Field>
   );
 }
 

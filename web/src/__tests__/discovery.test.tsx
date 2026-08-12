@@ -579,6 +579,37 @@ describe("discovery control-plane surface", () => {
     });
   });
 
+  it("creates a reference-only AD CS source for a network relay", async () => {
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    const form = within(sourceForm as HTMLFormElement);
+    await user.type(form.getByLabelText("Name"), "corp-adcs");
+    await user.selectOptions(form.getByLabelText("Kind"), "adcs");
+    await user.clear(form.getByLabelText("Directory URL"));
+    await user.type(form.getByLabelText("Directory URL"), "ldaps://dc01.corp.example:636");
+    await user.type(form.getByLabelText("Config"), "CN=Configuration,DC=corp,DC=example");
+    await user.type(form.getByLabelText("Bind"), "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example");
+    await user.type(form.getByLabelText("Credential reference"), "secret://adcs/domain-reader");
+    await user.type(form.getByLabelText(/^Relay agent ID/), "11111111-1111-4111-8111-111111111111");
+    await user.click(form.getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "corp-adcs",
+      kind: "adcs",
+      config: {
+        url: "ldaps://dc01.corp.example:636",
+        configuration_dn: "CN=Configuration,DC=corp,DC=example",
+        bind_dn: "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example",
+        password_ref: "secret://adcs/domain-reader",
+        relay_agent_id: "11111111-1111-4111-8111-111111111111",
+      },
+    });
+  });
+
   it("creates an API-key and token source from metadata-only observations", async () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);

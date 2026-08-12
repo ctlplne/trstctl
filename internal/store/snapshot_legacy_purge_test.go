@@ -74,7 +74,7 @@ func TestLegacyReadModelSnapshotPayloadsArePurgedOnUpgradeAndEveryStartupAUD114(
 			Scan(&constraintType, &validated, &expression); err != nil {
 			t.Fatalf("inspect snapshot format floor after %s: %v", stage, err)
 		}
-		if constraintType != "c" || !validated || expression != "format_version>=22" {
+		if constraintType != "c" || !validated || expression != "format_version>=23" {
 			t.Fatalf("snapshot format floor after %s = type:%q validated:%t expression:%q",
 				stage, constraintType, validated, expression)
 		}
@@ -87,7 +87,7 @@ func TestLegacyReadModelSnapshotPayloadsArePurgedOnUpgradeAndEveryStartupAUD114(
 			VALUES ('a1140000-0000-4000-8000-000000000099', 21, 21,
 			        jsonb_build_object('owners', jsonb_build_array(
 			          jsonb_build_object('name', $1::text))))`, rawSubject); err == nil {
-			t.Fatalf("pre-v22 snapshot write succeeded after %s", stage)
+			t.Fatalf("pre-current snapshot write succeeded after %s", stage)
 		}
 	}
 
@@ -103,9 +103,9 @@ func TestLegacyReadModelSnapshotPayloadsArePurgedOnUpgradeAndEveryStartupAUD114(
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("upgrade Migrate over legacy snapshot: %v", err)
 	}
-	assertPurged("format-22 upgrade")
-	assertValidatedFloor("format-22 upgrade")
-	assertLegacyWriteRejected("format-22 upgrade")
+	assertPurged("format-23 upgrade")
+	assertValidatedFloor("format-23 upgrade")
+	assertLegacyWriteRejected("format-23 upgrade")
 
 	// Simulate an old replica writing v21 after migration 160 was ledgered. The
 	// missing-floor fixture models an externally restored/altered schema; normal
@@ -143,10 +143,10 @@ func TestLegacyReadModelSnapshotPayloadsArePurgedOnUpgradeAndEveryStartupAUD114(
 	if currentRows != 1 {
 		t.Fatalf("current-format snapshots after ordinary startup = %d, want 1", currentRows)
 	}
-	assertValidatedFloor("missing-floor repair over current v22")
+	assertValidatedFloor("missing-floor repair over current v23")
 
 	// An interrupted online schema repair may leave the right constraint present
-	// but NOT VALID. Startup validates it in place and preserves the clean v22 row.
+	// but NOT VALID. Startup replaces the old v22 floor and preserves the clean v23 row.
 	if _, err := s.SystemPool().Exec(ctx,
 		`ALTER TABLE read_model_snapshots DROP CONSTRAINT `+floorConstraint); err != nil {
 		t.Fatalf("drop validated floor before NOT VALID fixture: %v", err)
@@ -196,8 +196,8 @@ func TestMigrateReplacesMalformedValidatedSnapshotFloorAUD114(t *testing.T) {
 		INSERT INTO read_model_snapshots
 		       (tenant_id, covered_seq, format_version, payload)
 		VALUES ('a1140000-0000-4000-8000-000000000004', 22, $1,
-		        '{"safe":"preserve-v22"}'::jsonb)`, store.SnapshotFormatVersion); err != nil {
-		t.Fatalf("seed clean v22 snapshot behind malformed floor: %v", err)
+		        '{"safe":"preserve-v23"}'::jsonb)`, store.SnapshotFormatVersion); err != nil {
+		t.Fatalf("seed clean v23 snapshot behind malformed floor: %v", err)
 	}
 
 	if err := s.Migrate(ctx); err != nil {
@@ -206,12 +206,12 @@ func TestMigrateReplacesMalformedValidatedSnapshotFloorAUD114(t *testing.T) {
 	var rows int
 	if err := s.SystemPool().QueryRow(ctx,
 		`SELECT count(*) FROM read_model_snapshots
-		  WHERE format_version = $1 AND payload = '{"safe":"preserve-v22"}'::jsonb`,
+		  WHERE format_version = $1 AND payload = '{"safe":"preserve-v23"}'::jsonb`,
 		store.SnapshotFormatVersion).Scan(&rows); err != nil {
-		t.Fatalf("inspect preserved v22 snapshot: %v", err)
+		t.Fatalf("inspect preserved v23 snapshot: %v", err)
 	}
 	if rows != 1 {
-		t.Fatalf("clean v22 rows after malformed-floor repair = %d, want 1", rows)
+		t.Fatalf("clean v23 rows after malformed-floor repair = %d, want 1", rows)
 	}
 	var constraintType, expression string
 	var validated bool
@@ -227,7 +227,7 @@ func TestMigrateReplacesMalformedValidatedSnapshotFloorAUD114(t *testing.T) {
 		Scan(&constraintType, &validated, &expression); err != nil {
 		t.Fatalf("inspect repaired snapshot floor: %v", err)
 	}
-	if constraintType != "c" || !validated || expression != "format_version>=22" {
+	if constraintType != "c" || !validated || expression != "format_version>=23" {
 		t.Fatalf("repaired snapshot floor = type:%q validated:%t expression:%q",
 			constraintType, validated, expression)
 	}

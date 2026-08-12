@@ -32,6 +32,7 @@ public final class OpenApiSchemas {
       "ADCSDatabaseList",
       "ADCSDatabaseSummary",
       "ADCSFindingEvidence",
+      "ADCSInventorySource",
       "ADCSPosture",
       "ADCSTemplate",
       "ADCSTemplateFinding",

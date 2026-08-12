@@ -4,8 +4,11 @@ package adcs_test
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -21,23 +24,29 @@ import (
 // test can prove the query is scoped rather than a wildcard sweep.
 type fakeDirectory struct {
 	byBase map[string][]adcs.Entry
-	asked  []string
-	attrs  [][]string
+	asked  []adcs.SearchRequest
 	err    error
 }
 
-func (f *fakeDirectory) Search(_ context.Context, baseDN, _ string, attributes []string) ([]adcs.Entry, error) {
-	f.asked = append(f.asked, baseDN)
-	f.attrs = append(f.attrs, attributes)
+func (f *fakeDirectory) Search(_ context.Context, request adcs.SearchRequest) ([]adcs.Entry, error) {
+	f.asked = append(f.asked, request)
 	if f.err != nil {
 		return nil, f.err
 	}
-	return f.byBase[baseDN], nil
+	return f.byBase[request.BaseDN], nil
 }
 
 const configDN = "CN=Configuration,DC=corp,DC=example"
 
 func directoryWith(templates, services []adcs.Entry) *fakeDirectory {
+	for i := range templates {
+		if templates[i].BinaryAttributes == nil {
+			templates[i].BinaryAttributes = map[string][][]byte{}
+		}
+		if len(templates[i].BinaryAttributes["nTSecurityDescriptor"]) == 0 {
+			templates[i].BinaryAttributes["nTSecurityDescriptor"] = [][]byte{securityDescriptor()}
+		}
+	}
 	base := adcs.PublicKeyServicesRDN + "," + configDN
 	return &fakeDirectory{byBase: map[string][]adcs.Entry{
 		"CN=Certificate Templates," + base: templates,
@@ -98,7 +107,8 @@ func TestCollectAsksForNamedAttributesOnly(t *testing.T) {
 	if _, err := adcs.Collect(context.Background(), dir, configDN); err != nil {
 		t.Fatalf("collect: %v", err)
 	}
-	for _, attrs := range dir.attrs {
+	for _, request := range dir.asked {
+		attrs := request.Attributes
 		if len(attrs) == 0 {
 			t.Fatal("a search requested every attribute; the query must name what it uses")
 		}
@@ -110,11 +120,168 @@ func TestCollectAsksForNamedAttributesOnly(t *testing.T) {
 	}
 	// Both containers are scoped under Public Key Services, not searched from
 	// the naming context root.
-	for _, base := range dir.asked {
-		if !strings.Contains(base, adcs.PublicKeyServicesRDN) {
-			t.Errorf("search base %q is not scoped to the Public Key Services container", base)
+	for _, request := range dir.asked {
+		if !strings.Contains(request.BaseDN, adcs.PublicKeyServicesRDN) {
+			t.Errorf("search base %q is not scoped to the Public Key Services container", request.BaseDN)
+		}
+		if request.MaxEntries <= 0 {
+			t.Errorf("search %q has no entry bound", request.BaseDN)
 		}
 	}
+	if len(dir.asked) != 2 {
+		t.Fatalf("search count = %d, want template and enrollment-service reads", len(dir.asked))
+	}
+	if !dir.asked[0].DACLOnly || dir.asked[1].DACLOnly {
+		t.Fatalf("DACL controls = template:%v service:%v, want true/false", dir.asked[0].DACLOnly, dir.asked[1].DACLOnly)
+	}
+	if !reflect.DeepEqual(dir.asked[0].Attributes[len(dir.asked[0].Attributes)-1:], []string{"nTSecurityDescriptor"}) {
+		t.Fatalf("template attributes omit the security descriptor: %v", dir.asked[0].Attributes)
+	}
+}
+
+// TestCollectDecodesEnrollmentRightsFromTheTemplateDACL is AUD-35's security
+// fact. An Enroll object ACE and a generic-all ACE grant enrollment; an object
+// ACE for a different extended right does not. A deny for the exact same SID
+// wins over its later allow, so the panel never calls that trustee granted.
+func TestCollectDecodesEnrollmentRightsFromTheTemplateDACL(t *testing.T) {
+	const (
+		allowedSID = "S-1-5-21-111-222-333-1001"
+		genericSID = "S-1-5-11"
+		deniedSID  = "S-1-5-21-111-222-333-1002"
+		otherSID   = "S-1-5-21-111-222-333-1003"
+	)
+	descriptor := securityDescriptor(
+		objectACE(0x05, 0x00000100, enrollmentGUIDBytes(), sidBytes(allowedSID)),
+		allowACE(0x10000000, sidBytes(genericSID)),
+		objectACE(0x06, 0x00000100, enrollmentGUIDBytes(), sidBytes(deniedSID)),
+		objectACE(0x05, 0x00000100, enrollmentGUIDBytes(), sidBytes(deniedSID)),
+		objectACE(0x05, 0x00000100, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}, sidBytes(otherSID)),
+	)
+	dir := directoryWith([]adcs.Entry{{
+		DN: "CN=UserAuth,...",
+		Attributes: map[string][]string{
+			"cn":                  {"UserAuth"},
+			"pKIExtendedKeyUsage": {adcs.EKUClientAuth},
+		},
+		BinaryAttributes: map[string][][]byte{"nTSecurityDescriptor": {descriptor}},
+	}}, nil)
+
+	inv, err := adcs.Collect(context.Background(), dir, configDN)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if len(inv.Templates) != 1 {
+		t.Fatalf("templates = %d, want one", len(inv.Templates))
+	}
+	want := []string{genericSID, allowedSID}
+	if got := inv.Templates[0].EnrollmentPrincipals; !reflect.DeepEqual(got, want) {
+		t.Fatalf("enrollment principals = %v, want %v", got, want)
+	}
+	encoded := string(mustJSON(t, inv))
+	if strings.Contains(encoded, string(descriptor)) || strings.Contains(encoded, "nTSecurityDescriptor") {
+		t.Fatal("raw security descriptor crossed the normalized inventory boundary")
+	}
+}
+
+func TestCollectRefusesMalformedEnrollmentACLInsteadOfClaimingNobodyCanEnroll(t *testing.T) {
+	dir := directoryWith([]adcs.Entry{{
+		DN: "CN=Broken,...", Attributes: map[string][]string{"cn": {"Broken"}},
+		BinaryAttributes: map[string][][]byte{"nTSecurityDescriptor": {{1, 2, 3}}},
+	}}, nil)
+	if _, err := adcs.Collect(context.Background(), dir, configDN); err == nil {
+		t.Fatal("malformed ACL became an empty enrollment-principal list")
+	}
+}
+
+func TestEnrollmentACLRefusesTrailingBytesAfterTrusteeSID(t *testing.T) {
+	ace := allowACE(0x10000000, sidBytes("S-1-5-11"))
+	ace = append(ace, 0xde, 0xad)
+	binary.LittleEndian.PutUint16(ace[2:4], uint16(len(ace)))
+	if _, err := adcs.EnrollmentPrincipalsFromSecurityDescriptor(securityDescriptor(ace)); err == nil {
+		t.Fatal("trailing bytes after a standard ACE trustee SID were silently accepted")
+	}
+}
+
+func FuzzEnrollmentPrincipalsFromSecurityDescriptor(f *testing.F) {
+	f.Add(securityDescriptor(objectACE(0x05, 0x00000100, enrollmentGUIDBytes(), sidBytes("S-1-5-11"))))
+	f.Add([]byte{1, 2, 3})
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		_, _ = adcs.EnrollmentPrincipalsFromSecurityDescriptor(raw)
+	})
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	b, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func enrollmentGUIDBytes() []byte {
+	return []byte{0x68, 0xc9, 0x10, 0x0e, 0xfb, 0x78, 0xd2, 0x11, 0x90, 0xd4, 0x00, 0xc0, 0x4f, 0x79, 0xdc, 0x55}
+}
+
+func sidBytes(text string) []byte {
+	parts := strings.Split(strings.TrimPrefix(text, "S-"), "-")
+	if len(parts) < 2 {
+		panic("bad test SID")
+	}
+	revision, _ := strconv.ParseUint(parts[0], 10, 8)
+	authority, _ := strconv.ParseUint(parts[1], 10, 48)
+	out := make([]byte, 8+4*(len(parts)-2))
+	out[0], out[1] = byte(revision), byte(len(parts)-2)
+	for i := 0; i < 6; i++ {
+		out[7-i] = byte(authority)
+		authority >>= 8
+	}
+	for i, part := range parts[2:] {
+		value, _ := strconv.ParseUint(part, 10, 32)
+		binary.LittleEndian.PutUint32(out[8+i*4:], uint32(value))
+	}
+	return out
+}
+
+func allowACE(mask uint32, sid []byte) []byte {
+	out := make([]byte, 8+len(sid))
+	out[0] = 0x00
+	binary.LittleEndian.PutUint16(out[2:4], uint16(len(out)))
+	binary.LittleEndian.PutUint32(out[4:8], mask)
+	copy(out[8:], sid)
+	return out
+}
+
+func objectACE(aceType byte, mask uint32, objectGUID, sid []byte) []byte {
+	out := make([]byte, 12+len(objectGUID)+len(sid))
+	out[0] = aceType
+	binary.LittleEndian.PutUint16(out[2:4], uint16(len(out)))
+	binary.LittleEndian.PutUint32(out[4:8], mask)
+	binary.LittleEndian.PutUint32(out[8:12], 0x1)
+	copy(out[12:], objectGUID)
+	copy(out[12+len(objectGUID):], sid)
+	return out
+}
+
+func securityDescriptor(aces ...[]byte) []byte {
+	aclSize := 8
+	for _, ace := range aces {
+		aclSize += len(ace)
+	}
+	out := make([]byte, 20+aclSize)
+	out[0] = 1
+	binary.LittleEndian.PutUint16(out[2:4], 0x8004)
+	binary.LittleEndian.PutUint32(out[16:20], 20)
+	acl := out[20:]
+	acl[0] = 4
+	binary.LittleEndian.PutUint16(acl[2:4], uint16(aclSize))
+	binary.LittleEndian.PutUint16(acl[4:6], uint16(len(aces)))
+	offset := 8
+	for _, ace := range aces {
+		copy(acl[offset:], ace)
+		offset += len(ace)
+	}
+	return out
 }
 
 // TestSearcherIsReadOnly is the structural guarantee. An inventory tool pointed

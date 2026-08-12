@@ -5315,17 +5315,37 @@ export interface components {
             attribute: string;
             observed: string;
         };
+        ADCSInventorySource: {
+            /** Format: date-time */
+            last_run_completed_at?: string;
+            /** Format: date-time */
+            last_run_created_at?: string;
+            last_run_error?: string;
+            /** Format: uuid */
+            last_run_id?: string;
+            /** @enum {string} */
+            last_run_status: "pending" | "running" | "succeeded" | "failed";
+            monitoring_interval_seconds?: number;
+            name: string;
+            schedule_enabled: boolean;
+            /** Format: uuid */
+            schedule_id?: string;
+            /** Format: uuid */
+            source_id: string;
+        };
         ADCSPosture: {
             critical: number;
             guidance: string;
             high: number;
             medium: number;
             observed: boolean;
+            sources?: components["schemas"]["ADCSInventorySource"][];
             templates: components["schemas"]["ADCSTemplate"][];
         };
         ADCSTemplate: {
             display_name?: string;
             domain: string;
+            enrollment_principals?: string[];
             findings: components["schemas"]["ADCSTemplateFinding"][];
             /** Format: date-time */
             observed_at: string;
@@ -6863,7 +6883,7 @@ export interface components {
             finding_count: number;
             findings_path: string;
             /** @enum {string} */
-            kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+            kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
             /** Format: date-time */
             last_discovery_at?: string;
             /** Format: date-time */
@@ -7013,7 +7033,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+            kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
             name: string;
             /** Format: uuid */
             tenant_id: string;
@@ -7027,7 +7047,7 @@ export interface components {
         DiscoverySourceRequest: {
             config?: Record<string, never>;
             /** @enum {string} */
-            kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+            kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
             name: string;
         };
         DiscoveryUnknown: {

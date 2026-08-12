@@ -48,6 +48,7 @@ import type {
   EnrollmentDiagnosticList,
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
+  ADCSInventorySource as GenADCSInventorySource,
   ADCSPosture as GenADCSPosture,
   ADCSDatabaseList as GenADCSDatabaseList,
   ADCSTemplate as GenADCSTemplate,
@@ -476,6 +477,7 @@ export type ExternalCA = GenExternalCA;
 export type CADiscovery = CADiscoveryInventory;
 export type Identity = GenIdentity;
 export type ADCSPosture = GenADCSPosture;
+export type ADCSInventorySource = GenADCSInventorySource;
 export type ADCSDatabaseList = GenADCSDatabaseList;
 export type ADCSTemplate = GenADCSTemplate;
 export type Agent = GenAgent;

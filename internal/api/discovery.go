@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cbom/coverage"
 	"trstctl.com/trstctl/internal/discovery"
+	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/apikey"
 	"trstctl.com/trstctl/internal/discovery/compromise"
 	"trstctl.com/trstctl/internal/discovery/k8stls"
@@ -521,6 +522,21 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, errStatus(http.StatusBadRequest, "an excluded segment cannot back an executable discovery source")
 			}
 		}
+		if kind == adcsdiscovery.SourceKind {
+			intent, resolveErr := adcsdiscovery.ResolveInventoryIntent(cfg)
+			if resolveErr != nil {
+				return 0, nil, errStatus(http.StatusBadRequest, resolveErr.Error())
+			}
+			if intent.RequiredAgentID != "" {
+				agent, agentErr := a.store.GetAgent(ctx, tenantID, intent.RequiredAgentID)
+				if agentErr != nil {
+					return 0, nil, errStatus(http.StatusBadRequest, "relay_agent_id must name an enrolled tenant agent")
+				}
+				if agent.Status == "offboarded" || !sourceKindsContain(agent.Roles, adcsdiscovery.RequiredRoleNetwork) {
+					return 0, nil, errStatus(http.StatusBadRequest, "relay_agent_id must name an active network-role agent")
+				}
+			}
+		}
 		privateEgress, err := discoveryPrivateEgressRequested(cfg)
 		if err != nil {
 			return 0, nil, err
@@ -818,9 +834,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		return nil, errStatus(http.StatusBadRequest, "name is required")
 	}
 	switch req.Kind {
-	case "network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", apikey.SourceKind, "agent", "manual", nhi.SourceKind, oauthgrant.SourceKind, serviceaccount.SourceKind, nhibehavior.SourceKind, compromise.SourceKind, k8stls.SourceKind:
+	case "network", "ssh", adcsdiscovery.SourceKind, "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", apikey.SourceKind, "agent", "manual", nhi.SourceKind, oauthgrant.SourceKind, serviceaccount.SourceKind, nhibehavior.SourceKind, compromise.SourceKind, k8stls.SourceKind:
 	default:
-		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual, nhi_cross_surface, oauth_grant, service_account, nhi_behavior, credential_compromise, k8s_ingress_gateway")
+		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, adcs, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual, nhi_cross_surface, oauth_grant, service_account, nhi_behavior, credential_compromise, k8s_ingress_gateway")
 	}
 	cfg := req.Config
 	if len(cfg) == 0 {
@@ -835,6 +851,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if req.Kind == "network" || req.Kind == "ssh" {
 		if _, err := segmentscan.Resolve(req.Kind, cfg); err != nil {
+			return nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+	}
+	if req.Kind == adcsdiscovery.SourceKind {
+		if _, err := adcsdiscovery.ResolveInventoryIntent(cfg); err != nil {
 			return nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 	}

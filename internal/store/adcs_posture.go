@@ -44,47 +44,43 @@ type ADCSTemplatePosture struct {
 	ObservedTemplate json.RawMessage
 }
 
-// ReplaceADCSTemplatePosture writes one relay observation of one domain.
-//
-// It replaces the domain's rows rather than merging them, because a template
-// that has been DELETED from the directory must disappear from the console. A
-// merge would leave a dangerous template on the page forever after someone
-// removed it, which is the worst way for a posture surface to be wrong: it
-// would punish the fix.
-func (s *Store) ReplaceADCSTemplatePosture(ctx context.Context, tenantID, domain, observedBy string, rows []ADCSTemplatePosture, at time.Time) error {
-	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+// ApplyADCSTemplatePostureObservedTx is the projector-only writer for one
+// immutable adcs.template.inventory.observed event. Delete+insert is atomic, so
+// a removed directory template disappears on replay without a partial domain
+// ever becoming visible. There is deliberately no non-projector wrapper: all
+// state changes must enter through the event log (AN-2).
+func (s *Store) ApplyADCSTemplatePostureObservedTx(ctx context.Context, tx pgx.Tx, tenantID, domain, observedBy string, rows []ADCSTemplatePosture, at time.Time) error {
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM adcs_template_posture WHERE tenant_id = $1 AND domain = $2`,
+		tenantID, domain); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		findings := row.Findings
+		if len(findings) == 0 {
+			findings = json.RawMessage("[]")
+		}
+		published := row.PublishedBy
+		if published == nil {
+			published = []string{}
+		}
+		observed := row.ObservedTemplate
+		if len(observed) == 0 {
+			observed = json.RawMessage("{}")
+		}
 		if _, err := tx.Exec(ctx,
-			`DELETE FROM adcs_template_posture WHERE tenant_id = $1 AND domain = $2`,
-			tenantID, domain); err != nil {
+			`INSERT INTO adcs_template_posture
+			     (tenant_id, domain, template, display_name, schema_version,
+			      published_by, worst_severity, finding_count, findings,
+			      observed_by, observed_at, observed_template)
+			 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9::jsonb, $10, $11, $12::jsonb)`,
+			tenantID, domain, row.Template, row.DisplayName, row.SchemaVersion,
+			published, row.WorstSeverity, row.FindingCount, string(findings),
+			observedBy, at.UTC(), string(observed)); err != nil {
 			return err
 		}
-		for _, row := range rows {
-			findings := row.Findings
-			if len(findings) == 0 {
-				findings = json.RawMessage("[]")
-			}
-			published := row.PublishedBy
-			if published == nil {
-				published = []string{}
-			}
-			observed := row.ObservedTemplate
-			if len(observed) == 0 {
-				observed = json.RawMessage("{}")
-			}
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO adcs_template_posture
-				     (tenant_id, domain, template, display_name, schema_version,
-				      published_by, worst_severity, finding_count, findings,
-				      observed_by, observed_at, observed_template)
-				 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9::jsonb, $10, $11, $12::jsonb)`,
-				tenantID, domain, row.Template, row.DisplayName, row.SchemaVersion,
-				published, row.WorstSeverity, row.FindingCount, string(findings),
-				observedBy, at.UTC(), string(observed)); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // ListADCSTemplatePosture returns a tenant's observed templates, most dangerous

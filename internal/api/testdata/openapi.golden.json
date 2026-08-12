@@ -806,6 +806,58 @@
         ],
         "type": "object"
       },
+      "ADCSInventorySource": {
+        "properties": {
+          "last_run_completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_run_created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_run_error": {
+            "type": "string"
+          },
+          "last_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_run_status": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "monitoring_interval_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule_enabled": {
+            "type": "boolean"
+          },
+          "schedule_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "name",
+          "schedule_enabled",
+          "last_run_status"
+        ],
+        "type": "object"
+      },
       "ADCSPosture": {
         "properties": {
           "critical": {
@@ -822,6 +874,12 @@
           },
           "observed": {
             "type": "boolean"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSInventorySource"
+            },
+            "type": "array"
           },
           "templates": {
             "items": {
@@ -847,6 +905,12 @@
           },
           "domain": {
             "type": "string"
+          },
+          "enrollment_principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "findings": {
             "items": {
@@ -6634,6 +6698,7 @@
             "enum": [
               "network",
               "ssh",
+              "adcs",
               "cloud_certificate",
               "cloud_secret",
               "ct_log",
@@ -7149,6 +7214,7 @@
             "enum": [
               "network",
               "ssh",
+              "adcs",
               "cloud_certificate",
               "cloud_secret",
               "ct_log",
@@ -7215,6 +7281,7 @@
             "enum": [
               "network",
               "ssh",
+              "adcs",
               "cloud_certificate",
               "cloud_secret",
               "ct_log",

@@ -8,9 +8,24 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/audit"
+	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// privacyDiscoveryRunQueued is the closed union carried by
+// discovery.run.queued. The projector reads the embedded common relay fields;
+// AD CS boot reconciliation additionally needs its immutable public connection
+// command. PasswordRef is a reference name, never credential material.
+type privacyDiscoveryRunQueued struct {
+	segmentscan.Intent
+	URL                string `json:"url,omitempty"`
+	ConfigurationDN    string `json:"configuration_dn,omitempty"`
+	BindDN             string `json:"bind_dn,omitempty"`
+	PasswordRef        string `json:"password_ref,omitempty"`
+	InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
+}
 
 func privacyRules(rules ...events.PrivacyFieldRule) events.PrivacyEventPolicy {
 	return events.PrivacyEventPolicy{Rules: rules}
@@ -232,8 +247,16 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	)
 	discoveryRunQueued := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/source_id", opaque),
+		privacyRule("/job_kind", opaque),
 		privacyRule("/schedule_id", opaque), privacyRule("/dry_run", opaque),
 		privacyRule("/requested_by", exact),
+		privacyRule("/execution", opaque), privacyRule("/mode", opaque),
+		privacyRule("/targets", opaque), privacyRule("/allow_rfc1918", opaque),
+		privacyRule("/allow_loopback", opaque), privacyRule("/allow_reserved_ranges", opaque),
+		privacyRule("/segment", opaque), privacyRule("/required_agent_role", opaque),
+		privacyRule("/required_agent_id", opaque), privacyRule("/url", opaque),
+		privacyRule("/configuration_dn", token), privacyRule("/bind_dn", token),
+		privacyRule("/password_ref", token), privacyRule("/insecure_skip_verify", opaque),
 	)
 	discoveryFinding := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/run_id", opaque),
@@ -916,7 +939,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventProfileUpdated, ProfileEventSchemaVersion}:                             privacyPayloadShape[ProfileVersioned](),
 		{EventDiscoverySegmentUpserted, 1}:                                           privacyPayloadShape[DiscoverySegmentUpserted](),
 		{EventDiscoverySourceUpserted, 1}:                                            privacyPayloadShape[DiscoverySourceUpserted](),
-		{EventDiscoveryRunQueued, 1}:                                                 privacyPayloadShape[DiscoveryRunQueued](),
+		{EventDiscoveryRunQueued, 1}:                                                 privacyPayloadShape[privacyDiscoveryRunQueued](),
 		{EventDiscoveryFindingRecorded, 1}:                                           privacyPayloadShape[DiscoveryFindingRecorded](),
 		{EventDiscoveryFindingTriageChanged, 1}:                                      privacyPayloadShape[DiscoveryFindingTriageChanged](),
 		{EventComplianceReportScheduleUpserted, 1}:                                   privacyPayloadShape[ComplianceReportScheduleUpserted](),
@@ -974,6 +997,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventEdgeDelegationRevoked, 1}:                             privacyPayloadShape[EdgeDelegationRevoked](),
 		{EventEdgeIssuanceReconciled, 1}:                            privacyPayloadShape[EdgeIssuanceReconciled](),
 		{EventADCSDatabaseIngested, 1}:                              privacyPayloadShape[ADCSDatabaseIngested](),
+		{EventADCSInventoryObserved, 1}:                             privacyPayloadShape[adcsdiscovery.InventoryObserved](),
 		{EventOwnershipConflictResolved, 1}:                         privacyPayloadShape[OwnershipConflictResolved](),
 		{EventAgentUpgradeCampaignOpened, 1}:                        privacyPayloadShape[AgentUpgradeCampaignOpened](),
 		{EventAgentUpgradeCampaignAdvanced, 1}:                      privacyPayloadShape[AgentUpgradeCampaignAdvanced](),

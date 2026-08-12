@@ -5,100 +5,99 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
-	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
 // Recording an in-domain relay's AD CS observation (epic F1).
 //
-// The relay reads the directory and reports; this turns that report into the
-// read model the Posture console shows. It runs on the report path rather than
-// as a projection over the event log because what an operator needs here is the
-// CURRENT state of a domain's templates — "what does this directory look like
-// now" — and replaying every observation ever made to answer that would be
-// slower and no more true.
+// The relay reads the directory and reports immutable facts. The event
+// projector is the only writer of the current posture table, so a cold replay
+// rebuilds the same console state without trusting this transport callback.
 
-// recordADCSPosture stores one relay observation.
-//
-// It replaces the domain's rows rather than merging them, because a template
-// DELETED from the directory has to disappear from the console. A merge would
-// leave a dangerous template on the page forever after someone removed it —
-// the worst way for a posture surface to be wrong, because it punishes the fix.
-func (s *Server) recordADCSPosture(ctx context.Context, tenantID, agentName, _, reportJSON string) {
-	if s.store == nil {
-		return
+// recordADCSInventory validates and projects one result while its exact agent
+// lease is still held. Any error leaves the claim retryable; receipt-derived
+// event IDs make a partial retry converge without duplicating state.
+func (s *Server) recordADCSInventory(ctx context.Context, tenantID, agentName, idempotencyKey string, jobPayload []byte, reportJSON string) error {
+	if s.store == nil || s.orch == nil {
+		return errors.New("AD CS inventory receiver is not configured")
 	}
-	var report struct {
-		Inventory struct {
-			Templates []adcs.Template `json:"templates"`
-		} `json:"inventory"`
-		Findings          []adcs.Finding `json:"findings"`
-		DirectoryVerified bool           `json:"directory_verified"`
+	if len(reportJSON) > maxStructuredSyncReportBytes {
+		return errors.New("AD CS inventory report exceeds the receiver bound")
 	}
-	if err := json.Unmarshal([]byte(reportJSON), &report); err != nil {
-		// A relay that reported something this cannot read is a version skew,
-		// not an empty domain. Writing an empty posture would tell an operator
-		// their template list is clean, which is the failure this whole epic
-		// exists to prevent.
-		return
+	var intent adcs.InventoryIntent
+	if err := decodeStrictJSON(jobPayload, &intent); err != nil {
+		return fmt.Errorf("decode AD CS inventory command: %w", err)
 	}
-	if len(report.Inventory.Templates) == 0 {
-		// Same reasoning: a domain with no templates at all does not happen in
-		// practice, so an empty inventory is far more likely a failed read that
-		// reported success. Refusing to write it keeps a real posture on screen
-		// rather than replacing it with a comforting blank.
-		return
+	var report adcs.InventoryReport
+	if err := decodeStrictJSON([]byte(reportJSON), &report); err != nil {
+		return fmt.Errorf("decode AD CS inventory report: %w", err)
+	}
+	if err := adcs.ValidateInventoryReport(intent, report); err != nil {
+		return err
+	}
+	if report.Status == "succeeded" && report.DirectoryVerified == intent.InsecureSkipVerify {
+		return errors.New("AD CS report directory-verification claim contradicts its command")
+	}
+	agentID := agentRowID(tenantID, agentName)
+	if intent.RequiredAgentID != "" && intent.RequiredAgentID != agentID {
+		return errors.New("AD CS inventory receipt does not match the selected relay")
+	}
+	run, err := s.store.GetDiscoveryRun(ctx, tenantID, intent.ID)
+	if err != nil {
+		return err
+	}
+	if run.SourceID != intent.SourceID || run.Execution != adcs.ExecutionRelay ||
+		run.RequiredAgentRole != intent.RequiredAgentRole || run.RequiredAgentID != intent.RequiredAgentID {
+		return errors.New("AD CS inventory command does not match its projected run")
+	}
+	if discoveryRunTerminal(run.Status) {
+		if run.ExecutedByAgentID == agentID {
+			return nil
+		}
+		return errors.New("AD CS inventory run is already terminal under another executor")
+	}
+	if strings.TrimSpace(idempotencyKey) == "" {
+		return errors.New("AD CS inventory claim has no durable idempotency key")
+	}
+	if run.Status == "queued" {
+		if err := s.orch.StartDiscoveryRunWithEventID(ctx, tenantID, intent.ID,
+			orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-run-started")); err != nil {
+			return err
+		}
+	}
+	if report.Status == "failed" {
+		return s.orch.CompleteDiscoveryRunWithEventID(ctx, tenantID,
+			orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-run-completed"), store.DiscoveryRun{
+				ID: intent.ID, Status: "failed", Targets: 1, Failed: 1,
+				Error: report.ErrorCode, ExecutedByAgentID: agentID,
+			})
 	}
 
-	// The domain is derived from the templates' own publishing CAs when it can
-	// be, so one forest's several domains stay separate on the page. Templates
-	// named "User" in two domains are not the same template, and merging them
-	// would hide a dangerous one behind a safe namesake.
 	domain := adcsDomainFor(report.Inventory.Templates)
-
-	byTemplate := map[string][]adcs.Finding{}
-	for _, finding := range report.Findings {
-		byTemplate[finding.Template] = append(byTemplate[finding.Template], finding)
+	// Compute drift before the current observation replaces the previous domain.
+	s.recordADCSDrift(ctx, tenantID, domain, agentName, idempotencyKey, report.Inventory.Templates)
+	if err := s.orch.RecordADCSInventoryObservedWithEventID(ctx, tenantID,
+		orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-inventory-observed"),
+		adcs.InventoryObserved{
+			RunID: intent.ID, SourceID: intent.SourceID, Domain: domain,
+			AgentID: agentID, AgentName: agentName, DirectoryVerified: report.DirectoryVerified,
+			Templates: report.Inventory.Templates, Findings: report.Findings,
+		}); err != nil {
+		return err
 	}
-
-	// F2: what changed since the last sweep, in security terms. This runs BEFORE
-	// the replace, because after it the previous state is gone — and the whole
-	// value of a template inventory over time is noticing the moment somebody
-	// turned on supplies-subject, not the fact that it is on now.
-	s.recordADCSDrift(ctx, tenantID, domain, agentName, report.Inventory.Templates)
-
-	rows := make([]store.ADCSTemplatePosture, 0, len(report.Inventory.Templates))
-	for _, tpl := range report.Inventory.Templates {
-		findings := byTemplate[tpl.Name]
-		encoded, err := json.Marshal(findings)
-		if err != nil {
-			continue
-		}
-		// The template is stored as observed so the NEXT sweep can diff against
-		// what the directory really said (F2), not against a reconstruction
-		// that would report every flag as newly set.
-		observed, err := json.Marshal(tpl)
-		if err != nil {
-			continue
-		}
-		rows = append(rows, store.ADCSTemplatePosture{
-			Domain:           domain,
-			Template:         tpl.Name,
-			DisplayName:      tpl.DisplayName,
-			SchemaVersion:    tpl.SchemaVersion,
-			PublishedBy:      tpl.PublishedBy,
-			WorstSeverity:    worstADCSSeverity(findings),
-			FindingCount:     len(findings),
-			Findings:         encoded,
-			ObservedTemplate: observed,
+	return s.orch.CompleteDiscoveryRunWithEventID(ctx, tenantID,
+		orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-run-completed"), store.DiscoveryRun{
+			ID: intent.ID, Status: "succeeded", Targets: 1,
+			Discovered: len(report.Inventory.Templates), ExecutedByAgentID: agentID,
 		})
-	}
-	_ = s.store.ReplaceADCSTemplatePosture(ctx, tenantID, domain, agentName, rows, time.Now().UTC())
 }
 
 // adcsDomainFor labels the observation.
@@ -119,29 +118,35 @@ func adcsDomainFor(templates []adcs.Template) string {
 	return "unattributed"
 }
 
-// worstADCSSeverity reduces a template's findings to the one word the console
-// sorts on. Empty means no findings, which is a real state and must not read as
-// unknown.
-func worstADCSSeverity(findings []adcs.Finding) string {
-	worst := ""
-	rank := map[adcs.Severity]int{adcs.SeverityMedium: 1, adcs.SeverityHigh: 2, adcs.SeverityCritical: 3}
-	best := 0
-	for _, f := range findings {
-		if r := rank[f.Severity]; r > best {
-			best, worst = r, string(f.Severity)
-		}
-	}
-	return worst
-}
-
-// adcsPostureView serves the observed template posture to the API.
-func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.ADCSTemplate, error) {
+// adcsPostureView serves source lifecycle and observed template posture to the API.
+func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.ADCSInventorySource, []api.ADCSTemplate, error) {
 	if s.store == nil {
-		return nil, nil
+		return nil, nil, nil
+	}
+	monitoring, err := s.store.ListDiscoveryMonitoringSources(ctx, tenantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	sources := make([]api.ADCSInventorySource, 0)
+	for _, source := range monitoring {
+		if source.Kind != adcs.SourceKind {
+			continue
+		}
+		status := source.LastRunStatus
+		if status == "" || status == "queued" {
+			status = "pending"
+		}
+		sources = append(sources, api.ADCSInventorySource{
+			SourceID: source.SourceID, Name: source.Name,
+			ScheduleID: source.ScheduleID, ScheduleEnabled: source.ScheduleEnabled,
+			MonitoringIntervalSeconds: source.MonitoringIntervalSeconds,
+			LastRunID:                 source.LastRunID, LastRunStatus: status, LastRunError: source.LastRunError,
+			LastRunCreatedAt: source.LastRunCreatedAt, LastRunCompletedAt: source.LastRunCompletedAt,
+		})
 	}
 	rows, err := s.store.ListADCSTemplatePosture(ctx, tenantID, 500)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := make([]api.ADCSTemplate, 0, len(rows))
 	for _, row := range rows {
@@ -159,14 +164,21 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 		if published == nil {
 			published = []string{}
 		}
+		principals := []string{}
+		if len(row.ObservedTemplate) > 0 {
+			var observed adcs.Template
+			if json.Unmarshal(row.ObservedTemplate, &observed) == nil && observed.EnrollmentPrincipals != nil {
+				principals = observed.EnrollmentPrincipals
+			}
+		}
 		out = append(out, api.ADCSTemplate{
 			Domain: row.Domain, Template: row.Template, DisplayName: row.DisplayName,
-			SchemaVersion: row.SchemaVersion, PublishedBy: published,
+			SchemaVersion: row.SchemaVersion, PublishedBy: published, EnrollmentPrincipals: principals,
 			WorstSeverity: row.WorstSeverity, Findings: findings,
 			ObservedBy: row.ObservedBy, ObservedAt: row.ObservedAt,
 		})
 	}
-	return out, nil
+	return sources, out, nil
 }
 
 // recordADCSDrift compares this sweep against the stored one and records the
@@ -177,7 +189,7 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 // on improvement teaches people to mute it — after which it will not reach them
 // on the day it matters. Better and neutral changes are still recorded, because
 // an incident timeline needs them.
-func (s *Server) recordADCSDrift(ctx context.Context, tenantID, domain, agentName string, current []adcs.Template) {
+func (s *Server) recordADCSDrift(ctx context.Context, tenantID, domain, agentName, idempotencyKey string, current []adcs.Template) {
 	if s.store == nil || s.log == nil {
 		return
 	}
@@ -224,5 +236,8 @@ func (s *Server) recordADCSDrift(ctx context.Context, tenantID, domain, agentNam
 		// without having to reason about the payload.
 		eventType = "adcs.template.drift.worsened"
 	}
-	_, _ = s.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: encoded})
+	_, _ = s.log.Append(ctx, events.Event{
+		ID:   orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-drift"),
+		Type: eventType, TenantID: tenantID, Data: encoded,
+	})
 }

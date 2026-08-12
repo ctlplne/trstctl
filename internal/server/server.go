@@ -1719,7 +1719,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// read on the Connectors page.
 		recordDryRun:               s.dryRunReceipt,
 		recordRollback:             s.rollbackReceipt,
-		recordADCSPosture:          s.recordADCSPosture,
+		recordADCSInventory:        s.recordADCSInventory,
 		recordCMDBSync:             s.recordCMDBSync,
 		recordMDMSync:              s.recordMDMSync,
 		recordDiscoveryScan:        s.recordDiscoveryScan,

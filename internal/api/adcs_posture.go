@@ -48,11 +48,12 @@ type ADCSFindingEvidence struct {
 
 // ADCSTemplate is one observed certificate template.
 type ADCSTemplate struct {
-	Domain        string   `json:"domain"`
-	Template      string   `json:"template"`
-	DisplayName   string   `json:"display_name,omitempty"`
-	SchemaVersion int      `json:"schema_version,omitempty"`
-	PublishedBy   []string `json:"published_by"`
+	Domain               string   `json:"domain"`
+	Template             string   `json:"template"`
+	DisplayName          string   `json:"display_name,omitempty"`
+	SchemaVersion        int      `json:"schema_version,omitempty"`
+	PublishedBy          []string `json:"published_by"`
+	EnrollmentPrincipals []string `json:"enrollment_principals"`
 	// WorstSeverity is empty when the template has no findings. That is a real
 	// state and the console renders it as clean, not as unknown.
 	WorstSeverity string                `json:"worst_severity"`
@@ -64,13 +65,30 @@ type ADCSTemplate struct {
 	ObservedAt time.Time `json:"observed_at"`
 }
 
+// ADCSInventorySource is the operator-visible lifecycle of one configured
+// directory reader. It carries references and run metadata only; bind
+// credentials and raw directory responses never cross this read surface.
+type ADCSInventorySource struct {
+	SourceID                  string     `json:"source_id"`
+	Name                      string     `json:"name"`
+	ScheduleID                string     `json:"schedule_id,omitempty"`
+	ScheduleEnabled           bool       `json:"schedule_enabled"`
+	MonitoringIntervalSeconds int        `json:"monitoring_interval_seconds,omitempty"`
+	LastRunID                 string     `json:"last_run_id,omitempty"`
+	LastRunStatus             string     `json:"last_run_status"`
+	LastRunError              string     `json:"last_run_error,omitempty"`
+	LastRunCreatedAt          *time.Time `json:"last_run_created_at,omitempty"`
+	LastRunCompletedAt        *time.Time `json:"last_run_completed_at,omitempty"`
+}
+
 // ADCSPosture is the served template view.
 type ADCSPosture struct {
 	// Observed reports whether any relay has ever read a directory for this
 	// tenant. Without it an empty list is ambiguous between "no AD CS estate"
 	// and "nobody has looked", and those are opposite facts.
-	Observed  bool           `json:"observed"`
-	Templates []ADCSTemplate `json:"templates"`
+	Observed  bool                  `json:"observed"`
+	Sources   []ADCSInventorySource `json:"sources"`
+	Templates []ADCSTemplate        `json:"templates"`
 	// Counts summarize what the page is about to show, so an operator can tell
 	// at a glance whether to read it now or later.
 	Critical int `json:"critical"`
@@ -82,8 +100,8 @@ type ADCSPosture struct {
 	Guidance string `json:"guidance"`
 }
 
-// ADCSPostureProvider reads the observed template posture.
-type ADCSPostureProvider func(ctx context.Context, tenantID string) ([]ADCSTemplate, error)
+// ADCSPostureProvider reads source lifecycle and observed template posture.
+type ADCSPostureProvider func(ctx context.Context, tenantID string) ([]ADCSInventorySource, []ADCSTemplate, error)
 
 // WithADCSPosture wires the served AD CS template view.
 func WithADCSPosture(provider ADCSPostureProvider) Option {
@@ -92,7 +110,7 @@ func WithADCSPosture(provider ADCSPostureProvider) Option {
 
 // adcsPostureGuidance is the honest caveat, carried on the response so it
 // travels with the data rather than living only in documentation.
-const adcsPostureGuidance = "Enrollment ACLs are not yet decoded, so these findings describe what a template permits, not who may use it. A dangerous template restricted to a small group is a different risk from the same template open to Domain Users, and this page cannot yet tell them apart."
+const adcsPostureGuidance = "Enrollment trustees are reported as canonical Windows SIDs from each template DACL. Group expansion, inherited or conditional policy, and a user's effective access remain directory-side decisions; verify those before changing access."
 
 func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
@@ -100,16 +118,17 @@ func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	out := ADCSPosture{Templates: []ADCSTemplate{}, Guidance: adcsPostureGuidance}
+	out := ADCSPosture{Sources: []ADCSInventorySource{}, Templates: []ADCSTemplate{}, Guidance: adcsPostureGuidance}
 	if a.adcsPosture == nil {
 		a.writeJSON(w, http.StatusOK, out)
 		return
 	}
-	templates, err := a.adcsPosture(r.Context(), tenantID)
+	sources, templates, err := a.adcsPosture(r.Context(), tenantID)
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
+	out.Sources = sources
 	if len(templates) > 0 {
 		out.Observed = true
 		out.Templates = templates
