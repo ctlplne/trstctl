@@ -2241,8 +2241,26 @@ func componentSchemas() map[string]*Schema {
 		"unknown_count": {Type: "integer"},
 		"guidance":      str(),
 	}, "items", "unknown_count", "guidance")
+	relayPluginGrant := object(map[string]*Schema{
+		"capability":  {Type: "string", Enum: []string{"fs.read", "fs.write", "net.dial"}},
+		"constraints": {Type: "array", Items: str()},
+	}, "capability", "constraints")
+	relayPluginEntry := object(map[string]*Schema{
+		"name": str(), "digest": str(), "publisher": str(),
+		"execution_context": {Type: "string", Enum: []string{"network_relay_wasm"}},
+		"grants":            {Type: "array", Items: ref("RelayPluginGrant")},
+	}, "name", "digest", "publisher", "execution_context", "grants")
+	relayPluginRuntime := object(map[string]*Schema{
+		"agent_id": uuid(), "agent_name": str(), "agent_status": str(),
+		"reported_at": timestamp(), "signer_fingerprint": str(),
+		"signature_verified": {Type: "boolean"}, "metadata_only": {Type: "boolean"},
+		"plugins": {Type: "array", Items: ref("RelayPluginEntry")},
+	}, "agent_id", "agent_name", "agent_status", "reported_at", "signer_fingerprint",
+		"signature_verified", "metadata_only", "plugins")
 	connectorCatalog := object(map[string]*Schema{
-		"items": {Type: "array", Items: ref("ConnectorCatalogItem")},
+		"items":                     {Type: "array", Items: ref("ConnectorCatalogItem")},
+		"relay_plugins":             {Type: "array", Items: ref("RelayPluginRuntime")},
+		"relay_plugins_next_cursor": str(),
 	}, "items")
 	acmeDNS01ProviderCatalogItem := object(map[string]*Schema{
 		"name":                        str(),
@@ -4850,6 +4868,9 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorSupportRow":                      connectorSupportRow,
 		"ConnectorRelayParity":                     connectorRelayParity,
 		"ConnectorCatalogItem":                     connectorCatalogItem,
+		"RelayPluginGrant":                         relayPluginGrant,
+		"RelayPluginEntry":                         relayPluginEntry,
+		"RelayPluginRuntime":                       relayPluginRuntime,
 		"ConnectorCatalog":                         connectorCatalog,
 		"DeploymentTargetRequest":                  deploymentTargetReq,
 		"DeploymentTarget":                         deploymentTarget,

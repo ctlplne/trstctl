@@ -40,6 +40,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/protocol"
 )
 
@@ -94,6 +95,10 @@ type HeartbeatRequest struct {
 	// Nothing is authorized from these values. The server derives tenant, agent
 	// identity, and relay role from the verified client certificate.
 	EnrollmentProxy *EnrollmentProxyReport `json:"enrollment_proxy,omitempty"`
+	// RelayPlugins is the signed, metadata-only census of WASM connectors this
+	// exact relay process verified and loaded. Nil means an older agent cannot
+	// report it; non-nil with zero plugins is an explicit current empty census.
+	RelayPlugins *plugincensus.Report `json:"relay_plugins,omitempty"`
 }
 
 // EnrollmentProxyReport is metadata-only evidence from one relay process.

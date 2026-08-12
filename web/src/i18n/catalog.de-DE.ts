@@ -4520,6 +4520,25 @@ const deDECatalog = {
   "source.provider.drill.run.l3prov0038": "Isolationsübung ausführen",
   "source.provider.drill.pass.l3prov0039": "Die Isolierung hält — jede Prüfung wurde bestanden.",
   "source.provider.drill.fail.l3prov0040": "Isolationsübung FEHLGESCHLAGEN — sofort untersuchen.",
+  // E4 relay plugin census — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "connectors.relayPlugins.title": "Verifizierte Relay-Plugins",
+  "connectors.relayPlugins.help":
+    "Jede Zeile stammt aus den Modulen, die dieses Relay verifiziert und geladen hat. Fingerabdrücke, Ausführungskontext und effektive Berechtigungen sind Metadaten; Modulbytes und Geheimnisse gelangen nie in den Katalog.",
+  "connectors.relayPlugins.emptyTitle": "Kein Relay-Plugin-Inventar gemeldet",
+  "connectors.relayPlugins.emptyBody":
+    "Aktualisieren Sie ein Netzwerk-Relay und warten Sie auf seinen Heartbeat, bevor Sie die Abdeckung durch Drittanbieter-Connectors als bekannt behandeln.",
+  "connectors.relayPlugins.relay": "Relay",
+  "connectors.relayPlugins.plugin": "Plugin",
+  "connectors.relayPlugins.provenance": "Herkunft",
+  "connectors.relayPlugins.execution": "Ausführungskontext",
+  "connectors.relayPlugins.grant": "Effektive Berechtigung",
+  "connectors.relayPlugins.reported": "Gemeldet",
+  "connectors.relayPlugins.signatureVerified": "Vom Relay-Zertifikat signiert",
+  "connectors.relayPlugins.signatureUnverified": "Signatur nicht verifiziert",
+  "connectors.relayPlugins.metadataOnly": "Nur Metadaten",
+  "connectors.relayPlugins.noLoadedPlugins": "Keine geladenen Plugins",
+  "connectors.relayPlugins.unrestricted": "Unbeschränkt",
+  "connectors.relayPlugins.loadMore": "Weitere Relay-Laufzeiten laden",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

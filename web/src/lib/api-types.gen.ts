@@ -1509,6 +1509,8 @@ export interface ComplianceReportScheduleRequest {
 
 export interface ConnectorCatalog {
   items: ConnectorCatalogItem[];
+  relay_plugins?: RelayPluginRuntime[];
+  relay_plugins_next_cursor?: string;
 }
 
 export interface ConnectorCatalogItem {
@@ -4683,6 +4685,30 @@ export interface RegionalIssuanceLane {
   recovery: string;
   region: string;
   signer_mode: string;
+}
+
+export interface RelayPluginEntry {
+  digest: string;
+  execution_context: "network_relay_wasm";
+  grants: RelayPluginGrant[];
+  name: string;
+  publisher: string;
+}
+
+export interface RelayPluginGrant {
+  capability: "fs.read" | "fs.write" | "net.dial";
+  constraints: string[];
+}
+
+export interface RelayPluginRuntime {
+  agent_id: string;
+  agent_name: string;
+  agent_status: string;
+  metadata_only: boolean;
+  plugins: RelayPluginEntry[];
+  reported_at: string;
+  signature_verified: boolean;
+  signer_fingerprint: string;
 }
 
 export interface RemediationPlaybook {

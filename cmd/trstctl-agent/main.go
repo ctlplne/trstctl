@@ -38,6 +38,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/plugincensus"
 )
 
 func main() {
@@ -476,6 +477,17 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if strings.TrimSpace(o.enrollProxyListen) != "" && !agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
 		return fmt.Errorf("--enroll-proxy-listen requires a certificate carrying the %q role; re-enroll this agent with a network-role bootstrap token", mtls.AgentRoleNetwork)
 	}
+	// E4: verify and load third-party connectors BEFORE the first heartbeat.
+	// That first beat is the boot record operators trust; reporting an empty
+	// runtime and correcting it one interval later would be a false outage.
+	pluginRuntime, pluginErr := buildPluginRuntime(ctx, o)
+	if pluginErr != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent:", pluginErr)
+		return pluginErr
+	}
+	if pluginRuntime != nil {
+		defer func() { _ = pluginRuntime.Close(context.Background()) }()
+	}
 	creds, err := a.Credentials()
 	if err != nil {
 		return err
@@ -500,6 +512,15 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	ch := channelAdapter{
 		c:               transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())),
 		enrollmentProxy: reportEnrollmentProxy,
+	}
+	if agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
+		ch.pluginIdentity = a.Identity()
+		ch.pluginCensus = func() []plugincensus.Entry {
+			if pluginRuntime == nil {
+				return []plugincensus.Entry{}
+			}
+			return pluginRuntime.Census()
+		}
 	}
 	fmt.Printf("trstctl-agent: connected to %s as %s (cert serial %s, expires %s)\n",
 		o.serverAddr, o.commonName, a.CertificateSerial(), a.CertificateNotAfter().Format(time.RFC3339))
@@ -617,20 +638,6 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	// revocation without a route to the control plane.
 	stopRevCache := startRevocationCache(ctx, o)
 	defer stopRevCache()
-
-	// E4: third-party connectors, verified and loaded before any work is
-	// claimed. A configuration error here is fatal rather than a warning: an
-	// agent that came up having skipped its plugin directory would serve a
-	// subset of what an operator configured, and the missing one is the module
-	// whose signature did not check out.
-	pluginRuntime, pluginErr := buildPluginRuntime(ctx, o)
-	if pluginErr != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent:", pluginErr)
-		return pluginErr
-	}
-	if pluginRuntime != nil {
-		defer func() { _ = pluginRuntime.Close(context.Background()) }()
-	}
 
 	// B3: the SPIFFE Workload API, served on this host for the workloads that
 	// run on it. Its own goroutine because it is a listener rather than a
@@ -1032,6 +1039,8 @@ func agentIdentityFilesExist(o agentOptions) bool {
 type channelAdapter struct {
 	c               *transport.AgentClient
 	enrollmentProxy func() *transport.EnrollmentProxyReport
+	pluginIdentity  *mtls.AgentIdentity
+	pluginCensus    func() []plugincensus.Entry
 }
 
 func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatRequest) (*agent.HeartbeatResponse, error) {
@@ -1041,6 +1050,18 @@ func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatReque
 	}
 	if a.enrollmentProxy != nil {
 		wire.EnrollmentProxy = a.enrollmentProxy()
+	}
+	if a.pluginCensus != nil {
+		if a.pluginIdentity == nil {
+			return nil, errors.New("plugin census signer is not configured")
+		}
+		report, err := transport.SignedPluginCensus(a.pluginIdentity,
+			a.pluginIdentity.TenantID(), a.pluginIdentity.CommonName(),
+			a.pluginCensus(), time.Now().UTC().Unix())
+		if err != nil {
+			return nil, fmt.Errorf("sign relay plugin census: %w", err)
+		}
+		wire.RelayPlugins = report
 	}
 	resp, err := a.c.Heartbeat(ctx, wire)
 	if err != nil {

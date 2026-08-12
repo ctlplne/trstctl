@@ -5794,6 +5794,15 @@
               "$ref": "#/components/schemas/ConnectorCatalogItem"
             },
             "type": "array"
+          },
+          "relay_plugins": {
+            "items": {
+              "$ref": "#/components/schemas/RelayPluginRuntime"
+            },
+            "type": "array"
+          },
+          "relay_plugins_next_cursor": {
+            "type": "string"
           }
         },
         "required": [
@@ -18337,6 +18346,106 @@
         ],
         "type": "object"
       },
+      "RelayPluginEntry": {
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "execution_context": {
+            "enum": [
+              "network_relay_wasm"
+            ],
+            "type": "string"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/RelayPluginGrant"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "digest",
+          "publisher",
+          "execution_context",
+          "grants"
+        ],
+        "type": "object"
+      },
+      "RelayPluginGrant": {
+        "properties": {
+          "capability": {
+            "enum": [
+              "fs.read",
+              "fs.write",
+              "net.dial"
+            ],
+            "type": "string"
+          },
+          "constraints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "constraints"
+        ],
+        "type": "object"
+      },
+      "RelayPluginRuntime": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "agent_name": {
+            "type": "string"
+          },
+          "agent_status": {
+            "type": "string"
+          },
+          "metadata_only": {
+            "type": "boolean"
+          },
+          "plugins": {
+            "items": {
+              "$ref": "#/components/schemas/RelayPluginEntry"
+            },
+            "type": "array"
+          },
+          "reported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "signature_verified": {
+            "type": "boolean"
+          },
+          "signer_fingerprint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "agent_name",
+          "agent_status",
+          "reported_at",
+          "signer_fingerprint",
+          "signature_verified",
+          "metadata_only",
+          "plugins"
+        ],
+        "type": "object"
+      },
       "RemediationPlaybook": {
         "properties": {
           "action": {
@@ -29290,6 +29399,24 @@
     "/api/v1/connectors/catalog": {
       "get": {
         "operationId": "listConnectorCatalog",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -29330,7 +29457,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "List served connector kinds and rollback posture",
+        "summary": "List served connector kinds, rollback posture, and signed relay plugin runtimes",
         "x-trstctl-permission": "connectors:read"
       }
     },

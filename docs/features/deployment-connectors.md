@@ -63,6 +63,32 @@ replay contract are claimed before I/O and left operator-indeterminate after an
 ambiguous failure, avoiding a duplicate mutation. Connectors compute fingerprints and
 request signing through the signer boundary; none do crypto directly.
 
+### Verified relay plugins
+
+A network relay reports what its running plugin loader actually accepted through a
+signed, metadata-only census on its mTLS heartbeat. Each row contains the stable
+plugin name, verified module digest, publisher fingerprint, the
+`network_relay_wasm` execution context, and its effective grants and normalized
+constraints. This list comes from the same load operation that checked the module
+signature and started the WASM instance; scanning a directory would only prove that
+a file exists, not that the runtime trusted and loaded it.
+
+The relay signs the tenant, its certificate common name, the normalized list, and
+the issued-at time with its agent identity. The control plane independently takes
+the tenant and relay identity from the authenticated certificate, rejects tampered,
+stale, cross-tenant, or host-agent reports, and projects an accepted heartbeat from
+the immutable event stream. A signed empty census is explicit evidence that the
+relay currently loaded no partner modules. A missing census means the agent version
+cannot report this state; the two cases are not collapsed.
+
+`GET /api/v1/connectors/catalog` returns these per-relay rows in `relay_plugins`,
+with cursor pagination. The **Verified relay plugins** table on Connectors shows the
+relay identity, signature status, signer certificate fingerprint, plugin provenance,
+execution context, effective grants and normalized constraints, and report time.
+This surface contains no module bytes, publisher keys, credential bytes, or secrets.
+It is evidence of what the relay loaded, not a control-plane mechanism for pushing
+modules or widening an operator-owned grant.
+
 Retries use capped backoff with jitter, and a tenant/destination circuit breaker opens
 after repeated failures, skipping new claims until a half-open probe succeeds.
 Operators inspect live state with `GET /api/v1/connectors/outbox-circuits`; Prometheus

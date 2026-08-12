@@ -225,6 +225,11 @@
           "go_type": "*transport.EnrollmentProxyReport",
           "name": "enrollment_proxy",
           "presence": "optional"
+        },
+        {
+          "go_type": "*plugincensus.Report",
+          "name": "relay_plugins",
+          "presence": "optional"
         }
       ]
     },
@@ -416,6 +421,68 @@
         {
           "go_type": "[]KubernetesPostureResource",
           "name": "resources",
+          "presence": "required"
+        }
+      ]
+    },
+    "RelayPluginEntry": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "name",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "digest",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "publisher",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "execution_context",
+          "presence": "required"
+        },
+        {
+          "go_type": "[]plugincensus.Grant",
+          "name": "grants",
+          "presence": "required"
+        }
+      ]
+    },
+    "RelayPluginGrant": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "capability",
+          "presence": "required"
+        },
+        {
+          "go_type": "[]string",
+          "name": "constraints",
+          "presence": "required"
+        }
+      ]
+    },
+    "RelayPluginReport": {
+      "fields": [
+        {
+          "go_type": "[]plugincensus.Entry",
+          "name": "plugins",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "issued_at_unix",
+          "presence": "required"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "signature",
           "presence": "required"
         }
       ]

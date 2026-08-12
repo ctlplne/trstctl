@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -53,6 +54,7 @@ type PluginRuntime struct {
 	mu      sync.RWMutex
 	plugins map[string]*pluginhost.Plugin
 	grants  map[string]pluginhost.Grant
+	census  map[string]plugincensus.Entry
 }
 
 // PluginConfig is what an operator gives the relay to run third-party connectors.
@@ -113,6 +115,7 @@ func NewPluginRuntime(ctx context.Context, cfg PluginConfig) (*PluginRuntime, er
 		trust:   trust,
 		plugins: map[string]*pluginhost.Plugin{},
 		grants:  map[string]pluginhost.Grant{},
+		census:  map[string]plugincensus.Entry{},
 	}
 	if err := rt.loadDir(ctx, dir, cfg.Grant); err != nil {
 		_ = rt.Close(ctx)
@@ -146,12 +149,27 @@ func (r *PluginRuntime) loadDir(ctx context.Context, dir string, grant pluginhos
 			return fmt.Errorf("relay: plugin %q has no signature at %s; unsigned third-party code "+
 				"is refused: %w", name, filepath.Base(sigPath), err)
 		}
-		p, err := r.host.LoadVerified(ctx, wasm, sig, r.trust, grant)
+		p, provenance, err := r.host.LoadVerifiedWithProvenance(ctx, wasm, sig, r.trust, grant)
 		if err != nil {
 			return fmt.Errorf("relay: plugin %q failed verification: %w", name, err)
 		}
+		grants := make([]plugincensus.Grant, 0, len(grant.Capabilities()))
+		for _, capability := range grant.Capabilities() {
+			grants = append(grants, plugincensus.Grant{
+				Capability: string(capability), Constraints: grant.PathPrefixes(capability),
+			})
+		}
+		entry, err := plugincensus.Normalize([]plugincensus.Entry{{
+			Name: name, Digest: provenance.Digest, Publisher: provenance.Publisher,
+			ExecutionContext: plugincensus.ExecutionContextNetworkRelayWASM, Grants: grants,
+		}})
+		if err != nil {
+			_ = p.Close(ctx)
+			return fmt.Errorf("relay: plugin %q census metadata: %w", name, err)
+		}
 		r.plugins[name] = p
 		r.grants[name] = grant
+		r.census[name] = entry[0]
 	}
 	return nil
 }
@@ -180,6 +198,26 @@ func (r *PluginRuntime) Names() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// Census returns the normalized metadata captured by the successful verifier
+// and loader. It cannot expose module or signature bytes because neither is
+// retained in the census map.
+func (r *PluginRuntime) Census() []plugincensus.Entry {
+	if r == nil {
+		return []plugincensus.Entry{}
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]plugincensus.Entry, 0, len(r.census))
+	for _, entry := range r.census {
+		out = append(out, entry)
+	}
+	normalized, err := plugincensus.Normalize(out)
+	if err != nil {
+		panic("relay: stored plugin census is not normalized: " + err.Error())
+	}
+	return normalized
 }
 
 // Deploy runs a third-party connector's deploy entrypoint.
@@ -248,6 +286,7 @@ func (r *PluginRuntime) Close(ctx context.Context) error {
 			firstErr = err
 		}
 		delete(r.plugins, name)
+		delete(r.census, name)
 	}
 	if err := r.host.Close(ctx); err != nil && firstErr == nil {
 		firstErr = err

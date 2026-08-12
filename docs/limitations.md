@@ -800,11 +800,24 @@ never live in the API process. What you can do end to end against the running bi
   is refused, and an unset grant is refused rather than defaulted — a grant nobody
   set and a grant that permits nothing are indistinguishable at that point, so the
   reading that cannot surprise anyone is the one that refuses.
-  SCOPE: the control plane cannot enumerate which modules a given relay carries —
-  it does not distribute them and does not hold the operator's keys — so the count
-  shown per agent is REPORTED BY THE RELAY on its heartbeat rather than derived
-  centrally. Third-party connectors never receive redeemed credential material; a
-  module that could read an appliance password would make the sandbox decorative.
+  AUD-34 adds a signed, metadata-only census to that boundary. The census comes
+  from the exact verifier-and-loader that instantiated the module; it names the
+  stable plugin name, verified module and publisher fingerprints, the fixed
+  `network_relay_wasm` execution context, and the effective grants plus normalized
+  constraints. The relay signs the tenant ID, its certificate common name, that
+  normalized list, and the issued-at time with the same key used by its mTLS
+  certificate. The server rebuilds both identities from the authenticated
+  certificate, verifies the signature, and refuses a tampered, stale, or
+  cross-tenant report. A host-role certificate cannot report relay plugins.
+  Accepted reports enter the immutable event stream and rebuild the newest
+  tenant-isolated projection after restart. The connector catalog API and the
+  Connectors console show each reporting relay separately. A signed empty census
+  means “this relay loaded no third-party modules”; no report means an older agent
+  cannot make the claim. The report contains no module bytes, publisher keys,
+  credentials, or secrets. The control plane still does not distribute modules or
+  operator trust keys. Third-party connectors also never receive redeemed
+  credential material; a module that could read an appliance password would make
+  the sandbox decorative.
   Live appliance readback (E2): after every appliance mutation the relay now asks
   the device what it actually has, alongside D2's TLS handshake against the served
   listener. The two are not redundant and only together locate a fault: a handshake

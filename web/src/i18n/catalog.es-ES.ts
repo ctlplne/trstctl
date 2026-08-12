@@ -4506,6 +4506,24 @@ const esESCatalog = {
   "source.provider.drill.run.l3prov0038": "Ejecutar simulacro de aislamiento",
   "source.provider.drill.pass.l3prov0039": "El aislamiento se mantiene: todas las comprobaciones pasaron.",
   "source.provider.drill.fail.l3prov0040": "El simulacro de aislamiento FALLÓ: investigue de inmediato.",
+  // E4 relay plugin census — Machine-authored translations, FLAG FOR HUMAN REVIEW.
+  "connectors.relayPlugins.title": "Plugins de relay verificados",
+  "connectors.relayPlugins.help":
+    "Cada fila proviene de los módulos que este relay verificó y cargó. Las huellas, el contexto de ejecución y los permisos efectivos son metadatos; los bytes del módulo y los secretos nunca entran en el catálogo.",
+  "connectors.relayPlugins.emptyTitle": "No se informó ningún inventario de plugins del relay",
+  "connectors.relayPlugins.emptyBody": "Actualice un relay de red y espere su heartbeat antes de considerar conocida la cobertura de conectores de terceros.",
+  "connectors.relayPlugins.relay": "Relay",
+  "connectors.relayPlugins.plugin": "Plugin",
+  "connectors.relayPlugins.provenance": "Procedencia",
+  "connectors.relayPlugins.execution": "Contexto de ejecución",
+  "connectors.relayPlugins.grant": "Permiso efectivo",
+  "connectors.relayPlugins.reported": "Informado",
+  "connectors.relayPlugins.signatureVerified": "Firmado por el certificado del relay",
+  "connectors.relayPlugins.signatureUnverified": "Firma no verificada",
+  "connectors.relayPlugins.metadataOnly": "Solo metadatos",
+  "connectors.relayPlugins.noLoadedPlugins": "No hay plugins cargados",
+  "connectors.relayPlugins.unrestricted": "Sin restricciones",
+  "connectors.relayPlugins.loadMore": "Cargar más runtimes de relay",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

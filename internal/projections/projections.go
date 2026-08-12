@@ -4,6 +4,7 @@ package projections
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/ownership"
+	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/privacyref"
 	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/rotationcommand"
@@ -1470,6 +1472,55 @@ type AgentHeartbeat struct {
 	// EnrollmentProxy is nil for an older agent and present for a current build,
 	// including when that build explicitly reports that its relay is off.
 	EnrollmentProxy *EnrollmentProxyReport `json:"enrollment_proxy,omitempty"`
+	// RelayPlugins is present only on v2 events after the server verified the
+	// report against the exact mTLS peer certificate and freshness window.
+	RelayPlugins *AgentRelayPluginCensus `json:"relay_plugins,omitempty"`
+}
+
+// AgentHeartbeatPluginCensusSchemaVersion adds signed relay-plugin metadata to
+// the legacy heartbeat without changing how v1 history replays.
+const AgentHeartbeatPluginCensusSchemaVersion = 2
+
+// AgentRelayPluginCensus preserves the evidence needed to audit the projection.
+// Publisher and digest fields inside Plugins are fingerprints only.
+type AgentRelayPluginCensus struct {
+	Plugins           []plugincensus.Entry `json:"plugins"`
+	IssuedAtUnix      int64                `json:"issued_at_unix"`
+	Signature         []byte               `json:"signature"`
+	Statement         string               `json:"statement"`
+	SignerFingerprint string               `json:"signer_fingerprint"`
+}
+
+func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, heartbeat AgentHeartbeat) error {
+	report := heartbeat.RelayPlugins
+	switch schemaVersion {
+	case events.DefaultSchemaVersion:
+		if report != nil {
+			return errors.New("projections: agent.heartbeat v1 cannot carry relay plugin census")
+		}
+		return nil
+	case AgentHeartbeatPluginCensusSchemaVersion:
+		if report == nil {
+			return errors.New("projections: agent.heartbeat v2 requires relay plugin census")
+		}
+	default:
+		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
+	}
+	canonical, err := (plugincensus.Statement{
+		TenantID: tenantID, AgentCommonName: heartbeat.Agent,
+		Plugins: report.Plugins, IssuedAtUnix: report.IssuedAtUnix,
+	}).Canonical()
+	if err != nil {
+		return fmt.Errorf("projections: relay plugin census metadata: %w", err)
+	}
+	if report.Statement != string(canonical) || len(report.Signature) == 0 {
+		return errors.New("projections: relay plugin census evidence is incomplete or does not match metadata")
+	}
+	fingerprint, err := hex.DecodeString(report.SignerFingerprint)
+	if err != nil || len(fingerprint) != 32 || report.SignerFingerprint != strings.ToLower(report.SignerFingerprint) {
+		return errors.New("projections: relay plugin census signer fingerprint is invalid")
+	}
+	return nil
 }
 
 // EnrollmentProxyReport is the durable, replayable topology/health evidence
@@ -2898,7 +2949,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventBreakglassCACrossSigned:                  {1: true},
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
-	EventAgentHeartbeat:                           {1: true},
+	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true},
 	EventAgentCertRenewed:                         {1: true},
 	EventAgentCertRevoked:                         {1: true},
 	EventAgentOffboarded:                          {1: true},
@@ -3725,6 +3776,9 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		if err := validateAgentHeartbeatPluginCensus(schemaVersionOf(e), e.TenantID, pl); err != nil {
+			return err
+		}
 		lastSeen := e.Time
 		row := store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: pl.Status,
@@ -3755,6 +3809,14 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			row.EnrollmentProxyLastFailoverAt = report.LastFailoverAt
 			reported := e.Time
 			row.EnrollmentProxyReportedAt = &reported
+		}
+		if report := pl.RelayPlugins; report != nil {
+			row.RelayPlugins = report.Plugins
+			row.RelayPluginsStatement = report.Statement
+			row.RelayPluginsSignature = append([]byte(nil), report.Signature...)
+			row.RelayPluginsSignerFingerprint = report.SignerFingerprint
+			reported := time.Unix(report.IssuedAtUnix, 0).UTC()
+			row.RelayPluginsReportedAt = &reported
 		}
 		return p.store.ApplyAgentHeartbeatTx(ctx, tx, row)
 	case EventAgentCertRenewed:

@@ -1432,7 +1432,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List served connector kinds and rollback posture */
+        /** List served connector kinds, rollback posture, and signed relay plugin runtimes */
         get: operations["listConnectorCatalog"];
         put?: never;
         post?: never;
@@ -6806,6 +6806,8 @@ export interface components {
         };
         ConnectorCatalog: {
             items: components["schemas"]["ConnectorCatalogItem"][];
+            relay_plugins?: components["schemas"]["RelayPluginRuntime"][];
+            relay_plugins_next_cursor?: string;
         };
         ConnectorCatalogItem: {
             capabilities: string[];
@@ -10130,6 +10132,31 @@ export interface components {
             recovery: string;
             region: string;
             signer_mode: string;
+        };
+        RelayPluginEntry: {
+            digest: string;
+            /** @enum {string} */
+            execution_context: "network_relay_wasm";
+            grants: components["schemas"]["RelayPluginGrant"][];
+            name: string;
+            publisher: string;
+        };
+        RelayPluginGrant: {
+            /** @enum {string} */
+            capability: "fs.read" | "fs.write" | "net.dial";
+            constraints: string[];
+        };
+        RelayPluginRuntime: {
+            /** Format: uuid */
+            agent_id: string;
+            agent_name: string;
+            agent_status: string;
+            metadata_only: boolean;
+            plugins: components["schemas"]["RelayPluginEntry"][];
+            /** Format: date-time */
+            reported_at: string;
+            signature_verified: boolean;
+            signer_fingerprint: string;
         };
         RemediationPlaybook: {
             action: string;
@@ -15498,7 +15525,12 @@ export interface operations {
     };
     listConnectorCatalog: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

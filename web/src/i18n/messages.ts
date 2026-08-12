@@ -16290,6 +16290,32 @@ export const messages = {
     defaultMessage: "Plaintext local preview. No private cert/key bytes are exposed in this browser view.",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:44.",
   },
+  "connectors.relayPlugins.title": { defaultMessage: "Verified relay plugins", description: "E4: signed per-relay WASM connector census heading." },
+  "connectors.relayPlugins.help": {
+    defaultMessage:
+      "Each row comes from the modules that this relay verified and loaded. Fingerprints, execution context, and effective grants are metadata; module bytes and secrets never enter the catalog.",
+    description: "E4: explains the provenance and metadata boundary of the relay plugin census.",
+  },
+  "connectors.relayPlugins.emptyTitle": { defaultMessage: "No relay plugin census reported", description: "E4: empty signed plugin census title." },
+  "connectors.relayPlugins.emptyBody": {
+    defaultMessage: "Upgrade and heartbeat a network relay before treating third-party connector coverage as known.",
+    description: "E4: distinguishes unreported runtime metadata from an explicitly empty census.",
+  },
+  "connectors.relayPlugins.relay": { defaultMessage: "Relay", description: "E4 plugin census relay column." },
+  "connectors.relayPlugins.plugin": { defaultMessage: "Plugin", description: "E4 plugin census module column." },
+  "connectors.relayPlugins.provenance": { defaultMessage: "Provenance", description: "E4 plugin census publisher and digest column." },
+  "connectors.relayPlugins.execution": { defaultMessage: "Execution context", description: "E4 plugin census execution boundary column." },
+  "connectors.relayPlugins.grant": { defaultMessage: "Effective grant", description: "E4 plugin census normalized capability grant column." },
+  "connectors.relayPlugins.reported": { defaultMessage: "Reported", description: "E4 plugin census signed observation time column." },
+  "connectors.relayPlugins.signatureVerified": {
+    defaultMessage: "Signed by the relay certificate",
+    description: "E4 plugin census signature verification state.",
+  },
+  "connectors.relayPlugins.signatureUnverified": { defaultMessage: "Signature not verified", description: "E4 fail-closed defensive plugin census state." },
+  "connectors.relayPlugins.metadataOnly": { defaultMessage: "Metadata only", description: "E4 plugin census carries no module or secret bytes." },
+  "connectors.relayPlugins.noLoadedPlugins": { defaultMessage: "No loaded plugins", description: "E4 current relay explicitly reported an empty runtime." },
+  "connectors.relayPlugins.unrestricted": { defaultMessage: "Unrestricted", description: "E4 capability has no resource constraint." },
+  "connectors.relayPlugins.loadMore": { defaultMessage: "Load more relay runtimes", description: "E4 plugin census pagination action." },
 } as const;
 
 export type MessageKey = keyof typeof messages;

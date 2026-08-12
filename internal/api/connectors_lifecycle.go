@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -126,6 +127,23 @@ type connectorSupportRow struct {
 
 type connectorCatalogResponse struct {
 	Items []connectorCatalogItem `json:"items"`
+	// RelayPlugins is a bounded page of certificate-bound relay runtime views.
+	// It is separate from Items because a third-party name need not be one of the
+	// native catalog's static families, and because provenance/grants belong to
+	// the exact relay that loaded the module.
+	RelayPlugins           []relayPluginRuntime `json:"relay_plugins"`
+	RelayPluginsNextCursor string               `json:"relay_plugins_next_cursor,omitempty"`
+}
+
+type relayPluginRuntime struct {
+	AgentID           string               `json:"agent_id"`
+	AgentName         string               `json:"agent_name"`
+	AgentStatus       string               `json:"agent_status"`
+	ReportedAt        string               `json:"reported_at"`
+	SignerFingerprint string               `json:"signer_fingerprint"`
+	SignatureVerified bool                 `json:"signature_verified"`
+	MetadataOnly      bool                 `json:"metadata_only"`
+	Plugins           []plugincensus.Entry `json:"plugins"`
 }
 
 type deploymentTargetRequest struct {
@@ -284,11 +302,61 @@ var servedConnectorCatalog = []connectorCatalogItem{
 }
 
 func (a *API) listConnectorCatalog(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.tenant(r); !ok {
+	tenantID, ok := a.tenant(r)
+	if !ok {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	a.writeJSON(w, http.StatusOK, connectorCatalogResponse{Items: a.connectorCatalogWithSandbox()})
+	// Spec and static-catalog tests intentionally construct an API without a
+	// datastore. Keep the pre-E4 static surface usable in that narrow shape;
+	// assembled servers always supply the tenant-scoped store.
+	if a.store == nil {
+		a.writeJSON(w, http.StatusOK, connectorCatalogResponse{
+			Items: a.connectorCatalogWithSandbox(), RelayPlugins: []relayPluginRuntime{},
+		})
+		return
+	}
+	limit, err := pageLimit(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	afterID := store.ZeroUUID
+	var afterCreatedAt *time.Time
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		createdAt, id, err := decodeAgentCursor(cursor)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid cursor"))
+			return
+		}
+		afterCreatedAt, afterID = createdAt, id
+	}
+	agents, err := a.store.ListAgentsPage(r.Context(), tenantID, afterCreatedAt, afterID, limit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	relayPlugins := make([]relayPluginRuntime, 0, len(agents))
+	for _, agent := range agents {
+		if agent.RelayPluginsReportedAt == nil {
+			continue
+		}
+		relayPlugins = append(relayPlugins, relayPluginRuntime{
+			AgentID: agent.ID, AgentName: agent.Name, AgentStatus: agent.Status,
+			ReportedAt:        agent.RelayPluginsReportedAt.UTC().Format(time.RFC3339),
+			SignerFingerprint: agent.RelayPluginsSignerFingerprint,
+			SignatureVerified: len(agent.RelayPluginsSignature) > 0 && agent.RelayPluginsStatement != "",
+			MetadataOnly:      true, Plugins: append([]plugincensus.Entry(nil), agent.RelayPlugins...),
+		})
+	}
+	next := ""
+	if len(agents) == limit {
+		next = encodeAgentCursor(agents[len(agents)-1])
+	}
+	a.writeJSON(w, http.StatusOK, connectorCatalogResponse{
+		Items: a.connectorCatalogWithSandbox(), RelayPlugins: relayPlugins,
+		RelayPluginsNextCursor: next,
+	})
 }
 
 //trstctl:mutation

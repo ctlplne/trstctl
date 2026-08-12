@@ -4259,6 +4259,22 @@ const translatedValues = [
   "Ihr erstes Zertifikat",
   "Schlüssel {value1} nullsetzen",
   "Unverschlüsselte lokale Vorschau. In dieser Browseransicht werden keine Bytes privater Zertifikate oder Schlüssel offengelegt.",
+  "Verifizierte Relay-Plugins",
+  "Jede Zeile stammt aus den Modulen, die dieses Relay verifiziert und geladen hat. Fingerabdrücke, Ausführungskontext und effektive Berechtigungen sind Metadaten; Modulbytes und Geheimnisse gelangen nie in den Katalog.",
+  "Kein Relay-Plugin-Inventar gemeldet",
+  "Aktualisieren Sie ein Netzwerk-Relay und warten Sie auf seinen Heartbeat, bevor Sie die Abdeckung durch Drittanbieter-Connectors als bekannt behandeln.",
+  "Relay",
+  "Plugin",
+  "Herkunft",
+  "Ausführungskontext",
+  "Effektive Berechtigung",
+  "Gemeldet",
+  "Vom Relay-Zertifikat signiert",
+  "Signatur nicht verifiziert",
+  "Nur Metadaten",
+  "Keine geladenen Plugins",
+  "Unbeschränkt",
+  "Weitere Relay-Laufzeiten laden",
 ] as const;
 
 export default buildTranslatedCatalog(translatedValues);

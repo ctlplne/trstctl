@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/protocol"
 )
 
@@ -203,6 +204,9 @@ func currentAgentContract() agentContract {
 			"EnrollmentProxyReport":     {Fields: jsonFieldsOf(EnrollmentProxyReport{})},
 			"HeartbeatRequest":          {Fields: jsonFieldsOf(HeartbeatRequest{})},
 			"HeartbeatResponse":         {Fields: jsonFieldsOf(HeartbeatResponse{})},
+			"RelayPluginEntry":          {Fields: jsonFieldsOf(plugincensus.Entry{})},
+			"RelayPluginGrant":          {Fields: jsonFieldsOf(plugincensus.Grant{})},
+			"RelayPluginReport":         {Fields: jsonFieldsOf(plugincensus.Report{})},
 			"RenewRequest":              {Fields: jsonFieldsOf(RenewRequest{})},
 			"RenewResponse":             {Fields: jsonFieldsOf(RenewResponse{})},
 			"InventoryFinding":          {Fields: jsonFieldsOf(InventoryFinding{})},

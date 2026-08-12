@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	173: true,
 	172: true,
 	170: true,
 	167: true,
@@ -59,6 +60,60 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0173PreservesExistingAgentsAndRequiresCompleteCensusEvidence(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 173)
+	if target.noTx || target.name != "0173_agent_relay_plugin_census.sql" {
+		t.Fatalf("migration 0173 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	agentID := uuid(tenantA, 17301)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
+		VALUES ($1, $2, 'relay-before-0173', 'active', '1.0.0', now())`, agentID, tenantA); err != nil {
+		t.Fatalf("seed pre-0173 agent: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	var plugins string
+	var statement, signer string
+	var signature []byte
+	var reportedAt sql.NullTime
+	if err := pool.QueryRow(ctx, `
+		SELECT relay_plugins::text, relay_plugins_statement, relay_plugins_signature,
+		       relay_plugins_signer_fingerprint, relay_plugins_reported_at
+		  FROM agents WHERE tenant_id=$1 AND id=$2`, tenantA, agentID).
+		Scan(&plugins, &statement, &signature, &signer, &reportedAt); err != nil {
+		t.Fatal(err)
+	}
+	if plugins != "[]" || statement != "" || len(signature) != 0 || signer != "" || reportedAt.Valid {
+		t.Fatalf("legacy agent gained invented census evidence: plugins=%s statement=%q signature=%x signer=%q reported_at=%v",
+			plugins, statement, signature, signer, reportedAt)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE agents SET relay_plugins_reported_at=now()
+		 WHERE tenant_id=$1 AND id=$2`, tenantA, agentID); err == nil {
+		t.Fatal("0173 accepted reported_at without a signed statement and signer evidence")
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE agents
+		   SET relay_plugins='[]'::jsonb,
+		       relay_plugins_statement='trstctl-agent-plugin-census/v1 signed-empty',
+		       relay_plugins_signature=decode('abcd', 'hex'),
+		       relay_plugins_signer_fingerprint=$3,
+		       relay_plugins_reported_at=now()
+		 WHERE tenant_id=$1 AND id=$2`, tenantA, agentID, strings.Repeat("a", 64)); err != nil {
+		t.Fatalf("0173 refused a complete signed-empty census projection: %v", err)
+	}
 }
 
 func TestMigration0172BackfillsTruthfulEdgeCustodyAndConstrainsNewRows(t *testing.T) {

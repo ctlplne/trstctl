@@ -4259,6 +4259,22 @@ const translatedValues = [
   "Su primer certificado",
   "Poner a cero la clave {value1}",
   "Vista previa local en texto plano. En esta vista del navegador no se expone ningún byte de certificados o claves privadas.",
+  "Plugins de relay verificados",
+  "Cada fila proviene de los módulos que este relay verificó y cargó. Las huellas, el contexto de ejecución y los permisos efectivos son metadatos; los bytes del módulo y los secretos nunca entran en el catálogo.",
+  "No se informó ningún inventario de plugins del relay",
+  "Actualice un relay de red y espere su heartbeat antes de considerar conocida la cobertura de conectores de terceros.",
+  "Relay",
+  "Plugin",
+  "Procedencia",
+  "Contexto de ejecución",
+  "Permiso efectivo",
+  "Informado",
+  "Firmado por el certificado del relay",
+  "Firma no verificada",
+  "Solo metadatos",
+  "No hay plugins cargados",
+  "Sin restricciones",
+  "Cargar más runtimes de relay",
 ] as const;
 
 export default buildTranslatedCatalog(translatedValues);

@@ -11,6 +11,7 @@ import { formatDateTime, formatDateTime as formatDateTimePolicy } from "@/i18n/f
 import {
   api,
   type ConnectorCatalogItem,
+  type RelayPluginRuntime,
   type ConnectorDelivery,
   type DeploymentTarget,
   type EndpointVerification,
@@ -48,6 +49,9 @@ function VantageBadge({ vantage }: { vantage: string }) {
 export function Connectors() {
   const { t } = useTranslation();
   const [catalog, setCatalog] = useState<ConnectorCatalogItem[] | null>(null);
+  const [relayPlugins, setRelayPlugins] = useState<RelayPluginRuntime[] | null>(null);
+  const [relayPluginsCursor, setRelayPluginsCursor] = useState<string | undefined>(undefined);
+  const [relayPluginsLoadingMore, setRelayPluginsLoadingMore] = useState(false);
   const [targets, setTargets] = useState<DeploymentTarget[] | null>(null);
   const [identities, setIdentities] = useState<Identity[]>([]);
   const [deliveries, setDeliveries] = useState<ConnectorDelivery[] | null>(null);
@@ -96,9 +100,13 @@ export function Connectors() {
 
   const refresh = () => {
     void refreshCircuits();
-    return Promise.allSettled([api.connectorCatalog(), api.connectorTargets(), api.identities(), api.connectorDeliveries({ limit: 20 })]).then(
+    return Promise.allSettled([api.connectorCatalog({ limit: 100 }), api.connectorTargets(), api.identities(), api.connectorDeliveries({ limit: 20 })]).then(
       ([catalogResult, targetResult, identityResult, deliveryResult]) => {
-        if (catalogResult.status === "fulfilled") setCatalog(catalogResult.value.items ?? []);
+        if (catalogResult.status === "fulfilled") {
+          setCatalog(catalogResult.value.items ?? []);
+          setRelayPlugins(catalogResult.value.relay_plugins ?? []);
+          setRelayPluginsCursor(catalogResult.value.relay_plugins_next_cursor);
+        }
         if (deliveryResult.status === "fulfilled") {
           setDeliveries(deliveryResult.value.items ?? []);
           setDeliveriesCursor(deliveryResult.value.next_cursor);
@@ -115,6 +123,20 @@ export function Connectors() {
         setError(null);
       },
     );
+  };
+
+  const loadMoreRelayPlugins = async () => {
+    if (!relayPluginsCursor || relayPluginsLoadingMore) return;
+    setRelayPluginsLoadingMore(true);
+    try {
+      const next = await api.connectorCatalog({ limit: 100, cursor: relayPluginsCursor });
+      setRelayPlugins((current) => [...(current ?? []), ...(next.relay_plugins ?? [])]);
+      setRelayPluginsCursor(next.relay_plugins_next_cursor);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRelayPluginsLoadingMore(false);
+    }
   };
 
   useEffect(() => {
@@ -647,6 +669,90 @@ export function Connectors() {
               </table>
             </div>
           )}
+        </section>
+      )}
+
+      {relayPlugins && (
+        <section aria-labelledby="relay-plugin-census-heading" className="grid gap-3 border-y border-border py-4">
+          <div>
+            <h2 id="relay-plugin-census-heading" className="text-title font-semibold">
+              {translateNow("connectors.relayPlugins.title")}
+            </h2>
+            <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{translateNow("connectors.relayPlugins.help")}</p>
+          </div>
+          {relayPlugins.length === 0 ? (
+            <EmptyState title={translateNow("connectors.relayPlugins.emptyTitle")}>{translateNow("connectors.relayPlugins.emptyBody")}</EmptyState>
+          ) : (
+            <div className="ui-panel overflow-x-auto">
+              <table className="ui-table min-w-[76rem]">
+                <caption className="sr-only">{translateNow("connectors.relayPlugins.title")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{translateNow("connectors.relayPlugins.relay")}</th>
+                    <th scope="col">{translateNow("connectors.relayPlugins.plugin")}</th>
+                    <th scope="col">{translateNow("connectors.relayPlugins.provenance")}</th>
+                    <th scope="col">{translateNow("connectors.relayPlugins.execution")}</th>
+                    <th scope="col">{translateNow("connectors.relayPlugins.grant")}</th>
+                    <th scope="col">{translateNow("connectors.relayPlugins.reported")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {relayPlugins.flatMap((runtime) => {
+                    const plugins = runtime.plugins.length > 0 ? runtime.plugins : [null];
+                    return plugins.map((plugin) => (
+                      <tr key={`${runtime.agent_id}:${plugin?.name ?? "empty"}`} className="align-top">
+                        <td className="max-w-[18rem]">
+                          <span className="font-mono text-xs font-semibold">{runtime.agent_name}</span>
+                          <span className="mt-1 block break-all font-mono text-xs text-muted-foreground">{runtime.agent_id}</span>
+                          <span className={`mt-1 block text-xs ${runtime.signature_verified ? "text-status-success" : "text-status-danger"}`}>
+                            {runtime.signature_verified
+                              ? translateNow("connectors.relayPlugins.signatureVerified")
+                              : translateNow("connectors.relayPlugins.signatureUnverified")}
+                          </span>
+                          {runtime.metadata_only ? (
+                            <span className="mt-1 block text-xs text-muted-foreground">{translateNow("connectors.relayPlugins.metadataOnly")}</span>
+                          ) : null}
+                          <span className="mt-1 block break-all font-mono text-xs text-muted-foreground">{runtime.signer_fingerprint}</span>
+                        </td>
+                        <td className="font-mono text-xs font-semibold">{plugin?.name ?? translateNow("connectors.relayPlugins.noLoadedPlugins")}</td>
+                        <td className="max-w-[24rem]">
+                          {plugin ? (
+                            <>
+                              <span className="block break-all font-mono text-xs">{plugin.publisher}</span>
+                              <span className="mt-1 block break-all font-mono text-xs text-muted-foreground">{plugin.digest}</span>
+                            </>
+                          ) : null}
+                        </td>
+                        <td className="font-mono text-xs">{plugin?.execution_context ?? "—"}</td>
+                        <td className="max-w-[22rem]">
+                          {plugin?.grants.map((grant) => (
+                            <span key={grant.capability} className="block text-xs">
+                              <span className="font-mono font-semibold">{grant.capability}</span>{" "}
+                              <span className="text-muted-foreground">
+                                {grant.constraints.length > 0 ? grant.constraints.join(", ") : translateNow("connectors.relayPlugins.unrestricted")}
+                              </span>
+                            </span>
+                          ))}
+                        </td>
+                        <td className="text-xs text-muted-foreground">{formatDateTime(runtime.reported_at)}</td>
+                      </tr>
+                    ));
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {relayPluginsCursor ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-self-start"
+              disabled={relayPluginsLoadingMore}
+              onClick={() => void loadMoreRelayPlugins()}
+            >
+              {relayPluginsLoadingMore ? translateNow("app.loading") : translateNow("connectors.relayPlugins.loadMore")}
+            </Button>
+          ) : null}
         </section>
       )}
 

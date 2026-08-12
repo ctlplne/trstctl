@@ -125,6 +125,7 @@ import type {
   ConnectorDelivery,
   ConnectorDeliveryList,
   ConnectorTargetActionRequest,
+  RelayPluginRuntime,
   ContextualRiskPriorities as GenContextualRiskPriorities,
   ContextualRiskPriority as GenContextualRiskPriority,
   CredentialRisk as GenCredentialRisk,
@@ -701,6 +702,7 @@ export type {
   ConnectorDelivery,
   ConnectorDeliveryList,
   ConnectorTargetActionRequest,
+  RelayPluginRuntime,
   CRLDistribution,
   CRLDistributionList,
   RevocationHealth,
@@ -1474,7 +1476,7 @@ export interface Api {
   discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
   claimDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
   dismissDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
-  connectorCatalog(): Promise<ConnectorCatalog>;
+  connectorCatalog(options?: { limit?: number; cursor?: string }): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
   createEndpointBinding(input: EndpointBindingRequest): Promise<EndpointBinding>;
@@ -1920,7 +1922,7 @@ const liveApi: Api = {
   },
   claimDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/claim`, input),
   dismissDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/dismiss`, input),
-  connectorCatalog: () => req<ConnectorCatalog>("/api/v1/connectors/catalog"),
+  connectorCatalog: (options) => req<ConnectorCatalog>("/api/v1/connectors/catalog" + pageQueryString(options)),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),
   createEndpointBinding: (input) => mutate<EndpointBinding>("POST", "/api/v1/lifecycle/endpoint-bindings", input),

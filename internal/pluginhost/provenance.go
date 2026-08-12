@@ -37,6 +37,13 @@ type TrustPolicy struct {
 	pinnedDigests map[string]bool
 }
 
+// Provenance is the verified, metadata-only identity of one admitted module.
+// It contains fingerprints only, never module, signature, or publisher-key bytes.
+type Provenance struct {
+	Digest    string
+	Publisher string
+}
+
 // NewTrustPolicy builds a TrustPolicy from PEM-encoded Ed25519 public keys and
 // an optional set of pinned content digests (lowercase hex SHA-256 of the
 // `.wasm`). It returns an error if no usable trusted key is supplied or a key /
@@ -70,34 +77,42 @@ func NewTrustPolicy(trustedKeyPEMs [][]byte, pinnedDigestsHex []string) (*TrustP
 // (no trusted key, bad signature, unpinned digest) returns a non-nil error and
 // the module must not run.
 func (tp *TrustPolicy) Verify(wasm, signature []byte) error {
+	_, err := tp.VerifyProvenance(wasm, signature)
+	return err
+}
+
+// VerifyProvenance performs Verify and returns the exact digest and trusted
+// publisher key that matched. Callers must retain this result from admission;
+// reconstructing it later from filenames would not describe what was verified.
+func (tp *TrustPolicy) VerifyProvenance(wasm, signature []byte) (Provenance, error) {
 	if tp == nil || len(tp.trustedKeys) == 0 {
-		return fmt.Errorf("pluginhost: no plugin trust policy configured; refusing to load unverified module (fail closed)")
+		return Provenance{}, fmt.Errorf("pluginhost: no plugin trust policy configured; refusing to load unverified module (fail closed)")
 	}
 	if len(signature) == 0 {
-		return fmt.Errorf("pluginhost: module has no provenance signature; refusing to load (SUPPLY-004)")
+		return Provenance{}, fmt.Errorf("pluginhost: module has no provenance signature; refusing to load (SUPPLY-004)")
 	}
+	digest := normalizeHex(crypto.SHA256Hex(wasm))
 	// Content pin (when configured) before signature, so a tampered/unknown
 	// artifact is rejected even if it were somehow signed. The match is
 	// constant-time per candidate so digest comparison does not leak via timing.
 	if len(tp.pinnedDigests) > 0 {
-		got := normalizeHex(crypto.SHA256Hex(wasm))
 		matched := false
 		for want := range tp.pinnedDigests {
-			if crypto.ConstantTimeEqual([]byte(got), []byte(want)) {
+			if crypto.ConstantTimeEqual([]byte(digest), []byte(want)) {
 				matched = true
 			}
 		}
 		if !matched {
-			return fmt.Errorf("pluginhost: module digest %s is not in the pinned allowlist (SUPPLY-004)", got)
+			return Provenance{}, fmt.Errorf("pluginhost: module digest %s is not in the pinned allowlist (SUPPLY-004)", digest)
 		}
 	}
 	// A signature from ANY configured trusted key admits the module.
 	for _, der := range tp.trustedKeys {
 		if err := crypto.VerifyEd25519(der, wasm, signature); err == nil {
-			return nil
+			return Provenance{Digest: "sha256:" + digest, Publisher: "sha256:" + crypto.SHA256Hex(der)}, nil
 		}
 	}
-	return fmt.Errorf("pluginhost: module signature does not verify under any trusted key; refusing to load (SUPPLY-004)")
+	return Provenance{}, fmt.Errorf("pluginhost: module signature does not verify under any trusted key; refusing to load (SUPPLY-004)")
 }
 
 // LoadVerified is the only admission path a SERVED plugin surface uses: it
@@ -113,6 +128,20 @@ func (h *Host) LoadVerified(ctx context.Context, wasm, signature []byte, tp *Tru
 		return nil, err
 	}
 	return h.Load(ctx, wasm, grant)
+}
+
+// LoadVerifiedWithProvenance is LoadVerified plus the matched admission
+// metadata. The provenance result is emitted only after the module instantiates.
+func (h *Host) LoadVerifiedWithProvenance(ctx context.Context, wasm, signature []byte, tp *TrustPolicy, grant Grant) (*Plugin, Provenance, error) {
+	provenance, err := tp.VerifyProvenance(wasm, signature)
+	if err != nil {
+		return nil, Provenance{}, err
+	}
+	p, err := h.Load(ctx, wasm, grant)
+	if err != nil {
+		return nil, Provenance{}, err
+	}
+	return p, provenance, nil
 }
 
 // normalizeHex lowercases a hex digest so pin comparison does not depend on the

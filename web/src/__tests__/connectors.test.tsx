@@ -101,6 +101,26 @@ describe("connector deployment disclosure surface", () => {
           rollback: "restore previous connector certificate/key files",
         },
       ],
+      relay_plugins: [
+        {
+          agent_id: "11111111-1111-1111-1111-111111111111",
+          agent_name: "relay-plant-7",
+          agent_status: "active",
+          reported_at: "2026-08-12T18:30:00Z",
+          signer_fingerprint: `sha256:${"b".repeat(64)}`,
+          signature_verified: true,
+          metadata_only: true,
+          plugins: [
+            {
+              name: "partner-f5",
+              digest: `sha256:${"a".repeat(64)}`,
+              publisher: `sha256:${"c".repeat(64)}`,
+              execution_context: "network_relay_wasm",
+              grants: [{ capability: "net.dial", constraints: ["appliance.internal:443"] }],
+            },
+          ],
+        },
+      ],
     });
     apiMock.connectorTargets.mockReset().mockResolvedValue({
       items: [
@@ -202,6 +222,14 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText("edge/prod/payments").length).toBeGreaterThan(0);
     expect(screen.getAllByText("native registry, signed plugin, or receipt").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Verified relay plugins" })).toBeInTheDocument();
+    expect(screen.getByText("partner-f5")).toBeInTheDocument();
+    expect(screen.getByText("relay-plant-7")).toBeInTheDocument();
+    expect(screen.getByText("network_relay_wasm")).toBeInTheDocument();
+    expect(screen.getByText("net.dial")).toBeInTheDocument();
+    expect(screen.getByText("appliance.internal:443")).toBeInTheDocument();
+    expect(screen.getByText("Signed by the relay certificate")).toBeInTheDocument();
+    expect(screen.getByText("Metadata only")).toBeInTheDocument();
     expect(screen.getAllByText("delivered").length).toBeGreaterThan(0);
     expect(screen.getByText("sha256:served-receipt")).toBeInTheDocument();
     expect(screen.getAllByText(/connector\.deploy/).length).toBeGreaterThan(0);

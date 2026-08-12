@@ -2161,6 +2161,8 @@ ConnectorCatalog = TypedDict(
     'ConnectorCatalog',
     {
         'items': list[dict[str, Any]],
+        'relay_plugins': list[dict[str, Any]],
+        'relay_plugins_next_cursor': str,
     },
     total=False,
 )
@@ -6595,6 +6597,42 @@ RegionalIssuanceLane = TypedDict(
         'recovery': str,
         'region': str,
         'signer_mode': str,
+    },
+    total=False,
+)
+
+RelayPluginEntry = TypedDict(
+    'RelayPluginEntry',
+    {
+        'digest': str,
+        'execution_context': str,
+        'grants': list[dict[str, Any]],
+        'name': str,
+        'publisher': str,
+    },
+    total=False,
+)
+
+RelayPluginGrant = TypedDict(
+    'RelayPluginGrant',
+    {
+        'capability': str,
+        'constraints': list[str],
+    },
+    total=False,
+)
+
+RelayPluginRuntime = TypedDict(
+    'RelayPluginRuntime',
+    {
+        'agent_id': str,
+        'agent_name': str,
+        'agent_status': str,
+        'metadata_only': bool,
+        'plugins': list[dict[str, Any]],
+        'reported_at': str,
+        'signature_verified': bool,
+        'signer_fingerprint': str,
     },
     total=False,
 )

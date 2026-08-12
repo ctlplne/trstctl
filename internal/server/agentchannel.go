@@ -44,6 +44,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -57,6 +58,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
@@ -525,11 +527,26 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 		}
 		beatPayload.EnrollmentProxy = report
 	}
+	eventSchemaVersion := events.DefaultSchemaVersion
+	if req.RelayPlugins != nil {
+		if !agentHasRole(info.Roles, mtls.AgentRoleNetwork) {
+			return nil, status.Error(codes.PermissionDenied, "only a certificate-bound network relay may report loaded connector plugins")
+		}
+		report, err := a.validatedRelayPluginCensus(ctx, info, req.RelayPlugins)
+		if err != nil {
+			return nil, err
+		}
+		beatPayload.RelayPlugins = report
+		eventSchemaVersion = projections.AgentHeartbeatPluginCensusSchemaVersion
+	}
 	payload, err := json.Marshal(beatPayload)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
 	}
-	ev, err := a.log.Append(ctx, events.Event{Type: projections.EventAgentHeartbeat, TenantID: info.TenantID, Data: payload})
+	ev, err := a.log.Append(ctx, events.Event{
+		Type: projections.EventAgentHeartbeat, TenantID: info.TenantID,
+		SchemaVersion: eventSchemaVersion, Data: payload,
+	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "record agent heartbeat event: %v", err)
 	}
@@ -543,6 +560,46 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 	return &transport.HeartbeatResponse{
 		TenantID:             info.TenantID,
 		NextHeartbeatSeconds: int64(beat / time.Second),
+	}, nil
+}
+
+func (a *agentService) validatedRelayPluginCensus(ctx context.Context, info mtls.PeerCertInfo,
+	report *plugincensus.Report) (*projections.AgentRelayPluginCensus, error) {
+	if report == nil {
+		return nil, nil
+	}
+	now := time.Now().UTC()
+	if report.IssuedAtUnix <= 0 {
+		return nil, status.Error(codes.PermissionDenied, "relay plugin census has no issued-at")
+	}
+	issued := time.Unix(report.IssuedAtUnix, 0).UTC()
+	if delta := now.Sub(issued); delta > receiptSkew || delta < -receiptSkew {
+		return nil, status.Error(codes.PermissionDenied, "relay plugin census issued-at is outside the accepted window")
+	}
+	statement := plugincensus.Statement{
+		TenantID: info.TenantID, AgentCommonName: info.CommonName,
+		Plugins: report.Plugins, IssuedAtUnix: report.IssuedAtUnix,
+	}
+	canonical, err := statement.Canonical()
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "relay plugin census is not normalized: %v", err)
+	}
+	if err := mtls.VerifyStatement(info.LeafDER, canonical, report.Signature); err != nil {
+		return nil, status.Error(codes.PermissionDenied, "relay plugin census signature does not verify against the presented certificate")
+	}
+	if a.store != nil {
+		prior, err := a.store.GetAgent(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName))
+		switch {
+		case err == nil && prior.RelayPluginsReportedAt != nil && !issued.After(*prior.RelayPluginsReportedAt):
+			return nil, status.Error(codes.FailedPrecondition, "relay plugin census is not newer than the accepted census")
+		case err != nil && !errors.Is(err, pgx.ErrNoRows):
+			return nil, status.Errorf(codes.Internal, "read prior relay plugin census: %v", err)
+		}
+	}
+	return &projections.AgentRelayPluginCensus{
+		Plugins: report.Plugins, IssuedAtUnix: report.IssuedAtUnix,
+		Signature: append([]byte(nil), report.Signature...), Statement: string(canonical),
+		SignerFingerprint: strings.ToLower(strings.TrimSpace(info.FingerprintSHA256)),
 	}, nil
 }
 

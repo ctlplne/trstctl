@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/plugincensus"
 )
 
 // Agent is an in-network agent that performs discovery, deployment, and drift
@@ -51,10 +53,19 @@ type Agent struct {
 	EnrollmentProxyLastForwardedAt    *time.Time
 	EnrollmentProxyLastFailoverAt     *time.Time
 	EnrollmentProxyReportedAt         *time.Time
-	CreatedAt                         time.Time
-	OffboardedAt                      *time.Time
-	OffboardedBy                      string
-	OffboardReason                    string
+	// RelayPlugins* is the newest signed metadata-only module census projected
+	// from this certificate-bound relay's heartbeat. ReportedAt nil means an
+	// older build never reported it; an empty slice with ReportedAt set is an
+	// explicit current empty census.
+	RelayPlugins                  []plugincensus.Entry
+	RelayPluginsStatement         string
+	RelayPluginsSignature         []byte
+	RelayPluginsSignerFingerprint string
+	RelayPluginsReportedAt        *time.Time
+	CreatedAt                     time.Time
+	OffboardedAt                  *time.Time
+	OffboardedBy                  string
+	OffboardReason                string
 }
 
 // AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
@@ -93,16 +104,31 @@ func (s *Store) UpsertAgent(ctx context.Context, a Agent) error {
 // ApplyAgentHeartbeatTx projects an agent.heartbeat event into the agents read
 // model on the caller's tenant-scoped transaction.
 func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) error {
-	_, err := tx.Exec(ctx,
+	plugins := a.RelayPlugins
+	if plugins == nil {
+		plugins = []plugincensus.Entry{}
+	}
+	signature := a.RelayPluginsSignature
+	if signature == nil {
+		signature = []byte{}
+	}
+	relayPlugins, err := json.Marshal(plugins)
+	if err != nil {
+		return fmt.Errorf("store: encode relay plugin census: %w", err)
+	}
+	_, err = tx.Exec(ctx,
 		`INSERT INTO agents (id, tenant_id, name, status, version, roles, last_seen_at,
 		                     workload_api_served, workload_api_svids, workload_api_reported_at,
 		                     enrollment_proxy_serving, enrollment_proxy_segment, enrollment_proxy_public_url,
 		                     enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams, enrollment_proxy_unknown_upstreams,
 		                     enrollment_proxy_upstream_failures, enrollment_proxy_forwarded,
 		                     enrollment_proxy_refused, enrollment_proxy_last_forwarded_at,
-		                     enrollment_proxy_last_failover_at, enrollment_proxy_reported_at)
+		                     enrollment_proxy_last_failover_at, enrollment_proxy_reported_at,
+		                     relay_plugins, relay_plugins_statement, relay_plugins_signature,
+		                     relay_plugins_signer_fingerprint, relay_plugins_reported_at)
 		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10,
-		         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+		         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+		         $23::jsonb, $24, $25, $26, $27)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
 		        status = CASE WHEN agents.status = 'offboarded' THEN agents.status ELSE EXCLUDED.status END,
@@ -164,13 +190,35 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		            ELSE GREATEST(agents.enrollment_proxy_last_failover_at, EXCLUDED.enrollment_proxy_last_failover_at) END,
 		        enrollment_proxy_reported_at = CASE
 		            WHEN EXCLUDED.enrollment_proxy_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.enrollment_proxy_reported_at
-		            ELSE EXCLUDED.enrollment_proxy_reported_at END`,
+		            ELSE EXCLUDED.enrollment_proxy_reported_at END,
+		        relay_plugins = CASE
+		            WHEN EXCLUDED.relay_plugins_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.relay_plugins
+		            WHEN agents.relay_plugins_reported_at IS NOT NULL AND EXCLUDED.relay_plugins_reported_at <= agents.relay_plugins_reported_at THEN agents.relay_plugins
+		            ELSE EXCLUDED.relay_plugins END,
+		        relay_plugins_statement = CASE
+		            WHEN EXCLUDED.relay_plugins_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.relay_plugins_statement
+		            WHEN agents.relay_plugins_reported_at IS NOT NULL AND EXCLUDED.relay_plugins_reported_at <= agents.relay_plugins_reported_at THEN agents.relay_plugins_statement
+		            ELSE EXCLUDED.relay_plugins_statement END,
+		        relay_plugins_signature = CASE
+		            WHEN EXCLUDED.relay_plugins_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.relay_plugins_signature
+		            WHEN agents.relay_plugins_reported_at IS NOT NULL AND EXCLUDED.relay_plugins_reported_at <= agents.relay_plugins_reported_at THEN agents.relay_plugins_signature
+		            ELSE EXCLUDED.relay_plugins_signature END,
+		        relay_plugins_signer_fingerprint = CASE
+		            WHEN EXCLUDED.relay_plugins_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.relay_plugins_signer_fingerprint
+		            WHEN agents.relay_plugins_reported_at IS NOT NULL AND EXCLUDED.relay_plugins_reported_at <= agents.relay_plugins_reported_at THEN agents.relay_plugins_signer_fingerprint
+		            ELSE EXCLUDED.relay_plugins_signer_fingerprint END,
+		        relay_plugins_reported_at = CASE
+		            WHEN EXCLUDED.relay_plugins_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.relay_plugins_reported_at
+		            WHEN agents.relay_plugins_reported_at IS NOT NULL AND EXCLUDED.relay_plugins_reported_at <= agents.relay_plugins_reported_at THEN agents.relay_plugins_reported_at
+		            ELSE EXCLUDED.relay_plugins_reported_at END`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt,
 		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt,
 		a.EnrollmentProxyServing, a.EnrollmentProxySegment, a.EnrollmentProxyPublicURL,
 		a.EnrollmentProxyHealthyUpstreams, a.EnrollmentProxyUnhealthyUpstreams, a.EnrollmentProxyUnknownUpstreams,
 		a.EnrollmentProxyUpstreamFailures, a.EnrollmentProxyForwarded, a.EnrollmentProxyRefused,
-		a.EnrollmentProxyLastForwardedAt, a.EnrollmentProxyLastFailoverAt, a.EnrollmentProxyReportedAt)
+		a.EnrollmentProxyLastForwardedAt, a.EnrollmentProxyLastFailoverAt, a.EnrollmentProxyReportedAt,
+		relayPlugins, a.RelayPluginsStatement, signature,
+		a.RelayPluginsSignerFingerprint, a.RelayPluginsReportedAt)
 	return err
 }
 
@@ -336,6 +384,7 @@ func normalizeAgentCertSelector(selectorType, v string) string {
 // GetAgent loads an agent in its tenant context.
 func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error) {
 	var a Agent
+	var relayPlugins []byte
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, status, version, roles, last_seen_at, created_at,
@@ -344,7 +393,9 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 			        enrollment_proxy_serving, enrollment_proxy_segment, enrollment_proxy_public_url,
 			        enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams, enrollment_proxy_unknown_upstreams,
 			        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
-			        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at
+			        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at,
+			        relay_plugins, relay_plugins_statement, relay_plugins_signature,
+			        relay_plugins_signer_fingerprint, relay_plugins_reported_at
 			   FROM agents WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
 				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
@@ -352,8 +403,13 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 				&a.EnrollmentProxyServing, &a.EnrollmentProxySegment, &a.EnrollmentProxyPublicURL,
 				&a.EnrollmentProxyHealthyUpstreams, &a.EnrollmentProxyUnhealthyUpstreams, &a.EnrollmentProxyUnknownUpstreams,
 				&a.EnrollmentProxyUpstreamFailures, &a.EnrollmentProxyForwarded, &a.EnrollmentProxyRefused,
-				&a.EnrollmentProxyLastForwardedAt, &a.EnrollmentProxyLastFailoverAt, &a.EnrollmentProxyReportedAt)
+				&a.EnrollmentProxyLastForwardedAt, &a.EnrollmentProxyLastFailoverAt, &a.EnrollmentProxyReportedAt,
+				&relayPlugins, &a.RelayPluginsStatement, &a.RelayPluginsSignature,
+				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt)
 	})
+	if err == nil {
+		err = json.Unmarshal(relayPlugins, &a.RelayPlugins)
+	}
 	return a, err
 }
 
@@ -376,7 +432,9 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				        enrollment_proxy_serving, enrollment_proxy_segment, enrollment_proxy_public_url,
 				        enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams, enrollment_proxy_unknown_upstreams,
 				        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
-				        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at
+				        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at,
+				        relay_plugins, relay_plugins_statement, relay_plugins_signature,
+				        relay_plugins_signer_fingerprint, relay_plugins_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1 AND (created_at, id) > ($2, $3)
 				  ORDER BY created_at, id
@@ -390,7 +448,9 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				        enrollment_proxy_serving, enrollment_proxy_segment, enrollment_proxy_public_url,
 				        enrollment_proxy_healthy_upstreams, enrollment_proxy_unhealthy_upstreams, enrollment_proxy_unknown_upstreams,
 				        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
-				        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at
+				        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at,
+				        relay_plugins, relay_plugins_statement, relay_plugins_signature,
+				        relay_plugins_signer_fingerprint, relay_plugins_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1
 				  ORDER BY created_at, id
@@ -403,14 +463,20 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 		defer rows.Close()
 		for rows.Next() {
 			var a Agent
+			var relayPlugins []byte
 			if err := rows.Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
 				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
 				&a.WorkloadAPIServed, &a.WorkloadAPISVIDs, &a.WorkloadAPIReportedAt,
 				&a.EnrollmentProxyServing, &a.EnrollmentProxySegment, &a.EnrollmentProxyPublicURL,
 				&a.EnrollmentProxyHealthyUpstreams, &a.EnrollmentProxyUnhealthyUpstreams, &a.EnrollmentProxyUnknownUpstreams,
 				&a.EnrollmentProxyUpstreamFailures, &a.EnrollmentProxyForwarded, &a.EnrollmentProxyRefused,
-				&a.EnrollmentProxyLastForwardedAt, &a.EnrollmentProxyLastFailoverAt, &a.EnrollmentProxyReportedAt); err != nil {
+				&a.EnrollmentProxyLastForwardedAt, &a.EnrollmentProxyLastFailoverAt, &a.EnrollmentProxyReportedAt,
+				&relayPlugins, &a.RelayPluginsStatement, &a.RelayPluginsSignature,
+				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt); err != nil {
 				return err
+			}
+			if err := json.Unmarshal(relayPlugins, &a.RelayPlugins); err != nil {
+				return fmt.Errorf("store: decode relay plugin census: %w", err)
 			}
 			out = append(out, a)
 		}

@@ -612,8 +612,14 @@ describe("i18n boundary", () => {
       // operator claim into TPM same-key proof, or an exportable software key
       // into hardware custody. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "e524949307220a420bad39caf42e9d61b02a448bb96435407d63194bb4b6f56d",
-      "de-DE": "4174c498d616dae4cba68a4dbb9255e86a84275f1e4cae3b64037e7da6230003",
+      // AUD-34 relay-plugin-census re-pin: fifteen connectors.relayPlugins.*
+      // keys name certificate-verified evidence, metadata-only handling,
+      // effective grants, and the explicit no-loaded-plugins state. The es/de
+      // wording keeps "signed" distinct from merely reported and never calls
+      // module bytes catalog data. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "ed4b4d873ffebc80548b385a402bfe38030b3879a2b5918efe43579e2504d81d",
+      "de-DE": "a4b126d3a7feaea36267ebb2c7d32c452093374d7c4f76a7540d14fca1eda670",
     });
   });
 

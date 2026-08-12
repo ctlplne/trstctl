@@ -4,6 +4,7 @@ package relay_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,6 +94,54 @@ func TestASignedThirdPartyConnectorDeploysFromTheRelay(t *testing.T) {
 	}
 	if err := rt.Deploy(ctx, "partner"); err != nil {
 		t.Fatalf("deploy through the relay sandbox: %v", err)
+	}
+}
+
+// The operator-facing census must come from the SAME successful verification
+// that admitted the module. Re-reading filenames or configuration later would
+// let the catalog describe a module other than the one the runtime can execute.
+// It carries metadata only: never the WASM body, signature, or a secret value.
+func TestPluginCensusComesFromVerifiedLoadedModules(t *testing.T) {
+	ctx := context.Background()
+	module, readable := benignModule(t)
+	dir, keyPEM, _ := signedPluginDir(t, "partner", module)
+
+	rt, err := relay.NewPluginRuntime(ctx, relay.PluginConfig{
+		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM},
+		Grant: pluginhost.NewGrant(pluginhost.CapNetDial, pluginhost.CapFSRead).
+			WithPathPrefix(pluginhost.CapFSRead, readable).
+			WithPathPrefix(pluginhost.CapNetDial, "appliance.internal:443"),
+	})
+	if err != nil {
+		t.Fatalf("load verified plugin: %v", err)
+	}
+	t.Cleanup(func() { _ = rt.Close(ctx) })
+
+	entries := rt.Census()
+	if len(entries) != 1 {
+		t.Fatalf("plugin census = %+v, want one verified loaded module", entries)
+	}
+	got := entries[0]
+	pubDER, err := crypto.ParseEd25519PublicKeyPEM(keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "partner" || got.Digest != "sha256:"+crypto.SHA256Hex(module) ||
+		got.Publisher != "sha256:"+crypto.SHA256Hex(pubDER) || got.ExecutionContext != "network_relay_wasm" {
+		t.Fatalf("verified census identity = %+v", got)
+	}
+	if len(got.Grants) != 2 || got.Grants[0].Capability != "fs.read" ||
+		len(got.Grants[0].Constraints) != 1 || got.Grants[0].Constraints[0] != readable ||
+		got.Grants[1].Capability != "net.dial" || len(got.Grants[1].Constraints) != 1 ||
+		got.Grants[1].Constraints[0] != "appliance.internal:443" {
+		t.Fatalf("normalized effective grant = %+v", got.Grants)
+	}
+	wire, err := json.Marshal(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(wire), "partner config") || strings.Contains(string(wire), "signature") {
+		t.Fatalf("metadata-only census leaked module/signature material: %s", wire)
 	}
 }
 

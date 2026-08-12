@@ -527,6 +527,10 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 			proxy.PublicURL != "https://enrol.plant-7.example" || proxy.HealthyUpstreams != 0 || proxy.UnknownUpstreams != 1 {
 			t.Fatalf("initial heartbeat enrollment proxy = %+v, want assembled serving topology", proxy)
 		}
+		if census := heartbeat.RelayPlugins; census == nil || census.Plugins == nil ||
+			len(census.Plugins) != 0 || census.IssuedAtUnix <= 0 || len(census.Signature) == 0 {
+			t.Fatalf("initial heartbeat plugin census = %+v, want a signed explicit empty runtime view", census)
+		}
 		cancel()
 	case <-time.After(10 * time.Second):
 		cancel()
