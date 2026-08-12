@@ -72,10 +72,10 @@ type connectorCatalogItem struct {
 	// unaudited work stays where it always ran. Read from the live registry
 	// census, never hardcoded beside the description.
 	TargetVantage string `json:"target_vantage"`
-	// RelayParity is this family's position in the E1 relay migration. Nil for
-	// anything that is not an appliance: a host connector has no migration to be
-	// partway through, and an empty object would read as one that has not
-	// started.
+	// RelayParity is this family's position in the accepted E1 relay migration.
+	// It is present for all thirteen source-plan families, including families
+	// whose current runtime is host-agent or control-plane. Omitting those rows
+	// would let implementation scope silently shrink product acceptance.
 	RelayParity *connectorRelayParity `json:"relay_parity,omitempty"`
 }
 
@@ -88,14 +88,17 @@ type connectorCatalogItem struct {
 type connectorRelayParity struct {
 	Met     []string `json:"met"`
 	Missing []string `json:"missing"`
+	// Disposition is the closed status: migrated, architecture_exception, or
+	// unimplemented. It is authoritative; the booleans below remain for older
+	// clients that predate AUD-33.
+	Disposition string `json:"disposition"`
 	// Outstanding are E1 deliverables that do not block migration but are not
 	// built. Reported so a migrated family cannot read as a finished one.
 	Outstanding   []string `json:"outstanding"`
 	RelayMigrated bool     `json:"relay_migrated"`
-	// CPRetained marks a family whose control-plane path is the TERMINAL state
-	// by the E1 scope decision (device API cannot express rollback/readback).
-	// It distinguishes "not migrated by design" from "not migrated yet";
-	// ScopeNote carries the reason an operator reads.
+	// CPRetained marks a family whose control-plane path remains an open
+	// architecture exception because its device API cannot express the required
+	// rollback/readback. ScopeNote carries the exact reason.
 	CPRetained bool   `json:"cp_retained"`
 	ScopeNote  string `json:"scope_note,omitempty"`
 	Detail     string `json:"detail"`
@@ -969,32 +972,35 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		item.TargetVantage = string(connector.VantageControlPlane)
 		item.ExecutesRollback = connector.CanExecuteRollback(item.Name)
 		item.DeviceProven = connector.DeviceProven(item.Name)
-		if connector.IsRelayVantageFamily(item.Name) {
+		if connector.IsE1Family(item.Name) {
 			status := connector.ParityStatusFor(item.Name)
 			item.RelayParity = &connectorRelayParity{
 				Met:           parityGateNames(status.Met),
 				Missing:       parityGateNames(status.Missing),
+				Disposition:   string(status.Disposition),
 				Outstanding:   parityGateNames(status.Outstanding),
 				RelayMigrated: status.RelayMigrated,
 				CPRetained:    status.CPRetained,
 				ScopeNote:     status.ScopeNote,
-				Detail: "E1 moves each appliance family's execution to the relay runtime and " +
-					"refuses the control-plane path once the family is through its gates. A " +
-					"family that is not migrated still deploys from the control plane, which " +
-					"is the behaviour that predates E1 and is not a fault — it is simply not " +
-					"the claim E1 makes.",
+				Detail: "E1's accepted denominator contains thirteen families. Migrated means every " +
+					"gate is proven and the old path is refused; architecture_exception means a " +
+					"documented control-plane path still keeps E1 open; unimplemented means the " +
+					"family has no network-relay execution and refusal proof.",
 			}
 		}
 		if row, ok := connector.SupportRowFor(item.Name); ok {
+			detail := "These operations are exercised by this connector's repository tests. " +
+				"No physical, vendor-hosted, or external target has been run, so this is not a firmware claim."
+			if connector.DeviceProven(item.Name) {
+				detail = "These operations are exercised against a faithful in-process double of " +
+					"the named management API. No physical or vendor-hosted device has been run."
+			}
 			item.Support = &connectorSupportRow{
 				APIContract:      row.APIContract,
 				ProvenOperations: row.ProvenOperations,
 				KnownLimits:      row.KnownLimits,
 				HardwareTested:   row.HardwareTested,
-				Detail: "These operations are exercised against a faithful in-process double of " +
-					"the named API in this repository's CI. No physical or vendor-hosted device " +
-					"has been run against this connector, so this is a statement about the API " +
-					"contract rather than about any firmware version.",
+				Detail:           detail,
 			}
 		}
 		if a.connectorRegistry != nil {

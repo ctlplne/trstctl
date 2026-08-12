@@ -2154,8 +2154,8 @@ func componentSchemas() map[string]*Schema {
 		"replay_safety": {Type: "string", Enum: []string{"at-most-once", "reconciled"}},
 		// A3: where this connector's deploy work executes, from the live census.
 		"target_vantage": {Type: "string", Enum: []string{"control_plane", "host_agent", "network_relay"}},
-		// E1: appliance families only. Absent on host and cloud connectors,
-		// which have no relay migration to be partway through.
+		// E1: present for every family in the accepted 13-family denominator,
+		// including host/cloud families whose network-relay path is unimplemented.
 		"relay_parity": ref("ConnectorRelayParity"),
 	}, "name", "kind", "delivery_mode", "rollback", "native", "capabilities", "replay_safety", "target_vantage", "device_proven")
 	// E1: which per-family gates a family has cleared, and which hold it back.
@@ -2165,10 +2165,10 @@ func componentSchemas() map[string]*Schema {
 		"met":            {Type: "array", Items: str()},
 		"missing":        {Type: "array", Items: str()},
 		"outstanding":    {Type: "array", Items: str()},
+		"disposition":    {Type: "string", Enum: []string{"migrated", "architecture_exception", "unimplemented"}},
 		"relay_migrated": {Type: "boolean"},
-		// cp_retained distinguishes "not migrated by design" (the device API
-		// cannot express rollback/readback — E1 scope decision) from "not
-		// migrated yet"; scope_note carries the operator-facing reason.
+		// cp_retained is a compatibility field for an open architecture
+		// exception; disposition is the authoritative closed classification.
 		"cp_retained": {Type: "boolean"},
 		"scope_note":  str(),
 		"detail":      str(),

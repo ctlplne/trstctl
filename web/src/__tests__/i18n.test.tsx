@@ -546,12 +546,10 @@ describe("i18n boundary", () => {
       // fail line reads as the imperative it is ("investigate immediately")
       // rather than a neutral status. Machine-authored es/de — FLAG FOR HUMAN
       // TRANSLATION REVIEW.
-      // E1 scope-closure re-pin: one source.cp.retained.* key labels the three
-      // families that retain control-plane execution by design (owner scope
-      // decision) — rendered neutral on the Connectors console, not a warning,
-      // because there is nothing to act on. The E1 closing commit shipped the
-      // catalog keys without this re-pin, so the suite was red at that commit;
-      // caught by the 2026-08-09 delivery audit. Machine-authored es/de —
+      // AUD-33 E1 status re-pin: the existing source.cp.retained.* key now labels
+      // the three open architecture exceptions as warnings, not terminal design
+      // choices. The six unimplemented accepted rows use source.not.migrated.*.
+      // Machine-authored es/de —
       // FLAG FOR HUMAN TRANSLATION REVIEW.
       // I5 trace-detail re-pin: one punctuation-format key keeps the durable
       // step detail inside the typed catalog. The em dash and placeholder are
@@ -614,8 +612,8 @@ describe("i18n boundary", () => {
       // operator claim into TPM same-key proof, or an exportable software key
       // into hardware custody. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "5fc5388582347ae775a0d21cd52e918744cc53f0a5d0c7c784689ebaf9e01259",
-      "de-DE": "1b9f6a6d10d88d1f9397f883d5c87f3ef66df374b2f81c9db86ec0ba73307671",
+      "es-ES": "e524949307220a420bad39caf42e9d61b02a448bb96435407d63194bb4b6f56d",
+      "de-DE": "4174c498d616dae4cba68a4dbb9255e86a84275f1e4cae3b64037e7da6230003",
     });
   });
 

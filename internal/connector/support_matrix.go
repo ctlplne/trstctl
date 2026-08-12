@@ -4,7 +4,7 @@ package connector
 
 import "sort"
 
-// What each connector family is actually known to work against (epic E3).
+// What each E1 connector family is actually known to work against (epic E3).
 //
 // The obvious shape for this surface is a firmware compatibility table — "F5
 // BIG-IP 15.1–17.1 supported" — and that shape is the reason it is not what this
@@ -13,11 +13,12 @@ import "sort"
 // clothes of evidence, and an operator would reasonably plan a migration around
 // it.
 //
-// What this repository can attest is narrower and true: which API CONTRACT each
-// connector implements, which operations are exercised against a faithful double
-// of that contract, and what is explicitly not covered. That is a weaker claim
-// than a firmware matrix and a far more useful one, because every part of it is
-// backed by a test that runs in CI.
+// What this repository can attest is narrower and true: which API or local
+// execution contract each connector implements, which operations its tests
+// exercise, and what is explicitly not covered. DeviceProven separately tells
+// callers whether that test is a faithful management-API double. Keeping those
+// facts separate prevents an ordinary connector unit test from being presented
+// as appliance proof.
 //
 // The distinction matters most when it disappoints. An operator asking "will
 // this work against our 16.1 boxes" deserves "we implement iControl REST and
@@ -50,11 +51,10 @@ type SupportRow struct {
 	HardwareTested bool
 }
 
-// supportMatrix is the attested surface, one row per appliance family.
-//
-// Appliance families only. A host connector writes a file and reloads a service;
-// its "API contract" is the filesystem, and inventing a row for it would pad the
-// table without telling an operator anything.
+// supportMatrix is the attested surface, one row per accepted E1 family. The
+// exact-denominator guard in support_matrix_test.go cross-checks this table
+// against E1Families, so a family cannot vanish from the published matrix just
+// because its relay migration has not been implemented.
 var supportMatrix = []SupportRow{
 	{
 		Family:      "a10",
@@ -68,6 +68,32 @@ var supportMatrix = []SupportRow{
 		},
 	},
 	{
+		Family:      "aws-acm",
+		APIContract: "AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4)",
+		ProvenOperations: []string{
+			"deploy: import an externally issued certificate and key into a new or existing ACM ARN",
+			"request contract: sign the exact AWS JSON 1.1 request with SigV4 through the connector sandbox",
+		},
+		KnownLimits: []string{
+			"no rollback: the connector does not retain and re-import a predecessor ACM version",
+			"no E1 relay migration: execution remains in the control plane with no relay constructor, " +
+				"relay proof, or control-plane refusal",
+		},
+	},
+	{
+		Family:      "azure-keyvault",
+		APIContract: "Azure Key Vault Certificates REST import API v7.4",
+		ProvenOperations: []string{
+			"deploy: import a PEM certificate and key as a new version of a named vault certificate",
+			"authentication contract: acquire and wipe an Entra ID bearer token per operation",
+		},
+		KnownLimits: []string{
+			"no rollback: the connector does not select and restore a predecessor certificate version",
+			"no E1 relay migration: execution remains in the control plane with no relay constructor, " +
+				"relay proof, or control-plane refusal",
+		},
+	},
+	{
 		Family:      "cisco",
 		APIContract: "Cisco management certificate-import API (HTTP Basic, JSON)",
 		ProvenOperations: []string{
@@ -77,6 +103,18 @@ var supportMatrix = []SupportRow{
 			"no rollback: the API's only certificate call both uploads and installs, with no way " +
 				"to address an already-installed object, so a re-bind is not expressible",
 			"the device's own trustpoint lifecycle is not driven; the connector imports and stops",
+		},
+	},
+	{
+		Family:      "envoy",
+		APIContract: "Envoy SDS management HTTP resource (v3 Secret payload)",
+		ProvenOperations: []string{
+			"deploy: read the current SDS secret and push the desired v3 Secret only when it differs",
+			"compensation: re-push the previous SDS secret when an update fails after current-state read",
+		},
+		KnownLimits: []string{
+			"the shipped target is a co-resident loopback SDS endpoint and executes on a host agent",
+			"no E1 network-relay migration: there is no network-relay constructor, relay proof, or E1 refusal",
 		},
 	},
 	{
@@ -111,6 +149,19 @@ var supportMatrix = []SupportRow{
 		},
 	},
 	{
+		Family:      "gcp-certificate-manager",
+		APIContract: "Google Cloud Certificate Manager certificates.patch REST API",
+		ProvenOperations: []string{
+			"deploy: patch a self-managed certificate and private key with updateMask=self_managed",
+			"completion: poll the returned long-running operation until it succeeds or reaches a bounded failure",
+		},
+		KnownLimits: []string{
+			"no rollback: the connector does not retain and restore a predecessor Certificate Manager resource",
+			"no E1 relay migration: execution remains in the control plane with no relay constructor, " +
+				"relay proof, or control-plane refusal",
+		},
+	},
+	{
 		Family:      "kemp",
 		APIContract: "Kemp LoadMaster RESTful API",
 		ProvenOperations: []string{
@@ -119,6 +170,19 @@ var supportMatrix = []SupportRow{
 		},
 		KnownLimits: []string{
 			"certificate-set naming collisions across virtual services are not modelled",
+		},
+	},
+	{
+		Family:      "mysql",
+		APIContract: "host-local MySQL TLS files plus allowlisted mysqladmin reload",
+		ProvenOperations: []string{
+			"deploy: replace the configured certificate and key files and run the exact allowlisted reload",
+			"rollback: restore the encrypted predecessor bundle on the exact host agent, reload, and reverify",
+		},
+		KnownLimits: []string{
+			"the connector proof uses sandboxed filesystem/process operations, not a live MySQL server",
+			"no E1 network-relay migration: execution is host-agent local with no network-relay constructor, " +
+				"relay proof, or E1 refusal",
 		},
 	},
 	{
@@ -144,6 +208,19 @@ var supportMatrix = []SupportRow{
 			"no commit is issued; a candidate configuration is left for the operator's own commit " +
 				"policy, which is deliberate — an automatic commit would push unrelated pending " +
 				"changes somebody else staged",
+		},
+	},
+	{
+		Family:      "postgresql",
+		APIContract: "host-local PostgreSQL TLS files plus allowlisted pg_ctl reload",
+		ProvenOperations: []string{
+			"deploy: replace the configured certificate and key files and run the exact allowlisted reload",
+			"rollback: restore the encrypted predecessor bundle on the exact host agent, reload, and reverify",
+		},
+		KnownLimits: []string{
+			"the connector proof uses sandboxed filesystem/process operations, not a live PostgreSQL server",
+			"no E1 network-relay migration: execution is host-agent local with no network-relay constructor, " +
+				"relay proof, or E1 refusal",
 		},
 	},
 }

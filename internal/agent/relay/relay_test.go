@@ -451,6 +451,28 @@ func TestHostExecutorRefusesWorkItCannotDo(t *testing.T) {
 	}
 }
 
+// AUD-33: E1's product denominator and the relay binary's executable set are
+// different facts. Migrated and architecture-exception appliance families have
+// relay constructors today; the six unimplemented E1 families must stay
+// visible in ParityProgram without being advertised by this executor.
+func TestE1DispositionMatchesTheAgentExecutorsThatActuallyShip(t *testing.T) {
+	for _, status := range connector.ParityProgram() {
+		executes := relay.Executes(status.Family)
+		switch status.Disposition {
+		case connector.ParityDispositionMigrated, connector.ParityDispositionArchitectureException:
+			if !executes {
+				t.Errorf("%s is %s but the network-relay binary has no constructor", status.Family, status.Disposition)
+			}
+		case connector.ParityDispositionUnimplemented:
+			if executes {
+				t.Errorf("%s is classified unimplemented but the relay advertises it", status.Family)
+			}
+		default:
+			t.Errorf("%s has unknown E1 disposition %q", status.Family, status.Disposition)
+		}
+	}
+}
+
 // Envoy is host-vantage even though its local side effect is HTTP: the SDS
 // management socket is co-resident and commonly loopback-only. Prove the agent
 // carries that fourteenth constructor and uses its own client without asking

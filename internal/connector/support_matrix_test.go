@@ -3,11 +3,29 @@
 package connector_test
 
 import (
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/connector"
 )
+
+func TestSupportMatrixUsesTheAcceptedThirteenFamilyDenominator(t *testing.T) {
+	t.Parallel()
+	want := []string{
+		"a10", "aws-acm", "azure-keyvault", "cisco", "envoy", "f5", "fortigate",
+		"gcp-certificate-manager", "kemp", "mysql", "netscaler", "paloalto", "postgresql",
+	}
+	got := make([]string, 0, len(connector.SupportMatrix()))
+	for _, row := range connector.SupportMatrix() {
+		got = append(got, row.Family)
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("support matrix families = %v, want the source plan's exact 13-family E1 scope %v", got, want)
+	}
+}
 
 // The support matrix is served to operators, so it is a claim (epic E3).
 //
@@ -29,9 +47,8 @@ func TestEveryDeviceProvenFamilyHasASupportRow(t *testing.T) {
 func TestEverySupportRowNamesAFamilyThatExists(t *testing.T) {
 	t.Parallel()
 	for _, row := range connector.SupportMatrix() {
-		if !connector.DeviceProven(row.Family) {
-			t.Errorf("the support matrix describes %q as exercised, but that family has no device "+
-				"proof; the row would be describing tests that do not run", row.Family)
+		if !connector.IsE1Family(row.Family) {
+			t.Errorf("the support matrix describes %q, but that family is outside the accepted E1 scope", row.Family)
 		}
 	}
 }
@@ -74,7 +91,7 @@ func TestEverySupportRowStatesBothWhatItProvesAndWhatItCannot(t *testing.T) {
 func TestAFamilyWithoutRollbackSaysSoInItsLimits(t *testing.T) {
 	t.Parallel()
 	for _, row := range connector.SupportMatrix() {
-		if connector.CanRollback(row.Family) {
+		if connector.CanExecuteRollback(row.Family) {
 			continue
 		}
 		said := false

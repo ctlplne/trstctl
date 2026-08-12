@@ -22,6 +22,54 @@ import "sort"
 // would keep whatever parity status somebody last typed. Deriving means the
 // answer cannot disagree with the evidence it is drawn from.
 
+// e1SourcePlanFamilies is the accepted denominator from WS-E/E1 in
+// trstctl-clm-remediation-plan-2026-08-02.html, not a list inferred from what the
+// current relay happens to implement.
+//
+// The plan spells out eleven names and then says "+ DB/API variants" while the
+// same sentence and epic title fix the total at thirteen. PostgreSQL and MySQL
+// are the two shipped database connector families that resolve that shorthand.
+// Naming them here removes the ambiguity from every executable surface. If the
+// product plan changes, this one list changes first; ParityProgram, the catalog,
+// support matrix guards, console, and docs all consume it.
+//
+// Membership does NOT route work. It only says "E1 promised to assess this
+// family." relayVantageFamilies below remains the runtime routing census, so an
+// omitted implementation shows as unimplemented instead of accidentally
+// sending cloud or host work to an agent that has no constructor for it.
+var e1SourcePlanFamilies = []string{
+	"a10",
+	"aws-acm",
+	"azure-keyvault",
+	"cisco",
+	"envoy",
+	"f5",
+	"fortigate",
+	"gcp-certificate-manager",
+	"kemp",
+	"mysql",
+	"netscaler",
+	"paloalto",
+	"postgresql",
+}
+
+// IsE1Family reports whether the accepted E1 source plan names a family.
+func IsE1Family(name string) bool {
+	for _, family := range e1SourcePlanFamilies {
+		if family == name {
+			return true
+		}
+	}
+	return false
+}
+
+// E1Families returns the accepted E1 denominator, sorted.
+func E1Families() []string {
+	out := append([]string(nil), e1SourcePlanFamilies...)
+	sort.Strings(out)
+	return out
+}
+
 // relayVantageFamilies are the appliance families whose deploy work executes on
 // a network relay rather than in the control plane.
 //
@@ -98,19 +146,21 @@ const (
 	ParityGateDeviceCSR ParityGate = "device_generated_csr"
 )
 
-// cpRetainedFamilies are the relay-vantage families whose control-plane
-// execution path is RETAINED BY DESIGN — the terminal state of the E1
-// migration for them, not a pending one.
+// cpRetainedFamilies are relay-vantage families whose control-plane execution
+// remains an OPEN architecture exception.
 //
-// Owner scope decision, 2026-08-08: E1 closed at the gate-capable families.
-// These three cannot pass the rollback/readback gates because of a property of
+// A 2026-08-08 owner decision retained these paths. AUD-33 corrects the status:
+// retention explains why a migration is unsafe; it does not erase the family
+// from the accepted denominator or make E1 complete. These three cannot pass
+// the rollback/readback gates because of a property of
 // the DEVICE APIs, not of this repository: each imports a certificate by name
 // with no separately addressable installed object, so a re-bind (rollback) and
 // an installed-state query (readback) are not expressible. Migrating them
 // anyway would remove the control plane's proven fallback without the recovery
 // path that justifies removing it, which D5 forbids. Their support-matrix rows
 // (KnownLimits) state the same constraint per family; this census is what lets
-// the parity surface say "retained by design" instead of "coming soon".
+// the parity surface say "open architecture exception" instead of silently
+// presenting the control-plane path as completed migration.
 //
 // A family leaves this list only if its vendor API grows an addressable
 // installed object (re-check on new PAN-OS / FortiOS / IOS-XE majors) — at
@@ -121,8 +171,9 @@ var cpRetainedFamilies = []string{
 	"paloalto",
 }
 
-// CPRetained reports whether a family's control-plane execution is retained by
-// the E1 scope decision rather than pending migration.
+// CPRetained reports whether a family's control-plane execution remains as an
+// explicit E1 architecture exception. The wire field is kept for compatible
+// clients; ParityStatus.Disposition is the authoritative classification.
 func CPRetained(family string) bool {
 	for _, n := range cpRetainedFamilies {
 		if n == family {
@@ -133,10 +184,30 @@ func CPRetained(family string) bool {
 }
 
 // retainedScopeNote is the operator-facing sentence for a retained family.
-const retainedScopeNote = "control-plane execution retained by design (E1 scope decision): this " +
+const retainedScopeNote = "open architecture exception: control-plane execution remains because this " +
 	"device's management API imports a certificate by name with no separately addressable " +
-	"installed object, so relay rollback and readback are not expressible; see the family's " +
-	"support-matrix known limits"
+	"installed object, so relay rollback and readback are not expressible; this family keeps E1 " +
+	"open and its support-matrix row records the limitation"
+
+// unimplementedScopeNotes state where each omitted family executes today and
+// which E1 proof is absent. They are deliberately per family: one generic
+// "pending" label would hide that cloud stores still run in the control plane
+// while Envoy and the database connectors already run on host agents.
+var unimplementedScopeNotes = map[string]string{
+	"envoy": "E1 network-relay migration is unimplemented: Envoy SDS currently executes on the " +
+		"co-resident host agent and has no network-relay constructor, relay proof, or E1 refusal",
+	"aws-acm": "E1 network-relay migration is unimplemented: AWS ACM currently executes in the " +
+		"control plane and has no relay constructor, relay proof, or control-plane refusal",
+	"azure-keyvault": "E1 network-relay migration is unimplemented: Azure Key Vault currently executes " +
+		"in the control plane and has no relay constructor, relay proof, or control-plane refusal",
+	"gcp-certificate-manager": "E1 network-relay migration is unimplemented: GCP Certificate Manager " +
+		"currently executes in the control plane and has no relay constructor, relay proof, or " +
+		"control-plane refusal",
+	"postgresql": "E1 network-relay migration is unimplemented: PostgreSQL currently executes on the " +
+		"host agent and has no network-relay constructor, relay proof, or E1 refusal",
+	"mysql": "E1 network-relay migration is unimplemented: MySQL currently executes on the host agent " +
+		"and has no network-relay constructor, relay proof, or E1 refusal",
+}
 
 // haPairedFamilies are families whose HA deployment gives each peer its own
 // configuration store, so a deploy that reaches one peer leaves the other
@@ -296,9 +367,22 @@ func gateMet(family string, gate ParityGate) bool {
 	}
 }
 
+// ParityDisposition is the closed, operator-visible classification of an E1
+// family. A family cannot disappear into a narrower denominator: it is either
+// migrated, an explicit architecture exception, or not implemented.
+type ParityDisposition string
+
+const (
+	ParityDispositionMigrated              ParityDisposition = "migrated"
+	ParityDispositionArchitectureException ParityDisposition = "architecture_exception"
+	ParityDispositionUnimplemented         ParityDisposition = "unimplemented"
+)
+
 // ParityStatus is one family's position in the E1 migration.
 type ParityStatus struct {
 	Family string `json:"family"`
+	// Disposition is the authoritative, closed classification for this family.
+	Disposition ParityDisposition `json:"disposition"`
 	// Met are the required gates this family has passed.
 	Met []ParityGate `json:"met"`
 	// Missing are the required gates it has not, and they are the reason
@@ -312,22 +396,19 @@ type ParityStatus struct {
 	// RelayMigrated is true when every required gate is met. It is what decides
 	// whether the control plane refuses this family's deploys.
 	RelayMigrated bool `json:"relay_migrated"`
-	// CPRetained is true for families whose control-plane path is the terminal
-	// state by the E1 scope decision: their device APIs cannot express the
-	// rollback/readback gates, so "not migrated" here means "by design", never
-	// "coming soon". ScopeNote carries the operator-facing reason.
+	// CPRetained is true for families whose control-plane path remains an open
+	// architecture exception: their device APIs cannot express the
+	// rollback/readback gates. ScopeNote carries the operator-facing reason.
 	CPRetained bool   `json:"cp_retained"`
 	ScopeNote  string `json:"scope_note,omitempty"`
 }
 
 // ParityStatusFor reports a family's migration position.
 //
-// A host or cloud family has no device proof, so it reports un-migrated with
-// device_proof missing. That is accurate rather than meaningful — the gate does
-// not apply to a connector that writes a file — and it is why callers ask about
-// relay-vantage families rather than iterating everything.
+// Families outside E1 fail closed with no disposition and cannot become
+// relay-migrated by accidentally satisfying a subset of unrelated censuses.
 func ParityStatusFor(family string) ParityStatus {
-	status := ParityStatus{Family: family, RelayMigrated: true}
+	status := ParityStatus{Family: family, RelayMigrated: IsE1Family(family)}
 	for _, gate := range requiredParityGates(family) {
 		if gateMet(family, gate) {
 			status.Met = append(status.Met, gate)
@@ -342,6 +423,18 @@ func ParityStatusFor(family string) ParityStatus {
 	if CPRetained(family) {
 		status.CPRetained = true
 		status.ScopeNote = retainedScopeNote
+	}
+	if !IsE1Family(family) {
+		return status
+	}
+	switch {
+	case status.RelayMigrated:
+		status.Disposition = ParityDispositionMigrated
+	case status.CPRetained:
+		status.Disposition = ParityDispositionArchitectureException
+	default:
+		status.Disposition = ParityDispositionUnimplemented
+		status.ScopeNote = unimplementedScopeNotes[family]
 	}
 	return status
 }
@@ -358,8 +451,8 @@ func RelayMigrated(family string) bool {
 
 // RelayMigratedConnectors reports the migrated families, sorted.
 func RelayMigratedConnectors() []string {
-	out := make([]string, 0, len(relayVantageFamilies))
-	for _, family := range RelayVantageFamilies() {
+	out := make([]string, 0, len(e1SourcePlanFamilies))
+	for _, family := range E1Families() {
 		if RelayMigrated(family) {
 			out = append(out, family)
 		}
@@ -367,15 +460,12 @@ func RelayMigratedConnectors() []string {
 	return out
 }
 
-// ParityProgram reports every relay-vantage family's status, sorted by family.
-//
-// Scoped to the relay-vantage families rather than the whole registry because
-// E1 is about appliances: a family with no device API has no relay migration to
-// be partway through, and listing nginx here with four missing gates would be
-// noise that makes the real gaps harder to see.
+// ParityProgram reports every family in the accepted source-plan denominator.
+// It must not iterate relayVantageFamilies: doing so would let implementation
+// scope rewrite product acceptance and is the exact AUD-33 regression.
 func ParityProgram() []ParityStatus {
-	out := make([]ParityStatus, 0, len(relayVantageFamilies))
-	for _, family := range RelayVantageFamilies() {
+	out := make([]ParityStatus, 0, len(e1SourcePlanFamilies))
+	for _, family := range E1Families() {
 		out = append(out, ParityStatusFor(family))
 	}
 	return out

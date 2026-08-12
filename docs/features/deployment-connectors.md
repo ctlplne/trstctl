@@ -202,9 +202,9 @@ keeps active plus one predecessor in an encrypted local ledger at
 `--host-rollback-dir` (by default `host-rollbacks` beside the agent key). A
 rollback is routed to that exact enrolled agent, serialized with deploys for the
 target, restores files, runs the allowlisted reload, and re-handshakes
-`verify_address`. The four appliance families listed in the support matrix use
-object re-bind instead. Every other family returns a conflict and records no
-rollback-shaped success.
+`verify_address`. The four migrated appliance families use object re-bind instead.
+Cisco, FortiGate, Palo Alto, and the three cloud stores have no executable rollback;
+their support rows say so, and a refusal records no rollback-shaped success.
 
 ## Pitfalls & limits
 

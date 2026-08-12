@@ -5976,6 +5976,14 @@
           "detail": {
             "type": "string"
           },
+          "disposition": {
+            "enum": [
+              "migrated",
+              "architecture_exception",
+              "unimplemented"
+            ],
+            "type": "string"
+          },
           "met": {
             "items": {
               "type": "string"

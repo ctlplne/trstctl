@@ -2221,6 +2221,7 @@ ConnectorRelayParity = TypedDict(
     {
         'cp_retained': bool,
         'detail': str,
+        'disposition': str,
         'met': list[str],
         'missing': list[str],
         'outstanding': list[str],

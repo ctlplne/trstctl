@@ -1553,6 +1553,7 @@ export interface ConnectorDeliveryList {
 export interface ConnectorRelayParity {
   cp_retained?: boolean;
   detail: string;
+  disposition?: "migrated" | "architecture_exception" | "unimplemented";
   met: string[];
   missing: string[];
   outstanding: string[];

@@ -2,38 +2,45 @@
 
 # Connector support matrix
 
-What each appliance connector is **known** to work against.
+What each connector in E1's accepted thirteen-family scope is **known** to do.
 
 This is deliberately not a firmware compatibility table. A version range is a
 claim about hardware somebody ran, and nothing in this repository runs against a
 physical or vendor-hosted device. Publishing one would be marketing in the shape
 of evidence, and you would reasonably plan a migration around it.
 
-What is published instead is narrower and true: the management API each
-connector speaks, the operations exercised against a faithful in-process double
-of that API in CI, and what the family cannot do. Every line below is backed by
-a test that runs on every change.
+What is published instead is narrower and true: the API or local execution
+contract each connector speaks, the operations exercised by repository tests,
+and what the family cannot do. Device-API-double evidence is labelled separately
+from ordinary connector tests. Every line below is backed by a test.
 
 If you are asking "will this work against our devices", the honest answer is
-that we implement the named API contract and exercise these calls against a
-double of it. Run a dry-run (`connector.test`) against one of your own devices
-before trusting it with a rotation.
+that we implement the named contract and exercise the listed calls. Run a dry-run
+(`connector.test`) against one of your own targets before trusting it with a rotation.
 
-| Family | API contract | Rollback | Hardware tested |
-| --- | --- | --- | --- |
-| `a10` | A10 Thunder aXAPI v3 | yes (re-bind) | no |
-| `cisco` | Cisco management certificate-import API (HTTP Basic, JSON) | no | no |
-| `f5` | F5 BIG-IP iControl REST | yes (re-bind) | no |
-| `fortigate` | FortiOS CMDB REST (vpn.certificate/local) | no | no |
-| `kemp` | Kemp LoadMaster RESTful API | yes (re-bind) | no |
-| `netscaler` | Citrix NetScaler NITRO REST | yes (re-bind) | no |
-| `paloalto` | PAN-OS XML API (certificate import) | no | no |
+| Family | API/local contract | E1 disposition | Rollback | External target tested |
+| --- | --- | --- | --- | --- |
+| `a10` | A10 Thunder aXAPI v3 | `migrated` | yes (re-bind) | no |
+| `aws-acm` | AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4) | `unimplemented` | no | no |
+| `azure-keyvault` | Azure Key Vault Certificates REST import API v7.4 | `unimplemented` | no | no |
+| `cisco` | Cisco management certificate-import API (HTTP Basic, JSON) | `architecture_exception` | no | no |
+| `envoy` | Envoy SDS management HTTP resource (v3 Secret payload) | `unimplemented` | yes (host restore) | no |
+| `f5` | F5 BIG-IP iControl REST | `migrated` | yes (re-bind) | no |
+| `fortigate` | FortiOS CMDB REST (vpn.certificate/local) | `architecture_exception` | no | no |
+| `gcp-certificate-manager` | Google Cloud Certificate Manager certificates.patch REST API | `unimplemented` | no | no |
+| `kemp` | Kemp LoadMaster RESTful API | `migrated` | yes (re-bind) | no |
+| `mysql` | host-local MySQL TLS files plus allowlisted mysqladmin reload | `unimplemented` | yes (host restore) | no |
+| `netscaler` | Citrix NetScaler NITRO REST | `migrated` | yes (re-bind) | no |
+| `paloalto` | PAN-OS XML API (certificate import) | `architecture_exception` | no | no |
+| `postgresql` | host-local PostgreSQL TLS files plus allowlisted pg_ctl reload | `unimplemented` | yes (host restore) | no |
 
 ## a10
 
-**API contract:** A10 Thunder aXAPI v3
+**API/local contract:** A10 Thunder aXAPI v3
 
-**Exercised against a double of that API:**
+**E1 disposition:** `migrated`
+
+**Exercised against a faithful management-API double:**
 
 - deploy: upload certificate and key, then bind to the client-SSL template
 - rollback: re-bind the template to a previously installed certificate
@@ -42,11 +49,45 @@ before trusting it with a rotation.
 
 - partition-aware deploys are not modelled; the double serves a single partition
 
+## aws-acm
+
+**API/local contract:** AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4)
+
+**E1 disposition:** `unimplemented`
+
+**Exercised by connector tests (not a device-API proof):**
+
+- deploy: import an externally issued certificate and key into a new or existing ACM ARN
+- request contract: sign the exact AWS JSON 1.1 request with SigV4 through the connector sandbox
+
+**Known limits:**
+
+- no rollback: the connector does not retain and re-import a predecessor ACM version
+- no E1 relay migration: execution remains in the control plane with no relay constructor, relay proof, or control-plane refusal
+
+## azure-keyvault
+
+**API/local contract:** Azure Key Vault Certificates REST import API v7.4
+
+**E1 disposition:** `unimplemented`
+
+**Exercised by connector tests (not a device-API proof):**
+
+- deploy: import a PEM certificate and key as a new version of a named vault certificate
+- authentication contract: acquire and wipe an Entra ID bearer token per operation
+
+**Known limits:**
+
+- no rollback: the connector does not select and restore a predecessor certificate version
+- no E1 relay migration: execution remains in the control plane with no relay constructor, relay proof, or control-plane refusal
+
 ## cisco
 
-**API contract:** Cisco management certificate-import API (HTTP Basic, JSON)
+**API/local contract:** Cisco management certificate-import API (HTTP Basic, JSON)
 
-**Exercised against a double of that API:**
+**E1 disposition:** `architecture_exception`
+
+**Exercised against a faithful management-API double:**
 
 - deploy: import certificate and key under a named entry
 
@@ -55,11 +96,29 @@ before trusting it with a rotation.
 - no rollback: the API's only certificate call both uploads and installs, with no way to address an already-installed object, so a re-bind is not expressible
 - the device's own trustpoint lifecycle is not driven; the connector imports and stops
 
+## envoy
+
+**API/local contract:** Envoy SDS management HTTP resource (v3 Secret payload)
+
+**E1 disposition:** `unimplemented`
+
+**Exercised by connector tests (not a device-API proof):**
+
+- deploy: read the current SDS secret and push the desired v3 Secret only when it differs
+- compensation: re-push the previous SDS secret when an update fails after current-state read
+
+**Known limits:**
+
+- the shipped target is a co-resident loopback SDS endpoint and executes on a host agent
+- no E1 network-relay migration: there is no network-relay constructor, relay proof, or E1 refusal
+
 ## f5
 
-**API contract:** F5 BIG-IP iControl REST
+**API/local contract:** F5 BIG-IP iControl REST
 
-**Exercised against a double of that API:**
+**E1 disposition:** `migrated`
+
+**Exercised against a faithful management-API double:**
 
 - deploy: upload, crypto-install, and bind to a Client SSL profile
 - rollback: re-bind the profile to a previously installed crypto object
@@ -73,9 +132,11 @@ before trusting it with a rotation.
 
 ## fortigate
 
-**API contract:** FortiOS CMDB REST (vpn.certificate/local)
+**API/local contract:** FortiOS CMDB REST (vpn.certificate/local)
 
-**Exercised against a double of that API:**
+**E1 disposition:** `architecture_exception`
+
+**Exercised against a faithful management-API double:**
 
 - deploy: upsert the local-certificate object carrying certificate and key
 
@@ -84,11 +145,29 @@ before trusting it with a rotation.
 - no rollback: the local-certificate object holds the material rather than referencing it, and the deploy replaces its contents in place, so no predecessor survives to bind back to
 - VDOM routing is not modelled; the double serves the root VDOM
 
+## gcp-certificate-manager
+
+**API/local contract:** Google Cloud Certificate Manager certificates.patch REST API
+
+**E1 disposition:** `unimplemented`
+
+**Exercised by connector tests (not a device-API proof):**
+
+- deploy: patch a self-managed certificate and private key with updateMask=self_managed
+- completion: poll the returned long-running operation until it succeeds or reaches a bounded failure
+
+**Known limits:**
+
+- no rollback: the connector does not retain and restore a predecessor Certificate Manager resource
+- no E1 relay migration: execution remains in the control plane with no relay constructor, relay proof, or control-plane refusal
+
 ## kemp
 
-**API contract:** Kemp LoadMaster RESTful API
+**API/local contract:** Kemp LoadMaster RESTful API
 
-**Exercised against a double of that API:**
+**E1 disposition:** `migrated`
+
+**Exercised against a faithful management-API double:**
 
 - deploy: upload the certificate set and bind it to a virtual service
 - rollback: re-bind the virtual service to a previously installed certificate
@@ -97,11 +176,29 @@ before trusting it with a rotation.
 
 - certificate-set naming collisions across virtual services are not modelled
 
+## mysql
+
+**API/local contract:** host-local MySQL TLS files plus allowlisted mysqladmin reload
+
+**E1 disposition:** `unimplemented`
+
+**Exercised by connector tests (not a device-API proof):**
+
+- deploy: replace the configured certificate and key files and run the exact allowlisted reload
+- rollback: restore the encrypted predecessor bundle on the exact host agent, reload, and reverify
+
+**Known limits:**
+
+- the connector proof uses sandboxed filesystem/process operations, not a live MySQL server
+- no E1 network-relay migration: execution is host-agent local with no network-relay constructor, relay proof, or E1 refusal
+
 ## netscaler
 
-**API contract:** Citrix NetScaler NITRO REST
+**API/local contract:** Citrix NetScaler NITRO REST
 
-**Exercised against a double of that API:**
+**E1 disposition:** `migrated`
+
+**Exercised against a faithful management-API double:**
 
 - deploy: upload, create the certkey, and bind it to the SSL virtual server
 - rollback: re-bind the virtual server to a previously created certkey
@@ -112,9 +209,11 @@ before trusting it with a rotation.
 
 ## paloalto
 
-**API contract:** PAN-OS XML API (certificate import)
+**API/local contract:** PAN-OS XML API (certificate import)
 
-**Exercised against a double of that API:**
+**E1 disposition:** `architecture_exception`
+
+**Exercised against a faithful management-API double:**
 
 - deploy: import the certificate and the private key as separate calls, in order
 
@@ -122,4 +221,20 @@ before trusting it with a rotation.
 
 - no rollback: import both uploads and installs, and the API exposes no call that re-points an installed certificate, so a re-bind is not expressible
 - no commit is issued; a candidate configuration is left for the operator's own commit policy, which is deliberate — an automatic commit would push unrelated pending changes somebody else staged
+
+## postgresql
+
+**API/local contract:** host-local PostgreSQL TLS files plus allowlisted pg_ctl reload
+
+**E1 disposition:** `unimplemented`
+
+**Exercised by connector tests (not a device-API proof):**
+
+- deploy: replace the configured certificate and key files and run the exact allowlisted reload
+- rollback: restore the encrypted predecessor bundle on the exact host agent, reload, and reverify
+
+**Known limits:**
+
+- the connector proof uses sandboxed filesystem/process operations, not a live PostgreSQL server
+- no E1 network-relay migration: execution is host-agent local with no network-relay constructor, relay proof, or E1 refusal
 

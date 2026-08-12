@@ -217,6 +217,66 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
   });
 
+  it("renders all three E1 dispositions instead of hiding the unimplemented denominator", async () => {
+    apiMock.connectorCatalog.mockResolvedValueOnce({
+      items: [
+        {
+          name: "a10",
+          kind: "appliance",
+          delivery_mode: "native",
+          rollback: "re-bind",
+          relay_parity: {
+            disposition: "migrated",
+            met: [],
+            missing: [],
+            outstanding: [],
+            relay_migrated: true,
+            detail: "all gates proven",
+          },
+        },
+        {
+          name: "cisco",
+          kind: "appliance",
+          delivery_mode: "native",
+          rollback: "unsupported",
+          relay_parity: {
+            disposition: "architecture_exception",
+            met: [],
+            missing: ["rollback", "readback"],
+            outstanding: [],
+            relay_migrated: false,
+            cp_retained: true,
+            scope_note: "device API has no addressable installed object; E1 remains open",
+            detail: "open exception",
+          },
+        },
+        {
+          name: "aws-acm",
+          kind: "cloud",
+          delivery_mode: "native",
+          rollback: "unsupported",
+          relay_parity: {
+            disposition: "unimplemented",
+            met: ["support_matrix"],
+            missing: ["relay_execution_proof", "cp_path_refusal"],
+            outstanding: [],
+            relay_migrated: false,
+            scope_note: "execution remains in the control plane",
+            detail: "not migrated",
+          },
+        },
+      ],
+    });
+
+    renderConnectors();
+
+    expect(await screen.findByText("Relay-executed")).toBeInTheDocument();
+    expect(screen.getByText("Open architecture exception")).toBeInTheDocument();
+    expect(screen.getByText("Network-relay migration unimplemented")).toBeInTheDocument();
+    expect(screen.getByText("device API has no addressable installed object; E1 remains open")).toBeInTheDocument();
+    expect(screen.getByText("execution remains in the control plane")).toBeInTheDocument();
+  });
+
   it("creates and operates a served connector target", async () => {
     const user = userEvent.setup();
     renderConnectors();

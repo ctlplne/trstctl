@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"sort"
 	"testing"
 
 	"trstctl.com/trstctl/internal/api"
@@ -21,6 +23,53 @@ type catalogBody struct {
 		Capabilities []string `json:"capabilities"`
 		ReplaySafety string   `json:"replay_safety"`
 	} `json:"items"`
+}
+
+// AUD-33 served proof: the authenticated HTTP route publishes the source
+// plan's denominator, not only the connector subset the relay binary currently
+// advertises. The three counts make retained paths visibly open and keep all
+// six omitted families in the operator-facing migration program.
+func TestServedConnectorCatalogPublishesAllE1Dispositions(t *testing.T) {
+	handler := api.New(nil, nil, nil, api.WithInsecureHeaderResolver())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/connectors/catalog", nil)
+	req.Header.Set("X-Tenant-ID", connectorTenantA)
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Items []struct {
+			Name        string `json:"name"`
+			RelayParity *struct {
+				Disposition string `json:"disposition"`
+			} `json:"relay_parity"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"a10", "aws-acm", "azure-keyvault", "cisco", "envoy", "f5", "fortigate",
+		"gcp-certificate-manager", "kemp", "mysql", "netscaler", "paloalto", "postgresql",
+	}
+	got := make([]string, 0, len(want))
+	counts := map[string]int{}
+	for _, item := range body.Items {
+		if item.RelayParity == nil {
+			continue
+		}
+		got = append(got, item.Name)
+		counts[item.RelayParity.Disposition]++
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("served E1 families = %v, want %v", got, want)
+	}
+	if counts["migrated"] != 4 || counts["architecture_exception"] != 3 || counts["unimplemented"] != 6 || len(counts) != 3 {
+		t.Fatalf("served E1 dispositions = %v", counts)
+	}
 }
 
 // fakeConnector declares a grant without doing any work, so the catalog test

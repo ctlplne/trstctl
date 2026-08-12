@@ -4,20 +4,30 @@ package connector
 
 import "testing"
 
-// TestE1ScopeClosure_EveryVantageFamilyMigratedOrRetained pins the E1 closure
-// invariant (owner scope decision, 2026-08-08): every relay-vantage family is
-// either relay-migrated or control-plane-retained BY DESIGN — no family may sit
-// in an unlabelled limbo that reads as "coming soon". It also pins that the
-// two states never overlap, and that retention is grounded in the capability
-// censuses rather than asserted: a retained family is exactly one that cannot
-// express rollback or readback, and a family that CAN pass the gates may never
-// be parked as retained.
-func TestE1ScopeClosure_EveryVantageFamilyMigratedOrRetained(t *testing.T) {
-	for _, family := range RelayVantageFamilies() {
+// AUD-33: every accepted E1 family has exactly one closed classification. The
+// invariant iterates the SOURCE denominator, not the relay implementation list;
+// otherwise deleting an executor from the latter would also delete the red row
+// meant to reveal that omission.
+func TestE1ScopeEveryAcceptedFamilyHasOneTruthfulDisposition(t *testing.T) {
+	counts := map[ParityDisposition]int{}
+	for _, family := range E1Families() {
 		status := ParityStatusFor(family)
-		if status.RelayMigrated == status.CPRetained {
-			t.Errorf("family %s: relay_migrated=%v cp_retained=%v — must be exactly one (no limbo, no overlap)",
-				family, status.RelayMigrated, status.CPRetained)
+		counts[status.Disposition]++
+		switch status.Disposition {
+		case ParityDispositionMigrated:
+			if !status.RelayMigrated || status.CPRetained || len(status.Missing) != 0 {
+				t.Errorf("family %s: migrated disposition disagrees with gates: %+v", family, status)
+			}
+		case ParityDispositionArchitectureException:
+			if status.RelayMigrated || !status.CPRetained || status.ScopeNote == "" {
+				t.Errorf("family %s: architecture exception is not explicit: %+v", family, status)
+			}
+		case ParityDispositionUnimplemented:
+			if status.RelayMigrated || status.CPRetained || len(status.Missing) == 0 || status.ScopeNote == "" {
+				t.Errorf("family %s: unimplemented disposition has no concrete gap: %+v", family, status)
+			}
+		default:
+			t.Errorf("family %s has unknown disposition %q", family, status.Disposition)
 		}
 		if status.CPRetained {
 			if CanRollback(family) || CanReadback(family) {
@@ -35,8 +45,7 @@ func TestE1ScopeClosure_EveryVantageFamilyMigratedOrRetained(t *testing.T) {
 		}
 	}
 
-	migrated := RelayMigratedConnectors()
-	if len(migrated) != 4 {
-		t.Errorf("migrated families = %v, want the four gate-capable families (a10, f5, kemp, netscaler)", migrated)
+	if counts[ParityDispositionMigrated] != 4 || counts[ParityDispositionArchitectureException] != 3 || counts[ParityDispositionUnimplemented] != 6 {
+		t.Errorf("E1 disposition counts = %v, want migrated=4 architecture_exception=3 unimplemented=6", counts)
 	}
 }

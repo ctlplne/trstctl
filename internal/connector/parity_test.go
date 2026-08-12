@@ -22,8 +22,17 @@ import (
 
 func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 	t.Parallel()
+	missingRelayImplementation := []ParityGate{
+		ParityGateDeviceProof,
+		ParityGateRollback,
+		ParityGateReadback,
+		ParityGateRelayExecutionProof,
+		ParityGateCPPathRefusal,
+	}
 	want := map[string]struct {
 		migrated    bool
+		retained    bool
+		disposition ParityDisposition
 		missing     []ParityGate
 		outstanding []ParityGate
 	}{
@@ -32,27 +41,38 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// that refuses their deploys when a relay is enrolled. For these three,
 		// E1's sentence is now true: where you run a relay, the relay is the
 		// executor rather than one of two candidates racing.
-		"a10":       {migrated: true, outstanding: []ParityGate{ParityGateDeviceCSR}},
-		"kemp":      {migrated: true},
-		"netscaler": {migrated: true, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		"a10":       {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		"kemp":      {migrated: true, disposition: ParityDispositionMigrated},
+		"netscaler": {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
 		// F5 now closes the last gate: HAPair deploys, rolls back, and reads
 		// back BOTH peers, so the migrated path is no longer wrong on an HA
 		// pair. A deploy that reaches only the active node fails rather than
 		// reporting success, and a readback reports the pair serving only when
 		// both peers are bound to the deployed certificate.
-		"f5": {migrated: true, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		"f5": {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
 		// Device-proven and relay-proven, but they cannot be asked what they
 		// hold or told to put back what they held. Migrating them would remove
 		// the control plane's fallback without providing the recovery path that
 		// justifies removing it.
-		"cisco": {migrated: false,
+		"cisco": {migrated: false, retained: true, disposition: ParityDispositionArchitectureException,
 			missing:     []ParityGate{ParityGateRollback, ParityGateReadback},
 			outstanding: []ParityGate{ParityGateDeviceCSR}},
-		"fortigate": {migrated: false,
+		"fortigate": {migrated: false, retained: true, disposition: ParityDispositionArchitectureException,
 			missing: []ParityGate{ParityGateRollback, ParityGateReadback}},
-		"paloalto": {migrated: false,
+		"paloalto": {migrated: false, retained: true, disposition: ParityDispositionArchitectureException,
 			missing:     []ParityGate{ParityGateRollback, ParityGateReadback},
 			outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// The source plan's six omitted families. None has a network-relay
+		// constructor, relay execution proof, or control-plane refusal. Envoy,
+		// PostgreSQL, and MySQL currently execute on host agents; the cloud
+		// stores execute in the control plane. Those are honest runtime facts,
+		// not permission to remove them from E1's accepted denominator.
+		"envoy":                   {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"aws-acm":                 {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"azure-keyvault":          {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"gcp-certificate-manager": {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"postgresql":              {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
+		"mysql":                   {migrated: false, disposition: ParityDispositionUnimplemented, missing: missingRelayImplementation},
 	}
 
 	program := ParityProgram()
@@ -72,6 +92,12 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 				"refuses the family's deploys, so confirm the change is intended before "+
 				"updating this table (missing gates: %v)", got.Family, got.RelayMigrated,
 				expect.migrated, got.Missing)
+		}
+		if got.CPRetained != expect.retained {
+			t.Errorf("%s: cp_retained=%v, expected %v", got.Family, got.CPRetained, expect.retained)
+		}
+		if got.Disposition != expect.disposition {
+			t.Errorf("%s: disposition=%q, expected %q", got.Family, got.Disposition, expect.disposition)
 		}
 		if !sameGates(got.Missing, expect.missing) {
 			t.Errorf("%s: missing gates %v, expected %v", got.Family, got.Missing, expect.missing)

@@ -1605,12 +1605,12 @@ const esESCatalog = {
   "source.rpo.j2dr000013": "RPO (alcanzado)",
   "source.rto.floor.j2dr000014": "RTO (m\u00ednimo)",
   "source.relay.migration.e1par00001": "Migraci\u00f3n a rel\u00e9",
-  "source.parity.not.applicable.e1par00002": "No es un dispositivo",
+  "source.parity.not.applicable.e1par00002": "Fuera del alcance de E1",
   "source.relay.migrated.e1par00003": "Ejecutado por rel\u00e9",
-  "source.not.migrated.e1par00004": "A\u00fan ejecutado por el plano de control",
+  "source.not.migrated.e1par00004": "Migraci\u00f3n al rel\u00e9 de red no implementada",
   "source.outstanding.gates.e1par00005": "Pendiente (no bloquea la migraci\u00f3n):",
-  // E1 scope closure — Machine-authored translation, FLAG FOR HUMAN REVIEW.
-  "source.cp.retained.e1par00006": "Ejecutado por el plano de control por dise\u00f1o",
+  // AUD-33 E1 open-exception status — Machine-authored translation, FLAG FOR HUMAN REVIEW.
+  "source.cp.retained.e1par00006": "Excepci\u00f3n de arquitectura abierta",
   "source.authority.agreement.c4xr000001": "Acuerdo entre autoridades (XREC)",
   "source.agreement.unavailable.c4xr000002":
     "La reconciliaci\u00f3n entre autoridades no est\u00e1 disponible en esta instalaci\u00f3n. No se ha recopilado ning\u00fan estado ni se ha podido detectar ninguna divergencia. Esto no indica que sus autoridades coincidan.",

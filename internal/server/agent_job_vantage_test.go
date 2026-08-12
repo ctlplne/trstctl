@@ -42,8 +42,9 @@ func TestVantageCensusCoversEveryShippedConnector(t *testing.T) {
 		"a10": connector.VantageNetworkRelay, "kemp": connector.VantageNetworkRelay,
 		"cisco": connector.VantageNetworkRelay, "fortigate": connector.VantageNetworkRelay,
 		"paloalto": connector.VantageNetworkRelay,
-		// Cloud certificate stores: no host, no segment — permanently the
-		// control plane's egress-guarded client.
+		// Cloud certificate stores: the current runtime is the control plane's
+		// egress-guarded client. E1 still reports their network-relay migration
+		// unimplemented; the current vantage cannot silently close that scope.
 		"aws-acm": connector.VantageControlPlane, "azure-keyvault": connector.VantageControlPlane,
 		"gcp-certificate-manager": connector.VantageControlPlane,
 	}

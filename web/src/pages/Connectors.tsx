@@ -505,7 +505,11 @@ export function Connectors() {
                       </div>
                       <StatusBadge value={item.status} vocabulary="delivery" tone={targetTimelineStatusTone(item.stage, item.status)} />
                       <div className="text-xs text-muted-foreground">
-                        {item.actor ? <p className="font-mono">{translateNow("source.agent.11b39c9377")}: {item.actor}</p> : null}
+                        {item.actor ? (
+                          <p className="font-mono">
+                            {translateNow("source.agent.11b39c9377")}: {item.actor}
+                          </p>
+                        ) : null}
                         <p>{item.detail || "-"}</p>
                       </div>
                     </li>
@@ -601,30 +605,19 @@ export function Connectors() {
                           </>
                         ) : null}
                       </td>
-                      {/* E1: the relay migration, per family.
-                          The honest headline is that none of the seven is
-                          migrated, and the reason is named rather than
-                          summarised: cisco is held back by having no rollback
-                          and no readback, f5 by HA-peer sync, and all of them by
-                          the control plane still executing their deploys. A
-                          percentage would let a reader assume the remainder is
-                          small and alike. */}
+                      {/* E1: all thirteen accepted families use the API's closed
+                          disposition. The runtime executor census must never
+                          decide which rows are visible: that was the AUD-33 bug. */}
                       <td className="max-w-[26rem]">
                         {!connector.relay_parity ? (
-                          /* Not an appliance. There is no relay migration for a
-                             connector that writes files on a host, so silence
-                             here is accurate rather than a gap. */
+                          /* This connector is genuinely outside E1's thirteen,
+                             not merely absent from the current relay binary. */
                           <span className="text-muted-foreground">{translateNow("source.parity.not.applicable.e1par00002")}</span>
-                        ) : connector.relay_parity.relay_migrated ? (
+                        ) : connector.relay_parity.disposition === "migrated" || connector.relay_parity.relay_migrated ? (
                           <span className="font-medium text-status-success">{translateNow("source.relay.migrated.e1par00003")}</span>
-                        ) : connector.relay_parity.cp_retained ? (
-                          /* Terminal by the E1 scope decision, not pending: the
-                             device API cannot express rollback/readback, so the
-                             proven control-plane path stays. Rendered neutral,
-                             not warning — a warning says "act", and there is
-                             nothing to act on. */
+                        ) : connector.relay_parity.disposition === "architecture_exception" || connector.relay_parity.cp_retained ? (
                           <>
-                            <span className="font-medium">{translateNow("source.cp.retained.e1par00006")}</span>
+                            <span className="font-medium text-status-warning">{translateNow("source.cp.retained.e1par00006")}</span>
                             {connector.relay_parity.scope_note ? (
                               <span className="mt-1 block text-xs text-muted-foreground">{connector.relay_parity.scope_note}</span>
                             ) : null}
@@ -632,6 +625,9 @@ export function Connectors() {
                         ) : (
                           <>
                             <span className="text-status-warning">{translateNow("source.not.migrated.e1par00004")}</span>
+                            {connector.relay_parity.scope_note ? (
+                              <span className="mt-1 block text-xs text-muted-foreground">{connector.relay_parity.scope_note}</span>
+                            ) : null}
                             <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
                               {connector.relay_parity.missing.map((gate) => (
                                 <li key={gate}>{gate}</li>

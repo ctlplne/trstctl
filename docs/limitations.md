@@ -532,10 +532,15 @@ never live in the API process. What you can do end to end against the running bi
   are ranked worst-first; an authority that has never been collected from does not
   appear in the table at all, which is why `configured` is a field rather than
   something a reader is left to infer from an empty list.
-  Relay migration parity (E1, CLOSED BY SCOPE DECISION 2026-08-08 — every
-  gate-capable family migrated; three families retained by design): the connector
-  catalog and Connectors console publish a per-family gate table for the seven
-  appliance families, and the control plane now REFUSES a migrated family's deploy
+  Relay migration parity (E1, OPEN — four migrated, three architecture exceptions,
+  six unimplemented): the connector catalog and Connectors console publish the
+  thirteen-family source-plan denominator, not the smaller list the current relay
+  binary happens to execute. The exact families are a10, AWS ACM, Azure Key Vault,
+  Cisco, Envoy, F5, FortiGate, GCP Certificate Manager, Kemp, MySQL, NetScaler,
+  Palo Alto, and PostgreSQL; PostgreSQL and MySQL make the plan's formerly vague
+  "+ DB/API variants" phrase executable. Every row carries a closed `disposition`:
+  four are `migrated`, three are open `architecture_exception` rows, and six are
+  `unimplemented`. The control plane REFUSES a migrated family's deploy
   when the tenant has a network relay enrolled. Before this, the A3 role stamp
   reserved an appliance deploy for a relay by writing `required_agent_role` on the
   outbox row and nothing enforced it: the outbox claim query has no predicate on
@@ -562,21 +567,26 @@ never live in the API process. What you can do end to end against the running bi
   fails, a rollback re-binds both, and a readback reports the pair serving only
   when both peers are bound to the deployed certificate; the two-peer deploy is
   proven end-to-end through `relay.Execute` against two device doubles.
-  Control-plane execution RETAINED BY DESIGN (the E1 scope decision, terminal
-  rather than pending) for cisco, fortigate and paloalto: their management APIs
+  Three open architecture exceptions retain control-plane execution for cisco,
+  fortigate and paloalto: their management APIs
   import a certificate by name with no separately-addressable installed object to
   re-bind or query, so the rollback and readback gates are not expressible and
   migrating them would remove the control plane's proven fallback without the
   recovery path that justifies removing it. The parity surface and console now
   say this explicitly (`cp_retained` + a scope note) so "not migrated" cannot be
-  read as "coming soon"; each family's support-matrix known limits state the same
-  constraint, and the closure invariant is pinned by a test (every relay-vantage
-  family is exactly one of migrated or retained, and a family whose API CAN pass
-  the gates may never be parked as retained). Re-check on new PAN-OS / FortiOS /
+  read as completion; each family's support-matrix known limits state the same
+  constraint. These rows KEEP E1 OPEN. Re-check on new PAN-OS / FortiOS /
   IOS-XE majors: a vendor API that grows an addressable installed object re-opens
   that family's migration through the same gates, not around them.
+  Six accepted families have no network-relay migration: Envoy, PostgreSQL, and
+  MySQL execute on co-resident host agents, while AWS ACM, Azure Key Vault, and GCP
+  Certificate Manager execute in the control plane. None has a network-relay
+  constructor, relay execution proof, and E1 refusal. Their `unimplemented` rows
+  name those missing gates and current vantage instead of disappearing from the
+  denominator. The executor census remains a separate fail-closed list: publishing
+  an E1 row does not let an agent claim work it cannot construct.
   Device-generated CSR is reported as outstanding on the five families whose
-  device APIs support it — a post-E1 enhancement, not part of the closed scope:
+  device APIs support it — a separate custody enhancement, not a migration gate:
   the current mode — the relay generates the key inside the segment and installs
   it — is correct as it stands, and holding families back to avoid an improvement
   was the worse trade.
@@ -832,10 +842,11 @@ never live in the API process. What you can do end to end against the running bi
   publishes no firmware compatibility range: nothing in this repository runs against
   a physical or vendor-hosted device, so a version claim would be unbacked, and it
   is precisely the line an operator would plan a migration around. What it publishes
-  instead is the management API each connector speaks, the operations exercised
-  against a faithful double of it, and the family's known limits. A guard test fails
-  the build if a version claim ever appears on the page, and every row carries an
-  explicit hardware_tested flag that is false for all seven families today.
+  instead is the API or local execution contract each connector speaks, the
+  operations exercised by repository tests, and the family's known limits. The
+  seven appliance rows distinguish faithful management-API doubles from the six
+  rows that have only ordinary connector tests. A guard fails if a version claim
+  appears, and all thirteen rows explicitly say no external target was tested.
   Rollback, restated honestly after that work: cisco, fortigate and paloalto CANNOT
   re-bind, and it is a property of their APIs rather than an unfinished feature.
   Each exposes a single call that both uploads and installs the credential, with no

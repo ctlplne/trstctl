@@ -6033,25 +6033,24 @@ export const messages = {
     description: "E1: column heading \u2014 whether this appliance family executes on a relay yet.",
   },
   "source.parity.not.applicable.e1par00002": {
-    defaultMessage: "Not an appliance",
-    description: "E1: a host or cloud connector has no relay migration to be partway through.",
+    defaultMessage: "Outside E1 scope",
+    description: "E1: this connector is outside the source plan's exact thirteen-family denominator.",
   },
   "source.relay.migrated.e1par00003": {
     defaultMessage: "Relay-executed",
     description: "E1: every required gate cleared and the control-plane path refused.",
   },
   "source.not.migrated.e1par00004": {
-    defaultMessage: "Still control-plane executed",
-    description: "E1: not a fault \u2014 it is the behaviour that predates E1, and the gates below say what is left.",
+    defaultMessage: "Network-relay migration unimplemented",
+    description: "E1: this accepted family has no complete network-relay execution and refusal proof.",
   },
   "source.outstanding.gates.e1par00005": {
     defaultMessage: "Outstanding (does not block migration):",
     description: "E1: named E1 deliverables that are not built, so a migrated family cannot read as a finished one.",
   },
   "source.cp.retained.e1par00006": {
-    defaultMessage: "Control-plane executed by design",
-    description:
-      "E1: terminal state, not a pending one — the device API cannot express rollback/readback, so the proven control-plane path is retained (E1 scope decision).",
+    defaultMessage: "Open architecture exception",
+    description: "E1: the device API cannot express rollback/readback, so the control-plane path remains and this family keeps the migration open.",
   },
   "source.authority.agreement.c4xr000001": {
     defaultMessage: "Authority agreement (XREC)",
