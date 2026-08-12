@@ -33,15 +33,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(webRoot, "../internal/webui/dist"),
     emptyOutDir: true,
-    // S-C3: pages are route-level lazy chunks; the one deliberately large
-    // chunk is the entry (React + router + shell + the typed i18n catalogs).
+    // S-C3: pages are route-level lazy chunks. The shell, shared UI helpers,
+    // and eager English message source form the initial module graph; es/de
+    // stay lazy and AUD-121 emits value-only locale chunks from keyed sources.
     // The enforced budget lives in package.json "size-limit" (`npm run size`),
-    // measured compressed — this raw-size warning threshold sits just above
-    // the entry so a NEW oversized chunk still trips it. Follow-up tracked in
-    // CHANGELOG: per-locale catalog splitting would shrink the entry further.
-    // The all-JS ratchet was re-pinned at 640 kB after the 2026-08-09 audit
-    // added operator evidence surfaces and complete es/de copy; the measured
-    // 631.59 kB build retains an 8 kB regression margin.
+    // measured compressed. This raw-size warning remains a coarse extra alarm
+    // for a new standalone giant; it does not replace those compressed gates.
+    // AUD-121 keeps the 640 kB all-JS ratchet unchanged and measures 573.65 kB
+    // brotli after removing repeated locale message IDs.
     chunkSizeWarningLimit: 1300,
   },
   server: {

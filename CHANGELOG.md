@@ -458,6 +458,15 @@ This file is the human-readable companion to the git tags; the
   split modules, and the entry size-limit budget is lowered to 185 kB to lock
   in the win.
 
+### Compact locale wire catalogs (AUD-121, 2026-08-12)
+- **Reviewed translations keep their keys; the browser stops downloading those
+  keys twice.** A checked generator emits value-only lazy runtime catalogs in
+  the canonical English message order, then reconstructs the keyed map when a
+  locale loads. Keyed es/de sources, type-level completeness, placeholder
+  checks, and review digests remain authoritative and byte-identical. The build
+  rejects stale generated mirrors, and the 640 kB all-JavaScript ceiling stays
+  unchanged.
+
 ### Console engineering train (S-C4 / S-C5 / S-C8 / S-C9, 2026-07-24)
 - **S-C5 — the data and form layers arrive.** TanStack Query is the console's
   query layer (`src/lib/query.tsx`; provider in `AppRoutes`), piloted on

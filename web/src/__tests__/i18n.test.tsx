@@ -20,6 +20,10 @@ const catalogs = {
   "es-ES": (await import("@/i18n/catalog.es-ES")).default,
   "de-DE": (await import("@/i18n/catalog.de-DE")).default,
 } as const;
+const runtimeCatalogs = {
+  "es-ES": (await import("@/i18n/catalog.es-ES.runtime.gen")).default,
+  "de-DE": (await import("@/i18n/catalog.de-DE.runtime.gen")).default,
+} as const;
 import { contextualRouteItems, navGroups, taskNavItems } from "@/lib/navigation";
 
 function DemoFormats() {
@@ -51,6 +55,11 @@ function LocaleProbe() {
 }
 
 describe("i18n boundary", () => {
+  it("generates byte-identical compact runtime catalogs from the reviewed keyed sources", () => {
+    expect(runtimeCatalogs["es-ES"]).toEqual(catalogs["es-ES"]);
+    expect(runtimeCatalogs["de-DE"]).toEqual(catalogs["de-DE"]);
+  });
+
   function setViewportWidth(width: number) {
     act(() => {
       Object.defineProperty(window, "innerWidth", {

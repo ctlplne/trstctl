@@ -75,9 +75,11 @@ the same change.
 10. **New user-facing strings are typed message keys.** English goes in
     `src/i18n/messages.ts`; the `es-ES`/`de-DE` entries go in the per-locale
     modules `src/i18n/catalog.es-ES.ts` / `catalog.de-DE.ts` (S-C10 — a
-    missing key is a type error there). Skip either and the extraction
-    ratchet in `extractedMessages.budget.json` or the type-checker will fail —
-    never raise the budget. The production-catalog sha256 digests in
+    missing key is a type error there). Production loads generated value-only
+    mirrors of those keyed review sources; `npm run gen:i18n-runtime` rebuilds
+    them and the normal build fails if they are stale. Skip either and the
+    extraction ratchet in `extractedMessages.budget.json` or the type-checker
+    will fail — never raise the budget. The production-catalog sha256 digests in
     `src/__tests__/i18n.test.tsx` are a REVIEW RATCHET: adding or changing a
     translation legitimately breaks them, so re-pin them in the same change
     with a comment saying what was reviewed. Machine-authored translations are

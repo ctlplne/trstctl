@@ -16228,6 +16228,19 @@ function buildCatalog(localize: (message: string) => string): Record<MessageKey,
   return Object.fromEntries(Object.entries(messages).map(([key, descriptor]) => [key, localize(descriptor.defaultMessage)])) as Record<MessageKey, string>;
 }
 
+const orderedMessageKeys = Object.keys(messages) as MessageKey[];
+
+/** Rebuild a lazy production catalog whose generated chunk carries values
+ * only. Message IDs already exist in the eager English catalog, so sending
+ * those same IDs again for every locale is duplicate wire data. The exact
+ * length check makes stale generated output fail closed before any lookup. */
+export function buildTranslatedCatalog(values: readonly string[]): Record<MessageKey, string> {
+  if (values.length !== orderedMessageKeys.length) {
+    throw new Error(`translated catalog has ${values.length} values for ${orderedMessageKeys.length} message keys`);
+  }
+  return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, values[index]])) as Record<MessageKey, string>;
+}
+
 /* S-C10: the production translation catalogs moved to per-locale modules
  * (catalog.es-ES.ts / catalog.de-DE.ts) loaded on demand by the I18nProvider,
  * so the entry chunk ships only the English source catalog and the cheap
@@ -16246,6 +16259,6 @@ export function isLazyLocale(locale: Locale): locale is LazyLocale {
 }
 
 export const lazyCatalogLoaders: Record<LazyLocale, () => Promise<{ default: Record<MessageKey, string> }>> = {
-  "es-ES": () => import("@/i18n/catalog.es-ES"),
-  "de-DE": () => import("@/i18n/catalog.de-DE"),
+  "es-ES": () => import("@/i18n/catalog.es-ES.runtime.gen"),
+  "de-DE": () => import("@/i18n/catalog.de-DE.runtime.gen"),
 };
