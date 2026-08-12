@@ -39,6 +39,26 @@ func TestEveryAPIOperationHasACLICommand(t *testing.T) {
 	}
 }
 
+func TestExecutableMigrationCommandsCoverEveryDurableControlAUD40(t *testing.T) {
+	want := map[string]string{
+		"POST /api/v1/migrations/runs":               "migrations start",
+		"GET /api/v1/migrations/runs":                "migrations list",
+		"GET /api/v1/migrations/runs/{id}":           "migrations show",
+		"POST /api/v1/migrations/runs/{id}/pause":    "migrations pause",
+		"POST /api/v1/migrations/runs/{id}/resume":   "migrations resume",
+		"POST /api/v1/migrations/runs/{id}/rollback": "migrations rollback",
+	}
+	for _, command := range cli.Commands() {
+		key := command.Method + " " + command.Path
+		if names, ok := want[key]; ok && strings.Join(command.Name, " ") == names {
+			delete(want, key)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing executable migration CLI controls: %+v", want)
+	}
+}
+
 // capture records the request the CLI sent.
 type capture struct {
 	Method string

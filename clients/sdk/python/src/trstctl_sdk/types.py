@@ -4488,6 +4488,119 @@ MigrationAssessment = TypedDict(
     total=False,
 )
 
+MigrationMemberBinding = TypedDict(
+    'MigrationMemberBinding',
+    {
+        'connector': str,
+        'issuing_authority_id': str,
+        'predecessor_certificate_id': str,
+        'predecessor_fingerprint': str,
+        'required_agent_id': str,
+        'subject_common_name': str,
+        'subject_dns_names': list[str],
+        'successor_fingerprint': str,
+        'target': str,
+        'target_config': dict[str, Any],
+        'target_id': str,
+        'target_revision': str,
+        'trust_anchor_fingerprint': str,
+        'trust_anchor_path': str,
+        'trust_anchor_pem': str,
+        'verify_address': str,
+        'verify_server_name': str,
+    },
+    total=False,
+)
+
+MigrationRun = TypedDict(
+    'MigrationRun',
+    {
+        'halt_reason': str,
+        'id': str,
+        'pause_reason': str,
+        'plan_id': str,
+        'rollback_attempt': int,
+        'rollback_stage': str,
+        'rollback_wave_id': str,
+        'status': str,
+        'waves': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+MigrationRunActionRequest = TypedDict(
+    'MigrationRunActionRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+MigrationRunList = TypedDict(
+    'MigrationRunList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+MigrationRunMember = TypedDict(
+    'MigrationRunMember',
+    {
+        'binding': dict[str, Any],
+        'identity_id': str,
+        'rollback_successor_verdict': str,
+        'rollback_trust_verdict': str,
+        'successor_verdict': str,
+        'trust_verdict': str,
+    },
+    total=False,
+)
+
+MigrationRunStartMember = TypedDict(
+    'MigrationRunStartMember',
+    {
+        'agent_id': str,
+        'identity_id': str,
+        'trust_anchor_path': str,
+    },
+    total=False,
+)
+
+MigrationRunStartRequest = TypedDict(
+    'MigrationRunStartRequest',
+    {
+        'new_authority_id': str,
+        'plan_id': str,
+        'waves': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+MigrationRunStartWave = TypedDict(
+    'MigrationRunStartWave',
+    {
+        'id': str,
+        'members': list[dict[str, Any]],
+        'ordinal': int,
+    },
+    total=False,
+)
+
+MigrationRunWave = TypedDict(
+    'MigrationRunWave',
+    {
+        'halt_reason': str,
+        'id': str,
+        'members': list[dict[str, Any]],
+        'ordinal': int,
+        'phase': str,
+        'started': bool,
+    },
+    total=False,
+)
+
 MigrationUnknown = TypedDict(
     'MigrationUnknown',
     {

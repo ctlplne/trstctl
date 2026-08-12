@@ -189,6 +189,56 @@ func (o *localOps) WriteFile(path string, data []byte) error {
 	return closeErr
 }
 
+// RemoveLocalFile removes one exact regular file inside operator-approved roots
+// and fsyncs its parent. expected, when non-empty, prevents a migration rollback
+// from deleting a trust object another run replaced at the same path.
+func RemoveLocalFile(cfg LocalOpsConfig, path string, expected []byte) error {
+	raw, err := NewLocalOps(cfg)
+	if err != nil {
+		return err
+	}
+	ops, ok := raw.(*localOps)
+	if !ok {
+		return errors.New("connector: local removal boundary is unavailable")
+	}
+	clean, err := ops.allowedPath(path)
+	if err != nil {
+		return err
+	}
+	info, err := os.Lstat(clean)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("connector: local remove %q is not a regular non-symlink file", clean)
+	}
+	if len(expected) > 0 {
+		current, readErr := os.ReadFile(clean) // #nosec G304 -- clean is confined to operator-approved local roots above (CWE-22)
+		if readErr != nil {
+			return readErr
+		}
+		if !bytes.Equal(current, expected) {
+			return fmt.Errorf("connector: local remove %q no longer matches the expected bytes", clean)
+		}
+	}
+	if err := os.Remove(clean); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(clean)) // #nosec G304 -- clean is confined to operator-approved local roots above (CWE-22)
+	if err != nil {
+		return err
+	}
+	syncErr := dir.Sync()
+	closeErr := dir.Close()
+	if syncErr != nil {
+		return syncErr
+	}
+	return closeErr
+}
+
 func (o *localOps) Exec(name string, args []string) error {
 	return o.ExecContext(context.Background(), name, args)
 }

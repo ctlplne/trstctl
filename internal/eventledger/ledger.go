@@ -59,6 +59,7 @@ const (
 	EventDiscoveryRunQueued                       = "discovery.run.queued"
 	EventRevocationProbeQueued                    = "revocation.probe.queued"
 	EventRevocationHealthObserved                 = "revocation.health.observed"
+	EventMigrationRunRecorded                     = "migration.run.recorded"
 	EventDiscoveryFindingTriageChanged            = "discovery.finding.triage_changed"
 	EventACMEDNS01ProviderConfigUpserted          = "acme.dns01.provider_config.upserted"
 	EventACMEDNS01ProviderConfigDeleted           = "acme.dns01.provider_config.deleted"
@@ -166,6 +167,7 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "start_run", "startDiscoveryRun", []string{EventDiscoveryRunQueued}},
 	{"R1", "Revocation monitoring", "queue_probe", "listRevocationHealth", []string{EventRevocationProbeQueued}},
 	{"R1", "Revocation monitoring", "observe_health", "listRevocationHealth", []string{EventRevocationHealthObserved}},
+	{"H2", "CA migration waves", "record_run", "startMigrationRun", []string{EventMigrationRunRecorded}},
 	{"F2", "Network discovery", "triage_finding", "claimDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F2", "Network discovery", "dismiss_finding", "dismissDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved}},

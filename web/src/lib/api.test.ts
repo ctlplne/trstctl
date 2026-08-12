@@ -80,6 +80,53 @@ describe("api error handling (SURFACE-007)", () => {
   });
 });
 
+describe("CA migration execution contract (AUD-40)", () => {
+  it("keeps assessment read-only and sends idempotent run controls to exact paths", async () => {
+    const run = { id: "run-1", status: "running", waves: [] };
+    mockFetchSequence([
+      { status: 200, body: JSON.stringify({ plan_id: "plan-1", members: 1, migratable: 1, guidance: "ready", unknowns: [], waves: [] }) },
+      { status: 201, body: JSON.stringify(run) },
+      { status: 200, body: JSON.stringify({ items: [run] }) },
+      { status: 200, body: JSON.stringify({ ...run, status: "paused" }) },
+      { status: 200, body: JSON.stringify(run) },
+      { status: 200, body: JSON.stringify({ ...run, status: "rolling_back" }) },
+    ]);
+    const request = {
+      plan_id: "plan-1",
+      new_authority_id: "40400000-0000-4000-8000-000000000042",
+      waves: [
+        {
+          id: "canary",
+          ordinal: 1,
+          members: [{ identity_id: "identity-1", agent_id: "40400000-0000-4000-8000-000000000040", trust_anchor_path: "/etc/trstctl/next.pem" }],
+        },
+      ],
+    };
+
+    await api.assessMigration({ plan_id: "plan-1", waves: [] });
+    await api.startMigrationRun(request);
+    await api.migrationRuns();
+    await api.pauseMigrationRun("run-1");
+    await api.resumeMigrationRun("run-1");
+    await api.rollbackMigrationRun("run-1");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.map((call) => call[0])).toEqual([
+      "/api/v1/migrations/assess",
+      "/api/v1/migrations/runs",
+      "/api/v1/migrations/runs",
+      "/api/v1/migrations/runs/run-1/pause",
+      "/api/v1/migrations/runs/run-1/resume",
+      "/api/v1/migrations/runs/run-1/rollback",
+    ]);
+    expect((calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
+    for (const index of [1, 3, 4, 5]) {
+      expect((calls[index][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeTruthy();
+    }
+    expect(calls[2][1]?.method).toBeUndefined();
+  });
+});
+
 describe("approval request contract (AUD-77)", () => {
   it("lists pending intents and approves by immutable request id plus digest", async () => {
     document.cookie = "trstctl_csrf=csrf-approval; path=/";
@@ -223,14 +270,11 @@ describe("approval request contract (AUD-77)", () => {
       }),
     );
 
-    await api.approveIdentityAction(
-      "identity-1",
-      {
-        action: "rotate",
-        request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e03",
-        intent_digest: "sha256:identity-rotate",
-      },
-    );
+    await api.approveIdentityAction("identity-1", {
+      action: "rotate",
+      request_id: "019fec49-6641-7131-ae7f-17f7ea4b5e03",
+      intent_digest: "sha256:identity-rotate",
+    });
 
     const call = vi.mocked(fetch).mock.calls[0];
     expect(call[0]).toBe("/api/v1/identities/identity-1/approvals");

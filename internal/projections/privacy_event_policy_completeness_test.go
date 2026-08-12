@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/privacyref"
 )
 
@@ -477,6 +478,52 @@ func TestOwnerPrivacyPolicyUsesExactPathsAndPreservesOpaqueShortSubject(t *testi
 	if got.ID != "aa4a" || got.Kind != "ca" || got.Name == "a" || got.Email == "a" ||
 		!strings.HasPrefix(got.Name, "erased:") || got.Name != got.Email {
 		t.Fatalf("owner exact-path rewrite = %+v", got)
+	}
+}
+
+func TestMigrationPrivacyRewritePreservesExecutableRunAndActionBindingAUD40(t *testing.T) {
+	const subject = "alice"
+	run := migration.Run{
+		ID: "40400000-0000-4000-8000-000000000040", PlanID: subject, Status: migration.RunRunning,
+		Waves: []migration.RunWave{{
+			ID: subject, Ordinal: 1, Phase: migration.PhaseVerifyingTrust, Started: true,
+			Members: []migration.RunMember{{
+				IdentityID: "40400000-0000-4000-8000-000000000041",
+				Binding: migration.MemberBinding{
+					IssuingAuthorityID: "40400000-0000-4000-8000-000000000042",
+					TargetID:           "40400000-0000-4000-8000-000000000043", TargetRevision: "revision-a",
+					Connector: "nginx", Target: subject,
+					TargetConfig:    json.RawMessage(`{"owner":"alice"}`),
+					RequiredAgentID: "40400000-0000-4000-8000-000000000044",
+					TrustAnchorPath: "/etc/" + subject + "/root.pem", TrustAnchorPEM: []byte("public-ca"),
+					TrustAnchorFingerprint: "aaaaaaaa", VerifyAddress: "127.0.0.1:443",
+					VerifyServerName: subject, SubjectCommonName: subject,
+					SubjectDNSNames:          []string{subject},
+					PredecessorCertificateID: "40400000-0000-4000-8000-000000000045",
+					PredecessorFingerprint:   "bbbbbbbb",
+				},
+			}},
+		}},
+	}
+	payload, err := json.Marshal(MigrationRunRecorded{Run: run, Actions: []migration.Action{{
+		Kind: migration.ActionDistributeTrust, WaveID: run.Waves[0].ID, IdentityID: run.Waves[0].Members[0].IdentityID,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewritten, changed, err := events.PseudonymizeEventDataForSubject(payload, "tenant-a", subject, EventMigrationRunRecorded, 1)
+	if err != nil || !changed || bytes.Contains(rewritten, []byte(subject)) {
+		t.Fatalf("migration privacy rewrite changed=%t err=%v payload=%s", changed, err, rewritten)
+	}
+	var got MigrationRunRecorded
+	if err := json.Unmarshal(rewritten, &got); err != nil {
+		t.Fatal(err)
+	}
+	if err := migration.ValidateExecutableRun(got.Run); err != nil {
+		t.Fatalf("rewritten migration run lost executable authority: %v", err)
+	}
+	if err := migration.ValidateActions(got.Run, got.Actions); err != nil {
+		t.Fatalf("rewritten migration actions drifted from their wave: %v", err)
 	}
 }
 

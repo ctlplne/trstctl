@@ -2617,20 +2617,12 @@ const esESCatalog = {
   "source.trusted.by.none.h1trust0003":
     "Ning\u00fan almac\u00e9n de confianza analizado contiene el ancla de esta CA. Eso es lo observado, no una prueba de que nadie conf\u00ede en ella.",
   "source.migration.h2mig00001": "Migraci\u00f3n",
-  "source.migration.description.h2mig00002":
-    "Planifique una migraci\u00f3n de CA en oleadas ordenadas y vea qu\u00e9 afectar\u00eda cada una antes de ejecutar nada.",
+  "source.migration.description.h2mig00002": "Ejecute oleadas de CA: confianza, hojas, verificaci\u00f3n o reversi\u00f3n.",
   "source.migration.plan.h2mig00003": "Plan de migraci\u00f3n",
   "source.migration.assess.h2mig00004": "Evaluar plan",
-  "source.migration.readonly.h2mig00005":
-    "La evaluaci\u00f3n es de solo lectura: no se distribuye, emite ni despliega nada. La ejecuci\u00f3n de una migraci\u00f3n a\u00fan no se ofrece desde esta consola.",
-  "source.migration.unavailable.h2mig00006": "Evaluaci\u00f3n no disponible",
-  "source.migration.assessment.h2mig00007": "Evaluaci\u00f3n",
-  "source.migration.counts.h2mig00008": "{value1} de {value2} miembros pueden migrarse con lo observado hasta ahora.",
+  "source.migration.readonly.h2mig00005": "La evaluaci\u00f3n no cambia nada. Revise antes de iniciar.",
+  "source.migration.counts.h2mig00008": "Migrables: {value1}/{value2} miembros.",
   "source.migration.waves.h2mig00009": "Oleadas",
-  "source.migration.wave.members.h2mig00010": "{value1} miembros",
-  "source.migration.unknowns.h2mig00011": "Desconocidos",
-  "source.migration.no.unknowns.h2mig00012":
-    "Cada miembro de este plan tiene un almac\u00e9n de confianza observado, un destino de despliegue y un puerto que verificar.",
   "source.all.kinds.ddd0c2108e": "Todos los tipos",
   "source.all.profiles.18f6aff3fe": "Todos los perfiles",
   "source.all.statuses.8ee57323a6": "Todos los estados",

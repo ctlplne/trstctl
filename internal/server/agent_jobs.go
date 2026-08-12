@@ -456,6 +456,19 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// interrupted projection leaves the durable job claim retryable. Receivers
 	// derive stable event IDs from the outbox key, so partial retries converge.
 	var ingestErr error
+	if a.recordMigrationResult == nil {
+		if _, handled, decodeErr := decodeMigrationReceiptClaim(claim.Destination, claim.Payload); decodeErr != nil {
+			ingestErr = decodeErr
+		} else if handled {
+			ingestErr = errors.New("migration result receiver is not configured")
+		}
+	} else {
+		_, ingestErr = a.recordMigrationResult(ctx, info.TenantID, agentID, claim.Destination,
+			claim.IdempotencyKey, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest)
+	}
+	if ingestErr != nil {
+		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
+	}
 	switch claim.Destination {
 	case agentJobKindCMDBSync:
 		if a.recordCMDBSync == nil {
@@ -610,6 +623,27 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 // perform.
 func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCertInfo,
 	agentID string, req *transport.ReportJobResultRequest, now time.Time) (*transport.ReportJobResultResponse, error) {
+	claim, held, err := a.store.AgentJobClaimForResult(ctx, info.TenantID, agentID, req.JobID, req.Attempt, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "load failed agent job claim: %v", err)
+	}
+	if !held {
+		return &transport.ReportJobResultResponse{Accepted: false}, nil
+	}
+	migrationHandled := false
+	if a.recordMigrationResult == nil {
+		if _, handled, decodeErr := decodeMigrationReceiptClaim(claim.Destination, claim.Payload); decodeErr != nil {
+			return nil, status.Errorf(codes.Internal, "decode failed migration result: %v", decodeErr)
+		} else if handled {
+			return nil, status.Error(codes.Internal, "migration result receiver is not configured")
+		}
+	} else {
+		migrationHandled, err = a.recordMigrationResult(ctx, info.TenantID, agentID, claim.Destination,
+			claim.IdempotencyKey, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "ingest signed failed migration result: %v", err)
+		}
+	}
 
 	detail := strings.TrimSpace(req.Detail)
 	// A rollback that can never succeed leaves the queue instead of being
@@ -619,20 +653,20 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	// impossible operation would hold material outside the seal
 	// indefinitely, which is exactly what single-use redemption exists to
 	// prevent.
-	permanent := false
+	permanent := migrationHandled
 	if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil &&
 		dest == "connector.rollback" && transport.RollbackReasonIsPermanent(detail) {
 		permanent = true
 	}
 	var ok bool
-	var err error
+	var releaseErr error
 	if permanent {
-		ok, err = a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, detail, now)
+		ok, releaseErr = a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, detail, now)
 	} else {
-		ok, err = a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Detail)
+		ok, releaseErr = a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Detail)
 	}
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "release agent job: %v", err)
+	if releaseErr != nil {
+		return nil, status.Errorf(codes.Internal, "release agent job: %v", releaseErr)
 	}
 	if ok && a.recordRollback != nil {
 		if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil && dest == "connector.rollback" {
@@ -654,6 +688,9 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 		a.attachJobReceipt(failed, info, req)
 		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
 		a.recordVerifiedReceipt(ctx, info, req, "", now)
+		if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
+			a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome)
+		}
 	}
 	return &transport.ReportJobResultResponse{Accepted: ok}, nil
 }

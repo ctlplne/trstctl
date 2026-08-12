@@ -910,6 +910,15 @@ const previewReaders: Record<string, () => unknown> = {
       },
     ],
   }),
+  assessMigration: () => ({
+    plan_id: "preview-ca-rollover",
+    members: 1,
+    migratable: 1,
+    guidance: "All members have the required observed facts.",
+    unknowns: [],
+    waves: [{ id: "canary", ordinal: 1, members: ["identity-preview-api"] }],
+  }),
+  migrationRuns: () => ({ items: [] }),
 };
 
 function clone<T>(value: T): T {

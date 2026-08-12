@@ -283,6 +283,10 @@ type agentService struct {
 	// recordRevocationHealth validates a signed CRL/OCSP relay report and
 	// projects endpoint health before the exact claim closes (AUD-38/R1).
 	recordRevocationHealth func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report, evidenceDigest string) error
+	// recordMigrationResult converts an exact-agent, lease-bound signed result
+	// into the trust/successor/rollback gate before the job claim is closed
+	// (AUD-40/H2).
+	recordMigrationResult func(ctx context.Context, tenantID, agentID, destination, idempotencyKey string, payload []byte, outcome, report, evidenceDigest string) (bool, error)
 
 	// recordEndpointVerification turns a relay's verification sweep into
 	// observed endpoint state (epic D2). Without it the sweep's report would

@@ -35,6 +35,12 @@ type ShippedJobKind struct {
 func ShippedJobKinds() []ShippedJobKind {
 	return []ShippedJobKind{
 		{
+			// H2: host-local CA-anchor install/remove plus exact readback. Public
+			// anchor bytes travel in the job; no credential is redeemed.
+			Kind:  KindTrustDistribute,
+			Flags: []string{"--relay-claim", "--host-exec-profile"},
+		},
+		{
 			Kind: "connector.deploy",
 			// Both vantages, because one binary serves both roles: the appliance
 			// connectors a relay drives over an API, and the file/exec
@@ -153,7 +159,5 @@ func ShippedJobKinds() []ShippedJobKind {
 // operator enabling one of these on the control plane should be able to find out
 // here why nothing happens, rather than watching a queue not drain.
 func UnshippedJobKinds() map[string]string {
-	return map[string]string{
-		"trust.distribute": "host-local work: installs roots in a host's own trust store",
-	}
+	return map[string]string{}
 }

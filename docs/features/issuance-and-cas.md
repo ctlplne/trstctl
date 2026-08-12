@@ -188,6 +188,77 @@ DNS, path length, subject/public key, and both chain directions first. The full
 operator procedure is the
 [CA key-ceremony runbook](../runbooks/key-ceremony.md).
 
+### Executing a CA migration in waves (H2)
+
+CA rollover is served as a durable trust-before-leaf workflow, not as a batch loop.
+First run the read-only assessment:
+
+```sh
+trstctl migrations assess -f assessment.json
+```
+
+Then start a reviewed manifest with a fresh `Idempotency-Key` (the CLI supplies one
+unless you override it):
+
+```json
+{
+  "plan_id": "root-rollover-2026",
+  "new_authority_id": "11111111-1111-4111-8111-111111111111",
+  "waves": [
+    {
+      "id": "canary",
+      "ordinal": 1,
+      "members": [
+        {
+          "identity_id": "22222222-2222-4222-8222-222222222222",
+          "agent_id": "33333333-3333-4333-8333-333333333333",
+          "trust_anchor_path": "/etc/trstctl/roots/next.pem"
+        }
+      ]
+    }
+  ]
+}
+```
+
+`new_authority_id` must name an active signer-backed hierarchy authority in the
+same tenant. The control plane reads its public certificate and freezes both the
+authority ID and anchor fingerprint into every member binding. Private keys never
+enter the manifest or control-plane process. When the trust receipt arrives, the
+successor is signed by that exact authority; a later CA rotation does not silently
+reroute an already-reviewed run.
+
+The phase order is fixed: install and read back the public anchor, issue against a
+host-generated CSR, deploy, handshake the configured listener, then release the next
+wave. Agent receipts are signature- and lease-verified before they can move a gate.
+Any failed receipt halts publication of later work and automatically starts the
+newest-first inverse. Every effect published for the failed gate is settled, including
+work that was already leased and reports after rollback began. `pause` prevents new
+publication while retaining receipts for already-leased work; `resume` reconstructs
+only the unfinished actions. The manual `rollback` control uses the same inverse:
+restore and verify predecessor leaves newest wave first, restore inventory truth from
+the same migration event, and remove successor trust only after the leaf inverse
+passes. A failed inverse halts with its durable attempt cursor; a later manual retry
+uses fresh outbox identities rather than replaying a terminal job.
+
+Starting and resuming require both `keys:write` and `certs:issue`, because either
+operation can release a successor mint. Pause and rollback require `keys:write`.
+
+```sh
+trstctl migrations start -f run.json
+trstctl migrations list
+trstctl migrations show RUN_ID
+trstctl migrations pause RUN_ID
+trstctl migrations resume RUN_ID
+trstctl migrations rollback RUN_ID
+```
+
+The REST equivalents are `POST /api/v1/migrations/runs`, `GET
+/api/v1/migrations/runs`, `GET /api/v1/migrations/runs/{id}`, and the three action
+routes below that run. The current executable boundary is internally issued,
+DNS-only X.509 identities deployed by enabled host-agent connectors with a configured
+verification listener. Unsupported membership is rejected before any trust job is
+published.
+
 ### Profiles and the registration-authority split (F53)
 
 A **certificate profile** is a versioned, tenant-scoped rulebook: allowed key

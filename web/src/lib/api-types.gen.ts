@@ -3154,6 +3154,83 @@ export interface MigrationAssessment {
   waves: MigrationAssessedWave[];
 }
 
+export interface MigrationMemberBinding {
+  connector: string;
+  issuing_authority_id: string;
+  predecessor_certificate_id: string;
+  predecessor_fingerprint: string;
+  required_agent_id: string;
+  subject_common_name: string;
+  subject_dns_names: string[];
+  successor_fingerprint?: string;
+  target: string;
+  target_config: Record<string, unknown>;
+  target_id: string;
+  target_revision: string;
+  trust_anchor_fingerprint: string;
+  trust_anchor_path: string;
+  trust_anchor_pem: string;
+  verify_address: string;
+  verify_server_name?: string;
+}
+
+export interface MigrationRun {
+  halt_reason?: string;
+  id: string;
+  pause_reason?: string;
+  plan_id?: string;
+  rollback_attempt?: number;
+  rollback_stage?: string;
+  rollback_wave_id?: string;
+  status: "planned" | "running" | "paused" | "halted" | "rolling_back" | "rolled_back" | "complete";
+  waves: MigrationRunWave[];
+}
+
+export interface MigrationRunActionRequest {
+  reason?: string;
+}
+
+export interface MigrationRunList {
+  items: MigrationRun[];
+  next_cursor?: string;
+}
+
+export interface MigrationRunMember {
+  binding: MigrationMemberBinding;
+  identity_id: string;
+  rollback_successor_verdict?: string;
+  rollback_trust_verdict?: string;
+  successor_verdict?: string;
+  trust_verdict?: string;
+}
+
+export interface MigrationRunStartMember {
+  agent_id: string;
+  identity_id: string;
+  trust_anchor_path: string;
+}
+
+export interface MigrationRunStartRequest {
+  new_authority_id: string;
+  plan_id: string;
+  waves: MigrationRunStartWave[];
+}
+
+export interface MigrationRunStartWave {
+  id: string;
+  members: MigrationRunStartMember[];
+  ordinal: number;
+}
+
+export interface MigrationRunWave {
+  halt_reason?: string;
+  id: string;
+  members: MigrationRunMember[];
+  ordinal: number;
+  phase: string;
+  started: boolean;
+}
+
 export interface MigrationUnknown {
   detail: string;
   kind: "no_trust_store_observed" | "no_verification_address" | "no_deployment_target";

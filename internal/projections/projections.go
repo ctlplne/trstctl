@@ -27,6 +27,7 @@ import (
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/privacyref"
 	"trstctl.com/trstctl/internal/revocationhealth"
@@ -148,6 +149,7 @@ const (
 	EventADCSInventoryObserved                    = "adcs.template.inventory.observed"
 	EventRevocationProbeQueued                    = "revocation.probe.queued"
 	EventRevocationHealthObserved                 = "revocation.health.observed"
+	EventMigrationRunRecorded                     = "migration.run.recorded"
 	EventACMEDNS01ProviderConfigUpserted          = "acme.dns01.provider_config.upserted"
 	EventACMEDNS01ProviderConfigDeleted           = "acme.dns01.provider_config.deleted"
 	EventACMEDNS01Preflighted                     = "acme.dns01.preflighted"
@@ -1436,6 +1438,14 @@ type DiscoveryRunQueued = segmentscan.Intent
 type RevocationProbeQueued = revocationhealth.Intent
 type RevocationHealthObserved = revocationhealth.Observed
 
+// MigrationRunRecorded is a complete aggregate snapshot plus only the newly
+// licensed effects. The snapshot rebuilds operator state; Actions bridge the
+// append-before-SQL crash window through outbox reconciliation.
+type MigrationRunRecorded struct {
+	Run     migration.Run      `json:"run"`
+	Actions []migration.Action `json:"actions"`
+}
+
 // DiscoveryRunStarted is the payload of discovery.run.started.
 type DiscoveryRunStarted struct {
 	ID string `json:"id"`
@@ -2701,6 +2711,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventADCSInventoryObserved:                    {1: true},
 	EventRevocationProbeQueued:                    {1: true},
 	EventRevocationHealthObserved:                 {1: true},
+	EventMigrationRunRecorded:                     {1: true},
 	EventACMEDNS01ProviderConfigUpserted:          {1: true},
 	EventACMEDNS01ProviderConfigDeleted:           {1: true},
 	EventACMEDNS01Preflighted:                     {1: true},
@@ -3717,6 +3728,18 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			})
 		}
 		return p.store.ApplyRevocationEndpointHealthObservedTx(ctx, tx, rows)
+	case EventMigrationRunRecorded:
+		var pl MigrationRunRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if err := migration.ValidateExecutableRun(pl.Run); err != nil {
+			return fmt.Errorf("projections: validate migration run: %w", err)
+		}
+		if err := migration.ValidateActions(pl.Run, pl.Actions); err != nil {
+			return fmt.Errorf("projections: validate migration actions: %w", err)
+		}
+		return p.store.ApplyMigrationRunRecordedTx(ctx, tx, e.TenantID, pl.Run, e.Sequence, e.Time)
 	case EventACMEDNS01ProviderConfigUpserted:
 		var pl ACMEDNS01ProviderConfigUpserted
 		if err := decode(e, &pl); err != nil {

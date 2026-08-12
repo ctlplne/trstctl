@@ -42,6 +42,8 @@ type servedHostRelayChannel struct {
 	client                  *transport.AgentClient
 	identity                *agent.Agent
 	lastOutcome, lastDetail string
+	lastAccepted            bool
+	lastReportErr           error
 }
 
 func (c servedHostRelayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leaseSeconds int) ([]agentrelay.Job, error) {
@@ -70,6 +72,7 @@ func (c servedHostRelayChannel) RedeemJobCredential(ctx context.Context, jobID i
 
 func (c *servedHostRelayChannel) ReportJobResult(ctx context.Context, jobID int64, attempt int, outcome, detail, evidenceDigest string) (bool, error) {
 	c.lastOutcome, c.lastDetail = outcome, detail
+	c.lastAccepted, c.lastReportErr = false, nil
 	id := c.identity.Identity()
 	req, err := transport.SignedReport(id, id.TenantID(), id.CommonName(), jobID, attempt,
 		outcome, detail, evidenceDigest, time.Now().UTC().Unix())
@@ -78,8 +81,10 @@ func (c *servedHostRelayChannel) ReportJobResult(ctx context.Context, jobID int6
 	}
 	resp, err := c.client.ReportJobResult(ctx, req)
 	if err != nil {
+		c.lastReportErr = err
 		return false, err
 	}
+	c.lastAccepted = resp.Accepted
 	return resp.Accepted, nil
 }
 

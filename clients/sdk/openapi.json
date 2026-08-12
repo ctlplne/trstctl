@@ -12270,6 +12270,289 @@
         ],
         "type": "object"
       },
+      "MigrationMemberBinding": {
+        "properties": {
+          "connector": {
+            "type": "string"
+          },
+          "issuing_authority_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "predecessor_certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "predecessor_fingerprint": {
+            "type": "string"
+          },
+          "required_agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "subject_common_name": {
+            "type": "string"
+          },
+          "subject_dns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "successor_fingerprint": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "target_config": {
+            "type": "object"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "string"
+          },
+          "trust_anchor_fingerprint": {
+            "type": "string"
+          },
+          "trust_anchor_path": {
+            "type": "string"
+          },
+          "trust_anchor_pem": {
+            "format": "byte",
+            "type": "string"
+          },
+          "verify_address": {
+            "type": "string"
+          },
+          "verify_server_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuing_authority_id",
+          "target_id",
+          "target_revision",
+          "connector",
+          "target",
+          "target_config",
+          "required_agent_id",
+          "trust_anchor_path",
+          "trust_anchor_pem",
+          "trust_anchor_fingerprint",
+          "verify_address",
+          "subject_common_name",
+          "subject_dns_names",
+          "predecessor_certificate_id",
+          "predecessor_fingerprint"
+        ],
+        "type": "object"
+      },
+      "MigrationRun": {
+        "properties": {
+          "halt_reason": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "pause_reason": {
+            "type": "string"
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "rollback_attempt": {
+            "type": "integer"
+          },
+          "rollback_stage": {
+            "type": "string"
+          },
+          "rollback_wave_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "planned",
+              "running",
+              "paused",
+              "halted",
+              "rolling_back",
+              "rolled_back",
+              "complete"
+            ],
+            "type": "string"
+          },
+          "waves": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationRunWave"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "waves"
+        ],
+        "type": "object"
+      },
+      "MigrationRunActionRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MigrationRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationRun"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "MigrationRunMember": {
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/MigrationMemberBinding"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "rollback_successor_verdict": {
+            "type": "string"
+          },
+          "rollback_trust_verdict": {
+            "type": "string"
+          },
+          "successor_verdict": {
+            "type": "string"
+          },
+          "trust_verdict": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "binding"
+        ],
+        "type": "object"
+      },
+      "MigrationRunStartMember": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "trust_anchor_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "agent_id",
+          "trust_anchor_path"
+        ],
+        "type": "object"
+      },
+      "MigrationRunStartRequest": {
+        "properties": {
+          "new_authority_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "waves": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationRunStartWave"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_id",
+          "new_authority_id",
+          "waves"
+        ],
+        "type": "object"
+      },
+      "MigrationRunStartWave": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationRunStartMember"
+            },
+            "type": "array"
+          },
+          "ordinal": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ordinal",
+          "members"
+        ],
+        "type": "object"
+      },
+      "MigrationRunWave": {
+        "properties": {
+          "halt_reason": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationRunMember"
+            },
+            "type": "array"
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "started": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "ordinal",
+          "members",
+          "phase",
+          "started"
+        ],
+        "type": "object"
+      },
       "MigrationUnknown": {
         "properties": {
           "detail": {
@@ -35059,6 +35342,405 @@
         ],
         "summary": "Assess a migration plan read-only: what it would touch and what is unknown",
         "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/migrations/runs": {
+      "get": {
+        "operationId": "listMigrationRuns",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List executable CA migration runs",
+        "x-trstctl-permission": "keys:read"
+      },
+      "post": {
+        "operationId": "startMigrationRun",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrationRunStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start an exact-agent trust-before-leaf migration run",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/migrations/runs/{id}": {
+      "get": {
+        "operationId": "getMigrationRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get one executable CA migration run",
+        "x-trstctl-permission": "keys:read"
+      }
+    },
+    "/api/v1/migrations/runs/{id}/pause": {
+      "post": {
+        "operationId": "pauseMigrationRun",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrationRunActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Pause migration advancement after any already-leased effect",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/migrations/runs/{id}/resume": {
+      "post": {
+        "operationId": "resumeMigrationRun",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrationRunActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Resume the current migration gate without skipping it",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/migrations/runs/{id}/rollback": {
+      "post": {
+        "operationId": "rollbackMigrationRun",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrationRunActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Roll back changed waves newest-first and remove successor trust last",
+        "x-trstctl-permission": "keys:write"
       }
     },
     "/api/v1/nhi/decommission": {

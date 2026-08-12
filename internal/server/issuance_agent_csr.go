@@ -15,6 +15,8 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/custody"
+	"trstctl.com/trstctl/internal/migration"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/usage"
 )
@@ -95,7 +97,9 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 
 	out, err := d.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
 		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
-		material, err := d.mintServedLeafFromCSR(ctx, tenantID, ident, csrPEM, intent.Issuance)
+		material, err := d.mintServedLeafFromCSRForAuthority(
+			ctx, tenantID, ident, intent.IssuingAuthorityID, csrPEM, intent.Issuance,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -123,26 +127,52 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 				return nil, err
 			}
 			usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
-			return append(append([]byte(recorded.Fingerprint), '\n'), material.CertPEM...), nil
+			return marshalAgentCSRResult(recorded.Fingerprint, material)
 		}
 		recorded, err := d.orch.RecordCertificate(ctx, tenantID, cert)
 		if err != nil {
 			return nil, err
 		}
 		usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
-		return append(append([]byte(recorded.Fingerprint), '\n'), material.CertPEM...), nil
+		return marshalAgentCSRResult(recorded.Fingerprint, material)
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "issue against agent csr: %v", err)
 	}
 
-	fingerprint, certPEM, ok := splitAgentCSRResult(out)
+	fingerprint, certPEM, chainPEM, ok := splitAgentCSRResult(out)
 	if !ok {
 		return nil, status.Error(codes.Internal, "issued certificate could not be read back")
 	}
+	if strings.TrimSpace(intent.MigrationRunID) != "" {
+		eventID := orchestrator.MigrationEventID(tenantID, intent.MigrationRunID, "issued:"+job.IdempotencyKey)
+		if _, err := d.orch.UpdateMigrationRun(ctx, tenantID, intent.MigrationRunID, eventID,
+			func(current migration.Run) (migration.Run, []migration.Action, error) {
+				member, found := migration.Member(current, intent.MigrationWaveID, intent.IdentityID)
+				if !found {
+					return current, nil, fmt.Errorf("server: migration CSR job names no current run member")
+				}
+				claim := migrationReceiptClaim{
+					runID: intent.MigrationRunID, waveID: intent.MigrationWaveID,
+					identityID: intent.IdentityID, stage: migration.StageSuccessor, renew: &intent,
+				}
+				if err := validateMigrationClaimBinding(member.Binding, intent.RequiredAgentID, claim); err != nil {
+					return current, nil, err
+				}
+				next, err := migration.RecordSuccessorIssued(
+					current, intent.MigrationWaveID, intent.IdentityID, fingerprint,
+				)
+				return next, nil, err
+			}); err != nil {
+			return nil, status.Errorf(codes.Internal, "bind issued successor to migration: %v", err)
+		}
+	}
+	if len(chainPEM) == 0 {
+		chainPEM = d.chainPEM
+	}
 	return &transport.SignJobCSRResponse{
 		CertificatePEM: certPEM,
-		ChainPEM:       append([]byte(nil), d.chainPEM...),
+		ChainPEM:       append([]byte(nil), chainPEM...),
 		Fingerprint:    fingerprint,
 	}, nil
 }
@@ -223,12 +253,30 @@ func csrCarriesOnlyDNSIdentifiers(info crypto.CSRInfo) (string, bool) {
 	return "", true
 }
 
-// splitAgentCSRResult separates the fingerprint line from the certificate.
+type storedAgentCSRResult struct {
+	Fingerprint    string `json:"fingerprint"`
+	CertificatePEM []byte `json:"certificate_pem"`
+	ChainPEM       []byte `json:"chain_pem,omitempty"`
+}
+
+func marshalAgentCSRResult(fingerprint string, material issuedLeafMaterial) ([]byte, error) {
+	return json.Marshal(storedAgentCSRResult{
+		Fingerprint: fingerprint, CertificatePEM: material.CertPEM, ChainPEM: material.ChainPEM,
+	})
+}
+
+// splitAgentCSRResult decodes the structured JSON result and retains support for
+// the old fingerprint-newline-certificate form already present in durable
+// idempotency rows during a rolling upgrade.
 //
 // The idempotent runner stores one byte slice, and a replayed call must return
 // the certificate as well as the fingerprint — an agent that got only a
 // fingerprint back on retry would have nothing to install.
-func splitAgentCSRResult(raw []byte) (string, []byte, bool) {
+func splitAgentCSRResult(raw []byte) (string, []byte, []byte, bool) {
+	var stored storedAgentCSRResult
+	if json.Unmarshal(raw, &stored) == nil && strings.TrimSpace(stored.Fingerprint) != "" && len(stored.CertificatePEM) > 0 {
+		return stored.Fingerprint, append([]byte(nil), stored.CertificatePEM...), append([]byte(nil), stored.ChainPEM...), true
+	}
 	idx := -1
 	for i, b := range raw {
 		if b == '\n' {
@@ -237,9 +285,9 @@ func splitAgentCSRResult(raw []byte) (string, []byte, bool) {
 		}
 	}
 	if idx <= 0 || idx+1 >= len(raw) {
-		return "", nil, false
+		return "", nil, nil, false
 	}
-	return string(raw[:idx]), append([]byte(nil), raw[idx+1:]...), true
+	return string(raw[:idx]), append([]byte(nil), raw[idx+1:]...), nil, true
 }
 
 // signAgentSubjectCSR is the Server-level seam the agent channel is wired to.
@@ -258,7 +306,7 @@ func (s *Server) signAgentSubjectCSR(
 	attempt int,
 ) (*transport.SignJobCSRResponse, error) {
 	d, ok := s.obHandler.(*issuanceDispatcher)
-	if !ok || d == nil || d.issue == nil {
+	if !ok || d == nil || (d.issue == nil && d.authorityIssue == nil) {
 		return nil, status.Error(codes.FailedPrecondition,
 			"this control plane has no issuing CA, so it cannot sign a host-generated request")
 	}

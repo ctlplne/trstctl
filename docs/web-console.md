@@ -152,6 +152,25 @@ yet exposed here as a control. See
 `/api/v1/cbom/assets`, `/api/v1/cbom/scans`, `/api/v1/discovery/ct-monitoring`, and
 `/api/v1/discovery/drift-remediation`.
 
+### CA migration (`/migration`)
+
+Migration separates a read-only assessment from execution. The three-step form takes
+an exact signer-backed CA authority ID, ordered waves, member identities, enrolled
+host-agent IDs, and trust-anchor paths; assessment stops on unknown trust stores,
+deployment targets, or verification listeners before the review step can start a
+run. The server derives the public anchor from the selected authority, so neither a
+CA private key nor pasted certificate text enters the browser manifest.
+
+The run table reads the durable event projection and shows every wave's membership,
+phase, and signed trust-plus-live verification percentage beside the run's current
+gate. Pause blocks publication after already-leased work, resume continues the same
+incomplete gate, and rollback restores predecessor leaves newest-first before
+removing successor trust. A failed signed gate starts that inverse automatically;
+the button remains the operator-initiated path. The buttons do not locally advance anything: only
+signature-verified host-agent trust readback and live-listener receipts move a gate.
+Backed by `/api/v1/migrations/assess`, `/api/v1/migrations/runs`, and the
+`/api/v1/migrations/runs/{id}/{pause,resume,rollback}` mutations.
+
 ### Risk (`/risk`)
 
 Risk is the ranked-by-urgency list of individual credentials — what to rotate first —

@@ -103,7 +103,7 @@ func newStore(t *testing.T) *store.Store {
 	}
 	// The package shares one database; reset the spine tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE secret_rotation_schedule_commands, secret_rotation_schedules,
+		`TRUNCATE secret_rotation_schedule_commands, secret_rotation_schedules, migration_runs,
 		          tenants, idempotency_keys, outbox,
 		          owners, issuers, identities, identity_transitions, deployment_targets, certificates,
 		          connector_delivery_receipts, lifecycle_rotation_runs

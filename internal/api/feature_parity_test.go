@@ -143,8 +143,12 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// bind a served, event-sourced denominator before a relay can execute them.
 	// AUD-38's CRL/OCSP observation read raises it to 352 and maps it onto F47,
 	// the revocation infrastructure whose real client-facing health it proves.
-	if len(out) != 352 {
-		t.Fatalf("OpenAPI operationIds = %d, want 352", len(out))
+	// AUD-40's six durable CA-migration run operations raise it to 358 and map
+	// onto F48: they execute the trust-distribute, exact-authority reissue,
+	// live-verify, pause/resume, and newest-first rollback half of CA hierarchy
+	// management rather than merely describing a rollout.
+	if len(out) != 358 {
+		t.Fatalf("OpenAPI operationIds = %d, want 358", len(out))
 	}
 	return out
 }

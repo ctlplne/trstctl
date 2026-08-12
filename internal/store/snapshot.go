@@ -90,7 +90,10 @@ import (
 // Bumped to 24 when relay-verified CRL/OCSP endpoint health joined the immutable
 // event read model. A v23 snapshot would skip those retained observations while
 // restoring an empty, falsely reassuring health view.
-const SnapshotFormatVersion = 24
+// Bumped to 25 when executable CA migration aggregates joined the event read
+// model. A v24 payload cannot restore a paused or partially verified run and
+// must not skip its retained state transitions.
+const SnapshotFormatVersion = 25
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -123,7 +126,7 @@ type snapshotSetQuerier interface {
 // identity_transitions (which references identities) comes last. The revocation
 // responder tables have no foreign keys, but they are pure projections too, so
 // snapshots carry them with the rest of the tenant read model.
-var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
+var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
 	// Format 13. EIGHT tables sat in ReadModelTables without entering this
 	// list or the capture payload — and the restore truncates the WHOLE read
 	// model, then reloads only what snapshots carry, so any restore erased

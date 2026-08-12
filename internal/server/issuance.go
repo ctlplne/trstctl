@@ -63,6 +63,14 @@ func IssuingCAID() string {
 // leaf profile (Server.IssueLeafWithProfile satisfies it).
 type issueFunc func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error)
 
+type authorityIssueFunc func(
+	ctx context.Context,
+	tenantID, authorityID string,
+	csrDER []byte,
+	ttl time.Duration,
+	leafProfile crypto.LeafProfile,
+) (leafPEM, chainPEM []byte, effectiveAuthorityID string, err error)
+
 // connectorPluginDeployer is the narrow signed-plugin surface needed by the
 // outbox dispatcher. Keeping the seam small also lets replay-safety tests prove
 // that an untrusted plugin is never assumed idempotent merely because it loaded.
@@ -101,13 +109,14 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 type issuanceDispatcher struct {
 	// relayPresence overrides the store for the E1 control-plane refusal; nil in
 	// production, where the store answers.
-	relayPresence relayPresence
-	issue         issueFunc
-	orch          *orchestrator.Orchestrator
-	idem          *orchestrator.Idempotency
-	outbox        *orchestrator.Outbox
-	store         *store.Store
-	admission     editionseam.AdmissionHook
+	relayPresence  relayPresence
+	issue          issueFunc
+	authorityIssue authorityIssueFunc
+	orch           *orchestrator.Orchestrator
+	idem           *orchestrator.Idempotency
+	outbox         *orchestrator.Outbox
+	store          *store.Store
+	admission      editionseam.AdmissionHook
 
 	// log is the event log used to emit the profile-gated issuance decision
 	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the
@@ -449,6 +458,7 @@ type sealedConnectorDeployPayload struct {
 type issuedLeafMaterial struct {
 	Certificate store.Certificate
 	CertPEM     []byte
+	ChainPEM    []byte
 	KeyPEM      []byte
 }
 
@@ -1785,8 +1795,23 @@ func subjectCSRFromIdentity(ident store.Identity) string {
 // it would need is on the caller's side; host-executed renewal (epic B2) is what
 // closes that loop properly.
 func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID string, ident store.Identity, csrPEM []byte, issuance ...*store.OperationApprovalIssuanceBinding) (issuedLeafMaterial, error) {
-	if d.issue == nil {
+	return d.mintServedLeafFromCSRForAuthority(ctx, tenantID, ident, "", csrPEM, issuance...)
+}
+
+func (d *issuanceDispatcher) mintServedLeafFromCSRForAuthority(
+	ctx context.Context,
+	tenantID string,
+	ident store.Identity,
+	authorityID string,
+	csrPEM []byte,
+	issuance ...*store.OperationApprovalIssuanceBinding,
+) (issuedLeafMaterial, error) {
+	authorityID = strings.TrimSpace(authorityID)
+	if authorityID == "" && d.issue == nil {
 		return issuedLeafMaterial{}, errors.New("server: issuing CA is unavailable")
+	}
+	if authorityID != "" && d.authorityIssue == nil {
+		return issuedLeafMaterial{}, errors.New("server: exact CA authority issuance is unavailable")
 	}
 	csrDER, dnsNames, err := decodeSubjectCSR(csrPEM)
 	if err != nil {
@@ -1806,9 +1831,18 @@ func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafPEM, err := d.issue(ctx, csrDER, ttl, leafProfile)
+	caID := IssuingCAID()
+	var leafPEM, chainPEM []byte
+	if authorityID == "" {
+		leafPEM, err = d.issue(ctx, csrDER, ttl, leafProfile)
+	} else {
+		leafPEM, chainPEM, caID, err = d.authorityIssue(ctx, tenantID, authorityID, csrDER, ttl, leafProfile)
+	}
 	if err != nil {
 		return issuedLeafMaterial{}, err
+	}
+	if authorityID != "" && caID != authorityID {
+		return issuedLeafMaterial{}, errors.New("server: exact CA authority issuer returned a different authority")
 	}
 	blk, _ := pem.Decode(leafPEM)
 	if blk == nil {
@@ -1826,7 +1860,7 @@ func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID
 	nb, na := info.NotBefore, info.NotAfter
 	return issuedLeafMaterial{
 		Certificate: store.Certificate{
-			CAID: IssuingCAID(), OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
+			CAID: caID, OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
@@ -1836,7 +1870,8 @@ func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID
 			// system does — which is the difference an auditor is asking about.
 			KeyOrigin: string(custody.OriginRequester),
 		},
-		CertPEM: append([]byte(nil), leafPEM...),
+		CertPEM:  append([]byte(nil), leafPEM...),
+		ChainPEM: append([]byte(nil), chainPEM...),
 		// The material field is left zero on purpose: the subject key was never
 		// here, so there is nothing to return, wipe, or leak.
 	}, nil

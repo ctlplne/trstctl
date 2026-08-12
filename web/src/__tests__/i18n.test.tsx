@@ -572,8 +572,13 @@ describe("i18n boundary", () => {
       // enrollment-principal SID column are named in every locale. The console
       // stays TLS-verifying; the lab-only API override remains documented.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "ec6a52351cc0b8b4b7578de638590f403631f1cfed8e535786b4d1421b48d464",
-      "de-DE": "94820f55d8b59686dbc7ca0aa1637f088b55b76642741aa02746300928650119",
+      // AUD-40 executable-migration re-pin: the manifest now names one exact
+      // signer-backed authority instead of accepting pasted certificate text,
+      // the review labels that authority, and each wave names its signed
+      // trust-plus-live verification denominator. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "b961c37b0ac81c059588c5c6b0923184d6f7be3202798961027a73d367aba20f",
+      "de-DE": "c81c933ab082293328861f0ef91f1057a7f54ec652741d6853c48cad3947d5ef",
     });
   });
 

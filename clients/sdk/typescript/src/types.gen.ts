@@ -2973,6 +2973,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/migrations/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List executable CA migration runs */
+        get: operations["listMigrationRuns"];
+        put?: never;
+        /** Start an exact-agent trust-before-leaf migration run */
+        post: operations["startMigrationRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/migrations/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one executable CA migration run */
+        get: operations["getMigrationRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/migrations/runs/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause migration advancement after any already-leased effect */
+        post: operations["pauseMigrationRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/migrations/runs/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume the current migration gate without skipping it */
+        post: operations["resumeMigrationRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/migrations/runs/{id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Roll back changed waves newest-first and remove successor trust last */
+        post: operations["rollbackMigrationRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/decommission": {
         parameters: {
             query?: never;
@@ -8368,6 +8454,85 @@ export interface components {
             plan_id: string;
             unknowns: components["schemas"]["MigrationUnknown"][];
             waves: components["schemas"]["MigrationAssessedWave"][];
+        };
+        MigrationMemberBinding: {
+            connector: string;
+            /** Format: uuid */
+            issuing_authority_id: string;
+            /** Format: uuid */
+            predecessor_certificate_id: string;
+            predecessor_fingerprint: string;
+            /** Format: uuid */
+            required_agent_id: string;
+            subject_common_name: string;
+            subject_dns_names: string[];
+            successor_fingerprint?: string;
+            target: string;
+            target_config: Record<string, never>;
+            /** Format: uuid */
+            target_id: string;
+            target_revision: string;
+            trust_anchor_fingerprint: string;
+            trust_anchor_path: string;
+            /** Format: byte */
+            trust_anchor_pem: string;
+            verify_address: string;
+            verify_server_name?: string;
+        };
+        MigrationRun: {
+            halt_reason?: string;
+            /** Format: uuid */
+            id: string;
+            pause_reason?: string;
+            plan_id?: string;
+            rollback_attempt?: number;
+            rollback_stage?: string;
+            rollback_wave_id?: string;
+            /** @enum {string} */
+            status: "planned" | "running" | "paused" | "halted" | "rolling_back" | "rolled_back" | "complete";
+            waves: components["schemas"]["MigrationRunWave"][];
+        };
+        MigrationRunActionRequest: {
+            reason?: string;
+        };
+        MigrationRunList: {
+            items: components["schemas"]["MigrationRun"][];
+            next_cursor?: string;
+        };
+        MigrationRunMember: {
+            binding: components["schemas"]["MigrationMemberBinding"];
+            /** Format: uuid */
+            identity_id: string;
+            rollback_successor_verdict?: string;
+            rollback_trust_verdict?: string;
+            successor_verdict?: string;
+            trust_verdict?: string;
+        };
+        MigrationRunStartMember: {
+            /** Format: uuid */
+            agent_id: string;
+            /** Format: uuid */
+            identity_id: string;
+            trust_anchor_path: string;
+        };
+        MigrationRunStartRequest: {
+            /** Format: uuid */
+            new_authority_id: string;
+            plan_id: string;
+            waves: components["schemas"]["MigrationRunStartWave"][];
+        };
+        MigrationRunStartWave: {
+            id: string;
+            members: components["schemas"]["MigrationRunStartMember"][];
+            ordinal: number;
+        };
+        MigrationRunWave: {
+            halt_reason?: string;
+            id: string;
+            members: components["schemas"]["MigrationRunMember"][];
+            ordinal: number;
+            phase: string;
+            started: boolean;
         };
         MigrationUnknown: {
             detail: string;
@@ -19677,6 +19842,270 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MigrationAssessment"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMigrationRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationRunList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startMigrationRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrationRunStartRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMigrationRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    pauseMigrationRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MigrationRunActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resumeMigrationRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MigrationRunActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rollbackMigrationRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MigrationRunActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationRun"];
                 };
             };
             /** @description client error */

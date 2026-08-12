@@ -3347,6 +3347,45 @@ func componentSchemas() map[string]*Schema {
 		"members":  {Type: "integer"}, "migratable": {Type: "integer"},
 		"guidance": str(),
 	}, "plan_id", "waves", "unknowns", "members", "migratable", "guidance")
+	migrationRunStartMember := object(map[string]*Schema{
+		"identity_id": uuid(), "agent_id": uuid(), "trust_anchor_path": str(),
+	}, "identity_id", "agent_id", "trust_anchor_path")
+	migrationRunStartWave := object(map[string]*Schema{
+		"id": str(), "ordinal": {Type: "integer"},
+		"members": {Type: "array", Items: ref("MigrationRunStartMember")},
+	}, "id", "ordinal", "members")
+	migrationRunStartRequest := object(map[string]*Schema{
+		"plan_id": str(), "new_authority_id": uuid(),
+		"waves": {Type: "array", Items: ref("MigrationRunStartWave")},
+	}, "plan_id", "new_authority_id", "waves")
+	migrationMemberBinding := object(map[string]*Schema{
+		"issuing_authority_id": uuid(), "target_id": uuid(), "target_revision": str(), "connector": str(), "target": str(),
+		"target_config": {Type: "object"}, "required_agent_id": uuid(),
+		"trust_anchor_path": str(), "trust_anchor_pem": {Type: "string", Format: "byte"},
+		"trust_anchor_fingerprint": str(), "verify_address": str(), "verify_server_name": str(),
+		"subject_common_name": str(), "subject_dns_names": {Type: "array", Items: str()},
+		"predecessor_certificate_id": uuid(), "predecessor_fingerprint": str(),
+		"successor_fingerprint": str(),
+	}, "issuing_authority_id", "target_id", "target_revision", "connector", "target", "target_config", "required_agent_id",
+		"trust_anchor_path", "trust_anchor_pem", "trust_anchor_fingerprint", "verify_address",
+		"subject_common_name", "subject_dns_names", "predecessor_certificate_id", "predecessor_fingerprint")
+	migrationRunMember := object(map[string]*Schema{
+		"identity_id": uuid(), "binding": ref("MigrationMemberBinding"),
+		"trust_verdict": str(), "successor_verdict": str(),
+		"rollback_successor_verdict": str(), "rollback_trust_verdict": str(),
+	}, "identity_id", "binding")
+	migrationRunWave := object(map[string]*Schema{
+		"id": str(), "ordinal": {Type: "integer"}, "phase": str(), "started": {Type: "boolean"}, "halt_reason": str(),
+		"members": {Type: "array", Items: ref("MigrationRunMember")},
+	}, "id", "ordinal", "members", "phase", "started")
+	migrationRun := object(map[string]*Schema{
+		"id": uuid(), "plan_id": str(), "status": {Type: "string", Enum: []string{
+			"planned", "running", "paused", "halted", "rolling_back", "rolled_back", "complete",
+		}},
+		"waves":       {Type: "array", Items: ref("MigrationRunWave")},
+		"halt_reason": str(), "rollback_wave_id": str(), "rollback_stage": str(), "rollback_attempt": {Type: "integer"}, "pause_reason": str(),
+	}, "id", "status", "waves")
+	migrationRunActionRequest := object(map[string]*Schema{"reason": str()})
 	// H1: who trusts a CA, and where those stores live.
 	graphTrustStores := object(map[string]*Schema{
 		"issuer":      str(),
@@ -4904,6 +4943,15 @@ func componentSchemas() map[string]*Schema {
 		"MigrationUnknown":                         migrationUnknown,
 		"MigrationAssessedWave":                    migrationAssessedWave,
 		"MigrationAssessment":                      migrationAssessment,
+		"MigrationRunStartMember":                  migrationRunStartMember,
+		"MigrationRunStartWave":                    migrationRunStartWave,
+		"MigrationRunStartRequest":                 migrationRunStartRequest,
+		"MigrationMemberBinding":                   migrationMemberBinding,
+		"MigrationRunMember":                       migrationRunMember,
+		"MigrationRunWave":                         migrationRunWave,
+		"MigrationRun":                             migrationRun,
+		"MigrationRunList":                         list("MigrationRun"),
+		"MigrationRunActionRequest":                migrationRunActionRequest,
 		"GraphQueryResult":                         graphQueryResult,
 		"Owner":                                    owner,
 		"OwnerRequest":                             ownerReq,

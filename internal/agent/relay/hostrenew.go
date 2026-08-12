@@ -49,7 +49,7 @@ type CSRSigner interface {
 
 // runHostRenew generates a key, gets a certificate for it, installs both, and
 // verifies the result.
-func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile connector.LocalOpsConfig, job Job) bool {
+func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile connector.LocalOpsConfig, hostRollback *HostRollbackStore, job Job) bool {
 	var intent DeployIntent
 	if err := decodeIntent(job.Payload, &intent); err != nil {
 		report(ctx, ch, job, OutcomeFailed, "job payload is not a renewal intent")
@@ -158,6 +158,22 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		report(ctx, ch, job, OutcomeFailed,
 			"a certificate was issued for this host but could not be installed")
 		return false
+	}
+	if intent.MigrationRunID != "" && hostRollback == nil {
+		report(ctx, ch, job, OutcomeFailed,
+			"migration renewal cannot retain its local predecessor for rollback")
+		return false
+	}
+	if hostRollback != nil {
+		if strings.TrimSpace(intent.TargetID) == "" || strings.TrimSpace(fingerprint) == "" {
+			report(ctx, ch, job, OutcomeFailed,
+				"host renewal is missing target or fingerprint rollback identity")
+			return false
+		}
+		if err := hostRollback.RecordDeploy(intent.Connector, intent.TargetID, fingerprint, certPEM, keyPEM); err != nil {
+			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be committed")
+			return false
+		}
 	}
 
 	// D2's post-deploy handshake, unchanged. A renewal that installed and does

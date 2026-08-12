@@ -184,6 +184,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the listener it just changed — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
 | Connector rollback | Served through two honest execution models. **f5, kemp, netscaler, a10** re-bind a fingerprint-named object already on the appliance. All 14 host connectors restore the one encrypted predecessor bundle retained only by the exact enrolled host agent, run the connector reload, and reverify the listener when configured. Deploy and rollback share a serialized per-target lane. Unsupported cloud/appliance/plugin routes return `409` and write no rollback-shaped receipt. Automatic rollback after `verify_failed` is opt-in per target; manual rollback uses the same job and signed transcript | [The agent job ledger](#the-agent-job-ledger-served-fabric-no-work-yet) |
+| CA migration waves (H2) | Served for internally issued X.509 identities on host-agent connectors: read-only assessment, reviewed exact-authority manifest, durable trust-before-leaf waves, signed trust/live gates, pause/resume, halt, and newest-first rollback | [Migration waves](#conditional-partial-and-residual-boundaries) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Agents redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. The control-plane dispatcher structurally refuses host-stamped and legacy host-family rows before native lookup or I/O, so 14 host families execute only on the enrolled host agent; an unavailable agent leaves pending work, never a control-plane fallback | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
@@ -2470,22 +2471,39 @@ than sending an operator looking for a credential that was never there.
   has nothing to verify and a halted one changed nothing; a read failure leaves
   the gate as it stands rather than inventing a verdict in either direction.
 - Migration waves (H2): `internal/migration` is the generic ordered-cohort engine
-  behind CA rollover. Phases run distribute-trust → VERIFY trust → issue → VERIFY
-  live → advance, and both verify steps are GATES rather than steps: `Advance`
-  refuses to leave the trust gate on an unconfirmed cohort, which is what stops
-  successor leaves being issued under a root the cohort's hosts do not yet trust —
-  the failure mode where every handshake to those endpoints fails outright. A
-  member that was checked and FAILED is never averaged away by a percentage
-  threshold; `Halt` never rewrites a wave that already executed; `RollbackOrder`
-  runs newest-first so undoing a wave cannot strip an anchor a later live wave
-  depends on. `ValidatePlan` refuses duplicate ordinals and a member in two waves.
-  Served: `POST /api/v1/migrations/assess`, `trstctl migrations assess`, and the
-  `/migration` console — READ-ONLY, and the page says so. Scope, stated exactly:
-  executing a migration is NOT served. The engine, its gates and the assessment
-  are; the orchestration that drives them end to end is not, so this is planning
-  and analysis rather than a run button. The assessment reports UNKNOWNS as
-  distinct from findings — a member with no observed trust store is not a member
-  confirmed to have an empty one, and only the second is safe to migrate.
+  behind served CA rollover. `POST /api/v1/migrations/assess` remains a separate,
+  read-only operation and reports UNKNOWNS separately from findings: a member with
+  no observed trust store is not a member confirmed to have an empty one. A reviewed
+  manifest then names one active signer-backed CA authority, ordered waves, exact
+  deployed identities, exact enrolled host agents, and exact public trust-anchor
+  paths. The server derives the public anchor from that authority; it never accepts
+  an operator-supplied key or silently changes authorities after review.
+
+  Execution is event-sourced and restart-safe. Each wave runs distribute public
+  trust → signed readback → issue from the manifest authority against a host-generated
+  CSR → deploy → signed live-listener handshake → advance. Both observations are
+  gates, not progress labels: one missing receipt licenses no next action, one failed
+  receipt stops forward publication, and later waves never enter the outbox. The
+  failure automatically begins the newest-first inverse, including every member effect
+  already published for the failed gate; signed receipts that arrive late are retained
+  without restarting forward motion and their serialized inverse still runs. Pause
+  stops new work from being published but cannot recall work an agent already leased;
+  its signed result is retained and resume continues the same gate. Rollback restores
+  and reverifies predecessor leaves newest wave first, projects the predecessor active
+  and successor superseded in the same event transaction, then removes successor
+  trust. A rollback failure halts on a durable attempt cursor and a manual retry gets
+  fresh idempotent outbox identities. The exact-agent jobs, immutable aggregate,
+  outbox effects, receipt evidence, and rollback cursor all survive PostgreSQL
+  projection loss and event replay.
+
+  Served through `/api/v1/migrations/runs` plus `/{id}/pause`, `/{id}/resume`, and
+  `/{id}/rollback`, the matching `trstctl migrations` commands, SDKs, and the
+  `/migration` console. Scope: executable membership is deliberately narrower than
+  assessment today — one active internally issued DNS-only predecessor per identity,
+  an enabled host-agent connector with `verify_address`, and an active host-role
+  agent. Network-appliance, cloud-store, externally issued, IP/email/URI SAN, and
+  offline-authority migrations are refused at start rather than represented as
+  executable.
 - Trust in the graph (H1): trust-store anchors agents collect are promoted from
   flat discovery findings into relationships — a `trust-store` node kind, `TRUSTS`
   (store → issuer, oriented the way impact travels) and `HOSTS` (resource → store).

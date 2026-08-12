@@ -595,12 +595,13 @@ type Server struct {
 	cloudTokenMinter *cloudauth.Minter
 	tenantCrypto     tenantseal.Access
 
-	signer     SignerProvider
-	caSigner   crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
-	caCertDER  []byte
-	ocspSigner crypto.DigestSigner
-	signAuthz  signing.SignTokenProvider
-	signTO     time.Duration
+	signer      SignerProvider
+	caSigner    crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
+	caCertDER   []byte
+	caHierarchy *caHierarchyService
+	ocspSigner  crypto.DigestSigner
+	signAuthz   signing.SignTokenProvider
+	signTO      time.Duration
 
 	// Served agent steady-state channel (WIRE-004 / OPS-005): the agent CA key lives
 	// in the signer (agentCASigner, AN-4) and is STABLE across restarts (a fixed
@@ -1184,6 +1185,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		defaults = append(defaults, api.WithCTSubmission(ctSubmit))
 	}
 	if hierarchySvc := s.buildCAHierarchyService(d); hierarchySvc != nil {
+		s.caHierarchy, _ = hierarchySvc.(*caHierarchyService)
 		defaults = append(defaults, api.WithCAHierarchy(hierarchySvc))
 	}
 	if edgeSvc := s.buildEdgeDelegationService(d, orch); edgeSvc != nil {
@@ -1530,12 +1532,16 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		}
 	}
 	connectorPlugins := connectorPluginDeployerFromManager(s.plugins)
+	var authorityIssue authorityIssueFunc
+	if s.caHierarchy != nil {
+		authorityIssue = s.caHierarchy.issueLeafForExactAuthority
+	}
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	}
 	return nil
 }
@@ -1721,6 +1727,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		recordRollback:             s.rollbackReceipt,
 		recordADCSInventory:        s.recordADCSInventory,
 		recordRevocationHealth:     s.recordRevocationHealth,
+		recordMigrationResult:      s.recordMigrationResult,
 		recordCMDBSync:             s.recordCMDBSync,
 		recordMDMSync:              s.recordMDMSync,
 		recordDiscoveryScan:        s.recordDiscoveryScan,

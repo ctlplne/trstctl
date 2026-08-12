@@ -301,6 +301,10 @@ type RelayDeployIntent struct {
 	//
 	// Empty on a first issuance, which genuinely replaces nothing.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
+	IssuingAuthorityID       string `json:"issuing_authority_id,omitempty"`
+	MigrationRunID           string `json:"migration_run_id,omitempty"`
+	MigrationWaveID          string `json:"migration_wave_id,omitempty"`
+	RequiredAgentID          string `json:"required_agent_id,omitempty"`
 	// Issuance is present on an approval-gated first issuance. The agent does
 	// not interpret it; the control plane re-reads this original job payload
 	// when the CSR returns and enforces the exact reviewed profile revision/TTL.

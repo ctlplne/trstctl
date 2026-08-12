@@ -179,9 +179,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// application-secret bulk-import command because that compatibility route is
 	// explicitly unavailable, leaving 360 commands. AUD-38's read-only
 	// `revocation health` command raises it to 361 and exposes the same signed
-	// relay evidence as the API and console.
-	if len(out) != 361 {
-		t.Fatalf("CLI commands = %d, want 361", len(out))
+	// relay evidence as the API and console. AUD-40's six `migrations`
+	// start/list/show/pause/resume/rollback commands raise it to 367 and map the
+	// complete durable CA-wave control surface onto F48.
+	if len(out) != 367 {
+		t.Fatalf("CLI commands = %d, want 367", len(out))
 	}
 	return out
 }

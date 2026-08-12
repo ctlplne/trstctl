@@ -809,6 +809,14 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			healed += inserted
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == projections.EventMigrationRunRecorded {
+			inserted, err := o.reconcileMigrationRun(ctx, ev)
+			if err != nil {
+				return err
+			}
+			healed += inserted
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventIncidentFleetReissuanceRecorded {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err

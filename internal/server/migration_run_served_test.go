@@ -1,0 +1,403 @@
+// SPDX-License-Identifier: MPL-2.0
+
+package server
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	agentrelay "trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/migration"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
+)
+
+// SignJobCSR completes the shipping relay adapter used by the assembled host
+// tests. The request carries a public CSR; the response carries only public
+// certificate material. The private key never leaves runHostRenew.
+func (c *servedHostRelayChannel) SignJobCSR(ctx context.Context, jobID int64, attempt int, csrDER []byte) ([]byte, []byte, string, error) {
+	resp, err := c.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: jobID, Attempt: attempt, CSRDER: csrDER,
+	})
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return resp.CertificatePEM, resp.ChainPEM, resp.Fingerprint, nil
+}
+
+// TestServedMigrationTrustBeforeLeafAndRollbackAUD40 is H2's assembled proof.
+// The run is started through the authenticated API, survives a projection-loss
+// replay, and is then executed by an enrolled host agent over the real mTLS
+// channel. The signer is the harness's separate UDS process, PostgreSQL and NATS
+// are real, and the listener is handshaked after both deploy and rollback.
+func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost},
+		agentrelay.KindTrustDistribute, agentrelay.KindEndpointRenew, agentrelay.KindConnectorRollback)
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{
+		AgentID: h.agent, Version: "aud40-test", Status: "active",
+	}); err != nil {
+		t.Fatalf("register active migration agent: %v", err)
+	}
+
+	root := t.TempDir()
+	certPath := filepath.Join(root, "listener.crt")
+	keyPath := filepath.Join(root, "listener.key")
+	trustPath := filepath.Join(root, "next-root.pem")
+	rollbackDir := filepath.Join(root, "rollback")
+	const dnsName = "migration-aud40.test"
+
+	oldCert, oldKey := issueHostPair(t, h, dnsName)
+	defer secret.Wipe(oldCert)
+	defer secret.Wipe(oldKey)
+	if err := os.WriteFile(certPath, oldCert, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, oldKey, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tlsServer, err := mtls.ServerCertFromFiles(certPath, keyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tlsServer.SetReloadCheckInterval(time.Millisecond)
+	httpServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})} // #nosec G112 -- loopback fixture is closed below (CWE-400)
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- tlsServer.ServeHTTPS(httpServer, listener) }()
+	t.Cleanup(func() {
+		_ = httpServer.Close()
+		if serveErr := <-serveDone; serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			t.Errorf("migration listener: %v", serveErr)
+		}
+	})
+
+	targetConfig, err := json.Marshal(map[string]any{
+		"executor": "agent", "cert_path": certPath, "key_path": keyPath,
+		"verify_address": listener.Addr().String(), "verify_server_name": dnsName,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := h.srv.orch.UpsertDeploymentTarget(ctx, h.tenant, store.DeploymentTarget{
+		Name: "host/aud40", Type: "nginx", Config: targetConfig, Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := h.srv.orch.CreateOwner(ctx, h.tenant, "workload", "AUD40 owner", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	attrs, err := json.Marshal(map[string]string{
+		"deployment_target_id": target.ID, "connector": target.Type, "target": target.Name,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityID := "40400000-0000-4000-8000-000000000040"
+	// Test-fixture setup only: the run itself remains event-sourced. This avoids
+	// queueing an unrelated first issuance/deploy whose agent job could mask the
+	// trust-before-leaf ordering this test is isolating.
+	if err := h.store.UpsertIdentity(ctx, store.Identity{
+		ID: identityID, TenantID: h.tenant, Kind: store.KindX509Certificate,
+		Name: dnsName, OwnerID: owner.ID, Status: "deployed", Attributes: attrs,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	oldInfo, err := certinfo.Inspect(oldCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldDER, err := mtls.FirstCertDER(oldCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notBefore, notAfter := oldInfo.NotBefore, oldInfo.NotAfter
+	predecessor, err := h.srv.orch.RecordCertificate(ctx, h.tenant, store.Certificate{
+		OwnerID: &owner.ID, Subject: dnsName, SANs: oldInfo.DNSNames, Issuer: oldInfo.Issuer,
+		Serial: oldInfo.SerialNumber, Fingerprint: oldInfo.SHA256Fingerprint,
+		KeyAlgorithm: oldInfo.KeyAlgorithm, NotBefore: &notBefore, NotAfter: &notAfter,
+		Source: "issued", CertificateDER: oldDER, CertificatePEM: oldCert,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := agentrelay.NewHostRollbackStore(rollbackDir, h.tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := state.RecordDeploy(target.Type, target.ID, predecessor.Fingerprint, oldCert, oldKey); err != nil {
+		t.Fatal(err)
+	}
+
+	caOperator := seedScopedTokenSubject(t, h.store, h.tenant, "aud40-ca-operator", "issuers:read", "issuers:write")
+	caApprover := seedScopedTokenSubject(t, h.store, h.tenant, "aud40-ca-custodian", "issuers:read", "issuers:write")
+	rootSpec := map[string]any{
+		"common_name": "AUD40 successor root", "max_path_len": 1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{dnsName}, "extended_key_usages": []string{"serverAuth"},
+		"signature_algorithm": "ecdsa-p256",
+	}
+	ceremony := createCACeremony(t, h.servedHarness, caOperator, "create_root", "", rootSpec, 1, "aud40-root-ceremony")
+	approveCACeremony(t, h.servedHarness, caApprover, ceremony.ID, 1, "aud40-root-approval")
+	successorAuthority := createRootCA(t, h.servedHarness, caOperator, ceremony.ID, rootSpec, "aud40-root-create")
+
+	trustOnlyToken := seedScopedTokenSubject(t, h.store, h.tenant, "aud40-trust-only", "keys:read", "keys:write")
+	token := seedScopedTokenSubject(t, h.store, h.tenant, "aud40-migration-operator", "keys:read", "keys:write", "certs:issue")
+	startBody := map[string]any{
+		"plan_id": "plan-aud40", "new_authority_id": successorAuthority.ID,
+		"waves": []any{map[string]any{
+			"id": "canary", "ordinal": 1,
+			"members": []any{map[string]any{
+				"identity_id": identityID, "agent_id": agentRowID(h.tenant, h.agent),
+				"trust_anchor_path": trustPath,
+			}},
+		}},
+	}
+	statusCode, body := secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs", trustOnlyToken, "aud40-start-forbidden", startBody)
+	if statusCode != http.StatusForbidden {
+		t.Fatalf("start migration without certs:issue = %d %s, want 403", statusCode, body)
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs", token, "aud40-start", startBody)
+	if statusCode != http.StatusCreated {
+		t.Fatalf("start migration = %d %s", statusCode, body)
+	}
+	var started migration.Run
+	if err := json.Unmarshal(body, &started); err != nil {
+		t.Fatalf("decode started run: %v (%s)", err, body)
+	}
+	if started.Status != migration.RunRunning || started.Waves[0].Phase != migration.PhaseVerifyingTrust {
+		t.Fatalf("started run = %+v", started)
+	}
+	assertMigrationOutboxCountAUD40(t, h, started.ID, "distribute_trust", 1)
+	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 0)
+
+	// Pause/resume is durable and cannot duplicate the already-published trust
+	// effect. Work already leased could still finish; nothing is leased here.
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs/"+started.ID+"/pause", trustOnlyToken, "aud40-pause", map[string]string{"reason": "operator gate"})
+	if statusCode != http.StatusOK || !bytes.Contains(body, []byte(`"status":"paused"`)) {
+		t.Fatalf("pause migration = %d %s", statusCode, body)
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs/"+started.ID+"/resume", trustOnlyToken, "aud40-resume-forbidden", nil)
+	if statusCode != http.StatusForbidden {
+		t.Fatalf("resume migration without certs:issue = %d %s, want 403", statusCode, body)
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs/"+started.ID+"/resume", token, "aud40-resume", nil)
+	if statusCode != http.StatusOK || !bytes.Contains(body, []byte(`"status":"running"`)) {
+		t.Fatalf("resume migration = %d %s", statusCode, body)
+	}
+	assertMigrationOutboxCountAUD40(t, h, started.ID, "distribute_trust", 1)
+
+	// Model projection loss at restart, then rebuild only this aggregate from
+	// the retained event log. The already-published outbox work is untouched.
+	if _, err := h.store.SystemPool().Exec(ctx, `TRUNCATE migration_runs`); err != nil {
+		t.Fatal(err)
+	}
+	projector := projections.New(h.store)
+	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type == projections.EventMigrationRunRecorded {
+			return projector.Apply(ctx, event)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	const tenantB = "22222222-2222-2222-2222-222222222222"
+	tokenB := seedScopedToken(t, h.store, tenantB, "keys:read")
+	statusCode, _ = secretsReq(t, h.servedHarness, http.MethodGet,
+		"/api/v1/migrations/runs/"+started.ID, tokenB, nil)
+	if statusCode != http.StatusNotFound {
+		t.Fatalf("tenant B read tenant A migration = %d, want 404", statusCode)
+	}
+
+	profile := connector.LocalOpsConfig{
+		AllowedRoots: []string{root},
+		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}},
+	}
+	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeExecuted) // trust readback
+	installedTrust, err := os.ReadFile(trustPath)                               // #nosec G304 -- test-owned fixture path (CWE-22)
+	if err != nil || !bytes.Equal(bytes.TrimSpace(installedTrust), bytes.TrimSpace([]byte(successorAuthority.CertificatePEM))) {
+		t.Fatalf("installed trust is not the manifest authority certificate: err=%v", err)
+	}
+	assertMigrationStatusAUD40(t, h, started.ID, migration.RunRunning, migration.PhaseVerifyingLive)
+	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 1)
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerified) // signer + deploy + live probe
+	assertMigrationStatusAUD40(t, h, started.ID, migration.RunComplete, migration.PhaseComplete)
+	successorPEM, err := os.ReadFile(certPath) // #nosec G304 -- test-owned fixture path (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	successorDER, err := mtls.FirstCertDER(successorPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := crypto.VerifyLeafSignedByCA(successorDER, caCertDER(t, []byte(successorAuthority.CertificatePEM))); err != nil {
+		t.Fatalf("successor leaf was not minted by the manifest authority: %v", err)
+	}
+	active, err := h.store.ListActiveIssuedCertificatesForIdentity(ctx, h.tenant, owner.ID, dnsName)
+	if err != nil || len(active) != 1 {
+		t.Fatalf("active successor inventory = %+v err=%v; want one certificate", active, err)
+	}
+	if issued, found, err := h.store.LookupIssuedCert(ctx, h.tenant, successorAuthority.ID, active[0].Serial); err != nil || !found || issued.Revoked() {
+		t.Fatalf("successor responder authority = %+v found=%v err=%v; want active authority %s", issued, found, err, successorAuthority.ID)
+	}
+
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs/"+started.ID+"/rollback", token, "aud40-rollback", nil)
+	if statusCode != http.StatusOK || !bytes.Contains(body, []byte(`"status":"rolling_back"`)) {
+		t.Fatalf("start rollback = %d %s", statusCode, body)
+	}
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerified) // restore predecessor + live probe
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeExecuted) // remove successor trust
+	assertMigrationStatusAUD40(t, h, started.ID, migration.RunRolledBack, migration.PhaseRolledBack)
+
+	if _, err := os.Stat(trustPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("successor trust remains after rollback: %v", err)
+	}
+	servedCert, err := os.ReadFile(certPath) // #nosec G304 -- test-owned fixture path (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(servedCert)
+	if !bytes.Equal(servedCert, oldCert) {
+		t.Fatal("newest-first inverse did not restore the predecessor certificate")
+	}
+	restored, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, predecessor.Fingerprint)
+	if err != nil || restored.Status != "active" {
+		t.Fatalf("rollback predecessor inventory = %+v err=%v; want active", restored, err)
+	}
+	rolledBackSuccessor, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, active[0].Fingerprint)
+	if err != nil || rolledBackSuccessor.Status != "superseded" {
+		t.Fatalf("rollback successor inventory = %+v err=%v; want superseded", rolledBackSuccessor, err)
+	}
+
+	// A signed failed cohort is not left waiting for an operator to notice it.
+	// Point verification at a second listener that deliberately keeps serving
+	// the predecessor. The successor deploy therefore lands but fails its live
+	// gate; the signed mismatch must automatically restore that predecessor and
+	// remove successor trust.
+	staticCertPath := filepath.Join(root, "static-predecessor.crt")
+	staticKeyPath := filepath.Join(root, "static-predecessor.key")
+	if err := os.WriteFile(staticCertPath, oldCert, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staticKeyPath, oldKey, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staticListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	staticTLS, err := mtls.ServerCertFromFiles(staticCertPath, staticKeyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staticHTTP := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})} // #nosec G112 -- loopback fixture is closed below (CWE-400)
+	staticDone := make(chan error, 1)
+	go func() { staticDone <- staticTLS.ServeHTTPS(staticHTTP, staticListener) }()
+	t.Cleanup(func() {
+		_ = staticHTTP.Close()
+		if serveErr := <-staticDone; serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			t.Errorf("static migration listener: %v", serveErr)
+		}
+	})
+	failureConfig, err := json.Marshal(map[string]any{
+		"executor": "agent", "cert_path": certPath, "key_path": keyPath,
+		"verify_address": staticListener.Addr().String(), "verify_server_name": dnsName,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.srv.orch.UpsertDeploymentTarget(ctx, h.tenant, store.DeploymentTarget{
+		ID: target.ID, Name: target.Name, Type: target.Type, Config: failureConfig, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	statusCode, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+		"/api/v1/migrations/runs", token, "aud40-failed-start", startBody)
+	if statusCode != http.StatusCreated {
+		t.Fatalf("start failure-path migration = %d %s", statusCode, body)
+	}
+	var failedRun migration.Run
+	if err := json.Unmarshal(body, &failedRun); err != nil {
+		t.Fatal(err)
+	}
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeExecuted)
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerifyFailed)
+	assertMigrationStatusAUD40(t, h, failedRun.ID, migration.RunRollingBack, migration.PhaseVerifyingLive)
+	assertMigrationOutboxCountAUD40(t, h, failedRun.ID, "issue_successor", 1)
+	assertMigrationOutboxCountAUD40(t, h, failedRun.ID, "rollback_successor", 1)
+	assertMigrationOutboxCountAUD40(t, h, failedRun.ID, "remove_trust", 0)
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerified)
+	assertMigrationOutboxCountAUD40(t, h, failedRun.ID, "remove_trust", 1)
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeExecuted)
+	assertMigrationStatusAUD40(t, h, failedRun.ID, migration.RunRolledBack, migration.PhaseRolledBack)
+}
+
+func runAgentPassAUD40(t *testing.T, channel *servedHostRelayChannel, profile connector.LocalOpsConfig, state *agentrelay.HostRollbackStore, wantOutcome string) {
+	t.Helper()
+	executed, err := agentrelay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), channel,
+		http.DefaultClient, profile, nil, nil, state, 1, 120)
+	if err != nil || executed != 1 || channel.lastOutcome != wantOutcome || !channel.lastAccepted || channel.lastReportErr != nil {
+		t.Fatalf("agent pass = executed %d outcome %q accepted %v reportErr %v detail %q err %v; want 1/%q",
+			executed, channel.lastOutcome, channel.lastAccepted, channel.lastReportErr,
+			channel.lastDetail, err, wantOutcome)
+	}
+}
+
+func assertMigrationStatusAUD40(t *testing.T, h *roleHarness, runID string, status migration.RunStatus, phase migration.Phase) {
+	t.Helper()
+	row, err := h.store.GetMigrationRun(t.Context(), h.tenant, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.Run.Status != status || row.Run.Waves[0].Phase != phase {
+		t.Fatalf("migration state = %s/%s, want %s/%s", row.Run.Status, row.Run.Waves[0].Phase, status, phase)
+	}
+}
+
+func assertMigrationOutboxCountAUD40(t *testing.T, h *roleHarness, runID, action string, want int) {
+	t.Helper()
+	var got int
+	pattern := "migration:" + runID + ":%:" + action + "%"
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND idempotency_key LIKE $2`,
+		h.tenant, pattern).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("outbox %s count = %d, want %d", action, got, want)
+	}
+}

@@ -253,3 +253,16 @@ func TestRevocationEndpointHealthIsRebuiltAndSnapshotSafe(t *testing.T) {
 		t.Fatalf("SnapshotFormatVersion = %d; a v23 payload cannot restore revocation endpoint health", SnapshotFormatVersion)
 	}
 }
+
+func TestMigrationRunsAreRebuiltAndSnapshotSafeAUD40(t *testing.T) {
+	const table = "migration_runs"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Fatalf("%s is event-derived but missing from the cold-rebuild truncate set", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s is missing from snapshots, so restore would erase paused or partial runs", table)
+	}
+	if SnapshotFormatVersion < 25 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v24 payload cannot restore migration runs", SnapshotFormatVersion)
+	}
+}

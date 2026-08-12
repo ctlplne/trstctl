@@ -61,6 +61,60 @@ func (s *Server) buildCAHierarchyService(d Deps) api.CAHierarchyService {
 	}
 }
 
+// issueLeafForExactAuthority mints through the active signer-backed authority
+// frozen into a migration member. Unlike the public hierarchy issue route, it
+// deliberately does not follow a later rotation: changing authorities under a
+// reviewed run would make the installed trust anchor and issued leaf disagree.
+func (h *caHierarchyService) issueLeafForExactAuthority(
+	ctx context.Context,
+	tenantID, authorityID string,
+	csrDER []byte,
+	ttl time.Duration,
+	profile crypto.LeafProfile,
+) ([]byte, []byte, string, error) {
+	if len(csrDER) == 0 || ttl <= 0 {
+		return nil, nil, "", fmt.Errorf("%w: CSR and positive TTL are required", api.ErrCAHierarchyInvalid)
+	}
+	authority, err := h.store.GetCAAuthority(ctx, tenantID, authorityID)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if authority.Status != "active" {
+		return nil, nil, "", fmt.Errorf("%w: migration authority %s is no longer active", api.ErrCAHierarchyConflict, authority.ID)
+	}
+	signer, err := h.signerForAuthority(ctx, authority)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	caDER, err := firstCertDER(authority.CertificatePEM)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, signer, csrDER, ttl, applyAuthorityLane(profile, authority))
+	if err != nil {
+		if crypto.IsLeafProfileViolation(err) {
+			return nil, nil, "", fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		return nil, nil, "", err
+	}
+	info, err := certinfo.Inspect(leafDER)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	ev, err := h.appendEvent(ctx, tenantID, projections.EventCAEndEntityIssued, map[string]any{
+		"ca_id": authority.ID, "serial": info.SerialNumber, "subject": info.Subject,
+		"migration_exact_authority": true,
+	})
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if err := projections.New(h.store).Apply(ctx, ev); err != nil {
+		return nil, nil, "", err
+	}
+	leafPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
+	return leafPEM, []byte(authority.CertificatePEM), authority.ID, nil
+}
+
 func (h *caHierarchyService) StartCeremony(ctx context.Context, tenantID string, req api.CACeremonyStartRequest) (api.CAKeyCeremony, error) {
 	if req.Threshold < 1 {
 		return api.CAKeyCeremony{}, fmt.Errorf("%w: threshold must be at least 1", api.ErrCAHierarchyInvalid)

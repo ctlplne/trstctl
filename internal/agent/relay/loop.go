@@ -63,6 +63,7 @@ func ClaimableKinds() []string {
 		// reach. Same vantage rules as the CMDB read.
 		KindMDMSync,
 		KindTicketSync,
+		KindTrustDistribute,
 		// B2: host-generated renewal. Asked for by every agent and granted only
 		// to host-role ones — the vantage gate is the server's, not the agent's,
 		// which is why this list is not split by role. A network relay asking
@@ -265,7 +266,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// redemption asking for material the control plane deliberately does not
 	// hold.
 	if job.Kind == KindEndpointRenew {
-		return runHostRenew(ctx, ch, client, hostProfile, job)
+		return runHostRenew(ctx, ch, client, hostProfile, hostRollback, job)
+	}
+	// H2: trust distribution is public anchor material and host-local I/O. It
+	// redeems no credential, and routing it before deploy is what enforces that.
+	if job.Kind == KindTrustDistribute {
+		return runTrustDistribution(ctx, ch, hostProfile, job)
 	}
 
 	// A rollback carries a rollback intent, not a deploy intent — no

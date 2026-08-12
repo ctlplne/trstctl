@@ -159,6 +159,10 @@ var TenantScopedTables = []string{
 	"acme_upstream_authorizations",
 	"endpoint_verifications",
 	"revocation_endpoint_health",
+	// H2: a migration run is the tenant's event-projected trust-wave state. It
+	// has no child foreign keys, but it still must leave with the tenant and be
+	// deleted before the tenant row during an offboard/rebuild.
+	"migration_runs",
 	// I5: the MDM device join. It names the tenant's own devices and leaves
 	// with the tenant.
 	"mdm_device_correlations",

@@ -84,6 +84,16 @@ type DeployIntent struct {
 	// PredecessorCertificateID is control-plane bookkeeping the agent never
 	// reads. It is declared so the intent round-trips without loss.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
+	// IssuingAuthorityID freezes the signer-backed CA selected by an executable
+	// migration manifest. The agent does not interpret it; SignJobCSR re-reads
+	// this immutable job field and refuses to mint through any other authority.
+	IssuingAuthorityID string `json:"issuing_authority_id,omitempty"`
+	// MigrationRunID/WaveID bind this renewal to the trust gate that licensed
+	// it. They are control-plane correlation fields; the executor never chooses
+	// or edits them.
+	MigrationRunID  string `json:"migration_run_id,omitempty"`
+	MigrationWaveID string `json:"migration_wave_id,omitempty"`
+	RequiredAgentID string `json:"required_agent_id,omitempty"`
 }
 
 // TargetConfig is the relay-side view of a deployment target: the routing
@@ -207,7 +217,10 @@ type RollbackIntent struct {
 	VerifyServerName string `json:"verify_server_name,omitempty"`
 	// Reason is operator context for the transcript. It never reaches the
 	// appliance.
-	Reason string `json:"reason,omitempty"`
+	Reason          string `json:"reason,omitempty"`
+	MigrationRunID  string `json:"migration_run_id,omitempty"`
+	MigrationWaveID string `json:"migration_wave_id,omitempty"`
+	RequiredAgentID string `json:"required_agent_id,omitempty"`
 }
 
 // Rollback drives the appliance re-bind model. Host restore is implemented in

@@ -182,6 +182,10 @@ import type {
   GraphImpact,
   GraphTrustStores,
   MigrationAssessment,
+  MigrationRun,
+  MigrationRunActionRequest,
+  MigrationRunList,
+  MigrationRunStartRequest,
   UnownedQueue,
   RetirementChecklist,
   GraphNode,
@@ -734,6 +738,10 @@ export type {
   GraphImpact,
   GraphTrustStores,
   MigrationAssessment,
+  MigrationRun,
+  MigrationRunActionRequest,
+  MigrationRunList,
+  MigrationRunStartRequest,
   UnownedQueue,
   RetirementChecklist,
   GraphNode,
@@ -1265,7 +1273,7 @@ function newIdempotencyKey(): string {
 
 /** mutate issues a state-changing request with an optional JSON body and an
  * Idempotency-Key. */
-function mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
+export function mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
   return req<T>(path, {
     method,
     headers: { "Content-Type": "application/json", "Idempotency-Key": newIdempotencyKey() },
@@ -1530,6 +1538,12 @@ export interface Api {
   graphTrustStores(id: string): Promise<GraphTrustStores>;
   // H2: read-only assessment of a migration plan.
   assessMigration(request: unknown): Promise<MigrationAssessment>;
+  startMigrationRun(request: MigrationRunStartRequest): Promise<MigrationRun>;
+  migrationRuns(): Promise<MigrationRunList>;
+  migrationRun(id: string): Promise<MigrationRun>;
+  pauseMigrationRun(id: string, request?: MigrationRunActionRequest): Promise<MigrationRun>;
+  resumeMigrationRun(id: string): Promise<MigrationRun>;
+  rollbackMigrationRun(id: string, request?: MigrationRunActionRequest): Promise<MigrationRun>;
   // I1: managed identities whose ownership cannot answer an incident question.
   unownedIdentities(): Promise<UnownedQueue>;
   // H4: what blocks a CA key's destruction.
@@ -1963,6 +1977,12 @@ const liveApi: Api = {
   unownedIdentities: estate.unownedIdentities,
   caRetirementChecklist: estate.caRetirementChecklist,
   assessMigration: estate.assessMigration,
+  startMigrationRun: estate.startMigrationRun,
+  migrationRuns: estate.migrationRuns,
+  migrationRun: estate.migrationRun,
+  pauseMigrationRun: estate.pauseMigrationRun,
+  resumeMigrationRun: estate.resumeMigrationRun,
+  rollbackMigrationRun: estate.rollbackMigrationRun,
   graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions: (options) => req<PAMSessionList>(`/api/v1/access/sessions${pageQueryString(options)}`),
