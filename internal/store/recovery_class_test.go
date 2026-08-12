@@ -29,6 +29,19 @@ func TestMachineAuthReadModelsUseEventRecoveryAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestOwnershipReadinessExceptionsUseEventRecoveryAndSnapshotsAUD44(t *testing.T) {
+	const table = "ownership_readiness_exceptions"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is event-derived but missing from ReadModelTables", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is event-derived but missing from snapshotTables", table)
+	}
+	if SnapshotFormatVersion < 26 {
+		t.Errorf("SnapshotFormatVersion = %d; a pre-AUD-44 snapshot cannot restore temporary ownership authority", SnapshotFormatVersion)
+	}
+}
+
 func TestWorkloadIdentityReadModelsUseEventRecoveryAndSnapshots(t *testing.T) {
 	for _, table := range []string{"workload_attester_trust_sources", "secret_sync_workload_identity_sources"} {
 		if !containsRecoveryTable(ReadModelTables, table) {

@@ -1033,6 +1033,10 @@ type Log struct {
 type Lifecycle struct {
 	RenewBefore string `json:"renew_before"`
 	AlertBefore string `json:"alert_before"`
+	// OwnershipAttestationCadence is how long one authenticated owner
+	// attestation authorizes steady-state deployment before re-confirmation is
+	// required. Empty selects 90 days.
+	OwnershipAttestationCadence string `json:"ownership_attestation_cadence,omitempty"`
 	// NotBeforeSkew backdates every issued certificate's NotBefore so fresh
 	// certs are immediately valid at verifiers with modest clock skew
 	// (OPS-CLOCKSKEW-001). Default "5m" per common CA practice; bounds 30s..1h.
@@ -1082,6 +1086,13 @@ func (l Lifecycle) RenewBeforeDuration() (time.Duration, error) {
 // AlertBeforeDuration parses the alert threshold.
 func (l Lifecycle) AlertBeforeDuration() (time.Duration, error) {
 	return time.ParseDuration(l.AlertBefore)
+}
+
+func (l Lifecycle) OwnershipAttestationCadenceDuration() (time.Duration, error) {
+	if l.OwnershipAttestationCadence == "" {
+		return 90 * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(l.OwnershipAttestationCadence)
 }
 
 // LeafValidityDuration parses the CA-calendar reference leaf validity
@@ -1976,7 +1987,7 @@ func Default() *Config {
 		// HA (SPINE-004).
 		NATS:       NATS{Mode: NATSEmbedded, StoreDir: "data/nats", SyncInterval: DefaultEmbeddedSyncInterval.String()},
 		Log:        Log{Level: "info", Format: "json"},
-		Lifecycle:  Lifecycle{RenewBefore: "720h", AlertBefore: "336h", NotBeforeSkew: "5m"}, // 30d renew, 14d alert, 5m issuance backdate
+		Lifecycle:  Lifecycle{RenewBefore: "720h", AlertBefore: "336h", NotBeforeSkew: "5m", OwnershipAttestationCadence: "2160h"}, // 30d renew, 14d alert, 5m issuance backdate, 90d ownership re-attestation
 		Connectors: Connectors{HTTPTimeout: "15s"},
 		AirGap:     AirGap{Enabled: false, AllowPrivate: true},
 		// Telemetry is OFF by default (privacy-first) and ships NO default endpoint:
@@ -2118,6 +2129,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
 	setString(getenv, "TRSTCTL_LIFECYCLE_NOT_BEFORE_SKEW", &c.Lifecycle.NotBeforeSkew)
 	setString(getenv, "TRSTCTL_LIFECYCLE_LEAF_VALIDITY", &c.Lifecycle.LeafValidity)
+	setString(getenv, "TRSTCTL_LIFECYCLE_OWNERSHIP_ATTESTATION_CADENCE", &c.Lifecycle.OwnershipAttestationCadence)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ENABLED", &c.Connectors.Enabled)
 	setString(getenv, "TRSTCTL_CONNECTORS_HTTP_TIMEOUT", &c.Connectors.HTTPTimeout)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ALLOW_PRIVATE_CIDRS", &c.Connectors.AllowPrivateCIDRs)
@@ -2883,6 +2895,11 @@ func validateLoggingAndLifecycle(c *Config) []error {
 		errs = append(errs, fmt.Errorf("lifecycle.alert_before %q is invalid: %w", c.Lifecycle.AlertBefore, err))
 	} else if d <= 0 {
 		errs = append(errs, errors.New("lifecycle.alert_before must be positive"))
+	}
+	if d, err := c.Lifecycle.OwnershipAttestationCadenceDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("lifecycle.ownership_attestation_cadence %q is invalid: %w", c.Lifecycle.OwnershipAttestationCadence, err))
+	} else if d < time.Hour || d > 365*24*time.Hour {
+		errs = append(errs, errors.New("lifecycle.ownership_attestation_cadence must be within [1h, 1 year]"))
 	}
 	if d, err := c.Postgres.StatementTimeoutDuration(); err != nil {
 		errs = append(errs, fmt.Errorf("postgres.statement_timeout %q is invalid: %w", c.Postgres.StatementTimeout, err))

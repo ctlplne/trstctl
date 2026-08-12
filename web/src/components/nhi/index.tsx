@@ -55,16 +55,23 @@ export function NhiInventory({ identities, inventory, risks = [] }: { identities
 }
 
 export function OrphanGovernance({ owners = [] }: { owners?: Owner[] }) {
+  const { t } = useTranslation();
   const { data: risks } = useRisk();
   const orphans = risks.filter((risk) => !risk.owner_active);
-  const coverage = risks.length ? Math.round(((risks.length - orphans.length) / risks.length) * 100) : 100;
+  const referenceCoverage = risks.length ? Math.round(((risks.length - orphans.length) / risks.length) * 100) : 0;
+  const currentOwners = owners.filter((owner) => owner.ownership_current).length;
   return (
     <div className="grid gap-4">
       <DashboardGrid>
         <StatTile label="Credentials" value={risks.length} />
         <StatTile label="Registered owners" value={owners.length} />
         <StatTile label="Orphaned" value={orphans.length} tone={orphans.length ? "high" : undefined} />
-        <StatTile label="Ownership coverage" value={`${coverage}%`} />
+        <StatTile label={t("owners.governance.referenceCoverage")} value={`${referenceCoverage}%`} />
+        <StatTile
+          label={t("owners.governance.currentRecords")}
+          value={`${currentOwners}/${owners.length}`}
+          tone={currentOwners < owners.length ? "high" : undefined}
+        />
       </DashboardGrid>
       <SectionCard title={translateNow("source.orphaned.credentials.0e9e535cd8")} description="machine identities whose human custodian is gone or inactive">
         {orphans.length === 0 ? (

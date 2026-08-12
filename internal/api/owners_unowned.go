@@ -5,6 +5,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"trstctl.com/trstctl/internal/store"
 )
@@ -12,11 +13,12 @@ import (
 // The unowned queue (epic I1).
 //
 // A high-priority queue rather than a report, and the difference is in what it
-// refuses to average. Three reasons travel separately because they need three
+// refuses to average. Four reasons travel separately because they need four
 // different actions: an identity with no owner is a data-entry gap, one whose
 // owner carries no application or environment is a classification gap — it names
 // a person and not a system, which is the wrong half for deciding blast radius —
-// and one whose ownership nobody has ever attested is a trust gap. A single
+// one whose ownership nobody has ever attested is a trust gap, and an expired
+// attestation is a cadence gap. A single
 // "unowned: 47" would be a number nobody can act on.
 
 // UnownedIdentity is one row of the queue.
@@ -73,6 +75,9 @@ func unownedReasonDetail(reason string) string {
 	case store.UnownedUnattested:
 		return "nobody has confirmed this ownership is still correct; an owner recorded once and " +
 			"never re-checked is the one most likely to have moved on"
+	case store.UnownedStale:
+		return "the last ownership confirmation is older than the configured cadence; re-attest " +
+			"the application and environment before another steady-state deployment"
 	default:
 		return ""
 	}
@@ -89,7 +94,9 @@ func (a *API) listUnownedIdentities(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "ownership data is not configured"))
 		return
 	}
-	rows, err := a.store.ListUnownedIdentities(r.Context(), tenantID, unownedLimit(r))
+	rows, err := a.store.ListUnownedIdentitiesAt(
+		r.Context(), tenantID, time.Now().UTC(), a.ownerAttestationCadence(), unownedLimit(r),
+	)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -103,6 +110,7 @@ func (a *API) listUnownedIdentities(w http.ResponseWriter, r *http.Request) {
 			store.UnownedNoOwner:         0,
 			store.UnownedIncompleteOwner: 0,
 			store.UnownedUnattested:      0,
+			store.UnownedStale:           0,
 		},
 		Guidance: unownedGuidance,
 	}

@@ -64,6 +64,10 @@ type Orchestrator struct {
 	// composition root; nil means every row gets the empty demand, which is the
 	// pre-A3 behaviour.
 	effectRole func(destination string, payload []byte) string
+	// ownershipAttestationCadence enables the I1 steady-state authority gate.
+	// Zero keeps source-compatible embedded/test orchestrators disabled; the
+	// shipped composition always supplies its validated production setting.
+	ownershipAttestationCadence time.Duration
 }
 
 // OrchestratorOption configures served command-side behavior while keeping the
@@ -112,6 +116,14 @@ func WithTenantRegistrationIdempotency(idempotency *Idempotency) OrchestratorOpt
 func WithSideEffectRoleClassifier(classify func(destination string, payload []byte) string) OrchestratorOption {
 	return func(orchestrator *Orchestrator) {
 		orchestrator.effectRole = classify
+	}
+}
+
+func WithOwnershipAttestationCadence(cadence time.Duration) OrchestratorOption {
+	return func(orchestrator *Orchestrator) {
+		if cadence > 0 {
+			orchestrator.ownershipAttestationCadence = cadence
+		}
 	}
 }
 
@@ -291,6 +303,23 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	if issuance != nil && (from != StateRequested || to != StateIssued) {
 		return errors.New("orchestrator: issuance binding is only valid for requested -> issued")
 	}
+	commandTime := time.Now().UTC()
+	var ownershipReadiness *store.OwnershipReadinessEvidence
+	if o.ownershipAttestationCadence > 0 && to == StateDeployed {
+		if approval != nil || issuance != nil {
+			return errors.New("orchestrator: ownership-readiness deployment cannot carry issuance authority")
+		}
+		var evidence store.OwnershipReadinessEvidence
+		if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			var resolveErr error
+			evidence, resolveErr = o.store.ResolveOwnershipReadinessTx(ctx, tx, tenantID, identityID,
+				commandTime, o.ownershipAttestationCadence)
+			return resolveErr
+		}); err != nil {
+			return err
+		}
+		ownershipReadiness = &evidence
+	}
 
 	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
 	schemaVersion := 0
@@ -304,7 +333,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		sideEffectKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
 		schemaVersion = projections.LifecycleSideEffectEventSchemaVersion
 	}
-	basePayload := transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey, SubjectCSRPEM: subjectCSRPEM, Approval: approval, Issuance: issuance}
+	basePayload := transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey, SubjectCSRPEM: subjectCSRPEM, Approval: approval, Issuance: issuance, OwnershipReadiness: ownershipReadiness}
 	if approval != nil {
 		schemaVersion = projections.LifecycleApprovalEventSchemaVersion
 		eventID = approvalExecutionEventID(tenantID, *approval)
@@ -314,6 +343,9 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 	if issuance != nil {
 		schemaVersion = projections.LifecycleIssuanceEventSchemaVersion
+	}
+	if ownershipReadiness != nil {
+		schemaVersion = projections.LifecycleOwnershipReadinessEventSchemaVersion
 	}
 	// Classify the claim demand from the RAW side-effect payload, before any
 	// sealing transform makes it opaque (epic A3). The classifier is injected by
@@ -344,8 +376,8 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 	if hasSideEffect {
 		replayPayload := append([]byte(nil), outboxPayload...)
-		if approval != nil || issuance != nil {
-			// V4 approval and v5 issuance events have one command body, not an
+		if approval != nil || issuance != nil || ownershipReadiness != nil {
+			// V4 approval, v5 issuance, and v6 ownership-readiness events have one command body, not an
 			// opaque base64 copy inside themselves. Warm enqueue and boot
 			// reconciliation derive the body by removing this SideEffect object
 			// from the canonical event.
@@ -366,7 +398,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	var terminalApprovalErr error
 	apply := func(ctx context.Context) error {
 		return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			eventTime := time.Now().UTC()
+			eventTime := commandTime
 			locked, version, err := o.store.IdentityApprovalTargetTx(ctx, tx, tenantID, identityID, true)
 			if err != nil {
 				return err
@@ -421,6 +453,16 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 					return err
 				}
 			}
+			if ownershipReadiness != nil {
+				// The first resolution supplied the immutable event bytes. Repeat it
+				// under the final identity/owner locks before append: if an owner edit
+				// won the gap, refuse without publishing a permanently unprojectable
+				// event. The projector validates once more in this same transaction.
+				if err := o.store.ValidateOwnershipReadinessEvidenceTx(ctx, tx, tenantID,
+					*ownershipReadiness, o.ownershipAttestationCadence); err != nil {
+					return err
+				}
+			}
 			ev, err := o.log.Append(ctx, events.Event{ID: eventID, Type: evType, TenantID: tenantID, Time: eventTime, SchemaVersion: schemaVersion, Data: payload})
 			if err != nil {
 				return err
@@ -468,11 +510,11 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 	profileBound := approval != nil && approval.Issuance != nil && approval.Issuance.ProfileID != ""
 	profileBound = profileBound || issuance != nil && issuance.ProfileID != ""
-	if profileBound {
+	if profileBound || ownershipReadiness != nil {
 		// Profile writes already use this cross-replica lock. Taking it around
-		// validation+append makes event order agree with the active revision we
-		// observed: either the profile update wins and this authority drifts, or
-		// this issuance commits before the later profile version exists.
+		// validation+append makes event order agree with the active profile or
+		// ownership revision we observed. Either the authority update wins and this
+		// command drifts, or this lifecycle event commits before the later update.
 		err := o.store.WithProjectionLock(ctx, apply)
 		if err == nil && terminalApprovalErr != nil {
 			return terminalApprovalErr
@@ -705,6 +747,29 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			healed = healedBefore
 			reconcileErr = o.quarantineOutboxReconciliationConflict(ctx, log, ev, conflict)
 		}()
+		if ev.Type == projections.EventOwnerReattestationRequested {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var request projections.OwnerReattestationRequested
+			if err := json.Unmarshal(ev.Data, &request); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			entry, err := ownershipReattestationOutboxEntry(ev.TenantID, ev.ID, request)
+			if err != nil {
+				return err
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+				if inserted {
+					healed++
+				}
+				return err
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		// Approval requests notify reviewers. The ordinary command path projects the
 		// request and records this intent in one PostgreSQL transaction; this branch
 		// heals the earlier append-ACK / transaction-rollback gap from the immutable
@@ -1194,7 +1259,8 @@ func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest 
 		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): side_effect idempotency key is not event-derived", ev.Type, ev.Sequence)
 	}
 	if ev.SchemaVersion == projections.LifecycleApprovalEventSchemaVersion ||
-		ev.SchemaVersion == projections.LifecycleIssuanceEventSchemaVersion {
+		ev.SchemaVersion == projections.LifecycleIssuanceEventSchemaVersion ||
+		ev.SchemaVersion == projections.LifecycleOwnershipReadinessEventSchemaVersion {
 		if len(pl.SideEffect.Payload) != 0 {
 			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): canonical side_effect must not duplicate the outer payload", ev.Type, ev.Sequence)
 		}

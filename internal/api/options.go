@@ -137,6 +137,12 @@ func WithCALeafValidity(d time.Duration) Option {
 	return func(c *config) { c.caLeafValidity = d }
 }
 
+// WithOwnershipAttestationCadence keeps the owner read model and the lifecycle
+// admission wall on the same clock. A non-positive value uses the core default.
+func WithOwnershipAttestationCadence(d time.Duration) Option {
+	return func(c *config) { c.ownershipAttestationCadence = d }
+}
+
 // WithSSHFleet wires the standing-SSH-key fleet inventory (B-2): the hosts
 // whose access does not run through the SSH CA.
 func WithSSHFleet(fn SSHFleetProvider) Option {

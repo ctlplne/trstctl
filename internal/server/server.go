@@ -293,6 +293,11 @@ type Deps struct {
 	// channels (Slack, Teams, email, PagerDuty, OpsGenie, webhook). Zero disables
 	// expiry-alert sweeps.
 	LifecycleAlertBefore time.Duration
+	// OwnershipAttestationCadence makes owner accountability a steady-state
+	// lifecycle authority and schedules one re-attestation notification per stale
+	// verification edge. Zero disables it for source-compatible embedders; the
+	// shipped Run composition always supplies the validated config value.
+	OwnershipAttestationCadence time.Duration
 	// AgentClaimableJobKinds are the estate-touching job kinds agents may claim
 	// over the channel (A1). Empty — the default — means the job ledger is served
 	// but hands nothing out, which is correct until an agent-side executor for a
@@ -789,10 +794,11 @@ type Server struct {
 
 	// Lifecycle automation telemetry (JOURNEY-002): identities queued for served
 	// renewal, expiry notifications enqueued, and scheduler failures.
-	lifecycleRenewBefore  time.Duration
-	lifecycleAlertBefore  time.Duration
-	lifecycleLeafValidity time.Duration
-	lifecycleInterval     time.Duration
+	lifecycleRenewBefore        time.Duration
+	lifecycleAlertBefore        time.Duration
+	lifecycleLeafValidity       time.Duration
+	ownershipAttestationCadence time.Duration
+	lifecycleInterval           time.Duration
 	// endpointVerificationInterval is how often endpoints are re-probed (D2).
 	// Zero uses defaultEndpointVerificationInterval.
 	endpointVerificationInterval time.Duration
@@ -977,7 +983,11 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 }
 
 func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, error) {
-	proj := projections.New(d.Store, d.LicensedProjectionOptions...)
+	options := append([]projections.Option(nil), d.LicensedProjectionOptions...)
+	if d.OwnershipAttestationCadence > 0 {
+		options = append(options, projections.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence))
+	}
+	proj := projections.New(d.Store, options...)
 	if _, err := proj.RestoreFromSnapshot(ctx, d.Log); err != nil {
 		return nil, fmt.Errorf("server: restore read model from snapshot: %w", err)
 	}
@@ -1037,6 +1047,9 @@ func (s *Server) configureMutationSpine(
 	)
 	orchOptions := historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)
 	orchOptions = append(orchOptions, orchestrator.WithProjector(proj))
+	if d.OwnershipAttestationCadence > 0 {
+		orchOptions = append(orchOptions, orchestrator.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence))
+	}
 	if d.ConnectorRegistry != nil {
 		// Stamp each connector side effect's per-row agent-role demand from the
 		// shipped vantage census at enqueue (epic A3). Without a registry there
@@ -1250,6 +1263,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithACMEARIPosture(s.ACMEARIPosture),
 		api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains),
 		api.WithTenantCrypto(d.TenantCrypto),
+		api.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence),
 	}
 }
 
@@ -1816,6 +1830,7 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.lifecycleRenewBefore = d.LifecycleRenewBefore
 	s.lifecycleAlertBefore = d.LifecycleAlertBefore
 	s.lifecycleLeafValidity = d.LifecycleLeafValidity
+	s.ownershipAttestationCadence = d.OwnershipAttestationCadence
 	s.lifecycleInterval = d.LifecycleInterval
 	s.endpointVerificationInterval = d.EndpointVerificationInterval
 	s.restoreDrill = d.RestoreDrill
@@ -2908,7 +2923,7 @@ const (
 // queues notification.expiry rows; the outbox then fans them to configured notify
 // channels. A sweep error is logged and the next tick retries.
 func (s *Server) RunLifecycleScheduler(ctx context.Context) {
-	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0) || s.orch == nil || s.store == nil {
+	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0 && s.ownershipAttestationCadence <= 0) || s.orch == nil || s.store == nil {
 		return
 	}
 	_, _ = s.RunLifecycleOnce(ctx)
@@ -2933,7 +2948,7 @@ func (s *Server) RunLifecycleScheduler(ctx context.Context) {
 // but are counted on their own metric so callers that care about renewal behavior keep
 // the old return contract. Exported for served-path tests.
 func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
-	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0) || s.orch == nil || s.store == nil {
+	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0 && s.ownershipAttestationCadence <= 0) || s.orch == nil || s.store == nil {
 		return 0, nil
 	}
 	now := time.Now().UTC()
@@ -2949,51 +2964,50 @@ func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
 		// will resume.
 		if reason := s.maintenanceWindows.DeferralReason(now); reason != "" {
 			s.recordRenewalDeferral(ctx, now, reason)
-			s.observeLifecycleSweep(queued, 0, nil)
-			return queued, nil
-		}
-		cutoff := now.Add(s.lifecycleRenewBefore)
-		tenants, err := s.store.TenantsWithRenewalIdentityCandidates(ctx, cutoff, now)
-		if err != nil {
-			s.observeLifecycleSweep(queued, 0, err)
-			return 0, err
-		}
-		for _, tenant := range tenants {
-			candidates, err := s.store.ListRenewalIdentityCandidates(ctx, tenant, cutoff, now)
+		} else {
+			cutoff := now.Add(s.lifecycleRenewBefore)
+			tenants, err := s.store.TenantsWithRenewalIdentityCandidates(ctx, cutoff, now)
 			if err != nil {
 				s.observeLifecycleSweep(queued, 0, err)
-				return queued, err
+				return 0, err
 			}
-			seen := make(map[string]struct{}, len(candidates))
-			for _, candidate := range candidates {
-				ident := candidate.Identity
-				if _, ok := seen[ident.ID]; ok {
-					continue
-				}
-				seen[ident.ID] = struct{}{}
-				reason, due := lifecycleRenewalReason(candidate.Certificate, now, cutoff)
-				if !due {
-					continue
-				}
-				payload, err := json.Marshal(transitionTrigger{
-					IdentityID:             ident.ID,
-					To:                     string(orchestrator.StateRenewing),
-					Reason:                 reason,
-					Origin:                 lifecycleTransitionOriginScheduler,
-					PredecessorFingerprint: candidate.Certificate.Fingerprint,
-				})
+			for _, tenant := range tenants {
+				candidates, err := s.store.ListRenewalIdentityCandidates(ctx, tenant, cutoff, now)
 				if err != nil {
 					s.observeLifecycleSweep(queued, 0, err)
 					return queued, err
 				}
-				if err := s.orch.TransitionWithSideEffectPayload(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason, payload); err != nil {
-					if errors.Is(err, orchestrator.ErrInvalidTransition) {
+				seen := make(map[string]struct{}, len(candidates))
+				for _, candidate := range candidates {
+					ident := candidate.Identity
+					if _, ok := seen[ident.ID]; ok {
 						continue
 					}
-					s.observeLifecycleSweep(queued, 0, err)
-					return queued, err
+					seen[ident.ID] = struct{}{}
+					reason, due := lifecycleRenewalReason(candidate.Certificate, now, cutoff)
+					if !due {
+						continue
+					}
+					payload, err := json.Marshal(transitionTrigger{
+						IdentityID:             ident.ID,
+						To:                     string(orchestrator.StateRenewing),
+						Reason:                 reason,
+						Origin:                 lifecycleTransitionOriginScheduler,
+						PredecessorFingerprint: candidate.Certificate.Fingerprint,
+					})
+					if err != nil {
+						s.observeLifecycleSweep(queued, 0, err)
+						return queued, err
+					}
+					if err := s.orch.TransitionWithSideEffectPayload(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason, payload); err != nil {
+						if errors.Is(err, orchestrator.ErrInvalidTransition) {
+							continue
+						}
+						s.observeLifecycleSweep(queued, 0, err)
+						return queued, err
+					}
+					queued++
 				}
-				queued++
 			}
 		}
 	}
@@ -3011,7 +3025,44 @@ func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
 		s.observeLifecycleSweep(queued, alerted+horizonAlerts, err)
 		return queued, err
 	}
-	s.observeLifecycleSweep(queued, alerted+horizonAlerts, nil)
+	ownershipAlerts, err := s.runOwnershipReattestationOnce(ctx)
+	if err != nil {
+		s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, err)
+		return queued, err
+	}
+	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, nil)
+	return queued, nil
+}
+
+// runOwnershipReattestationOnce is bounded twice: tenant discovery selects only
+// due owners and each tenant page is capped. QueueOwnershipReattestation repeats
+// the predicate under a row lock, so two leader replicas racing one sweep still
+// append and enqueue one immutable request per verification edge.
+func (s *Server) runOwnershipReattestationOnce(ctx context.Context) (int, error) {
+	if s.ownershipAttestationCadence <= 0 || s.store == nil || s.orch == nil || s.outbox == nil {
+		return 0, nil
+	}
+	now := time.Now().UTC()
+	tenants, err := s.store.TenantsWithOwnershipReattestationCandidates(ctx, now, s.ownershipAttestationCadence)
+	if err != nil {
+		return 0, err
+	}
+	queued := 0
+	for _, tenantID := range tenants {
+		owners, err := s.store.ListOwnershipReattestationCandidates(ctx, tenantID, now, s.ownershipAttestationCadence, 200)
+		if err != nil {
+			return queued, err
+		}
+		for _, owner := range owners {
+			inserted, err := s.orch.QueueOwnershipReattestation(ctx, tenantID, owner.ID, s.ownershipAttestationCadence)
+			if err != nil {
+				return queued, err
+			}
+			if inserted {
+				queued++
+			}
+		}
+	}
 	return queued, nil
 }
 

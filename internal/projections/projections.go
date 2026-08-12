@@ -40,10 +40,14 @@ import (
 // between the command side (which appends them) and the projector (which builds
 // the read model from them).
 const (
-	EventTenantRegistered = "tenant.registered"
-	EventTenantOffboarded = "tenant.offboarded"
-	EventOwnerCreated     = "owner.created"
-	EventOwnerUpdated     = "owner.updated"
+	EventTenantRegistered            = "tenant.registered"
+	EventTenantOffboarded            = "tenant.offboarded"
+	EventOwnerCreated                = "owner.created"
+	EventOwnerUpdated                = "owner.updated"
+	EventOwnershipAttested           = "owner.ownership_attested"
+	EventOwnerReattestationRequested = "owner.reattestation.requested"
+	EventOwnershipExceptionGranted   = "ownership.exception.granted"
+	EventOwnershipExceptionRevoked   = "ownership.exception.revoked"
 	// I2: an external source's reconciliation against recorded ownership. It
 	// carries BOTH halves — what was applied and what was refused — because a
 	// replay that reconstructed only the applied half would rebuild an estate
@@ -258,6 +262,18 @@ const LifecycleApprovalEventSchemaVersion = 4
 // into side_effect.payload.
 const LifecycleIssuanceEventSchemaVersion = 5
 
+// LifecycleOwnershipReadinessEventSchemaVersion binds a deployed/renewed event
+// to the exact current owner attestation or active exception that authorized the
+// steady-state edge. Earlier history remains readable; new served writes never
+// emit a steady-state event without this proof when the cadence gate is enabled.
+const LifecycleOwnershipReadinessEventSchemaVersion = 6
+
+// OwnerDepthEventSchemaVersion is the first owner.created/owner.updated shape
+// that carries the complete I1 application model. V1 remains readable and is
+// deliberately applied as a basic-field update so absent legacy fields cannot
+// erase depth added after migration.
+const OwnerDepthEventSchemaVersion = 2
+
 // CAAuthorityCreatedEventSchemaVersion is the first CA create/import event shape
 // that carries the full ca_authorities row. Version 1 events were audit-only
 // breadcrumbs and cannot rebuild the authority read model.
@@ -282,18 +298,62 @@ const PrivacySubjectErasedEventSchemaVersion = 3
 
 // OwnerCreated is the payload of an owner.created event.
 type OwnerCreated struct {
-	ID    string `json:"id"`
-	Kind  string `json:"kind"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID              string   `json:"id"`
+	Kind            string   `json:"kind"`
+	Name            string   `json:"name"`
+	Email           string   `json:"email"`
+	ApplicationID   string   `json:"application_id,omitempty"`
+	Service         string   `json:"service,omitempty"`
+	BusinessUnit    string   `json:"business_unit,omitempty"`
+	Environment     string   `json:"environment,omitempty"`
+	EscalationChain []string `json:"escalation_chain,omitempty"`
 }
 
 // OwnerUpdated is the payload of an owner.updated event.
 type OwnerUpdated struct {
-	ID    string `json:"id"`
-	Kind  string `json:"kind"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID              string   `json:"id"`
+	Kind            string   `json:"kind"`
+	Name            string   `json:"name"`
+	Email           string   `json:"email"`
+	ApplicationID   string   `json:"application_id,omitempty"`
+	Service         string   `json:"service,omitempty"`
+	BusinessUnit    string   `json:"business_unit,omitempty"`
+	Environment     string   `json:"environment,omitempty"`
+	EscalationChain []string `json:"escalation_chain,omitempty"`
+}
+
+type OwnershipAttested struct {
+	OwnerID     string    `json:"owner_id"`
+	AttestedBy  string    `json:"attested_by"`
+	AttestedAt  time.Time `json:"attested_at"`
+	ModelDigest string    `json:"model_digest"`
+}
+
+type OwnerReattestationRequested struct {
+	OwnerID              string     `json:"owner_id"`
+	VerifiedFor          *time.Time `json:"verified_for,omitempty"`
+	DueAt                time.Time  `json:"due_at"`
+	RequestedAt          time.Time  `json:"requested_at"`
+	CadenceSeconds       int        `json:"cadence_seconds"`
+	OwnerName            string     `json:"owner_name"`
+	OwnerEmail           string     `json:"owner_email,omitempty"`
+	EscalationRecipients []string   `json:"escalation_recipients,omitempty"`
+}
+
+type OwnershipExceptionGranted struct {
+	ID         string    `json:"id"`
+	IdentityID string    `json:"identity_id"`
+	Reason     string    `json:"reason"`
+	GrantedBy  string    `json:"granted_by"`
+	GrantedAt  time.Time `json:"granted_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+type OwnershipExceptionRevoked struct {
+	ID        string    `json:"id"`
+	RevokedBy string    `json:"revoked_by"`
+	Reason    string    `json:"reason"`
+	RevokedAt time.Time `json:"revoked_at"`
 }
 
 // AgentUpgradeCampaignOpened is the payload of agent.upgrade.campaign.opened (A5).
@@ -2153,15 +2213,16 @@ type ResponseIntegrationDispatchedDestination struct {
 // read an indexed, tenant-scoped projection instead of replaying the whole log.
 // (The contract is the JSON, so the projector does not import the orchestrator.)
 type identityTransition struct {
-	IdentityID     string                                  `json:"identity_id"`
-	From           string                                  `json:"from"`
-	To             string                                  `json:"to"`
-	Reason         string                                  `json:"reason,omitempty"`
-	IdempotencyKey string                                  `json:"idempotency_key,omitempty"`
-	SubjectCSRPEM  string                                  `json:"subject_csr_pem,omitempty"`
-	SideEffect     *identityTransitionEffect               `json:"side_effect,omitempty"`
-	Approval       *store.OperationApprovalUse             `json:"approval,omitempty"`
-	Issuance       *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
+	IdentityID         string                                  `json:"identity_id"`
+	From               string                                  `json:"from"`
+	To                 string                                  `json:"to"`
+	Reason             string                                  `json:"reason,omitempty"`
+	IdempotencyKey     string                                  `json:"idempotency_key,omitempty"`
+	SubjectCSRPEM      string                                  `json:"subject_csr_pem,omitempty"`
+	SideEffect         *identityTransitionEffect               `json:"side_effect,omitempty"`
+	Approval           *store.OperationApprovalUse             `json:"approval,omitempty"`
+	Issuance           *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
+	OwnershipReadiness *store.OwnershipReadinessEvidence       `json:"ownership_readiness,omitempty"`
 }
 
 // identityTransitionEffect mirrors the lifecycle event's durable AN-6 intent
@@ -2182,6 +2243,7 @@ type Projector struct {
 	store                            *store.Store
 	eventProjections                 []EventProjection
 	allowSecretSyncRecoveryBootstrap bool
+	ownershipAttestationCadence      time.Duration
 }
 
 // Option customizes the generic projector without coupling MPL core to any
@@ -2263,6 +2325,17 @@ func WithEventProjection(proj EventProjection) Option {
 func WithSecretSyncRecoveryBootstrap() Option {
 	return func(p *Projector) {
 		p.allowSecretSyncRecoveryBootstrap = true
+	}
+}
+
+// WithOwnershipAttestationCadence supplies the same validated cadence used by
+// the command side. It lets v6 steady-state events verify their immutable proof
+// during live projection, restart catch-up, and zero-state rebuild.
+func WithOwnershipAttestationCadence(cadence time.Duration) Option {
+	return func(p *Projector) {
+		if cadence > 0 {
+			p.ownershipAttestationCadence = cadence
+		}
 	}
 }
 
@@ -2650,8 +2723,12 @@ var knownSchemaVersions = map[string]map[int]bool{
 	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
 	EventTenantRegistered:                         {1: true},
 	EventTenantOffboarded:                         {1: true},
-	EventOwnerCreated:                             {1: true},
-	EventOwnerUpdated:                             {1: true},
+	EventOwnerCreated:                             {1: true, OwnerDepthEventSchemaVersion: true},
+	EventOwnerUpdated:                             {1: true, OwnerDepthEventSchemaVersion: true},
+	EventOwnershipAttested:                        {1: true},
+	EventOwnerReattestationRequested:              {1: true},
+	EventOwnershipExceptionGranted:                {1: true},
+	EventOwnershipExceptionRevoked:                {1: true},
 	EventOwnershipReconciled:                      {1: true},
 	EventCMDBScheduleConfigured:                   {1: true},
 	EventIssuanceRequestOpened:                    {1: true},
@@ -2677,10 +2754,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
 	EventIdentityIssued:                           {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true},
-	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
 	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewing:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
-	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
 	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true},
 	EventCertificateRevoked:                       {1: true},
@@ -2909,18 +2986,80 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		escalation, err := json.Marshal(pl.EscalationChain)
+		if err != nil {
+			return err
+		}
 		return p.store.ApplyOwnerCreatedTx(ctx, tx, store.Owner{
 			ID: pl.ID, TenantID: e.TenantID, Kind: store.OwnerKind(pl.Kind),
-			Name: pl.Name, Email: pl.Email, CreatedAt: e.Time,
+			Name: pl.Name, Email: pl.Email, ApplicationID: pl.ApplicationID,
+			Service: pl.Service, BusinessUnit: pl.BusinessUnit, Environment: pl.Environment,
+			EscalationChain: escalation, CreatedAt: e.Time,
 		})
 	case EventOwnerUpdated:
 		var pl OwnerUpdated
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyOwnerUpdatedTx(ctx, tx, store.Owner{
+		owner := store.Owner{
 			ID: pl.ID, TenantID: e.TenantID, Kind: store.OwnerKind(pl.Kind), Name: pl.Name, Email: pl.Email,
+		}
+		if schemaVersionOf(e) == 1 {
+			return p.store.ApplyOwnerUpdatedLegacyTx(ctx, tx, owner)
+		}
+		escalation, err := json.Marshal(pl.EscalationChain)
+		if err != nil {
+			return err
+		}
+		owner.ApplicationID, owner.Service = pl.ApplicationID, pl.Service
+		owner.BusinessUnit, owner.Environment = pl.BusinessUnit, pl.Environment
+		owner.EscalationChain = escalation
+		return p.store.ApplyOwnerUpdatedTx(ctx, tx, owner)
+	case EventOwnershipAttested:
+		var pl OwnershipAttested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.OwnerID == "" || pl.AttestedBy == "" || pl.ModelDigest == "" || pl.AttestedAt.IsZero() || !pl.AttestedAt.Equal(e.Time) {
+			return fmt.Errorf("projections: %s requires owner, authenticated attestor, event time, and model digest", e.Type)
+		}
+		return p.store.ApplyOwnershipAttestedTx(ctx, tx, e.TenantID, pl.OwnerID, pl.AttestedBy, pl.ModelDigest, pl.AttestedAt)
+	case EventOwnerReattestationRequested:
+		var pl OwnerReattestationRequested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.OwnerID == "" || pl.RequestedAt.IsZero() || !pl.RequestedAt.Equal(e.Time) || pl.CadenceSeconds <= 0 {
+			return fmt.Errorf("projections: %s requires owner, event time, and positive cadence", e.Type)
+		}
+		return p.store.ApplyOwnerReattestationRequestedTx(
+			ctx, tx, e.TenantID, pl.OwnerID, pl.VerifiedFor, pl.DueAt, pl.RequestedAt,
+			time.Duration(pl.CadenceSeconds)*time.Second,
+		)
+	case EventOwnershipExceptionGranted:
+		var pl OwnershipExceptionGranted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.IdentityID == "" || strings.TrimSpace(pl.Reason) == "" || strings.TrimSpace(pl.GrantedBy) == "" ||
+			pl.GrantedAt.IsZero() || !pl.GrantedAt.Equal(e.Time) || !pl.ExpiresAt.After(pl.GrantedAt) {
+			return fmt.Errorf("projections: %s requires identity, attributed reason, event time, and future expiry", e.Type)
+		}
+		return p.store.ApplyOwnershipExceptionGrantedTx(ctx, tx, store.OwnershipException{
+			ID: pl.ID, TenantID: e.TenantID, IdentityID: pl.IdentityID, Reason: pl.Reason,
+			GrantedBy: pl.GrantedBy, GrantedAt: pl.GrantedAt, ExpiresAt: pl.ExpiresAt,
+			CreatedEventID: e.ID, LastEventSeq: e.Sequence,
 		})
+	case EventOwnershipExceptionRevoked:
+		var pl OwnershipExceptionRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || strings.TrimSpace(pl.RevokedBy) == "" || strings.TrimSpace(pl.Reason) == "" ||
+			pl.RevokedAt.IsZero() || !pl.RevokedAt.Equal(e.Time) {
+			return fmt.Errorf("projections: %s requires exception, attributed reason, and event time", e.Type)
+		}
+		return p.store.ApplyOwnershipExceptionRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, pl.Reason, pl.RevokedAt, e.Sequence)
 	case EventAgentUpgradeCampaignOpened:
 		var pl AgentUpgradeCampaignOpened
 		if err := decode(e, &pl); err != nil {
@@ -4844,6 +4983,18 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 					return err
 				}
 			}
+			if schemaVersionOf(e) == LifecycleOwnershipReadinessEventSchemaVersion {
+				if pl.OwnershipReadiness == nil || p.ownershipAttestationCadence <= 0 ||
+					(pl.To != "deployed") || !pl.OwnershipReadiness.EvaluatedAt.Equal(e.Time) {
+					return fmt.Errorf("projections: %s v%d is missing exact ownership-readiness authority", e.Type, schemaVersionOf(e))
+				}
+				if err := p.store.ValidateOwnershipReadinessEvidenceTx(ctx, tx, e.TenantID,
+					*pl.OwnershipReadiness, p.ownershipAttestationCadence); err != nil {
+					return fmt.Errorf("projections: %s ownership-readiness authority: %w", e.Type, err)
+				}
+			} else if pl.OwnershipReadiness != nil {
+				return fmt.Errorf("projections: %s ownership-readiness payload/schema mismatch", e.Type)
+			}
 			if err := p.store.SetIdentityStatusTx(ctx, tx, e.TenantID, pl.IdentityID, pl.To); err != nil {
 				return err
 			}
@@ -4876,6 +5027,17 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 		if hasApproval || !hasIssuance {
 			return fmt.Errorf("projections: %s issuance payload/schema mismatch", e.Type)
 		}
+	case LifecycleOwnershipReadinessEventSchemaVersion:
+		if hasApproval || hasIssuance || pl.OwnershipReadiness == nil || pl.To != "deployed" ||
+			(e.Type != EventIdentityDeployed && e.Type != EventIdentityRenewed) {
+			return fmt.Errorf("projections: %s ownership-readiness payload/schema mismatch", e.Type)
+		}
+		if pl.SideEffect == nil || pl.SideEffect.Destination != "connector.deploy" ||
+			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) ||
+			len(pl.SideEffect.Payload) != 0 {
+			return fmt.Errorf("projections: %s ownership-readiness side-effect mismatch", e.Type)
+		}
+		return nil
 	default:
 		if hasApproval {
 			return fmt.Errorf("projections: %s approval payload/schema mismatch", e.Type)
@@ -4930,7 +5092,8 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 // outbox command from retained history.
 func ValidateLifecycleApprovalEvent(e events.Event) error {
 	if schemaVersionOf(e) != LifecycleApprovalEventSchemaVersion &&
-		schemaVersionOf(e) != LifecycleIssuanceEventSchemaVersion {
+		schemaVersionOf(e) != LifecycleIssuanceEventSchemaVersion &&
+		schemaVersionOf(e) != LifecycleOwnershipReadinessEventSchemaVersion {
 		return nil
 	}
 	var payload identityTransition

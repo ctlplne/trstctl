@@ -400,6 +400,11 @@ tenant payload. Every new table joins the backup classification
 See [Configuration → Datastores](configuration.md#datastores) for the Postgres
 connection settings these commands use.
 
+Migration 0168 adds the tenant-RLS `ownership_readiness_exceptions` event
+projection and nullable owner verification-binding columns. Migration 0169 builds
+the populated-owner cadence index concurrently in a no-transaction migration, so
+upgrading does not stop owner writes while PostgreSQL scans existing rows.
+
 ## Bounded lock waits (OPS-MIG-LOCK-001)
 
 The migration runner pins its session to `lock_timeout = 5s`,

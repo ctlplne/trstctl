@@ -66,6 +66,17 @@ unresolved as `orphaned` rather than counted as accountability. See
 kinds, and evidence-ref shape; the same data is available via
 `trstctl-cli owners attribution` and the Owners console.
 
+Ownership attribution is also deployment authority. Owner create/update carries
+`application_id`, `service`, `business_unit`, `environment`, and an ordered
+escalation chain in `owner.*` v2 events. `POST /api/v1/owners/{id}/attest` records
+the authenticated principal and a digest of the exact application/environment
+model. A deployment event carries either that still-current proof or one active,
+reasoned, attributed exception from
+`/api/v1/identities/{id}/ownership-exceptions`; it is rejected with `409` when
+neither exists. The configurable cadence scheduler requests re-attestation once
+per stale verification edge and writes the owner/escalation notification intent
+through the outbox in the same tenant transaction.
+
 **Status:** served for managed identities plus discovery-fed NHIs.
 
 ### NHI policy compliance

@@ -270,17 +270,31 @@ func object(props map[string]*Schema, required ...string) *Schema {
 
 func componentSchemas() map[string]*Schema {
 	owner := object(map[string]*Schema{
-		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: []string{"user", "team", "workload", "service"}},
+		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: []string{"user", "team", "workload", "service", "vendor"}},
 		"name": str(), "email": str(), "created_at": timestamp(),
+		"application_id": str(), "service": str(), "business_unit": str(), "environment": str(),
+		"escalation_chain":      {Type: "array", Items: str()},
+		"ownership_verified_at": timestamp(), "ownership_verified_by": str(),
+		"ownership_complete": {Type: "boolean"}, "ownership_attested": {Type: "boolean"},
+		"ownership_current": {Type: "boolean"}, "ownership_attestation_due_at": timestamp(),
 		// I2 provenance. Optional, because absent must stay distinguishable from
 		// recorded-and-empty: a row that predates provenance has no origin, and
 		// stamping one would read like a recorded answer.
 		"ownership_source": str(), "ownership_source_ref": str(),
 		"ownership_source_observed_at": str(),
-	}, "id", "tenant_id", "kind", "name")
+	}, "id", "tenant_id", "kind", "name", "escalation_chain", "ownership_complete", "ownership_attested", "ownership_current")
 	ownerReq := object(map[string]*Schema{
-		"kind": {Type: "string", Enum: []string{"user", "team", "workload", "service"}}, "name": str(), "email": str(),
+		"kind": {Type: "string", Enum: []string{"user", "team", "workload", "service", "vendor"}}, "name": str(), "email": str(),
+		"application_id": str(), "service": str(), "business_unit": str(), "environment": str(),
+		"escalation_chain": {Type: "array", Items: str()},
 	}, "kind", "name")
+	ownershipException := object(map[string]*Schema{
+		"id": uuid(), "identity_id": uuid(), "reason": str(), "granted_by": str(),
+		"granted_at": timestamp(), "expires_at": timestamp(), "revoked_by": str(),
+		"revoked_at": timestamp(), "revocation_reason": str(), "active": {Type: "boolean"},
+	}, "id", "identity_id", "reason", "granted_by", "granted_at", "expires_at", "active")
+	ownershipExceptionReq := object(map[string]*Schema{"reason": str(), "expires_at": timestamp()}, "reason", "expires_at")
+	ownershipExceptionRevokeReq := object(map[string]*Schema{"reason": str()}, "reason")
 
 	issuer := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: []string{"x509_ca", "ssh_ca"}},
@@ -3297,7 +3311,7 @@ func componentSchemas() map[string]*Schema {
 	unownedIdentity := object(map[string]*Schema{
 		"identity_id": str(), "name": str(), "status": str(),
 		"reason": {Type: "string", Enum: []string{
-			"no_owner", "owner_missing_application_model", "ownership_never_attested",
+			"no_owner", "owner_missing_application_model", "ownership_never_attested", "ownership_attestation_stale",
 		}},
 		"detail": str(),
 	}, "identity_id", "name", "reason")
@@ -4969,6 +4983,10 @@ func componentSchemas() map[string]*Schema {
 		"Owner":                                    owner,
 		"OwnerRequest":                             ownerReq,
 		"OwnerList":                                list("Owner"),
+		"OwnershipException":                       ownershipException,
+		"OwnershipExceptionRequest":                ownershipExceptionReq,
+		"OwnershipExceptionRevokeRequest":          ownershipExceptionRevokeReq,
+		"OwnershipExceptionList":                   list("OwnershipException"),
 		"Profile":                                  profile,
 		"ProfileRequest":                           profileReq,
 		"ProfileList":                              list("Profile"),

@@ -10,7 +10,8 @@ export (below) returns every matching row for that location.
 | --- | --- | --- |
 | `events.actor.subject` | `events.Actor.Subject` | Tenant audit reads replace erased subjects with subject-ref placeholders. |
 | `events.data.subject-values` | `events.Event.Data` | Audit reads redact exact erased subject values from old immutable event payloads. |
-| `owners.email` | `owners.email` | Blanks the inactive, unreferenced owner's email. Pseudonymizes the owner name. |
+| `owners.accountability` | `owners.name/email/application_id/service/business_unit/escalation_chain/ownership_verified_by` | Export includes every matching ownership-accountability field. Erasure pseudonymizes the owner and verification actor and clears contact, application-model, and escalation values. Retention applies the same cleanup to inactive, unreferenced owners. `environment` stays opaque because it is a deployment classification, not a person. |
+| `ownership_readiness_exceptions.actor-reason` | `ownership_readiness_exceptions.granted_by/reason/revoked_by/revocation_reason` | Export includes attributed grant/revoke evidence. Erasure pseudonymizes matching actors and clears free text; retention does the same after expiry. Identity, event, grant/expiry, and revocation timestamps remain immutable authority. |
 | `tenant_members.subject` | `tenant_members.subject/display_name/email` | Replaces offboarded subjects with erased placeholders. Clears display/contact fields. |
 | `api_tokens.subject` | `api_tokens.subject` | Revokes direct erasure matches. Pseudonymizes expired/revoked token subjects. |
 | `identities.name-attributes` | `identities.name/attributes` | Pseudonymizes terminal identity names. Clears attributes. |
@@ -44,7 +45,7 @@ Default non-audit retention runs every `24h`, using these class windows:
 owners `17520h`; identities/certificates/approvals/profiles/attestations
 `9528h`; SSH keys/agents/agent offboarding evidence `4320h`; and access
 subjects/PAM subjects `2160h`. Governance, discovery, notification,
-remediation, compliance-schedule, and incident free-form evidence follows
+remediation, compliance-schedule, ownership-exception, and incident free-form evidence follows
 the 397-day operational evidence window unless an operator configures a
 shorter policy. OIDC pre-login metadata is ephemeral and expires after
 `10m`. Operators can override these classes via the

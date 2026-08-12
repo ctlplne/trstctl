@@ -181,6 +181,7 @@ How far ahead of expiry trstctl renews and alerts. Values are Go durations.
 | `TRSTCTL_LIFECYCLE_RENEW_BEFORE` | `720h` (30 days) | Renew this far before expiry. |
 | `TRSTCTL_LIFECYCLE_ALERT_BEFORE` | `336h` (14 days) | Alert this far before expiry. |
 | `TRSTCTL_LIFECYCLE_LEAF_VALIDITY` | `2160h` (90 days) | Reference leaf lifetime the **CA calendar** measures each authority's remaining horizon against, so the scheduler can say "this authority can no longer issue a full-length leaf" and the console can show a renew/re-key-by date. A yardstick for horizon reporting only — it caps nothing. |
+| `TRSTCTL_LIFECYCLE_OWNERSHIP_ATTESTATION_CADENCE` | `2160h` (90 days) | How long an authenticated owner decision authorizes a steady-state deployment. Values must be from `1h` through `8760h`. At expiry, deployment fails closed unless the identity has an active attributed exception, and the bounded lifecycle scheduler emits one re-attestation request plus one outbox notification for the stale verification edge. |
 
 ## Native connector and external-CA assembly
 

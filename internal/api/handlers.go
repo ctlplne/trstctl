@@ -23,18 +23,34 @@ import (
 // ---- DTOs -----------------------------------------------------------------
 
 type ownerRequest struct {
-	Kind  string `json:"kind"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Kind            string   `json:"kind"`
+	Name            string   `json:"name"`
+	Email           string   `json:"email"`
+	ApplicationID   string   `json:"application_id"`
+	Service         string   `json:"service"`
+	BusinessUnit    string   `json:"business_unit"`
+	Environment     string   `json:"environment"`
+	EscalationChain []string `json:"escalation_chain"`
 }
 
 type ownerResponse struct {
-	ID        string    `json:"id"`
-	TenantID  string    `json:"tenant_id"`
-	Kind      string    `json:"kind"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	ID                        string     `json:"id"`
+	TenantID                  string     `json:"tenant_id"`
+	Kind                      string     `json:"kind"`
+	Name                      string     `json:"name"`
+	Email                     string     `json:"email"`
+	CreatedAt                 time.Time  `json:"created_at"`
+	ApplicationID             string     `json:"application_id,omitempty"`
+	Service                   string     `json:"service,omitempty"`
+	BusinessUnit              string     `json:"business_unit,omitempty"`
+	Environment               string     `json:"environment,omitempty"`
+	EscalationChain           []string   `json:"escalation_chain"`
+	OwnershipVerifiedAt       *time.Time `json:"ownership_verified_at,omitempty"`
+	OwnershipVerifiedBy       string     `json:"ownership_verified_by,omitempty"`
+	OwnershipComplete         bool       `json:"ownership_complete"`
+	OwnershipAttested         bool       `json:"ownership_attested"`
+	OwnershipCurrent          bool       `json:"ownership_current"`
+	OwnershipAttestationDueAt *time.Time `json:"ownership_attestation_due_at,omitempty"`
 
 	// Where this ownership claim came from (I2). Empty means UNKNOWN — the row
 	// predates provenance — and is deliberately not rendered as "manual": an
@@ -45,14 +61,31 @@ type ownerResponse struct {
 	OwnershipSourceObservedAt string `json:"ownership_source_observed_at,omitempty"`
 }
 
-func toOwnerResponse(o store.Owner) ownerResponse {
-	out := ownerResponse{ID: o.ID, TenantID: o.TenantID, Kind: string(o.Kind), Name: o.Name, Email: o.Email, CreatedAt: o.CreatedAt}
+func (a *API) toOwnerResponse(o store.Owner) ownerResponse {
+	chain, _ := store.OwnerEscalationChain(o.EscalationChain)
+	cadence := a.ownerAttestationCadence()
+	out := ownerResponse{
+		ID: o.ID, TenantID: o.TenantID, Kind: string(o.Kind), Name: o.Name, Email: o.Email, CreatedAt: o.CreatedAt,
+		ApplicationID: o.ApplicationID, Service: o.Service, BusinessUnit: o.BusinessUnit,
+		Environment: o.Environment, EscalationChain: chain,
+		OwnershipVerifiedAt: o.OwnershipVerifiedAt, OwnershipVerifiedBy: o.OwnershipVerifiedBy,
+		OwnershipComplete: o.OwnershipComplete(), OwnershipAttested: o.OwnershipAttested(),
+		OwnershipCurrent:          o.OwnershipCurrent(time.Now().UTC(), cadence),
+		OwnershipAttestationDueAt: o.OwnershipAttestationDueAt(cadence),
+	}
 	out.OwnershipSource = o.OwnershipSource
 	out.OwnershipSourceRef = o.OwnershipSourceRef
 	if o.OwnershipSourceObservedAt != nil {
 		out.OwnershipSourceObservedAt = o.OwnershipSourceObservedAt.UTC().Format(time.RFC3339)
 	}
 	return out
+}
+
+func (a *API) ownerAttestationCadence() time.Duration {
+	if a.ownershipAttestationCadence > 0 {
+		return a.ownershipAttestationCadence
+	}
+	return store.DefaultOwnershipAttestationCadence
 }
 
 type issuerRequest struct {
@@ -166,11 +199,19 @@ func (a *API) createOwner(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		o, err := a.orch.CreateOwner(ctx, tenantID, req.Kind, req.Name, req.Email)
+		chain, err := json.Marshal(req.EscalationChain)
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		return http.StatusCreated, toOwnerResponse(o), nil
+		o, err := a.orch.CreateOwnerRecord(ctx, store.Owner{
+			TenantID: tenantID, Kind: store.OwnerKind(req.Kind), Name: req.Name, Email: req.Email,
+			ApplicationID: req.ApplicationID, Service: req.Service, BusinessUnit: req.BusinessUnit,
+			Environment: req.Environment, EscalationChain: chain,
+		})
+		if err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		return http.StatusCreated, a.toOwnerResponse(o), nil
 	})
 }
 
@@ -185,7 +226,7 @@ func (a *API) getOwner(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toOwnerResponse(o))
+	a.writeJSON(w, http.StatusOK, a.toOwnerResponse(o))
 }
 
 func (a *API) listOwners(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +247,7 @@ func (a *API) listOwners(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]ownerResponse, 0, len(owners))
 	for _, o := range owners {
-		items = append(items, toOwnerResponse(o))
+		items = append(items, a.toOwnerResponse(o))
 	}
 	next := ""
 	if len(owners) == limit {
@@ -224,14 +265,22 @@ func (a *API) updateOwner(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if err := a.orch.UpdateOwner(ctx, tenantID, id, req.Kind, req.Name, req.Email); err != nil {
-			return 0, nil, err
-		}
-		updated, err := a.store.GetOwner(ctx, tenantID, id)
+		chain, err := json.Marshal(req.EscalationChain)
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		return http.StatusOK, toOwnerResponse(updated), nil
+		updated, err := a.orch.UpdateOwnerRecord(ctx, store.Owner{
+			ID: id, TenantID: tenantID, Kind: store.OwnerKind(req.Kind), Name: req.Name, Email: req.Email,
+			ApplicationID: req.ApplicationID, Service: req.Service, BusinessUnit: req.BusinessUnit,
+			Environment: req.Environment, EscalationChain: chain,
+		})
+		if err != nil {
+			if store.IsNotFound(err) {
+				return 0, nil, err
+			}
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		return http.StatusOK, a.toOwnerResponse(updated), nil
 	})
 }
 

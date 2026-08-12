@@ -147,8 +147,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// onto F48: they execute the trust-distribute, exact-authority reissue,
 	// live-verify, pause/resume, and newest-first rollback half of CA hierarchy
 	// management rather than merely describing a rollout.
-	if len(out) != 358 {
-		t.Fatalf("OpenAPI operationIds = %d, want 358", len(out))
+	// AUD-44's attestOwner plus ownership-exception list/grant/revoke operations
+	// raise it to 362 and make the owner application model lifecycle authority.
+	if len(out) != 362 {
+		t.Fatalf("OpenAPI operationIds = %d, want 362", len(out))
 	}
 	return out
 }

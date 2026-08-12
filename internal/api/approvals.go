@@ -472,6 +472,8 @@ func approvalAPIError(err error) error {
 		return errStatus(http.StatusConflict, "approval target version or state drifted")
 	case errors.Is(err, store.ErrApprovalNotReady):
 		return errStatus(http.StatusConflict, "approval request has not reached quorum")
+	case errors.Is(err, store.ErrOwnershipNotReady):
+		return errWithStatus(http.StatusConflict, err)
 	default:
 		return err
 	}

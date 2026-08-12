@@ -8,12 +8,15 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ToastProvider";
 import { OrphanGovernance } from "@/components/nhi";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
-const ownerKinds: Owner["kind"][] = ["user", "team", "workload", "service"];
+const ownerKinds: Owner["kind"][] = ["user", "team", "workload", "service", "vendor"];
 
 function emptyOwnershipAttribution(): OwnershipAttribution {
   return { generated_at: new Date(0).toISOString(), items: [], summary: {}, coverage: [] };
@@ -26,13 +29,21 @@ function readOwnershipAttribution(): Promise<OwnershipAttribution> {
 
 // UnownedQueuePanel surfaces the ownership gaps that block an incident (I1).
 //
-// Three counts, never one. A single "unowned: 47" would be a number nobody can
+// Four counts, never one. A single "unowned: 47" would be a number nobody can
 // act on: a missing owner record, an owner who names a person but no system, and
 // an owner nobody has re-confirmed are three different pieces of work, and the
 // middle one is the one people miss — it looks owned until somebody needs a
 // blast radius.
 function UnownedQueuePanel() {
+  const { t } = useTranslation();
   const queue = useApiQuery(["unowned-identities"], api.unownedIdentities);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [exceptionTarget, setExceptionTarget] = useState<{ identity_id: string; name: string } | null>(null);
+  const [exceptionReason, setExceptionReason] = useState("");
+  const [exceptionHours, setExceptionHours] = useState("24");
+  const [exceptionBusy, setExceptionBusy] = useState(false);
+  const [exceptionError, setExceptionError] = useState<string | null>(null);
   const data = queue.data;
   // Guard the array, not just the object. A response whose shape is present but
   // whose items are absent is exactly what a fixture or a partial payload looks
@@ -40,28 +51,125 @@ function UnownedQueuePanel() {
   // hiding one panel.
   const items = data?.items ?? [];
   if (!data || items.length === 0) return null;
+  async function submitException() {
+    if (!exceptionTarget) return;
+    const reason = exceptionReason.trim();
+    const hours = Number(exceptionHours);
+    if (!reason || !Number.isFinite(hours) || hours <= 0 || hours > 720) {
+      setExceptionError(t("owners.readiness.exceptionValidation"));
+      return;
+    }
+    setExceptionBusy(true);
+    setExceptionError(null);
+    try {
+      await api.grantOwnershipException(exceptionTarget.identity_id, {
+        reason,
+        expires_at: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(),
+      });
+      void queryClient.invalidateQueries({ queryKey: ["unowned-identities"] });
+      toast({ kind: "success", title: t("owners.readiness.exceptionGranted"), description: exceptionTarget.name });
+      setExceptionTarget(null);
+      setExceptionReason("");
+    } catch (err) {
+      setExceptionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExceptionBusy(false);
+    }
+  }
+
   return (
-    <section aria-labelledby="unowned-heading" className="ui-panel space-y-3 p-comfortable">
-      <h2 id="unowned-heading" className="text-title font-semibold">
-        {translateNow("source.unowned.queue.i1own00001")}
-      </h2>
-      <p className="text-sm">
-        {translateNow("source.unowned.counts.i1own00002", {
-          value1: String(data.counts?.no_owner ?? 0),
-          value2: String(data.counts?.owner_missing_application_model ?? 0),
-          value3: String(data.counts?.ownership_never_attested ?? 0),
-        })}
-      </p>
-      <ul className="space-y-2 text-sm">
-        {items.slice(0, 25).map((item) => (
-          <li key={item.identity_id} className="border-b border-border pb-2 last:border-0">
-            <span className="font-mono text-xs">{item.name}</span>
-            <span className="mt-1 block text-caption text-muted-foreground">{item.detail}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="text-caption text-muted-foreground">{data.guidance}</p>
-    </section>
+    <>
+      <section aria-labelledby="unowned-heading" className="ui-panel space-y-3 p-comfortable">
+        <h2 id="unowned-heading" className="text-title font-semibold">
+          {translateNow("source.unowned.queue.i1own00001")}
+        </h2>
+        <p className="text-sm">
+          {translateNow("source.unowned.counts.i1own00002", {
+            value1: String(data.counts?.no_owner ?? 0),
+            value2: String(data.counts?.owner_missing_application_model ?? 0),
+            value3: String(data.counts?.ownership_never_attested ?? 0),
+          })}
+          {" "}
+          {t("owners.readiness.staleCount", { count: String(data.counts?.ownership_attestation_stale ?? 0) })}
+        </p>
+        <ul className="space-y-2 text-sm">
+          {items.slice(0, 25).map((item) => (
+            <li key={item.identity_id} className="border-b border-border pb-2 last:border-0">
+              <span className="font-mono text-xs">{item.name}</span>
+              <span className="mt-1 block text-caption text-muted-foreground">{item.detail}</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => {
+                  setExceptionTarget({ identity_id: item.identity_id, name: item.name });
+                  setExceptionError(null);
+                }}
+              >
+                {t("owners.readiness.grantTemporary")}
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <p className="text-caption text-muted-foreground">{data.guidance}</p>
+      </section>
+      <Dialog
+        open={exceptionTarget !== null}
+        onClose={() => {
+          if (!exceptionBusy) setExceptionTarget(null);
+        }}
+        titleId="ownership-exception-title"
+        panelClassName="fixed left-1/2 top-1/2 grid w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        {exceptionTarget && (
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitException();
+            }}
+          >
+            <h2 id="ownership-exception-title" className="text-title font-semibold">
+              {t("owners.readiness.exceptionTitle", { name: exceptionTarget.name })}
+            </h2>
+            <p className="text-sm text-muted-foreground">{t("owners.readiness.exceptionDescription")}</p>
+            <label className="grid gap-1 text-body font-medium" htmlFor="ownership-exception-reason">
+              {t("owners.readiness.reason")}
+              <Textarea
+                id="ownership-exception-reason"
+                className="min-h-24 font-normal"
+                value={exceptionReason}
+                onChange={(event) => setExceptionReason(event.target.value)}
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="ownership-exception-hours">
+              {t("owners.readiness.expiryHours")}
+              <Input
+                id="ownership-exception-hours"
+                type="number"
+                min="1"
+                max="720"
+                className="font-normal"
+                value={exceptionHours}
+                onChange={(event) => setExceptionHours(event.target.value)}
+                required
+              />
+            </label>
+            {exceptionError && <p className="text-sm font-medium text-risk-critical">{exceptionError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" disabled={exceptionBusy} onClick={() => setExceptionTarget(null)}>
+                {translateNow("source.cancel.19766ed6cc")}
+              </Button>
+              <Button type="submit" disabled={exceptionBusy}>
+                {t("owners.readiness.grant")}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
+    </>
   );
 }
 
@@ -78,10 +186,17 @@ export function Owners() {
   const attribution = useApiQuery(["ownership-attribution"], readOwnershipAttribution);
   const { toast } = useToast();
   const rows = data;
+  const [editorOpen, setEditorOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Owner | null>(null);
   const [editName, setEditName] = useState("");
   const [editKind, setEditKind] = useState<Owner["kind"]>("user");
   const [editEmail, setEditEmail] = useState("");
+  const [editApplicationID, setEditApplicationID] = useState("");
+  const [editService, setEditService] = useState("");
+  const [editBusinessUnit, setEditBusinessUnit] = useState("");
+  const [editEnvironment, setEditEnvironment] = useState("");
+  const [editEscalationChain, setEditEscalationChain] = useState("");
+  const [attestingID, setAttestingID] = useState<string | null>(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Owner | null>(null);
@@ -108,7 +223,27 @@ export function Owners() {
     setEditName(owner.name);
     setEditKind(owner.kind);
     setEditEmail(owner.email ?? "");
+    setEditApplicationID(owner.application_id ?? "");
+    setEditService(owner.service ?? "");
+    setEditBusinessUnit(owner.business_unit ?? "");
+    setEditEnvironment(owner.environment ?? "");
+    setEditEscalationChain((owner.escalation_chain ?? []).join("\n"));
     setEditError(null);
+    setEditorOpen(true);
+  }
+
+  function openCreate() {
+    setEditTarget(null);
+    setEditName("");
+    setEditKind("team");
+    setEditEmail("");
+    setEditApplicationID("");
+    setEditService("");
+    setEditBusinessUnit("");
+    setEditEnvironment("");
+    setEditEscalationChain("");
+    setEditError(null);
+    setEditorOpen(true);
   }
 
   function openDelete(owner: Owner) {
@@ -118,7 +253,6 @@ export function Owners() {
   }
 
   async function submitEdit() {
-    if (!editTarget) return;
     const name = editName.trim();
     if (!name) {
       setEditError("Name is required.");
@@ -127,15 +261,46 @@ export function Owners() {
     setEditBusy(true);
     setEditError(null);
     try {
-      const updated = await api.updateOwner(editTarget.id, { name, kind: editKind, email: editEmail.trim() || undefined });
-      queryClient.setQueryData<Owner[]>(["owners"], (current) => (current ? current.map((owner) => (owner.id === updated.id ? updated : owner)) : current));
+      const input = {
+        name,
+        kind: editKind,
+        email: editEmail.trim() || undefined,
+        application_id: editApplicationID.trim() || undefined,
+        service: editService.trim() || undefined,
+        business_unit: editBusinessUnit.trim() || undefined,
+        environment: editEnvironment.trim() || undefined,
+        escalation_chain: editEscalationChain
+          .split("\n")
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      };
+      const updated = editTarget ? await api.updateOwner(editTarget.id, input) : await api.createOwner(input);
+      queryClient.setQueryData<Owner[]>(["owners"], (current) => {
+        if (!current) return current;
+        return editTarget ? current.map((owner) => (owner.id === updated.id ? updated : owner)) : [...current, updated];
+      });
       void queryClient.invalidateQueries({ queryKey: ["owners"] });
       setEditTarget(null);
-      toast({ kind: "success", title: t("parity.ownerUpdated_07b92f"), description: updated.name });
+      setEditorOpen(false);
+      toast({ kind: "success", title: editTarget ? t("parity.ownerUpdated_07b92f") : t("owners.readiness.created"), description: updated.name });
     } catch (err) {
       setEditError(err instanceof Error ? err.message : String(err));
     } finally {
       setEditBusy(false);
+    }
+  }
+
+  async function attestOwner(owner: Owner) {
+    setAttestingID(owner.id);
+    try {
+      const updated = await api.attestOwner(owner.id);
+      queryClient.setQueryData<Owner[]>(["owners"], (current) => current?.map((item) => (item.id === updated.id ? updated : item)));
+      void queryClient.invalidateQueries({ queryKey: ["unowned-identities"] });
+      toast({ kind: "success", title: t("owners.readiness.attested"), description: updated.name });
+    } catch (err) {
+      toast({ kind: "error", title: t("owners.readiness.attestFailed"), description: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setAttestingID(null);
     }
   }
 
@@ -161,7 +326,25 @@ export function Owners() {
   const columns: DataGridColumn<Owner>[] = [
     { id: "name", header: "Name", cell: (owner) => owner.name },
     { id: "kind", header: "Kind", cell: (owner) => owner.kind },
-    { id: "email", header: "Email", cell: (owner) => owner.email ?? "—" },
+    { id: "application", header: t("owners.readiness.applicationID"), cell: (owner) => owner.application_id ?? "Unknown" },
+    { id: "environment", header: t("owners.readiness.environment"), cell: (owner) => owner.environment ?? "Unknown" },
+    {
+      id: "readiness",
+      header: t("owners.readiness.column"),
+      cell: (owner) => (
+        <span className={owner.ownership_current ? "text-status-success" : "text-risk-critical"}>
+          {owner.ownership_current
+            ? owner.ownership_attestation_due_at
+              ? t("owners.readiness.current", { date: owner.ownership_attestation_due_at.slice(0, 10) })
+              : t("owners.readiness.currentNoDate")
+            : owner.ownership_complete
+              ? owner.ownership_attested
+                ? t("owners.readiness.due")
+                : t("owners.readiness.needsAttestation")
+              : t("owners.readiness.incomplete")}
+        </span>
+      ),
+    },
     {
       // I2: where this ownership claim came from, and when that source last
       // said it. An owner with no recorded origin reads as "not recorded" and
@@ -194,6 +377,15 @@ export function Owners() {
             type="button"
             size="sm"
             variant="outline"
+            disabled={!owner.ownership_complete || attestingID === owner.id}
+            onClick={() => void attestOwner(owner)}
+          >
+            {owner.ownership_attested ? t("owners.readiness.reattest") : t("owners.readiness.attest")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
             className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
             onClick={() => openDelete(owner)}
           >
@@ -210,6 +402,11 @@ export function Owners() {
         titleId="owners-heading"
         title={translateNow("source.owners.58f5df9b24")}
         description="Search owner records — the people and teams accountable for credentials — by name, ID, kind, or email."
+        actions={
+          <Button type="button" onClick={openCreate}>
+            {t("owners.readiness.add")}
+          </Button>
+        }
       />
       <OrphanGovernance owners={owners} />
       <UnownedQueuePanel />
@@ -283,14 +480,14 @@ export function Owners() {
       )}
 
       <Dialog
-        open={editTarget !== null}
+        open={editorOpen}
         onClose={() => {
-          if (!editBusy) setEditTarget(null);
+          if (!editBusy) setEditorOpen(false);
         }}
         titleId="owner-edit-title"
         panelClassName="fixed left-1/2 top-1/2 grid w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-panel border border-border bg-card p-5 shadow-elevation3"
       >
-        {editTarget && (
+        {editorOpen && (
           <form
             className="grid gap-4"
             onSubmit={(event) => {
@@ -299,7 +496,7 @@ export function Owners() {
             }}
           >
             <h2 id="owner-edit-title" className="text-title font-semibold">
-              {translateNow("source.edit.464c4ffd01")} {editTarget.name}
+              {editTarget ? t("owners.readiness.editTitle", { name: editTarget.name }) : t("owners.readiness.add")}
             </h2>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-name">
               {translateNow("source.name.dcd1d5223f")}
@@ -313,9 +510,9 @@ export function Owners() {
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-kind">
               {translateNow("source.owner.kind.eb9923cec7")}
-              <select
+              <Select
                 id="owner-edit-kind"
-                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                className="font-normal"
                 value={editKind}
                 onChange={(event) => setEditKind(event.target.value as Owner["kind"])}
               >
@@ -324,7 +521,7 @@ export function Owners() {
                     {ownerKind}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-email">
               {t("parity.emailOptional_5c10b5")}
@@ -336,13 +533,60 @@ export function Owners() {
                 onChange={(event) => setEditEmail(event.target.value)}
               />
             </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-application">
+              {t("owners.readiness.applicationID")}
+              <input
+                id="owner-edit-application"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={editApplicationID}
+                onChange={(event) => setEditApplicationID(event.target.value)}
+                placeholder={t("owners.readiness.applicationPlaceholder")}
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-service">
+              {t("owners.readiness.service")}
+              <input
+                id="owner-edit-service"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={editService}
+                onChange={(event) => setEditService(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-business-unit">
+              {t("owners.readiness.businessUnit")}
+              <input
+                id="owner-edit-business-unit"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={editBusinessUnit}
+                onChange={(event) => setEditBusinessUnit(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-environment">
+              {t("owners.readiness.environment")}
+              <input
+                id="owner-edit-environment"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
+                value={editEnvironment}
+                onChange={(event) => setEditEnvironment(event.target.value)}
+                placeholder={t("owners.readiness.environmentPlaceholder")}
+              />
+            </label>
+            <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-escalation">
+              {t("owners.readiness.escalation")}
+              <Textarea
+                id="owner-edit-escalation"
+                className="min-h-24 font-mono font-normal"
+                value={editEscalationChain}
+                onChange={(event) => setEditEscalationChain(event.target.value)}
+              />
+            </label>
             {editError && <p className="text-sm font-medium text-risk-critical">{editError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setEditTarget(null)} disabled={editBusy}>
+              <Button type="button" variant="ghost" onClick={() => setEditorOpen(false)} disabled={editBusy}>
                 {translateNow("source.cancel.19766ed6cc")}
               </Button>
               <Button type="submit" disabled={editBusy}>
-                {t("parity.saveOwner_b67638")}
+                {editTarget ? t("parity.saveOwner_b67638") : t("owners.readiness.create")}
               </Button>
             </div>
           </form>

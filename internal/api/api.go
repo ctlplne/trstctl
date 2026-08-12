@@ -146,9 +146,10 @@ type API struct {
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
-	featureObserver func(feature, action, outcome string, seconds float64)
-	mux             *http.ServeMux
-	spec            *Document
+	featureObserver             func(feature, action, outcome string, seconds float64)
+	ownershipAttestationCadence time.Duration
+	mux                         *http.ServeMux
+	spec                        *Document
 }
 
 // Option configures an API.
@@ -168,76 +169,77 @@ type config struct {
 	// real authenticated resolver (so test servers still accept bearer tokens and
 	// sessions). It is referenced only from WithInsecureHeaderResolver, so it is
 	// not linked into the production build. See WithInsecureHeaderResolver.
-	principalFromReg          func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
-	audit                     *audit.Service
-	auditTimestamper          auditanchor.Timestamper
-	retirementChecklist       RetirementChecklistSource
-	auth                      *AuthConfig
-	scim                      *SCIMConfig
-	agentTokens               BootstrapTokenIssuer
-	agentEnroller             BootstrapEnroller
-	agentEnrollmentObserver   func(result string)
-	rateLimiter               RateLimiter
-	specialAbuseLimits        SpecialRouteAbuseLimits
-	gate                      MutationGate
-	abac                      ABACDenyEvaluator
-	abacEnvironment           map[string]string
-	abacNow                   func() time.Time
-	approvals                 ApprovalRecorder
-	breakglass                BreakglassReconciler
-	breakglassIssuer          BreakglassIssuer
-	breakglassCeremonies      BreakglassCeremonyService
-	breakglassRotation        BreakglassRotationService
-	breakglassAdmin           *breakglass.AdminService
-	caHierarchy               CAHierarchyService
-	edgeDelegations           EdgeDelegationService
-	externalCAs               ExternalCAService
-	attestedIssuer            AttestedIssuerService
-	sshWorkflow               SSHWorkflowService
-	broker                    BrokerService
-	ephemeral                 EphemeralIssuerService
-	pam                       PAMService
-	managedKeys               ManagedKeyService
-	transit                   TransitService
-	protocolProfile           ProtocolProfileControl
-	codeSigning               CodeSigningService
-	ctSubmission              CTSubmissionService
-	secrets                   *secretsService
-	ai                        *aiSurface
-	cbom                      CBOMService
-	pqcCampaignSigner         PQCCampaignClosureSigner
-	licensedRoutes            []LicensedRoute
-	licensedSchemas           map[string]*Schema
-	complianceEvidence        ComplianceEvidenceService
-	license                   *license.Manager
-	remediation               bool
-	notificationChannels      []string
-	notificationOutbox        *orchestrator.Outbox
-	outboxCircuits            func() []orchestrator.CircuitSnapshot
-	bulkheadStats             func() []bulkhead.Stats
-	systemReadout             SystemReadoutProvider
-	idemProtection            IdempotencyResultProtectionProvider
-	tenantKeyDomains          TenantKeyDomainLifecycle
-	tenantCrypto              tenantseal.Access
-	connectorRegistry         *connector.Registry
-	caLeafValidity            time.Duration
-	sshFleet                  SSHFleetProvider
-	codeSigningIdentities     CodeSigningIdentityProvider
-	serviceNowBindings        []ServiceNowBinding
-	outboundEnvCredentialRefs map[string]struct{}
-	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
-	acmeCAAResolver           acmesrv.CAAResolver
-	acmeARIPosture            ACMEARIPostureProvider
-	acmeEAB                   ACMEEABProvider
-	agentJobPosture           AgentJobPostureProvider
-	enqueueConnectorTest      ConnectorTestEnqueuer
-	adcsPosture               ADCSPostureProvider
-	acmeEABDisable            ACMEEABDisabler
-	privacyRetentionPolicy    privacy.RetentionPolicy
-	privacyRetentionSource    privacy.RetentionPolicySource
-	kubernetesCSRPosture      KubernetesPostureReader
-	kubernetesTrustPosture    KubernetesPostureReader
-	featureObserver           func(feature, action, outcome string, seconds float64)
+	principalFromReg            func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
+	audit                       *audit.Service
+	auditTimestamper            auditanchor.Timestamper
+	retirementChecklist         RetirementChecklistSource
+	auth                        *AuthConfig
+	scim                        *SCIMConfig
+	agentTokens                 BootstrapTokenIssuer
+	agentEnroller               BootstrapEnroller
+	agentEnrollmentObserver     func(result string)
+	rateLimiter                 RateLimiter
+	specialAbuseLimits          SpecialRouteAbuseLimits
+	gate                        MutationGate
+	abac                        ABACDenyEvaluator
+	abacEnvironment             map[string]string
+	abacNow                     func() time.Time
+	approvals                   ApprovalRecorder
+	breakglass                  BreakglassReconciler
+	breakglassIssuer            BreakglassIssuer
+	breakglassCeremonies        BreakglassCeremonyService
+	breakglassRotation          BreakglassRotationService
+	breakglassAdmin             *breakglass.AdminService
+	caHierarchy                 CAHierarchyService
+	edgeDelegations             EdgeDelegationService
+	externalCAs                 ExternalCAService
+	attestedIssuer              AttestedIssuerService
+	sshWorkflow                 SSHWorkflowService
+	broker                      BrokerService
+	ephemeral                   EphemeralIssuerService
+	pam                         PAMService
+	managedKeys                 ManagedKeyService
+	transit                     TransitService
+	protocolProfile             ProtocolProfileControl
+	codeSigning                 CodeSigningService
+	ctSubmission                CTSubmissionService
+	secrets                     *secretsService
+	ai                          *aiSurface
+	cbom                        CBOMService
+	pqcCampaignSigner           PQCCampaignClosureSigner
+	licensedRoutes              []LicensedRoute
+	licensedSchemas             map[string]*Schema
+	complianceEvidence          ComplianceEvidenceService
+	license                     *license.Manager
+	remediation                 bool
+	notificationChannels        []string
+	notificationOutbox          *orchestrator.Outbox
+	outboxCircuits              func() []orchestrator.CircuitSnapshot
+	bulkheadStats               func() []bulkhead.Stats
+	systemReadout               SystemReadoutProvider
+	idemProtection              IdempotencyResultProtectionProvider
+	tenantKeyDomains            TenantKeyDomainLifecycle
+	tenantCrypto                tenantseal.Access
+	connectorRegistry           *connector.Registry
+	caLeafValidity              time.Duration
+	sshFleet                    SSHFleetProvider
+	codeSigningIdentities       CodeSigningIdentityProvider
+	serviceNowBindings          []ServiceNowBinding
+	outboundEnvCredentialRefs   map[string]struct{}
+	acmeDNS01Providers          []ACMEDNS01ProviderCatalogItem
+	acmeCAAResolver             acmesrv.CAAResolver
+	acmeARIPosture              ACMEARIPostureProvider
+	acmeEAB                     ACMEEABProvider
+	agentJobPosture             AgentJobPostureProvider
+	enqueueConnectorTest        ConnectorTestEnqueuer
+	adcsPosture                 ADCSPostureProvider
+	acmeEABDisable              ACMEEABDisabler
+	privacyRetentionPolicy      privacy.RetentionPolicy
+	privacyRetentionSource      privacy.RetentionPolicySource
+	kubernetesCSRPosture        KubernetesPostureReader
+	kubernetesTrustPosture      KubernetesPostureReader
+	featureObserver             func(feature, action, outcome string, seconds float64)
+	ownershipAttestationCadence time.Duration
 }
 
 // WithAuth wires the browser OIDC login + session bridge used by the web UI
@@ -426,85 +428,86 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	specialAbuseLimits := cfg.specialAbuseLimits.withDefaults()
 	a := &API{
-		store:                     st,
-		log:                       cfg.eventLog,
-		idem:                      idem,
-		orch:                      orch,
-		tenantFn:                  tenantFromHeader,
-		drVerify:                  backupVerifierFor(cfg.backupDir),
-		lastDrill:                 cfg.lastDrill,
-		roles:                     reg,
-		audit:                     cfg.audit,
-		auditTimestamper:          cfg.auditTimestamper,
-		retirementChecklist:       cfg.retirementChecklist,
-		auth:                      cfg.auth,
-		scim:                      cfg.scim,
-		scimTokens:                normalizeSCIM(cfg.scim),
-		agentTokens:               cfg.agentTokens,
-		agentEnroller:             cfg.agentEnroller,
-		agentEnrollmentObserver:   cfg.agentEnrollmentObserver,
-		rateLimiter:               cfg.rateLimiter,
-		specialAbuse:              newSpecialRouteAbuseLimiter(specialAbuseLimits),
-		gate:                      cfg.gate,
-		abac:                      cfg.abac,
-		abacEnvironment:           copyStringMap(cfg.abacEnvironment),
-		abacNow:                   cfg.abacNow,
-		approvals:                 cfg.approvals,
-		breakglass:                cfg.breakglass,
-		breakglassIssuer:          cfg.breakglassIssuer,
-		breakglassCeremonies:      cfg.breakglassCeremonies,
-		breakglassRotation:        cfg.breakglassRotation,
-		breakglassAdmin:           cfg.breakglassAdmin,
-		caHierarchy:               cfg.caHierarchy,
-		edgeDelegations:           cfg.edgeDelegations,
-		externalCAs:               cfg.externalCAs,
-		attestedIssuer:            cfg.attestedIssuer,
-		sshWorkflow:               cfg.sshWorkflow,
-		broker:                    cfg.broker,
-		ephemeral:                 cfg.ephemeral,
-		pam:                       cfg.pam,
-		managedKeys:               cfg.managedKeys,
-		transit:                   cfg.transit,
-		vaultCompat:               newVaultCompatState(cfg.eventLog),
-		protocolProfile:           cfg.protocolProfile,
-		codeSigning:               cfg.codeSigning,
-		ctSubmission:              cfg.ctSubmission,
-		secrets:                   cfg.secrets,
-		ai:                        cfg.ai,
-		cbom:                      cfg.cbom,
-		pqcCampaignSigner:         cfg.pqcCampaignSigner,
-		licensedRoutes:            append([]LicensedRoute(nil), cfg.licensedRoutes...),
-		licensedSchemas:           copySchemaMap(cfg.licensedSchemas),
-		complianceEvidence:        cfg.complianceEvidence,
-		license:                   cfg.license,
-		remediation:               cfg.remediation,
-		notificationChannels:      append([]string(nil), cfg.notificationChannels...),
-		notificationOutbox:        cfg.notificationOutbox,
-		outboxCircuits:            cfg.outboxCircuits,
-		bulkheadStats:             cfg.bulkheadStats,
-		systemReadout:             cfg.systemReadout,
-		idemProtection:            cfg.idemProtection,
-		tenantKeyDomains:          cfg.tenantKeyDomains,
-		tenantCrypto:              cfg.tenantCrypto,
-		connectorRegistry:         cfg.connectorRegistry,
-		caLeafValidity:            cfg.caLeafValidity,
-		sshFleet:                  cfg.sshFleet,
-		codeSigningIdentities:     cfg.codeSigningIdentities,
-		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
-		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
-		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
-		acmeCAAResolver:           cfg.acmeCAAResolver,
-		acmeARIPosture:            cfg.acmeARIPosture,
-		acmeEAB:                   cfg.acmeEAB,
-		agentJobPosture:           cfg.agentJobPosture,
-		enqueueConnectorTest:      cfg.enqueueConnectorTest,
-		adcsPosture:               cfg.adcsPosture,
-		acmeEABDisable:            cfg.acmeEABDisable,
-		featureObserver:           cfg.featureObserver,
-		privacyRetentionPolicy:    policy.WithDefaults(),
-		privacyRetentionSource:    cfg.privacyRetentionSource,
-		kubernetesCSRPosture:      cfg.kubernetesCSRPosture,
-		kubernetesTrustPosture:    cfg.kubernetesTrustPosture,
+		store:                       st,
+		log:                         cfg.eventLog,
+		idem:                        idem,
+		orch:                        orch,
+		tenantFn:                    tenantFromHeader,
+		drVerify:                    backupVerifierFor(cfg.backupDir),
+		lastDrill:                   cfg.lastDrill,
+		roles:                       reg,
+		audit:                       cfg.audit,
+		auditTimestamper:            cfg.auditTimestamper,
+		retirementChecklist:         cfg.retirementChecklist,
+		auth:                        cfg.auth,
+		scim:                        cfg.scim,
+		scimTokens:                  normalizeSCIM(cfg.scim),
+		agentTokens:                 cfg.agentTokens,
+		agentEnroller:               cfg.agentEnroller,
+		agentEnrollmentObserver:     cfg.agentEnrollmentObserver,
+		rateLimiter:                 cfg.rateLimiter,
+		specialAbuse:                newSpecialRouteAbuseLimiter(specialAbuseLimits),
+		gate:                        cfg.gate,
+		abac:                        cfg.abac,
+		abacEnvironment:             copyStringMap(cfg.abacEnvironment),
+		abacNow:                     cfg.abacNow,
+		approvals:                   cfg.approvals,
+		breakglass:                  cfg.breakglass,
+		breakglassIssuer:            cfg.breakglassIssuer,
+		breakglassCeremonies:        cfg.breakglassCeremonies,
+		breakglassRotation:          cfg.breakglassRotation,
+		breakglassAdmin:             cfg.breakglassAdmin,
+		caHierarchy:                 cfg.caHierarchy,
+		edgeDelegations:             cfg.edgeDelegations,
+		externalCAs:                 cfg.externalCAs,
+		attestedIssuer:              cfg.attestedIssuer,
+		sshWorkflow:                 cfg.sshWorkflow,
+		broker:                      cfg.broker,
+		ephemeral:                   cfg.ephemeral,
+		pam:                         cfg.pam,
+		managedKeys:                 cfg.managedKeys,
+		transit:                     cfg.transit,
+		vaultCompat:                 newVaultCompatState(cfg.eventLog),
+		protocolProfile:             cfg.protocolProfile,
+		codeSigning:                 cfg.codeSigning,
+		ctSubmission:                cfg.ctSubmission,
+		secrets:                     cfg.secrets,
+		ai:                          cfg.ai,
+		cbom:                        cfg.cbom,
+		pqcCampaignSigner:           cfg.pqcCampaignSigner,
+		licensedRoutes:              append([]LicensedRoute(nil), cfg.licensedRoutes...),
+		licensedSchemas:             copySchemaMap(cfg.licensedSchemas),
+		complianceEvidence:          cfg.complianceEvidence,
+		license:                     cfg.license,
+		remediation:                 cfg.remediation,
+		notificationChannels:        append([]string(nil), cfg.notificationChannels...),
+		notificationOutbox:          cfg.notificationOutbox,
+		outboxCircuits:              cfg.outboxCircuits,
+		bulkheadStats:               cfg.bulkheadStats,
+		systemReadout:               cfg.systemReadout,
+		idemProtection:              cfg.idemProtection,
+		tenantKeyDomains:            cfg.tenantKeyDomains,
+		tenantCrypto:                cfg.tenantCrypto,
+		connectorRegistry:           cfg.connectorRegistry,
+		caLeafValidity:              cfg.caLeafValidity,
+		sshFleet:                    cfg.sshFleet,
+		codeSigningIdentities:       cfg.codeSigningIdentities,
+		serviceNowBindings:          append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
+		outboundEnvCredentialRefs:   copyStringSet(cfg.outboundEnvCredentialRefs),
+		acmeDNS01Providers:          append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
+		acmeCAAResolver:             cfg.acmeCAAResolver,
+		acmeARIPosture:              cfg.acmeARIPosture,
+		acmeEAB:                     cfg.acmeEAB,
+		agentJobPosture:             cfg.agentJobPosture,
+		enqueueConnectorTest:        cfg.enqueueConnectorTest,
+		adcsPosture:                 cfg.adcsPosture,
+		acmeEABDisable:              cfg.acmeEABDisable,
+		featureObserver:             cfg.featureObserver,
+		ownershipAttestationCadence: cfg.ownershipAttestationCadence,
+		privacyRetentionPolicy:      policy.WithDefaults(),
+		privacyRetentionSource:      cfg.privacyRetentionSource,
+		kubernetesCSRPosture:        cfg.kubernetesCSRPosture,
+		kubernetesTrustPosture:      cfg.kubernetesTrustPosture,
 	}
 	if a.auth != nil {
 		a.oidcPreLogin = newOIDCPreLoginStore(a.auth.PreLoginTTL, specialAbuseLimits.preLoginLimits())
@@ -842,6 +845,7 @@ func jsonBodyStringField(r *http.Request, field string) (string, error) {
 
 func (a *API) routes() []route {
 	idPath := []param{pathUUID("id")}
+	ownershipExceptionPath := []param{pathUUID("id"), pathUUID("exception_id")}
 	graphNodePath := []param{pathString("id", "credential graph node id")}
 	profileVersionPath := []param{
 		pathString("name", "certificate profile name"),
@@ -940,6 +944,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/owners/{id}", opID: "getOwner", summary: "Get an owner", handler: a.getOwner, pathParams: idPath, resSchema: "Owner", successCode: "200", perm: authz.OwnersRead},
 		{method: "PUT", path: "/api/v1/owners/{id}", opID: "updateOwner", summary: "Replace an owner", handler: a.updateOwner, pathParams: idPath, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "200", mutation: true, perm: authz.OwnersWrite},
 		{method: "DELETE", path: "/api/v1/owners/{id}", opID: "deleteOwner", summary: "Delete an owner", handler: a.deleteOwner, pathParams: idPath, successCode: "204", mutation: true, perm: authz.OwnersWrite},
+		{method: "POST", path: "/api/v1/owners/{id}/attest", opID: "attestOwner", summary: "Attest the current owner application and environment", handler: a.attestOwner, pathParams: idPath, resSchema: "Owner", successCode: "200", mutation: true, perm: authz.OwnersWrite},
+		{method: "GET", path: "/api/v1/identities/{id}/ownership-exceptions", opID: "listOwnershipExceptions", summary: "List attributed ownership-readiness exceptions", handler: a.listOwnershipExceptions, pathParams: idPath, resSchema: "OwnershipExceptionList", successCode: "200", perm: authz.OwnersRead},
+		{method: "POST", path: "/api/v1/identities/{id}/ownership-exceptions", opID: "grantOwnershipException", summary: "Grant a temporary ownership-readiness exception", handler: a.grantOwnershipException, pathParams: idPath, reqSchema: "OwnershipExceptionRequest", resSchema: "OwnershipException", successCode: "201", mutation: true, perm: authz.OwnersWrite},
+		{method: "POST", path: "/api/v1/identities/{id}/ownership-exceptions/{exception_id}/revoke", opID: "revokeOwnershipException", summary: "Revoke an ownership-readiness exception", handler: a.revokeOwnershipException, pathParams: ownershipExceptionPath, reqSchema: "OwnershipExceptionRevokeRequest", resSchema: "OwnershipException", successCode: "200", mutation: true, perm: authz.OwnersWrite},
 
 		{method: "POST", path: "/api/v1/issuers", opID: "createIssuer", summary: "Create an issuer", handler: a.createIssuer, reqSchema: "IssuerRequest", resSchema: "Issuer", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/issuers", opID: "listIssuers", summary: "List issuers", handler: a.listIssuers, query: page, resSchema: "IssuerList", successCode: "200", perm: authz.IssuersRead},

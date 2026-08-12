@@ -185,9 +185,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// segments create` raises it to 368 and closes the prerequisite already
 	// served by GUI-F002's createDiscoverySegment API operation. AUD-42's
 	// destructive `ca keys retire` raises it to 369 and keeps the signer-gated
-	// operation usable from a headless recovery terminal.
-	if len(out) != 369 {
-		t.Fatalf("CLI commands = %d, want 369", len(out))
+	// operation usable from a headless recovery terminal. AUD-44's owner attest
+	// plus exception list/grant/revoke commands raise it to 373 and expose the
+	// ownership-readiness gate from a headless incident terminal.
+	if len(out) != 373 {
+		t.Fatalf("CLI commands = %d, want 373", len(out))
 	}
 	return out
 }

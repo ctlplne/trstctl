@@ -264,6 +264,10 @@ import type {
   OwnerRequest,
   OwnershipAttribution,
   OwnershipAttributionItem,
+  OwnershipException,
+  OwnershipExceptionList,
+  OwnershipExceptionRequest,
+  OwnershipExceptionRevokeRequest,
   PAMSession,
   PAMSessionList,
   PAMSessionRequest,
@@ -477,6 +481,7 @@ export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } fr
 export type { AgentUpgradeCampaign } from "./api-types.gen";
 export type { OutboxReconciliationConflict, OutboxReconciliationConflictList } from "./api-types.gen";
 export type Owner = GenOwner;
+export type { OwnershipException, OwnershipExceptionRequest, OwnershipExceptionRevokeRequest } from "./api-types.gen";
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
 export type CADiscovery = CADiscoveryInventory;
@@ -1408,6 +1413,10 @@ export interface Api {
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
   createOwner(input: OwnerRequest): Promise<Owner>;
+  attestOwner(id: string): Promise<Owner>;
+  ownershipExceptions(identityId: string): Promise<OwnershipException[]>;
+  grantOwnershipException(identityId: string, input: OwnershipExceptionRequest): Promise<OwnershipException>;
+  revokeOwnershipException(identityId: string, exceptionId: string, input: OwnershipExceptionRevokeRequest): Promise<OwnershipException>;
   issuers(): Promise<Issuer[]>;
   issuerCapabilities(): Promise<IssuerCapabilityMatrix>;
   createIssuer(input: IssuerRequest): Promise<Issuer>;
@@ -1814,6 +1823,17 @@ const liveApi: Api = {
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),
+  attestOwner: (id) => mutate<Owner>("POST", `/api/v1/owners/${encodeURIComponent(id)}/attest`, {}),
+  ownershipExceptions: (identityId) =>
+    req<OwnershipExceptionList>(`/api/v1/identities/${encodeURIComponent(identityId)}/ownership-exceptions`).then((result) => result.items ?? []),
+  grantOwnershipException: (identityId, input) =>
+    mutate<OwnershipException>("POST", `/api/v1/identities/${encodeURIComponent(identityId)}/ownership-exceptions`, input),
+  revokeOwnershipException: (identityId, exceptionId, input) =>
+    mutate<OwnershipException>(
+      "POST",
+      `/api/v1/identities/${encodeURIComponent(identityId)}/ownership-exceptions/${encodeURIComponent(exceptionId)}/revoke`,
+      input,
+    ),
   issuers: () => req<{ items: Issuer[] }>("/api/v1/issuers").then((r) => r.items ?? []),
   issuerCapabilities: () => req<IssuerCapabilityMatrix>("/api/v1/issuers/capabilities"),
   createIssuer: (input) => mutate<Issuer>("POST", "/api/v1/issuers", input),

@@ -83,6 +83,10 @@ var coreCommandTable = []Command{
 	{Name: []string{"owners", "get"}, Method: "GET", Path: "/api/v1/owners/{id}", Summary: "Get an owner"},
 	{Name: []string{"owners", "update"}, Method: "PUT", Path: "/api/v1/owners/{id}", Body: bodyFile, Summary: "Replace an owner"},
 	{Name: []string{"owners", "delete"}, Method: "DELETE", Path: "/api/v1/owners/{id}", Summary: "Delete an owner"},
+	{Name: []string{"owners", "attest"}, Method: "POST", Path: "/api/v1/owners/{id}/attest", Body: bodyOptionalFile, Summary: "Attest the current owner application and environment"},
+	{Name: []string{"owners", "exceptions", "list"}, Method: "GET", Path: "/api/v1/identities/{id}/ownership-exceptions", Summary: "List temporary ownership-readiness exceptions for an identity"},
+	{Name: []string{"owners", "exceptions", "grant"}, Method: "POST", Path: "/api/v1/identities/{id}/ownership-exceptions", Body: bodyFile, Summary: "Grant a reasoned, attributed, expiring ownership-readiness exception"},
+	{Name: []string{"owners", "exceptions", "revoke"}, Method: "POST", Path: "/api/v1/identities/{id}/ownership-exceptions/{exception_id}/revoke", Body: bodyFile, Summary: "Revoke an ownership-readiness exception"},
 
 	{Name: []string{"issuers", "create"}, Method: "POST", Path: "/api/v1/issuers", Body: bodyFile, Summary: "Create an issuer"},
 	{Name: []string{"issuers", "list"}, Method: "GET", Path: "/api/v1/issuers", Query: []string{"limit", "cursor"}, Summary: "List issuers"},

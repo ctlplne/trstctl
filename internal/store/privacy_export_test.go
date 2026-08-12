@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -391,6 +392,86 @@ func TestPrivacyRetentionRedactsDiscoveryConfigAndFindingMetadata(t *testing.T) 
 		if hits := countDiscoveryJSONStringHits(t, ctx, s, tenantA, raw); hits != 0 {
 			t.Fatalf("retention left raw discovery JSON value %q in %d source config/finding metadata values", raw, hits)
 		}
+	}
+}
+
+func TestOwnershipReadinessPrivacyExportAndErasureAUD44(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "AUD-44 privacy"}); err != nil {
+		t.Fatal(err)
+	}
+	const subject = "ownership-admin@example.test"
+	ownerID, identityID, exceptionID := uuid(tenantA, 201), uuid(tenantA, 202), uuid(tenantA, 203)
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO owners
+			(id, tenant_id, kind, name, email, application_id, service, business_unit,
+			 environment, escalation_chain, ownership_verified_at, ownership_verified_by,
+			 ownership_model_digest)
+			VALUES ($1,$2,'Service',$3,$3,$3,$3,$3,'production',jsonb_build_array($3::text),now(),$3,'sha256:model')`,
+			ownerID, tenantA, subject); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO identities (id, tenant_id, kind, name, owner_id)
+			VALUES ($1,$2,'x509','aud44-privacy',$3)`, identityID, tenantA, ownerID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO ownership_readiness_exceptions
+			(tenant_id,id,identity_id,reason,granted_by,granted_at,expires_at,
+			 revoked_by,revoked_at,revocation_reason,created_event_id,last_event_seq)
+			VALUES ($1,$2,$3,$4,$4,now(),now()+interval '1 day',$4,now(),$4,'event-aud44',1)`,
+			tenantA, exceptionID, identityID, subject)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	export, err := s.SelectPrivacySubjectExport(ctx, tenantA, subject)
+	if err != nil {
+		t.Fatalf("export ownership readiness: %v", err)
+	}
+	if len(export.Owners) != 1 || export.Owners[0].ApplicationID != subject ||
+		export.Owners[0].OwnershipVerifiedBy != subject || len(export.Owners[0].EscalationChain) != 1 {
+		t.Fatalf("owner depth missing from privacy export: %+v", export.Owners)
+	}
+	var sawException bool
+	for _, record := range export.ReadModels {
+		if record.Table == "ownership_readiness_exceptions" && record.ID == exceptionID {
+			sawException = true
+		}
+	}
+	if !sawException {
+		t.Fatalf("ownership exception missing from privacy export: %+v", export.ReadModels)
+	}
+
+	erasure, err := s.SelectPrivacySubjectErasure(ctx, tenantA, subject)
+	if err != nil {
+		t.Fatalf("select ownership readiness erasure: %v", err)
+	}
+	if erasure.Counts["owners"] != 1 || erasure.Counts["ownership_readiness_exceptions"] != 1 {
+		t.Fatalf("ownership erasure selectors incomplete: counts=%v selectors=%+v", erasure.Counts, erasure.Selectors)
+	}
+	erasure.RequestedByRef = privacy.SubjectRef(tenantA, "privacy-admin")
+	erasure.Reason = "AUD-44 data subject request"
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyPrivacySubjectErasedTx(ctx, tx, erasure)
+	}); err != nil {
+		t.Fatalf("erase ownership readiness: %v", err)
+	}
+	var ownerRaw, exceptionRaw string
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT concat_ws('|',name,email,application_id,service,business_unit,
+			escalation_chain::text,ownership_verified_by) FROM owners WHERE tenant_id=$1 AND id=$2`,
+			tenantA, ownerID).Scan(&ownerRaw); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT concat_ws('|',reason,granted_by,coalesce(revoked_by,''),coalesce(revocation_reason,''))
+			FROM ownership_readiness_exceptions WHERE tenant_id=$1 AND id=$2`, tenantA, exceptionID).Scan(&exceptionRaw)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(ownerRaw, subject) || strings.Contains(exceptionRaw, subject) {
+		t.Fatalf("erasure retained ownership subject: owner=%q exception=%q", ownerRaw, exceptionRaw)
 	}
 }
 

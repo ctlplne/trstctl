@@ -106,6 +106,10 @@ const (
 	EventOwnerCreated                             = "owner.created"
 	EventOwnerUpdated                             = "owner.updated"
 	EventOwnerDeleted                             = "owner.deleted"
+	EventOwnershipAttested                        = "owner.ownership_attested"
+	EventOwnerReattestationRequested              = "owner.reattestation.requested"
+	EventOwnershipExceptionGranted                = "ownership.exception.granted"
+	EventOwnershipExceptionRevoked                = "ownership.exception.revoked"
 	EventTenantMemberUpserted                     = "tenant.member.upserted"
 	EventTenantMemberOffboarded                   = "tenant.member.offboarded"
 	EventAPITokenCreated                          = "api_token.created"
@@ -265,6 +269,10 @@ var ledger = []FeatureEvent{
 	{"F8", "RBAC", "create_owner", "createOwner", []string{EventOwnerCreated}},
 	{"F8", "RBAC", "update_owner", "updateOwner", []string{EventOwnerUpdated}},
 	{"F8", "RBAC", "delete_owner", "deleteOwner", []string{EventOwnerDeleted}},
+	{"F8", "Ownership accountability", "attest_owner", "attestOwner", []string{EventOwnershipAttested}},
+	{"F8", "Ownership accountability", "grant_exception", "grantOwnershipException", []string{EventOwnershipExceptionGranted}},
+	{"F8", "Ownership accountability", "revoke_exception", "revokeOwnershipException", []string{EventOwnershipExceptionRevoked}},
+	{"F8", "Ownership accountability", "request_reattestation", "ownershipReattestationScheduler", []string{EventOwnerReattestationRequested}},
 	{"F8", "RBAC", "upsert_member", "upsertMember", []string{EventTenantMemberUpserted}},
 	{"F8", "RBAC", "offboard_member", "offboardMember", []string{EventTenantMemberOffboarded}},
 	{"F8", "RBAC", "create_api_token", "createAPIToken", []string{EventAPITokenCreated}},

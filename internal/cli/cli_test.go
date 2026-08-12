@@ -372,6 +372,68 @@ func TestCreateSendsBodyFromStdin(t *testing.T) {
 	}
 }
 
+func TestOwnershipReadinessCommandsAUD44(t *testing.T) {
+	var calls []capture
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		calls = append(calls, capture{Method: r.Method, Path: r.URL.Path, Header: r.Header.Clone(), Body: body})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	t.Cleanup(srv.Close)
+	env := cli.Env{Server: srv.URL, Token: "owner-token", Tenant: "tenant-44", HTTPClient: srv.Client()}
+
+	commands := []struct {
+		args  []string
+		stdin string
+	}{
+		{args: []string{"owners", "attest", "owner-44"}},
+		{args: []string{"owners", "exceptions", "list", "identity-44"}},
+		{args: []string{"owners", "exceptions", "grant", "identity-44", "-f", "-"}, stdin: `{"reason":"incident recovery","expires_at":"2026-08-13T10:00:00Z"}`},
+		{args: []string{"owners", "exceptions", "revoke", "identity-44", "exception-44", "--force", "-f", "-"}, stdin: `{"reason":"owner re-attested"}`},
+	}
+	for _, command := range commands {
+		if code, _, stderr := run(t, command.args, env, command.stdin); code != 0 {
+			t.Fatalf("%v exit = %d, stderr = %q", command.args, code, stderr)
+		}
+	}
+	if len(calls) != 4 {
+		t.Fatalf("calls = %d, want 4", len(calls))
+	}
+	wants := []struct {
+		method string
+		path   string
+		body   string
+		mutate bool
+	}{
+		{method: http.MethodPost, path: "/api/v1/owners/owner-44/attest", mutate: true},
+		{method: http.MethodGet, path: "/api/v1/identities/identity-44/ownership-exceptions"},
+		{method: http.MethodPost, path: "/api/v1/identities/identity-44/ownership-exceptions", body: commands[2].stdin, mutate: true},
+		{method: http.MethodPost, path: "/api/v1/identities/identity-44/ownership-exceptions/exception-44/revoke", body: commands[3].stdin, mutate: true},
+	}
+	for i, want := range wants {
+		got := calls[i]
+		if got.Method != want.method || got.Path != want.path {
+			t.Errorf("call %d = %s %s, want %s %s", i, got.Method, got.Path, want.method, want.path)
+		}
+		if want.body != "" && !sameJSON(got.Body, []byte(want.body)) {
+			t.Errorf("call %d body = %s, want %s", i, got.Body, want.body)
+		}
+		if want.mutate && got.Header.Get("Idempotency-Key") == "" {
+			t.Errorf("call %d mutation has no Idempotency-Key", i)
+		}
+		if !want.mutate && got.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("call %d read sent Idempotency-Key %q", i, got.Header.Get("Idempotency-Key"))
+		}
+		if got.Header.Get("Authorization") != "Bearer owner-token" || got.Header.Get("X-Tenant-ID") != "tenant-44" {
+			t.Errorf("call %d lost authentication: authorization=%q tenant=%q", i, got.Header.Get("Authorization"), got.Header.Get("X-Tenant-ID"))
+		}
+	}
+}
+
 func TestDestructiveCommandRequiresForce(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"revoked":1}`, &cap)

@@ -96,8 +96,15 @@ Owners is the accountability directory: search and filter the people, teams,
 workloads, and services credentials are attributed to; edit, delete, or read the
 orphan-governance panel flagging credentials with no living owner. A companion
 ownership-attribution table lists each non-human identity against its resolved
-owner (or "orphaned") and how the attribution was derived. Backed by
-`/api/v1/owners`, `/api/v1/owners/{id}`, and `/api/v1/ownership/attribution`.
+owner (or "orphaned") and how the attribution was derived. The editor carries the
+application ID, service, business unit, environment, and escalation recipients;
+the grid shows whether that exact application/environment model is current. An
+operator explicitly attests a complete model. The ownership-gaps panel separates
+missing, incomplete, never-attested, and stale records, and can grant one
+reasoned exception with an explicit expiry of at most 30 days. Backed by
+`/api/v1/owners`, `/api/v1/owners/{id}`, `/api/v1/owners/{id}/attest`,
+`/api/v1/identities/{id}/ownership-exceptions`, and
+`/api/v1/ownership/attribution`.
 
 ### Agents (`/agents`)
 

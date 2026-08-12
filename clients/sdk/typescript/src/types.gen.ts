@@ -2250,6 +2250,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/ownership-exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List attributed ownership-readiness exceptions */
+        get: operations["listOwnershipExceptions"];
+        put?: never;
+        /** Grant a temporary ownership-readiness exception */
+        post: operations["grantOwnershipException"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identities/{id}/ownership-exceptions/{exception_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an ownership-readiness exception */
+        post: operations["revokeOwnershipException"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/transitions": {
         parameters: {
             query?: never;
@@ -3523,6 +3558,23 @@ export interface paths {
         post?: never;
         /** Delete an owner */
         delete: operations["deleteOwner"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/owners/{id}/attest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attest the current owner application and environment */
+        post: operations["attestOwner"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -9268,17 +9320,30 @@ export interface components {
             items: components["schemas"]["OutboxReconciliationConflict"][];
         };
         Owner: {
+            application_id?: string;
+            business_unit?: string;
             /** Format: date-time */
             created_at?: string;
             email?: string;
+            environment?: string;
+            escalation_chain: string[];
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "user" | "team" | "workload" | "service";
+            kind: "user" | "team" | "workload" | "service" | "vendor";
             name: string;
+            /** Format: date-time */
+            ownership_attestation_due_at?: string;
+            ownership_attested: boolean;
+            ownership_complete: boolean;
+            ownership_current: boolean;
             ownership_source?: string;
             ownership_source_observed_at?: string;
             ownership_source_ref?: string;
+            /** Format: date-time */
+            ownership_verified_at?: string;
+            ownership_verified_by?: string;
+            service?: string;
             /** Format: uuid */
             tenant_id: string;
         };
@@ -9349,10 +9414,15 @@ export interface components {
             total: number;
         };
         OwnerRequest: {
+            application_id?: string;
+            business_unit?: string;
             email?: string;
+            environment?: string;
+            escalation_chain?: string[];
             /** @enum {string} */
-            kind: "user" | "team" | "workload" | "service";
+            kind: "user" | "team" | "workload" | "service" | "vendor";
             name: string;
+            service?: string;
         };
         OwnershipAttribution: {
             coverage: string[];
@@ -9406,6 +9476,35 @@ export interface components {
             guidance: string;
             items: components["schemas"]["OwnershipConflict"][];
             refused: number;
+        };
+        OwnershipException: {
+            active: boolean;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            granted_at: string;
+            granted_by: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            identity_id: string;
+            reason: string;
+            revocation_reason?: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            revoked_by?: string;
+        };
+        OwnershipExceptionList: {
+            items: components["schemas"]["OwnershipException"][];
+            next_cursor?: string;
+        };
+        OwnershipExceptionRequest: {
+            /** Format: date-time */
+            expires_at: string;
+            reason: string;
+        };
+        OwnershipExceptionRevokeRequest: {
+            reason: string;
         };
         OwnershipImportResult: {
             applied: number;
@@ -11090,7 +11189,7 @@ export interface components {
             identity_id: string;
             name: string;
             /** @enum {string} */
-            reason: "no_owner" | "owner_missing_application_model" | "ownership_never_attested";
+            reason: "no_owner" | "owner_missing_application_model" | "ownership_never_attested" | "ownership_attestation_stale";
             status?: string;
         };
         UnownedQueue: {
@@ -17705,6 +17804,141 @@ export interface operations {
             };
         };
     };
+    listOwnershipExceptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipExceptionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    grantOwnershipException: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnershipExceptionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipException"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeOwnershipException: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                exception_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnershipExceptionRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipException"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     transitionIdentity: {
         parameters: {
             query?: never;
@@ -21653,6 +21887,49 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    attestOwner: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Owner"];
+                };
             };
             /** @description client error */
             "4XX": {

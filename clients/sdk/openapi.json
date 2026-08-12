@@ -15335,12 +15335,27 @@
       },
       "Owner": {
         "properties": {
+          "application_id": {
+            "type": "string"
+          },
+          "business_unit": {
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
           },
           "email": {
             "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "escalation_chain": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "id": {
             "format": "uuid",
@@ -15351,12 +15366,26 @@
               "user",
               "team",
               "workload",
-              "service"
+              "service",
+              "vendor"
             ],
             "type": "string"
           },
           "name": {
             "type": "string"
+          },
+          "ownership_attestation_due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ownership_attested": {
+            "type": "boolean"
+          },
+          "ownership_complete": {
+            "type": "boolean"
+          },
+          "ownership_current": {
+            "type": "boolean"
           },
           "ownership_source": {
             "type": "string"
@@ -15365,6 +15394,16 @@
             "type": "string"
           },
           "ownership_source_ref": {
+            "type": "string"
+          },
+          "ownership_verified_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ownership_verified_by": {
+            "type": "string"
+          },
+          "service": {
             "type": "string"
           },
           "tenant_id": {
@@ -15376,7 +15415,11 @@
           "id",
           "tenant_id",
           "kind",
-          "name"
+          "name",
+          "escalation_chain",
+          "ownership_complete",
+          "ownership_attested",
+          "ownership_current"
         ],
         "type": "object"
       },
@@ -15641,19 +15684,38 @@
       },
       "OwnerRequest": {
         "properties": {
+          "application_id": {
+            "type": "string"
+          },
+          "business_unit": {
+            "type": "string"
+          },
           "email": {
             "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "escalation_chain": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "kind": {
             "enum": [
               "user",
               "team",
               "workload",
-              "service"
+              "service",
+              "vendor"
             ],
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "service": {
             "type": "string"
           }
         },
@@ -15849,6 +15911,99 @@
           "items",
           "refused",
           "guidance"
+        ],
+        "type": "object"
+      },
+      "OwnershipException": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "granted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "granted_by": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "revocation_reason": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revoked_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "identity_id",
+          "reason",
+          "granted_by",
+          "granted_at",
+          "expires_at",
+          "active"
+        ],
+        "type": "object"
+      },
+      "OwnershipExceptionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OwnershipException"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "OwnershipExceptionRequest": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "OwnershipExceptionRevokeRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "type": "object"
       },
@@ -22080,7 +22235,8 @@
             "enum": [
               "no_owner",
               "owner_missing_application_model",
-              "ownership_never_attested"
+              "ownership_never_attested",
+              "ownership_attestation_stale"
             ],
             "type": "string"
           },
@@ -32234,6 +32390,225 @@
         "x-trstctl-permission": "connectors:write"
       }
     },
+    "/api/v1/identities/{id}/ownership-exceptions": {
+      "get": {
+        "operationId": "listOwnershipExceptions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipExceptionList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List attributed ownership-readiness exceptions",
+        "x-trstctl-permission": "owners:read"
+      },
+      "post": {
+        "operationId": "grantOwnershipException",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnershipExceptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipException"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Grant a temporary ownership-readiness exception",
+        "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/identities/{id}/ownership-exceptions/{exception_id}/revoke": {
+      "post": {
+        "operationId": "revokeOwnershipException",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "exception_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnershipExceptionRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipException"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke an ownership-readiness exception",
+        "x-trstctl-permission": "owners:write"
+      }
+    },
     "/api/v1/identities/{id}/transitions": {
       "post": {
         "operationId": "transitionIdentity",
@@ -37949,6 +38324,73 @@
           }
         ],
         "summary": "Replace an owner",
+        "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/owners/{id}/attest": {
+      "post": {
+        "operationId": "attestOwner",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Owner"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Attest the current owner application and environment",
         "x-trstctl-permission": "owners:write"
       }
     },

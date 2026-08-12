@@ -5515,14 +5515,25 @@ OutboxReconciliationConflictList = TypedDict(
 Owner = TypedDict(
     'Owner',
     {
+        'application_id': str,
+        'business_unit': str,
         'created_at': str,
         'email': str,
+        'environment': str,
+        'escalation_chain': list[str],
         'id': str,
         'kind': str,
         'name': str,
+        'ownership_attestation_due_at': str,
+        'ownership_attested': bool,
+        'ownership_complete': bool,
+        'ownership_current': bool,
         'ownership_source': str,
         'ownership_source_observed_at': str,
         'ownership_source_ref': str,
+        'ownership_verified_at': str,
+        'ownership_verified_by': str,
+        'service': str,
         'tenant_id': str,
     },
     total=False,
@@ -5622,9 +5633,14 @@ OwnerRemediationSummary = TypedDict(
 OwnerRequest = TypedDict(
     'OwnerRequest',
     {
+        'application_id': str,
+        'business_unit': str,
         'email': str,
+        'environment': str,
+        'escalation_chain': list[str],
         'kind': str,
         'name': str,
+        'service': str,
     },
     total=False,
 )
@@ -5694,6 +5710,49 @@ OwnershipConflictList = TypedDict(
         'guidance': str,
         'items': list[dict[str, Any]],
         'refused': int,
+    },
+    total=False,
+)
+
+OwnershipException = TypedDict(
+    'OwnershipException',
+    {
+        'active': bool,
+        'expires_at': str,
+        'granted_at': str,
+        'granted_by': str,
+        'id': str,
+        'identity_id': str,
+        'reason': str,
+        'revocation_reason': str,
+        'revoked_at': str,
+        'revoked_by': str,
+    },
+    total=False,
+)
+
+OwnershipExceptionList = TypedDict(
+    'OwnershipExceptionList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+OwnershipExceptionRequest = TypedDict(
+    'OwnershipExceptionRequest',
+    {
+        'expires_at': str,
+        'reason': str,
+    },
+    total=False,
+)
+
+OwnershipExceptionRevokeRequest = TypedDict(
+    'OwnershipExceptionRevokeRequest',
+    {
+        'reason': str,
     },
     total=False,
 )

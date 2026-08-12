@@ -54,6 +54,32 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/id", opaque), privacyRule("/kind", opaque),
 		privacyRule("/name", token), privacyRule("/email", exact),
 	)
+	ownerDepth := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/kind", opaque),
+		privacyRule("/name", token), privacyRule("/email", exact),
+		privacyRule("/application_id", token), privacyRule("/service", token),
+		privacyRule("/business_unit", token), privacyRule("/environment", opaque),
+		privacyRule("/escalation_chain/*", exact),
+	)
+	ownershipAttested := privacyRules(
+		privacyRule("/owner_id", opaque), privacyRule("/attested_by", exact),
+		privacyRule("/attested_at", opaque), privacyRule("/model_digest", opaque),
+	)
+	ownerReattestationRequested := privacyRules(
+		privacyRule("/owner_id", opaque), privacyRule("/verified_for", opaque),
+		privacyRule("/due_at", opaque), privacyRule("/requested_at", opaque),
+		privacyRule("/cadence_seconds", opaque), privacyRule("/owner_name", token),
+		privacyRule("/owner_email", exact), privacyRule("/escalation_recipients/*", exact),
+	)
+	ownershipExceptionGranted := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/identity_id", opaque),
+		privacyRule("/reason", clear), privacyRule("/granted_by", exact),
+		privacyRule("/granted_at", opaque), privacyRule("/expires_at", opaque),
+	)
+	ownershipExceptionRevoked := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/revoked_by", exact),
+		privacyRule("/reason", clear), privacyRule("/revoked_at", opaque),
+	)
 	approvalRequested := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/intent_digest", opaque),
 		privacyRule("/resource_kind", opaque), privacyRule("/resource_id", opaque),
@@ -212,6 +238,28 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/issuance/profile_spec_digest", opaque),
 		privacyRule("/issuance/requested_ttl_seconds", opaque),
 		privacyRule("/issuance/effective_ttl_seconds", opaque),
+	)
+	identityTransitionV6 := privacyRules(
+		privacyRule("/identity_id", opaque), privacyRule("/from", opaque),
+		privacyRule("/to", opaque), privacyRule("/reason", clear),
+		privacyRule("/idempotency_key", opaque), privacyRule("/subject_csr_pem", opaque),
+		privacyRule("/side_effect/destination", opaque),
+		privacyRule("/side_effect/idempotency_key", opaque),
+		privacyRule("/side_effect/payload", opaque),
+		privacyRule("/side_effect/required_agent_role", opaque),
+		privacyRule("/ownership_readiness/mode", opaque),
+		privacyRule("/ownership_readiness/identity_id", opaque),
+		privacyRule("/ownership_readiness/owner_id", opaque),
+		privacyRule("/ownership_readiness/owner_model_digest", opaque),
+		privacyRule("/ownership_readiness/attested_by", exact),
+		privacyRule("/ownership_readiness/verified_at", opaque),
+		privacyRule("/ownership_readiness/attestation_due_at", opaque),
+		privacyRule("/ownership_readiness/exception_id", opaque),
+		privacyRule("/ownership_readiness/exception_reason", clear),
+		privacyRule("/ownership_readiness/exception_granted_by", exact),
+		privacyRule("/ownership_readiness/exception_granted_at", opaque),
+		privacyRule("/ownership_readiness/exception_expires_at", opaque),
+		privacyRule("/ownership_readiness/evaluated_at", opaque),
 	)
 	agentHeartbeat := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
@@ -476,16 +524,22 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/actions/*/identity_id", opaque),
 	)
 	policies := map[privacyEventPolicyKey]events.PrivacyEventPolicy{
-		{EventOwnerCreated, 1}:             owner,
-		{EventOwnerUpdated, 1}:             owner,
-		{EventOwnerDeleted, 1}:             ownerDeleted,
-		{EventApprovalRequested, 1}:        approvalRequested,
-		{EventApprovalDecisionRecorded, 1}: approvalDecision,
-		{EventApprovalStatusChanged, 1}:    approvalStatus,
-		{EventIssuanceRequestOpened, 1}:    issuanceRequestOpened,
-		{EventIssuanceRequestDecided, 1}:   issuanceRequestDecided,
-		{EventIdentityCreated, 1}:          identityCreated,
-		{EventTenantMemberUpserted, 1}:     tenantMember,
+		{EventOwnerCreated, 1}:                            owner,
+		{EventOwnerUpdated, 1}:                            owner,
+		{EventOwnerCreated, OwnerDepthEventSchemaVersion}: ownerDepth,
+		{EventOwnerUpdated, OwnerDepthEventSchemaVersion}: ownerDepth,
+		{EventOwnerDeleted, 1}:                            ownerDeleted,
+		{EventOwnershipAttested, 1}:                       ownershipAttested,
+		{EventOwnerReattestationRequested, 1}:             ownerReattestationRequested,
+		{EventOwnershipExceptionGranted, 1}:               ownershipExceptionGranted,
+		{EventOwnershipExceptionRevoked, 1}:               ownershipExceptionRevoked,
+		{EventApprovalRequested, 1}:                       approvalRequested,
+		{EventApprovalDecisionRecorded, 1}:                approvalDecision,
+		{EventApprovalStatusChanged, 1}:                   approvalStatus,
+		{EventIssuanceRequestOpened, 1}:                   issuanceRequestOpened,
+		{EventIssuanceRequestDecided, 1}:                  issuanceRequestDecided,
+		{EventIdentityCreated, 1}:                         identityCreated,
+		{EventTenantMemberUpserted, 1}:                    tenantMember,
 		{EventTenantMemberOffboarded, 1}: privacyRules(
 			privacyRule("/subject", exact), privacyRule("/reason", clear),
 			privacyRule("/offboarded_by", exact), privacyRule("/revoked_token_count", opaque),
@@ -544,6 +598,9 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/reason", clear), privacyRule("/evidence_refs", clear),
 			privacyRule("/held_until", opaque),
 		),
+	}
+	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed} {
+		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = identityTransitionV6
 	}
 	for _, eventType := range []string{
 		EventIdentityIssued, EventIdentityDeployed, EventIdentityRevoked,
@@ -810,6 +867,15 @@ type privacyIdentityTransitionV1 struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
+// V1 owner events predate the application ownership model. Keeping their
+// closed shape separate prevents an old schema number from smuggling new PII.
+type privacyOwnerV1 struct {
+	ID    string `json:"id"`
+	Kind  string `json:"kind"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 type privacyIdentityTransitionV2 struct {
 	privacyIdentityTransitionV1
 	IdempotencyKey string `json:"idempotency_key,omitempty"`
@@ -829,6 +895,11 @@ type privacyIdentityTransitionV4 struct {
 type privacyIdentityTransitionV5 struct {
 	privacyIdentityTransitionV3
 	Issuance *store.OperationApprovalIssuanceBinding `json:"issuance"`
+}
+
+type privacyIdentityTransitionV6 struct {
+	privacyIdentityTransitionV3
+	OwnershipReadiness *store.OwnershipReadinessEvidence `json:"ownership_readiness"`
 }
 
 // Legacy CA hierarchy events were audit breadcrumbs with event-specific wire
@@ -995,9 +1066,15 @@ func privacyPayloadShape[T any]() events.PrivacyPayloadShape {
 
 func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	shapes := map[privacyEventPolicyKey]events.PrivacyPayloadShape{
-		{EventOwnerCreated, 1}:                                                       privacyPayloadShape[OwnerCreated](),
-		{EventOwnerUpdated, 1}:                                                       privacyPayloadShape[OwnerUpdated](),
+		{EventOwnerCreated, 1}:                                                       privacyPayloadShape[privacyOwnerV1](),
+		{EventOwnerUpdated, 1}:                                                       privacyPayloadShape[privacyOwnerV1](),
+		{EventOwnerCreated, OwnerDepthEventSchemaVersion}:                            privacyPayloadShape[OwnerCreated](),
+		{EventOwnerUpdated, OwnerDepthEventSchemaVersion}:                            privacyPayloadShape[OwnerUpdated](),
 		{EventOwnerDeleted, 1}:                                                       privacyPayloadShape[OwnerDeleted](),
+		{EventOwnershipAttested, 1}:                                                  privacyPayloadShape[OwnershipAttested](),
+		{EventOwnerReattestationRequested, 1}:                                        privacyPayloadShape[OwnerReattestationRequested](),
+		{EventOwnershipExceptionGranted, 1}:                                          privacyPayloadShape[OwnershipExceptionGranted](),
+		{EventOwnershipExceptionRevoked, 1}:                                          privacyPayloadShape[OwnershipExceptionRevoked](),
 		{EventApprovalRequested, 1}:                                                  privacyPayloadShape[ApprovalRequested](),
 		{EventApprovalDecisionRecorded, 1}:                                           privacyPayloadShape[ApprovalDecisionRecorded](),
 		{EventApprovalStatusChanged, 1}:                                              privacyPayloadShape[ApprovalStatusChanged](),
@@ -1058,6 +1135,9 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleApprovalEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV4]()
 	}
 	shapes[privacyEventPolicyKey{EventType: EventIdentityIssued, Version: LifecycleIssuanceEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV5]()
+	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed} {
+		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV6]()
+	}
 	return shapes
 }
 

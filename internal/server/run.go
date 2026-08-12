@@ -510,6 +510,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
+	ownershipAttestationCadence, err := cfg.Lifecycle.OwnershipAttestationCadenceDuration()
+	if err != nil {
+		return Deps{}, fmt.Errorf("lifecycle ownership attestation cadence: %w", err)
+	}
 	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, err := runTenantCustodyFromConfig(
 		cfg.Secrets, st, log, sec.kek, auditKey,
 	)
@@ -590,6 +594,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		MaintenanceWindows:           maintenanceWindows,
 		LifecycleAlertBefore:         alertBefore,
 		LifecycleLeafValidity:        leafValidity,
+		OwnershipAttestationCadence:  ownershipAttestationCadence,
 		NotificationChannels:         notificationChannels,
 		notificationChannelOwner:     notificationOwner,
 		CodeSigning:                  codeSigning,

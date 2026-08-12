@@ -141,7 +141,8 @@ type transitionPayload struct {
 	// Issuance is the exact profile revision and TTL used by an issuance that
 	// does not require dual control. Approval-gated issuance carries the same
 	// binding inside Approval instead, so each command has one canonical copy.
-	Issuance *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
+	Issuance           *store.OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
+	OwnershipReadiness *store.OwnershipReadinessEvidence       `json:"ownership_readiness,omitempty"`
 }
 
 // transitionSideEffect carries the durable outbox intent for lifecycle events

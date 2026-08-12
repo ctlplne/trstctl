@@ -3915,14 +3915,25 @@ export interface OutboxReconciliationConflictList {
 }
 
 export interface Owner {
+  application_id?: string;
+  business_unit?: string;
   created_at?: string;
   email?: string;
+  environment?: string;
+  escalation_chain: string[];
   id: string;
-  kind: "user" | "team" | "workload" | "service";
+  kind: "user" | "team" | "workload" | "service" | "vendor";
   name: string;
+  ownership_attestation_due_at?: string;
+  ownership_attested: boolean;
+  ownership_complete: boolean;
+  ownership_current: boolean;
   ownership_source?: string;
   ownership_source_observed_at?: string;
   ownership_source_ref?: string;
+  ownership_verified_at?: string;
+  ownership_verified_by?: string;
+  service?: string;
   tenant_id: string;
 }
 
@@ -3994,9 +4005,14 @@ export interface OwnerRemediationSummary {
 }
 
 export interface OwnerRequest {
+  application_id?: string;
+  business_unit?: string;
   email?: string;
-  kind: "user" | "team" | "workload" | "service";
+  environment?: string;
+  escalation_chain?: string[];
+  kind: "user" | "team" | "workload" | "service" | "vendor";
   name: string;
+  service?: string;
 }
 
 export interface OwnershipAttribution {
@@ -4046,6 +4062,33 @@ export interface OwnershipConflictList {
   guidance: string;
   items: OwnershipConflict[];
   refused: number;
+}
+
+export interface OwnershipException {
+  active: boolean;
+  expires_at: string;
+  granted_at: string;
+  granted_by: string;
+  id: string;
+  identity_id: string;
+  reason: string;
+  revocation_reason?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+}
+
+export interface OwnershipExceptionList {
+  items: OwnershipException[];
+  next_cursor?: string;
+}
+
+export interface OwnershipExceptionRequest {
+  expires_at: string;
+  reason: string;
+}
+
+export interface OwnershipExceptionRevokeRequest {
+  reason: string;
 }
 
 export interface OwnershipImportResult {
@@ -5671,7 +5714,7 @@ export interface UnownedIdentity {
   detail?: string;
   identity_id: string;
   name: string;
-  reason: "no_owner" | "owner_missing_application_model" | "ownership_never_attested";
+  reason: "no_owner" | "owner_missing_application_model" | "ownership_never_attested" | "ownership_attestation_stale";
   status?: string;
 }
 

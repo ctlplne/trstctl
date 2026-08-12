@@ -1985,8 +1985,9 @@ than sending an operator looking for a credential that was never there.
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`) are
   also served, as is the AI/RCA/MCP surface behind `ai.enable_api`.
 - Ownership depth (I1): owners carry an application/service model —
-  `application_id`, `service`, `business_unit`, `environment` — plus a STORED
-  `escalation_chain` and an `ownership_verified_at` attestation. The stored chain
+  `application_id`, `service`, `business_unit`, `environment` — plus a stored
+  `escalation_chain`, attributed `ownership_verified_by`, verification time, and
+  digest of the exact application/environment pair a human confirmed. The stored chain
   is deliberately distinct from the computed approver snapshot: the snapshot
   answers who could approve right now, the chain answers who to wake and in what
   order, and the approver graph cannot answer the second because it is about
@@ -1994,16 +1995,20 @@ than sending an operator looking for a credential that was never there.
   UNKNOWN, never "none" — an estate predating this model has owners nobody can
   retroactively classify, and treating blank as a deliberate answer would hide
   exactly the rows the queue exists to surface. `Store.ListUnownedIdentities`
-  reports three distinct reasons rather than one boolean (`no_owner`,
-  `owner_missing_application_model`, `ownership_never_attested`) because they need
-  different actions: a data-entry gap, a classification gap, and a trust gap.
-  An ownership attestation is never cleared by an ordinary edit — losing it would
-  silently return the owner to the queue and train operators to click through the
-  re-confirmation. Served at `GET /api/v1/owners/unowned`, `trstctl owners
-  unowned`, and an "Ownership gaps" panel on the Owners console that renders the
-  three counts separately rather than a total. Scope, stated exactly: the console
-  shows the queue and its reasons; EDITING the application model from the Owners
-  page is not built, so the fields are populated through the API.
+  reports four distinct reasons rather than one boolean (`no_owner`,
+  `owner_missing_application_model`, `ownership_never_attested`,
+  `ownership_attestation_stale`) because they need different actions: a data-entry
+  gap, a classification gap, a first trust decision, and a repeated decision.
+  Editing application ID or environment invalidates the prior digest immediately;
+  no timestamp is allowed to pretend it confirms a different model. New steady-state
+  deployments require current evidence at the configurable cadence (90 days by
+  default) or an active identity-bound exception with authenticated grantor, reason,
+  and expiry of at most 30 days. The scheduler writes one immutable request and one
+  outbox notification per stale verification edge. Served through the owner and
+  ownership-exception APIs, `trstctl owners attest/exceptions`, and the Owners
+  console, which can create/edit the full model, attest it, separate all four queue
+  counts, and grant a bounded exception. Expiry is enforced from event time and
+  needs no cleanup timer to become effective.
 - Ownership provenance and CMDB reconcile (I2): owners record WHERE an ownership
   claim came from — `ownership_source` (unset / `manual` / `csv-import` / `cmdb`),
   `ownership_source_ref`, `ownership_source_observed_at`. All three are nullable

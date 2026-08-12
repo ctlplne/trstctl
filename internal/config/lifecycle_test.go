@@ -26,6 +26,9 @@ func TestLifecycleDefaults(t *testing.T) {
 	if renew <= 0 || alert <= 0 {
 		t.Errorf("thresholds must be positive: renew=%s alert=%s", renew, alert)
 	}
+	if cadence, err := cfg.Lifecycle.OwnershipAttestationCadenceDuration(); err != nil || cadence != 90*24*time.Hour {
+		t.Errorf("ownership cadence = %s, err=%v; want 2160h", cadence, err)
+	}
 }
 
 // TestLifecycleParseAndEnv: JSON overlays and TRSTCTL_LIFECYCLE_* env vars set
@@ -40,8 +43,9 @@ func TestLifecycleParseAndEnv(t *testing.T) {
 	}
 
 	env := map[string]string{
-		"TRSTCTL_LIFECYCLE_RENEW_BEFORE": "120h",
-		"TRSTCTL_LIFECYCLE_ALERT_BEFORE": "12h",
+		"TRSTCTL_LIFECYCLE_RENEW_BEFORE":                  "120h",
+		"TRSTCTL_LIFECYCLE_ALERT_BEFORE":                  "12h",
+		"TRSTCTL_LIFECYCLE_OWNERSHIP_ATTESTATION_CADENCE": "720h",
 	}
 	loaded, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -52,6 +56,19 @@ func TestLifecycleParseAndEnv(t *testing.T) {
 	}
 	if got, _ := loaded.Lifecycle.AlertBeforeDuration(); got != 12*time.Hour {
 		t.Errorf("env alert_before = %s, want 12h", got)
+	}
+	if got, _ := loaded.Lifecycle.OwnershipAttestationCadenceDuration(); got != 720*time.Hour {
+		t.Errorf("env ownership cadence = %s, want 720h", got)
+	}
+}
+
+func TestLifecycleRejectsUnsafeOwnershipAttestationCadenceAUD44(t *testing.T) {
+	for _, cadence := range []string{"not-a-duration", "59m", "8761h"} {
+		cfg := Default()
+		cfg.Lifecycle.OwnershipAttestationCadence = cadence
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "ownership_attestation_cadence") {
+			t.Errorf("Validate(%q) = %v, want ownership cadence failure", cadence, err)
+		}
 	}
 }
 

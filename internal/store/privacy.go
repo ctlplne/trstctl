@@ -68,7 +68,7 @@ var privacyReadModelSelectorTables = map[string]struct{}{
 	"access_change_requests": {}, "access_change_request_decisions": {},
 	"discovery_runs": {}, "notification_routing_policies": {},
 	"remediation_playbook_runs": {}, "compliance_report_schedules": {},
-	"incident_fleet_reissuance_runs": {},
+	"incident_fleet_reissuance_runs": {}, "ownership_readiness_exceptions": {},
 }
 
 // ValidatePrivacyErasureSelectorsV3 proves that every selector emitted by the
@@ -220,11 +220,18 @@ type PrivacySubjectErasureOperation struct {
 
 // PrivacyOwnerRecord is one owner row linked to the subject.
 type PrivacyOwnerRecord struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	ID                  string     `json:"id"`
+	Kind                string     `json:"kind"`
+	Name                string     `json:"name"`
+	Email               string     `json:"email"`
+	ApplicationID       string     `json:"application_id,omitempty"`
+	Service             string     `json:"service,omitempty"`
+	BusinessUnit        string     `json:"business_unit,omitempty"`
+	Environment         string     `json:"environment,omitempty"`
+	EscalationChain     []string   `json:"escalation_chain,omitempty"`
+	OwnershipVerifiedBy string     `json:"ownership_verified_by,omitempty"`
+	OwnershipVerifiedAt *time.Time `json:"ownership_verified_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
 }
 
 // PrivacyIdentityRecord is one identity row linked to the subject (by name or an
@@ -351,16 +358,29 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		// Owners (matched by email or name).
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, kind, name, email, created_at
+			`SELECT id::text, kind, name, email,
+			        coalesce(application_id, ''), coalesce(service, ''),
+			        coalesce(business_unit, ''), coalesce(environment, ''),
+			        escalation_chain, coalesce(ownership_verified_by, ''),
+			        ownership_verified_at, created_at
 			   FROM owners
-			  WHERE tenant_id = $1 AND (email = $2 OR name = $2)
+			  WHERE tenant_id = $1
+			    AND (email = $2 OR position($2 in name) > 0
+			      OR position($2 in coalesce(application_id, '')) > 0
+			      OR position($2 in coalesce(service, '')) > 0
+			      OR position($2 in coalesce(business_unit, '')) > 0
+			      OR escalation_chain @> jsonb_build_array($2::text)
+			      OR coalesce(ownership_verified_by, '') = $2)
 			  ORDER BY id`, tenantID, subject)
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
 			var r PrivacyOwnerRecord
-			if err := rows.Scan(&r.ID, &r.Kind, &r.Name, &r.Email, &r.CreatedAt); err != nil {
+			if err := rows.Scan(&r.ID, &r.Kind, &r.Name, &r.Email,
+				&r.ApplicationID, &r.Service, &r.BusinessUnit, &r.Environment,
+				&r.EscalationChain, &r.OwnershipVerifiedBy, &r.OwnershipVerifiedAt,
+				&r.CreatedAt); err != nil {
 				rows.Close()
 				return err
 			}
@@ -646,7 +666,13 @@ func (s *Store) selectPrivacySubjectErasureTx(
 	var err error
 	if out.Selectors.OwnerIDs, err = selectStrings(ctx, tx,
 		`SELECT id::text FROM owners
-			  WHERE tenant_id = $1 AND (email = $2 OR name = $2)
+			  WHERE tenant_id = $1
+			    AND (email = $2 OR position($2 in name) > 0
+			      OR position($2 in coalesce(application_id, '')) > 0
+			      OR position($2 in coalesce(service, '')) > 0
+			      OR position($2 in coalesce(business_unit, '')) > 0
+			      OR escalation_chain @> jsonb_build_array($2::text)
+			      OR coalesce(ownership_verified_by, '') = $2)
 			  ORDER BY id`, tenantID, subject); err != nil {
 		return err
 	}
@@ -997,9 +1023,15 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE owners
-		    SET name = 'erased:' || left(id::text, 12), email = ''
+		    SET name = 'erased:' || left(id::text, 12), email = '',
+		        application_id = '', service = '', business_unit = '',
+		        escalation_chain = '[]'::jsonb,
+		        ownership_verified_by = CASE
+		          WHEN ownership_verified_by = '' THEN ''
+		          ELSE $3
+		        END
 		  WHERE tenant_id = $1 AND id::text = ANY($2::text[])`,
-		e.TenantID, e.Selectors.OwnerIDs); err != nil {
+		e.TenantID, e.Selectors.OwnerIDs, placeholder); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx,
@@ -1260,10 +1292,14 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 	if _, err := tx.Exec(ctx,
 		`UPDATE owners
 		    SET name = 'retained:' || left(id::text, 12),
-		        email = ''
+		        email = '', application_id = '', service = '', business_unit = '',
+		        escalation_chain = '[]'::jsonb, ownership_verified_by = ''
 		  WHERE tenant_id = $1
 		    AND created_at < $2
-		    AND (email <> '' OR name NOT LIKE 'retained:%')
+		    AND (email <> '' OR name NOT LIKE 'retained:%'
+		      OR coalesce(application_id, '') <> '' OR coalesce(service, '') <> ''
+		      OR coalesce(business_unit, '') <> '' OR jsonb_array_length(escalation_chain) > 0
+		      OR coalesce(ownership_verified_by, '') <> '')
 		    AND NOT EXISTS (
 		          SELECT 1 FROM identities
 		           WHERE tenant_id = $1 AND owner_id = owners.id
@@ -1441,6 +1477,24 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 		       OR (offboarded_at IS NOT NULL AND offboarded_at < $2)
 		    )`,
 		r.TenantID, r.Cutoffs.AgentStaleBefore); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE ownership_readiness_exceptions
+		    SET reason = '', revocation_reason = '',
+		        granted_by = CASE
+		          WHEN granted_by LIKE 'retained:%' OR granted_by LIKE 'erased:%' THEN granted_by
+		          ELSE 'retained:' || left(md5($1::text || ':' || granted_by), 12)
+		        END,
+		        revoked_by = CASE
+		          WHEN revoked_by IS NULL OR revoked_by = '' OR revoked_by LIKE 'retained:%' OR revoked_by LIKE 'erased:%' THEN revoked_by
+		          ELSE 'retained:' || left(md5($1::text || ':' || revoked_by), 12)
+		        END
+		  WHERE tenant_id = $1 AND expires_at < $2
+		    AND (reason <> '' OR coalesce(revocation_reason, '') <> ''
+		      OR (granted_by NOT LIKE 'retained:%' AND granted_by NOT LIKE 'erased:%')
+		      OR (coalesce(revoked_by, '') <> '' AND revoked_by NOT LIKE 'retained:%' AND revoked_by NOT LIKE 'erased:%'))`,
+		r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx,
@@ -2128,6 +2182,22 @@ func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQ
 			       ORDER BY id`,
 			args: []any{tenantID, subject},
 		},
+		{
+			table: "ownership_readiness_exceptions",
+			sql: `SELECT id::text, identity_id::text,
+			             jsonb_build_object('identity_id', identity_id, 'reason', reason,
+			               'granted_by', granted_by, 'granted_at', granted_at,
+			               'expires_at', expires_at, 'revoked_by', revoked_by,
+			               'revoked_at', revoked_at, 'revocation_reason', revocation_reason)::text,
+			             granted_at
+			        FROM ownership_readiness_exceptions
+			       WHERE tenant_id = $1
+			         AND (granted_by = $2 OR coalesce(revoked_by, '') = $2
+			           OR position($2 in reason) > 0
+			           OR position($2 in coalesce(revocation_reason, '')) > 0)
+			       ORDER BY id`,
+			args: []any{tenantID, subject},
+		},
 	}
 }
 
@@ -2170,6 +2240,7 @@ func privacyReadModelSelectorQueries(tenantID, subject string) []privacyReadMode
 		{table: "remediation_playbook_runs", sql: `SELECT id::text, ''::text, 0 FROM remediation_playbook_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs) OR $2 = ANY(rollback_refs)) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "compliance_report_schedules", sql: `SELECT id::text, ''::text, 0 FROM compliance_report_schedules WHERE tenant_id = $1 AND recipient_ref = $2 ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "incident_fleet_reissuance_runs", sql: `SELECT id::text, ''::text, 0 FROM incident_fleet_reissuance_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs)) ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "ownership_readiness_exceptions", sql: `SELECT id::text, ''::text, 0 FROM ownership_readiness_exceptions WHERE tenant_id = $1 AND (granted_by = $2 OR coalesce(revoked_by, '') = $2 OR position($2 in reason) > 0 OR position($2 in coalesce(revocation_reason, '')) > 0) ORDER BY id`, args: []any{tenantID, subject}},
 	}
 }
 
@@ -2449,6 +2520,7 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 		eraseRemediationRunPrivacyRows,
 		eraseComplianceReportSchedulePrivacyRows,
 		eraseIncidentFleetReissuancePrivacyRows,
+		eraseOwnershipReadinessExceptionPrivacyRows,
 	} {
 		if err := fn(ctx, tx, tenantID, subjectRef, placeholder, selectors); err != nil {
 			return err
@@ -3244,6 +3316,45 @@ func eraseIncidentFleetReissuancePrivacyRows(ctx context.Context, tx pgx.Tx, ten
 	return eraseIncidentEvidenceRows(ctx, tx, tenantID, subjectRef, placeholder, "incident_fleet_reissuance_runs", readModelIDs(selectors, "incident_fleet_reissuance_runs"))
 }
 
+func eraseOwnershipReadinessExceptionPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	ids := readModelIDs(selectors, "ownership_readiness_exceptions")
+	if len(ids) == 0 {
+		return nil
+	}
+	type row struct{ id, grantedBy, revokedBy string }
+	var selected []row
+	rows, err := tx.Query(ctx, `SELECT id::text, granted_by, coalesce(revoked_by, '')
+		FROM ownership_readiness_exceptions
+		WHERE tenant_id = $1 AND id::text = ANY($2::text[])`, tenantID, ids)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var item row
+		if err := rows.Scan(&item.id, &item.grantedBy, &item.revokedBy); err != nil {
+			rows.Close()
+			return err
+		}
+		selected = append(selected, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, item := range selected {
+		if _, err := tx.Exec(ctx, `UPDATE ownership_readiness_exceptions
+			SET reason = '', revocation_reason = '',
+			    granted_by = $3, revoked_by = $4
+			WHERE tenant_id = $1 AND id::text = $2`, tenantID, item.id,
+			redactSubjectValue(tenantID, subjectRef, placeholder, item.grantedBy),
+			redactSubjectValue(tenantID, subjectRef, placeholder, item.revokedBy)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func eraseIncidentEvidenceRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder, table string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
@@ -3373,7 +3484,10 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 			sql: `SELECT count(*) FROM owners
 			       WHERE tenant_id = $1
 			         AND created_at < $2
-			         AND (email <> '' OR name NOT LIKE 'retained:%')
+			         AND (email <> '' OR name NOT LIKE 'retained:%'
+			           OR coalesce(application_id, '') <> '' OR coalesce(service, '') <> ''
+			           OR coalesce(business_unit, '') <> '' OR jsonb_array_length(escalation_chain) > 0
+			           OR coalesce(ownership_verified_by, '') <> '')
 			         AND NOT EXISTS (
 			               SELECT 1 FROM identities
 			                WHERE tenant_id = $1 AND owner_id = owners.id
@@ -3619,6 +3733,14 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 				       WHERE tenant_id = $1
 				         AND updated_at < $2
 				         AND (created_by <> '' OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
+			args: []any{tenantID, c.AttestationEvidenceBefore},
+		},
+		"ownership_readiness_exceptions": {
+			sql: `SELECT count(*) FROM ownership_readiness_exceptions
+			       WHERE tenant_id = $1 AND expires_at < $2
+			         AND (reason <> '' OR coalesce(revocation_reason, '') <> ''
+			           OR (granted_by NOT LIKE 'retained:%' AND granted_by NOT LIKE 'erased:%')
+			           OR (coalesce(revoked_by, '') <> '' AND revoked_by NOT LIKE 'retained:%' AND revoked_by NOT LIKE 'erased:%'))`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
 		},
 	}

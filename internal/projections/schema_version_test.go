@@ -182,18 +182,18 @@ func TestReplayOldEventsNewProjector(t *testing.T) {
 	}
 
 	// Now simulate the dangerous case: a deployment changed owner.created's payload
-	// shape and stamped it version 2, but this projector only knows version 1.
+	// shape and stamped it version 3, but this projector knows only v1 and v2.
 	// Appending and replaying such an event MUST fail (so the wrong shape is never
 	// applied), not silently mis-project.
 	if _, err := log.Append(ctx, events.Event{
-		Type: projections.EventOwnerCreated, TenantID: tenantA, SchemaVersion: 2,
+		Type: projections.EventOwnerCreated, TenantID: tenantA, SchemaVersion: 3,
 		Data: ownerCreatedPayload("33333333-cccc-4ccc-8ccc-333333333333", "shipping"),
 	}); err != nil {
 		t.Fatal(err)
 	}
 	err = p.Project(ctx, log)
 	if !errors.Is(err, projections.ErrUnknownSchemaVersion) {
-		t.Fatalf("projecting an owner.created v2 (unknown to this projector) err = %v, want ErrUnknownSchemaVersion", err)
+		t.Fatalf("projecting an owner.created v3 (unknown to this projector) err = %v, want ErrUnknownSchemaVersion", err)
 	}
 }
 

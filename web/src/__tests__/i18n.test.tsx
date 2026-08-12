@@ -582,8 +582,12 @@ describe("i18n boundary", () => {
       // the review labels that authority, and each wave names its signed
       // trust-plus-live verification denominator. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "f659908247cb9b760290eb26dbcbc9c55a06b52c9b2834d1c9ecc60fbcfdca24",
-      "de-DE": "682b5371fa40ba0503103254cac32488784676055441d55d27257226f05d184d",
+      // AUD-44 ownership-readiness re-pin: the owner-depth fields, attributed
+      // attestation state, stale-owner queue, and temporary exception workflow
+      // now have reviewed catalog entries. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "876b4a112d1254b5291ec0ab1171348548980b7c5d1a3ffd5c59c8023e429eaa",
+      "de-DE": "6ec34fbca63650f1faa0edb80d6ddca8a933a08bcff72953b40c74f80726bffe",
     });
   });
 

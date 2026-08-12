@@ -104,7 +104,7 @@ exhaustive subcommand list:
 | `nhi`                              | Unified NHI inventory, posture findings, policy compliance, decommissioning (`inventory` · `posture shadow/stale/overprivilege/static-credentials/exposure` · `policy compliance` · `decommission`) |
 | `notifications`                    | Notification channels, routing policies, inbox/dead-letter management (`channels` · `routing-policies` · `list` · `get` · `read` · `requeue`)               |
 | `operations`                       | Operational telemetry for the bounded worker pools that carry backpressure (`bulkheads`)                                                                    |
-| `owners`                           | Owner CRUD and NHI ownership attribution (`create` · `list` · `get` · `update` · `delete` · `attribution`)                                                   |
+| `owners`                           | Owner CRUD, application-model readiness, explicit attestation, expiring identity exceptions, and NHI attribution (`create` · `list` · `get` · `update` · `delete` · `attest` · `exceptions list/grant/revoke` · `attribution`) |
 | `platform`                         | Show self-hostable run-anywhere distribution posture (`distribution`)                                                                                        |
 | `platform`                         | Running build, uptime, signer topology, and spine reachability (`system`)                                                                                    |
 | `policy`                           | Author, list, activate, and roll back lifecycle policy versions; dry-run a candidate module (`versions create/list/activate/rollback` · `dry-run`)           |

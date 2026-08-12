@@ -50,6 +50,9 @@ const (
 	// reachability failures (R1). It is separate so network and PKI teams can
 	// route endpoint incidents independently from certificate expiry.
 	DestinationRevocation = "notification.revocation"
+	// DestinationOwnership carries initial and cadence-driven ownership
+	// attestation requests (I1/AUD-44).
+	DestinationOwnership = "notification.ownership"
 )
 
 // Alert kinds.
@@ -96,7 +99,8 @@ const (
 	KindCAValidityCompression = "ca.validity_compression"
 	// KindRevocationHealth marks a CRL or OCSP endpoint whose signed evidence is
 	// stale, nearing expiry, unreachable, or invalid.
-	KindRevocationHealth = "revocation.health"
+	KindRevocationHealth       = "revocation.health"
+	KindOwnershipReattestation = "ownership.reattestation_requested"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

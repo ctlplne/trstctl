@@ -6,10 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // OwnerKind enumerates who can own a credential.
@@ -21,6 +24,9 @@ const (
 	OwnerWorkload OwnerKind = "workload"
 	OwnerService  OwnerKind = "service"
 	OwnerVendor   OwnerKind = "vendor"
+	// DefaultOwnershipAttestationCadence is the production default used when an
+	// operator does not set lifecycle.ownership_attestation_cadence.
+	DefaultOwnershipAttestationCadence = 90 * 24 * time.Hour
 )
 
 // Owner is a credential owner (User | Team | Workload | Service | Vendor).
@@ -50,6 +56,16 @@ type Owner struct {
 	// true. Nil means NEVER attested, which is more urgent than attested-long-ago
 	// and must not collapse into it.
 	OwnershipVerifiedAt *time.Time
+	// OwnershipVerifiedBy is the authenticated principal who made the last
+	// attestation. ModelDigest binds that decision to the readiness-critical
+	// application/environment coordinates; changing either clears all three.
+	OwnershipVerifiedBy  string
+	OwnershipModelDigest string
+	// These two fields suppress duplicate stale-attestation notifications. The
+	// `for` timestamp is the verification that was stale when the immutable
+	// request event was emitted; a new attestation therefore creates a new edge.
+	OwnershipReattestationRequestedAt  *time.Time
+	OwnershipReattestationRequestedFor *time.Time
 
 	// Where this ownership claim came from (I2). OwnershipSource empty means
 	// UNKNOWN — the row predates provenance — and is never read as "manual": an
@@ -77,14 +93,82 @@ func (o Owner) OwnershipComplete() bool {
 	return strings.TrimSpace(o.ApplicationID) != "" && strings.TrimSpace(o.Environment) != ""
 }
 
+// OwnershipAttestationDueAt is the first instant at which the last human
+// decision is no longer current. A nil result means there is no attestation or
+// no configured cadence, and callers must not read that as current.
+func (o Owner) OwnershipAttestationDueAt(cadence time.Duration) *time.Time {
+	if o.OwnershipVerifiedAt == nil || cadence <= 0 {
+		return nil
+	}
+	due := o.OwnershipVerifiedAt.UTC().Add(cadence)
+	return &due
+}
+
+// OwnershipCurrent reports whether a complete owner has a still-current human
+// attestation. The boundary is inclusive on the stale side: at the exact due
+// instant the operator owes a new decision.
+func (o Owner) OwnershipCurrent(now time.Time, cadence time.Duration) bool {
+	due := o.OwnershipAttestationDueAt(cadence)
+	if !o.OwnershipComplete() || due == nil || !now.UTC().Before(*due) ||
+		strings.TrimSpace(o.OwnershipVerifiedBy) == "" || strings.TrimSpace(o.OwnershipModelDigest) == "" {
+		return false
+	}
+	digest, err := OwnerModelDigest(o)
+	return err == nil && o.OwnershipModelDigest == digest
+}
+
+// OwnerModelDigest binds an attestation to the two fields OwnershipComplete
+// treats as readiness authority. Service taxonomy and escalation routing can be
+// maintained without forcing a new ownership decision; moving the credential to
+// a different application or environment cannot.
+func OwnerModelDigest(o Owner) (string, error) {
+	canonical, err := json.Marshal(struct {
+		ApplicationID string `json:"application_id"`
+		Environment   string `json:"environment"`
+	}{
+		ApplicationID: strings.TrimSpace(o.ApplicationID),
+		Environment:   strings.TrimSpace(o.Environment),
+	})
+	if err != nil {
+		return "", fmt.Errorf("store: encode owner application model: %w", err)
+	}
+	return "sha256:" + crypto.SHA256Hex(canonical), nil
+}
+
+// OwnerEscalationChain validates and copies the stored JSON chain.
+func OwnerEscalationChain(raw json.RawMessage) ([]string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return []string{}, nil
+	}
+	var chain []string
+	if err := json.Unmarshal(raw, &chain); err != nil {
+		return nil, fmt.Errorf("store: escalation_chain must be an array of strings: %w", err)
+	}
+	if len(chain) > 32 {
+		return nil, errors.New("store: escalation_chain cannot contain more than 32 recipients")
+	}
+	for i := range chain {
+		chain[i] = strings.TrimSpace(chain[i])
+		if chain[i] == "" {
+			return nil, errors.New("store: escalation_chain recipients cannot be empty")
+		}
+		if len(chain[i]) > 320 {
+			return nil, errors.New("store: escalation_chain recipient is too long")
+		}
+	}
+	return chain, nil
+}
+
 // UpsertOwner inserts or updates an owner in its tenant context (RLS-enforced).
 func (s *Store) UpsertOwner(ctx context.Context, o Owner) error {
 	return s.WithTenant(ctx, o.TenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO owners (id, tenant_id, kind, name, email,
 			                     application_id, service, business_unit, environment,
-			                     escalation_chain, ownership_verified_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			                     escalation_chain, ownership_verified_at, ownership_verified_by,
+			                     ownership_model_digest, ownership_reattestation_requested_at,
+			                     ownership_reattestation_requested_for)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 			 ON CONFLICT (tenant_id, id) DO UPDATE
 			    SET kind = EXCLUDED.kind, name = EXCLUDED.name, email = EXCLUDED.email,
 			        application_id = EXCLUDED.application_id, service = EXCLUDED.service,
@@ -94,10 +178,16 @@ func (s *Store) UpsertOwner(ctx context.Context, o Owner) error {
 			        -- it would silently move an owner back into the unattested
 			        -- queue, and an operator would re-confirm something that was
 			        -- already confirmed — training them to click through it.
-			        ownership_verified_at = COALESCE(EXCLUDED.ownership_verified_at, owners.ownership_verified_at)`,
+			        ownership_verified_at = COALESCE(EXCLUDED.ownership_verified_at, owners.ownership_verified_at),
+			        ownership_verified_by = COALESCE(EXCLUDED.ownership_verified_by, owners.ownership_verified_by),
+			        ownership_model_digest = COALESCE(EXCLUDED.ownership_model_digest, owners.ownership_model_digest),
+			        ownership_reattestation_requested_at = COALESCE(EXCLUDED.ownership_reattestation_requested_at, owners.ownership_reattestation_requested_at),
+			        ownership_reattestation_requested_for = COALESCE(EXCLUDED.ownership_reattestation_requested_for, owners.ownership_reattestation_requested_for)`,
 			o.ID, o.TenantID, string(o.Kind), o.Name, o.Email,
 			nullableText(o.ApplicationID), nullableText(o.Service), nullableText(o.BusinessUnit),
-			nullableText(o.Environment), nullableJSON(o.EscalationChain), o.OwnershipVerifiedAt)
+			nullableText(o.Environment), nullableJSON(o.EscalationChain), o.OwnershipVerifiedAt,
+			nullableText(o.OwnershipVerifiedBy), nullableText(o.OwnershipModelDigest),
+			o.OwnershipReattestationRequestedAt, o.OwnershipReattestationRequestedFor)
 		return err
 	})
 }
@@ -127,11 +217,17 @@ func (s *Store) UpdateOwner(ctx context.Context, o Owner) error {
 			    SET kind = $3, name = $4, email = $5,
 			        application_id = $6, service = $7, business_unit = $8, environment = $9,
 			        escalation_chain = $10,
-			        ownership_verified_at = COALESCE($11, owners.ownership_verified_at)
+			        ownership_verified_at = COALESCE($11, owners.ownership_verified_at),
+			        ownership_verified_by = COALESCE($12, owners.ownership_verified_by),
+			        ownership_model_digest = COALESCE($13, owners.ownership_model_digest),
+			        ownership_reattestation_requested_at = COALESCE($14, owners.ownership_reattestation_requested_at),
+			        ownership_reattestation_requested_for = COALESCE($15, owners.ownership_reattestation_requested_for)
 			  WHERE tenant_id = $1 AND id = $2`,
 			o.TenantID, o.ID, string(o.Kind), o.Name, o.Email,
 			nullableText(o.ApplicationID), nullableText(o.Service), nullableText(o.BusinessUnit),
-			nullableText(o.Environment), nullableJSON(o.EscalationChain), o.OwnershipVerifiedAt)
+			nullableText(o.Environment), nullableJSON(o.EscalationChain), o.OwnershipVerifiedAt,
+			nullableText(o.OwnershipVerifiedBy), nullableText(o.OwnershipModelDigest),
+			o.OwnershipReattestationRequestedAt, o.OwnershipReattestationRequestedFor)
 		if err != nil {
 			return err
 		}
@@ -166,6 +262,8 @@ func (s *Store) ListOwnersPage(ctx context.Context, tenantID, afterID string, li
 			        coalesce(application_id, ''), coalesce(service, ''),
 			        coalesce(business_unit, ''), coalesce(environment, ''),
 			        escalation_chain, ownership_verified_at,
+			        coalesce(ownership_verified_by, ''), coalesce(ownership_model_digest, ''),
+			        ownership_reattestation_requested_at, ownership_reattestation_requested_for,
 			        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
 			        ownership_source_observed_at
 			   FROM owners WHERE tenant_id = $1 AND id > $2 ORDER BY id LIMIT $3`,
@@ -181,7 +279,8 @@ func (s *Store) ListOwnersPage(ctx context.Context, tenantID, afterID string, li
 			)
 			if err := rows.Scan(&o.ID, &o.TenantID, &kind, &o.Name, &o.Email, &o.CreatedAt,
 				&o.ApplicationID, &o.Service, &o.BusinessUnit, &o.Environment,
-				&o.EscalationChain, &o.OwnershipVerifiedAt,
+				&o.EscalationChain, &o.OwnershipVerifiedAt, &o.OwnershipVerifiedBy, &o.OwnershipModelDigest,
+				&o.OwnershipReattestationRequestedAt, &o.OwnershipReattestationRequestedFor,
 				&o.OwnershipSource, &o.OwnershipSourceRef, &o.OwnershipSourceObservedAt); err != nil {
 				return err
 			}
@@ -204,11 +303,17 @@ func (s *Store) GetOwner(ctx context.Context, tenantID, id string) (Owner, error
 			`SELECT id::text, tenant_id::text, kind, name, email, created_at,
 			        coalesce(application_id, ''), coalesce(service, ''),
 			        coalesce(business_unit, ''), coalesce(environment, ''),
-			        escalation_chain, ownership_verified_at
+			        escalation_chain, ownership_verified_at,
+			        coalesce(ownership_verified_by, ''), coalesce(ownership_model_digest, ''),
+			        ownership_reattestation_requested_at, ownership_reattestation_requested_for,
+			        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
+			        ownership_source_observed_at
 			   FROM owners WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&o.ID, &o.TenantID, &kind, &o.Name, &o.Email, &o.CreatedAt,
 				&o.ApplicationID, &o.Service, &o.BusinessUnit, &o.Environment,
-				&o.EscalationChain, &o.OwnershipVerifiedAt)
+				&o.EscalationChain, &o.OwnershipVerifiedAt, &o.OwnershipVerifiedBy, &o.OwnershipModelDigest,
+				&o.OwnershipReattestationRequestedAt, &o.OwnershipReattestationRequestedFor,
+				&o.OwnershipSource, &o.OwnershipSourceRef, &o.OwnershipSourceObservedAt)
 	})
 	o.Kind = OwnerKind(kind)
 	return o, err
@@ -222,7 +327,11 @@ func (s *Store) ListOwners(ctx context.Context, tenantID string) ([]Owner, error
 			`SELECT id::text, tenant_id::text, kind, name, email, created_at,
 			        coalesce(application_id, ''), coalesce(service, ''),
 			        coalesce(business_unit, ''), coalesce(environment, ''),
-			        escalation_chain, ownership_verified_at
+			        escalation_chain, ownership_verified_at,
+			        coalesce(ownership_verified_by, ''), coalesce(ownership_model_digest, ''),
+			        ownership_reattestation_requested_at, ownership_reattestation_requested_for,
+			        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
+			        ownership_source_observed_at
 			   FROM owners WHERE tenant_id = $1 ORDER BY created_at, id`, tenantID)
 		if err != nil {
 			return err
@@ -235,7 +344,9 @@ func (s *Store) ListOwners(ctx context.Context, tenantID string) ([]Owner, error
 			)
 			if err := rows.Scan(&o.ID, &o.TenantID, &kind, &o.Name, &o.Email, &o.CreatedAt,
 				&o.ApplicationID, &o.Service, &o.BusinessUnit, &o.Environment,
-				&o.EscalationChain, &o.OwnershipVerifiedAt); err != nil {
+				&o.EscalationChain, &o.OwnershipVerifiedAt, &o.OwnershipVerifiedBy, &o.OwnershipModelDigest,
+				&o.OwnershipReattestationRequestedAt, &o.OwnershipReattestationRequestedFor,
+				&o.OwnershipSource, &o.OwnershipSourceRef, &o.OwnershipSourceObservedAt); err != nil {
 				return err
 			}
 			o.Kind = OwnerKind(kind)
@@ -287,19 +398,33 @@ const (
 	// UnownedUnattested: an owner nobody has ever confirmed. Distinct from an
 	// owner confirmed long ago, which is a cadence problem rather than a gap.
 	UnownedUnattested = "ownership_never_attested"
+	// UnownedStale is an attributed owner confirmation older than the configured
+	// cadence, so it cannot authorize another steady-state deployment.
+	UnownedStale = "ownership_attestation_stale"
 )
 
 // ListUnownedIdentities is the high-priority queue this epic exists to expose.
 //
-// It reports three distinct problems rather than one boolean, because they need
+// It reports four distinct problems rather than one boolean, because they need
 // different actions: no owner is a data-entry gap, an incomplete owner is a
-// classification gap, and an unattested owner is a trust gap — somebody is
-// named but nobody has confirmed the name is still right. Collapsing them into
+// classification gap, an unattested owner is a trust gap, and a stale owner is
+// re-attestation work. Collapsing them into
 // "unowned" would give an operator a single number they cannot act on.
 func (s *Store) ListUnownedIdentities(ctx context.Context, tenantID string, limit int) ([]UnownedIdentity, error) {
+	return s.ListUnownedIdentitiesAt(ctx, tenantID, time.Now().UTC(), DefaultOwnershipAttestationCadence, limit)
+}
+
+// ListUnownedIdentitiesAt uses the same clock and cadence as lifecycle
+// admission. The visible queue and the deployment wall therefore cannot
+// disagree about a stale attestation.
+func (s *Store) ListUnownedIdentitiesAt(ctx context.Context, tenantID string, now time.Time, cadence time.Duration, limit int) ([]UnownedIdentity, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
+	if cadence <= 0 {
+		cadence = DefaultOwnershipAttestationCadence
+	}
+	now = now.UTC()
 	out := make([]UnownedIdentity, 0, limit)
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
@@ -310,7 +435,10 @@ func (s *Store) ListUnownedIdentities(ctx context.Context, tenantID string, limi
 			        CASE
 			          WHEN o.id IS NULL THEN $2
 			          WHEN coalesce(o.application_id, '') = '' OR coalesce(o.environment, '') = '' THEN $3
-			          ELSE $4
+			          WHEN o.ownership_verified_at IS NULL
+			            OR coalesce(o.ownership_verified_by, '') = ''
+			            OR coalesce(o.ownership_model_digest, '') = '' THEN $4
+			          ELSE $5
 			        END AS reason
 			   FROM identities AS i
 			   LEFT JOIN owners AS o ON o.tenant_id = i.tenant_id AND o.id = i.owner_id
@@ -318,10 +446,14 @@ func (s *Store) ListUnownedIdentities(ctx context.Context, tenantID string, limi
 			    AND (o.id IS NULL
 			         OR coalesce(o.application_id, '') = ''
 			         OR coalesce(o.environment, '') = ''
-			         OR o.ownership_verified_at IS NULL)
+			         OR o.ownership_verified_at IS NULL
+			         OR coalesce(o.ownership_verified_by, '') = ''
+			         OR coalesce(o.ownership_model_digest, '') = ''
+			         OR o.ownership_verified_at + make_interval(secs => $7) <= $6)
 			  ORDER BY i.created_at, i.id
-			  LIMIT $5`,
-			tenantID, UnownedNoOwner, UnownedIncompleteOwner, UnownedUnattested, limit)
+			  LIMIT $8`,
+			tenantID, UnownedNoOwner, UnownedIncompleteOwner, UnownedUnattested, UnownedStale,
+			now, int(cadence/time.Second), limit)
 		if err != nil {
 			return err
 		}

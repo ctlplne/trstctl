@@ -70,6 +70,7 @@ var TenantScopedTables = []string{
 	"lifecycle_rotation_runs",
 	"certificates",
 	"identity_transitions",
+	"ownership_readiness_exceptions",
 	"identities",
 	"ca_ceremony_approvals",
 	"ca_key_ceremonies",

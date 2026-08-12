@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/privacyref"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestEveryProjectorKnownSchemaHasClosedPrivacyPolicy(t *testing.T) {
@@ -168,6 +169,22 @@ func TestShortSubjectDoesNotCollideWithOpaqueKnownSchemaValues(t *testing.T) {
 	for eventType, knownVersions := range knownSchemaVersions {
 		for version := range knownVersions {
 			data := []byte(`{"status":"active","algorithm":"saml","digest":"aa4a","kind":"ca","protocol":"data"}`)
+			if isLifecycleEvent(eventType) {
+				switch version {
+				case 1:
+					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "deployed"}))
+				case LifecycleEventSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "deployed"}, IdempotencyKey: "stable"}))
+				case LifecycleSideEffectEventSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV3{privacyIdentityTransitionV2: privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "deployed"}}}))
+				case LifecycleApprovalEventSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV4{privacyIdentityTransitionV3: privacyIdentityTransitionV3{privacyIdentityTransitionV2: privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "deployed"}}}, Approval: &store.OperationApprovalUse{}}))
+				case LifecycleIssuanceEventSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV5{privacyIdentityTransitionV3: privacyIdentityTransitionV3{privacyIdentityTransitionV2: privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "requested", To: "issued"}}}, Issuance: &store.OperationApprovalIssuanceBinding{}}))
+				case LifecycleOwnershipReadinessEventSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV6{privacyIdentityTransitionV3: privacyIdentityTransitionV3{privacyIdentityTransitionV2: privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "deployed"}}}, OwnershipReadiness: &store.OwnershipReadinessEvidence{}}))
+				}
+			}
 			if isApplicationSecretMutationEvent(eventType) {
 				action := applicationSecretMutationAction(eventType)
 				switch version {
@@ -287,6 +304,26 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 		{name: "owner", eventType: EventOwnerCreated, version: 1,
 			data:   completePrivacyFixture[OwnerCreated](t, `{"name":"team/privacy-policy-subject","email":"privacy-policy-subject"}`),
 			decode: decodePrivacyFixture[OwnerCreated], wantPlaceholder: true},
+		{name: "owner depth", eventType: EventOwnerCreated, version: OwnerDepthEventSchemaVersion,
+			data:   completePrivacyFixture[OwnerCreated](t, `{"name":"team/privacy-policy-subject","email":"privacy-policy-subject","application_id":"privacy-policy-subject","service":"service/privacy-policy-subject","business_unit":"privacy-policy-subject","environment":"production","escalation_chain":["privacy-policy-subject"]}`),
+			decode: decodePrivacyFixture[OwnerCreated], wantPlaceholder: true},
+		{name: "owner depth update", eventType: EventOwnerUpdated, version: OwnerDepthEventSchemaVersion,
+			data:   completePrivacyFixture[OwnerUpdated](t, `{"name":"team/privacy-policy-subject","email":"privacy-policy-subject","application_id":"privacy-policy-subject","service":"service/privacy-policy-subject","business_unit":"privacy-policy-subject","environment":"production","escalation_chain":["privacy-policy-subject"]}`),
+			decode: decodePrivacyFixture[OwnerUpdated], wantPlaceholder: true},
+		{name: "ownership attestation actor", eventType: EventOwnershipAttested, version: 1,
+			data:   completePrivacyFixture[OwnershipAttested](t, `{"attested_by":"privacy-policy-subject"}`),
+			decode: decodePrivacyFixture[OwnershipAttested], wantPlaceholder: true},
+		{name: "ownership re-attestation recipients", eventType: EventOwnerReattestationRequested, version: 1,
+			data:   completePrivacyFixture[OwnerReattestationRequested](t, `{"owner_name":"team/privacy-policy-subject","owner_email":"privacy-policy-subject","escalation_recipients":["privacy-policy-subject"]}`),
+			decode: decodePrivacyFixture[OwnerReattestationRequested], wantPlaceholder: true},
+		{name: "ownership exception grant", eventType: EventOwnershipExceptionGranted, version: 1,
+			data:   completePrivacyFixture[OwnershipExceptionGranted](t, `{"reason":"approved for privacy-policy-subject","granted_by":"privacy-policy-subject"}`),
+			decode: decodePrivacyFixture[OwnershipExceptionGranted], wantPlaceholder: true,
+			want: []string{`"reason":""`}},
+		{name: "ownership exception revoke", eventType: EventOwnershipExceptionRevoked, version: 1,
+			data:   completePrivacyFixture[OwnershipExceptionRevoked](t, `{"reason":"revoked for privacy-policy-subject","revoked_by":"privacy-policy-subject"}`),
+			decode: decodePrivacyFixture[OwnershipExceptionRevoked], wantPlaceholder: true,
+			want: []string{`"reason":""`}},
 		{name: "issuance request", eventType: EventIssuanceRequestOpened, version: 1,
 			data:   completePrivacyFixture[IssuanceRequestOpened](t, `{"subject":"spiffe://tenant/privacy-policy-subject","requester":"privacy-policy-subject","justification":"requested by privacy-policy-subject"}`),
 			decode: decodePrivacyFixture[IssuanceRequestOpened], wantPlaceholder: true,
@@ -426,6 +463,10 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 			case LifecycleIssuanceEventSchemaVersion:
 				data = completePrivacyFixture[privacyIdentityTransitionV5](t,
 					`{"identity_id":"identity-a","from":"pending","to":"issued","reason":"requested by privacy-policy-subject","idempotency_key":"stable-key","issuance":{"requested_ttl_seconds":3600,"effective_ttl_seconds":3600}}`)
+			case LifecycleOwnershipReadinessEventSchemaVersion:
+				data = completePrivacyFixture[privacyIdentityTransitionV6](t,
+					`{"identity_id":"identity-a","from":"issued","to":"deployed","reason":"requested by privacy-policy-subject","idempotency_key":"stable-key","ownership_readiness":{"mode":"owner","identity_id":"identity-a","owner_id":"owner-a","owner_model_digest":"sha256:model","attested_by":"privacy-policy-subject","verified_at":"2026-08-12T10:00:00Z","attestation_due_at":"2026-11-10T10:00:00Z","evaluated_at":"2026-08-12T10:01:00Z"}}`)
+				wantPlaceholder = true
 			default:
 				t.Fatalf("identity transition %s has no privacy fixture for schema v%d", eventType, version)
 			}
