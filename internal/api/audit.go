@@ -126,11 +126,27 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Records first, in every format. The chain head and the anchor are computed
-	// from the SAME records the caller receives, so a CSV and a JWS taken from
-	// one request describe one thing — an anchor derived from a separate read
-	// could attest a head the exported rows do not hash to.
-	recs, err := a.audit.Search(r.Context(), q)
+	if format == auditanchor.FormatJWS {
+		signed, bundle, err := a.audit.ExportWithBundle(r.Context(), q)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		anchor, anchorErr := auditanchor.AnchorHead(r.Context(), a.auditTimestamper, bundle.ChainHead)
+		if anchorErr != nil && anchor.Detail == "" {
+			anchor.Detail = "this export could not be externally anchored"
+		}
+		a.writeJSON(w, http.StatusOK, auditanchor.EvidenceEnvelope{
+			SchemaVersion: auditanchor.EvidenceEnvelopeSchemaVersion,
+			Format:        format, Bundle: signed, ChainHead: bundle.ChainHead, Anchor: anchor,
+		})
+		return
+	}
+
+	// Record streams are read once. The chain head and anchor are computed from
+	// those exact rows, so the final in-file trailer cannot attest a neighboring
+	// generation observed by a second query.
+	recs, prevHash, err := a.audit.SearchWithSeed(r.Context(), q)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -144,19 +160,6 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 		anchor.Detail = "this export could not be externally anchored"
 	}
 
-	if format == auditanchor.FormatJWS {
-		bundle, err := a.audit.Export(r.Context(), q)
-		if err != nil {
-			a.writeError(w, err)
-			return
-		}
-		a.writeJSON(w, http.StatusOK, map[string]any{
-			"format": string(format), "bundle": bundle,
-			"chain_head": head, "anchor": anchor,
-		})
-		return
-	}
-
 	w.Header().Set("Content-Type", format.ContentType())
 	w.Header().Set("X-Trstctl-Audit-Chain-Head", head)
 	w.Header().Set("X-Trstctl-Audit-Anchor", string(anchor.Kind))
@@ -167,5 +170,5 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	// line, so a consumer that reaches EOF without one knows its download was
 	// truncated, and knows it from the file itself rather than from a status
 	// code it no longer has access to.
-	_ = auditanchor.WriteRecords(w, format, recs, head, anchor)
+	_ = auditanchor.WriteRecords(w, format, recs, prevHash, head, anchor)
 }

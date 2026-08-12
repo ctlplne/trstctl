@@ -10,12 +10,18 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/auditanchor"
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tsa"
 )
 
 // Audit export in formats a SIEM ingests, served (epic J1).
@@ -153,9 +159,98 @@ func TestServedCSVExportParses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("served CSV does not parse: %v", err)
 	}
-	if len(rows) == 0 || rows[0][0] != "sequence" {
+	if len(rows) < 2 || rows[0][0] != "sequence" || rows[len(rows)-1][9] != "chain_trailer" {
 		t.Fatalf("unexpected CSV header: %v", rows)
 	}
+}
+
+func TestServedSavedAuditArtifactsVerifyOfflineAUD51(t *testing.T) {
+	ts, tok, srv, rootDER := newAnchoredAuditExportHarnessAUD51(t)
+
+	code, envelope := doBearer(t, ts, http.MethodGet, "/api/v1/audit/export", tok, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("JWS evidence envelope = %d: %s", code, envelope)
+	}
+	bundle, err := auditanchor.VerifyEvidenceEnvelope(envelope, srv.audit.VerificationKeys(), rootDER, time.Hour)
+	if err != nil || bundle.Count == 0 {
+		t.Fatalf("saved browser envelope did not verify offline: count=%d err=%v body=%s", bundle.Count, err, envelope)
+	}
+
+	code, csvArtifact := doBearer(t, ts, http.MethodGet, "/api/v1/audit/export?format=csv", tok, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("CSV evidence artifact = %d: %s", code, csvArtifact)
+	}
+	records, err := auditanchor.VerifyCSVArtifact(csvArtifact, rootDER, time.Hour)
+	if err != nil || len(records) == 0 {
+		t.Fatalf("saved CSV did not verify offline: records=%d err=%v", len(records), err)
+	}
+}
+
+func newAnchoredAuditExportHarnessAUD51(t *testing.T) (*httptest.Server, string, *Server, []byte) {
+	t.Helper()
+	ctx := context.Background()
+	const tenantID = "11111111-1111-1111-1111-111111111151"
+	st := newServerTestStore(t)
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "AUD-51 anchored export"}); err != nil {
+		t.Fatal(err)
+	}
+	tok := seedServedAPIToken(t, ctx, st, tenantID, "aud-51-auditor", []string{
+		string(authz.AuditRead), string(authz.OwnersWrite), string(authz.OwnersRead),
+	})
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auditKey, err := jose.GenerateRSASigningKey("aud-51-export")
+	if err != nil {
+		_ = log.Close()
+		t.Fatal(err)
+	}
+	rootKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(rootKey.Destroy)
+	rootDER, err := crypto.SelfSignedCACert(rootKey, "AUD-51 TSA root", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tsaKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(tsaKey.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "AUD-51 TSA"}, tsaKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tsaCert, err := crypto.SignTimestampingCertFromCSR(rootDER, rootKey, csr, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority, err := tsa.New(tsa.Config{
+		TenantID: tenantID, TSACertDER: tsaCert, TSASigner: tsaKey, Audit: auditsink.Nop{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := Build(ctx, Deps{
+		Store: st, Log: log, AuditSigningKey: auditKey,
+		APIOptions: []api.Option{api.WithAuditTimestamper(authority)},
+	})
+	if err != nil {
+		_ = log.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+	code, body := doBearer(t, ts, http.MethodPost, "/api/v1/owners", tok, "aud-51-seed",
+		map[string]any{"kind": "team", "name": "Audit", "email": "audit@example.test"})
+	if code != http.StatusCreated && code != http.StatusOK {
+		t.Fatalf("seed audit event = %d: %s", code, body)
+	}
+	return ts, tok, srv, rootDER
 }
 
 // An unknown format is a 400, not a silent downgrade to JWS.

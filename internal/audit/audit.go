@@ -155,13 +155,30 @@ func (s *Service) searchSeed(ctx context.Context, tenantID string) (from uint64,
 // prefix and the chain is seeded from the boundary hash, so the surviving records
 // keep the exact hashes they had in the full chain.
 func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
+	records, _, err := s.search(ctx, q)
+	return records, err
+}
+
+// SearchWithSeed returns the visible records plus the archived-prefix head they
+// continue from. Record-stream exporters need both values in one history read:
+// without the seed, an offline verifier cannot reconstruct a chain after
+// retention has pruned its prefix.
+func (s *Service) SearchWithSeed(ctx context.Context, q Query) ([]Record, string, error) {
+	return s.search(ctx, q)
+}
+
+// search also returns the exact chain seed captured inside the same pinned
+// history read. Signing records with a seed fetched afterward can pair a new
+// retention checkpoint with an older result, producing a bundle that cannot
+// verify even though neither component is corrupt.
+func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error) {
 	// Fail closed on a missing tenant scope (TENANT-003): the audit log is
 	// cross-tenant, and matches() only filters when TenantID is set, so an empty
 	// TenantID would leak every tenant's records. Reject it — a missing scope is an
 	// error, not "all tenants". Export and VerifyChain route through here, so all
 	// three query surfaces are covered by this one check.
 	if q.TenantID == "" {
-		return nil, ErrMissingTenant
+		return nil, "", ErrMissingTenant
 	}
 	var (
 		seed string
@@ -219,7 +236,7 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 		})
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if q.Limit > 0 && len(out) > q.Limit {
 		out = out[:q.Limit]
@@ -228,7 +245,7 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 	// chain attests to exactly this slice as a continuation of the archived prefix;
 	// a later tampering of any record is detectable by VerifyChain.
 	SealFrom(seed, out)
-	return out, nil
+	return out, seed, nil
 }
 
 func (q Query) matches(e events.Event, tenantSequence uint64) bool {
@@ -288,42 +305,48 @@ type Bundle struct {
 // bundle (a compact JWS whose payload is the Bundle). An auditor verifies it with
 // VerifyBundle and the service's verification keys.
 func (s *Service) Export(ctx context.Context, q Query) (string, error) {
+	signed, _, err := s.ExportWithBundle(ctx, q)
+	return signed, err
+}
+
+// ExportWithBundle signs one pinned query result and returns both views of the
+// same bytes. Callers that bind a second proof (for example an RFC 3161 audit
+// anchor) must use the returned Bundle. Running Search again creates a race in
+// which the signature covers one head and the timestamp covers another.
+func (s *Service) ExportWithBundle(ctx context.Context, q Query) (string, Bundle, error) {
 	if s.signer == nil {
-		return "", ErrMissingSigner
+		return "", Bundle{}, ErrMissingSigner
 	}
-	recs, err := s.Search(ctx, q)
+	recs, seed, err := s.search(ctx, q)
 	if err != nil {
-		return "", err
+		return "", Bundle{}, err
 	}
-	_, seed, _, err := s.searchSeed(ctx, q.TenantID)
-	if err != nil {
-		return "", err
-	}
-	payload, err := json.Marshal(Bundle{
+	bundle := Bundle{
 		TenantID: q.TenantID, GeneratedAt: s.now().UTC(), Query: q,
 		Records: recs, Count: len(recs), PrevHash: seed, ChainHead: chainHead(recs),
-	})
-	if err != nil {
-		return "", err
 	}
-	return s.signer.SignArtifact(jose.ArtifactAuditExport, payload)
+	payload, err := json.Marshal(bundle)
+	if err != nil {
+		return "", Bundle{}, err
+	}
+	signed, err := s.signer.SignArtifact(jose.ArtifactAuditExport, payload)
+	if err != nil {
+		return "", Bundle{}, err
+	}
+	return signed, bundle, nil
 }
 
 // VerifyChain reports the head of the hash chain over records and an error if any
 // record's stored hash does not match its recomputed link — i.e. a stored event
 // was altered, dropped, inserted, or reordered (R2.1 tamper detection).
 func (s *Service) VerifyChain(ctx context.Context, tenantID string) (string, error) {
-	recs, err := s.Search(ctx, Query{TenantID: tenantID})
+	recs, seed, err := s.search(ctx, Query{TenantID: tenantID})
 	if err != nil {
 		return "", err
 	}
 	// Verify from the same sealed boundary Search hashed the survivors onto (R4.4),
 	// so a pruned tenant's chain checks out as a continuation rather than reporting
 	// a false tamper at the first surviving record.
-	_, seed, _, err := s.searchSeed(ctx, tenantID)
-	if err != nil {
-		return "", err
-	}
 	return VerifyChainFrom(seed, recs)
 }
 

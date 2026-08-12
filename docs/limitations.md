@@ -1003,10 +1003,18 @@ never live in the API process. What you can do end to end against the running bi
   `audit_export` only; email/webhook/ticket dispatch is not served or implied.
 - Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
   JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record
-  streams, each carrying the per-record chain hash and a trailing `chain_trailer`
-  line with the chain head and anchor. When `protocols.tsa` is enabled the chain
+  streams. The JWS response and browser download are one versioned JSON envelope
+  containing the compact JWS, chain head, and complete anchor. NDJSON, Splunk HEC,
+  and Sentinel end with a JSON `chain_trailer`; CSV adds the compatible
+  `trstctl_record` and `integrity` columns and ends with an RFC-safe trailer row.
+  Every saved form therefore retains the record count, archived-prefix predecessor
+  hash, chain head, and complete anchor without depending on HTTP headers. When
+  `protocols.tsa` is enabled the chain
   head is countersigned with an RFC 3161 timestamp over a domain-separated
-  imprint, which is what makes a BACK-DATED head detectable: a chain rebuilt to
+  imprint; the artifact carries the timestamp info, signature, TSA certificate,
+  and CMS DER token. The offline verifier requires the separately pinned audit
+  JWK set and TSA root rather than trusting a root supplied by the artifact. This
+  is what makes a BACK-DATED head detectable: a chain rebuilt to
   remove a record hashes differently, so no earlier token exists for it, and a
   freshly-taken token is dated long after the events the bundle describes.
   Scope, stated exactly: an anchor proves the head is no NEWER than the timestamp.

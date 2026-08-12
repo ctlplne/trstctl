@@ -5884,9 +5884,22 @@ export interface components {
             public_key_pem: string;
             ttl_seconds?: number;
         };
+        AuditAnchor: {
+            /** Format: date-time */
+            anchored_at: string;
+            chain_head: string;
+            detail?: string;
+            /** @enum {string} */
+            kind: "" | "rfc3161";
+            token?: components["schemas"]["AuditTimestampToken"];
+        };
         AuditBundle: {
+            anchor: components["schemas"]["AuditAnchor"];
             bundle: string;
-            format: string;
+            chain_head: string;
+            /** @enum {string} */
+            format: "jws";
+            schema_version: number;
         };
         AuditEvent: {
             actor?: Record<string, never>;
@@ -5903,6 +5916,25 @@ export interface components {
         AuditEventList: {
             count?: number;
             events: components["schemas"]["AuditEvent"][];
+        };
+        AuditTimestampInfo: {
+            /** Format: date-time */
+            gen_time: string;
+            hash_algorithm: string;
+            /** Format: byte */
+            hashed_message: string;
+            policy: string;
+            serial_number: number;
+            version: number;
+        };
+        AuditTimestampToken: {
+            /** Format: byte */
+            der: string;
+            info: components["schemas"]["AuditTimestampInfo"];
+            /** Format: byte */
+            signature: string;
+            /** Format: byte */
+            tsa_cert: string;
         };
         Brand: {
             custom: boolean;

@@ -616,9 +616,20 @@ export interface AttestedSVIDRequest {
   ttl_seconds?: number;
 }
 
+export interface AuditAnchor {
+  anchored_at: string;
+  chain_head: string;
+  detail?: string;
+  kind: "" | "rfc3161";
+  token?: AuditTimestampToken;
+}
+
 export interface AuditBundle {
+  anchor: AuditAnchor;
   bundle: string;
-  format: string;
+  chain_head: string;
+  format: "jws";
+  schema_version: number;
 }
 
 export interface AuditEvent {
@@ -635,6 +646,22 @@ export interface AuditEvent {
 export interface AuditEventList {
   count?: number;
   events: AuditEvent[];
+}
+
+export interface AuditTimestampInfo {
+  gen_time: string;
+  hash_algorithm: string;
+  hashed_message: string;
+  policy: string;
+  serial_number: number;
+  version: number;
+}
+
+export interface AuditTimestampToken {
+  der: string;
+  info: AuditTimestampInfo;
+  signature: string;
+  tsa_cert: string;
 }
 
 export interface Brand {

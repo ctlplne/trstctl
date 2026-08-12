@@ -46,11 +46,15 @@ longer matches the signed bundle.
 
 This **does** detect alteration, truncation, insertion, or reordering
 relative to a previously signed bundle, and any in-place edit of one (the
-signature fails). It does **not** provide continuous at-rest notarization
-without a reference point — for that, an operator schedules periodic
-signed exports (e.g. a nightly `trstctl-cli audit export`) and retains
-them in write-once / WORM storage. A future hardware-anchored or
-external-notary checkpoint is a roadmap item.
+signature fails). With `protocols.tsa` enabled, the saved JWS envelope and every
+record-stream trailer also carry the complete RFC 3161 token over that exact
+head. Offline verification takes the separately pinned audit JWK set and TSA root,
+recomputes the record chain, checks the timestamp token, and applies the chosen
+maximum delay from newest record to authority time. It does **not** provide
+continuous at-rest notarization without periodic reference points — for that, an
+operator schedules exports (e.g. a nightly `trstctl-cli audit export`) and retains
+them in write-once / WORM storage. Translog inclusion and hardware-notary
+checkpoints remain separate roadmap controls.
 
 ## Framework evidence packs
 

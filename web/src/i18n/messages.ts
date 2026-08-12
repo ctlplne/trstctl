@@ -193,6 +193,38 @@ export const messages = {
     defaultMessage: "One audit stream, filtered to this module. Clear to see all events.",
     description: "Explanatory note beside the audit module-scope chip.",
   },
+  "audit.export.anchorStatus": {
+    defaultMessage: "External timestamp status",
+    description: "Audit evidence label for whether a complete external timestamp is saved in the artifact.",
+  },
+  "audit.export.anchorKind": {
+    defaultMessage: "Timestamp kind",
+    description: "Audit evidence label for the external timestamp protocol.",
+  },
+  "audit.export.anchoredAt": {
+    defaultMessage: "Authority time",
+    description: "Audit evidence label for the timestamp authority's asserted time.",
+  },
+  "audit.export.chainHead": {
+    defaultMessage: "Chain head",
+    description: "Audit evidence label for the hash-chain head bound by the signed bundle and timestamp.",
+  },
+  "audit.export.anchored": {
+    defaultMessage: "Complete RFC 3161 token saved",
+    description: "Audit evidence status when the downloaded envelope carries the complete external timestamp proof.",
+  },
+  "audit.export.unanchored": {
+    defaultMessage: "Unanchored",
+    description: "Audit evidence status when no external timestamp proof is available.",
+  },
+  "audit.export.offlineReady": {
+    defaultMessage: "Ready for offline verification against your pinned TSA root",
+    description: "Audit evidence guidance for a self-contained anchored download.",
+  },
+  "audit.export.offlineMissing": {
+    defaultMessage: "No external-time proof is available; the signed hash chain can still be checked",
+    description: "Audit evidence guidance for an unanchored but signed download.",
+  },
   "moduleKpi.certificates.renewSoon": {
     defaultMessage: "renew soon",
     description: "Module KPI sub-label under the certificates expiring-30d metric.",

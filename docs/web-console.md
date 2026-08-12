@@ -242,7 +242,13 @@ inspect the signed tenant/window, exact event/object references, and missing
 prerequisites before exporting the pack), the
 CAP-OBS-02 inventory report, report schedules, and the dry-run workbench. The audit
 explorer filters the tamper-evident event stream and exports a signed evidence
-bundle. See [Policy & governance](features/policy-and-governance.md)
+bundle. The evidence panel names the exact chain head, RFC 3161 kind, authority
+time, and whether the full token is present. Its download is the canonical JSON
+envelope from the served contract—not a display string—so the compact JWS and
+complete external timestamp remain together for offline verification against the
+operator's pinned audit JWK set and TSA root. CSV downloads likewise keep their
+proof in the final RFC-safe row rather than transient response headers. See
+[Policy & governance](features/policy-and-governance.md)
 and [Compliance](compliance.md). Backed by
 `/api/v1/compliance/evidence-packs/{framework}`,
 `/api/v1/compliance/inventory-report`, `/api/v1/compliance/report-schedules`,

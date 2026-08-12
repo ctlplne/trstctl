@@ -278,6 +278,17 @@ func TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource(t *testing.T)
 	if sealed.RecordCount != nOld || sealed.BoundaryHash != full[nOld-1].Hash || sealed.ArchiveURI == "" {
 		t.Errorf("checkpoint = %+v, want count=%d boundaryHash=%s archive set", sealed, nOld, full[nOld-1].Hash)
 	}
+	stream, seed, err := svc.SearchWithSeed(ctx, audit.Query{TenantID: tenant})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seed != sealed.BoundaryHash || len(stream) != len(post) {
+		t.Fatalf("stream seed/records = (%q, %d), want checkpoint (%q, %d)",
+			seed, len(stream), sealed.BoundaryHash, len(post))
+	}
+	if head, err := audit.VerifyChainFrom(seed, stream); err != nil || head != stream[len(stream)-1].Hash {
+		t.Fatalf("stream could not be verified from exported checkpoint: head=%q err=%v", head, err)
+	}
 	if err := audit.VerifyCheckpointSourceRetained(ctx, log, sealed); err != nil {
 		t.Fatalf("retained rebuild source: %v", err)
 	}

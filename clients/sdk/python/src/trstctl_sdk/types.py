@@ -870,11 +870,26 @@ AttestedSVIDRequest = TypedDict(
     total=False,
 )
 
+AuditAnchor = TypedDict(
+    'AuditAnchor',
+    {
+        'anchored_at': str,
+        'chain_head': str,
+        'detail': str,
+        'kind': str,
+        'token': dict[str, Any],
+    },
+    total=False,
+)
+
 AuditBundle = TypedDict(
     'AuditBundle',
     {
+        'anchor': dict[str, Any],
         'bundle': str,
+        'chain_head': str,
         'format': str,
+        'schema_version': int,
     },
     total=False,
 )
@@ -899,6 +914,30 @@ AuditEventList = TypedDict(
     {
         'count': int,
         'events': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AuditTimestampInfo = TypedDict(
+    'AuditTimestampInfo',
+    {
+        'gen_time': str,
+        'hash_algorithm': str,
+        'hashed_message': str,
+        'policy': str,
+        'serial_number': int,
+        'version': int,
+    },
+    total=False,
+)
+
+AuditTimestampToken = TypedDict(
+    'AuditTimestampToken',
+    {
+        'der': str,
+        'info': dict[str, Any],
+        'signature': str,
+        'tsa_cert': str,
     },
     total=False,
 )

@@ -364,31 +364,54 @@ function AuditFilterInput({
 }
 
 function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
+  const { t } = useTranslation();
   const payload = `${bundle.format}: ${bundle.bundle}`;
+  const artifact = `${JSON.stringify(bundle, null, 2)}\n`;
+  const anchored = bundle.anchor?.kind === "rfc3161" && Boolean(bundle.anchor.token?.der) && bundle.anchor.chain_head === bundle.chain_head;
+  const authorityTime = bundle.anchor?.token?.info?.gen_time || bundle.anchor?.anchored_at;
   return (
     <section aria-labelledby="evidence-bundle-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="evidence-bundle-heading" className="text-title font-semibold">
         {translateNow("source.signed.evidence.bundle.ready.9ce177ede7")}
       </h2>
-      <dl className="mt-3 grid gap-2 sm:grid-cols-3">
+      <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.format.2f343666aa")}</dt>
           <dd>{bundle.format}</dd>
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.bundle.bytes.842399751d")}</dt>
-          <dd>{bundle.bundle.length}</dd>
+          <dd>{artifact.length}</dd>
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.scope.b073f6c68e")}</dt>
           <dd>{translateNow("source.current.filters.4e3b0ba1cb")}</dd>
         </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("audit.export.anchorStatus")}</dt>
+          <dd>{anchored ? t("audit.export.anchored") : t("audit.export.unanchored")}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("audit.export.anchorKind")}</dt>
+          <dd>{bundle.anchor?.kind || t("audit.export.unanchored")}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("audit.export.anchoredAt")}</dt>
+          <dd>{authorityTime || "—"}</dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="font-medium text-muted-foreground">{t("audit.export.chainHead")}</dt>
+          <dd className="break-all font-mono text-xs">{bundle.chain_head || "—"}</dd>
+        </div>
       </dl>
+      <p className="mt-3 text-sm text-muted-foreground">
+        {anchored ? t("audit.export.offlineReady") : bundle.anchor?.detail || t("audit.export.offlineMissing")}
+      </p>
       <p className="mt-3 break-all rounded-md bg-muted p-3 font-mono text-xs">{payload}</p>
       <a
         className="mt-3 inline-flex items-center rounded-md border border-border px-3 py-2 text-sm underline"
-        download={`audit-evidence.${bundle.format}.txt`}
-        href={`data:application/octet-stream;charset=utf-8,${encodeURIComponent(payload)}`}
+        download={`audit-evidence.${bundle.format}.json`}
+        href={`data:application/json;charset=utf-8,${encodeURIComponent(artifact)}`}
       >
         {translateNow("source.download.signed.bundle.c6373a92cb")}
       </a>

@@ -2369,18 +2369,63 @@
         ],
         "type": "object"
       },
-      "AuditBundle": {
+      "AuditAnchor": {
         "properties": {
-          "bundle": {
+          "anchored_at": {
+            "format": "date-time",
             "type": "string"
           },
-          "format": {
+          "chain_head": {
             "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "",
+              "rfc3161"
+            ],
+            "type": "string"
+          },
+          "token": {
+            "$ref": "#/components/schemas/AuditTimestampToken"
           }
         },
         "required": [
+          "kind",
+          "chain_head",
+          "anchored_at"
+        ],
+        "type": "object"
+      },
+      "AuditBundle": {
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/AuditAnchor"
+          },
+          "bundle": {
+            "type": "string"
+          },
+          "chain_head": {
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "jws"
+            ],
+            "type": "string"
+          },
+          "schema_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
           "format",
-          "bundle"
+          "bundle",
+          "chain_head",
+          "anchor"
         ],
         "type": "object"
       },
@@ -2435,6 +2480,65 @@
         },
         "required": [
           "events"
+        ],
+        "type": "object"
+      },
+      "AuditTimestampInfo": {
+        "properties": {
+          "gen_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hash_algorithm": {
+            "type": "string"
+          },
+          "hashed_message": {
+            "format": "byte",
+            "type": "string"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "serial_number": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "policy",
+          "hash_algorithm",
+          "hashed_message",
+          "serial_number",
+          "gen_time"
+        ],
+        "type": "object"
+      },
+      "AuditTimestampToken": {
+        "properties": {
+          "der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "info": {
+            "$ref": "#/components/schemas/AuditTimestampInfo"
+          },
+          "signature": {
+            "format": "byte",
+            "type": "string"
+          },
+          "tsa_cert": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "info",
+          "signature",
+          "tsa_cert",
+          "der"
         ],
         "type": "object"
       },

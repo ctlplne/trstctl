@@ -306,7 +306,13 @@ describe("operational console surface", () => {
         data: { resource_id: "cert-1" },
       },
     ]);
-    apiMock.exportAudit.mockResolvedValue({ format: "jws", bundle: "sealed.bundle" });
+    apiMock.exportAudit.mockResolvedValue({
+      schema_version: 1,
+      format: "jws",
+      bundle: "sealed.bundle",
+      chain_head: "head-1",
+      anchor: { kind: "", chain_head: "head-1", anchored_at: "0001-01-01T00:00:00Z", detail: "TSA not configured" },
+    });
     const user = userEvent.setup();
     renderAt("/audit");
 
@@ -318,7 +324,7 @@ describe("operational console surface", () => {
 
     await user.click(screen.getByRole("button", { name: /Export evidence/i }));
     expect(await screen.findByText("jws: sealed.bundle")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "audit-evidence.jws.txt");
+    expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "audit-evidence.jws.json");
     expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 50 });
   });
 

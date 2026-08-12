@@ -46,7 +46,7 @@ func TestSplunkEventsCarryEpochSecondsNotRFC3339(t *testing.T) {
 	t.Parallel()
 	recs, head := exportRecords(t)
 	var buf bytes.Buffer
-	if err := auditanchor.WriteRecords(&buf, auditanchor.FormatSplunkHEC, recs, head, auditanchor.Anchor{}); err != nil {
+	if err := auditanchor.WriteRecords(&buf, auditanchor.FormatSplunkHEC, recs, "", head, auditanchor.Anchor{}); err != nil {
 		t.Fatalf("WriteRecords: %v", err)
 	}
 	lines := nonEmptyLines(buf.String())
@@ -87,7 +87,7 @@ func TestSentinelRecordsUseTheTableShapeSentinelExpects(t *testing.T) {
 	t.Parallel()
 	recs, head := exportRecords(t)
 	var buf bytes.Buffer
-	if err := auditanchor.WriteRecords(&buf, auditanchor.FormatSentinel, recs, head, auditanchor.Anchor{}); err != nil {
+	if err := auditanchor.WriteRecords(&buf, auditanchor.FormatSentinel, recs, "", head, auditanchor.Anchor{}); err != nil {
 		t.Fatal(err)
 	}
 	lines := nonEmptyLines(buf.String())
@@ -110,23 +110,28 @@ func TestSentinelRecordsUseTheTableShapeSentinelExpects(t *testing.T) {
 func TestCSVExportParsesAndPinsItsHeader(t *testing.T) {
 	t.Parallel()
 	recs, head := exportRecords(t)
+	h := newHarness(t, recs[len(recs)-1].Time.Add(time.Minute))
+	anchor, err := auditanchor.AnchorHead(t.Context(), h.authority, head)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var buf bytes.Buffer
-	if err := auditanchor.WriteRecords(&buf, auditanchor.FormatCSV, recs, head, auditanchor.Anchor{}); err != nil {
+	if err := auditanchor.WriteRecords(&buf, auditanchor.FormatCSV, recs, "", head, anchor); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := csv.NewReader(&buf).ReadAll()
 	if err != nil {
 		t.Fatalf("the CSV export does not parse as CSV: %v", err)
 	}
-	if len(rows) != len(recs)+1 {
-		t.Fatalf("got %d rows, want %d records + header", len(rows), len(recs))
+	if len(rows) != len(recs)+2 {
+		t.Fatalf("got %d rows, want %d records + header + self-contained integrity trailer", len(rows), len(recs))
 	}
 
 	// The header is pinned. Reordering breaks every saved query built on a
 	// previous export, and an audit export is exactly what people build saved
 	// queries on.
 	want := []string{"sequence", "id", "type", "tenant_id", "time",
-		"actor_subject", "actor_roles", "chain_hash", "data"}
+		"actor_subject", "actor_roles", "chain_hash", "data", "trstctl_record", "integrity"}
 	if len(rows[0]) != len(want) {
 		t.Fatalf("header = %v, want %v", rows[0], want)
 	}
@@ -146,6 +151,21 @@ func TestCSVExportParsesAndPinsItsHeader(t *testing.T) {
 	if rows[2][5] != "" || rows[2][6] != "" {
 		t.Errorf("an actorless record produced %q/%q", rows[2][5], rows[2][6])
 	}
+	trailer := rows[len(rows)-1]
+	if trailer[9] != "chain_trailer" {
+		t.Fatalf("CSV final row marker = %q, want chain_trailer", trailer[9])
+	}
+	var proof struct {
+		ChainHead string             `json:"chain_head"`
+		Count     int                `json:"count"`
+		Anchor    auditanchor.Anchor `json:"anchor"`
+	}
+	if err := json.Unmarshal([]byte(trailer[10]), &proof); err != nil {
+		t.Fatalf("CSV integrity trailer is not self-contained JSON: %v", err)
+	}
+	if proof.ChainHead != head || proof.Count != len(recs) || proof.Anchor.Token == nil || len(proof.Anchor.Token.DER) == 0 {
+		t.Fatalf("CSV integrity trailer dropped chain/anchor proof: %+v", proof)
+	}
 }
 
 // Every JSON stream format ends with the chain head and the anchor.
@@ -159,7 +179,7 @@ func TestJSONStreamsCarryTheChainHeadAndAnchor(t *testing.T) {
 		t.Run(string(format), func(t *testing.T) {
 			t.Parallel()
 			var buf bytes.Buffer
-			if err := auditanchor.WriteRecords(&buf, format, recs, head,
+			if err := auditanchor.WriteRecords(&buf, format, recs, "", head,
 				auditanchor.Anchor{Kind: auditanchor.KindNone, Detail: "not anchored"}); err != nil {
 				t.Fatal(err)
 			}
@@ -186,6 +206,52 @@ func TestJSONStreamsCarryTheChainHeadAndAnchor(t *testing.T) {
 				t.Error("the trailer does not explain the missing anchor")
 			}
 		})
+	}
+}
+
+func TestCSVArtifactVerifiesOfflineAndRejectsTamperTruncationAndBackdateAUD51(t *testing.T) {
+	t.Parallel()
+	recs, _ := exportRecords(t)
+	// Model an export after the retention worker archived an earlier segment.
+	// The saved artifact must retain this predecessor or the surviving hashes
+	// cannot be reconstructed offline.
+	prevHash := strings.Repeat("a", 64)
+	head := auditchain.SealFrom(prevHash, recs)
+	h := newHarness(t, recs[len(recs)-1].Time.Add(time.Minute))
+	anchor, err := auditanchor.AnchorHead(t.Context(), h.authority, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var good bytes.Buffer
+	if err := auditanchor.WriteRecords(&good, auditanchor.FormatCSV, recs, prevHash, head, anchor); err != nil {
+		t.Fatal(err)
+	}
+	verified, err := auditanchor.VerifyCSVArtifact(good.Bytes(), h.rootDER, time.Hour)
+	if err != nil || len(verified) != len(recs) {
+		t.Fatalf("saved CSV did not verify offline: records=%d err=%v", len(verified), err)
+	}
+
+	tampered := strings.Replace(good.String(), "api.example.test", "evil.example.test", 1)
+	if _, err := auditanchor.VerifyCSVArtifact([]byte(tampered), h.rootDER, time.Hour); err == nil {
+		t.Fatal("CSV with an altered event verified")
+	}
+	lines := nonEmptyLines(good.String())
+	truncated := strings.Join(lines[:len(lines)-1], "\n") + "\n"
+	if _, err := auditanchor.VerifyCSVArtifact([]byte(truncated), h.rootDER, time.Hour); err == nil {
+		t.Fatal("CSV without its final integrity trailer verified")
+	}
+
+	late := newHarness(t, recs[len(recs)-1].Time.Add(90*24*time.Hour))
+	lateAnchor, err := auditanchor.AnchorHead(t.Context(), late.authority, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var backdated bytes.Buffer
+	if err := auditanchor.WriteRecords(&backdated, auditanchor.FormatCSV, recs, prevHash, head, lateAnchor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := auditanchor.VerifyCSVArtifact(backdated.Bytes(), late.rootDER, time.Hour); err == nil {
+		t.Fatal("CSV freshly re-anchored 90 days after its newest event passed back-date policy")
 	}
 }
 

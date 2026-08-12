@@ -2845,10 +2845,28 @@ func componentSchemas() map[string]*Schema {
 		"events": {Type: "array", Items: ref("AuditEvent")},
 		"count":  {Type: "integer"},
 	}, "events")
+	auditTimestampInfo := object(map[string]*Schema{
+		"version": {Type: "integer"}, "policy": str(), "hash_algorithm": str(),
+		"hashed_message": {Type: "string", Format: "byte"}, "serial_number": {Type: "integer"},
+		"gen_time": timestamp(),
+	}, "version", "policy", "hash_algorithm", "hashed_message", "serial_number", "gen_time")
+	auditTimestampToken := object(map[string]*Schema{
+		"info": ref("AuditTimestampInfo"), "signature": {Type: "string", Format: "byte"},
+		"tsa_cert": {Type: "string", Format: "byte"}, "der": {Type: "string", Format: "byte"},
+	}, "info", "signature", "tsa_cert", "der")
+	auditAnchorKind := str()
+	auditAnchorKind.Enum = []string{"", "rfc3161"}
+	auditAnchor := object(map[string]*Schema{
+		"kind": auditAnchorKind, "chain_head": str(), "anchored_at": timestamp(),
+		"token": ref("AuditTimestampToken"), "detail": str(),
+	}, "kind", "chain_head", "anchored_at")
 	auditBundle := object(map[string]*Schema{
-		"format": str(),
-		"bundle": str(), // a compact JWS whose payload is the signed evidence bundle
-	}, "format", "bundle")
+		"schema_version": {Type: "integer"},
+		"format":         {Type: "string", Enum: []string{"jws"}},
+		"bundle":         str(), // a compact JWS whose payload is the signed evidence bundle
+		"chain_head":     str(),
+		"anchor":         ref("AuditAnchor"),
+	}, "schema_version", "format", "bundle", "chain_head", "anchor")
 	complianceEvidencePack := object(map[string]*Schema{
 		"format":         str(),
 		"framework":      {Type: "string", Enum: complianceFrameworkValues()},
@@ -4857,6 +4875,9 @@ func componentSchemas() map[string]*Schema {
 		"APITokenRevokeRequest":                    apiTokenRevokeReq,
 		"AuditEvent":                               auditEvent,
 		"AuditEventList":                           auditEventList,
+		"AuditTimestampInfo":                       auditTimestampInfo,
+		"AuditTimestampToken":                      auditTimestampToken,
+		"AuditAnchor":                              auditAnchor,
 		"AuditBundle":                              auditBundle,
 		"ComplianceEvidencePack":                   complianceEvidencePack,
 		"ComplianceReportScheduleRequest":          complianceReportScheduleReq,

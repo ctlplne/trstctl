@@ -586,8 +586,12 @@ describe("i18n boundary", () => {
       // attestation state, stale-owner queue, and temporary exception workflow
       // now have reviewed catalog entries. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "876b4a112d1254b5291ec0ab1171348548980b7c5d1a3ffd5c59c8023e429eaa",
-      "de-DE": "6ec34fbca63650f1faa0edb80d6ddca8a933a08bcff72953b40c74f80726bffe",
+      // AUD-51 audit-export re-pin: eight audit.export.* keys name the saved
+      // RFC 3161 proof status, authority time, chain head, and honest offline
+      // verification guidance. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "1bd2f5c25c74c6bc94a94b2a44283cee7204aae0d1bb5b6022524aed880f8641",
+      "de-DE": "41976aff62a9b1f886c5bc9753e1d1e483684c30a7644d4b9cf6c0e3a3772ecf",
     });
   });
 
