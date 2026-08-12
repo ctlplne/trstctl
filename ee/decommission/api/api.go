@@ -2,7 +2,8 @@
 
 // Package api is the served H4 surface for verifiable decommission: the CA-key
 // retirement checklist source behind core's GET /api/v1/ca/keys/{id}/retirement,
-// and the POST that starts re-protection for a key's outstanding dependents.
+// the POST that starts re-protection, and the explicitly confirmed POST that
+// freezes evidence for signer-local destruction.
 //
 // Both attach through the feature-neutral api.Option seam (the ee/succession
 // precedent); no VDEC route, handler, or DTO lives in MPL core. Before this
@@ -15,11 +16,15 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/ee/decommission/depstate"
 	"trstctl.com/trstctl/ee/decommission/reprotect"
+	"trstctl.com/trstctl/ee/decommission/retirement"
 	decstore "trstctl.com/trstctl/ee/decommission/store"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
@@ -30,20 +35,22 @@ import (
 // ChecklistSource answers the retirement checklist from the tenant-scoped VDEC
 // dependency-state read model. It implements api.RetirementChecklistSource.
 type ChecklistSource struct {
-	repo *decstore.Repo
+	repo       *decstore.Repo
+	retirement *retirement.Projection
 }
 
 // NewChecklistSource builds the source over the VDEC read-model repository.
-func NewChecklistSource(repo *decstore.Repo) *ChecklistSource {
-	return &ChecklistSource{repo: repo}
+func NewChecklistSource(repo *decstore.Repo, retirementProjection *retirement.Projection) *ChecklistSource {
+	return &ChecklistSource{repo: repo, retirement: retirementProjection}
 }
 
 // RetirementChecklist reports the dependents still standing between a key and
 // destruction. A key the ledger has never recorded dependency state for returns
 // an empty checklist with Total 0 — the truthful projection answer; enforcement
 // of the destruction refusal itself lives in the isolated signer, not here.
-// DestructionRecord stays empty until a destruction-record projection exists;
-// the core surface documents absence as the normal state for a living key.
+// DestructionRecord stays empty while the key is alive. Once the outbox worker
+// receives the signer's terminal decision, the immutable event projection makes
+// the signed refusal or full destruction record readable here.
 func (s *ChecklistSource) RetirementChecklist(r *http.Request, tenantID, keyID string) (api.RetirementChecklist, error) {
 	state, found, err := s.repo.FetchKeyState(r.Context(), tenantID, keyID)
 	if err != nil {
@@ -61,11 +68,23 @@ func (s *ChecklistSource) RetirementChecklist(r *http.Request, tenantID, keyID s
 			Detail: resolutionDetail(dep.Class),
 		})
 	}
-	return api.RetirementChecklist{
+	checklist := api.RetirementChecklist{
 		Outstanding: outstanding,
 		Accounted:   len(state.Registered) - len(unaccounted),
 		Total:       len(state.Registered),
-	}, nil
+	}
+	if s.retirement != nil {
+		retired, found, err := s.retirement.Fetch(r.Context(), tenantID, keyID)
+		if err != nil {
+			return api.RetirementChecklist{}, err
+		}
+		if found {
+			checklist.RetirementStatus = retired.Status
+			checklist.RefusalRecord = string(retired.RefusalRecord)
+			checklist.DestructionRecord = string(retired.DestructionRecord)
+		}
+	}
+	return checklist, nil
 }
 
 // resolutionDetail says what would resolve one outstanding dependent, in the
@@ -150,10 +169,57 @@ func reprotectHandler(a *api.API, enq *reprotect.Enqueuer) http.HandlerFunc {
 	}
 }
 
+type RetirementRequest struct {
+	FinalEpoch          uint64 `json:"final_epoch"`
+	ConfirmIrreversible bool   `json:"confirm_irreversible"`
+}
+
+func retirementHandler(a *api.API, coordinator *retirement.Coordinator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a.Mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+			start := time.Now()
+			var opErr error
+			defer func() { a.ObserveFeature("vdec_retirement", "request", start, opErr) }()
+			keyID := r.PathValue("id")
+			if keyID == "" {
+				opErr = api.ErrStatus(http.StatusBadRequest, "key id is required")
+				return 0, nil, opErr
+			}
+			var input RetirementRequest
+			if err := api.DecodeJSONStrict(r, &input); err != nil {
+				opErr = api.ErrWithStatus(http.StatusBadRequest, err)
+				return 0, nil, opErr
+			}
+			principal, err := api.AuthenticatedPrincipalSubject(ctx)
+			if err != nil {
+				opErr = err
+				return 0, nil, err
+			}
+			receipt, err := coordinator.Request(ctx, tenantID, keyID, retirement.Request{
+				FinalEpoch: input.FinalEpoch, ConfirmIrreversible: input.ConfirmIrreversible,
+				Approvals: []string{principal},
+			})
+			if err != nil {
+				switch {
+				case errors.Is(err, pgx.ErrNoRows):
+					err = api.ErrStatus(http.StatusNotFound, "CA authority not found")
+				case errors.Is(err, retirement.ErrCommandConflict):
+					err = api.ErrStatus(http.StatusConflict, err.Error())
+				case errors.Is(err, retirement.ErrInvalidCommand):
+					err = api.ErrStatus(http.StatusBadRequest, err.Error())
+				}
+				opErr = err
+				return 0, nil, err
+			}
+			return http.StatusAccepted, receipt, nil
+		})
+	}
+}
+
 // Routes declares the licensed VDEC REST surface. The start-re-protection route
 // is a mutation with no request body: the key id in the path and the header
 // idempotency key are the whole request (AN-5).
-func Routes(enq *reprotect.Enqueuer) []api.LicensedRoute {
+func Routes(enq *reprotect.Enqueuer, coordinator *retirement.Coordinator) []api.LicensedRoute {
 	return []api.LicensedRoute{
 		{
 			Method: "POST", Path: "/api/v1/ca/keys/{id}/reprotect", OperationID: "startCAKeyReprotection",
@@ -162,6 +228,14 @@ func Routes(enq *reprotect.Enqueuer) []api.LicensedRoute {
 			PathParams:     []api.RouteParam{api.PathStringParam("id", "stable key identifier")},
 			ResponseSchema: "VDECReprotectionReceipt", SuccessCode: "202", Mutation: true,
 			Permission: authz.KeysWrite,
+		},
+		{
+			Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement", OperationID: "retireCAKey",
+			Summary:       "Irreversibly retire a superseded CA key through the isolated signer",
+			Handler:       func(a *api.API) http.HandlerFunc { return retirementHandler(a, coordinator) },
+			PathParams:    []api.RouteParam{api.PathStringParam("id", "stable CA authority identifier")},
+			RequestSchema: "VDECRetirementRequest", ResponseSchema: "VDECRetirementReceipt", SuccessCode: "202",
+			Mutation: true, Permission: authz.KeysWrite,
 		},
 	}
 }
@@ -181,6 +255,17 @@ func schemas() map[string]*api.Schema {
 			"enqueued": api.IntegerSchema(),
 			"jobs":     api.ArraySchema(api.SchemaRef("VDECReprotectionJob")),
 		}, "key_id", "planned", "enqueued", "jobs"),
+		"VDECRetirementRequest": api.ObjectSchema(map[string]*api.Schema{
+			"final_epoch":          api.IntegerSchema(),
+			"confirm_irreversible": api.BooleanSchema(),
+		}, "final_epoch", "confirm_irreversible"),
+		"VDECRetirementReceipt": api.ObjectSchema(map[string]*api.Schema{
+			"key_id":           api.StringSchema(),
+			"command_event_id": api.StringSchema(),
+			"status":           api.StringSchema(),
+			"ledger_position":  api.IntegerSchema(),
+			"final_epoch":      api.IntegerSchema(),
+		}, "key_id", "command_event_id", "status", "ledger_position", "final_epoch"),
 	}
 }
 
@@ -189,7 +274,11 @@ func schemas() map[string]*api.Schema {
 // checklist source and the re-protection producer are built from the
 // server-provided store and outbox, so the route serves the same read model and
 // the same outbox the dispatcher drains.
-func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
+func NewAPIOptionsFactory(retirementProjections ...*retirement.Projection) editionseam.LicensedAPIOptionsFactory {
+	var retirementProjection *retirement.Projection
+	if len(retirementProjections) != 0 {
+		retirementProjection = retirementProjections[0]
+	}
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
 		repo := decstore.New(d.Store)
 		outbox := d.Outbox
@@ -197,9 +286,10 @@ func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 			outbox = orchestrator.NewOutbox(d.Store)
 		}
 		enq := reprotect.NewEnqueuer(d.Store, repo, outbox)
+		coordinator := retirement.NewCoordinator(d.Store, d.Log, retirementProjection)
 		return []api.Option{
-			api.WithRetirementChecklist(NewChecklistSource(repo)),
-			api.WithLicensedRoutes(Routes(enq)...),
+			api.WithRetirementChecklist(NewChecklistSource(repo, retirementProjection)),
+			api.WithLicensedRoutes(Routes(enq, coordinator)...),
 			api.WithLicensedSchemas(schemas()),
 		}, nil
 	}

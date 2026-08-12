@@ -13,6 +13,7 @@ import (
 	agidrevoke "trstctl.com/trstctl/ee/agentid/revoke"
 	"trstctl.com/trstctl/ee/decommission/depstate"
 	"trstctl.com/trstctl/ee/decommission/reprotect"
+	"trstctl.com/trstctl/ee/decommission/retirement"
 	"trstctl.com/trstctl/ee/pqcmigration"
 	"trstctl.com/trstctl/ee/provider"
 	"trstctl.com/trstctl/ee/reconcile/quarantine"
@@ -84,6 +85,9 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: depstate.TypeReprotectionCompleted, SchemaVersion: depstate.SchemaV1},
 		{EventType: depstate.TypeRevocationCompleted, SchemaVersion: depstate.SchemaV1},
 		{EventType: reprotect.TypeCredentialSupersession, SchemaVersion: depstate.SchemaV1},
+		{EventType: retirement.TypeRetirementRequested, SchemaVersion: retirement.SchemaV1},
+		{EventType: retirement.TypeRetirementRefused, SchemaVersion: retirement.SchemaV1},
+		{EventType: retirement.TypeDestructionRecorded, SchemaVersion: retirement.SchemaV1},
 		{EventType: "kmip.state.object.created", SchemaVersion: 1},
 		{EventType: "kmip.state.object.registered", SchemaVersion: 1},
 		{EventType: "kmip.state.object.rekeyed", SchemaVersion: 1},
@@ -137,6 +141,21 @@ func TestFullBinaryProducerVocabularyAndPrivacyCatalogHaveSetEquality(t *testing
 	for schema := range catalogSet {
 		if _, present := producerSet[schema]; !present {
 			t.Errorf("licensed privacy catalog has orphan coordinate %s v%d with no producer census entry", schema.EventType, schema.SchemaVersion)
+		}
+	}
+}
+
+func TestRetirementPrivacyPoliciesCoverEveryImmutableEventShape(t *testing.T) {
+	for _, schema := range []events.ProductionPrivacyEventSchema{
+		{EventType: retirement.TypeRetirementRequested, SchemaVersion: retirement.SchemaV1},
+		{EventType: retirement.TypeRetirementRefused, SchemaVersion: retirement.SchemaV1},
+		{EventType: retirement.TypeDestructionRecorded, SchemaVersion: retirement.SchemaV1},
+	} {
+		if !events.HasPrivacyEventPolicy(schema.EventType, schema.SchemaVersion) {
+			t.Fatalf("retirement event %s v%d has no privacy policy", schema.EventType, schema.SchemaVersion)
+		}
+		if _, err := events.ValidatePrivacyEventPolicySubjectFixtures(schema.EventType, schema.SchemaVersion); err != nil {
+			t.Fatalf("retirement event %s v%d privacy fixture: %v", schema.EventType, schema.SchemaVersion, err)
 		}
 	}
 }

@@ -29,6 +29,8 @@ const { apiMock } = vi.hoisted(() => ({
     caAuthorities: vi.fn(),
     edgeSegmentPolicies: vi.fn(),
     edgeDelegations: vi.fn(),
+		caRetirementChecklist: vi.fn(),
+		retireCAKey: vi.fn(),
   },
 }));
 
@@ -54,6 +56,21 @@ describe("CA hierarchy and custody surface", () => {
     apiMock.caAuthorities.mockResolvedValue({ items: [] });
     apiMock.edgeSegmentPolicies.mockResolvedValue({ items: [], guidance: "" });
     apiMock.edgeDelegations.mockResolvedValue({ items: [], guidance: "" });
+		apiMock.caRetirementChecklist.mockResolvedValue({
+			key_id: "iss-root",
+			blocked: true,
+			accounted: 1,
+			total: 2,
+			outstanding: [{ kind: "credential", ref: "leaf-2", detail: "re-issue under the successor" }],
+			guidance: "The isolated signer owns the final decision.",
+		});
+		apiMock.retireCAKey.mockResolvedValue({
+			key_id: "iss-root",
+			command_event_id: "vdec-command-1",
+			status: "pending",
+			ledger_position: 41,
+			final_epoch: 7,
+		});
     apiMock.issuers.mockReset().mockResolvedValue([
       {
         id: "iss-root",
@@ -707,4 +724,67 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("trstctl issues and revokes this")).toBeInTheDocument();
     expect(screen.getByText("No domain validation")).toBeInTheDocument();
   });
+
+	it("requires explicit confirmation, requests signer-gated retirement, and downloads the projected record", async () => {
+		const user = userEvent.setup();
+		apiMock.caAuthorities.mockResolvedValue({
+			items: [
+				{
+					id: "ca-retired",
+					tenant_id: "tenant-1",
+					common_name: "Retired Root CA",
+					kind: "root",
+					status: "superseded",
+					certificate_pem: "public certificate",
+					signer_handle: "signer-handle-retired",
+					serial: "42",
+					max_path_len: 1,
+					created_at: "2026-08-12T00:00:00Z",
+				},
+			],
+		});
+		const signedRecord = JSON.stringify({
+			commitment: { tenant_id: "tenant-1", stable_key_id: "ca-retired", final_epoch: 7 },
+			signature: "offline-signature",
+		});
+		apiMock.caRetirementChecklist
+			.mockResolvedValueOnce({
+				key_id: "ca-retired",
+				blocked: true,
+				accounted: 1,
+				total: 2,
+				outstanding: [{ kind: "credential", ref: "leaf-2" }],
+				guidance: "The isolated signer owns the final decision.",
+			})
+			.mockResolvedValueOnce({
+				key_id: "ca-retired",
+				blocked: false,
+				accounted: 2,
+				total: 2,
+				outstanding: [],
+				retirement_status: "destroyed",
+				destruction_record: signedRecord,
+				guidance: "The key was destroyed inside the isolated signer.",
+			});
+
+		renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+		const panel = await screen.findByRole("region", { name: "Key retirement" });
+		const retire = within(panel).getByRole("button", { name: "Irreversibly retire key" });
+		expect(retire).toBeDisabled();
+		await user.clear(within(panel).getByLabelText("Final dependency epoch"));
+		await user.type(within(panel).getByLabelText("Final dependency epoch"), "7");
+		await user.click(within(panel).getByLabelText("I understand this permanently destroys the signer-held key"));
+		await user.click(retire);
+
+		await waitFor(() =>
+			expect(apiMock.retireCAKey).toHaveBeenCalledWith("ca-retired", {
+				final_epoch: 7,
+				confirm_irreversible: true,
+			}),
+		);
+		const download = await within(panel).findByRole("link", { name: "Download offline-verifiable destruction record" });
+		expect(download).toHaveAttribute("download", "trstctl-ca-key-ca-retired-destruction-record.json");
+		expect(download.getAttribute("href")).toContain(encodeURIComponent("offline-signature"));
+		expect(within(panel).getByText("destroyed")).toBeInTheDocument();
+	});
 });

@@ -1281,6 +1281,22 @@ export function mutate<T>(method: string, path: string, body?: unknown): Promise
   });
 }
 
+// AUD-42: this licensed command is intentionally typed beside the shared HTTP
+// client. Community builds can still compile the thin client, but an unlicensed
+// server has no POST route and therefore fails closed before any command exists.
+export interface CARetirementRequest {
+  final_epoch: number;
+  confirm_irreversible: true;
+}
+
+export interface CARetirementReceipt {
+  key_id: string;
+  command_event_id: string;
+  status: string;
+  ledger_position: number;
+  final_epoch: number;
+}
+
 function enrollmentTokenRequest(input?: EnrollmentTokenRequest): EnrollmentTokenRequest | undefined {
   const allowedIdentity = input?.allowed_identity?.trim();
   const roles = input?.roles ?? [];
@@ -1548,6 +1564,7 @@ export interface Api {
   unownedIdentities(): Promise<UnownedQueue>;
   // H4: what blocks a CA key's destruction.
   caRetirementChecklist(keyId: string): Promise<RetirementChecklist>;
+  retireCAKey(keyId: string, input: CARetirementRequest): Promise<CARetirementReceipt>;
   graphReachable(id: string): Promise<GraphReachable>;
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
@@ -1976,6 +1993,7 @@ const liveApi: Api = {
   graphTrustStores: estate.graphTrustStores,
   unownedIdentities: estate.unownedIdentities,
   caRetirementChecklist: estate.caRetirementChecklist,
+  retireCAKey: estate.retireCAKey,
   assessMigration: estate.assessMigration,
   startMigrationRun: estate.startMigrationRun,
   migrationRuns: estate.migrationRuns,

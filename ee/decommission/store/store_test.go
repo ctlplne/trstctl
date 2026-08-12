@@ -283,6 +283,9 @@ func TestCoreOnly_AppliesZeroVDECMigrations(t *testing.T) {
 	if reg := regclass(t, core, "decommission_key_states"); reg != nil {
 		t.Fatalf("core-only migrate created a VDEC table: %q", *reg)
 	}
+	if reg := regclass(t, core, "decommission_retirements"); reg != nil {
+		t.Fatalf("core-only migrate created the licensed retirement table: %q", *reg)
+	}
 
 	seamed, err := corestore.Open(ctx, dsn)
 	if err != nil {
@@ -294,6 +297,9 @@ func TestCoreOnly_AppliesZeroVDECMigrations(t *testing.T) {
 	}
 	if reg := regclass(t, seamed, "decommission_key_states"); reg == nil {
 		t.Fatal("seam did not create the VDEC table")
+	}
+	if reg := regclass(t, seamed, "decommission_retirements"); reg == nil {
+		t.Fatal("seam did not create the VDEC retirement projection table")
 	}
 }
 

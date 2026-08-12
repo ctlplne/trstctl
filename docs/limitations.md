@@ -2446,21 +2446,35 @@ than sending an operator looking for a credential that was never there.
   inventory rows with no captured DER cannot participate in the comparison
   (no issuer bytes to derive the shared identity from), so a metadata-only
   scanner import is invisible to this pair of authorities.
-- CA-key retirement checklist (H4): `GET /api/v1/ca/keys/{id}/retirement` and
+- CA-key retirement (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
-  destruction, and the destruction record once it exists. The REFUSAL itself lives
-  in the isolated signer via `ee/decommission`, not in this route — the checklist
-  explains the gate rather than being it, and the served guidance says so, because
-  an operator who believes the page is the gate will route around it and have the
-  key destroyed by hand, at which point the evidence chain is never written.
+  destruction. An operator with `keys:write` can submit the exact final dependency
+  epoch through `POST /api/v1/ca/keys/{id}/retirement`, the explicit-confirmation
+  lifecycle control, or `trstctl ca keys retire <id> --force -f <request.json>`.
+  The wire request contains only `final_epoch` and `confirm_irreversible`: the
+  server fixes the policy class to `ca-signing-key` and derives the sole approval
+  identity from the authenticated principal, so a caller cannot name a weaker
+  class or impersonate another approver.
+  The request only appends a frozen evidence command and its same-transaction
+  outbox intent. The outbox worker replays that frozen event prefix and calls
+  `GatedDestroy` over the signer UDS; the API process never receives a private key
+  or a key-backend destruction handle. Incomplete evidence produces a signed
+  refusal and leaves the key alive. Complete evidence destroys the signer-local
+  handle first, then mints one full public record bound to the command ID, tenant,
+  stable key ID, final epoch, required/completion/revocation digests, quorum and
+  audit head. Both outcomes are immutable events and rebuild the tenant-RLS
+  projection after restart. The console displays signed refusals and downloads the
+  complete destruction record for offline verification.
   Licensed under `vdec` and FAIL-CLOSED: an unlicensed deployment returns 501 with
   a message stating that no answer was produced, rather than an empty outstanding
   list — an empty list reads as "this key has no dependents", which is permission
-  to perform an irreversible act on evidence nobody gathered. Served on the CA
-  hierarchy console's lifecycle tab, where retirement belongs beside rotation.
-  Scope, stated exactly: the panel is keyed on the first issuer because a per-key
-  selector is not served yet, and it renders NOTHING when the checklist cannot be
-  read — a reassuring zero must never appear because a request failed.
+  to perform an irreversible act on evidence nobody gathered; the licensed POST is
+  absent rather than downgraded. Served on the CA hierarchy console's lifecycle
+  tab, where retirement belongs beside rotation. Its selector is populated only
+  from served, signer-backed CA authorities already marked `superseded` or
+  `revoked`; it sends that authority's exact ID, while the API repeats the same
+  precondition check. A failed checklist read renders an explicit unavailable
+  state and no destruction control, never a reassuring zero.
 - Incident fleet-reissue batch gates (H3): each batch's health gate is recomputed
   on read from THAT BATCH's own replacement identities, through the same
   verification summary D6's canary uses. It previously round-robined the run's

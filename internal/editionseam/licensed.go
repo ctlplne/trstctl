@@ -87,6 +87,14 @@ type ManagedKeyCustody interface {
 	ManageKey(context.Context, signing.ManagedKeyCommand) (signing.ManagedKeyResult, error)
 }
 
+// GatedDestruction is the isolated signer's narrow irreversible-operation
+// surface. It is supplied only to licensed outbox workers: API handlers receive
+// no signer destruction capability, so every external custody effect must first
+// exist as a recoverable outbox command (AN-6).
+type GatedDestruction interface {
+	GatedDestroy(context.Context, signing.GatedDestroyRequest) (signing.GatedDestroyDecision, error)
+}
+
 // Compile-time proof the out-of-process signer client satisfies both licensed-outbox
 // signer seams, so internal/server can wire *signing.Client into LicensedOutboxDeps.Minter
 // and LicensedOutboxDeps.IssuanceGate directly (a signature drift is a build error).
@@ -95,6 +103,7 @@ var (
 	_ IssuanceGate      = (*signing.Client)(nil)
 	_ KEMCustody        = (*signing.Client)(nil)
 	_ ManagedKeyCustody = (*signing.Client)(nil)
+	_ GatedDestruction  = (*signing.Client)(nil)
 )
 
 type LicensedOutboxDeps struct {
@@ -129,6 +138,9 @@ type LicensedOutboxDeps struct {
 	// ManagedKeyCustody is the same out-of-process signer client narrowed to the
 	// managed-key lifecycle RPC. nil makes managedkey.command fail closed.
 	ManagedKeyCustody ManagedKeyCustody
+	// GatedDestruction is the out-of-process signer narrowed to the generic
+	// verify-then-destroy RPC. nil makes VDEC retirement fail closed.
+	GatedDestruction GatedDestruction
 	// Transit is the core envelope/transit service. Licensed outbox handlers may use
 	// it for public ciphertext re-wrap operations; nil means those operations fail
 	// closed instead of inventing a non-durable substitute.

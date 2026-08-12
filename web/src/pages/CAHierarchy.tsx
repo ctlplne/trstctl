@@ -131,25 +131,86 @@ const externalCAIssueDefaults: ExternalCAIssueForm = {
 // request failed.
 function RetirementChecklistPanel({ keyId }: { keyId: string }) {
   const [checklist, setChecklist] = useState<RetirementChecklist | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [finalEpoch, setFinalEpoch] = useState("1");
+  const [confirmed, setConfirmed] = useState(false);
+
+  async function refresh() {
+    try {
+      const next = await api.caRetirementChecklist(keyId);
+      setChecklist(next);
+      setLoadError(false);
+      return next;
+    } catch {
+      setChecklist(null);
+      setLoadError(true);
+      return null;
+    }
+  }
 
   useEffect(() => {
     let active = true;
     setChecklist(null);
+    setLoadError(false);
     if (!keyId || typeof api.caRetirementChecklist !== "function") return;
     api
       .caRetirementChecklist(keyId)
       .then((res) => {
-        if (active) setChecklist(res);
+        if (active) {
+          setChecklist(res);
+          setLoadError(false);
+        }
       })
       .catch(() => {
-        if (active) setChecklist(null);
+        if (active) {
+          setChecklist(null);
+          setLoadError(true);
+        }
       });
     return () => {
       active = false;
     };
   }, [keyId]);
 
+  async function requestRetirement() {
+    const epoch = Number(finalEpoch);
+    if (!confirmed || !Number.isSafeInteger(epoch) || epoch <= 0) return;
+    setBusy(true);
+    setRequestError(null);
+    try {
+      await api.retireCAKey(keyId, { final_epoch: epoch, confirm_irreversible: true });
+      await refresh();
+      setConfirmed(false);
+    } catch (err) {
+      setRequestError(errorText(err, translateNow("source.retirement.request.failed.h4ret00015")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loadError) {
+    return (
+      <section aria-labelledby="retirement-heading" className="ui-panel space-y-3 p-comfortable">
+        <h3 id="retirement-heading" className="text-title font-semibold">
+          {translateNow("source.retirement.checklist.h4ret00001")}
+        </h3>
+        <p className="text-sm text-destructive" role="alert">
+          {translateNow("source.retirement.unavailable.h4ret00014")}
+        </p>
+        <Button type="button" variant="outline" onClick={() => void refresh()}>
+          {translateNow("source.retirement.refresh.h4ret00007")}
+        </Button>
+      </section>
+    );
+  }
   if (!checklist) return null;
+  const epoch = Number(finalEpoch);
+  const destroyed = checklist.retirement_status === "destroyed";
+  const recordHref = checklist.destruction_record
+    ? `data:application/json;charset=utf-8,${encodeURIComponent(checklist.destruction_record)}`
+    : "";
   return (
     <section aria-labelledby="retirement-heading" className="ui-panel space-y-3 p-comfortable">
       <h3 id="retirement-heading" className="text-title font-semibold">
@@ -170,9 +231,98 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
           ))}
         </ul>
       )}
-      {checklist.destruction_record && <p className="break-all font-mono text-xs text-muted-foreground">{checklist.destruction_record}</p>}
+      <dl className="grid gap-1 text-sm sm:grid-cols-2">
+        <dt className="text-muted-foreground">{translateNow("source.retirement.status.h4ret00004")}</dt>
+        <dd className="font-mono">{checklist.retirement_status || translateNow("source.retirement.not.requested.h4ret00005")}</dd>
+      </dl>
+      {checklist.refusal_record && (
+        <details className="text-sm">
+          <summary>{translateNow("source.retirement.signed.refusal.h4ret00013")}</summary>
+          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">{checklist.refusal_record}</pre>
+        </details>
+      )}
+      {checklist.destruction_record && (
+        <div className="space-y-2">
+          <a
+            className="text-sm font-medium text-brand-accent underline"
+            download={`trstctl-ca-key-${keyId}-destruction-record.json`}
+            href={recordHref}
+          >
+            {translateNow("source.retirement.download.record.h4ret00012")}
+          </a>
+          <details className="text-sm">
+            <summary>{translateNow("source.retirement.record.preview.h4ret00016")}</summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">{checklist.destruction_record}</pre>
+          </details>
+        </div>
+      )}
+      {!destroyed && (
+        <div className="grid gap-3 rounded-md border border-destructive/40 p-3">
+          <label className="grid gap-1 text-sm" htmlFor={`retirement-final-epoch-${keyId}`}>
+            {translateNow("source.retirement.final.epoch.h4ret00006")}
+            <input
+              className="ui-input"
+              id={`retirement-final-epoch-${keyId}`}
+              min={1}
+              onChange={(event) => setFinalEpoch(event.target.value)}
+              type="number"
+              value={finalEpoch}
+            />
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} type="checkbox" />
+            <span>{translateNow("source.retirement.confirm.h4ret00008")}</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy || !confirmed || !Number.isSafeInteger(epoch) || epoch <= 0}
+              onClick={() => void requestRetirement()}
+            >
+              {translateNow("source.retirement.irreversible.action.h4ret00009")}
+            </Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => void refresh()}>
+              {translateNow("source.retirement.refresh.h4ret00007")}
+            </Button>
+          </div>
+          {requestError && <p className="text-sm text-destructive" role="alert">{requestError}</p>}
+        </div>
+      )}
       <p className="text-caption text-muted-foreground">{checklist.guidance}</p>
     </section>
+  );
+}
+
+function RetirementWorkspace({ candidates }: { candidates: CAAuthority[] }) {
+  const [keyId, setKeyId] = useState(candidates[0]?.id ?? "");
+
+  useEffect(() => {
+    if (!candidates.some((candidate) => candidate.id === keyId)) {
+      setKeyId(candidates[0]?.id ?? "");
+    }
+  }, [candidates, keyId]);
+
+  if (candidates.length === 0 || !keyId) return null;
+  return (
+    <div className="space-y-3">
+      <label className="grid gap-1 text-sm" htmlFor="retirement-key-selector">
+        {translateNow("source.retirement.checklist.h4ret00001")}
+        <select
+          className="ui-input"
+          id="retirement-key-selector"
+          onChange={(event) => setKeyId(event.target.value)}
+          value={keyId}
+        >
+          {candidates.map((candidate) => (
+            <option key={candidate.id} value={candidate.id}>
+              {candidate.common_name} ({candidate.status})
+            </option>
+          ))}
+        </select>
+      </label>
+      <RetirementChecklistPanel keyId={keyId} />
+    </div>
   );
 }
 
@@ -301,6 +451,10 @@ export function CAHierarchy() {
 
   const sortedIssuers = useMemo(() => [...issuers].sort((a, b) => a.name.localeCompare(b.name)), [issuers]);
   const authorityParents = useMemo(() => authorities.filter((authority) => authority.kind === "root" || authority.kind === "intermediate"), [authorities]);
+  const retirementCandidates = useMemo(
+    () => authorities.filter((authority) => authority.signer_handle && (authority.status === "superseded" || authority.status === "revoked")),
+    [authorities],
+  );
 
   async function refreshAuthorities() {
     try {
@@ -743,10 +897,10 @@ export function CAHierarchy() {
 
       <div {...tabPanelProps("ca", "lifecycle")} className={tab === "lifecycle" ? undefined : "hidden"}>
         {/* H4: retirement is the end of the lifecycle, so it lives on the
-            lifecycle tab beside rotation. Keyed on the first issuer because a
-            per-key selector is not served yet; the panel renders nothing when
-            the checklist cannot be read, which is the only safe empty state. */}
-        {issuers.length > 0 && <RetirementChecklistPanel keyId={issuers[0].id} />}
+            lifecycle tab beside rotation. Only signer-backed authorities which
+            are already superseded or revoked can be selected; the backend
+            independently enforces the same terminal precondition. */}
+        <RetirementWorkspace candidates={retirementCandidates} />
         <CARotationPanel
           busy={rotationBusy}
           error={rotationError}

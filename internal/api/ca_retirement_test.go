@@ -3,6 +3,8 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -26,6 +28,19 @@ func TestAnUnlicensedDeploymentRefusesRatherThanReportingNoDependents(t *testing
 	if !strings.Contains(reason, "not a statement that the key has no dependents") {
 		t.Errorf("the refusal reads %q; it must say it is a missing answer rather than an "+
 			"answer of zero", reason)
+	}
+}
+
+func TestAnUnlicensedDeploymentDoesNotMountIrreversibleRetirement(t *testing.T) {
+	t.Parallel()
+	served := New(nil, nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/ca-old/retirement",
+		strings.NewReader(`{"final_epoch":7,"confirm_irreversible":true}`))
+	req.Header.Set("Idempotency-Key", "must-not-be-admitted")
+	rr := httptest.NewRecorder()
+	served.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("unlicensed POST retirement = %d body=%s, want absent licensed route (404)", rr.Code, rr.Body.String())
 	}
 }
 

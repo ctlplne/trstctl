@@ -213,6 +213,9 @@ func TestAttachVerifiableDecommissionMountsBothSeams(t *testing.T) {
 	if deps.LicensedAPIOptionsFactory == nil {
 		t.Fatal("VDEC attach did not mount the API options factory (checklist source + reprotect route)")
 	}
+	if len(deps.LicensedProjectionOptions) != 1 {
+		t.Fatalf("VDEC attach mounted %d projection options, want the retirement replay projection", len(deps.LicensedProjectionOptions))
+	}
 	opts, err := deps.LicensedAPIOptionsFactory(server.LicensedAPIOptionsDeps{})
 	if err != nil {
 		t.Fatalf("VDEC API options factory: %v", err)

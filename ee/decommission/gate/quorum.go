@@ -36,15 +36,16 @@ type QuorumApprovalsV1 struct {
 // QuorumEvidence carries the VDEC-claim-11 quorum: approvals from a threshold of
 // distinct operators, bound into the destruction-record commitment.
 type QuorumEvidence struct {
-	Version         int      `json:"version"`
-	Domain          string   `json:"domain"`
-	KeyClass        string   `json:"key_class"`
-	Threshold       int      `json:"threshold"`
-	AuthorizedCount int      `json:"authorized_count"`
-	ApprovalCount   int      `json:"approval_count"`
-	Approvers       []string `json:"approvers,omitempty"`
-	ApproverDigest  []byte   `json:"approver_digest"`
-	Satisfied       bool     `json:"satisfied"`
+	Version           int      `json:"version"`
+	Domain            string   `json:"domain"`
+	KeyClass          string   `json:"key_class"`
+	Threshold         int      `json:"threshold"`
+	AuthorizedCount   int      `json:"authorized_count"`
+	ApprovalCount     int      `json:"approval_count"`
+	Approvers         []string `json:"approvers,omitempty"`
+	ApproversRedacted bool     `json:"approvers_redacted,omitempty"`
+	ApproverDigest    []byte   `json:"approver_digest"`
+	Satisfied         bool     `json:"satisfied"`
 }
 
 type QuorumPolicy map[string]bgquorum.Quorum
@@ -129,10 +130,14 @@ func NormalizeQuorumEvidence(ev QuorumEvidence) QuorumEvidence {
 	ev.Version = SchemaV1
 	ev.Domain = quorumEvidenceDomain
 	ev.KeyClass = strings.TrimSpace(ev.KeyClass)
-	ev.Approvers = distinctSortedStrings(ev.Approvers)
-	ev.ApprovalCount = len(ev.Approvers)
+	if ev.ApproversRedacted {
+		ev.Approvers = nil
+	} else {
+		ev.Approvers = distinctSortedStrings(ev.Approvers)
+		ev.ApprovalCount = len(ev.Approvers)
+		ev.ApproverDigest = quorumApproverDigest(ev.KeyClass, ev.Approvers)
+	}
 	ev.Satisfied = ev.Threshold > 0 && ev.ApprovalCount >= ev.Threshold
-	ev.ApproverDigest = quorumApproverDigest(ev.KeyClass, ev.Approvers)
 	return ev
 }
 
@@ -144,10 +149,22 @@ func ValidateQuorumEvidence(ev QuorumEvidence) error {
 	if !ev.Satisfied {
 		return fmt.Errorf("%w: only %d distinct approvals for threshold %d", ErrQuorumNotMet, ev.ApprovalCount, ev.Threshold)
 	}
-	if len(ev.ApproverDigest) == 0 {
+	if len(ev.ApproverDigest) != 32 {
 		return fmt.Errorf("%w: approver digest is required", ErrInvalidEvidence)
 	}
 	return nil
+}
+
+// RedactQuorumEvidence preserves signer-verified threshold proof while removing
+// operator identities before the immutable public destruction record is minted.
+func RedactQuorumEvidence(ev QuorumEvidence) (QuorumEvidence, error) {
+	ev = NormalizeQuorumEvidence(ev)
+	if err := ValidateQuorumEvidence(ev); err != nil {
+		return QuorumEvidence{}, err
+	}
+	ev.ApproversRedacted = true
+	ev.Approvers = nil
+	return NormalizeQuorumEvidence(ev), nil
 }
 
 func QuorumEvidenceDigest(ev QuorumEvidence) ([]byte, error) {

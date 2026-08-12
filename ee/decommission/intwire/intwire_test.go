@@ -4,12 +4,15 @@
 package intwire
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,18 +26,25 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	eedecommission "trstctl.com/trstctl/ee/decommission"
 	"trstctl.com/trstctl/ee/decommission/aggregate"
 	"trstctl.com/trstctl/ee/decommission/depstate"
 	"trstctl.com/trstctl/ee/decommission/gate"
 	"trstctl.com/trstctl/ee/decommission/jobmodel"
 	"trstctl.com/trstctl/ee/decommission/record"
+	"trstctl.com/trstctl/ee/decommission/retirement"
 	"trstctl.com/trstctl/ee/decommission/signerwiring"
 	decstore "trstctl.com/trstctl/ee/decommission/store"
 	vdecverify "trstctl.com/trstctl/ee/decommission/verify"
+	coreapi "trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	corestore "trstctl.com/trstctl/internal/store"
 )
@@ -105,6 +115,183 @@ func TestVDEC_Wire_GateDestroyMintInRealSigner(t *testing.T) {
 	}
 	if _, err := flow.h.signer.SignerForHandle(flow.h.ctx, flow.handle); status.Code(err) != codes.NotFound {
 		t.Fatalf("destroyed signer handle lookup err = %v, want NotFound", err)
+	}
+}
+
+func TestVDEC_ServedRetirementRefusesThenProjectsOfflineRecordAcrossRestart(t *testing.T) {
+	h := newHarness(t)
+	if err := h.store.UpsertTenant(h.ctx, corestore.Tenant{
+		TenantID: h.tenant, Name: "VDEC served tenant", EventSeq: 1,
+	}); err != nil {
+		t.Fatalf("UpsertTenant: %v", err)
+	}
+	handle := "vdec-served-retirement-handle"
+	if _, err := h.signer.GenerateKeyHandle(h.ctx, crypto.ECDSAP256, handle); err != nil {
+		t.Fatalf("GenerateKeyHandle: %v", err)
+	}
+	authority, err := h.store.InsertCAAuthority(h.ctx, corestore.CAAuthority{
+		TenantID: h.tenant, CommonName: "Retiring Root", Kind: "root", Status: "superseded",
+		CertificatePEM: "public-test-certificate", SignerHandle: handle, Serial: "42",
+	})
+	if err != nil {
+		t.Fatalf("InsertCAAuthority: %v", err)
+	}
+	h.keyID = authority.ID
+	h.successorKeyID = authority.ID + ":successor"
+	h.seedRegistered(t)
+	h.rebuildTenant(t)
+
+	outbox := orchestrator.NewOutbox(h.store)
+	runtime, err := eedecommission.NewRuntime(eedecommission.RuntimeConfig{Store: h.store, Log: h.log})
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+	licensed, err := runtime.APIOptionsFactory(editionseam.LicensedAPIOptionsDeps{
+		Store: h.store, Log: h.log, Outbox: outbox,
+	})
+	if err != nil {
+		t.Fatalf("APIOptionsFactory: %v", err)
+	}
+	role := authz.Role{Name: "vdec-served-operator", Permissions: []authz.Permission{authz.KeysRead, authz.KeysWrite}}
+	principal := authz.Principal{TenantID: h.tenant, Subject: "retirement-operator", Grants: []authz.Grant{{Role: role, Scope: authz.Scope{TenantID: h.tenant}}}}
+	opts := append([]coreapi.Option{
+		coreapi.WithRoles(role),
+		coreapi.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }),
+	}, licensed...)
+	served := coreapi.New(h.store, orchestrator.NewIdempotency(h.store), nil, opts...)
+	licensedHandler, err := runtime.RetirementOutboxFactory(editionseam.LicensedOutboxDeps{
+		Store: h.store, Log: h.log, GatedDestruction: h.signer,
+	})
+	if err != nil {
+		t.Fatalf("RetirementOutboxFactory: %v", err)
+	}
+	dispatch := func() {
+		t.Helper()
+		_, err := outbox.Dispatch(h.ctx, orchestrator.HandlerFunc(func(ctx context.Context, message orchestrator.Message) error {
+			handled, err := licensedHandler.DeliverLicensed(ctx, message)
+			if !handled {
+				return fmt.Errorf("retirement handler did not own %q", message.Destination)
+			}
+			return err
+		}))
+		if err != nil {
+			t.Fatalf("dispatch retirement: %v", err)
+		}
+	}
+	postAt := func(key string, epoch uint64) *httptest.ResponseRecorder {
+		t.Helper()
+		body := []byte(fmt.Sprintf(`{"final_epoch":%d,"confirm_irreversible":true}`, epoch))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/"+h.keyID+"/retirement", bytes.NewReader(body))
+		req.Header.Set("Idempotency-Key", key)
+		rr := httptest.NewRecorder()
+		served.ServeHTTP(rr, req)
+		return rr
+	}
+	post := func(key string) []byte {
+		t.Helper()
+		rr := postAt(key, finalEpochWire)
+		if rr.Code != http.StatusAccepted {
+			t.Fatalf("POST retirement = %d body=%s", rr.Code, rr.Body.String())
+		}
+		return append([]byte(nil), rr.Body.Bytes()...)
+	}
+	get := func() coreapi.RetirementChecklist {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		served.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/ca/keys/"+h.keyID+"/retirement", nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("GET retirement = %d body=%s", rr.Code, rr.Body.String())
+		}
+		var checklist coreapi.RetirementChecklist
+		if err := json.Unmarshal(rr.Body.Bytes(), &checklist); err != nil {
+			t.Fatalf("decode checklist: %v", err)
+		}
+		return checklist
+	}
+
+	first := post("served-retirement-refusal")
+	var firstReceipt retirement.Receipt
+	if err := json.Unmarshal(first, &firstReceipt); err != nil {
+		t.Fatalf("decode first retirement receipt: %v", err)
+	}
+	commandEvent, found, err := h.log.EventByID(h.ctx, firstReceipt.CommandEventID)
+	if err != nil || !found {
+		t.Fatalf("load frozen retirement command: found=%v err=%v", found, err)
+	}
+	frozen, err := retirement.DecodeRequested(commandEvent)
+	if err != nil {
+		t.Fatalf("decode frozen retirement command: %v", err)
+	}
+	if len(frozen.Approvals) != 1 || frozen.Approvals[0] != principal.Subject || frozen.KeyClass != retirement.KeyClass("") {
+		t.Fatalf("frozen authorization = class %q approvals=%v, want fixed CA class and authenticated caller", frozen.KeyClass, frozen.Approvals)
+	}
+	if _, foreignFound, err := runtime.RetirementProjection.Fetch(h.ctx, "88888888-8888-8888-8888-888888888888", h.keyID); err != nil || foreignFound {
+		t.Fatalf("foreign tenant saw retirement command: found=%v err=%v", foreignFound, err)
+	}
+	dispatch()
+	refused := get()
+	if refused.RetirementStatus != retirement.StatusRefused || refused.RefusalRecord == "" || refused.DestructionRecord != "" {
+		t.Fatalf("refused checklist = %+v", refused)
+	}
+	if _, err := h.signer.SignerForHandle(h.ctx, handle); err != nil {
+		t.Fatalf("signed refusal destroyed key: %v", err)
+	}
+	if replay := post("served-retirement-refusal"); !bytes.Equal(replay, first) {
+		t.Fatalf("same-key replay changed response: first=%s replay=%s", first, replay)
+	}
+
+	h.completeDependents(t)
+	h.rebuildTenant(t)
+	stalePending := post("served-retirement-stale-pending")
+	if sameSnapshot := post("served-retirement-stale-pending-new-http-key"); !bytes.Equal(sameSnapshot, stalePending) {
+		t.Fatalf("same frozen command changed under a new HTTP idempotency key: first=%s second=%s", stalePending, sameSnapshot)
+	}
+	if conflict := postAt("served-retirement-conflicting-epoch", finalEpochWire+1); conflict.Code != http.StatusConflict {
+		t.Fatalf("different command replaced a pending frozen command = %d body=%s, want 409", conflict.Code, conflict.Body.String())
+	}
+	h.appendPayload(t, depstate.DependencyReleasedV1{
+		TenantID: h.tenant, KeyID: h.keyID, Dependent: credentialDep,
+		Reason: "late durable release receipt supersedes the frozen command head",
+	})
+	h.rebuildTenant(t)
+	freshPending := post("served-retirement-success")
+	if bytes.Equal(stalePending, freshPending) {
+		t.Fatalf("dependency change did not freeze a newer retirement command: stale=%s fresh=%s", stalePending, freshPending)
+	}
+	dispatch()
+	destroyed := get()
+	if destroyed.RetirementStatus != retirement.StatusDestroyed || destroyed.DestructionRecord == "" || destroyed.RefusalRecord != "" || destroyed.Blocked {
+		t.Fatalf("destroyed checklist = %+v", destroyed)
+	}
+	rec, err := record.DecodeRecord([]byte(destroyed.DestructionRecord))
+	if err != nil {
+		t.Fatalf("DecodeRecord: %v", err)
+	}
+	if err := record.VerifyRecord(rec, crypto.PublicKey{Algorithm: rec.AttestationAlgorithm, DER: rec.AttestationPublicKeyDER}); err != nil {
+		t.Fatalf("offline VerifyRecord: %v", err)
+	}
+	if _, err := h.signer.SignerForHandle(h.ctx, handle); status.Code(err) != codes.NotFound {
+		t.Fatalf("destroyed signer handle lookup = %v", err)
+	}
+
+	restarted := retirement.NewProjection(h.store, outbox)
+	if err := restarted.Reset(h.ctx); err != nil {
+		t.Fatalf("restart projection reset: %v", err)
+	}
+	if err := h.log.Replay(h.ctx, 1, func(ev events.Event) error { return restarted.Apply(h.ctx, ev) }); err != nil {
+		t.Fatalf("restart projection replay: %v", err)
+	}
+	state, found, err := restarted.Fetch(h.ctx, h.tenant, h.keyID)
+	if err != nil || !found || state.Status != retirement.StatusDestroyed || len(state.DestructionRecord) == 0 {
+		t.Fatalf("restart state = %+v found=%v err=%v", state, found, err)
+	}
+	if err := restarted.Apply(h.ctx, eventspec.Event{
+		Type: projections.EventTenantOffboarded, TenantID: h.tenant, Sequence: state.LedgerPosition + 100,
+	}); err != nil {
+		t.Fatalf("project tenant offboard: %v", err)
+	}
+	if _, found, err := restarted.Fetch(h.ctx, h.tenant, h.keyID); err != nil || found {
+		t.Fatalf("offboarded retirement state remained: found=%v err=%v", found, err)
 	}
 }
 

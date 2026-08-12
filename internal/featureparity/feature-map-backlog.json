@@ -12575,6 +12575,7 @@
                 "graph trust-stores",
                 "migrations assess",
                 "ca keys retirement",
+                "ca keys retire",
                 "owners unowned",
                 "graph nodes",
                 "graph query",

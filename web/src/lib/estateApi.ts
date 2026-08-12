@@ -8,6 +8,8 @@ import type {
   MigrationRunActionRequest,
   MigrationRunList,
   MigrationRunStartRequest,
+  CARetirementReceipt,
+  CARetirementRequest,
   RetirementChecklist,
   UnownedQueue,
 } from "./api";
@@ -55,3 +57,7 @@ export const unownedIdentities = () => req<UnownedQueue>("/api/v1/owners/unowned
 
 /** H4: what blocks a CA key's destruction, and the record once it does not. */
 export const caRetirementChecklist = (keyId: string) => req<RetirementChecklist>(`/api/v1/ca/keys/${encodeURIComponent(keyId)}/retirement`);
+
+/** H4: record one exact irreversible command; the outbox owns signer I/O. */
+export const retireCAKey = (keyId: string, request: CARetirementRequest) =>
+  mutate<CARetirementReceipt>("POST", `/api/v1/ca/keys/${encodeURIComponent(keyId)}/retirement`, request);

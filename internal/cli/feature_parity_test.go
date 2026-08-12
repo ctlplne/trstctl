@@ -183,9 +183,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// start/list/show/pause/resume/rollback commands raise it to 367 and map the
 	// complete durable CA-wave control surface onto F48. AUD-118's `discovery
 	// segments create` raises it to 368 and closes the prerequisite already
-	// served by GUI-F002's createDiscoverySegment API operation.
-	if len(out) != 368 {
-		t.Fatalf("CLI commands = %d, want 368", len(out))
+	// served by GUI-F002's createDiscoverySegment API operation. AUD-42's
+	// destructive `ca keys retire` raises it to 369 and keeps the signer-gated
+	// operation usable from a headless recovery terminal.
+	if len(out) != 369 {
+		t.Fatalf("CLI commands = %d, want 369", len(out))
 	}
 	return out
 }

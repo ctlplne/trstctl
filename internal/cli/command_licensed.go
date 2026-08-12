@@ -18,6 +18,7 @@ package cli
 // answer for a feature the edition does not serve — the CLI does not pretend to
 // know the server's edition ahead of the call.
 var licensedRouteCommands = []Command{
+	{Name: []string{"ca", "keys", "retire"}, Method: "POST", Path: "/api/v1/ca/keys/{id}/retirement", Body: bodyFile, Summary: "Irreversibly retire a superseded CA key through the isolated signer and retain its signed destruction record"},
 	{Name: []string{"migration", "plan"}, Method: "POST", Path: "/api/v1/pqc/migrations/plan", Body: bodyFile, Summary: "Preview a crypto-migration plan without queueing it"},
 	{Name: []string{"migration", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Start a licensed crypto-migration run over CBOM findings"},
 	{Name: []string{"migration", "status"}, Method: "GET", Path: "/api/v1/pqc/migrations/{run_id}", Summary: "Show migration run progress"},

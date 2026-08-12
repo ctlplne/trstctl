@@ -144,6 +144,33 @@ func TestExecutableMigrationCommandsCoverEveryDurableControlAUD40(t *testing.T) 
 	}
 }
 
+func TestCARetirementCommandRequiresForceAndCarriesExactCommandAUD42(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusAccepted,
+		`{"key_id":"ca-old","command_event_id":"vdec-retirement-command-1","status":"pending","ledger_position":41,"final_epoch":7}`,
+		&captured)
+	env := cli.Env{Server: srv.URL, Token: "retirement-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+	body := `{"final_epoch":7,"confirm_irreversible":true,"approvals":["operator-a","operator-b"]}`
+
+	code, _, stderr := run(t, []string{"ca", "keys", "retire", "ca-old", "-f", "-"}, env, body)
+	if code == 0 || !strings.Contains(stderr, "--force") {
+		t.Fatalf("unconfirmed irreversible command = exit %d stderr=%q", code, stderr)
+	}
+
+	code, stdout, stderr := run(t, []string{"ca", "keys", "retire", "ca-old", "--force", "-f", "-"}, env, body)
+	if code != 0 {
+		t.Fatalf("confirmed retirement = exit %d stderr=%q", code, stderr)
+	}
+	if captured.Method != http.MethodPost || captured.Path != "/api/v1/ca/keys/ca-old/retirement" ||
+		captured.Header.Get("Idempotency-Key") == "" || !sameJSON(captured.Body, []byte(body)) {
+		t.Fatalf("captured retirement = %s %s key=%q body=%s", captured.Method, captured.Path,
+			captured.Header.Get("Idempotency-Key"), captured.Body)
+	}
+	if !strings.Contains(stdout, `"command_event_id": "vdec-retirement-command-1"`) {
+		t.Fatalf("stdout lost durable command identity: %s", stdout)
+	}
+}
+
 // capture records the request the CLI sent.
 type capture struct {
 	Method string

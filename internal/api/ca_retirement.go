@@ -47,7 +47,12 @@ type RetirementChecklist struct {
 	// DestructionRecord is present only once destruction has happened. Its
 	// absence is not a failure state — most keys are alive.
 	DestructionRecord string `json:"destruction_record,omitempty"`
-	Guidance          string `json:"guidance"`
+	// RetirementStatus is pending, refused, or destroyed once an explicitly
+	// authorized command exists. RefusalRecord is the signer's public signed
+	// proof that the frozen dependency set was not empty.
+	RetirementStatus string `json:"retirement_status,omitempty"`
+	RefusalRecord    string `json:"refusal_record,omitempty"`
+	Guidance         string `json:"guidance"`
 }
 
 // RetirementChecklistSource is the licensed seam that answers the checklist.

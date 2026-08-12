@@ -18,5 +18,6 @@ type SuccessionMinter = editionseam.SuccessionMinter
 type IssuanceGate = editionseam.IssuanceGate
 type KEMCustody = editionseam.KEMCustody
 type ManagedKeyCustody = editionseam.ManagedKeyCustody
+type GatedDestruction = editionseam.GatedDestruction
 type ProtocolLeafIssuer = editionseam.ProtocolLeafIssuer
 type AdmissionHook = editionseam.AdmissionHook

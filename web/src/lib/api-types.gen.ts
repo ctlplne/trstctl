@@ -4668,6 +4668,8 @@ export interface RetirementChecklist {
   guidance: string;
   key_id: string;
   outstanding: RetirementDependent[];
+  refusal_record?: string;
+  retirement_status?: string;
   total: number;
 }
 

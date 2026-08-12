@@ -133,6 +133,32 @@ func TestQuorum_RequiredAndBound(t *testing.T) {
 	}
 }
 
+func TestQuorum_PublicEvidenceCanOmitOperatorIdentities(t *testing.T) {
+	original := gate.QuorumEvidence{
+		KeyClass: quorumKeyClass, Threshold: 2, AuthorizedCount: 3,
+		Approvers: []string{"alice@example.test", "bob@example.test"},
+	}
+	redacted, err := gate.RedactQuorumEvidence(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !redacted.ApproversRedacted || len(redacted.Approvers) != 0 || redacted.ApprovalCount != 2 ||
+		len(redacted.ApproverDigest) != 32 || !redacted.Satisfied {
+		t.Fatalf("redacted quorum = %+v", redacted)
+	}
+	encoded, err := gate.EncodeQuorumEvidence(redacted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("alice")) || bytes.Contains(encoded, []byte("bob")) {
+		t.Fatalf("public quorum evidence retained operator identity: %s", encoded)
+	}
+	decoded, err := gate.DecodeQuorumEvidence(encoded)
+	if err != nil || !decoded.ApproversRedacted || decoded.ApprovalCount != 2 {
+		t.Fatalf("decode redacted quorum = %+v err=%v", decoded, err)
+	}
+}
+
 func quorumDestroyRequest(t *testing.T, events []eventspec.Event, approvals []string) signing.GatedDestroyRequest {
 	t.Helper()
 	bound := uint64(len(events))

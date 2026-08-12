@@ -10522,6 +10522,50 @@ export const messages = {
     defaultMessage: "Every dependent is accounted for. The signer will mint a destruction record when the key is destroyed.",
     description: "H4: the unblocked state.",
   },
+  "source.retirement.status.h4ret00004": {
+    defaultMessage: "Retirement status",
+    description: "H4: durable CA-key retirement projection state.",
+  },
+  "source.retirement.not.requested.h4ret00005": {
+    defaultMessage: "not requested",
+    description: "H4: no immutable retirement command exists yet.",
+  },
+  "source.retirement.final.epoch.h4ret00006": {
+    defaultMessage: "Final dependency epoch",
+    description: "H4: operator-asserted final evidence epoch bound by the signer gate.",
+  },
+  "source.retirement.refresh.h4ret00007": {
+    defaultMessage: "Refresh retirement evidence",
+    description: "H4: reload the durable retirement projection.",
+  },
+  "source.retirement.confirm.h4ret00008": {
+    defaultMessage: "I understand this permanently destroys the signer-held key",
+    description: "H4: explicit irreversible-action acknowledgement.",
+  },
+  "source.retirement.irreversible.action.h4ret00009": {
+    defaultMessage: "Irreversibly retire key",
+    description: "H4: submit an event-sourced signer-gated destruction command.",
+  },
+  "source.retirement.download.record.h4ret00012": {
+    defaultMessage: "Download offline-verifiable destruction record",
+    description: "H4: download the complete signer-minted public record.",
+  },
+  "source.retirement.signed.refusal.h4ret00013": {
+    defaultMessage: "Signed refusal evidence",
+    description: "H4: refusal minted by the isolated signer while the key remains alive.",
+  },
+  "source.retirement.unavailable.h4ret00014": {
+    defaultMessage: "Retirement evidence is unavailable. No destruction decision can be made.",
+    description: "H4: fail-closed checklist load state.",
+  },
+  "source.retirement.request.failed.h4ret00015": {
+    defaultMessage: "The retirement command was refused",
+    description: "H4: fallback for a rejected retirement mutation.",
+  },
+  "source.retirement.record.preview.h4ret00016": {
+    defaultMessage: "Preview signed destruction record",
+    description: "H4: disclose the public offline record inline.",
+  },
   "source.ca.hierarchy.73e4cbcaf4": {
     defaultMessage: "CA hierarchy",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",

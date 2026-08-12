@@ -15,6 +15,16 @@ type GatedDestroyer interface {
 	VerifyGatedDestroy(context.Context, GatedDestroyRequest) (GatedDestroyDecision, error)
 }
 
+// GatedDestructionFinalizer is the optional second half of one signer-local
+// destruction operation. It runs only after the custody handle has been
+// destroyed and returns public evidence for that exact irreversible effect.
+// Keeping finalization on the attached gate means core does not know an
+// edition's record format, while the control plane cannot mint a success record
+// without first passing through the signer-local destroy hook.
+type GatedDestructionFinalizer interface {
+	FinalizeGatedDestroy(context.Context, GatedDestroyRequest, GatedDestroyDecision) (GatedDestroyDecision, error)
+}
+
 // GatedDestroyRequest carries public, generic destruction preconditions into the
 // isolated signer. It carries no private key material and names no edition-specific
 // feature. Handle is the signer-local custody handle to destroy only after the
@@ -71,17 +81,67 @@ func (s *Server) verifyGatedDestroy(ctx context.Context, req GatedDestroyRequest
 // gatedDestroy enforces the generic ordering: verify first, destroy only after an
 // approving decision, and never call the supplied destroy hook on a refusal or
 // verifier error. The destroy hook is signer-local in production.
-func (s *Server) gatedDestroy(ctx context.Context, req GatedDestroyRequest, destroy func(context.Context, string) error) (GatedDestroyDecision, error) {
-	decision, err := s.verifyGatedDestroy(ctx, req)
-	if err != nil {
-		return GatedDestroyDecision{}, err
-	}
-	if !decision.Approved {
-		return decision, nil
+func (s *Server) gatedDestroy(ctx context.Context, req GatedDestroyRequest, destroy func(context.Context, string) error, durable bool) (GatedDestroyDecision, error) {
+	var operationID string
+	var decision GatedDestroyDecision
+	var err error
+	if durable {
+		s.gatedDestroyMu.Lock()
+		defer s.gatedDestroyMu.Unlock()
+		operationID, err = gatedDestroyOperationID(req)
+		if err != nil {
+			return GatedDestroyDecision{}, err
+		}
+		prior, state, found, err := s.loadGatedDestroyOperation(operationID, req)
+		if err != nil {
+			return GatedDestroyDecision{}, err
+		}
+		if found && state == "completed" {
+			return prior, nil
+		}
+		if found {
+			// The fsynced executing record is the signer-owned proof that this
+			// exact request was already approved before a crash. Re-running a
+			// mutable policy here could strand a key that was already zeroized.
+			decision = prior
+		} else {
+			decision, err = s.verifyGatedDestroy(ctx, req)
+			if err != nil {
+				return GatedDestroyDecision{}, err
+			}
+			if !decision.Approved {
+				return decision, nil
+			}
+			if err := s.beginGatedDestroyOperation(operationID, req, decision); err != nil {
+				return GatedDestroyDecision{}, err
+			}
+		}
+	} else {
+		decision, err = s.verifyGatedDestroy(ctx, req)
+		if err != nil {
+			return GatedDestroyDecision{}, err
+		}
+		if !decision.Approved {
+			return decision, nil
+		}
 	}
 	if destroy != nil {
 		if err := destroy(ctx, req.Handle); err != nil {
 			return decision, err
+		}
+	}
+	s.mu.Lock()
+	finalizer, canFinalize := s.gatedDestroyer.(GatedDestructionFinalizer)
+	s.mu.Unlock()
+	if canFinalize {
+		decision, err = finalizer.FinalizeGatedDestroy(ctx, req, decision)
+		if err != nil {
+			return GatedDestroyDecision{}, err
+		}
+	}
+	if durable {
+		if err := s.completeGatedDestroyOperation(operationID, req, decision); err != nil {
+			return GatedDestroyDecision{}, err
 		}
 	}
 	return decision, nil

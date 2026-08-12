@@ -1511,6 +1511,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			IssuanceGate:       s.issuanceGate(),
 			KEMCustody:         s.kemCustody(),
 			ManagedKeyCustody:  s.managedKeyCustody(),
+			GatedDestruction:   s.gatedDestruction(),
 			Transit:            s.transit,
 		})
 		if err != nil {
@@ -1567,6 +1568,13 @@ func (s *Server) successionMinter() SuccessionMinter {
 }
 
 func (s *Server) managedKeyCustody() ManagedKeyCustody {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+func (s *Server) gatedDestruction() GatedDestruction {
 	if s.signer == nil {
 		return nil
 	}

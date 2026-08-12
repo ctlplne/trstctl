@@ -442,8 +442,11 @@ describe("i18n boundary", () => {
       // I1 ownership re-pin: two source.unowned.* keys. The counts string must
       // keep its three separate numbers in every locale — collapsing them into a
       // total would lose the only information that makes the queue actionable.
-      // H4 retirement re-pin: three source.retirement.* keys. The cleared state
-      // must keep saying the SIGNER mints the record, not this page.
+      // H4 retirement re-pin: fourteen source.retirement.* keys. The cleared
+      // state must keep saying the SIGNER mints the record, the unavailable
+      // state must forbid a destruction decision, and the confirmation must say
+      // the signer-held key is permanently destroyed. Machine-authored es/de —
+      // FLAG FOR HUMAN TRANSLATION REVIEW.
       // I2 ownership-provenance re-pin: eleven keys. Five say whether ownership
       // is actually being re-read from the CMDB, including the two states that
       // otherwise look exactly like a healthy sync — paused, and failing. Four
@@ -579,8 +582,8 @@ describe("i18n boundary", () => {
       // the review labels that authority, and each wave names its signed
       // trust-plus-live verification denominator. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "3f5f27422dcc485fee3f043ee4dbc1e9630d44774c3bed1a73393545a6dd2efe",
-      "de-DE": "80ed503003331b8b606c12fd3157d077d2a51457f3534d835ac52757450dc3c2",
+      "es-ES": "f659908247cb9b760290eb26dbcbc9c55a06b52c9b2834d1c9ecc60fbcfdca24",
+      "de-DE": "682b5371fa40ba0503103254cac32488784676055441d55d27257226f05d184d",
     });
   });
 

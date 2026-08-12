@@ -18229,6 +18229,12 @@
             },
             "type": "array"
           },
+          "refusal_record": {
+            "type": "string"
+          },
+          "retirement_status": {
+            "type": "string"
+          },
           "total": {
             "type": "integer"
           }

@@ -6576,6 +6576,8 @@ RetirementChecklist = TypedDict(
         'guidance': str,
         'key_id': str,
         'outstanding': list[dict[str, Any]],
+        'refusal_record': str,
+        'retirement_status': str,
         'total': int,
     },
     total=False,

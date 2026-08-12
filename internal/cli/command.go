@@ -50,6 +50,7 @@ func (c Command) Destructive() bool {
 		"pqc campaigns close",
 		"recover",
 		"remediation playbooks run",
+		"retire",
 		"retention run",
 		"revoke",
 		"zeroize",

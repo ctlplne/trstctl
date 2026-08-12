@@ -544,15 +544,18 @@ func attachVerifiableDecommission(log *slog.Logger, deps *server.Deps) error {
 	// scattering license checks. Free blunt-destroy / zeroize stays outside this path.
 	runtime, err := eedecommission.NewRuntime(eedecommission.RuntimeConfig{
 		Store: deps.Store,
+		Log:   deps.Log,
 	})
 	if err != nil {
 		return err
 	}
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, runtime.ReprotectionOutboxFactory)
+	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, runtime.RetirementOutboxFactory)
+	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, runtime.ProjectionOptions...)
 	// The H4 surface: the retirement checklist source (without it the core route
 	// answers 501 on every deployment, licensed included — AUD-3) and the
-	// re-protection start route, the only production producer for the outbox
-	// handler mounted above (without it the pipeline is unreachable — AUD-2).
+	// re-protection start route plus the signer-gated retirement producer. The
+	// latter writes only an outbox intent; this process never owns the key handle.
 	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory, runtime.APIOptionsFactory)
 	if log != nil {
 		log.Info("Enterprise VDEC attached", slog.String("feature", string(license.FeatureVerifiableDecommission)))

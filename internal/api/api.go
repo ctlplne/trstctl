@@ -2037,6 +2037,20 @@ func decodeJSON(r *http.Request, v any) error {
 // DecodeJSON is the licensed-route wrapper for the core request decoder.
 func DecodeJSON(r *http.Request, v any) error { return decodeJSON(r, v) }
 
+// DecodeJSONStrict applies the same size and trailing-token limits as DecodeJSON
+// and also rejects fields outside the exact wire struct. Use it for destructive
+// commands where silently ignoring a caller-asserted control could be unsafe.
+func DecodeJSONStrict(r *http.Request, v any) error {
+	return decodeJSONWithLimitOptions(r, v, defaultRESTJSONBodyLimit, true)
+}
+
+// AuthenticatedPrincipalSubject returns the exact authenticated subject already
+// placed in the request context by the shared authorization middleware. Licensed
+// handlers use this instead of accepting caller-asserted operator identities.
+func AuthenticatedPrincipalSubject(ctx context.Context) (string, error) {
+	return requestPrincipalSubject(ctx)
+}
+
 // ErrStatus lets licensed route handlers return core problem+json errors without
 // depending on unexported error types.
 func ErrStatus(status int, detail string) error { return errStatus(status, detail) }
@@ -2078,6 +2092,10 @@ func (a *API) WriteProblemUnauthorized(w http.ResponseWriter) {
 }
 
 func decodeJSONWithLimit(r *http.Request, v any, limit int64) error {
+	return decodeJSONWithLimitOptions(r, v, limit, false)
+}
+
+func decodeJSONWithLimitOptions(r *http.Request, v any, limit int64, strict bool) error {
 	if r.Body == nil {
 		return errStatus(http.StatusBadRequest, "request body is required")
 	}
@@ -2093,6 +2111,9 @@ func decodeJSONWithLimit(r *http.Request, v any, limit int64) error {
 		return errStatus(http.StatusRequestEntityTooLarge, fmt.Sprintf("JSON request body too large; maximum is %d bytes", limit))
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
+	if strict {
+		dec.DisallowUnknownFields()
+	}
 	if err := dec.Decode(v); err != nil {
 		return errStatus(http.StatusBadRequest, fmt.Sprintf("invalid JSON body: %v", err))
 	}

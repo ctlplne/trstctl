@@ -208,6 +208,20 @@ func TestRetirementChecklist_ServedFromReadModel(t *testing.T) {
 	}
 }
 
+func TestRetirementRequestRejectsCallerAssertedQuorumClassAndOperators(t *testing.T) {
+	cs := openStoreOn(t, "vdec_api_retirement_authority")
+	served := newServedAPI(t, cs, orchestrator.NewOutbox(cs))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ca/keys/key-a/retirement", strings.NewReader(
+		`{"final_epoch":7,"confirm_irreversible":true,"key_class":"bypass","approvals":["other-operator"]}`,
+	))
+	req.Header.Set("Idempotency-Key", "retirement-forged-authority")
+	rr := httptest.NewRecorder()
+	served.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("caller-asserted retirement authority = %d body=%s, want 400", rr.Code, rr.Body.String())
+	}
+}
+
 // TestReprotection_StartFlowsThroughOutboxToLicensedHandler is the AUD-2
 // regression, and it must go through the outbox: POST plans jobs for exactly the
 // unaccounted dependents, records them as outbox rows, and a dispatcher sweep

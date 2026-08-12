@@ -72,6 +72,7 @@ func (ks *KeyStore) withKeyFactory(factory KeyFactory) {
 }
 
 const keyFileExt = ".key"
+const destroyedKeyFileExt = ".destroyed"
 
 func (ks *KeyStore) path(stem string) string {
 	return filepath.Join(ks.dir, stem+keyFileExt)
@@ -198,6 +199,13 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 // moment of sealing, then is wiped (AN-8).
 func (ks *KeyStore) Save(handle string, ls signerKey, constraints keyConstraints) error {
 	stem := sanitizeHandle(handle)
+	destroyed, err := ks.IsDestroyed(handle)
+	if err != nil {
+		return err
+	}
+	if destroyed {
+		return errors.New("signing: destroyed key handle cannot be recreated")
+	}
 	keyBytes, err := privateKeyBytesForSealing(ls)
 	if err != nil {
 		return err
@@ -238,6 +246,13 @@ func (ks *KeyStore) Load() (map[string]*heldKey, error) {
 			continue
 		}
 		stem := strings.TrimSuffix(name, keyFileExt)
+		destroyed, err := ks.IsDestroyed(stem)
+		if err != nil {
+			return nil, err
+		}
+		if destroyed {
+			continue
+		}
 		sealed, err := os.ReadFile(filepath.Join(ks.dir, name)) // #nosec G304 -- the signer's own keystore/journal directory from its config (CWE-22)
 		if err != nil {
 			return nil, err
@@ -271,6 +286,13 @@ func (ks *KeyStore) Load() (map[string]*heldKey, error) {
 // whole directory) so a runtime miss is a cheap, targeted read.
 func (ks *KeyStore) LoadHandle(handle string) (*heldKey, error) {
 	stem := sanitizeHandle(handle)
+	destroyed, err := ks.IsDestroyed(handle)
+	if err != nil {
+		return nil, err
+	}
+	if destroyed {
+		return nil, nil
+	}
 	sealed, err := os.ReadFile(ks.path(stem))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil // genuinely absent from the (possibly shared) store
@@ -302,6 +324,47 @@ func (ks *KeyStore) Remove(handle string) error {
 		return nil
 	}
 	return err
+}
+
+// MarkDestroyed durably prevents a signer replica from loading or continuing
+// to use a shared persisted handle. The marker is public state but lives in the
+// signer-owned 0700 keystore and is fsynced before local key zeroization.
+func (ks *KeyStore) MarkDestroyed(handle string) error {
+	stem := sanitizeHandle(handle)
+	if err := os.MkdirAll(ks.dir, 0o700); err != nil {
+		return err
+	}
+	path := filepath.Join(ks.dir, stem+destroyedKeyFileExt)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write([]byte("trstctl-destroyed-key-v1\n")); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return syncDirectory(ks.dir)
+}
+
+func (ks *KeyStore) IsDestroyed(handle string) (bool, error) {
+	_, err := os.Stat(filepath.Join(ks.dir, sanitizeHandle(handle)+destroyedKeyFileExt))
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
 }
 
 // sanitizeHandle restricts a handle to a safe filename charset. Real handles are

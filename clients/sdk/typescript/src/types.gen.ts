@@ -10044,6 +10044,8 @@ export interface components {
             guidance: string;
             key_id: string;
             outstanding: components["schemas"]["RetirementDependent"][];
+            refusal_record?: string;
+            retirement_status?: string;
             total: number;
         };
         RetirementDependent: {

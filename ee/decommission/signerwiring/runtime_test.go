@@ -3,6 +3,7 @@
 package signerwiring
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"trstctl.com/trstctl/ee/decommission/aggregate"
 	"trstctl.com/trstctl/ee/decommission/gate"
 	"trstctl.com/trstctl/ee/decommission/record"
+	"trstctl.com/trstctl/ee/decommission/retirement"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
 )
@@ -81,6 +83,67 @@ func TestRuntimeSignsVDECArtifactsInsideSigner(t *testing.T) {
 	}
 	if aggregateSig.KeyID != defaultAggregateRecordKeyID || len(aggregateSig.PublicKeyDER) == 0 || len(aggregateSig.Signature) == 0 {
 		t.Fatalf("aggregate signature = %+v, want public signer material", aggregateSig)
+	}
+}
+
+func TestRuntimeFinalizesFullOfflineRecordAfterGatedDestroy(t *testing.T) {
+	runtime, err := NewRuntime(Config{SignerID: "test-vdec-signer", FloorDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+	defer runtime.Destroy()
+	completionDigest := crypto.SHA256Sum([]byte("completion-digest"))
+	revocationDigest := crypto.SHA256Sum([]byte("revocation-digest"))
+	requested := retirement.RequestedV1{
+		TenantID: "tenant-a", KeyID: "key://tenant-a/root-ca", SignerHandle: "handle-a",
+		FinalEpoch: 42, LedgerPosition: 9, RequiredSet: []byte("required"),
+		RequiredSetDigest: crypto.SHA256Sum([]byte("required")), AuditChainHead: []byte("audit-head"),
+		CompletionEventsDigest:     completionDigest,
+		RevocationCompletionDigest: revocationDigest, KeyClass: "ca-signing-key",
+	}
+	finalization, err := retirement.EncodeFinalizationContext("command-event-a", requested)
+	if err != nil {
+		t.Fatalf("EncodeFinalizationContext: %v", err)
+	}
+	quorum, err := gate.EncodeQuorumEvidence(gate.QuorumEvidence{
+		KeyClass: requested.KeyClass, Threshold: 2, AuthorizedCount: 3,
+		Approvers: []string{"alice@example.test", "bob@example.test"},
+	})
+	if err != nil {
+		t.Fatalf("EncodeQuorumEvidence: %v", err)
+	}
+	decision, err := runtime.FinalizeGatedDestroy(context.Background(), signing.GatedDestroyRequest{
+		TenantID: requested.TenantID, Handle: requested.SignerHandle, SubjectRef: requested.KeyID,
+		AssertedFinalEpoch: requested.FinalEpoch, RequiredSetDigest: requested.RequiredSetDigest,
+		AuditChainHead: requested.AuditChainHead, Context: finalization,
+	}, signing.GatedDestroyDecision{Approved: true, Authorization: quorum})
+	if err != nil {
+		t.Fatalf("FinalizeGatedDestroy: %v", err)
+	}
+	rec, err := record.DecodeRecord(decision.Evidence)
+	if err != nil {
+		t.Fatalf("DecodeRecord: %v", err)
+	}
+	if rec.Commitment.StableKeyID != requested.KeyID || rec.Commitment.FinalEpoch != requested.FinalEpoch ||
+		!bytes.Equal(rec.Commitment.CompletionEventsDigest, completionDigest) ||
+		!bytes.Equal(rec.Commitment.RevocationCompletionDigest, revocationDigest) {
+		t.Fatalf("record commitment = %+v", rec.Commitment)
+	}
+	if evidence := rec.Commitment.QuorumEvidence; evidence == nil || !evidence.ApproversRedacted ||
+		len(evidence.Approvers) != 0 || evidence.ApprovalCount != 2 || len(evidence.ApproverDigest) != 32 {
+		t.Fatalf("public record quorum evidence = %+v, want identity-free threshold proof", evidence)
+	}
+	rawRecord, err := record.EncodeRecord(rec)
+	if err != nil {
+		t.Fatalf("EncodeRecord: %v", err)
+	}
+	if bytes.Contains(rawRecord, []byte("alice")) || bytes.Contains(rawRecord, []byte("bob")) {
+		t.Fatalf("public destruction record retained operator identities: %s", rawRecord)
+	}
+	if err := record.VerifyRecord(rec, crypto.PublicKey{
+		Algorithm: rec.AttestationAlgorithm, DER: rec.AttestationPublicKeyDER,
+	}); err != nil {
+		t.Fatalf("offline VerifyRecord: %v", err)
 	}
 }
 

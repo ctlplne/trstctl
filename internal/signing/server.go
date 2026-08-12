@@ -85,6 +85,10 @@ type Server struct {
 	// inside the signer before a caller-provided destroy operation may run. Core
 	// owns only the generic ordering seam; edition code owns the semantics.
 	gatedDestroyer GatedDestroyer
+	// Serializes signer-owned destruction intent/result journaling with handle
+	// removal. Two commands must never both observe one handle as live.
+	gatedDestroyMu  sync.Mutex
+	gatedDestroyOps map[string]gatedDestroyJournalRecord
 
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
@@ -353,7 +357,7 @@ func (s *Server) GatedDestroy(ctx context.Context, req *signerpb.GatedDestroyReq
 	if err != nil {
 		return nil, err
 	}
-	decision, err := s.gatedDestroy(ctx, greq, s.destroyKeyHandle)
+	decision, err := s.gatedDestroy(ctx, greq, s.destroyGatedKeyHandle, true)
 	if err != nil {
 		if errors.Is(err, ErrNoGatedDestroyer) {
 			return nil, status.Error(codes.Unimplemented, err.Error())
@@ -378,6 +382,28 @@ func (s *Server) DestroyKey(ctx context.Context, req *signerpb.DestroyKeyRequest
 func (s *Server) destroyKeyHandle(_ context.Context, handle string) error {
 	if handle == "" {
 		return status.Error(codes.InvalidArgument, "missing key handle")
+	}
+	if _, err := s.lookup(&signerpb.KeyHandle{Id: handle}); err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil
+		}
+		return err
+	}
+	return s.destroyGatedKeyHandle(context.Background(), handle)
+}
+
+// destroyGatedKeyHandle is reached only after the durable gated-destruction
+// journal proves this exact command observed the handle alive. Its tombstone is
+// shared signer state: another signer process that cached the same persisted
+// key will reject it on its next lookup instead of continuing to sign.
+func (s *Server) destroyGatedKeyHandle(_ context.Context, handle string) error {
+	if handle == "" {
+		return status.Error(codes.InvalidArgument, "missing key handle")
+	}
+	if s.store != nil {
+		if err := s.store.MarkDestroyed(handle); err != nil {
+			return status.Errorf(codes.Internal, "persist destroyed-key tombstone: %v", err)
+		}
 	}
 	s.mu.Lock()
 	held, ok := s.keys[handle]
@@ -436,6 +462,22 @@ func (s *Server) lookup(h *signerpb.KeyHandle) (*heldKey, error) {
 		return nil, status.Error(codes.InvalidArgument, "missing key handle")
 	}
 	s.mu.Lock()
+	if s.store != nil {
+		destroyed, err := s.store.IsDestroyed(h.GetId())
+		if err != nil {
+			s.mu.Unlock()
+			return nil, status.Errorf(codes.Internal, "read destroyed-key tombstone: %v", err)
+		}
+		if destroyed {
+			held := s.keys[h.GetId()]
+			delete(s.keys, h.GetId())
+			s.mu.Unlock()
+			if held != nil {
+				held.signer.Destroy()
+			}
+			return nil, status.Error(codes.NotFound, "destroyed key handle")
+		}
+	}
 	defer s.mu.Unlock()
 	if held, ok := s.keys[h.GetId()]; ok {
 		return held, nil

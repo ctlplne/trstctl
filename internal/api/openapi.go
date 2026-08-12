@@ -3314,7 +3314,8 @@ func componentSchemas() map[string]*Schema {
 		"key_id": str(), "blocked": {Type: "boolean"},
 		"outstanding": {Type: "array", Items: ref("RetirementDependent")},
 		"accounted":   {Type: "integer"}, "total": {Type: "integer"},
-		"destruction_record": str(), "guidance": str(),
+		"destruction_record": str(), "retirement_status": str(),
+		"refusal_record": str(), "guidance": str(),
 	}, "key_id", "blocked", "outstanding", "accounted", "total", "guidance")
 	// H2: read-only migration assessment.
 	migrationAssessRequest := object(map[string]*Schema{

@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
@@ -31,6 +33,32 @@ func (f *fakeGatedDestroyer) VerifyGatedDestroy(_ context.Context, req GatedDest
 		return GatedDestroyDecision{}, f.err
 	}
 	return f.decision, nil
+}
+
+type finalizingGatedDestroyer struct {
+	fakeGatedDestroyer
+	finalized bool
+}
+
+type crashFinalizingGatedDestroyer struct {
+	fakeGatedDestroyer
+	fail  bool
+	calls int
+}
+
+func (f *crashFinalizingGatedDestroyer) FinalizeGatedDestroy(_ context.Context, _ GatedDestroyRequest, decision GatedDestroyDecision) (GatedDestroyDecision, error) {
+	f.calls++
+	if f.fail {
+		return GatedDestroyDecision{}, errors.New("simulated signer crash after handle removal")
+	}
+	decision.Evidence = []byte("exact completed public destruction record")
+	return decision, nil
+}
+
+func (f *finalizingGatedDestroyer) FinalizeGatedDestroy(_ context.Context, _ GatedDestroyRequest, decision GatedDestroyDecision) (GatedDestroyDecision, error) {
+	f.finalized = true
+	decision.Evidence = []byte("signed destruction record")
+	return decision, nil
 }
 
 func TestGate_VerifyBeforeDestroyOrdering(t *testing.T) {
@@ -53,7 +81,7 @@ func TestGate_VerifyBeforeDestroyOrdering(t *testing.T) {
 		decision, err := s.gatedDestroy(ctx, req, func(context.Context, string) error {
 			order = append(order, "destroy")
 			return nil
-		})
+		}, false)
 		if err != nil {
 			t.Fatalf("gatedDestroy refusal: %v", err)
 		}
@@ -79,7 +107,7 @@ func TestGate_VerifyBeforeDestroyOrdering(t *testing.T) {
 				t.Fatalf("destroy handle = %q, want %q", handle, req.Handle)
 			}
 			return nil
-		})
+		}, false)
 		if err != nil {
 			t.Fatalf("gatedDestroy approval: %v", err)
 		}
@@ -103,7 +131,7 @@ func TestGate_VerifyBeforeDestroyOrdering(t *testing.T) {
 		_, err := s.gatedDestroy(ctx, req, func(context.Context, string) error {
 			order = append(order, "destroy")
 			return nil
-		})
+		}, false)
 		if !errors.Is(err, sentinel) {
 			t.Fatalf("gatedDestroy error = %v, want %v", err, sentinel)
 		}
@@ -111,6 +139,41 @@ func TestGate_VerifyBeforeDestroyOrdering(t *testing.T) {
 			t.Fatalf("order = %v, want [verify] only", order)
 		}
 	})
+}
+
+func TestGate_FinalizesPublicEvidenceOnlyAfterSignerLocalDestroy(t *testing.T) {
+	gate := &finalizingGatedDestroyer{fakeGatedDestroyer: fakeGatedDestroyer{decision: GatedDestroyDecision{Approved: true}}}
+	server := NewServer(WithGatedDestruction(gate))
+	destroyed := false
+	decision, err := server.gatedDestroy(context.Background(), GatedDestroyRequest{
+		TenantID: "tenant-a", Handle: "handle-a", SubjectRef: "key-a",
+	}, func(context.Context, string) error {
+		if gate.finalized {
+			t.Fatal("finalizer ran before signer-local destruction")
+		}
+		destroyed = true
+		return nil
+	}, false)
+	if err != nil {
+		t.Fatalf("gatedDestroy: %v", err)
+	}
+	if !destroyed || !gate.finalized || string(decision.Evidence) != "signed destruction record" {
+		t.Fatalf("destroyed=%v finalized=%v decision=%+v", destroyed, gate.finalized, decision)
+	}
+
+	refusing := &finalizingGatedDestroyer{fakeGatedDestroyer: fakeGatedDestroyer{decision: GatedDestroyDecision{Approved: false}}}
+	server = NewServer(WithGatedDestruction(refusing))
+	if _, err := server.gatedDestroy(context.Background(), GatedDestroyRequest{
+		TenantID: "tenant-a", Handle: "handle-a", SubjectRef: "key-a",
+	}, func(context.Context, string) error {
+		t.Fatal("refused destruction reached signer-local destroy")
+		return nil
+	}, false); err != nil {
+		t.Fatalf("refused gatedDestroy: %v", err)
+	}
+	if refusing.finalized {
+		t.Fatal("refused destruction reached finalizer")
+	}
 }
 
 func TestGatedDestroyRPCRefusalKeepsKeyAndApprovalDestroysKey(t *testing.T) {
@@ -159,6 +222,97 @@ func TestGatedDestroyRPCRefusalKeepsKeyAndApprovalDestroysKey(t *testing.T) {
 	_, err = approvingServer.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: req.Handle}})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("approved GatedDestroy lookup = %v, want NotFound", status.Code(err))
+	}
+}
+
+func TestGatedDestroyJournalRecoversAfterHandleRemovalAndReplaysExactResult(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	rawKEK, err := seal.GenerateKEK()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapper, err := seal.NewLocalKEK(rawKEK)
+	secret.Wipe(rawKEK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(wrapper.Destroy)
+	req := GatedDestroyRequest{
+		TenantID: "tenant-a", Handle: "crash-key", SubjectRef: "ca-old",
+		AssertedFinalEpoch: 7, LedgerPosition: 41, RequiredSet: []byte("required"),
+		RequiredSetDigest: []byte("required-digest"), SatisfactionEvidence: []byte("evidence"),
+		AuditChainHead: []byte("audit-head"), Context: []byte("public-context"),
+	}
+
+	crashing := &crashFinalizingGatedDestroyer{
+		fakeGatedDestroyer: fakeGatedDestroyer{decision: GatedDestroyDecision{Approved: true}}, fail: true,
+	}
+	first, err := NewPersistentServer(NewKeyStore(dir, wrapper), WithGatedDestruction(crashing))
+	if err != nil {
+		t.Fatal(err)
+	}
+	generateGatedDestroyKey(t, ctx, first, req.Handle)
+	peer, err := NewPersistentServer(NewKeyStore(dir, wrapper))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.GatedDestroy(ctx, gatedDestroyRequestToProto(req)); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("crash-gap call = %v, want FailedPrecondition", err)
+	}
+	if _, err := first.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: req.Handle}}); status.Code(err) != codes.NotFound {
+		t.Fatalf("crash-gap handle lookup = %v, want destroyed", err)
+	}
+	if _, err := peer.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: req.Handle}}); status.Code(err) != codes.NotFound {
+		t.Fatalf("shared-store peer kept cached destroyed key: %v", err)
+	}
+	if _, err := peer.GenerateKey(ctx, &signerpb.GenerateKeyRequest{
+		Algorithm: signerpb.Algorithm_ALGORITHM_ECDSA_P256, RequestedId: req.Handle,
+	}); status.Code(err) != codes.Internal {
+		t.Fatalf("destroyed persistent handle recreation = %v, want Internal refusal", err)
+	}
+
+	recovering := &crashFinalizingGatedDestroyer{
+		fakeGatedDestroyer: fakeGatedDestroyer{
+			err: errors.New("policy changed after the approved intent was fsynced"),
+		},
+	}
+	second, err := NewPersistentServer(NewKeyStore(dir, wrapper), WithGatedDestruction(recovering))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := second.GatedDestroy(ctx, gatedDestroyRequestToProto(req))
+	if err != nil {
+		t.Fatalf("exact restart recovery: %v", err)
+	}
+	if got := string(result.GetEvidence()); got != "exact completed public destruction record" || recovering.calls != 1 {
+		t.Fatalf("recovered result = %q finalizer calls=%d", got, recovering.calls)
+	}
+
+	third, err := NewPersistentServer(NewKeyStore(dir, wrapper), WithGatedDestruction(recovering))
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := third.GatedDestroy(ctx, gatedDestroyRequestToProto(req))
+	if err != nil {
+		t.Fatalf("completed restart replay: %v", err)
+	}
+	if !bytes.Equal(replayed.GetEvidence(), result.GetEvidence()) || recovering.calls != 1 {
+		t.Fatalf("completed replay changed result or reran finalizer: evidence=%q calls=%d", replayed.GetEvidence(), recovering.calls)
+	}
+}
+
+func TestGatedDestroyJournalRefusesNeverPresentHandle(t *testing.T) {
+	gate := &crashFinalizingGatedDestroyer{
+		fakeGatedDestroyer: fakeGatedDestroyer{decision: GatedDestroyDecision{Approved: true}},
+	}
+	server := NewServer(WithGatedDestruction(gate))
+	req := GatedDestroyRequest{TenantID: "tenant-a", Handle: "never-present", SubjectRef: "ca-old", LedgerPosition: 1}
+	if _, err := server.GatedDestroy(context.Background(), gatedDestroyRequestToProto(req)); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("absent handle = %v, want FailedPrecondition", err)
+	}
+	if gate.calls != 0 {
+		t.Fatalf("absent handle minted success evidence %d time(s)", gate.calls)
 	}
 }
 

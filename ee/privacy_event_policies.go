@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/ee/billing"
 	"trstctl.com/trstctl/ee/decommission/depstate"
 	"trstctl.com/trstctl/ee/decommission/reprotect"
+	"trstctl.com/trstctl/ee/decommission/retirement"
 	"trstctl.com/trstctl/ee/pqcmigration"
 	"trstctl.com/trstctl/ee/provider"
 	"trstctl.com/trstctl/ee/reconcile/quarantine"
@@ -350,6 +351,34 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 				licensedPrivacyRule("/OldCredentialID", events.PrivacyFieldSubjectToken),
 				licensedPrivacyRule("/NewCredentialID", events.PrivacyFieldSubjectToken),
 				licensedPrivacyRule("/SuccessorKeyID", events.PrivacyFieldSubjectToken),
+			)),
+		entry(retirement.TypeRetirementRequested, retirement.SchemaV1,
+			typedLicensedPrivacyPolicy[retirement.RequestedV1](
+				licensedPrivacyRule("/tenant_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/key_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/signer_handle", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/required_set", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/required_set_digest", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/audit_chain_head", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/completion_events_digest", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/revocation_completion_digest", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/key_class", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/approvals/*", events.PrivacyFieldIdentityExact),
+			)),
+		entry(retirement.TypeRetirementRefused, retirement.SchemaV1,
+			typedLicensedPrivacyPolicy[retirement.RefusedV1](
+				licensedPrivacyRule("/tenant_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/key_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/command_event_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/refusal_record", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/signer_evidence", events.PrivacyFieldOpaqueExact),
+			)),
+		entry(retirement.TypeDestructionRecorded, retirement.SchemaV1,
+			typedLicensedPrivacyPolicy[retirement.RecordedV1](
+				licensedPrivacyRule("/tenant_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/key_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/command_event_id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/record", events.PrivacyFieldOpaqueExact),
 			)),
 
 		// The BYOK/KMIP server owns both replay state and audit-shaped payloads.
