@@ -47,7 +47,7 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 		t.Fatalf("seal AD CS bind secret: %v", err)
 	}
 	seedApplicationSecretFixture(t, h.store, h.tenant, secretName, sealed)
-	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	token := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "notifications:read")
 
 	sourceRequest := map[string]any{
 		"name": "corp-adcs",
@@ -285,7 +285,249 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 		t.Fatalf("cross-tenant AD CS posture = %d %s", code, body)
 	}
 
+	assertADCSDriftHistoryAndAlertAUD36(t, h, token, otherToken, source.ID)
+
 	assertADCSFailedLifecycleAUD35(t, h, token, source.ID)
+}
+
+// assertADCSDriftHistoryAndAlertAUD36 performs the one-sweep journey missing in
+// the audit: queue the next real source run, let the selected relay report one
+// dangerous semantic/ACL change, then read the immutable before/after record and
+// its notification from the public surfaces. Replaying the signed receipt must
+// not duplicate either effect.
+func assertADCSDriftHistoryAndAlertAUD36(t *testing.T, h *roleHarness, token, otherToken, sourceID string) {
+	t.Helper()
+	ctx := context.Background()
+	code, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs",
+		token, "aud36-worsened-run", map[string]any{"source_id": sourceID})
+	if code != http.StatusCreated {
+		t.Fatalf("queue AUD-36 drift sweep: %d %s", code, body)
+	}
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("drain AUD-36 drift sweep: %v", err)
+	}
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{relay.KindADCSInventory}, Limit: 1})
+	if err != nil || len(claimed.Jobs) != 1 {
+		t.Fatalf("claim AUD-36 drift sweep: jobs=%d err=%v", len(claimed.Jobs), err)
+	}
+	job := claimed.Jobs[0]
+	var driftIntent struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(job.Payload, &driftIntent); err != nil || driftIntent.ID == "" {
+		t.Fatalf("decode AUD-36 drift command: id=%q err=%v", driftIntent.ID, err)
+	}
+	report := map[string]any{
+		"status": "succeeded", "directory_verified": true,
+		"inventory": map[string]any{
+			"templates": []map[string]any{{
+				"name": "UserAuth", "display_name": "User Authentication", "schema_version": 4,
+				"enrollee_supplies_subject": true,
+				"ekus":                      []string{"1.3.6.1.5.5.7.3.2"},
+				"enrollment_principals":     []string{"S-1-5-11", "S-1-5-21-111-222-333-1001", "S-1-5-21-111-222-333-2002"},
+				"published_by":              []string{"CORP-CA"},
+			}},
+			"enrollment_services": []map[string]any{{"name": "CORP-CA", "dns_name": "ca01.corp.example", "templates": []string{"UserAuth"}}},
+		},
+		"findings": []any{},
+	}
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt := h.report(t, job.JobID, job.Attempt, transport.JobOutcomeExecuted, string(reportJSON), "sha256:aud36-directory-drift")
+	response, err := h.client.ReportJobResult(ctx, receipt)
+	if err != nil || response == nil || !response.Accepted {
+		t.Fatalf("report AUD-36 drift sweep: response=%+v err=%v", response, err)
+	}
+	response, err = h.client.ReportJobResult(ctx, receipt)
+	if err != nil || response == nil || response.Accepted {
+		t.Fatalf("replay AUD-36 drift receipt: response=%+v err=%v", response, err)
+	}
+
+	code, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/posture/adcs/drift", token, nil)
+	if code != http.StatusOK {
+		t.Fatalf("get AUD-36 drift history: %d %s", code, body)
+	}
+	var history struct {
+		Items []struct {
+			ID         string `json:"id"`
+			RunID      string `json:"run_id"`
+			SourceID   string `json:"source_id"`
+			Domain     string `json:"domain"`
+			AgentID    string `json:"agent_id"`
+			ObservedBy string `json:"observed_by"`
+			ObservedAt string `json:"observed_at"`
+			Direction  string `json:"direction"`
+			Changes    []struct {
+				Template  string `json:"template"`
+				Direction string `json:"direction"`
+				Attribute string `json:"attribute"`
+				Before    string `json:"before"`
+				After     string `json:"after"`
+			} `json:"changes"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &history); err != nil || len(history.Items) != 1 {
+		t.Fatalf("decode AUD-36 drift history: items=%+v err=%v body=%s", history.Items, err, body)
+	}
+	item := history.Items[0]
+	if item.ID == "" || item.RunID != driftIntent.ID || item.SourceID != sourceID ||
+		item.Domain != "CORP-CA" || item.AgentID != agentRowID(h.tenant, h.agent) ||
+		item.ObservedBy != h.agent || item.ObservedAt == "" || item.Direction != "worse" {
+		t.Fatalf("AUD-36 drift authority/provenance = %+v", item)
+	}
+	var sawACL bool
+	for _, change := range item.Changes {
+		if change.Template == "UserAuth" && change.Direction == "worse" &&
+			change.Attribute == "nTSecurityDescriptor enrollment trustees" &&
+			change.Before == "S-1-5-11, S-1-5-21-111-222-333-1001" &&
+			strings.Contains(change.After, "S-1-5-21-111-222-333-2002") {
+			sawACL = true
+		}
+	}
+	if !sawACL || bytes.Contains(body, []byte("security_descriptor")) {
+		t.Fatalf("AUD-36 history lost ACL before/after or exposed raw descriptor: %s", body)
+	}
+
+	code, otherBody := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/posture/adcs/drift", otherToken, nil)
+	if code != http.StatusOK || bytes.Contains(otherBody, []byte(item.ID)) || bytes.Contains(otherBody, []byte("UserAuth")) {
+		t.Fatalf("cross-tenant AUD-36 history = %d %s", code, otherBody)
+	}
+	code, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/notifications", token, nil)
+	if code != http.StatusOK {
+		t.Fatalf("get AUD-36 notification inbox: %d %s", code, body)
+	}
+	var inbox struct {
+		Items []struct {
+			Kind        string `json:"kind"`
+			Destination string `json:"destination"`
+			Subject     string `json:"subject"`
+			Detail      string `json:"detail"`
+			Severity    string `json:"severity"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &inbox); err != nil {
+		t.Fatalf("decode AUD-36 notification inbox: %v (%s)", err, body)
+	}
+	alerts := 0
+	for _, notification := range inbox.Items {
+		if notification.Kind != "adcs.template_drift" {
+			continue
+		}
+		alerts++
+		if notification.Destination != "notification.drift" || notification.Severity != "critical" ||
+			!strings.Contains(notification.Subject, "UserAuth") ||
+			!strings.Contains(notification.Detail, "S-1-5-21-111-222-333-2002") {
+			t.Fatalf("AUD-36 inbox alert lost drift facts: %+v", notification)
+		}
+	}
+	if alerts != 1 {
+		t.Fatalf("AUD-36 inbox drift alerts = %d, want exactly one after receipt replay (%s)", alerts, body)
+	}
+
+	// A neutral EKU edit that preserves client authentication and a real hardening
+	// sweep stay readable but do not page. The identical sweep after them produces
+	// no fourth history row.
+	neutralReport := map[string]any{
+		"status": "succeeded", "directory_verified": true,
+		"inventory": map[string]any{
+			"templates": []map[string]any{{
+				"name": "UserAuth", "display_name": "Renamed User Authentication", "schema_version": 4,
+				"enrollee_supplies_subject": true,
+				"ekus":                      []string{"1.3.6.1.5.5.7.3.1", "1.3.6.1.5.5.7.3.2"},
+				"enrollment_principals":     []string{"S-1-5-11", "S-1-5-21-111-222-333-1001", "S-1-5-21-111-222-333-2002"},
+				"published_by":              []string{"CORP-CA"},
+			}},
+			"enrollment_services": []map[string]any{{"name": "CORP-CA", "dns_name": "ca01.corp.example", "templates": []string{"UserAuth"}}},
+		},
+		"findings": []any{},
+	}
+	runADCSSweepAUD36(t, h, token, sourceID, "aud36-neutral-run", "sha256:aud36-directory-neutral", neutralReport)
+	improvedReport := map[string]any{
+		"status": "succeeded", "directory_verified": true,
+		"inventory": map[string]any{
+			"templates": []map[string]any{{
+				"name": "UserAuth", "display_name": "Renamed User Authentication", "schema_version": 4,
+				"requires_manager_approval": true,
+				"ekus":                      []string{"1.3.6.1.5.5.7.3.1", "1.3.6.1.5.5.7.3.2"},
+				"enrollment_principals":     []string{"S-1-5-11", "S-1-5-21-111-222-333-1001"},
+				"published_by":              []string{"CORP-CA"},
+			}},
+			"enrollment_services": []map[string]any{{"name": "CORP-CA", "dns_name": "ca01.corp.example", "templates": []string{"UserAuth"}}},
+		},
+		"findings": []any{},
+	}
+	runADCSSweepAUD36(t, h, token, sourceID, "aud36-improved-run", "sha256:aud36-directory-hardened", improvedReport)
+	runADCSSweepAUD36(t, h, token, sourceID, "aud36-unchanged-run", "sha256:aud36-directory-unchanged", improvedReport)
+	code, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/posture/adcs/drift", token, nil)
+	var finalHistory struct {
+		Items []struct {
+			ID        string `json:"id"`
+			Direction string `json:"direction"`
+		} `json:"items"`
+	}
+	if code != http.StatusOK || json.Unmarshal(body, &finalHistory) != nil || len(finalHistory.Items) != 3 ||
+		finalHistory.Items[0].Direction != "better" || finalHistory.Items[1].Direction != "neutral" ||
+		finalHistory.Items[2].Direction != "worse" {
+		t.Fatalf("AUD-36 neutral/better/unchanged history = status %d items %+v body %s", code, finalHistory.Items, body)
+	}
+	code, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/notifications", token, nil)
+	if code != http.StatusOK || strings.Count(string(body), `"kind":"adcs.template_drift"`) != 1 {
+		t.Fatalf("AUD-36 better/unchanged sweeps paged or removed the alert: %d %s", code, body)
+	}
+
+	if err := h.srv.proj.Rebuild(ctx, h.log); err != nil {
+		t.Fatalf("rebuild AUD-36 drift history: %v", err)
+	}
+	code, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/posture/adcs/drift", token, nil)
+	var rebuiltHistory struct {
+		Items []struct {
+			ID        string `json:"id"`
+			Direction string `json:"direction"`
+		} `json:"items"`
+	}
+	if code != http.StatusOK || json.Unmarshal(body, &rebuiltHistory) != nil || len(rebuiltHistory.Items) != 3 ||
+		rebuiltHistory.Items[0].Direction != "better" || rebuiltHistory.Items[1].Direction != "neutral" ||
+		rebuiltHistory.Items[2].ID != item.ID || rebuiltHistory.Items[2].Direction != "worse" {
+		t.Fatalf("rebuilt AUD-36 drift history did not converge: %d %s", code, body)
+	}
+	code, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/notifications", token, nil)
+	if code != http.StatusOK || strings.Count(string(body), `"kind":"adcs.template_drift"`) != 1 {
+		t.Fatalf("AUD-36 rebuild duplicated or removed the drift alert: %d %s", code, body)
+	}
+}
+
+func runADCSSweepAUD36(
+	t *testing.T,
+	h *roleHarness,
+	token, sourceID, requestKey, digest string,
+	report map[string]any,
+) {
+	t.Helper()
+	ctx := context.Background()
+	code, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs",
+		token, requestKey, map[string]any{"source_id": sourceID})
+	if code != http.StatusCreated {
+		t.Fatalf("queue %s AD CS sweep: %d %s", requestKey, code, body)
+	}
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("drain %s AD CS sweep: %v", requestKey, err)
+	}
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{relay.KindADCSInventory}, Limit: 1})
+	if err != nil || len(claimed.Jobs) != 1 {
+		t.Fatalf("claim %s AD CS sweep: jobs=%d err=%v", requestKey, len(claimed.Jobs), err)
+	}
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := claimed.Jobs[0]
+	response, err := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt,
+		transport.JobOutcomeExecuted, string(reportJSON), digest))
+	if err != nil || response == nil || !response.Accepted {
+		t.Fatalf("report %s AD CS sweep: response=%+v err=%v", requestKey, response, err)
+	}
 }
 
 func assertADCSRunningLifecycleAUD35(t *testing.T, h *roleHarness, token, runID, sourceID string) {

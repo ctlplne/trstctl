@@ -618,8 +618,12 @@ describe("i18n boundary", () => {
       // wording keeps "signed" distinct from merely reported and never calls
       // module bytes catalog data. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "ed4b4d873ffebc80548b385a402bfe38030b3879a2b5918efe43579e2504d81d",
-      "de-DE": "a4b126d3a7feaea36267ebb2c7d32c452093374d7c4f76a7540d14fca1eda670",
+      // AUD-36 AD CS semantic-drift re-pin: nine source.adcs.drift.* keys
+      // name immutable before/after history, dangerous lifecycle facts, and
+      // say explicitly that only a worsening change creates a notification.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "e2e0fed3ae13209bfcac7626200f8219f6d04bf12b066bdd15d93a7d63a3a814",
+      "de-DE": "5909b5b4563c994f0e526a631c0df213dcdf84b4635e08ff134a37b5b98ce791",
     });
   });
 

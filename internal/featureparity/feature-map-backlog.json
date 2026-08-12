@@ -273,6 +273,7 @@
                 "createDiscoverySource",
                 "dismissDiscoveryFinding",
                 "getADCSPosture",
+                "getADCSTemplateDrift",
                 "getDiscoveryCoverage",
                 "getDiscoveryMonitoring",
                 "getDiscoveryRun",

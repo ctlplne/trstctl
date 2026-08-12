@@ -149,8 +149,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// management rather than merely describing a rollout.
 	// AUD-44's attestOwner plus ownership-exception list/grant/revoke operations
 	// raise it to 362 and make the owner application model lifecycle authority.
-	if len(out) != 362 {
-		t.Fatalf("OpenAPI operationIds = %d, want 362", len(out))
+	// AUD-36's semantic AD CS drift history read raises it to 363 and maps onto
+	// discovery: it is the consecutive-sweep history behind F1 posture, not a
+	// parallel inventory surface.
+	if len(out) != 363 {
+		t.Fatalf("OpenAPI operationIds = %d, want 363", len(out))
 	}
 	return out
 }

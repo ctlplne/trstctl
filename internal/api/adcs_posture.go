@@ -100,12 +100,61 @@ type ADCSPosture struct {
 	Guidance string `json:"guidance"`
 }
 
+// ADCSTemplateDriftChange is one checkable semantic before/after fact. Before
+// and After contain normalized flags, OIDs, CA names, or trustee SIDs — never a
+// credential or a raw directory security descriptor.
+type ADCSTemplateDriftChange struct {
+	Template  string `json:"template"`
+	Direction string `json:"direction"`
+	Change    string `json:"change"`
+	Attribute string `json:"attribute,omitempty"`
+	Before    string `json:"before,omitempty"`
+	After     string `json:"after,omitempty"`
+}
+
+// ADCSTemplateLifecycleChange records a template appearing or disappearing.
+type ADCSTemplateLifecycleChange struct {
+	Template     string `json:"template"`
+	Lifecycle    string `json:"lifecycle"`
+	WasDangerous bool   `json:"was_dangerous,omitempty"`
+	NowDangerous bool   `json:"now_dangerous,omitempty"`
+}
+
+// ADCSTemplateDrift is one immutable source/run-bound comparison between
+// consecutive sweeps.
+type ADCSTemplateDrift struct {
+	ID         string                        `json:"id"`
+	RunID      string                        `json:"run_id"`
+	SourceID   string                        `json:"source_id"`
+	Domain     string                        `json:"domain"`
+	AgentID    string                        `json:"agent_id"`
+	ObservedBy string                        `json:"observed_by"`
+	ObservedAt time.Time                     `json:"observed_at"`
+	Direction  string                        `json:"direction"`
+	Worsened   bool                          `json:"worsened"`
+	Changes    []ADCSTemplateDriftChange     `json:"changes"`
+	Lifecycle  []ADCSTemplateLifecycleChange `json:"lifecycle"`
+}
+
+// ADCSDriftHistory is the bounded tenant history served to Posture.
+type ADCSDriftHistory struct {
+	Items []ADCSTemplateDrift `json:"items"`
+}
+
 // ADCSPostureProvider reads source lifecycle and observed template posture.
 type ADCSPostureProvider func(ctx context.Context, tenantID string) ([]ADCSInventorySource, []ADCSTemplate, error)
+
+// ADCSDriftProvider reads the tenant's immutable semantic drift history.
+type ADCSDriftProvider func(ctx context.Context, tenantID string, limit int) ([]ADCSTemplateDrift, error)
 
 // WithADCSPosture wires the served AD CS template view.
 func WithADCSPosture(provider ADCSPostureProvider) Option {
 	return func(c *config) { c.adcsPosture = provider }
+}
+
+// WithADCSDrift wires the readable semantic drift history.
+func WithADCSDrift(provider ADCSDriftProvider) Option {
+	return func(c *config) { c.adcsDrift = provider }
 }
 
 // adcsPostureGuidance is the honest caveat, carried on the response so it
@@ -142,6 +191,28 @@ func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 		case "medium":
 			out.Medium++
 		}
+	}
+	a.writeJSON(w, http.StatusOK, out)
+}
+
+func (a *API) getADCSDrift(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	out := ADCSDriftHistory{Items: []ADCSTemplateDrift{}}
+	if a.adcsDrift == nil {
+		a.writeJSON(w, http.StatusOK, out)
+		return
+	}
+	items, err := a.adcsDrift(r.Context(), tenantID, 50)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if items != nil {
+		out.Items = items
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }

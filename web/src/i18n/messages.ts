@@ -14913,6 +14913,42 @@ export const messages = {
     defaultMessage: "Read from the directory:",
     description: "F3: falsifiable evidence references on an AD CS posture finding.",
   },
+  "source.adcs.drift.heading.aud360001": {
+    defaultMessage: "Template drift history",
+    description: "AUD-36: immutable semantic AD CS drift history on Posture.",
+  },
+  "source.adcs.drift.description.aud360002": {
+    defaultMessage: "Security meaning and exact before/after facts from consecutive relay sweeps. Only worsening changes create a notification.",
+    description: "AUD-36: immutable semantic AD CS drift history on Posture.",
+  },
+  "source.adcs.drift.loading.aud360003": {
+    defaultMessage: "Loading template drift",
+    description: "AUD-36: immutable semantic AD CS drift history on Posture.",
+  },
+  "source.adcs.drift.error.aud360004": {
+    defaultMessage: "Could not load template drift history",
+    description: "AUD-36: immutable semantic AD CS drift history on Posture.",
+  },
+  "source.adcs.drift.empty.aud360005": {
+    defaultMessage: "No semantic changes have been observed between sweeps.",
+    description: "AUD-36: immutable semantic AD CS drift history on Posture.",
+  },
+  "source.adcs.drift.before.aud360006": {
+    defaultMessage: "Before",
+    description: "AUD-36: immutable semantic AD CS drift before value on Posture.",
+  },
+  "source.adcs.drift.after.aud360007": {
+    defaultMessage: "After",
+    description: "AUD-36: immutable semantic AD CS drift after value on Posture.",
+  },
+  "source.adcs.drift.dangerousBefore.aud360008": {
+    defaultMessage: "Dangerous before",
+    description: "AUD-36: a removed AD CS template had a dangerous security posture before removal.",
+  },
+  "source.adcs.drift.dangerousNow.aud360009": {
+    defaultMessage: "Dangerous now",
+    description: "AUD-36: an added AD CS template has a dangerous security posture now.",
+  },
   "source.custody.key.b5cust0001": {
     defaultMessage: "Key custody",
     description: "B5: per-certificate key custody line on the certificate detail pane.",

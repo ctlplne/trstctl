@@ -3841,6 +3841,16 @@ const esESCatalog = {
   "source.adcs.sev.none.f1adcs0021": "Limpio",
   "source.adcs.observedby.f1adcs0022": "por el relé",
   "source.adcs.evidence.f3adcs0001": "Leído del directorio:",
+  "source.adcs.drift.heading.aud360001": "Historial de cambios de plantilla",
+  "source.adcs.drift.description.aud360002":
+    "Significado de seguridad y hechos exactos anteriores y posteriores de barridos de relé consecutivos. Solo los empeoramientos crean una notificación.",
+  "source.adcs.drift.loading.aud360003": "Cargando cambios de plantilla",
+  "source.adcs.drift.error.aud360004": "No se pudo cargar el historial de cambios de plantilla",
+  "source.adcs.drift.empty.aud360005": "No se observaron cambios semánticos entre barridos.",
+  "source.adcs.drift.before.aud360006": "Antes",
+  "source.adcs.drift.after.aud360007": "Después",
+  "source.adcs.drift.dangerousBefore.aud360008": "Peligrosa antes",
+  "source.adcs.drift.dangerousNow.aud360009": "Peligrosa ahora",
   "source.custody.key.b5cust0001": "Custodia de la clave",
   "source.custody.unrecorded.b5cust0002":
     "Este certificado es anterior al registro de custodia, o fue encontrado mediante descubrimiento en lugar de emitido aquí. No registrado no significa seguro.",

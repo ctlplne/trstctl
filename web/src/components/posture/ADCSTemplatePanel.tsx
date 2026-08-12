@@ -17,6 +17,7 @@ import { useApiQuery } from "@/lib/query";
  */
 export function ADCSTemplatePanel() {
   const query = useApiQuery(["posture", "adcs"], api.adcsPosture, { live: { intervalMs: 10_000 } });
+  const driftQuery = useApiQuery(["posture", "adcs", "drift"], api.adcsDrift, { live: { intervalMs: 10_000 } });
   const posture = query.data;
   const templates = posture?.templates ?? [];
   const sources = posture?.sources ?? [];
@@ -143,8 +144,88 @@ export function ADCSTemplatePanel() {
         </p>
       ) : null}
 
+      <ADCSDriftHistory items={driftQuery.data?.items ?? []} loading={driftQuery.loading} error={driftQuery.error} />
+
       {posture?.guidance ? <p className="text-xs text-status-warning">{posture.guidance}</p> : null}
     </div>
+  );
+}
+
+function ADCSDriftHistory({ items, loading, error }: { items: Awaited<ReturnType<typeof api.adcsDrift>>["items"]; loading: boolean; error: string | null }) {
+  return (
+    <section aria-labelledby="adcs-drift-heading" className="grid gap-2 border-t border-border pt-4">
+      <div>
+        <h3 id="adcs-drift-heading" className="text-sm font-semibold">
+          {translateNow("source.adcs.drift.heading.aud360001")}
+        </h3>
+        <p className="text-xs text-muted-foreground">{translateNow("source.adcs.drift.description.aud360002")}</p>
+      </div>
+      {loading ? <p className="text-sm text-muted-foreground">{translateNow("source.adcs.drift.loading.aud360003")}</p> : null}
+      {error ? <p className="text-sm text-status-critical">{translateNow("source.adcs.drift.error.aud360004")}</p> : null}
+      {!loading && !error && items.length === 0 ? <p className="text-sm text-muted-foreground">{translateNow("source.adcs.drift.empty.aud360005")}</p> : null}
+      {items.length > 0 ? (
+        <ol className="grid gap-2">
+          {items.map((item) => (
+            <li key={item.id} className="grid gap-2 rounded-panel border border-border bg-card p-3 shadow-elevation1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono text-xs font-semibold">{item.domain}</span>
+                <StatusBadge
+                  value={item.direction}
+                  vocabulary="lifecycle"
+                  tone={item.direction === "worse" ? "critical" : item.direction === "better" ? "success" : "neutral"}
+                />
+              </div>
+              <ul className="grid gap-2">
+                {item.changes.map((change, index) => (
+                  <li key={`${item.id}/${change.template}/${change.attribute ?? index}`} className="grid gap-1 border-l-2 border-status-warning pl-2 text-xs">
+                    <span className="font-medium">{change.template}</span>
+                    <span>{change.change}</span>
+                    {change.before || change.after ? (
+                      <dl className="grid gap-1 text-muted-foreground sm:grid-cols-2">
+                        <div>
+                          <dt>{translateNow("source.adcs.drift.before.aud360006")}</dt>
+                          <dd className="break-all font-mono">{change.before || translateNow("source.none.dc937b5989")}</dd>
+                        </div>
+                        <div>
+                          <dt>{translateNow("source.adcs.drift.after.aud360007")}</dt>
+                          <dd className="break-all font-mono">{change.after || translateNow("source.none.dc937b5989")}</dd>
+                        </div>
+                      </dl>
+                    ) : null}
+                  </li>
+                ))}
+                {item.lifecycle.map((change) => (
+                  <li
+                    key={`${item.id}/${change.template}/${change.lifecycle}`}
+                    className="flex flex-wrap items-center gap-2 border-l-2 border-status-info pl-2 text-xs"
+                  >
+                    <span className="font-medium">{change.template}</span>
+                    <StatusBadge
+                      value={change.lifecycle}
+                      vocabulary="lifecycle"
+                      tone={change.now_dangerous ? "critical" : change.was_dangerous ? "success" : "info"}
+                    />
+                    {change.was_dangerous ? (
+                      <StatusBadge value="high" vocabulary="risk" label={translateNow("source.adcs.drift.dangerousBefore.aud360008")} />
+                    ) : null}
+                    {change.now_dangerous ? (
+                      <StatusBadge value="critical" vocabulary="risk" label={translateNow("source.adcs.drift.dangerousNow.aud360009")} />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                {formatDateTime(item.observed_at)} · {translateNow("source.adcs.observedby.f1adcs0022")} <span className="font-mono">{item.observed_by}</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {translateNow("source.source.0e570ca6fa")} <span className="font-mono">{item.source_id}</span> · {translateNow("source.run.00d60e31a4")}{" "}
+                <span className="font-mono">{item.run_id}</span>
+              </p>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </section>
   );
 }
 

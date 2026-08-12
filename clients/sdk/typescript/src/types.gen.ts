@@ -3802,6 +3802,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/posture/adcs/drift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List immutable semantic AD CS template drift history */
+        get: operations["getADCSTemplateDrift"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pqc/campaigns": {
         parameters: {
             query?: never;
@@ -5466,6 +5483,9 @@ export interface components {
             unknown: number;
             unparsed: number;
         };
+        ADCSDriftHistory: {
+            items: components["schemas"]["ADCSTemplateDrift"][];
+        };
         ADCSFindingEvidence: {
             attribute: string;
             observed: string;
@@ -5511,6 +5531,34 @@ export interface components {
             /** @enum {string} */
             worst_severity: "" | "medium" | "high" | "critical";
         };
+        ADCSTemplateDrift: {
+            /** Format: uuid */
+            agent_id: string;
+            changes: components["schemas"]["ADCSTemplateDriftChange"][];
+            /** @enum {string} */
+            direction: "worse" | "better" | "neutral";
+            domain: string;
+            /** Format: uuid */
+            id: string;
+            lifecycle: components["schemas"]["ADCSTemplateLifecycleChange"][];
+            /** Format: date-time */
+            observed_at: string;
+            observed_by: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            source_id: string;
+            worsened: boolean;
+        };
+        ADCSTemplateDriftChange: {
+            after?: string;
+            attribute?: string;
+            before?: string;
+            change: string;
+            /** @enum {string} */
+            direction: "worse" | "better" | "neutral";
+            template: string;
+        };
         ADCSTemplateFinding: {
             evidence?: components["schemas"]["ADCSFindingEvidence"][];
             id: string;
@@ -5519,6 +5567,13 @@ export interface components {
             /** @enum {string} */
             severity: "medium" | "high" | "critical";
             summary: string;
+        };
+        ADCSTemplateLifecycleChange: {
+            /** @enum {string} */
+            lifecycle: "added" | "removed";
+            now_dangerous?: boolean;
+            template: string;
+            was_dangerous?: boolean;
         };
         AIAnswer: {
             citations?: string[];
@@ -22657,6 +22712,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ADCSPosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getADCSTemplateDrift: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSDriftHistory"];
                 };
             };
             /** @description client error */

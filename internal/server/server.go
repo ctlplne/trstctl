@@ -1322,6 +1322,7 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// operator has enabled connector.test. Otherwise the route keeps the honest
 	// local answer rather than queueing work nothing will claim.
 	*defaults = append(*defaults, api.WithADCSPosture(s.adcsPostureView))
+	*defaults = append(*defaults, api.WithADCSDrift(s.adcsDriftView))
 	*defaults = append(*defaults, api.WithConnectorTestEnqueuer(
 		s.connectorTestEnqueuer(AgentClaimableJobKinds(d.AgentClaimableJobKinds))))
 	// B-5: the console's system readout reuses the same probes as /readyz, so

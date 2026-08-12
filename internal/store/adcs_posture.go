@@ -3,12 +3,17 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+const ADCSDriftFindingKind = "adcs_template_drift"
 
 // AD CS template posture read model (epic F1).
 //
@@ -122,6 +127,105 @@ func (s *Store) ListADCSTemplatePosture(ctx context.Context, tenantID string, li
 			row.Findings = json.RawMessage(findings)
 			row.ObservedTemplate = json.RawMessage(observed)
 			out = append(out, row)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ApplyADCSTemplateDriftObservedTx projects one immutable semantic-drift
+// finding and, only for a worsening record, its notification intent in the same
+// tenant transaction (AN-2/AN-6). The existing discovery_findings table is the
+// right durable shape: each row belongs to the real source/run that observed it,
+// already has RLS, and already participates in rebuild/snapshot/offboarding.
+func (s *Store) ApplyADCSTemplateDriftObservedTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	finding DiscoveryFinding,
+	alertDestination string,
+	alertPayload []byte,
+	alertKey string,
+) error {
+	if finding.TenantID == "" || finding.ID == "" || finding.RunID == "" ||
+		finding.SourceID == "" || finding.Kind != ADCSDriftFindingKind ||
+		len(finding.Metadata) == 0 || finding.DiscoveredAt.IsZero() {
+		return errors.New("store: AD CS drift finding is incomplete")
+	}
+	if (alertDestination == "") != (len(alertPayload) == 0) ||
+		(alertDestination == "") != (alertKey == "") {
+		return errors.New("store: AD CS drift alert intent is incomplete")
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"adcs-template-drift\x1f"+finding.TenantID+"\x1f"+finding.ID); err != nil {
+		return fmt.Errorf("store: lock AD CS drift finding: %w", err)
+	}
+	var existed bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (
+		     SELECT 1 FROM discovery_findings
+		      WHERE tenant_id = $1 AND (id = $2 OR $2::uuid = ANY(recorded_ids))
+		 )`, finding.TenantID, finding.ID).Scan(&existed); err != nil {
+		return err
+	}
+	if err := s.ApplyDiscoveryFindingRecordedTx(ctx, tx, finding); err != nil {
+		return err
+	}
+	// Exact replay validates through ApplyDiscoveryFindingRecordedTx above and
+	// does not recreate an alert while the immutable projected finding exists.
+	if existed || alertDestination == "" {
+		return nil
+	}
+	var existingDestination string
+	var existingPayload []byte
+	err := tx.QueryRow(ctx,
+		`SELECT destination, payload FROM outbox
+		  WHERE tenant_id = $1 AND idempotency_key = $2 ORDER BY id LIMIT 1`,
+		finding.TenantID, alertKey).Scan(&existingDestination, &existingPayload)
+	if err == nil {
+		if existingDestination != alertDestination || !bytes.Equal(existingPayload, alertPayload) {
+			return fmt.Errorf("%w: AD CS drift alert key is already bound", ErrIdempotencyConflict)
+		}
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key)
+		 VALUES ($1, $2, $2, $3, $4)`,
+		finding.TenantID, alertDestination, alertPayload, alertKey); err != nil {
+		return fmt.Errorf("store: enqueue AD CS drift alert: %w", err)
+	}
+	return nil
+}
+
+// ListADCSTemplateDrift returns immutable drift findings newest first. The kind
+// predicate prevents unrelated discovery metadata from crossing this purpose-
+// built history surface; tenant_id is still explicit in SQL and enforced by RLS.
+func (s *Store) ListADCSTemplateDrift(ctx context.Context, tenantID string, limit int) ([]DiscoveryFinding, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var out []DiscoveryFinding
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
+			        provenance, fingerprint, risk_score, metadata, discovered_at,
+			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at
+			   FROM discovery_findings
+			  WHERE tenant_id = $1 AND kind = $2
+			  ORDER BY discovered_at DESC, id DESC LIMIT $3`,
+			tenantID, ADCSDriftFindingKind, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var finding DiscoveryFinding
+			if err := scanDiscoveryFinding(rows, &finding); err != nil {
+				return err
+			}
+			out = append(out, finding)
 		}
 		return rows.Err()
 	})

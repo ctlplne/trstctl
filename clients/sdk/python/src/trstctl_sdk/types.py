@@ -285,6 +285,14 @@ ADCSDatabaseSummary = TypedDict(
     total=False,
 )
 
+ADCSDriftHistory = TypedDict(
+    'ADCSDriftHistory',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 ADCSFindingEvidence = TypedDict(
     'ADCSFindingEvidence',
     {
@@ -342,6 +350,37 @@ ADCSTemplate = TypedDict(
     total=False,
 )
 
+ADCSTemplateDrift = TypedDict(
+    'ADCSTemplateDrift',
+    {
+        'agent_id': str,
+        'changes': list[dict[str, Any]],
+        'direction': str,
+        'domain': str,
+        'id': str,
+        'lifecycle': list[dict[str, Any]],
+        'observed_at': str,
+        'observed_by': str,
+        'run_id': str,
+        'source_id': str,
+        'worsened': bool,
+    },
+    total=False,
+)
+
+ADCSTemplateDriftChange = TypedDict(
+    'ADCSTemplateDriftChange',
+    {
+        'after': str,
+        'attribute': str,
+        'before': str,
+        'change': str,
+        'direction': str,
+        'template': str,
+    },
+    total=False,
+)
+
 ADCSTemplateFinding = TypedDict(
     'ADCSTemplateFinding',
     {
@@ -351,6 +390,17 @@ ADCSTemplateFinding = TypedDict(
         'remediation': str,
         'severity': str,
         'summary': str,
+    },
+    total=False,
+)
+
+ADCSTemplateLifecycleChange = TypedDict(
+    'ADCSTemplateLifecycleChange',
+    {
+        'lifecycle': str,
+        'now_dangerous': bool,
+        'template': str,
+        'was_dangerous': bool,
     },
     total=False,
 )

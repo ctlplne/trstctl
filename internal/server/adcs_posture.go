@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -83,7 +84,10 @@ func (s *Server) recordADCSInventory(ctx context.Context, tenantID, agentName, i
 
 	domain := adcsDomainFor(report.Inventory.Templates)
 	// Compute drift before the current observation replaces the previous domain.
-	s.recordADCSDrift(ctx, tenantID, domain, agentName, idempotencyKey, report.Inventory.Templates)
+	if err := s.recordADCSDrift(ctx, tenantID, intent.ID, intent.SourceID, domain,
+		agentID, agentName, idempotencyKey, report.Inventory.Templates); err != nil {
+		return err
+	}
 	if err := s.orch.RecordADCSInventoryObservedWithEventID(ctx, tenantID,
 		orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-inventory-observed"),
 		adcs.InventoryObserved{
@@ -181,6 +185,52 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 	return sources, out, nil
 }
 
+// adcsDriftView turns the immutable discovery-finding projection back into its
+// purpose-built API shape. The row and metadata must agree on run/source; a
+// corrupted or hand-written row fails closed instead of being served as relay
+// evidence.
+func (s *Server) adcsDriftView(ctx context.Context, tenantID string, limit int) ([]api.ADCSTemplateDrift, error) {
+	if s.store == nil {
+		return []api.ADCSTemplateDrift{}, nil
+	}
+	rows, err := s.store.ListADCSTemplateDrift(ctx, tenantID, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]api.ADCSTemplateDrift, 0, len(rows))
+	for _, row := range rows {
+		var recorded projections.ADCSTemplateDriftObserved
+		if err := json.Unmarshal(row.Metadata, &recorded); err != nil {
+			return nil, fmt.Errorf("decode projected AD CS drift %s: %w", row.ID, err)
+		}
+		if recorded.RunID != row.RunID || recorded.SourceID != row.SourceID ||
+			recorded.Domain != row.Ref {
+			return nil, fmt.Errorf("projected AD CS drift %s disagrees with its source/run row", row.ID)
+		}
+		changes := make([]api.ADCSTemplateDriftChange, 0, len(recorded.Changes))
+		for _, change := range recorded.Changes {
+			changes = append(changes, api.ADCSTemplateDriftChange{
+				Template: change.Template, Direction: string(change.Direction), Change: change.Change,
+				Attribute: change.Attribute, Before: change.Before, After: change.After,
+			})
+		}
+		lifecycle := make([]api.ADCSTemplateLifecycleChange, 0, len(recorded.Lifecycle))
+		for _, change := range recorded.Lifecycle {
+			lifecycle = append(lifecycle, api.ADCSTemplateLifecycleChange{
+				Template: change.Template, Lifecycle: string(change.Lifecycle),
+				WasDangerous: change.WasDangerous, NowDangerous: change.NowDangerous,
+			})
+		}
+		out = append(out, api.ADCSTemplateDrift{
+			ID: row.ID, RunID: row.RunID, SourceID: row.SourceID,
+			Domain: recorded.Domain, AgentID: recorded.AgentID, ObservedBy: recorded.ObservedBy,
+			ObservedAt: row.DiscoveredAt, Direction: string(recorded.Direction), Worsened: recorded.Worsened,
+			Changes: changes, Lifecycle: lifecycle,
+		})
+	}
+	return out, nil
+}
+
 // recordADCSDrift compares this sweep against the stored one and records the
 // semantic difference (epic F2).
 //
@@ -189,13 +239,17 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 // on improvement teaches people to mute it — after which it will not reach them
 // on the day it matters. Better and neutral changes are still recorded, because
 // an incident timeline needs them.
-func (s *Server) recordADCSDrift(ctx context.Context, tenantID, domain, agentName, idempotencyKey string, current []adcs.Template) {
+func (s *Server) recordADCSDrift(
+	ctx context.Context,
+	tenantID, runID, sourceID, domain, agentID, agentName, idempotencyKey string,
+	current []adcs.Template,
+) error {
 	if s.store == nil || s.log == nil {
-		return
+		return errors.New("AD CS drift recorder is not configured")
 	}
 	previousRows, err := s.store.ListADCSTemplatePosture(ctx, tenantID, 1000)
 	if err != nil {
-		return
+		return err
 	}
 	previous := make([]adcs.Template, 0, len(previousRows))
 	for _, row := range previousRows {
@@ -219,25 +273,40 @@ func (s *Server) recordADCSDrift(ctx context.Context, tenantID, domain, agentNam
 	}
 	drift := adcs.DiffTemplates(previous, current)
 	if len(drift.Changes) == 0 && len(drift.Lifecycle) == 0 {
-		return
+		return nil
 	}
-	payload := map[string]any{
-		"domain": domain, "agent": agentName,
-		"changes": drift.Changes, "lifecycle": drift.Lifecycle,
-		"worsened": drift.Worsened(),
+	if drift.Changes == nil {
+		drift.Changes = []adcs.TemplateChange{}
+	}
+	if drift.Lifecycle == nil {
+		drift.Lifecycle = []adcs.LifecycleChange{}
+	}
+	payload := projections.ADCSTemplateDriftObserved{
+		RunID: runID, SourceID: sourceID, Domain: domain,
+		AgentID: agentID, ObservedBy: agentName,
+		Direction: drift.Direction(), Worsened: drift.Worsened(),
+		Changes: drift.Changes, Lifecycle: drift.Lifecycle,
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		return
+		return err
 	}
-	eventType := "adcs.template.drift"
+	eventType := projections.EventADCSTemplateDriftObserved
 	if drift.Worsened() {
 		// A distinct type so the notify matrix can route the alerting case
 		// without having to reason about the payload.
-		eventType = "adcs.template.drift.worsened"
+		eventType = projections.EventADCSTemplateDriftWorsened
 	}
-	_, _ = s.log.Append(ctx, events.Event{
-		ID:   orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-drift"),
+	event, err := s.log.Append(ctx, events.Event{
+		ID:   orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-drift-v2"),
 		Type: eventType, TenantID: tenantID, Data: encoded,
+		SchemaVersion: projections.ADCSTemplateDriftEventSchemaVersion,
 	})
+	if err != nil {
+		return err
+	}
+	// The drift finding and optional notification outbox row commit together in
+	// this projector transaction. A crash after append is safe: the retained
+	// event is replayed on retry/startup and the deterministic IDs converge.
+	return projections.New(s.store).Apply(ctx, event)
 }

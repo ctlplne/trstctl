@@ -427,6 +427,25 @@ func componentSchemas() map[string]*Schema {
 		"critical":  {Type: "integer"}, "high": {Type: "integer"}, "medium": {Type: "integer"},
 		"guidance": str(),
 	}, "observed", "templates", "critical", "high", "medium", "guidance")
+	adcsTemplateDriftChange := object(map[string]*Schema{
+		"template": str(), "direction": {Type: "string", Enum: []string{"worse", "better", "neutral"}},
+		"change": str(), "attribute": str(), "before": str(), "after": str(),
+	}, "template", "direction", "change")
+	adcsTemplateLifecycleChange := object(map[string]*Schema{
+		"template": str(), "lifecycle": {Type: "string", Enum: []string{"added", "removed"}},
+		"was_dangerous": {Type: "boolean"}, "now_dangerous": {Type: "boolean"},
+	}, "template", "lifecycle")
+	adcsTemplateDrift := object(map[string]*Schema{
+		"id": uuid(), "run_id": uuid(), "source_id": uuid(), "domain": str(),
+		"agent_id": uuid(), "observed_by": str(), "observed_at": timestamp(),
+		"direction": {Type: "string", Enum: []string{"worse", "better", "neutral"}},
+		"worsened":  {Type: "boolean"},
+		"changes":   {Type: "array", Items: ref("ADCSTemplateDriftChange")},
+		"lifecycle": {Type: "array", Items: ref("ADCSTemplateLifecycleChange")},
+	}, "id", "run_id", "source_id", "domain", "agent_id", "observed_by", "observed_at", "direction", "worsened", "changes", "lifecycle")
+	adcsDriftHistory := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("ADCSTemplateDrift")},
+	}, "items")
 	agentJobRedemptions := object(map[string]*Schema{
 		"live":                {Type: "integer"},
 		"total":               {Type: "integer"},
@@ -5142,6 +5161,10 @@ func componentSchemas() map[string]*Schema {
 		"ADCSTemplate":                             adcsTemplate,
 		"ADCSTemplateFinding":                      adcsTemplateFinding,
 		"ADCSFindingEvidence":                      adcsFindingEvidence,
+		"ADCSDriftHistory":                         adcsDriftHistory,
+		"ADCSTemplateDrift":                        adcsTemplateDrift,
+		"ADCSTemplateDriftChange":                  adcsTemplateDriftChange,
+		"ADCSTemplateLifecycleChange":              adcsTemplateLifecycleChange,
 		"CAAuthorityList":                          list("CAAuthority"),
 		"CADiscoveryItem":                          caDiscoveryItem,
 		"CADiscoverySummary":                       caDiscoverySummary,

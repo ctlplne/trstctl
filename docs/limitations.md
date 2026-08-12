@@ -1401,6 +1401,20 @@ people to mute it — after which it will not reach them on the day it matters.
 Better and neutral changes are still recorded, because an incident timeline
 needs them.
 
+Those records are now first-class, tenant-scoped `adcs_template_drift`
+discovery findings rather than event-log-only notes. Each one is bound to the
+real source, run, relay UUID/name, domain, and observation time, and preserves
+the semantic change plus exact normalized before/after facts. Trustee changes
+carry canonical SIDs (who gained or lost enrollment access), never raw security
+descriptor bytes. `GET /api/v1/posture/adcs/drift`, the generated SDKs, and the
+Posture console expose the same bounded history. A worsening v2 drift event
+projects the immutable finding and one `notification.drift` outbox intent in the
+same PostgreSQL transaction, so it appears in the notification inbox after one
+sweep; first, unchanged, neutral, and improved sweeps do not page. Event ID and
+outbox-key replay guards keep a retried signed receipt from duplicating either.
+Pre-v2 drift events lacked run/source authority and therefore replay as audit
+history only rather than being attached to a guessed source.
+
 A first sweep is deliberately not drift. Reporting an entire estate as "added"
 the first time anyone looks would bury the real change that comes next under
 ninety notifications. The template is stored exactly as the directory reported

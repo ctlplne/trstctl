@@ -140,6 +140,7 @@ type API struct {
 	agentJobPosture                    AgentJobPostureProvider
 	enqueueConnectorTest               ConnectorTestEnqueuer
 	adcsPosture                        ADCSPostureProvider
+	adcsDrift                          ADCSDriftProvider
 	acmeEABDisable                     ACMEEABDisabler
 	privacyRetentionPolicy             privacy.RetentionPolicy
 	privacyRetentionSource             privacy.RetentionPolicySource
@@ -236,6 +237,7 @@ type config struct {
 	agentJobPosture             AgentJobPostureProvider
 	enqueueConnectorTest        ConnectorTestEnqueuer
 	adcsPosture                 ADCSPostureProvider
+	adcsDrift                   ADCSDriftProvider
 	acmeEABDisable              ACMEEABDisabler
 	privacyRetentionPolicy      privacy.RetentionPolicy
 	privacyRetentionSource      privacy.RetentionPolicySource
@@ -505,6 +507,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		agentJobPosture:             cfg.agentJobPosture,
 		enqueueConnectorTest:        cfg.enqueueConnectorTest,
 		adcsPosture:                 cfg.adcsPosture,
+		adcsDrift:                   cfg.adcsDrift,
 		acmeEABDisable:              cfg.acmeEABDisable,
 		featureObserver:             cfg.featureObserver,
 		ownershipAttestationCadence: cfg.ownershipAttestationCadence,

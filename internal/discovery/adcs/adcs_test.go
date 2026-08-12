@@ -568,6 +568,35 @@ func TestHardeningDoesNotAlert(t *testing.T) {
 	}
 }
 
+// TestEnrollmentTrusteeDriftCarriesBeforeAfterAUD36 proves that a DACL change
+// is translated into the operator fact that matters. The raw security
+// descriptor never enters the drift record; canonical SIDs do, so the operator
+// can see exactly who gained or lost enrollment access.
+func TestEnrollmentTrusteeDriftCarriesBeforeAfterAUD36(t *testing.T) {
+	before := []adcs.Template{{
+		Name: "UserAuth", EnrollmentPrincipals: []string{"S-1-5-11"},
+	}}
+	after := []adcs.Template{{
+		Name: "UserAuth", EnrollmentPrincipals: []string{"S-1-5-11", "S-1-5-21-111-222-333-1001"},
+	}}
+	drift := adcs.DiffTemplates(before, after)
+	if !drift.Worsened() || len(drift.Changes) != 1 {
+		t.Fatalf("trustee expansion = %+v, want one worsening change", drift)
+	}
+	change := drift.Changes[0]
+	if change.Attribute != "nTSecurityDescriptor enrollment trustees" ||
+		change.Before != "S-1-5-11" ||
+		change.After != "S-1-5-11, S-1-5-21-111-222-333-1001" ||
+		!strings.Contains(change.Change, "gained enrollment access") {
+		t.Fatalf("trustee expansion lost semantic before/after evidence: %+v", change)
+	}
+
+	back := adcs.DiffTemplates(after, before)
+	if back.Worsened() || len(back.Changes) != 1 || back.Changes[0].Direction != adcs.DriftBetter {
+		t.Fatalf("trustee removal = %+v, want one recorded improvement without an alert", back)
+	}
+}
+
 // TestFirstSweepIsNotDrift: reporting an entire estate as "added" the first time
 // anyone looks would bury the real change that comes next under ninety
 // notifications.

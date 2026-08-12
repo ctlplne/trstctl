@@ -3853,6 +3853,16 @@ const deDECatalog = {
   "source.adcs.sev.none.f1adcs0021": "Unauffällig",
   "source.adcs.observedby.f1adcs0022": "durch Relais",
   "source.adcs.evidence.f3adcs0001": "Aus dem Verzeichnis gelesen:",
+  "source.adcs.drift.heading.aud360001": "Verlauf der Vorlagenabweichungen",
+  "source.adcs.drift.description.aud360002":
+    "Sicherheitsbedeutung und genaue Vorher-/Nachher-Fakten aus aufeinanderfolgenden Relaisprüfungen. Nur Verschlechterungen erzeugen eine Benachrichtigung.",
+  "source.adcs.drift.loading.aud360003": "Vorlagenabweichungen werden geladen",
+  "source.adcs.drift.error.aud360004": "Verlauf der Vorlagenabweichungen konnte nicht geladen werden",
+  "source.adcs.drift.empty.aud360005": "Zwischen den Prüfungen wurden keine semantischen Änderungen beobachtet.",
+  "source.adcs.drift.before.aud360006": "Vorher",
+  "source.adcs.drift.after.aud360007": "Nachher",
+  "source.adcs.drift.dangerousBefore.aud360008": "Zuvor gefährlich",
+  "source.adcs.drift.dangerousNow.aud360009": "Jetzt gefährlich",
   "source.custody.key.b5cust0001": "Schlüsselverwahrung",
   "source.custody.unrecorded.b5cust0002":
     "Dieses Zertifikat stammt aus der Zeit vor der Verwahrungserfassung oder wurde per Ermittlung gefunden statt hier ausgestellt. Nicht erfasst bedeutet nicht sicher.",

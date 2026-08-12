@@ -85,6 +85,32 @@ type Drift struct {
 	Lifecycle []LifecycleChange `json:"lifecycle"`
 }
 
+// Direction summarizes the whole sweep without discarding the per-attribute
+// direction below it. Any newly opened access wins because that is the fact an
+// alert router must see. Otherwise a pure hardening sweep is better; appearance,
+// disappearance, or descriptive edits are neutral timeline facts.
+func (d Drift) Direction() DriftDirection {
+	if d.Worsened() {
+		return DriftWorse
+	}
+	hasBetter := false
+	for _, change := range d.Changes {
+		switch change.Direction {
+		case DriftNeutral:
+			return DriftNeutral
+		case DriftBetter:
+			hasBetter = true
+		}
+	}
+	if len(d.Lifecycle) > 0 {
+		return DriftNeutral
+	}
+	if hasBetter {
+		return DriftBetter
+	}
+	return DriftNeutral
+}
+
 // Worsened reports whether anything got less safe. It is the single question an
 // alert should be gated on: a sweep where three templates were hardened and a
 // display name changed is not an event anyone needs woken for.
@@ -243,6 +269,28 @@ func compareTemplate(before, after Template) []TemplateChange {
 			"A CA stopped publishing this template: "+strings.Join(unpublished, ", ")+".",
 			"certificateTemplates", strings.Join(before.PublishedBy, ", "), strings.Join(after.PublishedBy, ", "))
 	}
+
+	// The enrollment DACL is already reduced at the relay to canonical trustee
+	// SIDs. Keep only that safe semantic form: the raw security descriptor is a
+	// large binary policy document, not a useful or appropriate console payload.
+	// Gaining any trustee opens access and therefore wins over simultaneous
+	// removals. A pure trustee removal is recorded as hardening without paging.
+	if !sameStrings(before.EnrollmentPrincipals, after.EnrollmentPrincipals) {
+		gained := notIn(after.EnrollmentPrincipals, before.EnrollmentPrincipals)
+		lost := notIn(before.EnrollmentPrincipals, after.EnrollmentPrincipals)
+		direction := DriftBetter
+		parts := make([]string, 0, 2)
+		if len(gained) > 0 {
+			direction = DriftWorse
+			parts = append(parts, strings.Join(gained, ", ")+" gained enrollment access")
+		}
+		if len(lost) > 0 {
+			parts = append(parts, strings.Join(lost, ", ")+" lost enrollment access")
+		}
+		add(direction, strings.Join(parts, "; ")+".",
+			"nTSecurityDescriptor enrollment trustees",
+			canonicalStrings(before.EnrollmentPrincipals), canonicalStrings(after.EnrollmentPrincipals))
+	}
 	return out
 }
 
@@ -267,6 +315,12 @@ func sameStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func canonicalStrings(values []string) string {
+	values = append([]string(nil), values...)
+	sort.Strings(values)
+	return strings.Join(values, ", ")
 }
 
 // notIn returns the members of a that are absent from b.

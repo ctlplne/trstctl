@@ -211,6 +211,10 @@ export interface ADCSDatabaseSummary {
   unparsed: number;
 }
 
+export interface ADCSDriftHistory {
+  items: ADCSTemplateDrift[];
+}
+
 export interface ADCSFindingEvidence {
   attribute: string;
   observed: string;
@@ -252,6 +256,29 @@ export interface ADCSTemplate {
   worst_severity: "" | "medium" | "high" | "critical";
 }
 
+export interface ADCSTemplateDrift {
+  agent_id: string;
+  changes: ADCSTemplateDriftChange[];
+  direction: "worse" | "better" | "neutral";
+  domain: string;
+  id: string;
+  lifecycle: ADCSTemplateLifecycleChange[];
+  observed_at: string;
+  observed_by: string;
+  run_id: string;
+  source_id: string;
+  worsened: boolean;
+}
+
+export interface ADCSTemplateDriftChange {
+  after?: string;
+  attribute?: string;
+  before?: string;
+  change: string;
+  direction: "worse" | "better" | "neutral";
+  template: string;
+}
+
 export interface ADCSTemplateFinding {
   evidence?: ADCSFindingEvidence[];
   id: string;
@@ -259,6 +286,13 @@ export interface ADCSTemplateFinding {
   remediation: string;
   severity: "medium" | "high" | "critical";
   summary: string;
+}
+
+export interface ADCSTemplateLifecycleChange {
+  lifecycle: "added" | "removed";
+  now_dangerous?: boolean;
+  template: string;
+  was_dangerous?: boolean;
 }
 
 export interface AIAnswer {

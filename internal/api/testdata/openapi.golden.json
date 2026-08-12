@@ -791,6 +791,20 @@
         ],
         "type": "object"
       },
+      "ADCSDriftHistory": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSTemplateDrift"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ADCSFindingEvidence": {
         "properties": {
           "attribute": {
@@ -957,6 +971,106 @@
         ],
         "type": "object"
       },
+      "ADCSTemplateDrift": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSTemplateDriftChange"
+            },
+            "type": "array"
+          },
+          "direction": {
+            "enum": [
+              "worse",
+              "better",
+              "neutral"
+            ],
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lifecycle": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSTemplateLifecycleChange"
+            },
+            "type": "array"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_by": {
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "worsened": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "source_id",
+          "domain",
+          "agent_id",
+          "observed_by",
+          "observed_at",
+          "direction",
+          "worsened",
+          "changes",
+          "lifecycle"
+        ],
+        "type": "object"
+      },
+      "ADCSTemplateDriftChange": {
+        "properties": {
+          "after": {
+            "type": "string"
+          },
+          "attribute": {
+            "type": "string"
+          },
+          "before": {
+            "type": "string"
+          },
+          "change": {
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "worse",
+              "better",
+              "neutral"
+            ],
+            "type": "string"
+          },
+          "template": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "template",
+          "direction",
+          "change"
+        ],
+        "type": "object"
+      },
       "ADCSTemplateFinding": {
         "properties": {
           "evidence": {
@@ -991,6 +1105,31 @@
           "severity",
           "summary",
           "remediation"
+        ],
+        "type": "object"
+      },
+      "ADCSTemplateLifecycleChange": {
+        "properties": {
+          "lifecycle": {
+            "enum": [
+              "added",
+              "removed"
+            ],
+            "type": "string"
+          },
+          "now_dangerous": {
+            "type": "boolean"
+          },
+          "template": {
+            "type": "string"
+          },
+          "was_dangerous": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "template",
+          "lifecycle"
         ],
         "type": "object"
       },
@@ -39756,6 +39895,53 @@
           }
         ],
         "summary": "AD CS certificate template posture observed by an in-domain relay",
+        "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/posture/adcs/drift": {
+      "get": {
+        "operationId": "getADCSTemplateDrift",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSDriftHistory"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List immutable semantic AD CS template drift history",
         "x-trstctl-permission": "discovery:read"
       }
     },

@@ -156,6 +156,8 @@ const (
 	EventDiscoveryFindingTriageChanged            = "discovery.finding.triage_changed"
 	EventDiscoveryRunCompleted                    = "discovery.run.completed"
 	EventADCSInventoryObserved                    = "adcs.template.inventory.observed"
+	EventADCSTemplateDriftObserved                = "adcs.template.drift"
+	EventADCSTemplateDriftWorsened                = "adcs.template.drift.worsened"
 	EventRevocationProbeQueued                    = "revocation.probe.queued"
 	EventRevocationHealthObserved                 = "revocation.health.observed"
 	EventMigrationRunRecorded                     = "migration.run.recorded"
@@ -236,6 +238,11 @@ const (
 	// default and orchestrator.StateRequested).
 	initialIdentityStatus = "requested"
 )
+
+// ADCSTemplateDriftEventSchemaVersion is the first projectable AD CS drift
+// shape. Legacy v1 events were append-only maps with no run/source authority;
+// they remain replayable as no-ops instead of being fabricated into findings.
+const ADCSTemplateDriftEventSchemaVersion = 2
 
 // ProfileEventSchemaVersion is the first profile event shape that carries the full
 // certificate_profiles row. Version 1 profile events were audit-only
@@ -516,6 +523,22 @@ type ADCSDatabaseIngested struct {
 	RowsRejected int    `json:"rows_rejected"`
 	Source       string `json:"source,omitempty"`
 	LastError    string `json:"last_error,omitempty"`
+}
+
+// ADCSTemplateDriftObserved is one source/run-bound semantic difference between
+// consecutive relay sweeps. It carries canonical directory facts only: trustee
+// SIDs and normalized template attributes, never bind credentials or raw
+// security-descriptor bytes.
+type ADCSTemplateDriftObserved struct {
+	RunID      string                          `json:"run_id"`
+	SourceID   string                          `json:"source_id"`
+	Domain     string                          `json:"domain"`
+	AgentID    string                          `json:"agent_id"`
+	ObservedBy string                          `json:"observed_by"`
+	Direction  adcsdiscovery.DriftDirection    `json:"direction"`
+	Worsened   bool                            `json:"worsened"`
+	Changes    []adcsdiscovery.TemplateChange  `json:"changes"`
+	Lifecycle  []adcsdiscovery.LifecycleChange `json:"lifecycle"`
 }
 
 // EdgeSegmentPolicySet is the payload of edge.segment.policy_set (B6).
@@ -2965,6 +2988,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryFindingTriageChanged:            {1: true},
 	EventDiscoveryRunCompleted:                    {1: true},
 	EventADCSInventoryObserved:                    {1: true},
+	EventADCSTemplateDriftObserved:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
+	EventADCSTemplateDriftWorsened:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventRevocationProbeQueued:                    {1: true},
 	EventRevocationHealthObserved:                 {1: true},
 	EventMigrationRunRecorded:                     {1: true},
@@ -4056,6 +4081,60 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			})
 		}
 		return p.store.ApplyADCSTemplatePostureObservedTx(ctx, tx, e.TenantID, pl.Domain, pl.AgentName, rows, e.Time)
+	case EventADCSTemplateDriftObserved, EventADCSTemplateDriftWorsened:
+		// V1 was emitted before this read model existed and omitted run/source
+		// authority. Ignoring it is the only honest replay: attaching it to a
+		// guessed run would turn an append-only audit note into fabricated state.
+		if schemaVersionOf(e) == 1 {
+			return nil
+		}
+		var pl ADCSTemplateDriftObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if e.ID == "" || pl.RunID == "" || pl.SourceID == "" ||
+			strings.TrimSpace(pl.Domain) == "" || pl.AgentID == "" ||
+			strings.TrimSpace(pl.ObservedBy) == "" ||
+			(len(pl.Changes) == 0 && len(pl.Lifecycle) == 0) {
+			return errors.New("projections: AD CS drift is missing event/run/source/domain/relay/change authority")
+		}
+		drift := adcsdiscovery.Drift{Changes: pl.Changes, Lifecycle: pl.Lifecycle}
+		worsened := drift.Worsened()
+		if pl.Direction != drift.Direction() || pl.Worsened != worsened ||
+			(e.Type == EventADCSTemplateDriftWorsened) != worsened {
+			return errors.New("projections: AD CS drift direction disagrees with its semantic changes or event type")
+		}
+		metadata, err := json.Marshal(pl)
+		if err != nil {
+			return fmt.Errorf("projections: encode AD CS drift metadata: %w", err)
+		}
+		var alertDestination, alertKey string
+		var alertPayload []byte
+		if worsened {
+			alert := adcsTemplateDriftAlert{
+				Kind: "adcs.template_drift", TenantID: e.TenantID,
+				OperationID: "adcs-drift:" + e.ID,
+				Subject:     "AD CS template drift worsened: " + strings.Join(adcsDriftTemplateNames(pl), ", "),
+				Detail:      adcsDriftAlertDetail(pl), Severity: "critical",
+			}
+			alertPayload, err = json.Marshal(alert)
+			if err != nil {
+				return fmt.Errorf("projections: encode AD CS drift alert: %w", err)
+			}
+			alertDestination = "notification.drift"
+			alertKey = "adcs-drift-alert:" + e.ID
+		}
+		riskScore := 0
+		if worsened {
+			riskScore = 100
+		}
+		return p.store.ApplyADCSTemplateDriftObservedTx(ctx, tx, store.DiscoveryFinding{
+			ID: e.ID, RecordedID: e.ID, TenantID: e.TenantID,
+			RunID: pl.RunID, SourceID: pl.SourceID, Kind: store.ADCSDriftFindingKind,
+			Ref: pl.Domain, Provenance: "adcs-relay:" + pl.AgentID,
+			Fingerprint: cryptoboundary.SHA256Hex(e.Data), RiskScore: riskScore,
+			Metadata: metadata, DiscoveredAt: e.Time,
+		}, alertDestination, alertPayload, alertKey)
 	case EventRevocationProbeQueued:
 		var pl RevocationProbeQueued
 		if err := decode(e, &pl); err != nil {
@@ -5294,6 +5373,69 @@ type restoreDrillAlert struct {
 	Subject     string `json:"subject,omitempty"`
 	Detail      string `json:"detail,omitempty"`
 	Severity    string `json:"severity,omitempty"`
+}
+
+// adcsTemplateDriftAlert mirrors the credential-free subset consumed by the
+// notification package. Importing notify here would create a projection cycle;
+// JSON is the stable outbox contract.
+type adcsTemplateDriftAlert struct {
+	Kind        string `json:"kind"`
+	TenantID    string `json:"tenant_id"`
+	OperationID string `json:"operation_id,omitempty"`
+	Subject     string `json:"subject,omitempty"`
+	Detail      string `json:"detail,omitempty"`
+	Severity    string `json:"severity,omitempty"`
+}
+
+func adcsDriftTemplateNames(pl ADCSTemplateDriftObserved) []string {
+	seen := make(map[string]bool, len(pl.Changes)+len(pl.Lifecycle))
+	for _, change := range pl.Changes {
+		if name := strings.TrimSpace(change.Template); name != "" {
+			seen[name] = true
+		}
+	}
+	for _, change := range pl.Lifecycle {
+		if name := strings.TrimSpace(change.Template); name != "" {
+			seen[name] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for name := range seen {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return []string{"unknown template"}
+	}
+	return out
+}
+
+func adcsDriftAlertDetail(pl ADCSTemplateDriftObserved) string {
+	parts := []string{
+		"domain " + pl.Domain,
+		"source " + pl.SourceID,
+		"relay " + pl.ObservedBy + " (" + pl.AgentID + ")",
+	}
+	// The inbox is a page, not the evidence database. Keep it bounded while
+	// carrying enough exact before/after facts to decide whether to open history.
+	const maxFacts = 4
+	for _, change := range pl.Changes {
+		if len(parts) >= 3+maxFacts {
+			break
+		}
+		fact := change.Template + ": " + change.Change
+		if change.Before != "" || change.After != "" {
+			fact += " Before: " + change.Before + "; after: " + change.After + "."
+		}
+		parts = append(parts, fact)
+	}
+	for _, change := range pl.Lifecycle {
+		if len(parts) >= 3+maxFacts {
+			break
+		}
+		parts = append(parts, change.Template+": template "+string(change.Lifecycle)+".")
+	}
+	return strings.Join(parts, " · ")
 }
 
 // validateLifecycleApprovalShape checks the immutable event bytes before any

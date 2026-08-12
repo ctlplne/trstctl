@@ -50,6 +50,7 @@ import type {
   ActiveActiveIssuancePlan,
   ADCSInventorySource as GenADCSInventorySource,
   ADCSPosture as GenADCSPosture,
+  ADCSDriftHistory as GenADCSDriftHistory,
   ADCSDatabaseList as GenADCSDatabaseList,
   ADCSTemplate as GenADCSTemplate,
   Agent as GenAgent,
@@ -489,6 +490,7 @@ export type ExternalCA = GenExternalCA;
 export type CADiscovery = CADiscoveryInventory;
 export type Identity = GenIdentity;
 export type ADCSPosture = GenADCSPosture;
+export type ADCSDriftHistory = GenADCSDriftHistory;
 export type ADCSInventorySource = GenADCSInventorySource;
 export type ADCSDatabaseList = GenADCSDatabaseList;
 export type ADCSTemplate = GenADCSTemplate;
@@ -1468,6 +1470,7 @@ export interface Api {
   discoveryMonitoring(): Promise<DiscoveryMonitoring>;
   /** F1: AD CS certificate template posture observed by an in-domain relay. */
   adcsPosture(): Promise<ADCSPosture>;
+  adcsDrift(): Promise<ADCSDriftHistory>;
   /** F4: per-CA certificate-database lifecycle visibility. */
   adcsDatabases(): Promise<ADCSDatabaseList>;
   discoveryCoverage(options?: { class?: string; sourceKind?: string }): Promise<DiscoveryCoverage>;
@@ -1901,6 +1904,7 @@ const liveApi: Api = {
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
   adcsPosture: () => req<ADCSPosture>("/api/v1/posture/adcs"),
+  adcsDrift: () => req<ADCSDriftHistory>("/api/v1/posture/adcs/drift"),
   adcsDatabases: () => req<ADCSDatabaseList>("/api/v1/adcs/ca-database"),
   discoveryCoverage: (options) => {
     const qs = new URLSearchParams();

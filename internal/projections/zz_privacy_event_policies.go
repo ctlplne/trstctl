@@ -28,6 +28,17 @@ type privacyDiscoveryRunQueued struct {
 	InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
 }
 
+// privacyADCSTemplateDriftV1 is the historical append-only payload. It is
+// closed here even though the projector deliberately treats it as a no-op:
+// privacy import/erasure must still reject unknown fields under the old schema.
+type privacyADCSTemplateDriftV1 struct {
+	Domain    string                          `json:"domain"`
+	Agent     string                          `json:"agent"`
+	Changes   []adcsdiscovery.TemplateChange  `json:"changes"`
+	Lifecycle []adcsdiscovery.LifecycleChange `json:"lifecycle"`
+	Worsened  bool                            `json:"worsened"`
+}
+
 func privacyRules(rules ...events.PrivacyFieldRule) events.PrivacyEventPolicy {
 	return events.PrivacyEventPolicy{Rules: rules}
 }
@@ -1200,34 +1211,38 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 // version even when the existing schema was designed to carry no personal data.
 func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	return map[privacyEventPolicyKey]events.PrivacyPayloadShape{
-		{audit.EventTypeArchived, audit.ArchivedEventSchemaVersion}: privacyPayloadShape[audit.ArchivedEvent](),
-		{EventTenantRegistered, 1}:                                  privacyPayloadShape[tenantRegistered](),
-		{EventTenantOffboarded, 1}:                                  privacyPayloadShape[tenantOffboarded](),
-		{EventOwnershipReconciled, 1}:                               privacyPayloadShape[OwnershipReconciled](),
-		{EventCMDBScheduleConfigured, 1}:                            privacyPayloadShape[CMDBScheduleConfigured](),
-		{EventTicketIntakeConfigured, 1}:                            privacyPayloadShape[TicketIntakeConfigured](),
-		{EventEnrollmentDiagnosticObserved, 1}:                      privacyPayloadShape[EnrollmentDiagnosticObserved](),
-		{EventMDMDeviceCorrelated, 1}:                               privacyPayloadShape[MDMDeviceCorrelated](),
-		{EventMDMPollConfigured, 1}:                                 privacyPayloadShape[MDMPollConfigured](),
-		{EventEdgeSegmentPolicySet, 1}:                              privacyPayloadShape[edgeSegmentPolicySetV1](),
-		{EventEdgeSegmentPolicySet, EdgeCustodyEventSchemaVersion}:  privacyPayloadShape[EdgeSegmentPolicySet](),
-		{EventEdgeDelegationIssued, 1}:                              privacyPayloadShape[edgeDelegationIssuedV1](),
-		{EventEdgeDelegationIssued, EdgeCustodyEventSchemaVersion}:  privacyPayloadShape[EdgeDelegationIssued](),
-		{EventEdgeDelegationRevoked, 1}:                             privacyPayloadShape[EdgeDelegationRevoked](),
-		{EventEdgeIssuanceReconciled, 1}:                            privacyPayloadShape[EdgeIssuanceReconciled](),
-		{EventADCSDatabaseIngested, 1}:                              privacyPayloadShape[ADCSDatabaseIngested](),
-		{EventADCSInventoryObserved, 1}:                             privacyPayloadShape[adcsdiscovery.InventoryObserved](),
-		{EventOwnershipConflictResolved, 1}:                         privacyPayloadShape[OwnershipConflictResolved](),
-		{EventAgentUpgradeCampaignOpened, 1}:                        privacyPayloadShape[AgentUpgradeCampaignOpened](),
-		{EventAgentUpgradeCampaignAdvanced, 1}:                      privacyPayloadShape[AgentUpgradeCampaignAdvanced](),
-		{EventAgentUpgradeRingAssigned, 1}:                          privacyPayloadShape[AgentUpgradeRingAssigned](),
-		{EventAgentUpgradeRingDispatched, 1}:                        privacyPayloadShape[AgentUpgradeRingDispatched](),
-		{EventIssuerCreated, 1}:                                     privacyPayloadShape[IssuerCreated](),
-		{EventCertificateSuperseded, 1}:                             privacyPayloadShape[CertificateSuperseded](),
-		{EventCAIssuedCertificate, 1}:                               privacyPayloadShape[CAIssuedCertificate](),
-		{EventCACertificateRevoked, 1}:                              privacyPayloadShape[CACertificateRevoked](),
-		{EventCACeremonyStarted, 1}:                                 privacyPayloadShape[CACeremonyStarted](),
-		{EventCACeremonyApproved, 1}:                                privacyPayloadShape[CACeremonyApproved](),
+		{audit.EventTypeArchived, audit.ArchivedEventSchemaVersion}:           privacyPayloadShape[audit.ArchivedEvent](),
+		{EventTenantRegistered, 1}:                                            privacyPayloadShape[tenantRegistered](),
+		{EventTenantOffboarded, 1}:                                            privacyPayloadShape[tenantOffboarded](),
+		{EventOwnershipReconciled, 1}:                                         privacyPayloadShape[OwnershipReconciled](),
+		{EventCMDBScheduleConfigured, 1}:                                      privacyPayloadShape[CMDBScheduleConfigured](),
+		{EventTicketIntakeConfigured, 1}:                                      privacyPayloadShape[TicketIntakeConfigured](),
+		{EventEnrollmentDiagnosticObserved, 1}:                                privacyPayloadShape[EnrollmentDiagnosticObserved](),
+		{EventMDMDeviceCorrelated, 1}:                                         privacyPayloadShape[MDMDeviceCorrelated](),
+		{EventMDMPollConfigured, 1}:                                           privacyPayloadShape[MDMPollConfigured](),
+		{EventEdgeSegmentPolicySet, 1}:                                        privacyPayloadShape[edgeSegmentPolicySetV1](),
+		{EventEdgeSegmentPolicySet, EdgeCustodyEventSchemaVersion}:            privacyPayloadShape[EdgeSegmentPolicySet](),
+		{EventEdgeDelegationIssued, 1}:                                        privacyPayloadShape[edgeDelegationIssuedV1](),
+		{EventEdgeDelegationIssued, EdgeCustodyEventSchemaVersion}:            privacyPayloadShape[EdgeDelegationIssued](),
+		{EventEdgeDelegationRevoked, 1}:                                       privacyPayloadShape[EdgeDelegationRevoked](),
+		{EventEdgeIssuanceReconciled, 1}:                                      privacyPayloadShape[EdgeIssuanceReconciled](),
+		{EventADCSDatabaseIngested, 1}:                                        privacyPayloadShape[ADCSDatabaseIngested](),
+		{EventADCSInventoryObserved, 1}:                                       privacyPayloadShape[adcsdiscovery.InventoryObserved](),
+		{EventADCSTemplateDriftObserved, 1}:                                   privacyPayloadShape[privacyADCSTemplateDriftV1](),
+		{EventADCSTemplateDriftWorsened, 1}:                                   privacyPayloadShape[privacyADCSTemplateDriftV1](),
+		{EventADCSTemplateDriftObserved, ADCSTemplateDriftEventSchemaVersion}: privacyPayloadShape[ADCSTemplateDriftObserved](),
+		{EventADCSTemplateDriftWorsened, ADCSTemplateDriftEventSchemaVersion}: privacyPayloadShape[ADCSTemplateDriftObserved](),
+		{EventOwnershipConflictResolved, 1}:                                   privacyPayloadShape[OwnershipConflictResolved](),
+		{EventAgentUpgradeCampaignOpened, 1}:                                  privacyPayloadShape[AgentUpgradeCampaignOpened](),
+		{EventAgentUpgradeCampaignAdvanced, 1}:                                privacyPayloadShape[AgentUpgradeCampaignAdvanced](),
+		{EventAgentUpgradeRingAssigned, 1}:                                    privacyPayloadShape[AgentUpgradeRingAssigned](),
+		{EventAgentUpgradeRingDispatched, 1}:                                  privacyPayloadShape[AgentUpgradeRingDispatched](),
+		{EventIssuerCreated, 1}:                                               privacyPayloadShape[IssuerCreated](),
+		{EventCertificateSuperseded, 1}:                                       privacyPayloadShape[CertificateSuperseded](),
+		{EventCAIssuedCertificate, 1}:                                         privacyPayloadShape[CAIssuedCertificate](),
+		{EventCACertificateRevoked, 1}:                                        privacyPayloadShape[CACertificateRevoked](),
+		{EventCACeremonyStarted, 1}:                                           privacyPayloadShape[CACeremonyStarted](),
+		{EventCACeremonyApproved, 1}:                                          privacyPayloadShape[CACeremonyApproved](),
 		{EventCARootCreated, 1}: events.PrivacyPayloadShapeOneOf(
 			privacyPayloadShape[privacyLegacyCARootCreated](),
 			privacyPayloadShape[privacyLegacyCARootCreatedWithSigner](),
