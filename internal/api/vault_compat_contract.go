@@ -82,7 +82,7 @@ func vaultCompatParameters(rt vaultCompatRoute) []Parameter {
 			Description: "Vault KV v2 secret path below the secret/ mount.",
 			Schema:      str(),
 		})
-	case "/v1/pki/issue/{role}":
+	case "/v1/pki/issue/{role}", "/v1/pki/sign/{role}":
 		out = append(out, Parameter{
 			Name:        "role",
 			In:          "path",
@@ -138,7 +138,7 @@ func vaultCompatErrorCodes(rt vaultCompatRoute) []string {
 		return []string{"400", "403", "404", "409", "413", "429", "500"}
 	case rt.contractPath == "/v1/secret/data/{name}":
 		return []string{"400", "403", "404", "429", "500"}
-	case rt.contractPath == "/v1/pki/issue/{role}":
+	case rt.contractPath == "/v1/pki/issue/{role}" || rt.contractPath == "/v1/pki/sign/{role}":
 		return []string{"400", "403", "413", "422", "429", "503"}
 	default:
 		return []string{"403", "429", "500"}
@@ -207,11 +207,21 @@ func vaultCompatSchemas() map[string]*Schema {
 			"certificate":   str(),
 			"private_key":   str(),
 		}, "serial_number", "certificate", "private_key"),
+		"VaultPKISignRequest": object(map[string]*Schema{
+			"csr":         str(),
+			"ttl":         str(),
+			"ttl_seconds": intSchema,
+		}, "csr"),
+		"VaultPKISignData": object(map[string]*Schema{
+			"serial_number": str(),
+			"certificate":   str(),
+		}, "serial_number", "certificate"),
 		"VaultMountInfoResponse":       vaultCompatEnvelope("VaultMountInfo", anySchema),
 		"VaultTokenLookupSelfResponse": vaultCompatEnvelope("VaultTokenLookupSelf", anySchema),
 		"VaultKVWriteResponse":         vaultCompatEnvelope("VaultKVMetadata", anySchema),
 		"VaultKVReadResponse":          vaultCompatEnvelope("VaultKVReadData", anySchema),
 		"VaultPKIIssueResponse":        vaultCompatEnvelope("VaultPKIIssueData", anySchema),
+		"VaultPKISignResponse":         vaultCompatEnvelope("VaultPKISignData", anySchema),
 	}
 }
 

@@ -73,6 +73,7 @@ type servedHarness struct {
 	signer SignerProvider
 	authz  *crypto.SignAuthorizer
 	caFile string
+	kek    sealKeyWrapper
 
 	externalCADispatcherOnce sync.Once
 }
@@ -200,6 +201,7 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	return &servedHarness{
 		srv: srv, ts: ts, tenant: servedTestTenant, caPEM: srv.CACertPEM(),
 		log: log, store: st, signer: signerProvider, authz: authz, caFile: caFile,
+		kek: deps.KEK,
 	}
 }
 

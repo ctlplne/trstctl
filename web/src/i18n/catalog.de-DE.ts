@@ -261,6 +261,17 @@ const deDECatalog = {
   "request.csr.label": "Zertifikatsignieranforderung (PKCS#10)",
   "request.csr.omitted":
     "Lassen Sie dies leer, erzeugt trstctl den privaten Schl\u00fcssel selbst und gibt ihn zur\u00fcck \u2014 ein veralteter Weg, der bei jeder Ausf\u00fchrung ein issuance.server_side_keygen-Ereignis aufzeichnet.",
+  "secrets.pki.custodyLabel": "Schlüsselverwahrung",
+  "secrets.pki.csrMode": "Meine CSR signieren (empfohlen)",
+  "secrets.pki.csrHelp":
+    "Erstellen Sie diese CSR dort, wo das Zertifikat verwendet wird. trstctl erhält die öffentliche Anfrage, signiert sie und sieht den passenden privaten Schlüssel nie.",
+  "secrets.pki.csrPlaceholder": "-----BEGIN CERTIFICATE REQUEST-----",
+  "secrets.pki.legacyMode": "Schlüssel erzeugen und zurückgeben (veraltet)",
+  "secrets.pki.legacyWarning":
+    "trstctl erzeugt diesen privaten Schlüssel und gibt ihn zurück. Diese veraltete Auswahl zeichnet vor der Schlüsselerzeugung dauerhafte Audit-Nachweise auf.",
+  "secrets.pki.auditLink": "Jede veraltete Verwendung im Audit prüfen.",
+  "secrets.pki.csrResult": "Nur Zertifikat. Der private Schlüssel bleibt dort, wo Sie die CSR erzeugt haben.",
+  "secrets.pki.legacyResult": "Jetzt kopieren oder herunterladen. Diese veraltete Antwort enthält Zertifikat und privaten Schlüssel.",
   "request.wizard.profile.label": "Profil wählen",
   "request.wizard.profile.description": "Das Ausstellungsprofil bestimmt Schlüsseltyp, Laufzeit und wie viele Freigaben die Anforderung benötigt.",
   "request.wizard.details.label": "Credential benennen",

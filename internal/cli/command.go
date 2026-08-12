@@ -474,7 +474,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "scans", "run"}, Method: "POST", Path: "/api/v1/secrets/scans", Body: bodyFile, Summary: "Run Gitleaks and record redacted scan findings"},
 	{Name: []string{"secrets", "shares", "create"}, Method: "POST", Path: "/api/v1/secrets/shares", Body: bodyFile, Summary: "Create a secret share"},
 	{Name: []string{"secrets", "shares", "redeem"}, Method: "POST", Path: "/api/v1/secrets/shares/redeem", Body: bodyFile, Summary: "Redeem a secret share"},
-	{Name: []string{"secrets", "pki"}, Method: "POST", Path: "/api/v1/secrets/pki", Body: bodyFile, Summary: "Issue a dynamic PKI secret"},
+	{Name: []string{"secrets", "pki"}, Method: "POST", Path: "/api/v1/secrets/pki", Body: bodyFile, Summary: "Sign a requester CSR or explicitly request a deprecated server-generated PKI keypair"},
 
 	// Transit/EaaS served key operations (KMS-01/F66). These commands call fixed
 	// compile-time Go handlers behind internal/crypto, matching prior-art adapter

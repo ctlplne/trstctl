@@ -2788,7 +2788,8 @@ when off, requiring a KEK when on):
 - The Vault/OpenBao compatibility shim backs the common migration paths
   `GET /v1/auth/token/lookup-self`, KV mount-discovery preflight for
   `secret/`, `POST/PUT/GET /v1/secret/data/{path}`, and
-  `POST/PUT /v1/pki/issue/{role}` for stock `vault` CLI token lookup, KV v2
+  `POST/PUT /v1/pki/sign/{role}` for requester-generated CSRs, and the deprecated
+  `POST/PUT /v1/pki/issue/{role}` server-keygen path for stock `vault` CLI token lookup, KV v2
   put/get, and PKI issue — deliberately a subset over the native secret store
   and dynamic PKI secret; it does not implement Vault mount management, ACL
   policy authoring, cubbyhole, response wrapping, transit paths, or every
@@ -2833,10 +2834,13 @@ when off, requiring a KEK when on):
   retained, and a newer command exists; the newest lineage fence and all claimed
   or ambiguous rows remain.
 - PKI-as-a-secret / dynamic certificate leasing (F67) backs
-  `POST /api/v1/secrets/pki` — issues a short-lived certificate and its
-  private key (a usable TLS identity, `tls.X509KeyPair`-loadable) through the
-  issuing CA in the out-of-process signer, recorded on the served revocation
-  pipeline so a revoked dynamic-secret cert stops validating.
+  `POST /api/v1/secrets/pki`. Its recommended `csr_pem` mode signs a
+  requester-generated PKCS#10 request and returns only the certificate. The
+  mutually exclusive `common_name` mode still returns a usable certificate and
+  private key for compatibility, but is deprecated and fails before key generation
+  unless its `issuance.server_side_keygen` receipt is durable. Both modes use the
+  issuing CA in the out-of-process signer and record the serial on the served
+  revocation pipeline so a revoked dynamic-secret cert stops validating.
 - Secret sharing (F60) backs `POST /api/v1/secrets/shares` + `.../redeem` —
   a one-time self-destructing share that redeems exactly once; the bearer
   token is never written to the audit/event log.
@@ -3764,8 +3768,8 @@ key and whose disk holds it is answered in one CI-checked table at
 [Key custody](custody.md), not in prose scattered across pages. The short
 version: every enrollment protocol, and the identity API when given a CSR,
 generate keys in your environment and the control plane never sees them; CA
-keys are created inside the isolated signer and never leave it; and three
-paths still generate a subject key in the control plane, each named there
+keys are created inside the isolated signer and never leave it; and every
+remaining path that can generate a subject key in the control plane is named there
 with what replaces it. The identity API without a CSR is one of those three:
 it still works for one release train and records an
 `issuance.server_side_keygen` event every time it runs, so you can find which

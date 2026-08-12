@@ -200,7 +200,8 @@ diff, a version-history selector, and an explicit disabled bulk-import disclosur
 (the server route returns `501` until atomic event-sourced batch commands exist). See
 [Secrets](features/secrets.md). Backed by `/api/v1/secrets/store` and
 `/api/v1/secrets/store/{name}`. **Secret engines** (`/secrets/engines`) holds
-dynamic leases, PKI-as-a-secrets-engine, and the transit console for
+dynamic leases, CSR-first PKI-as-a-secrets-engine (the default; certificate-only),
+an explicit deprecated key-returning mode linked to its Audit receipts, and the transit console for
 encrypt/decrypt/HMAC against a managed key (`/api/v1/transit/*`).
 **One-time shares** (`/secrets/sharing`) covers reveal-once shares and ephemeral
 API keys, and **CI scanning** (`/secrets/scanning`) the pipeline secret-detection

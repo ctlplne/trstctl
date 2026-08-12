@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -219,18 +220,21 @@ func (a *API) approveSecretChange(w http.ResponseWriter, r *http.Request) {
 
 type pkiSecretRequest struct {
 	CommonName string `json:"common_name"`
+	// CSRPEM selects requester-key custody. It is mutually exclusive with
+	// CommonName: the CSR supplies the subject and public key, while the matching
+	// private key never enters the control plane (AUD-24/B1).
+	CSRPEM     string `json:"csr_pem,omitempty"`
 	TTLSeconds int    `json:"ttl_seconds"`
 }
 
-// pkiSecretResponse returns the dynamic PKI secret: the leaf certificate AND its
-// matching private key (the GAP-004 fix — a bare cert is unusable). Returned only
-// here, to the authorized caller; the key never leaves the boundary in a log/event
-// (AN-8).
+// pkiSecretResponse returns a certificate and, only for the deprecated legacy
+// mode, its matching control-plane-generated private key. CSR-first responses omit
+// PrivateKey entirely because that key exists only at the requester (AUD-24/B1).
 type pkiSecretResponse struct {
 	Serial      string          `json:"serial"`
 	CommonName  string          `json:"common_name"`
-	Certificate secretJSONBytes `json:"certificate"` // leaf cert PEM
-	PrivateKey  secretJSONBytes `json:"private_key"` // leaf private key PEM (PKCS#8)
+	Certificate secretJSONBytes `json:"certificate"`           // leaf cert PEM
+	PrivateKey  secretJSONBytes `json:"private_key,omitempty"` // legacy leaf private key PEM (PKCS#8)
 }
 
 // issuePKISecret issues a short-lived certificate + key as a dynamic secret (F67),
@@ -248,20 +252,54 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "dynamic PKI secret issuance unavailable — no issuing CA"))
 		return
 	}
+	var req pkiSecretRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	req.CommonName = strings.TrimSpace(req.CommonName)
+	req.CSRPEM = strings.TrimSpace(req.CSRPEM)
+	if (req.CommonName == "") == (req.CSRPEM == "") {
+		a.writeError(w, errStatus(http.StatusBadRequest, "exactly one of common_name or csr_pem is required"))
+		return
+	}
+	var csrDER []byte
+	if req.CSRPEM != "" {
+		var err error
+		csrDER, req.CommonName, err = decodePKISecretCSR([]byte(req.CSRPEM))
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+			return
+		}
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, err := pkiSecretRequestBinding(principal, r.Method, r.URL.EscapedPath(), req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		var req pkiSecretRequest
-		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		if req.CommonName == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "common_name is required")
-		}
+	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner)
-		cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{
-			Role: req.CommonName,
-			TTL:  time.Duration(req.TTLSeconds) * time.Second,
-		})
+		ttl := time.Duration(req.TTLSeconds) * time.Second
+		var (
+			cred dynsecret.Credential
+			err  error
+		)
+		if req.CSRPEM != "" {
+			cred, err = provider.GenerateFromCSR(ctx, csrDER, ttl)
+		} else {
+			// Fail closed before creating the key: a legacy custody choice is allowed
+			// only when its immutable deprecation receipt is already durable.
+			if evidenceErr := a.recordPKIServerSideKeygen(ctx, tenantID, req.CommonName, "native_pki_secret"); evidenceErr != nil {
+				return 0, nil, errStatus(http.StatusServiceUnavailable, evidenceErr.Error())
+			}
+			cred, err = provider.Generate(ctx, dynsecret.GenerateRequest{Role: req.CommonName, TTL: ttl})
+		}
 		if err != nil {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
 		}
@@ -273,7 +311,77 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 		secret.Wipe(cred.Secret) // cert/key PEM bytes now live only in resp until JSON encoding finishes
 		a.auditSecret(ctx, "pkisecret.issued", tenantID, req.CommonName, 0)
 		return http.StatusCreated, resp, nil
+	}, false)
+}
+
+func pkiSecretRequestBinding(principal, method, escapedPath string, req pkiSecretRequest) (string, error) {
+	encoded, err := json.Marshal(struct {
+		Domain      string           `json:"domain"`
+		Principal   string           `json:"principal"`
+		Method      string           `json:"method"`
+		EscapedPath string           `json:"escaped_path"`
+		Request     pkiSecretRequest `json:"request"`
+	}{
+		Domain:      "trstctl.api.pki-secret-request-binding.v1",
+		Principal:   principal,
+		Method:      method,
+		EscapedPath: escapedPath,
+		Request:     req,
 	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(encoded)
+	return crypto.SHA256Hex(encoded), nil
+}
+
+// decodePKISecretCSR accepts exactly one PKCS#10 PEM block and validates its
+// self-signature through internal/crypto (AN-3). Extra blocks or non-whitespace
+// bytes are rejected so a caller cannot smuggle ambiguous input past the custody
+// decision.
+func decodePKISecretCSR(csrPEM []byte) ([]byte, string, error) {
+	block, rest := pem.Decode(csrPEM)
+	if block == nil {
+		return nil, "", errors.New("csr_pem is not PEM")
+	}
+	if block.Type != "CERTIFICATE REQUEST" && block.Type != "NEW CERTIFICATE REQUEST" {
+		return nil, "", fmt.Errorf("csr_pem block is %q, want CERTIFICATE REQUEST", block.Type)
+	}
+	if strings.TrimSpace(string(rest)) != "" {
+		return nil, "", errors.New("csr_pem must contain exactly one certificate request")
+	}
+	info, err := crypto.InspectCSR(block.Bytes)
+	if err != nil {
+		return nil, "", fmt.Errorf("csr_pem is not a valid self-signed PKCS#10 request: %w", err)
+	}
+	if strings.TrimSpace(info.CommonName) == "" {
+		return nil, "", errors.New("csr_pem common name is required")
+	}
+	return append([]byte(nil), block.Bytes...), strings.TrimSpace(info.CommonName), nil
+}
+
+func (a *API) recordPKIServerSideKeygen(ctx context.Context, tenantID, commonName, surface string) error {
+	if a.secrets == nil || a.secrets.be.Audit == nil {
+		return errors.New("PKI server-side key generation evidence is unavailable")
+	}
+	payload, err := json.Marshal(struct {
+		IdentityID string `json:"identity_id"`
+		Name       string `json:"name"`
+		Detail     string `json:"detail"`
+		Successor  string `json:"successor"`
+	}{
+		IdentityID: "",
+		Name:       commonName,
+		Detail:     surface + ": the control plane was asked to generate and return this PKI-secret subject key; this path is deprecated",
+		Successor:  "supply csr_pem (or use Vault/OpenBao pki/sign) so the private key is generated where the certificate will be used",
+	})
+	if err != nil {
+		return fmt.Errorf("encode PKI server-side key generation evidence: %w", err)
+	}
+	if err := auditsink.Emit(ctx, a.secrets.be.Audit, nil, "issuance.server_side_keygen", tenantID, payload); err != nil {
+		return fmt.Errorf("record PKI server-side key generation evidence: %w", err)
+	}
+	return nil
 }
 
 // ---- machine login (authmethod, F58) ---------------------------------------

@@ -106,21 +106,10 @@ func (p *PKIProvider) TenantID() string { return p.tenantID }
 // in the lease Role (the "secret name"); the profile and policy gate it.
 func (p *PKIProvider) Generate(ctx context.Context, req dynsecret.GenerateRequest) (dynsecret.Credential, error) {
 	cn := req.Role
-	if cn == "" {
-		return dynsecret.Credential{}, fmt.Errorf("pkisecret: common name required")
+	if err := p.validateCommonName(cn); err != nil {
+		return dynsecret.Credential{}, err
 	}
-	if len(p.profile.AllowedCommonNames) > 0 && !p.profile.AllowedCommonNames[cn] {
-		return dynsecret.Credential{}, fmt.Errorf("pkisecret: common name %q not permitted by profile %q", cn, p.profile.Name)
-	}
-	if p.gate != nil {
-		if ok, reason := p.gate(cn); !ok {
-			return dynsecret.Credential{}, fmt.Errorf("pkisecret: policy denied %q: %s", cn, reason)
-		}
-	}
-	ttl := req.TTL
-	if ttl <= 0 || (p.profile.MaxTTL > 0 && ttl > p.profile.MaxTTL) {
-		ttl = p.profile.MaxTTL // profile-enforced cap
-	}
+	ttl := p.constrainTTL(req.TTL)
 	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		return dynsecret.Credential{}, err
@@ -130,7 +119,91 @@ func (p *PKIProvider) Generate(ctx context.Context, req dynsecret.GenerateReques
 	if err != nil {
 		return dynsecret.Credential{}, err
 	}
-	certDER, err := crypto.SignLeafFromCSR(p.caCertDER, p.caSigner, csr, ttl)
+	cred, err := p.signAndRecord(ctx, cn, csr, ttl)
+	if err != nil {
+		return dynsecret.Credential{}, err
+	}
+	// Hand the requester the certificate AND its matching leaf private key — a
+	// bare cert is unusable as a TLS identity. The key leaves the locked buffer
+	// only as a PKCS#8 PEM block in the returned Secret; the transient unsealed
+	// DER copy is zeroized immediately after encode (AN-8).
+	keyDER, err := leafKey.PKCS8()
+	if err != nil {
+		return dynsecret.Credential{}, fmt.Errorf("pkisecret: export leaf key: %w", err)
+	}
+	bundle := cred.Secret
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	secret.Wipe(keyDER) // wipe the transient unsealed DER copy
+	bundle = append(bundle, keyPEM...)
+	secret.Wipe(keyPEM) // keyPEM bytes now live only inside bundle (the returned Secret)
+	cred.Secret = bundle
+	return cred, nil
+}
+
+// GenerateFromCSR signs a caller-generated PKCS#10 request and returns only the
+// certificate. The provider never receives or creates the matching private key;
+// this is the custody-safe PKI-as-a-secret mode used by the native and
+// Vault/OpenBao signing routes (AUD-24/B1).
+func (p *PKIProvider) GenerateFromCSR(ctx context.Context, csrDER []byte, ttl time.Duration) (dynsecret.Credential, error) {
+	info, err := crypto.InspectCSR(csrDER)
+	if err != nil {
+		return dynsecret.Credential{}, fmt.Errorf("pkisecret: invalid certificate request: %w", err)
+	}
+	if err := p.validateCommonName(info.CommonName); err != nil {
+		return dynsecret.Credential{}, err
+	}
+	for _, dnsName := range info.DNSNames {
+		if err := p.validateCommonName(dnsName); err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("pkisecret: DNS SAN: %w", err)
+		}
+	}
+	// The legacy PKI-secret profile described only DNS common names. Accepting
+	// unconstrained IP, email, or URI SANs in the new CSR path would silently make
+	// that profile broader than the route it replaces, so these types stay closed
+	// until Profile grows explicit allow-lists for them.
+	if len(info.IPAddresses) > 0 || len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
+		return dynsecret.Credential{}, fmt.Errorf("pkisecret: CSR requests SAN types this profile does not permit")
+	}
+	switch info.KeyAlgorithm {
+	case "RSA":
+		if info.KeyBits < 2048 {
+			return dynsecret.Credential{}, fmt.Errorf("pkisecret: RSA subject key is %d bits, want at least 2048", info.KeyBits)
+		}
+	case "ECDSA":
+		if info.KeyBits < 256 {
+			return dynsecret.Credential{}, fmt.Errorf("pkisecret: ECDSA subject key is %d bits, want at least 256", info.KeyBits)
+		}
+	case "Ed25519":
+	default:
+		return dynsecret.Credential{}, fmt.Errorf("pkisecret: subject key algorithm %q is not supported", info.KeyAlgorithm)
+	}
+	return p.signAndRecord(ctx, info.CommonName, csrDER, p.constrainTTL(ttl))
+}
+
+func (p *PKIProvider) validateCommonName(cn string) error {
+	if cn == "" {
+		return fmt.Errorf("pkisecret: common name required")
+	}
+	if len(p.profile.AllowedCommonNames) > 0 && !p.profile.AllowedCommonNames[cn] {
+		return fmt.Errorf("pkisecret: common name %q not permitted by profile %q", cn, p.profile.Name)
+	}
+	if p.gate != nil {
+		if ok, reason := p.gate(cn); !ok {
+			return fmt.Errorf("pkisecret: policy denied %q: %s", cn, reason)
+		}
+	}
+	return nil
+}
+
+func (p *PKIProvider) constrainTTL(ttl time.Duration) time.Duration {
+	if ttl <= 0 || (p.profile.MaxTTL > 0 && ttl > p.profile.MaxTTL) {
+		return p.profile.MaxTTL
+	}
+	return ttl
+}
+
+func (p *PKIProvider) signAndRecord(ctx context.Context, cn string, csrDER []byte, ttl time.Duration) (dynsecret.Credential, error) {
+	certDER, err := crypto.SignLeafFromCSR(p.caCertDER, p.caSigner, csrDER, ttl)
 	if err != nil {
 		return dynsecret.Credential{}, fmt.Errorf("pkisecret: sign cert: %w", err)
 	}
@@ -145,20 +218,12 @@ func (p *PKIProvider) Generate(ctx context.Context, req dynsecret.GenerateReques
 	if p.sink != nil {
 		_ = p.sink.RecordIssued(ctx, p.tenantID, p.caID, serial)
 	}
-	// Hand the requester the certificate AND its matching leaf private key — a
-	// bare cert is unusable as a TLS identity. The key leaves the locked buffer
-	// only as a PKCS#8 PEM block in the returned Secret; the transient unsealed
-	// DER copy is zeroized immediately after encode (AN-8).
-	keyDER, err := leafKey.PKCS8()
-	if err != nil {
-		return dynsecret.Credential{}, fmt.Errorf("pkisecret: export leaf key: %w", err)
-	}
 	bundle := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	secret.Wipe(keyDER) // wipe the transient unsealed DER copy
-	bundle = append(bundle, keyPEM...)
-	secret.Wipe(keyPEM) // keyPEM bytes now live only inside bundle (the returned Secret)
-	return dynsecret.Credential{BackendRef: serial, Secret: bundle, Metadata: map[string]string{"cn": cn, "serial": serial}}, nil
+	return dynsecret.Credential{
+		BackendRef: serial,
+		Secret:     bundle,
+		Metadata:   map[string]string{"cn": cn, "serial": serial},
+	}, nil
 }
 
 // Revoke records an issued certificate as revoked (idempotent). When a revocation

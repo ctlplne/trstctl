@@ -99,6 +99,7 @@ type Schema struct {
 	Items       *Schema            `json:"items,omitempty"`
 	Properties  map[string]*Schema `json:"properties,omitempty"`
 	Required    []string           `json:"required,omitempty"`
+	OneOf       []*Schema          `json:"oneOf,omitempty"`
 	Enum        []string           `json:"enum,omitempty"`
 	// AdditionalProperties types free-key maps (e.g. principal -> scopes).
 	AdditionalProperties *Schema `json:"additionalProperties,omitempty"`
@@ -4536,11 +4537,20 @@ func componentSchemas() map[string]*Schema {
 		"at": timestamp(),
 	}, "at")
 	pkiSecretReq := object(map[string]*Schema{
-		"common_name": str(), "ttl_seconds": {Type: "integer"},
-	}, "common_name")
+		"common_name": {
+			Type:        "string",
+			Description: "Deprecated server-side-keygen mode: trstctl generates and returns the subject key, and records issuance.server_side_keygen before doing so.",
+		},
+		"csr_pem": {
+			Type:        "string",
+			Description: "Recommended requester-key mode: one self-signed PKCS#10 PEM request. trstctl signs it and never receives or returns the matching private key.",
+		},
+		"ttl_seconds": {Type: "integer"},
+	})
+	pkiSecretReq.OneOf = []*Schema{{Required: []string{"common_name"}}, {Required: []string{"csr_pem"}}}
 	pkiSecret := object(map[string]*Schema{
 		"serial": str(), "common_name": str(), "certificate": str(), "private_key": str(),
-	}, "serial", "certificate", "private_key")
+	}, "serial", "common_name", "certificate")
 	machineLoginReq := object(map[string]*Schema{
 		"method": str(), "credential": str(),
 	}, "credential")

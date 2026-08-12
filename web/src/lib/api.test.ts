@@ -1235,10 +1235,14 @@ describe("secrets contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
 
-    mockFetch(201, JSON.stringify({ serial: "01", certificate: "CERT", private_key: "KEY" }));
-    await api.issuePKISecret({ common_name: "svc.internal", ttl_seconds: 600 });
+    mockFetch(201, JSON.stringify({ serial: "01", common_name: "svc.internal", certificate: "CERT" }));
+    await api.issuePKISecret({ csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----", ttl_seconds: 600 });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/pki");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----",
+      ttl_seconds: 600,
+    });
 
     mockFetch(200, JSON.stringify({ session_id: "sess-1", principal: "svc", method: "token", scopes: ["secrets:read"], expires_at: "2026-06-19T13:00:00Z" }));
     await api.machineLogin({ method: "token", credential: "machine-token" });

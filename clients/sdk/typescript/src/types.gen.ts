@@ -4446,7 +4446,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Issue a dynamic PKI secret (short-lived cert + key) */
+        /** Sign a requester CSR or issue a deprecated server-generated PKI keypair */
         post: operations["issuePKISecret"];
         delete?: never;
         options?: never;
@@ -9633,14 +9633,17 @@ export interface components {
         };
         PKISecret: {
             certificate: string;
-            common_name?: string;
-            private_key: string;
+            common_name: string;
+            private_key?: string;
             serial: string;
         };
         PKISecretRequest: {
-            common_name: string;
+            /** @description Deprecated server-side-keygen mode: trstctl generates and returns the subject key, and records issuance.server_side_keygen before doing so. */
+            common_name?: string;
+            /** @description Recommended requester-key mode: one self-signed PKCS#10 PEM request. trstctl signs it and never receives or returns the matching private key. */
+            csr_pem?: string;
             ttl_seconds?: number;
-        };
+        } & (unknown | unknown);
         PQCMigrationCampaign: {
             automated_execution_available: boolean;
             automated_execution_note: string;

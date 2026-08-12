@@ -1238,6 +1238,11 @@ describe("secrets surface", () => {
 
   it("issues PKI secrets, tests machine login, and creates/redeems one-time shares once", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
+    apiMock.issuePKISecret.mockResolvedValueOnce({
+      serial: "pki-csr-01",
+      common_name: "svc.internal",
+      certificate: "-----BEGIN CERTIFICATE-----\nCSR-CERT\n-----END CERTIFICATE-----",
+    });
     apiMock.redeemShare
       .mockResolvedValueOnce({ value: "redeemed-secret" })
       .mockRejectedValueOnce(new ApiError(410, JSON.stringify({ detail: "share already redeemed" })));
@@ -1245,14 +1250,35 @@ describe("secrets surface", () => {
     renderSecrets("/secrets/engines");
 
     const pkiForm = within(await screen.findByRole("form", { name: "Issue PKI secret" }));
-    await user.type(pkiForm.getByLabelText("Common name"), "svc.internal");
+    expect(pkiForm.getByLabelText("Key custody")).toHaveValue("csr");
+    await user.type(
+      pkiForm.getByLabelText("Certificate signing request (PKCS#10)"),
+      "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----",
+    );
     await user.clear(pkiForm.getByLabelText("TTL seconds"));
     await user.type(pkiForm.getByLabelText("TTL seconds"), "600");
     await user.click(pkiForm.getByRole("button", { name: /issue pki secret/i }));
 
-    await waitFor(() => expect(apiMock.issuePKISecret).toHaveBeenCalledWith({ common_name: "svc.internal", ttl_seconds: 600 }));
+    await waitFor(() =>
+      expect(apiMock.issuePKISecret).toHaveBeenCalledWith({
+        csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----",
+        ttl_seconds: 600,
+      }),
+    );
+    expect(await screen.findByText(/PKI bundle pki-csr-01/i)).toBeInTheDocument();
+    expect(screen.getByText(/Its private key remains where you generated the CSR/i)).toBeInTheDocument();
+    expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
+
+    cleanup();
+    renderSecrets("/secrets/engines");
+    const legacyForm = within(await screen.findByRole("form", { name: "Issue PKI secret" }));
+    await user.selectOptions(legacyForm.getByLabelText("Key custody"), "legacy");
+    await user.type(legacyForm.getByLabelText("Common name"), "legacy.internal");
+    await user.click(legacyForm.getByRole("button", { name: /issue pki secret/i }));
+    await waitFor(() => expect(apiMock.issuePKISecret).toHaveBeenCalledWith({ common_name: "legacy.internal", ttl_seconds: 900 }));
     expect(await screen.findByText(/PKI bundle pki-01/i)).toBeInTheDocument();
     expect(screen.getByText(/BEGIN PRIVATE KEY/)).toBeInTheDocument();
+    expect(legacyForm.getByRole("link", { name: /Review every legacy use in Audit/i })).toHaveAttribute("href", "/audit?type=issuance.server_side_keygen");
 
     cleanup();
     renderSecrets("/secrets/access");

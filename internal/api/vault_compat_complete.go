@@ -44,8 +44,8 @@ var vaultCompatCompleteRoutes = []vaultCompatRoute{
 	{method: http.MethodPut, pattern: "/v1/{mount}/rewrap/{name}", contractPath: "/v1/{mount}/rewrap/{name}", samplePath: "/v1/transit/rewrap/app", sampleBody: `{"ciphertext":"vault:v1:opaque"}`, operationID: "vaultCompatTransitRewrapPut", summary: "Rewrap a Vault-compatible transit ciphertext", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitRewrap) }},
 	{method: http.MethodPost, pattern: "/v1/{mount}/hmac/{name}", contractPath: "/v1/{mount}/hmac/{name}", samplePath: "/v1/transit/hmac/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitHMAC", summary: "Compute a Vault-compatible transit HMAC", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitHMAC) }},
 	{method: http.MethodPut, pattern: "/v1/{mount}/hmac/{name}", contractPath: "/v1/{mount}/hmac/{name}", samplePath: "/v1/transit/hmac/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitHMACPut", summary: "Compute a Vault-compatible transit HMAC", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitHMAC) }},
-	{method: http.MethodPost, pattern: "/v1/{mount}/sign/{name}", contractPath: "/v1/{mount}/sign/{name}", samplePath: "/v1/transit/sign/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitSign", summary: "Sign with a Vault-compatible transit key", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitSign) }},
-	{method: http.MethodPut, pattern: "/v1/{mount}/sign/{name}", contractPath: "/v1/{mount}/sign/{name}", samplePath: "/v1/transit/sign/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitSignPut", summary: "Sign with a Vault-compatible transit key", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysWrite, a.vaultTransitSign) }},
+	{method: http.MethodPost, pattern: "/v1/{mount}/sign/{name}", contractPath: "/v1/{mount}/sign/{name}", samplePath: "/v1/transit/sign/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitSign", summary: "Sign through a Vault-compatible transit key or PKI CSR mount", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth("", a.vaultMountedSign) }},
+	{method: http.MethodPut, pattern: "/v1/{mount}/sign/{name}", contractPath: "/v1/{mount}/sign/{name}", samplePath: "/v1/transit/sign/app", sampleBody: `{"input":"cGF5bG9hZA=="}`, operationID: "vaultCompatTransitSignPut", summary: "Sign through a Vault-compatible transit key or PKI CSR mount", successCode: "200", permission: authz.KeysWrite, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth("", a.vaultMountedSign) }},
 	{method: http.MethodPost, pattern: "/v1/{mount}/verify/{name}", contractPath: "/v1/{mount}/verify/{name}", samplePath: "/v1/transit/verify/app", sampleBody: `{"input":"cGF5bG9hZA==","signature":"vault:v1:opaque"}`, operationID: "vaultCompatTransitVerify", summary: "Verify a Vault-compatible transit signature", successCode: "200", permission: authz.KeysRead, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysRead, a.vaultTransitVerify) }},
 	{method: http.MethodPut, pattern: "/v1/{mount}/verify/{name}", contractPath: "/v1/{mount}/verify/{name}", samplePath: "/v1/transit/verify/app", sampleBody: `{"input":"cGF5bG9hZA==","signature":"vault:v1:opaque"}`, operationID: "vaultCompatTransitVerifyPut", summary: "Verify a Vault-compatible transit signature", successCode: "200", permission: authz.KeysRead, tokenRequired: true, mutation: true, requestSchema: "VaultGenericRequest", responseSchema: "VaultGenericResponse", handler: func(a *API) http.HandlerFunc { return a.vaultAuth(authz.KeysRead, a.vaultTransitVerify) }},
 }
@@ -243,6 +243,48 @@ func (a *API) vaultMountedPKIIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.vaultPKIIssue(w, r)
+}
+
+// vaultMountedSign resolves the tenant-authored mount before applying the
+// operation permission. Vault reuses /{mount}/sign/{name} for two different
+// engines: transit signing needs keys:write, while PKI CSR signing needs
+// secrets:write. The outer vaultAuth has already authenticated the request,
+// applied its Vault ACL, rate limit, actor, and tenant cipher; this second gate
+// selects the correct native permission without weakening either engine.
+func (a *API) vaultMountedSign(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.principal(r)
+	if err != nil {
+		writeVaultError(w, http.StatusForbidden, "permission denied")
+		return
+	}
+	target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
+	authorize := func(permission authz.Permission) bool {
+		if !principal.Can(permission, target) {
+			writeVaultError(w, http.StatusForbidden, "permission denied")
+			return false
+		}
+		if err := a.checkABAC(r.Context(), r, principal, permission, target); err != nil {
+			writeVaultError(w, vaultStatus(err), err.Error())
+			return false
+		}
+		return true
+	}
+	if err := a.resolveVaultMount(r, "pki"); err == nil {
+		if !authorize(authz.SecretsWrite) {
+			return
+		}
+		r.SetPathValue("role", r.PathValue("name"))
+		a.vaultPKISign(w, r)
+		return
+	}
+	if err := a.resolveVaultMount(r, "transit"); err != nil {
+		writeVaultError(w, vaultHTTPStatus(err), err.Error())
+		return
+	}
+	if !authorize(authz.KeysWrite) {
+		return
+	}
+	a.vaultTransitSign(w, r)
 }
 
 func vaultHTTPStatus(err error) int {

@@ -1278,7 +1278,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/secrets/shares", opID: "createShare", summary: "Create a one-time secret share (returns a bearer token)", handler: a.createShare, reqSchema: "ShareRequest", resSchema: "ShareToken", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/shares/redeem", opID: "redeemShare", summary: "Redeem a one-time secret share exactly once", handler: a.redeemShare, reqSchema: "ShareRedeemRequest", resSchema: "ShareValue", successCode: "200", mutation: true, sensitiveResponse: true, perm: authz.SecretsRead},
 
-		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Issue a dynamic PKI secret (short-lived cert + key)", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Sign a requester CSR or issue a deprecated server-generated PKI keypair", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200", sensitiveResponse: true},
 		// C-S2 (DA-02): read-only projection of the configured machine-auth
 		// methods — exactly the set machineLogin accepts. Methods stay declared

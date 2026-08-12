@@ -143,6 +143,105 @@ func TestPKISecretReturnsUsableKeypair(t *testing.T) {
 	}
 }
 
+// TestPKISecretSignsRequesterCSRWithoutReturningAKey is AUD-24's library-level
+// custody proof. The provider may sign public CSR bytes, but the returned secret
+// must contain only the certificate because the matching private key was born in
+// the requester's locked buffer and never crossed into the provider.
+func TestPKISecretSignsRequesterCSRWithoutReturningAKey(t *testing.T) {
+	caDER, caKey := ca(t)
+	provider := NewPKIProvider(caDER, caKey, Profile{
+		Name: "web", MaxTTL: 30 * time.Minute,
+		AllowedCommonNames: map[string]bool{"csr.example": true},
+	}, nil)
+
+	requesterKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer requesterKey.Destroy()
+	csrDER, err := crypto.CreateCertificateRequest(
+		crypto.CertificateRequestTemplate{CommonName: "csr.example"}, requesterKey,
+	)
+	if err != nil {
+		t.Fatalf("create requester CSR: %v", err)
+	}
+
+	cred, err := provider.GenerateFromCSR(context.Background(), csrDER, time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateFromCSR: %v", err)
+	}
+	certBlock, rest := pem.Decode(cred.Secret)
+	if certBlock == nil || certBlock.Type != "CERTIFICATE" {
+		t.Fatalf("CSR issuance did not return a certificate: %q", cred.Secret)
+	}
+	if len(rest) != 0 {
+		t.Fatalf("CSR issuance returned material after its certificate: %q", rest)
+	}
+	if err := crypto.VerifyLeafSignedByCA(certBlock.Bytes, caDER); err != nil {
+		t.Fatalf("CSR-issued cert does not chain to CA: %v", err)
+	}
+
+	keyDER, err := requesterKey.PKCS8()
+	if err != nil {
+		t.Fatalf("export requester key for test proof: %v", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	defer func() {
+		for i := range keyDER {
+			keyDER[i] = 0
+		}
+		for i := range keyPEM {
+			keyPEM[i] = 0
+		}
+	}()
+	if err := crypto.VerifyCertKeyMatchPEM(cred.Secret, keyPEM); err != nil {
+		t.Fatalf("certificate does not bind the requester CSR key: %v", err)
+	}
+}
+
+func TestPKISecretCSRModeUsesTheSameProfileAndPolicyGates(t *testing.T) {
+	caDER, caKey := ca(t)
+	requesterKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer requesterKey.Destroy()
+	csrDER, err := crypto.CreateCertificateRequest(
+		crypto.CertificateRequestTemplate{CommonName: "blocked.example"}, requesterKey,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	profileDenied := NewPKIProvider(caDER, caKey, Profile{
+		Name: "allow-list", MaxTTL: time.Hour,
+		AllowedCommonNames: map[string]bool{"allowed.example": true},
+	}, nil)
+	if _, err := profileDenied.GenerateFromCSR(context.Background(), csrDER, time.Minute); err == nil {
+		t.Fatal("CSR mode bypassed the common-name allow-list")
+	}
+
+	policyDenied := NewPKIProvider(caDER, caKey, Profile{Name: "policy", MaxTTL: time.Hour},
+		func(cn string) (bool, string) { return cn != "blocked.example", "blocked by test policy" })
+	if _, err := policyDenied.GenerateFromCSR(context.Background(), csrDER, time.Minute); err == nil {
+		t.Fatal("CSR mode bypassed the policy gate")
+	}
+
+	sanCSR, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "allowed.example", DNSNames: []string{"smuggled.example"},
+	}, requesterKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sanDenied := NewPKIProvider(caDER, caKey, Profile{
+		Name: "SAN allow-list", MaxTTL: time.Hour,
+		AllowedCommonNames: map[string]bool{"allowed.example": true},
+	}, nil)
+	if _, err := sanDenied.GenerateFromCSR(context.Background(), sanCSR, time.Minute); err == nil {
+		t.Fatal("CSR mode smuggled a DNS SAN past the common-name profile allow-list")
+	}
+}
+
 // tenantTaggingSink records the (tenant, serial) pairs it is asked to record/
 // revoke, so a test can prove that each provider attributes its records to its own
 // tenant (AN-1 / GAP-009).

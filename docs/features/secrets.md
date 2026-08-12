@@ -99,7 +99,7 @@ export VAULT_TOKEN=trst_...
 vault login -no-store "$VAULT_TOKEN"
 vault kv put secret/payments/db username=payments password='correct horse battery staple'
 vault kv get -format=json secret/payments/db
-vault write -format=json pki/issue/default common_name=payments.internal ttl=1h
+vault write -format=json pki/sign/default csr=@payments.csr ttl=1h
 ```
 
 Supported paths are intentionally small:
@@ -111,6 +111,7 @@ Supported paths are intentionally small:
 | `POST`/`PUT /v1/secret/data/{path}`        | Upserts a KV v2 object into `/api/v1/secrets/store/{path}` as the next sealed version.  |
 | `GET /v1/secret/data/{path}`               | Reads the latest value as Vault KV v2 `data.data` plus version metadata.                |
 | `POST`/`PUT /v1/pki/issue/{role}`          | Issues a short-lived certificate and key via the signer-backed dynamic PKI secret.      |
+| `POST`/`PUT /v1/pki/sign/{role}`           | Signs a requester-generated CSR and returns no private key.                             |
 
 It skips Vault mount management, ACL policies, cubbyhole, response wrapping, transit
 paths, and every dynamic secret engine — the native trstctl API remains the full
@@ -173,9 +174,15 @@ same-host-emulator exception limited to `localhost`, `127.0.0.0/8`, or `::1`.
 - `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend
   revocation through the outbox worker.
 
-**PKI-as-a-secrets-engine** plugs the same lease machinery into certificate issuance: a
-short-lived certificate is requested exactly like a database password, and the leaf key
-is generated in wipeable memory and zeroed immediately after use.
+**PKI-as-a-secrets-engine** plugs certificate issuance into the same operator
+workspace. The recommended `csr_pem` mode accepts one self-signed PKCS#10 request,
+signs it through the isolated signer, and returns only the short-lived certificate.
+The mutually exclusive `common_name` compatibility mode generates and returns the
+leaf key from wipeable memory. That mode is deprecated: its
+`issuance.server_side_keygen` receipt must be durable before key generation begins,
+and its idempotent replay returns the original sealed response without generating a
+second key. The console defaults to CSR mode; Vault/OpenBao uses `pki/sign` for the
+same custody model and retains `pki/issue` only as the legacy equivalent.
 
 ### Secret rotation (F37)
 

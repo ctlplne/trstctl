@@ -1003,6 +1003,11 @@ func TestTRACE033PKISecretsRemainConditionalUntilEnabled(t *testing.T) {
 		"/api/v1/secrets/pki",
 		"short-lived certificate",
 		"private key",
+		"requester csr",
+		"certificate-only",
+		"issuance.server_side_keygen",
+		"pki/sign",
+		"pki/issue",
 		"signer",
 		"revocation",
 		"pkisecret.issued",
@@ -1023,8 +1028,11 @@ func TestTRACE033PKISecretsRemainConditionalUntilEnabled(t *testing.T) {
 		testRefs[ref] = true
 	}
 	for _, wantRef := range []string{
+		"internal/server/pki_secret_csr_served_test.go",
 		"internal/server/secrets_served_test.go",
+		"internal/api/pki_secret_contract_test.go",
 		"internal/api/feature_parity_test.go",
+		"internal/cli/pki_secret_csr_test.go",
 		"internal/cli/feature_parity_test.go",
 		"web/src/lib/api.test.ts",
 		"web/src/__tests__/secrets.test.tsx",
@@ -1036,7 +1044,18 @@ func TestTRACE033PKISecretsRemainConditionalUntilEnabled(t *testing.T) {
 	}
 
 	testEvidence := strings.ToLower(strings.Join(f67.FacetEvidence.Test.Evidence, "\n"))
-	for _, want := range []string{"trace-033", "testservedpkisecretissuesusablekeypair", "usable tls identity", "pkisecret.issued", "feature parity"} {
+	for _, want := range []string{
+		"aud-24",
+		"testservedpkisecretcsrfirstandlegacyevidence",
+		"testservedvaultpkisignkeepsrequesterkeyandissuerecordslegacychoice",
+		"issuance.server_side_keygen",
+		"cold restart replay",
+		"trace-033",
+		"testservedpkisecretissuesusablekeypair",
+		"usable tls identity",
+		"pkisecret.issued",
+		"feature parity",
+	} {
 		if !strings.Contains(testEvidence, want) {
 			t.Errorf("TRACE-033: F67 test evidence must mention %q, got %q", want, testEvidence)
 		}

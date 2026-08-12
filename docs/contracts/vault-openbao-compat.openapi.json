@@ -307,6 +307,67 @@
         ],
         "type": "object"
       },
+      "VaultPKISignData": {
+        "properties": {
+          "certificate": {
+            "type": "string"
+          },
+          "serial_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "serial_number",
+          "certificate"
+        ],
+        "type": "object"
+      },
+      "VaultPKISignRequest": {
+        "properties": {
+          "csr": {
+            "type": "string"
+          },
+          "ttl": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "csr"
+        ],
+        "type": "object"
+      },
+      "VaultPKISignResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VaultPKISignData"
+          },
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {}
+        },
+        "required": [
+          "request_id",
+          "lease_id",
+          "renewable",
+          "lease_duration",
+          "data",
+          "warnings"
+        ],
+        "type": "object"
+      },
       "VaultTokenLookupSelf": {
         "properties": {
           "accessor": {
@@ -741,6 +802,232 @@
           }
         ],
         "summary": "Issue a Vault/OpenBao-shaped short-lived certificate and private key",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/v1/pki/sign/{role}": {
+      "post": {
+        "operationId": "vaultCompatPKISign",
+        "parameters": [
+          {
+            "description": "Vault PKI role label accepted for CLI compatibility; trstctl maps issuance to the requested common name.",
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultPKISignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultPKISignResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Sign a requester-generated CSR without receiving or returning its private key",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      },
+      "put": {
+        "operationId": "vaultCompatPKISignPut",
+        "parameters": [
+          {
+            "description": "Vault PKI role label accepted for CLI compatibility; trstctl maps issuance to the requested common name.",
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional for stock Vault/OpenBao clients. When omitted, trstctl derives a deterministic key from method, path, and body so retries do not duplicate mutations.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultPKISignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultPKISignResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Sign a requester-generated CSR without receiving or returning its private key",
         "x-trstctl-permission": "secrets:write",
         "x-trstctl-sensitive-response": true
       }
@@ -3296,7 +3583,7 @@
             "VaultToken": []
           }
         ],
-        "summary": "Sign with a Vault-compatible transit key",
+        "summary": "Sign through a Vault-compatible transit key or PKI CSR mount",
         "x-trstctl-permission": "keys:write"
       },
       "put": {
@@ -3384,7 +3671,7 @@
             "VaultToken": []
           }
         ],
-        "summary": "Sign with a Vault-compatible transit key",
+        "summary": "Sign through a Vault-compatible transit key or PKI CSR mount",
         "x-trstctl-permission": "keys:write"
       }
     },

@@ -5929,6 +5929,7 @@ PKISecretRequest = TypedDict(
     'PKISecretRequest',
     {
         'common_name': str,
+        'csr_pem': str,
         'ttl_seconds': int,
     },
     total=False,

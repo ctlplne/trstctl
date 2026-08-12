@@ -106,6 +106,16 @@ func TestVaultCompatMountACLTransitPKIProductionAssembly(t *testing.T) {
 
 func vaultServedRequest(t *testing.T, h *servedHarness, token, method, path string, body any, want int) []byte {
 	t.Helper()
+	idempotencyKey := ""
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		idempotencyKey = "vault-served-" + strconv.FormatUint(vaultServedMutationSequence.Add(1), 10)
+	}
+	return vaultServedRequestKey(t, h, token, method, path, idempotencyKey, body, want)
+}
+
+func vaultServedRequestKey(t *testing.T, h *servedHarness, token, method, path, idempotencyKey string, body any, want int) []byte {
+	t.Helper()
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -119,9 +129,8 @@ func vaultServedRequest(t *testing.T, h *servedHarness, token, method, path stri
 		t.Fatalf("build Vault request: %v", err)
 	}
 	req.Header.Set("X-Vault-Token", token)
-	switch method {
-	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-		req.Header.Set("Idempotency-Key", "vault-served-"+strconv.FormatUint(vaultServedMutationSequence.Add(1), 10))
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

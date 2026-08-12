@@ -252,6 +252,17 @@ const esESCatalog = {
   "request.csr.label": "Solicitud de firma de certificado (PKCS#10)",
   "request.csr.omitted":
     "Deje esto vac\u00edo y trstctl generar\u00e1 la clave privada por s\u00ed mismo y la devolver\u00e1: una v\u00eda obsoleta que registra un evento issuance.server_side_keygen cada vez que se ejecuta.",
+  "secrets.pki.custodyLabel": "Custodia de claves",
+  "secrets.pki.csrMode": "Firmar mi CSR (recomendado)",
+  "secrets.pki.csrHelp":
+    "Genere esta CSR donde se utilizará el certificado. trstctl recibe la solicitud pública, la firma y nunca ve la clave privada correspondiente.",
+  "secrets.pki.csrPlaceholder": "-----BEGIN CERTIFICATE REQUEST-----",
+  "secrets.pki.legacyMode": "Generar y devolver una clave (obsoleto)",
+  "secrets.pki.legacyWarning":
+    "trstctl generará y devolverá esta clave privada. Esta opción obsoleta registra evidencia de auditoría duradera antes de generar la clave.",
+  "secrets.pki.auditLink": "Revise cada uso heredado en Auditoría.",
+  "secrets.pki.csrResult": "Solo certificado. Su clave privada permanece donde generó la CSR.",
+  "secrets.pki.legacyResult": "Cópielo o descárguelo ahora. Esta respuesta obsoleta contiene el certificado y la clave privada.",
   "request.wizard.profile.label": "Elegir perfil",
   "request.wizard.profile.description": "El perfil de emisión determina el tipo de clave, la vigencia y cuántas aprobaciones necesita la solicitud.",
   "request.wizard.details.label": "Nombrar la credencial",

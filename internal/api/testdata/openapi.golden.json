@@ -16440,23 +16440,37 @@
         },
         "required": [
           "serial",
-          "certificate",
-          "private_key"
+          "common_name",
+          "certificate"
         ],
         "type": "object"
       },
       "PKISecretRequest": {
+        "oneOf": [
+          {
+            "required": [
+              "common_name"
+            ]
+          },
+          {
+            "required": [
+              "csr_pem"
+            ]
+          }
+        ],
         "properties": {
           "common_name": {
+            "description": "Deprecated server-side-keygen mode: trstctl generates and returns the subject key, and records issuance.server_side_keygen before doing so.",
+            "type": "string"
+          },
+          "csr_pem": {
+            "description": "Recommended requester-key mode: one self-signed PKCS#10 PEM request. trstctl signs it and never receives or returns the matching private key.",
             "type": "string"
           },
           "ttl_seconds": {
             "type": "integer"
           }
         },
-        "required": [
-          "common_name"
-        ],
         "type": "object"
       },
       "PQCMigrationCampaign": {
@@ -42083,7 +42097,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Issue a dynamic PKI secret (short-lived cert + key)",
+        "summary": "Sign a requester CSR or issue a deprecated server-generated PKI keypair",
         "x-trstctl-permission": "secrets:write",
         "x-trstctl-sensitive-response": true
       }

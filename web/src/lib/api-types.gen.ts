@@ -4206,13 +4206,14 @@ export interface PAMSessionRequest {
 
 export interface PKISecret {
   certificate: string;
-  common_name?: string;
-  private_key: string;
+  common_name: string;
+  private_key?: string;
   serial: string;
 }
 
 export interface PKISecretRequest {
-  common_name: string;
+  common_name?: string;
+  csr_pem?: string;
   ttl_seconds?: number;
 }
 

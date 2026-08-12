@@ -43,12 +43,13 @@ today (see [Current limitations](../limitations.md) and
 
 - Served under `/api/v1/secrets/*`: the secret store (create, read, rotate,
   delete, recover, dual-control approvals), dynamic secret leases, one-time
-  sharing, the dynamic PKI secret (a short-lived certificate *and* its key),
+  sharing, the dynamic PKI secret (CSR-first certificate-only by default, with an
+  explicit deprecated certificate-and-key compatibility mode),
   machine login (`token`, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, generic
   JWT), outbound secret-sync, and Gitleaks-backed secret scanning. Short-lived
   API keys: `/api/v1/ephemeral/api-keys`. Transit encryption-as-a-service:
   `/api/v1/transit/*` and `trstctl-cli transit`. A Vault/OpenBao-compatible
-  subset (`/v1/auth/token/lookup-self`, `/v1/secret/data/*`, `/v1/pki/issue/*`)
+  subset (`/v1/auth/token/lookup-self`, `/v1/secret/data/*`, `/v1/pki/sign/*`, `/v1/pki/issue/*`)
   serves stock `vault` CLI migration. KMIP is an opt-in mTLS listener for
   AES-256 SymmetricKey Create/Register/Get/Locate/Revoke/Destroy, KMIP 1.4
   Query/DiscoverVersions negotiation, and AES-GCM wrapped Get/Register.
@@ -109,8 +110,8 @@ today (see [Current limitations](../limitations.md) and
    **Vault/OpenBao migration shortcut:** if your scripts already use the stock
    `vault` CLI, point it at the same server and use your trstctl API token as
    `VAULT_TOKEN`. The shim is intentionally limited to token lookup, KV v2 under
-   `secret/`, and PKI issue under `pki/issue/*`; native trstctl routes remain the
-   complete API.
+   `secret/`, CSR signing under `pki/sign/*`, and deprecated keypair generation
+   under `pki/issue/*`; native trstctl routes remain the complete API.
 
    ```sh
    export VAULT_ADDR=https://localhost:8443
@@ -119,12 +120,15 @@ today (see [Current limitations](../limitations.md) and
    vault login -no-store "$VAULT_TOKEN"
    vault kv put secret/db username=payments password=s3cr3t
    vault kv get -format=json secret/db
-   vault write -format=json pki/issue/default common_name=payments.internal ttl=1h
+   openssl ecparam -name prime256v1 -genkey -noout -out payments.key
+   openssl req -new -key payments.key -subj '/CN=payments.internal' -out payments.csr
+   vault write -format=json pki/sign/default csr=@payments.csr ttl=1h
    ```
 
    -> `vault kv` writes the same sealed, versioned store as `/api/v1/secrets/store`,
-   and `vault write pki/issue/...` returns a short-lived certificate plus private key
-   from the signer-backed dynamic PKI secret. The shim accepts `Idempotency-Key`; when
+   and `vault write pki/sign/...` returns a short-lived certificate without the
+   requester key. `pki/issue/...` remains available as a deprecated key-returning
+   compatibility path and records its custody choice first. The shim accepts `Idempotency-Key`; when
    the stock CLI omits it, trstctl derives a replay key from method, path, and body so
    retries do not mint duplicates.
 
@@ -294,21 +298,24 @@ today (see [Current limitations](../limitations.md) and
    `401`, and `GET /api/v1/access/api-tokens?subject=ci-preview-deploy&include_revoked=true`
    shows `revoked_at`.
 
-9. Hand an application a short-lived certificate identity it cannot hoard. The dynamic
-   PKI secret issues a usable TLS identity — a certificate **and** its private key —
-   through the issuing authority in the separate signing service, recorded on the
-   revocation pipeline so a revoked one stops validating. See [Secrets](../features/secrets.md).
+9. Hand an application a short-lived certificate while its private key stays where it
+   will run. Generate the CSR beside the workload, then send only that public request
+   to the separate signing service. The issued serial is recorded on the revocation
+   pipeline so a revoked certificate stops validating. See [Secrets](../features/secrets.md).
 
    ```sh
+   openssl ecparam -name prime256v1 -genkey -noout -out payments.key
+   openssl req -new -key payments.key -subj '/CN=payments.internal' -out payments.csr
    curl -fksS -X POST https://localhost:8443/api/v1/secrets/pki \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
-     -d '{}'
+     --data-binary "$(jq -n --rawfile csr payments.csr '{csr_pem:$csr,ttl_seconds:900}')"
    ```
 
-   -> you get back a short-lived certificate and key your app can load directly, with no
-   long-lived secret to steal.
+   -> you get back a short-lived certificate and no private key; `payments.key` never
+   left the workload environment. Supplying `common_name` instead is the deprecated
+   key-returning mode and creates an `issuance.server_side_keygen` Audit receipt first.
 
 10. Share a one-off secret that destroys itself after a single read.
 

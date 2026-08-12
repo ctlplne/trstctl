@@ -990,6 +990,43 @@ export const messages = {
       "Leave this empty and trstctl generates the private key itself and returns it \u2014 a deprecated path that records an issuance.server_side_keygen event each time it runs.",
     description: "B1: states plainly what happens when no CSR is supplied, so the deprecated path is a choice rather than a default nobody noticed.",
   },
+  "secrets.pki.custodyLabel": {
+    defaultMessage: "Key custody",
+    description: "PKI-as-a-secret selector explaining who creates and retains the subject private key.",
+  },
+  "secrets.pki.csrMode": {
+    defaultMessage: "Sign my CSR (recommended)",
+    description: "Requester-key PKI-as-a-secret mode; the control plane receives only a public CSR.",
+  },
+  "secrets.pki.csrHelp": {
+    defaultMessage:
+      "Generate this CSR where the certificate will be used. trstctl receives the public request, signs it, and never sees the matching private key.",
+    description: "PKI-as-a-secret CSR guidance that explains the requester-key custody boundary.",
+  },
+  "secrets.pki.csrPlaceholder": {
+    defaultMessage: "-----BEGIN CERTIFICATE REQUEST-----",
+    description: "PEM preamble shown in the PKI-as-a-secret CSR input.",
+  },
+  "secrets.pki.legacyMode": {
+    defaultMessage: "Generate and return a key (deprecated)",
+    description: "Legacy PKI-as-a-secret mode in which the control plane creates and returns the private key.",
+  },
+  "secrets.pki.legacyWarning": {
+    defaultMessage: "trstctl will generate and return this private key. This deprecated choice records durable Audit evidence before key generation.",
+    description: "Warning displayed only when an operator explicitly selects server-side PKI key generation.",
+  },
+  "secrets.pki.auditLink": {
+    defaultMessage: "Review every legacy use in Audit.",
+    description: "Link from the deprecated PKI-as-a-secret mode to its immutable deprecation evidence.",
+  },
+  "secrets.pki.csrResult": {
+    defaultMessage: "Certificate only. Its private key remains where you generated the CSR.",
+    description: "Requester-key PKI-as-a-secret result custody explanation.",
+  },
+  "secrets.pki.legacyResult": {
+    defaultMessage: "Copy or download now. This deprecated response contains the certificate and private key.",
+    description: "Legacy PKI-as-a-secret result warning.",
+  },
   "request.wizard.profile.label": {
     defaultMessage: "Choose profile",
     description: "Request-credential wizard step 1 title.",

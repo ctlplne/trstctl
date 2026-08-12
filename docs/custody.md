@@ -55,7 +55,8 @@ turn an audit fact back into an unknown.
 | Agent enrollment identity | The agent | The agent's own key store | No |
 | SSH host / user certificate | The requesting host or user | Wherever the requester put it | No |
 | SPIFFE X.509-SVID | The control plane | Transient: returned over the Workload API socket | **Yes** — the socket is brain-local today |
-| PKI-as-a-secret (`/api/v1/secrets/pki`) | The control plane | Returned once in the response, not persisted | **Yes** — brain-local convenience, see below |
+| PKI-as-a-secret, `csr_pem` supplied | The requester | Wherever the requester generated it | No |
+| PKI-as-a-secret, `common_name` supplied | The control plane | Returned once in the response, not persisted | **Yes — deprecated**, see below |
 | Automated renewal successor (rotate / renew-before-expiry) | The control plane | Transient: in locked memory, wiped when the successor is recorded | **Yes**, see below |
 | Ephemeral workload credential (attested) | The attested workload | Wherever the workload put it | No — it presents its own public key |
 
@@ -92,11 +93,16 @@ which means it can only ever serve workloads on the control plane's own box, and
 it mints SVID keys in-process. Moving the socket to the host agent — the SPIRE
 agent shape — puts SVID key generation on the host that uses it.
 
-**PKI-as-a-secret.** `/api/v1/secrets/pki` returns a key by design: it is the
-secrets-engine ergonomics, and callers ask it for a key precisely because they do
-not want to build a CSR. It is honest to call this a brain-local convenience for
-workloads colocated with the control plane rather than a general issuance path.
-For anything else, use a CSR-based surface from the table above.
+**PKI-as-a-secret.** `/api/v1/secrets/pki` now requires exactly one custody mode.
+Supply `csr_pem` and trstctl validates the self-signed PKCS#10 request through the
+crypto boundary, signs it, and returns only the certificate; the matching key never
+entered the control plane. Supplying `common_name` keeps the legacy brain-local convenience:
+trstctl first commits an `issuance.server_side_keygen` deprecation receipt, then
+generates and returns a keypair. If that receipt cannot become durable, issuance
+fails before key generation. The Secrets console defaults to CSR mode and links the
+legacy choice to its filtered Audit evidence. Vault/OpenBao clients use
+`pki/sign/{role}` for CSR custody; `pki/issue/{role}` is the same deprecated
+server-keygen choice.
 
 ## What this page does not claim
 

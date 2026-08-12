@@ -10434,16 +10434,17 @@
             "phase": "P1",
             "priority": 35,
             "served_state": "conditional",
-            "backend_status": "conditional: served /api/v1/secrets/pki dynamic PKI secret workflow: issuePKISecret mints a short-lived certificate and private key through internal/pkisecret and the out-of-process signer, returns a usable TLS identity, emits pkisecret.issued event evidence, keeps the private key out of logs, and records revocation state through the served revocation pipeline",
-            "current_frontend_mapping": "operate: Secrets at /secrets serves PKI secret issue controls with common name, TTL, serial/lease metadata, reveal-once certificate bundle and private key, and follow-on revocation metadata.",
+            "backend_status": "conditional: served /api/v1/secrets/pki issues a short-lived certificate through mutually exclusive requester-CSR and deprecated server-keygen modes in internal/pkisecret and the out-of-process signer; CSR mode returns certificate-only material, while every legacy key-returning use records durable issuance.server_side_keygen evidence before key generation; both record pkisecret.issued metadata and revocation state without logging private keys",
+            "current_frontend_mapping": "operate: Secrets at /secrets/engines defaults PKI issuance to a requester CSR, returns certificate-only material, exposes an explicit deprecated common-name keypair mode, and links that mode to filtered issuance.server_side_keygen Audit evidence.",
             "target_gui_mapping": "Roadmap residual: richer OCSP/CRL revocation-state UI beyond the served PKI issue controls, including live OCSP/CRL validation detail and revoke action diagnostics.",
-            "acceptance_test": "Served GA acceptance is TestServedPKISecretIssuesUsableKeypair plus OpenAPI/CLI parity for /api/v1/secrets/pki and the Secrets UI reveal-once workflow; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
+            "acceptance_test": "Served GA acceptance is TestServedPKISecretCSRFirstAndLegacyEvidence plus TestServedPKISecretIssuesUsableKeypair, Vault/OpenBao pki/sign and pki/issue parity, OpenAPI/CLI parity, and both Secrets UI custody modes; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
             "source_backend": [
                 "/api/v1/secrets/pki",
                 "internal/api/secrets_identity.go",
+                "internal/api/vault_compat.go",
                 "internal/api/secrets.go",
                 "internal/server/secrets.go",
                 "internal/pkisecret"
@@ -10452,7 +10453,7 @@
                 "web/src/pages/Secrets.tsx"
             ],
             "status": "closed",
-            "notes": "TRACE-033 promoted the served dynamic PKI secret workflow into the GA denominator. Test evidence: internal/server/secrets_served_test.go proves /api/v1/secrets/pki returns a certificate and private key that verify as a usable TLS identity signed by the served CA, emits pkisecret.issued, and keeps private key material out of logs; internal/api/feature_parity_test.go and internal/cli/feature_parity_test.go prove issuePKISecret and secrets pki stay wired; web/src/lib/api.test.ts and web/src/__tests__/secrets.test.tsx cover the typed client and Secrets UI reveal-once flow. The richer OCSP/CRL revocation-state UI is recorded as a roadmap residual instead of excluding the whole F67 row from GA.",
+            "notes": "TRACE-033 promoted the served dynamic PKI secret workflow into the GA denominator. AUD-24 adds requester-key custody: internal/server/pki_secret_csr_served_test.go proves native and Vault/OpenBao CSR signing returns no key and matches the requester key, while deprecated native/Vault issue modes durably record issuance.server_side_keygen before key creation and replay idempotently. TestServedPKISecretIssuesUsableKeypair retains compatibility proof for the explicit legacy mode. OpenAPI/generated SDKs, the generic secrets pki CLI body path, and the Secrets console expose both choices. The richer OCSP/CRL revocation-state UI remains a roadmap residual.",
             "api_surface": [
                 "issuePKISecret"
             ],
@@ -10464,15 +10465,19 @@
             "facet_evidence": {
                 "served": {
                     "evidence": [
-                        "POST /api/v1/secrets/pki issues a short-lived certificate and private key through the signer-backed dynamic PKI secret.",
+                        "POST /api/v1/secrets/pki signs a requester CSR and returns only its certificate, or explicitly runs the deprecated key-returning common_name mode after durable deprecation evidence.",
+                        "Vault/OpenBao pki/sign and tenant-authored PKI sign mounts use the same requester-key custody path; pki/issue remains the deprecated key-returning compatibility path.",
                         "TestServedPKISecretIssuesUsableKeypair verifies the returned certificate/private-key pair as a usable TLS identity signed by the served CA and checks pkisecret.issued event evidence.",
                         "served_state=conditional",
-                        "backend_status=conditional: served /api/v1/secrets/pki dynamic PKI secret workflow: issuePKISecret mints a short-lived certificate and private key through internal/pkisecret and the out-of-process signer, returns a usable TLS identity, emits pkisecret.issued event evidence, keeps the private key out of logs, and records revocation state through the served revocation pipeline"
+                        "backend_status=conditional: served /api/v1/secrets/pki issues a short-lived certificate through CSR-first certificate-only issuance or explicit deprecated server-keygen with durable issuance.server_side_keygen evidence"
                     ],
                     "refs": [
                         "internal/api/secrets_identity.go",
+                        "internal/api/vault_compat.go",
+                        "internal/api/vault_compat_complete.go",
                         "internal/api/secrets.go",
                         "internal/server/secrets.go",
+                        "internal/server/pki_secret_csr_served_test.go",
                         "internal/server/secrets_served_test.go",
                         "internal/pkisecret/pkisecret.go"
                     ],
@@ -10482,8 +10487,8 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets serves PKI secret issue controls with common name, TTL, serial/lease metadata, reveal-once certificate bundle and private key, and follow-on revocation metadata.",
-                        "target_gui_mapping: PKI secret UI to issue short-lived cert plus private key, show lease/serial, download bundle once, revoke, and verify OCSP/CRL state."
+                        "current_frontend_mapping: operate: Secrets at /secrets/engines defaults to CSR-first certificate-only issuance, exposes the deprecated keypair mode, and links its durable Audit evidence.",
+                        "target_gui_mapping: enrich the served custody-aware PKI secret UI with live OCSP/CRL validation detail and revoke diagnostics."
                     ],
                     "refs": [
                         "web/src/pages/Secrets.tsx",
@@ -10494,10 +10499,11 @@
                 "cli": {
                     "evidence": [
                         "CLI command: secrets pki",
-                        "trstctl-cli secrets pki posts common_name/ttl to /api/v1/secrets/pki as an Idempotency-Key-protected mutation."
+                        "trstctl-cli secrets pki accepts a JSON request file or stdin, preserves either csr_pem or the explicit deprecated common_name mode, and posts it to /api/v1/secrets/pki as an Idempotency-Key-protected mutation."
                     ],
                     "refs": [
                         "internal/cli/command.go",
+                        "internal/cli/pki_secret_csr_test.go",
                         "internal/cli/feature_parity_test.go",
                         "docs/cli.md"
                     ]
@@ -10505,26 +10511,32 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationId: issuePKISecret",
+                        "PKISecretRequest requires exactly one of csr_pem or common_name, PKISecret makes private_key optional, and the Vault/OpenBao contract exposes distinct pki/sign and pki/issue operations.",
                         "POST /api/v1/secrets/pki is marked as a sensitive mutating response and guarded by secrets:write."
                     ],
                     "refs": [
                         "internal/api/api.go",
+                        "internal/api/pki_secret_contract_test.go",
                         "internal/api/testdata/openapi.golden.json",
                         "internal/api/feature_parity_test.go"
                     ]
                 },
                 "test": {
                     "evidence": [
+                        "AUD-24: TestServedPKISecretCSRFirstAndLegacyEvidence and TestServedVaultPKISignKeepsRequesterKeyAndIssueRecordsLegacyChoice prove requester-key certificate matching, certificate-only responses, durable issuance.server_side_keygen evidence, tenant isolation, idempotency binding, cold restart replay, mounted PKI signing, and fail-closed evidence loss.",
                         "TRACE-033: TestServedPKISecretIssuesUsableKeypair proves /api/v1/secrets/pki returns a certificate and private key that verify as a usable TLS identity signed by the served CA, emits pkisecret.issued, and keeps private key material out of logs.",
                         "internal/api/feature_parity_test.go and internal/cli/feature_parity_test.go keep F67 issuePKISecret and secrets pki wired to served catalog feature parity.",
-                        "web/src/lib/api.test.ts and web/src/__tests__/secrets.test.tsx prove the typed client and Secrets UI issue the PKI bundle and display private key material only in the reveal-once result.",
-                        "acceptance_test: Served GA acceptance is TestServedPKISecretIssuesUsableKeypair plus OpenAPI/CLI parity for /api/v1/secrets/pki and the Secrets UI reveal-once workflow; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
+                        "web/src/lib/api.test.ts and web/src/__tests__/secrets.test.tsx prove the typed client and Secrets UI default to CSR-first certificate-only issuance while keeping legacy private-key material inside its explicit reveal-once result.",
+                        "acceptance_test: Served GA acceptance is TestServedPKISecretCSRFirstAndLegacyEvidence plus TestServedPKISecretIssuesUsableKeypair, Vault/OpenBao pki/sign and pki/issue parity, OpenAPI/CLI parity, and both Secrets UI custody modes; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
+                        "internal/server/pki_secret_csr_served_test.go",
                         "internal/server/secrets_served_test.go",
+                        "internal/api/pki_secret_contract_test.go",
                         "internal/api/feature_parity_test.go",
+                        "internal/cli/pki_secret_csr_test.go",
                         "internal/cli/feature_parity_test.go",
                         "web/src/lib/api.test.ts",
                         "web/src/__tests__/secrets.test.tsx",

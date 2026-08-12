@@ -102,8 +102,12 @@ complete.
 
 ## Short-lived PKI certificates
 
-`trstctl_pki_certificate` calls `POST /api/v1/secrets/pki`. The response contains
-the issued leaf certificate and its matching private key.
+`trstctl_pki_certificate` currently calls the deprecated `common_name` mode of
+`POST /api/v1/secrets/pki`. The response contains the issued leaf certificate and
+its matching private key, and the server records `issuance.server_side_keygen`
+before generating it. For requester-key custody, generate a CSR outside Terraform
+and call the route's `csr_pem` mode (or Vault/OpenBao `pki/sign`); that response
+contains no private key.
 
 ```hcl
 resource "trstctl_pki_certificate" "deploy_hook" {

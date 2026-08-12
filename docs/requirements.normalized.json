@@ -862,10 +862,10 @@
       "requirement_text": "trstctl shall provide PKI as a secrets engine.",
       "owner": "Secrets",
       "priority": "P1",
-      "acceptance_criteria": "Served GA acceptance is TestServedPKISecretIssuesUsableKeypair plus OpenAPI/CLI parity for /api/v1/secrets/pki and the Secrets UI reveal-once workflow; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
+      "acceptance_criteria": "Served GA acceptance is TestServedPKISecretCSRFirstAndLegacyEvidence plus TestServedPKISecretIssuesUsableKeypair, Vault/OpenBao pki/sign and pki/issue parity, OpenAPI/CLI parity, and both Secrets UI custody modes; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
       "status": "conditional",
       "served_state": "conditional",
-      "backend_status": "conditional: served /api/v1/secrets/pki dynamic PKI secret workflow: issuePKISecret mints a short-lived certificate and private key through internal/pkisecret and the out-of-process signer, returns a usable TLS identity, emits pkisecret.issued event evidence, keeps the private key out of logs, and records revocation state through the served revocation pipeline",
+      "backend_status": "conditional: served /api/v1/secrets/pki issues a short-lived certificate through mutually exclusive requester-CSR and deprecated server-keygen modes in internal/pkisecret and the out-of-process signer; CSR mode returns certificate-only material, while every legacy key-returning use records durable issuance.server_side_keygen evidence before key generation; both record pkisecret.issued metadata and revocation state without logging private keys",
       "ga_served_scope": "out_of_ga",
       "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
       "source_docs": [

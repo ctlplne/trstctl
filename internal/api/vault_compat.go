@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
@@ -174,6 +175,40 @@ var vaultCompatRoutes = []vaultCompatRoute{
 		responseSchema:    "VaultPKIIssueResponse",
 		sensitiveResponse: true,
 		handler:           func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultPKIIssue) },
+	},
+	{
+		method:            http.MethodPost,
+		pattern:           "/v1/pki/sign/{role}",
+		contractPath:      "/v1/pki/sign/{role}",
+		samplePath:        "/v1/pki/sign/default",
+		sampleBody:        `{"csr":"-----BEGIN CERTIFICATE REQUEST-----\\n...\\n-----END CERTIFICATE REQUEST-----","ttl":"1h"}`,
+		operationID:       "vaultCompatPKISign",
+		summary:           "Sign a requester-generated CSR without receiving or returning its private key",
+		successCode:       "200",
+		permission:        authz.SecretsWrite,
+		tokenRequired:     true,
+		mutation:          true,
+		requestSchema:     "VaultPKISignRequest",
+		responseSchema:    "VaultPKISignResponse",
+		sensitiveResponse: true,
+		handler:           func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultPKISign) },
+	},
+	{
+		method:            http.MethodPut,
+		pattern:           "/v1/pki/sign/{role}",
+		contractPath:      "/v1/pki/sign/{role}",
+		samplePath:        "/v1/pki/sign/default",
+		sampleBody:        `{"csr":"-----BEGIN CERTIFICATE REQUEST-----\\n...\\n-----END CERTIFICATE REQUEST-----","ttl":"1h"}`,
+		operationID:       "vaultCompatPKISignPut",
+		summary:           "Sign a requester-generated CSR without receiving or returning its private key",
+		successCode:       "200",
+		permission:        authz.SecretsWrite,
+		tokenRequired:     true,
+		mutation:          true,
+		requestSchema:     "VaultPKISignRequest",
+		responseSchema:    "VaultPKISignResponse",
+		sensitiveResponse: true,
+		handler:           func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultPKISign) },
 	},
 }
 
@@ -644,7 +679,7 @@ type vaultPKIIssueRequest struct {
 type vaultPKIIssueData struct {
 	SerialNumber string          `json:"serial_number"`
 	Certificate  secretJSONBytes `json:"certificate"`
-	PrivateKey   secretJSONBytes `json:"private_key"`
+	PrivateKey   secretJSONBytes `json:"private_key,omitempty"`
 }
 
 type vaultPKIIssueResponse struct {
@@ -681,7 +716,12 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	binding, err := vaultPKIRequestBinding(r, body)
+	if err != nil {
+		writeVaultError(w, http.StatusInternalServerError, "cannot bind PKI request")
+		return
+	}
+	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultPKIIssueRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
@@ -695,6 +735,9 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner)
+		if err := a.recordPKIServerSideKeygen(ctx, tenantID, req.CommonName, "vault_pki_issue"); err != nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, err.Error())
+		}
 		cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{
 			Role: req.CommonName,
 			TTL:  ttl,
@@ -716,7 +759,104 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 		}
 		a.auditSecret(ctx, "pkisecret.issued", tenantID, req.CommonName, 0)
 		return http.StatusOK, resp, nil
+	}, false)
+}
+
+type vaultPKISignRequest struct {
+	CSR        string `json:"csr"`
+	TTL        string `json:"ttl"`
+	TTLSeconds int    `json:"ttl_seconds"`
+}
+
+//trstctl:mutation
+func (a *API) vaultPKISign(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		writeVaultError(w, http.StatusNotFound, "secrets surface is not enabled")
+		return
+	}
+	body, ok := a.captureVaultBody(w, r)
+	if !ok {
+		return
+	}
+	defer secret.Wipe(body)
+	caCertDER, caSigner := a.secrets.resolveCA()
+	if caSigner == nil || len(caCertDER) == 0 {
+		writeVaultError(w, http.StatusServiceUnavailable, "dynamic PKI secret issuance unavailable")
+		return
+	}
+	idempotencyKey, ok := vaultMutationKey(w, r)
+	if !ok {
+		return
+	}
+	binding, err := vaultPKIRequestBinding(r, body)
+	if err != nil {
+		writeVaultError(w, http.StatusInternalServerError, "cannot bind PKI request")
+		return
+	}
+	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req vaultPKISignRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if strings.TrimSpace(req.CSR) == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "csr is required")
+		}
+		ttl, err := parseVaultTTL(req.TTL, req.TTLSeconds)
+		if err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		csrDER, commonName, err := decodePKISecretCSR([]byte(strings.TrimSpace(req.CSR)))
+		if err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner)
+		cred, err := provider.GenerateFromCSR(ctx, csrDER, ttl)
+		if err != nil {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+		}
+		certPEM, _ := splitCertKeyPEM(cred.Secret)
+		secret.Wipe(cred.Secret)
+		resp := vaultPKIIssueResponse{
+			RequestID:     vaultCompatRequestID,
+			LeaseDuration: int(ttl.Seconds()),
+			Data: vaultPKIIssueData{
+				SerialNumber: cred.BackendRef,
+				Certificate:  secretJSONBytes(certPEM),
+			},
+			Warnings: nil,
+		}
+		a.auditSecret(ctx, "pkisecret.issued", tenantID, commonName, 0)
+		return http.StatusOK, resp, nil
+	}, false)
+}
+
+func vaultPKIRequestBinding(r *http.Request, body []byte) (string, error) {
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		return "", err
+	}
+	escapedPath := ""
+	if r.URL != nil {
+		escapedPath = r.URL.EscapedPath()
+	}
+	encoded, err := json.Marshal(struct {
+		Domain      string `json:"domain"`
+		Principal   string `json:"principal"`
+		Method      string `json:"method"`
+		EscapedPath string `json:"escaped_path"`
+		BodySHA256  string `json:"body_sha256"`
+	}{
+		Domain:      "trstctl.api.vault-pki-request-binding.v1",
+		Principal:   principal,
+		Method:      r.Method,
+		EscapedPath: escapedPath,
+		BodySHA256:  crypto.SHA256Hex(body),
 	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(encoded)
+	return crypto.SHA256Hex(encoded), nil
 }
 
 func parseVaultTTL(raw string, seconds int) (time.Duration, error) {
