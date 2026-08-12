@@ -6,6 +6,7 @@
 package deviceattesttest
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -24,6 +25,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/google/go-tpm/tpm2"
+
+	trstcrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 var (
@@ -42,6 +45,85 @@ type TPMIdentity struct {
 	rootDER       []byte
 	rootPEM       []byte
 	aikDER        []byte
+}
+
+// EdgeCAKeyProvider returns a TPM-like opaque-handle provider over the same
+// credential key CredentialJSON attests. It exists only in this test-fixture
+// package so served journeys can drive the exact handle/CSR/sign APIs used by
+// trstctl-agent without exporting fixture private bytes into the normal path.
+func (i *TPMIdentity) EdgeCAKeyProvider() trstcrypto.EdgeCAKeyProvider {
+	return &edgeCAProvider{identity: i}
+}
+
+type edgeCAProvider struct{ identity *TPMIdentity }
+
+func (*edgeCAProvider) Name() string { return "tpm2" }
+
+func (p *edgeCAProvider) GenerateManagedKey(ctx context.Context, algorithm trstcrypto.Algorithm) (trstcrypto.Signer, trstcrypto.KeyRef, error) {
+	return p.GenerateManagedKeyForOperation(ctx, "fixture-unscoped", algorithm)
+}
+
+func (p *edgeCAProvider) GenerateManagedKeyForOperation(ctx context.Context, _ string, algorithm trstcrypto.Algorithm) (trstcrypto.Signer, trstcrypto.KeyRef, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, trstcrypto.KeyRef{}, err
+	}
+	if algorithm != trstcrypto.ECDSAP256 {
+		return nil, trstcrypto.KeyRef{}, fmt.Errorf("TPM fixture supports only ECDSA-P256")
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(&p.identity.credentialKey.PublicKey)
+	if err != nil {
+		return nil, trstcrypto.KeyRef{}, err
+	}
+	signer := edgeCASigner{identity: p.identity, publicDER: publicDER}
+	return signer, trstcrypto.KeyRef{ID: "fixture-persistent-handle", Algorithm: algorithm}, nil
+}
+
+func (p *edgeCAProvider) RotateKey(ctx context.Context, ref trstcrypto.KeyRef) (trstcrypto.Signer, trstcrypto.KeyRef, error) {
+	return p.GenerateManagedKey(ctx, ref.Algorithm)
+}
+
+func (p *edgeCAProvider) RotateKeyForOperation(ctx context.Context, operationID string, ref trstcrypto.KeyRef) (trstcrypto.Signer, trstcrypto.KeyRef, error) {
+	return p.GenerateManagedKeyForOperation(ctx, operationID, ref.Algorithm)
+}
+
+func (*edgeCAProvider) RevokeKey(context.Context, trstcrypto.KeyRef) error  { return nil }
+func (*edgeCAProvider) ZeroizeKey(context.Context, trstcrypto.KeyRef) error { return nil }
+func (*edgeCAProvider) RevokeKeyForOperation(context.Context, string, trstcrypto.KeyRef) error {
+	return nil
+}
+func (*edgeCAProvider) ZeroizeKeyForOperation(context.Context, string, trstcrypto.KeyRef) error {
+	return nil
+}
+
+func (p *edgeCAProvider) SignManagedDigest(ctx context.Context, ref trstcrypto.KeyRef, digest []byte, _ trstcrypto.SignOptions) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if ref.ID != "fixture-persistent-handle" || ref.Algorithm != trstcrypto.ECDSAP256 {
+		return nil, fmt.Errorf("TPM fixture: unknown edge CA handle")
+	}
+	return ecdsa.SignASN1(rand.Reader, p.identity.credentialKey, digest)
+}
+
+type edgeCASigner struct {
+	identity  *TPMIdentity
+	publicDER []byte
+}
+
+func (s edgeCASigner) Public() trstcrypto.PublicKey {
+	return trstcrypto.PublicKey{Algorithm: trstcrypto.ECDSAP256, DER: append([]byte(nil), s.publicDER...)}
+}
+func (edgeCASigner) Algorithm() trstcrypto.Algorithm { return trstcrypto.ECDSAP256 }
+func (s edgeCASigner) Sign(message []byte, opts trstcrypto.SignOptions) ([]byte, error) {
+	hash := opts.Hash
+	if hash == "" {
+		hash = trstcrypto.SHA256
+	}
+	digest, err := trstcrypto.Digest(hash, message)
+	if err != nil {
+		return nil, err
+	}
+	return ecdsa.SignASN1(rand.Reader, s.identity.credentialKey, digest)
 }
 
 // NewTPMIdentity creates a fresh fixture whose AIK chains to a fresh root.
@@ -127,9 +209,11 @@ func (i *TPMIdentity) CSRDER() []byte {
 	return append([]byte(nil), i.csrDER...)
 }
 
-// CredentialKeyPEM exports the attested credential key (PKCS#8 PEM). Tests
-// that play the EDGE HOST need it: the host holds the key its TPM attested,
-// and B6's local-issuance flow signs with exactly that key.
+// CredentialKeyPEM exports the fixture key only for adversarial tests that
+// deliberately bypass the shipping opaque-handle path (for example, forging
+// an out-of-constraint leaf so reconciliation can prove it records a
+// violation). Normal edge-host journeys use EdgeCAKeyProvider and never call
+// this method.
 func (i *TPMIdentity) CredentialKeyPEM() ([]byte, error) {
 	der, err := x509.MarshalPKCS8PrivateKey(i.credentialKey)
 	if err != nil {

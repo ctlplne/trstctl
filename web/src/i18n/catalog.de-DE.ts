@@ -4444,6 +4444,14 @@ const deDECatalog = {
   "source.edge.attested.key.b6edge00014": "Attestierter Schlüssel",
   "source.edge.reconcile.note.b6edge00015":
     "Ausstellungen, die erfolgen, während ein Host unerreichbar ist, werden erst sichtbar, wenn sein Journal abgeglichen wird; eine Delegation ohne Einträge kann weiterhin ausstellen. Abgeglichene Blattzertifikate außerhalb der Beschränkungen der Delegation werden sichtbar als Verstöße erfasst.",
+  "source.edge.allowed.custody.aud2600018": "Zulässige Schlüsselverwahrung",
+  "source.edge.custody.aud2600019": "Schlüsselverwahrung",
+  "source.edge.assurance.aud2600020": "Verwahrungsnachweis",
+  "source.edge.exportable.aud2600021": "EXPORTIERBAR",
+  "source.edge.nonexportable.aud2600022": "nicht exportierbar",
+  "source.edge.assurance.hardware.aud2600023": "CSR-Schlüssel durch TPM attestiert",
+  "source.edge.assurance.operator.claim.aud2600024": "Host attestiert; Token-Verwahrung vom Betreiber deklariert",
+  "source.edge.assurance.software.exception.aud2600025": "Host attestiert; exportierbare Software-Ausnahme",
   // F4 AD CS certificate-database panel — Machine-authored translations, FLAG FOR HUMAN REVIEW.
   "source.adcs.database.f4adcs0001": "AD-CS-Zertifikatdatenbank",
   "source.adcs.database.intro.f4adcs0002":

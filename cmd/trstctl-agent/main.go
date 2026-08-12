@@ -134,19 +134,32 @@ func main() {
 	workloadDeployment := flag.String("workload-deployment", "", "workload deployment scope for the co-sign binding")
 	workloadPredecessorKey := flag.String("workload-predecessor-key", "", "path to the workload predecessor key (PKCS#8 PEM) the agent holds and co-signs with")
 	// B6: one-shot, fully offline edge sub-CA modes for a host with no path to
-	// the brain. edge-csr generates the delegated key locally (it never
-	// travels) and prints the attestation challenge; edge-issue issues one
+	// the brain. edge-csr generates the delegated key non-extractably in a TPM
+	// or PKCS#11 token by default and prints the attestation challenge; edge-issue issues one
 	// leaf under the delegated certificate, whose OWN name constraints bound
 	// the request — out-of-constraint fails closed here, not at reconcile.
-	edgeCSRMode := flag.Bool("edge-csr", false, "one-shot: generate the delegated edge CA's keypair and CSR on this host, print the TPM attestation challenge, and exit")
+	edgeCSRMode := flag.Bool("edge-csr", false, "one-shot: generate the delegated edge CA's non-extractable key and CSR on this host, print the TPM attestation challenge, and exit")
 	edgeTenant := flag.String("edge-tenant", "", "tenant id the delegation is for (bound into the attestation challenge)")
 	edgeSegment := flag.String("edge-segment", "", "declared segment id the delegation is for (bound into the attestation challenge)")
 	edgeCN := flag.String("edge-cn", "", "common name for the delegated edge CA (edge-csr)")
-	edgeKeyOut := flag.String("edge-key-out", "edge-ca.key", "where edge-csr writes the delegated CA private key (0600; never leaves this host)")
+	edgeKeyProvider := flag.String("edge-key-provider", "tpm2", "edge CA custody provider: tpm2 (default), pkcs11, or software (software needs explicit exception flags and policy)")
+	edgeKeyGeneration := flag.String("edge-key-generation", "1", "durable generation label; rerunning the same tenant/segment/generation reconciles the same device key")
+	edgeAllowSoftwareKey := flag.Bool("edge-allow-software-key", false, "explicitly permit exportable PEM edge CA custody; the control-plane segment policy must separately permit it")
+	edgeKeyOut := flag.String("edge-key-out", "edge-ca.key", "software-exception only: where edge-csr writes the exportable delegated CA private key (0600)")
+	edgeKeyHandleOut := flag.String("edge-key-handle-out", "edge-ca.keyref.json", "hardware path: where edge-csr writes the opaque TPM/PKCS#11 public key handle (contains no private key)")
 	edgeCSROut := flag.String("edge-csr-out", "edge-ca.csr", "where edge-csr writes the CSR (DER) the operator carries to the brain")
+	edgeTPMPath := flag.String("edge-tpm-path", "", "TPM device or swtpm Unix socket; empty uses the Linux TPM default")
+	edgeTPMOwnerAuthFile := flag.String("edge-tpm-owner-auth-file", "", "optional file holding TPM owner hierarchy authorization")
+	edgeTPMKeyAuthFile := flag.String("edge-tpm-key-auth-file", "", "optional file holding TPM edge-key authorization")
+	edgeTPMHandleBase := flag.Uint("edge-tpm-persistent-handle-base", 0, "first owner-persistent TPM handle for reconciled edge CA keys; zero uses the safe backend default")
+	edgePKCS11Module := flag.String("edge-pkcs11-module", "", "PKCS#11 module path for non-extractable edge CA custody")
+	edgePKCS11Token := flag.String("edge-pkcs11-token", "", "PKCS#11 token label for edge CA custody")
+	edgePKCS11PINFile := flag.String("edge-pkcs11-pin-file", "", "file holding the PKCS#11 user PIN; required for pkcs11 custody")
+	edgePKCS11KeyLabelPrefix := flag.String("edge-pkcs11-key-label-prefix", "trstctl-edge-ca", "PKCS#11 object-label prefix for edge CA keys")
 	edgeIssueMode := flag.Bool("edge-issue", false, "one-shot: issue a leaf locally under the delegated edge CA and record it in the journal, then exit")
 	edgeCACert := flag.String("edge-ca-cert", "", "the delegated edge CA certificate (PEM) minted by the brain")
-	edgeCAKey := flag.String("edge-ca-key", "", "the delegated edge CA private key written by edge-csr")
+	edgeCAKey := flag.String("edge-ca-key", "", "software-exception only: the exportable delegated edge CA private key written by edge-csr")
+	edgeCAKeyHandle := flag.String("edge-ca-key-handle", "", "hardware path: opaque TPM/PKCS#11 public key handle written by edge-csr")
 	edgeIssueCN := flag.String("edge-issue-cn", "", "leaf common name (edge-issue)")
 	edgeIssueDNS := flag.String("edge-issue-dns", "", "comma-separated leaf DNS SANs; every one must sit inside the delegation's name constraints")
 	edgeIssueTTL := flag.Duration("edge-issue-ttl", 24*time.Hour, "leaf validity; capped so a leaf never outlives the delegated CA")
@@ -157,8 +170,12 @@ func main() {
 
 	if handled, err := runEdgeCAOps(edgeCAOptions{
 		csrMode: *edgeCSRMode, tenantID: *edgeTenant, segmentID: *edgeSegment,
-		commonName: *edgeCN, keyOut: *edgeKeyOut, csrOut: *edgeCSROut,
-		issueMode: *edgeIssueMode, caCert: *edgeCACert, caKey: *edgeCAKey,
+		commonName: *edgeCN, keyProvider: *edgeKeyProvider, keyGeneration: *edgeKeyGeneration,
+		allowSoftwareKey: *edgeAllowSoftwareKey, keyOut: *edgeKeyOut, keyHandleOut: *edgeKeyHandleOut, csrOut: *edgeCSROut,
+		tpmPath: *edgeTPMPath, tpmOwnerAuthFile: *edgeTPMOwnerAuthFile, tpmKeyAuthFile: *edgeTPMKeyAuthFile,
+		tpmPersistentHandleBase: uint32(*edgeTPMHandleBase), pkcs11Module: *edgePKCS11Module,
+		pkcs11Token: *edgePKCS11Token, pkcs11PINFile: *edgePKCS11PINFile, pkcs11KeyLabelPrefix: *edgePKCS11KeyLabelPrefix,
+		issueMode: *edgeIssueMode, caCert: *edgeCACert, caKey: *edgeCAKey, caKeyHandle: *edgeCAKeyHandle,
 		leafCN: *edgeIssueCN, leafDNS: *edgeIssueDNS, leafTTL: *edgeIssueTTL,
 		certOut: *edgeCertOut, leafKeyOut: *edgeLeafKeyOut, journal: *edgeJournalPath,
 	}, *commonName); handled {

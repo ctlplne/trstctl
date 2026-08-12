@@ -54,6 +54,9 @@ type EdgeSegmentPolicyRequest struct {
 	// minted for this segment. The mint request cannot widen them.
 	PermittedDNSDomains []string `json:"permitted_dns_domains,omitempty"`
 	ExcludedDNSDomains  []string `json:"excluded_dns_domains,omitempty"`
+	// AllowedKeyProviders is a closed, explicit custody allowlist. Empty means
+	// TPM2 only; adding software is a visible policy exception, never a fallback.
+	AllowedKeyProviders []string `json:"allowed_key_providers,omitempty"`
 }
 
 type EdgeSegmentPolicy struct {
@@ -65,6 +68,7 @@ type EdgeSegmentPolicy struct {
 	AttestationRoots    int       `json:"attestation_roots"`
 	PermittedDNSDomains []string  `json:"permitted_dns_domains,omitempty"`
 	ExcludedDNSDomains  []string  `json:"excluded_dns_domains,omitempty"`
+	AllowedKeyProviders []string  `json:"allowed_key_providers"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
 
@@ -87,6 +91,10 @@ type EdgeDelegationMintRequest struct {
 	// AttestationCredentialJSON is the WebAuthn-format TPM attestation over
 	// the challenge binding tenant, segment and this CSR.
 	AttestationCredentialJSON []byte `json:"attestation_credential_json"`
+	// KeyProvider describes the shipping agent custody path that made the CSR:
+	// tpm2 (default), pkcs11, or software. The server derives storage and
+	// exportability from this closed value and the segment must allow it.
+	KeyProvider string `json:"key_provider,omitempty"`
 }
 
 type EdgeDelegation struct {
@@ -100,6 +108,11 @@ type EdgeDelegation struct {
 	PermittedDNSDomains []string   `json:"permitted_dns_domains"`
 	ExcludedDNSDomains  []string   `json:"excluded_dns_domains,omitempty"`
 	AttestedKeySHA256   string     `json:"attested_key_sha256,omitempty"`
+	CSRKeySHA256        string     `json:"csr_key_sha256"`
+	KeyProvider         string     `json:"key_provider"`
+	KeyStorage          string     `json:"key_storage"`
+	KeyExportable       bool       `json:"key_exportable"`
+	CustodyAssurance    string     `json:"custody_assurance"`
 	Status              string     `json:"status"`
 	NotBefore           time.Time  `json:"not_before"`
 	NotAfter            time.Time  `json:"not_after"`
@@ -153,7 +166,9 @@ type EdgeReconcileResult struct {
 const edgeDelegationGuidance = "A delegated edge CA is the one deliberate exception to signing " +
 	"living only in the isolated signer, bounded hard: minted centrally with name constraints from " +
 	"the segment's policy, path length zero, a 30-day ceiling on life, per-segment opt-in, and TPM " +
-	"attestation of the edge key. Revoking here also revokes the delegation's serial in the parent " +
+	"attestation. TPM2 requires the attested key to equal the CSR key; PKCS#11 or exportable software " +
+	"custody requires an explicit policy exception and is labeled with its weaker assurance. Revoking " +
+	"here also revokes the delegation's serial in the parent " +
 	"CA's ledger, so OCSP and the CRL answer for it. Local issuances must reconcile back; a leaf " +
 	"outside the constraints is recorded as a violation, visibly."
 

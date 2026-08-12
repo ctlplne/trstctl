@@ -25,6 +25,7 @@ type EdgeSegmentPolicy struct {
 	AttestationRootsPEM []string
 	PermittedDNSDomains []string
 	ExcludedDNSDomains  []string
+	AllowedKeyProviders []string
 	UpdatedAt           time.Time
 }
 
@@ -42,6 +43,11 @@ type EdgeDelegation struct {
 	ExcludedDNSDomains    []string
 	AttestedKeySHA256     string
 	AttestationCertSHA256 string
+	CSRKeySHA256          string
+	KeyProvider           string
+	KeyStorage            string
+	KeyExportable         bool
+	CustodyAssurance      string
 	Status                string // 'active' | 'revoked'
 	NotBefore             time.Time
 	NotAfter              time.Time
@@ -76,19 +82,21 @@ func (s *Store) ApplyEdgeSegmentPolicyTx(ctx context.Context, tx pgx.Tx, p EdgeS
 	_, err := tx.Exec(ctx,
 		`INSERT INTO edge_segment_policies
 		        (tenant_id, segment_id, enabled, attestation_roots_pem,
-		         permitted_dns_domains, excluded_dns_domains, updated_at, event_sequence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		         permitted_dns_domains, excluded_dns_domains, allowed_key_providers,
+		         updated_at, event_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 ON CONFLICT (tenant_id, segment_id) DO UPDATE
 		    SET enabled = EXCLUDED.enabled,
 		        attestation_roots_pem = EXCLUDED.attestation_roots_pem,
 		        permitted_dns_domains = EXCLUDED.permitted_dns_domains,
 		        excluded_dns_domains = EXCLUDED.excluded_dns_domains,
+		        allowed_key_providers = EXCLUDED.allowed_key_providers,
 		        updated_at = EXCLUDED.updated_at,
 		        event_sequence = EXCLUDED.event_sequence
 		  WHERE edge_segment_policies.event_sequence <= EXCLUDED.event_sequence`,
 		p.TenantID, p.SegmentID, p.Enabled, textArray(p.AttestationRootsPEM),
 		textArray(p.PermittedDNSDomains), textArray(p.ExcludedDNSDomains),
-		p.UpdatedAt.UTC(), eventSequence)
+		textArray(edgeAllowedProvidersOrDefault(p.AllowedKeyProviders)), p.UpdatedAt.UTC(), eventSequence)
 	return err
 }
 
@@ -98,16 +106,18 @@ func (s *Store) ApplyEdgeDelegationIssuedTx(ctx context.Context, tx pgx.Tx, d Ed
 		`INSERT INTO edge_delegations
 		        (tenant_id, id, segment_id, ca_id, host, common_name, serial,
 		         certificate_pem, permitted_dns_domains, excluded_dns_domains,
-		         attested_key_sha256, attestation_cert_sha256, status,
+		         attested_key_sha256, attestation_cert_sha256, csr_key_sha256,
+		         key_provider, key_storage, key_exportable, custody_assurance, status,
 		         not_before, not_after, revoked_at, revoke_reason,
 		         created_at, updated_at, event_sequence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active',
-		         $13, $14, NULL, '', $15, $15, $16)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+		         $14, $15, $16, $17, 'active', $18, $19, NULL, '', $20, $20, $21)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		d.TenantID, d.ID, d.SegmentID, d.CAID, d.Host, d.CommonName, d.Serial,
 		d.CertificatePEM, textArray(d.PermittedDNSDomains), textArray(d.ExcludedDNSDomains),
-		d.AttestedKeySHA256, d.AttestationCertSHA256,
-		d.NotBefore.UTC(), d.NotAfter.UTC(), d.CreatedAt.UTC(), eventSequence)
+		d.AttestedKeySHA256, d.AttestationCertSHA256, edgeCSRKeyDigestOrLegacy(d),
+		edgeProviderOrDefault(d.KeyProvider), edgeStorageOrDefault(d.KeyStorage), d.KeyExportable,
+		edgeAssuranceOrDefault(d.CustodyAssurance), d.NotBefore.UTC(), d.NotAfter.UTC(), d.CreatedAt.UTC(), eventSequence)
 	return err
 }
 
@@ -147,12 +157,12 @@ func (s *Store) GetEdgeSegmentPolicy(ctx context.Context, tenantID, segmentID st
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx,
 			`SELECT tenant_id::text, segment_id::text, enabled, attestation_roots_pem,
-			        permitted_dns_domains, excluded_dns_domains, updated_at
+			        permitted_dns_domains, excluded_dns_domains, allowed_key_providers, updated_at
 			   FROM edge_segment_policies
 			  WHERE tenant_id = $1 AND segment_id = $2`,
 			tenantID, segmentID)
 		err := row.Scan(&p.TenantID, &p.SegmentID, &p.Enabled, &p.AttestationRootsPEM,
-			&p.PermittedDNSDomains, &p.ExcludedDNSDomains, &p.UpdatedAt)
+			&p.PermittedDNSDomains, &p.ExcludedDNSDomains, &p.AllowedKeyProviders, &p.UpdatedAt)
 		if err == pgx.ErrNoRows {
 			return nil
 		}
@@ -170,7 +180,7 @@ func (s *Store) ListEdgeSegmentPolicies(ctx context.Context, tenantID string) ([
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT tenant_id::text, segment_id::text, enabled, attestation_roots_pem,
-			        permitted_dns_domains, excluded_dns_domains, updated_at
+			        permitted_dns_domains, excluded_dns_domains, allowed_key_providers, updated_at
 			   FROM edge_segment_policies
 			  WHERE tenant_id = $1
 			  ORDER BY segment_id`,
@@ -182,7 +192,7 @@ func (s *Store) ListEdgeSegmentPolicies(ctx context.Context, tenantID string) ([
 		for rows.Next() {
 			var p EdgeSegmentPolicy
 			if err := rows.Scan(&p.TenantID, &p.SegmentID, &p.Enabled, &p.AttestationRootsPEM,
-				&p.PermittedDNSDomains, &p.ExcludedDNSDomains, &p.UpdatedAt); err != nil {
+				&p.PermittedDNSDomains, &p.ExcludedDNSDomains, &p.AllowedKeyProviders, &p.UpdatedAt); err != nil {
 				return err
 			}
 			out = append(out, p)
@@ -194,16 +204,54 @@ func (s *Store) ListEdgeSegmentPolicies(ctx context.Context, tenantID string) ([
 
 const edgeDelegationCols = `tenant_id::text, id::text, segment_id::text, ca_id::text, host,
 	common_name, serial, certificate_pem, permitted_dns_domains, excluded_dns_domains,
-	attested_key_sha256, attestation_cert_sha256, status, not_before, not_after,
+	attested_key_sha256, attestation_cert_sha256, csr_key_sha256,
+	key_provider, key_storage, key_exportable, custody_assurance, status, not_before, not_after,
 	revoked_at, revoke_reason, created_at, updated_at`
 
 func scanEdgeDelegation(row pgx.Row) (EdgeDelegation, error) {
 	var d EdgeDelegation
 	err := row.Scan(&d.TenantID, &d.ID, &d.SegmentID, &d.CAID, &d.Host,
 		&d.CommonName, &d.Serial, &d.CertificatePEM, &d.PermittedDNSDomains, &d.ExcludedDNSDomains,
-		&d.AttestedKeySHA256, &d.AttestationCertSHA256, &d.Status, &d.NotBefore, &d.NotAfter,
+		&d.AttestedKeySHA256, &d.AttestationCertSHA256, &d.CSRKeySHA256,
+		&d.KeyProvider, &d.KeyStorage, &d.KeyExportable, &d.CustodyAssurance,
+		&d.Status, &d.NotBefore, &d.NotAfter,
 		&d.RevokedAt, &d.RevokeReason, &d.CreatedAt, &d.UpdatedAt)
 	return d, err
+}
+
+func edgeAllowedProvidersOrDefault(in []string) []string {
+	if len(in) == 0 {
+		return []string{"tpm2"}
+	}
+	return in
+}
+
+func edgeProviderOrDefault(in string) string {
+	if in == "" {
+		return "tpm2"
+	}
+	return in
+}
+
+func edgeStorageOrDefault(in string) string {
+	if in == "" {
+		return "device_bound"
+	}
+	return in
+}
+
+func edgeAssuranceOrDefault(in string) string {
+	if in == "" {
+		return "hardware_key_attested"
+	}
+	return in
+}
+
+func edgeCSRKeyDigestOrLegacy(d EdgeDelegation) string {
+	if d.CSRKeySHA256 != "" {
+		return d.CSRKeySHA256
+	}
+	return d.AttestedKeySHA256
 }
 
 // GetEdgeDelegation loads one delegation.

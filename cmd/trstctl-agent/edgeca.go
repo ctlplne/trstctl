@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Edge sub-CA host operations (epic B6). These are ONE-SHOT, fully offline
@@ -31,22 +33,35 @@ import (
 //     agent needs no network client of its own for this.
 
 type edgeCAOptions struct {
-	csrMode    bool
-	tenantID   string
-	segmentID  string
-	commonName string
-	keyOut     string
-	csrOut     string
+	csrMode                 bool
+	tenantID                string
+	segmentID               string
+	commonName              string
+	keyProvider             string
+	keyGeneration           string
+	allowSoftwareKey        bool
+	keyOut                  string
+	keyHandleOut            string
+	csrOut                  string
+	tpmPath                 string
+	tpmOwnerAuthFile        string
+	tpmKeyAuthFile          string
+	tpmPersistentHandleBase uint32
+	pkcs11Module            string
+	pkcs11Token             string
+	pkcs11PINFile           string
+	pkcs11KeyLabelPrefix    string
 
-	issueMode  bool
-	caCert     string
-	caKey      string
-	leafCN     string
-	leafDNS    string
-	leafTTL    time.Duration
-	certOut    string
-	leafKeyOut string
-	journal    string
+	issueMode   bool
+	caCert      string
+	caKey       string
+	caKeyHandle string
+	leafCN      string
+	leafDNS     string
+	leafTTL     time.Duration
+	certOut     string
+	leafKeyOut  string
+	journal     string
 }
 
 // edgeJournal is the reconcile request body, maintained on disk in exactly the
@@ -75,20 +90,59 @@ func runEdgeCSR(opts edgeCAOptions) error {
 	if cn == "" {
 		cn = "trstctl-edge-ca"
 	}
-	keyPEM, csrDER, err := crypto.GenerateEdgeCAKeyAndCSR(cn)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(opts.keyOut, keyPEM, 0o600); err != nil {
-		return fmt.Errorf("write edge CA key: %w", err)
+	providerName := normalizedEdgeKeyProvider(opts.keyProvider)
+	var csrDER []byte
+	switch providerName {
+	case "software":
+		if !opts.allowSoftwareKey {
+			return fmt.Errorf("software edge CA custody is exportable and requires --edge-allow-software-key plus control-plane policy approval")
+		}
+		keyPEM, generatedCSR, err := crypto.GenerateEdgeCAKeyAndCSR(cn)
+		if err != nil {
+			return err
+		}
+		defer secret.Wipe(keyPEM)
+		if err := os.WriteFile(opts.keyOut, keyPEM, 0o600); err != nil {
+			return fmt.Errorf("write edge CA key: %w", err)
+		}
+		csrDER = generatedCSR
+		fmt.Printf("edge CA SOFTWARE key written to %s (0600); this is an explicit EXPORTABLE custody exception\n", opts.keyOut)
+	case "tpm2", "pkcs11":
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		provider, closeProvider, err := openEdgeCAKeyProvider(opts)
+		if err != nil {
+			return fmt.Errorf("open %s edge CA key provider: %w", providerName, err)
+		}
+		defer func() { _ = closeProvider() }()
+		generation := strings.TrimSpace(opts.keyGeneration)
+		if generation == "" {
+			generation = "1"
+		}
+		operationID := fmt.Sprintf("edge-ca/%s/%s/%s", strings.TrimSpace(opts.tenantID), strings.TrimSpace(opts.segmentID), generation)
+		handle, generatedCSR, err := crypto.GenerateEdgeCAKeyHandleAndCSR(ctx, operationID, cn, edgeKeyAlgorithm(providerName), provider)
+		if err != nil {
+			return err
+		}
+		handleJSON, err := json.MarshalIndent(handle, "", "  ")
+		if err != nil {
+			return fmt.Errorf("encode edge CA public key handle: %w", err)
+		}
+		if err := os.WriteFile(opts.keyHandleOut, handleJSON, 0o600); err != nil {
+			return fmt.Errorf("write edge CA public key handle: %w", err)
+		}
+		csrDER = generatedCSR
+		fmt.Printf("edge CA key generated NON-EXTRACTABLY in %s; opaque public handle written to %s\n", providerName, opts.keyHandleOut)
+	default:
+		return fmt.Errorf("unknown --edge-key-provider %q (want tpm2, pkcs11, or software)", opts.keyProvider)
 	}
 	if err := os.WriteFile(opts.csrOut, csrDER, 0o600); err != nil {
 		return fmt.Errorf("write edge CA CSR: %w", err)
 	}
 	challenge := crypto.EdgeAttestationChallenge(
 		strings.TrimSpace(opts.tenantID), strings.TrimSpace(opts.segmentID), csrDER)
-	fmt.Printf("edge CA key written to %s (0600) — it never leaves this host\n", opts.keyOut)
 	fmt.Printf("edge CA CSR written to %s\n", opts.csrOut)
+	fmt.Printf("mint custody: provider=%s storage=%s exportable=%t\n", providerName, edgeKeyStorage(providerName), providerName == "software")
 	fmt.Printf("csr_der (base64, for the mint request): %s\n", base64.StdEncoding.EncodeToString(csrDER))
 	fmt.Printf("attestation challenge (hex): %s\n", hex.EncodeToString(challenge))
 	fmt.Println("have this host's TPM tooling produce a WebAuthn TPM attestation over that challenge;")
@@ -97,17 +151,14 @@ func runEdgeCSR(opts edgeCAOptions) error {
 }
 
 func runEdgeIssue(opts edgeCAOptions, host string) error {
-	if opts.caCert == "" || opts.caKey == "" {
-		return fmt.Errorf("edge-issue requires --edge-ca-cert and --edge-ca-key")
+	providerName := normalizedEdgeKeyProvider(opts.keyProvider)
+	if opts.caCert == "" {
+		return fmt.Errorf("edge-issue requires --edge-ca-cert")
 	}
 	if strings.TrimSpace(opts.leafCN) == "" {
 		return fmt.Errorf("edge-issue requires --edge-issue-cn")
 	}
 	certPEM, err := os.ReadFile(opts.caCert) // #nosec G304 -- operator-configured local path from the agent's own flags (CWE-22)
-	if err != nil {
-		return err
-	}
-	keyPEM, err := os.ReadFile(opts.caKey) // #nosec G304 -- operator-configured local path from the agent's own flags (CWE-22)
 	if err != nil {
 		return err
 	}
@@ -117,14 +168,53 @@ func runEdgeIssue(opts edgeCAOptions, host string) error {
 			dns = append(dns, trimmed)
 		}
 	}
-	leaf, err := crypto.IssueEdgeLeaf(certPEM, keyPEM, crypto.EdgeLeafRequest{
+	request := crypto.EdgeLeafRequest{
 		CommonName: strings.TrimSpace(opts.leafCN),
 		DNSNames:   dns,
 		TTL:        opts.leafTTL,
-	}, time.Now().UTC())
+	}
+	var leaf crypto.EdgeIssuedLeaf
+	switch providerName {
+	case "software":
+		if !opts.allowSoftwareKey {
+			return fmt.Errorf("software edge CA custody is exportable and requires --edge-allow-software-key")
+		}
+		if opts.caKey == "" {
+			return fmt.Errorf("software edge-issue requires --edge-ca-key")
+		}
+		keyPEM, readErr := os.ReadFile(opts.caKey) // #nosec G304 -- operator-configured local path from the agent's own flags (CWE-22)
+		if readErr != nil {
+			return readErr
+		}
+		defer secret.Wipe(keyPEM)
+		leaf, err = crypto.IssueEdgeLeaf(certPEM, keyPEM, request, time.Now().UTC())
+	case "tpm2", "pkcs11":
+		if opts.caKeyHandle == "" {
+			return fmt.Errorf("%s edge-issue requires --edge-ca-key-handle", providerName)
+		}
+		raw, readErr := os.ReadFile(opts.caKeyHandle) // #nosec G304 -- operator-configured local handle path from the agent's own flags (CWE-22)
+		if readErr != nil {
+			return readErr
+		}
+		var handle crypto.EdgeCAKeyHandle
+		if decodeErr := json.Unmarshal(raw, &handle); decodeErr != nil {
+			return fmt.Errorf("decode edge CA public key handle: %w", decodeErr)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		provider, closeProvider, openErr := openEdgeCAKeyProvider(opts)
+		if openErr != nil {
+			return fmt.Errorf("open %s edge CA key provider: %w", providerName, openErr)
+		}
+		defer func() { _ = closeProvider() }()
+		leaf, err = crypto.IssueEdgeLeafWithKeyHandle(ctx, certPEM, handle, provider, request, time.Now().UTC())
+	default:
+		return fmt.Errorf("unknown --edge-key-provider %q (want tpm2, pkcs11, or software)", opts.keyProvider)
+	}
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(leaf.LeafKeyPEM)
 	certOut := opts.certOut
 	if certOut == "" {
 		certOut = "edge-leaf.crt"
@@ -146,6 +236,33 @@ func runEdgeIssue(opts edgeCAOptions, host string) error {
 	fmt.Printf("certificate: %s  key: %s  journal: %s\n", certOut, keyOut, opts.journal)
 	fmt.Println("reconcile the journal when a path exists: trstctl edge delegations reconcile <id> -f " + opts.journal)
 	return nil
+}
+
+func normalizedEdgeKeyProvider(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return "tpm2"
+	}
+	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+func edgeKeyAlgorithm(provider string) crypto.Algorithm {
+	if provider == "pkcs11" {
+		// The shipped PKCS#11 module path creates non-extractable RSA-2048 token
+		// objects today; TPM 2.0 uses its native ECDSA P-256 signing object.
+		return crypto.RSA2048
+	}
+	return crypto.ECDSAP256
+}
+
+func edgeKeyStorage(provider string) string {
+	switch provider {
+	case "tpm2":
+		return "device_bound"
+	case "pkcs11":
+		return "pkcs11"
+	default:
+		return "file"
+	}
 }
 
 // appendEdgeJournal records the issuance in the reconcile-shaped journal. The

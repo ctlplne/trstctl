@@ -33,8 +33,9 @@ import (
 //     CA's key never leaves it), name-constrained to exactly the identifiers
 //     the segment's policy declared, path-length zero, short-lived;
 //   - minting is per-segment OPT-IN (no policy row means OFF) and
-//     attestation-gated: the edge key must be vouched for by a TPM chaining to
-//     roots the operator pinned in the same opt-in;
+//     attestation-gated and custody-policy-bound: TPM2 requires same-key proof;
+//     PKCS#11/software exceptions require an explicit segment allowlist and
+//     carry weaker, honest assurance labels;
 //   - the delegation is revocable from the brain, and because its certificate
 //     joins the parent CA's issued ledger, OCSP and the CRL answer for it;
 //   - local issuances reconcile back on reconnect, re-verified here, and a
@@ -74,6 +75,10 @@ func (s *edgeDelegationService) SetSegmentPolicy(ctx context.Context, tenantID s
 	if _, err := s.segmentName(ctx, tenantID, segmentID); err != nil {
 		return api.EdgeSegmentPolicy{}, err
 	}
+	allowedProviders, err := normalizeEdgeAllowedKeyProviders(req.AllowedKeyProviders)
+	if err != nil {
+		return api.EdgeSegmentPolicy{}, fmt.Errorf("%w: %v", api.ErrEdgeDelegationInvalid, err)
+	}
 	if req.Enabled {
 		// Enabling IS the declaration. A segment enabled without attestation
 		// roots would admit any key that asks; one without identifiers would
@@ -107,6 +112,7 @@ func (s *edgeDelegationService) SetSegmentPolicy(ctx context.Context, tenantID s
 		AttestationRootsPEM: req.AttestationRootsPEM,
 		PermittedDNSDomains: req.PermittedDNSDomains,
 		ExcludedDNSDomains:  req.ExcludedDNSDomains,
+		AllowedKeyProviders: allowedProviders,
 	}); err != nil {
 		return api.EdgeSegmentPolicy{}, err
 	}
@@ -149,10 +155,21 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 		return api.EdgeDelegation{}, fmt.Errorf(
 			"%w: segment %s has not opted in to edge delegation", api.ErrEdgeDelegationRefused, segmentID)
 	}
+	provider, custody, err := edgeCustodyForProvider(req.KeyProvider)
+	if err != nil {
+		return api.EdgeDelegation{}, fmt.Errorf("%w: %v", api.ErrEdgeDelegationInvalid, err)
+	}
+	if !containsEdgeProvider(policy.AllowedKeyProviders, provider) {
+		return api.EdgeDelegation{}, fmt.Errorf(
+			"%w: key provider %s is not allowed by segment policy; software and PKCS#11 lanes must be named explicitly",
+			api.ErrEdgeDelegationRefused, provider)
+	}
 
-	// The attestation gate. The TPM's credential must verify against the
-	// roots the segment's policy pinned, over a challenge that binds tenant,
-	// segment and THIS CSR — and the attested key must BE the CSR's key.
+	// The attestation gate. The TPM credential must verify against the roots
+	// the segment pinned, over a challenge binding tenant, segment and THIS
+	// CSR. In the TPM2 custody lane the attested key must also BE the CSR key.
+	// For an explicitly allowed PKCS#11/software lane it authenticates the host
+	// and request only; the stored assurance label preserves that distinction.
 	if len(req.AttestationCredentialJSON) == 0 {
 		return api.EdgeDelegation{}, fmt.Errorf(
 			"%w: an un-attested host cannot receive a delegated CA", api.ErrEdgeDelegationRefused)
@@ -171,7 +188,7 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 	if err != nil {
 		return api.EdgeDelegation{}, fmt.Errorf("%w: csr: %v", api.ErrEdgeDelegationInvalid, err)
 	}
-	if !bytesEqualConst(attested.PublicKeySHA256, csrKeyDigest) {
+	if provider == "tpm2" && !bytesEqualConst(attested.PublicKeySHA256, csrKeyDigest) {
 		return api.EdgeDelegation{}, fmt.Errorf(
 			"%w: the attested key is not the CSR's key; a TPM vouching for a different key "+
 				"vouches for nothing here", api.ErrEdgeDelegationRefused)
@@ -216,6 +233,11 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 		ExcludedDNSDomains:    policy.ExcludedDNSDomains,
 		AttestedKeySHA256:     crypto.SHA256Hex(attested.PublicKeySHA256),
 		AttestationCertSHA256: crypto.SHA256Hex(attested.AttestationCertificateSHA256),
+		CSRKeySHA256:          crypto.SHA256Hex(csrKeyDigest),
+		KeyProvider:           provider,
+		KeyStorage:            custody.storage,
+		KeyExportable:         custody.exportable,
+		CustodyAssurance:      custody.assurance,
 		NotBefore:             info.NotBefore, NotAfter: info.NotAfter,
 	}); err != nil {
 		return api.EdgeDelegation{}, err
@@ -374,6 +396,7 @@ func (s *edgeDelegationService) policyView(ctx context.Context, tenantID string,
 		AttestationRoots:    len(p.AttestationRootsPEM),
 		PermittedDNSDomains: p.PermittedDNSDomains,
 		ExcludedDNSDomains:  p.ExcludedDNSDomains,
+		AllowedKeyProviders: edgeProvidersOrDefault(p.AllowedKeyProviders),
 		UpdatedAt:           p.UpdatedAt,
 	}
 }
@@ -430,10 +453,79 @@ func edgeDelegationView(d store.EdgeDelegation, now time.Time) api.EdgeDelegatio
 		PermittedDNSDomains: d.PermittedDNSDomains,
 		ExcludedDNSDomains:  d.ExcludedDNSDomains,
 		AttestedKeySHA256:   d.AttestedKeySHA256,
+		CSRKeySHA256:        d.CSRKeySHA256,
+		KeyProvider:         d.KeyProvider,
+		KeyStorage:          d.KeyStorage,
+		KeyExportable:       d.KeyExportable,
+		CustodyAssurance:    d.CustodyAssurance,
 		Status:              status,
 		NotBefore:           d.NotBefore, NotAfter: d.NotAfter,
 		RevokedAt: d.RevokedAt, RevokeReason: d.RevokeReason,
 	}
+}
+
+type edgeCustodyEvidence struct {
+	storage    string
+	exportable bool
+	assurance  string
+}
+
+func edgeCustodyForProvider(raw string) (string, edgeCustodyEvidence, error) {
+	provider := strings.ToLower(strings.TrimSpace(raw))
+	if provider == "" {
+		provider = "tpm2"
+	}
+	switch provider {
+	case "tpm2":
+		return provider, edgeCustodyEvidence{storage: "device_bound", assurance: "hardware_key_attested"}, nil
+	case "pkcs11":
+		// The shipping agent creates a CKA_SENSITIVE, CKA_EXTRACTABLE=false
+		// object. The WebAuthn TPM proof authenticates the host and CSR request,
+		// but cannot cryptographically attest a separate PKCS#11 token object;
+		// the assurance name says exactly that instead of laundering the host
+		// TPM proof into a token-key attestation.
+		return provider, edgeCustodyEvidence{storage: "pkcs11", assurance: "host_attested_operator_claim"}, nil
+	case "software":
+		return provider, edgeCustodyEvidence{storage: "file", exportable: true, assurance: "host_attested_software_exception"}, nil
+	default:
+		return "", edgeCustodyEvidence{}, fmt.Errorf("unknown key_provider %q (want tpm2, pkcs11, or software)", raw)
+	}
+}
+
+func normalizeEdgeAllowedKeyProviders(in []string) ([]string, error) {
+	if len(in) == 0 {
+		return []string{"tpm2"}, nil
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, raw := range in {
+		provider, _, err := edgeCustodyForProvider(raw)
+		if err != nil {
+			return nil, err
+		}
+		if _, duplicate := seen[provider]; duplicate {
+			return nil, fmt.Errorf("allowed_key_providers contains duplicate %q", provider)
+		}
+		seen[provider] = struct{}{}
+		out = append(out, provider)
+	}
+	return out, nil
+}
+
+func edgeProvidersOrDefault(in []string) []string {
+	if len(in) == 0 {
+		return []string{"tpm2"}
+	}
+	return in
+}
+
+func containsEdgeProvider(allowed []string, provider string) bool {
+	for _, candidate := range edgeProvidersOrDefault(allowed) {
+		if candidate == provider {
+			return true
+		}
+	}
+	return false
 }
 
 func bytesEqualConst(a, b []byte) bool {

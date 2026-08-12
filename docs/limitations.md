@@ -460,10 +460,11 @@ never live in the API process. What you can do end to end against the running bi
   exclusion beating permission), path length pinned to zero, and a 30-day
   ceiling on life that is refused rather than clamped. Default OFF: minting
   requires a declared segment's explicit opt-in, and the opt-in is one
-  declaration carrying both the pinned TPM attestation roots and the segment's
-  identifiers. An un-attested host is refused; an attestation over a different
-  key than the CSR's is refused (a TPM vouching for one key must not license
-  delegating another). The delegation is revocable from the brain and its
+  declaration carrying the pinned TPM attestation roots, the segment's
+  identifiers, and a closed allowed-key-provider list. That list defaults to
+  `tpm2` only. An un-attested host is refused. In the default TPM2 lane, an
+  attestation over a different key than the CSR's is refused (a TPM vouching
+  for one key must not license delegating another). The delegation is revocable from the brain and its
   serial lives in the parent CA's issued ledger, so OCSP and the CRL answer
   for it with no new machinery; expiry is the certificate's own clock. Local
   issuance (agent `-edge-issue`) enforces the constraints read FROM THE
@@ -474,15 +475,27 @@ never live in the API process. What you can do end to end against the running bi
   the delegated CA; names re-checked) and records an out-of-constraint leaf AS
   A VIOLATION — visible, never silently dropped and never silently accepted —
   while reconciled leaves enter the certificate inventory so there is no
-  shadow estate. Boundaries, stated exactly: the delegated key is
-  SOFTWARE-BACKED on the host (a PEM file the host operator protects);
-  TPM/PKCS#11-backed key STORAGE is not built — what the TPM provides today is
-  the attestation gate at mint time, and the honest bound either way is the
-  certificate's constraints and short life. Issuances made while the host is
+  shadow estate. Key custody, stated exactly: `trstctl-agent --edge-csr`
+  defaults to a persistent TPM2 signing object and writes only an opaque public
+  handle; `--edge-issue` reopens that handle and asks the TPM to sign. PKCS#11
+  is a configured alternative whose shipping module creates a token object
+  with `CKA_SENSITIVE=true` and `CKA_EXTRACTABLE=false`. It must be explicitly
+  allowed in the segment policy because the host's WebAuthn TPM attestation
+  authenticates the host and CSR request, not the separate token object; the
+  evidence therefore says `host_attested_operator_claim`, not hardware-key
+  attested. Exportable software PEM custody exists only behind BOTH
+  `--edge-key-provider software --edge-allow-software-key` and an explicit
+  segment-policy allowlist entry. Its durable evidence says `file`,
+  `key_exportable=true`, and `host_attested_software_exception`; the console
+  renders that exception rather than borrowing the host TPM's stronger label.
+  Neither hardware path silently falls back when its device/session is absent.
+  Issuances made while the host is
   unreachable are invisible until its journal reconciles, and the console
   panel says so rather than rendering silence as inactivity; there is no
   automatic renewal of a delegation — expiry is the design, and a host that
-  needs longer asks again through the same attested flow.
+  needs longer asks again through the same attested flow. The exact TPM2,
+  PKCS#11, and software-exception command/configuration lanes are documented in
+  [Disconnected edge CA key custody](edge-ca-custody.md).
   Authority agreement (C4): the pipeline now has a PRODUCER. A scheduled round
   observes the store-backed authorities, and when two signed digests commit to
   different state the scheduler hands every disagreeing pair to a sink that

@@ -78,6 +78,7 @@ nav:
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
   - Key custody: custody.md
+  - Disconnected edge CA custody: edge-ca-custody.md
   - Accessibility (VPAT): accessibility-vpat.md
   - Observability: observability.md
   - Performance:

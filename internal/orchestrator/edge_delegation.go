@@ -20,7 +20,7 @@ func (o *Orchestrator) SetEdgeSegmentPolicy(ctx context.Context, tenantID string
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventEdgeSegmentPolicySet, tenantID, payload)
+	_, err = o.emitVersioned(ctx, projections.EventEdgeSegmentPolicySet, tenantID, projections.EdgeCustodyEventSchemaVersion, payload)
 	return err
 }
 
@@ -30,7 +30,7 @@ func (o *Orchestrator) RecordEdgeDelegationIssued(ctx context.Context, tenantID 
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventEdgeDelegationIssued, tenantID, payload)
+	_, err = o.emitVersioned(ctx, projections.EventEdgeDelegationIssued, tenantID, projections.EdgeCustodyEventSchemaVersion, payload)
 	return err
 }
 

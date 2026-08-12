@@ -3601,14 +3601,16 @@ func componentSchemas() map[string]*Schema {
 		"attestation_roots":     {Type: "integer"},
 		"permitted_dns_domains": {Type: "array", Items: str()},
 		"excluded_dns_domains":  {Type: "array", Items: str()},
+		"allowed_key_providers": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}}},
 		"updated_at":            {Type: "string", Format: "date-time"},
-	}, "segment_id", "enabled", "attestation_roots", "updated_at")
+	}, "segment_id", "enabled", "attestation_roots", "allowed_key_providers", "updated_at")
 	edgeSegmentPolicyInput := object(map[string]*Schema{
 		"segment_id":            str(),
 		"enabled":               {Type: "boolean"},
 		"attestation_roots_pem": {Type: "array", Items: str()},
 		"permitted_dns_domains": {Type: "array", Items: str()},
 		"excluded_dns_domains":  {Type: "array", Items: str()},
+		"allowed_key_providers": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}}},
 	}, "enabled")
 	edgeDelegationSchema := object(map[string]*Schema{
 		"id": str(), "segment_id": str(), "ca_id": str(), "host": str(),
@@ -3616,17 +3618,23 @@ func componentSchemas() map[string]*Schema {
 		"permitted_dns_domains": {Type: "array", Items: str()},
 		"excluded_dns_domains":  {Type: "array", Items: str()},
 		"attested_key_sha256":   str(),
+		"csr_key_sha256":        str(),
+		"key_provider":          {Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}},
+		"key_storage":           {Type: "string", Enum: []string{"device_bound", "pkcs11", "file"}},
+		"key_exportable":        {Type: "boolean"},
+		"custody_assurance":     {Type: "string", Enum: []string{"hardware_key_attested", "host_attested_operator_claim", "host_attested_software_exception"}},
 		"status":                {Type: "string", Enum: []string{"active", "revoked", "expired"}},
 		"not_before":            {Type: "string", Format: "date-time"},
 		"not_after":             {Type: "string", Format: "date-time"},
 		"revoked_at":            {Type: "string", Format: "date-time"},
 		"revoke_reason":         str(),
-	}, "id", "segment_id", "ca_id", "host", "common_name", "serial", "permitted_dns_domains", "status", "not_before", "not_after")
+	}, "id", "segment_id", "ca_id", "host", "common_name", "serial", "permitted_dns_domains", "csr_key_sha256", "key_provider", "key_storage", "key_exportable", "custody_assurance", "status", "not_before", "not_after")
 	edgeDelegationMintInput := object(map[string]*Schema{
 		"segment_id": str(), "ca_id": str(), "host": str(), "common_name": str(),
 		"ttl_seconds":                 {Type: "integer"},
 		"csr_der":                     {Type: "string", Format: "byte"},
 		"attestation_credential_json": {Type: "string", Format: "byte"},
+		"key_provider":                {Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}},
 	}, "segment_id", "ca_id", "host", "csr_der", "attestation_credential_json")
 	edgeIssuanceSchema := object(map[string]*Schema{
 		"serial": str(), "subject": str(),

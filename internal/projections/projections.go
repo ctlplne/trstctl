@@ -517,7 +517,21 @@ type ADCSDatabaseIngested struct {
 }
 
 // EdgeSegmentPolicySet is the payload of edge.segment.policy_set (B6).
+// Version 2 adds the explicit edge key-provider allowlist. Version 1 remains
+// replayable as TPM2-only so old history cannot gain a software exception.
+const EdgeCustodyEventSchemaVersion = 2
+
 type EdgeSegmentPolicySet struct {
+	SegmentID           string   `json:"segment_id"`
+	Enabled             bool     `json:"enabled"`
+	AttestationRootsPEM []string `json:"attestation_roots_pem,omitempty"`
+	PermittedDNSDomains []string `json:"permitted_dns_domains,omitempty"`
+	ExcludedDNSDomains  []string `json:"excluded_dns_domains,omitempty"`
+	AllowedKeyProviders []string `json:"allowed_key_providers,omitempty"`
+	SetBy               string   `json:"set_by,omitempty"`
+}
+
+type edgeSegmentPolicySetV1 struct {
 	SegmentID           string   `json:"segment_id"`
 	Enabled             bool     `json:"enabled"`
 	AttestationRootsPEM []string `json:"attestation_roots_pem,omitempty"`
@@ -528,6 +542,27 @@ type EdgeSegmentPolicySet struct {
 
 // EdgeDelegationIssued is the payload of edge.delegation.issued (B6).
 type EdgeDelegationIssued struct {
+	ID                    string    `json:"id"`
+	SegmentID             string    `json:"segment_id"`
+	CAID                  string    `json:"ca_id"`
+	Host                  string    `json:"host"`
+	CommonName            string    `json:"common_name"`
+	Serial                string    `json:"serial"`
+	CertificatePEM        string    `json:"certificate_pem"`
+	PermittedDNSDomains   []string  `json:"permitted_dns_domains"`
+	ExcludedDNSDomains    []string  `json:"excluded_dns_domains,omitempty"`
+	AttestedKeySHA256     string    `json:"attested_key_sha256"`
+	AttestationCertSHA256 string    `json:"attestation_cert_sha256"`
+	CSRKeySHA256          string    `json:"csr_key_sha256,omitempty"`
+	KeyProvider           string    `json:"key_provider,omitempty"`
+	KeyStorage            string    `json:"key_storage,omitempty"`
+	KeyExportable         bool      `json:"key_exportable"`
+	CustodyAssurance      string    `json:"custody_assurance,omitempty"`
+	NotBefore             time.Time `json:"not_before"`
+	NotAfter              time.Time `json:"not_after"`
+}
+
+type edgeDelegationIssuedV1 struct {
 	ID                    string    `json:"id"`
 	SegmentID             string    `json:"segment_id"`
 	CAID                  string    `json:"ca_id"`
@@ -2824,8 +2859,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventEnrollmentDiagnosticObserved:             {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
 	EventMDMPollConfigured:                        {1: true},
-	EventEdgeSegmentPolicySet:                     {1: true},
-	EventEdgeDelegationIssued:                     {1: true},
+	EventEdgeSegmentPolicySet:                     {1: true, EdgeCustodyEventSchemaVersion: true},
+	EventEdgeDelegationIssued:                     {1: true, EdgeCustodyEventSchemaVersion: true},
 	EventEdgeDelegationRevoked:                    {1: true},
 	EventEdgeIssuanceReconciled:                   {1: true},
 	EventADCSDatabaseIngested:                     {1: true},
@@ -3235,6 +3270,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			AttestationRootsPEM: pl.AttestationRootsPEM,
 			PermittedDNSDomains: pl.PermittedDNSDomains,
 			ExcludedDNSDomains:  pl.ExcludedDNSDomains,
+			AllowedKeyProviders: pl.AllowedKeyProviders,
 			UpdatedAt:           e.Time,
 		}, e.Sequence)
 	case EventEdgeDelegationIssued:
@@ -3249,6 +3285,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			PermittedDNSDomains: pl.PermittedDNSDomains,
 			ExcludedDNSDomains:  pl.ExcludedDNSDomains,
 			AttestedKeySHA256:   pl.AttestedKeySHA256, AttestationCertSHA256: pl.AttestationCertSHA256,
+			CSRKeySHA256: pl.CSRKeySHA256, KeyProvider: pl.KeyProvider, KeyStorage: pl.KeyStorage,
+			KeyExportable: pl.KeyExportable, CustodyAssurance: pl.CustodyAssurance,
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, CreatedAt: e.Time,
 		}, e.Sequence); err != nil {
 			return err

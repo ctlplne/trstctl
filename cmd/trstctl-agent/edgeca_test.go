@@ -3,7 +3,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,12 +25,14 @@ func TestEdgeCSRAndIssueOffline(t *testing.T) {
 	keyPath := filepath.Join(dir, "edge.key")
 	csrPath := filepath.Join(dir, "edge.csr")
 	if err := runEdgeCSR(edgeCAOptions{
-		csrMode:    true,
-		tenantID:   "77777777-7777-7777-7777-777777777777",
-		segmentID:  "88888888-8888-8888-8888-888888888888",
-		commonName: "offline edge CA",
-		keyOut:     keyPath,
-		csrOut:     csrPath,
+		csrMode:          true,
+		tenantID:         "77777777-7777-7777-7777-777777777777",
+		segmentID:        "88888888-8888-8888-8888-888888888888",
+		commonName:       "offline edge CA",
+		keyProvider:      "software",
+		allowSoftwareKey: true,
+		keyOut:           keyPath,
+		csrOut:           csrPath,
 	}); err != nil {
 		t.Fatalf("edge-csr: %v", err)
 	}
@@ -75,14 +79,16 @@ func TestEdgeCSRAndIssueOffline(t *testing.T) {
 	journalPath := filepath.Join(dir, "journal.json")
 	issue := func(cn string) error {
 		return runEdgeIssue(edgeCAOptions{
-			issueMode:  true,
-			caCert:     delegationPath,
-			caKey:      keyPath,
-			leafCN:     cn,
-			leafTTL:    30 * time.Minute,
-			certOut:    filepath.Join(dir, "leaf.crt"),
-			leafKeyOut: filepath.Join(dir, "leaf.key"),
-			journal:    journalPath,
+			issueMode:        true,
+			keyProvider:      "software",
+			allowSoftwareKey: true,
+			caCert:           delegationPath,
+			caKey:            keyPath,
+			leafCN:           cn,
+			leafTTL:          30 * time.Minute,
+			certOut:          filepath.Join(dir, "leaf.crt"),
+			leafKeyOut:       filepath.Join(dir, "leaf.key"),
+			journal:          journalPath,
 		}, "bunker-offline")
 	}
 	if err := issue("db.edge.example.test"); err != nil {
@@ -115,5 +121,160 @@ func TestEdgeCSRAndIssueOffline(t *testing.T) {
 	}
 	if !strings.Contains(journal.CertificatesPEM[0], "BEGIN CERTIFICATE") {
 		t.Fatal("journal entry is not a PEM certificate")
+	}
+}
+
+func TestEdgeSoftwareKeyIsAnExplicitPolicyException(t *testing.T) {
+	dir := t.TempDir()
+	err := runEdgeCSR(edgeCAOptions{
+		csrMode: true, tenantID: "tenant-a", segmentID: "segment-a",
+		keyProvider: "software", keyOut: filepath.Join(dir, "edge.key"), csrOut: filepath.Join(dir, "edge.csr"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "allow-software") {
+		t.Fatalf("software fallback error = %v, want explicit opt-in refusal", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "edge.key")); !os.IsNotExist(statErr) {
+		t.Fatalf("software key was written before custody opt-in: %v", statErr)
+	}
+}
+
+type edgeCLITestProvider struct {
+	name string
+	key  *crypto.LockedSigner
+}
+
+func (p *edgeCLITestProvider) Name() string { return p.name }
+func (p *edgeCLITestProvider) GenerateManagedKey(ctx context.Context, algorithm crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+	return p.GenerateManagedKeyForOperation(ctx, "test-unscoped", algorithm)
+}
+func (p *edgeCLITestProvider) GenerateManagedKeyForOperation(ctx context.Context, _ string, algorithm crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, crypto.KeyRef{}, err
+	}
+	if p.key == nil {
+		key, err := crypto.GenerateLockedKey(algorithm)
+		if err != nil {
+			return nil, crypto.KeyRef{}, err
+		}
+		p.key = key
+	}
+	return edgeCLITestMessageSigner{p.key}, crypto.KeyRef{ID: "opaque-device-handle", Algorithm: algorithm}, nil
+}
+func (p *edgeCLITestProvider) RotateKey(ctx context.Context, ref crypto.KeyRef) (crypto.Signer, crypto.KeyRef, error) {
+	return p.GenerateManagedKey(ctx, ref.Algorithm)
+}
+func (p *edgeCLITestProvider) RotateKeyForOperation(ctx context.Context, op string, ref crypto.KeyRef) (crypto.Signer, crypto.KeyRef, error) {
+	return p.GenerateManagedKeyForOperation(ctx, op, ref.Algorithm)
+}
+func (*edgeCLITestProvider) RevokeKey(context.Context, crypto.KeyRef) error  { return nil }
+func (*edgeCLITestProvider) ZeroizeKey(context.Context, crypto.KeyRef) error { return nil }
+func (*edgeCLITestProvider) RevokeKeyForOperation(context.Context, string, crypto.KeyRef) error {
+	return nil
+}
+func (*edgeCLITestProvider) ZeroizeKeyForOperation(context.Context, string, crypto.KeyRef) error {
+	return nil
+}
+func (p *edgeCLITestProvider) SignManagedDigest(ctx context.Context, ref crypto.KeyRef, digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if ref.ID != "opaque-device-handle" || p.key == nil {
+		return nil, fmt.Errorf("test device: unknown handle")
+	}
+	return p.key.SignDigest(digest, opts)
+}
+
+type edgeCLITestMessageSigner struct{ *crypto.LockedSigner }
+
+func (s edgeCLITestMessageSigner) Sign(message []byte, opts crypto.SignOptions) ([]byte, error) {
+	hash := opts.Hash
+	if hash == "" {
+		hash = crypto.SHA256
+	}
+	digest, err := crypto.Digest(hash, message)
+	if err != nil {
+		return nil, err
+	}
+	return s.SignDigest(digest, opts)
+}
+
+func TestEdgeHardwareCLIUsesOnlyOpaqueHandleAndFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	provider := &edgeCLITestProvider{name: "tpm2"}
+	t.Cleanup(func() {
+		if provider.key != nil {
+			provider.key.Destroy()
+		}
+	})
+	oldOpen := openEdgeCAKeyProvider
+	openEdgeCAKeyProvider = func(opts edgeCAOptions) (crypto.EdgeCAKeyProvider, func() error, error) {
+		if opts.keyProvider != "tpm2" {
+			return nil, nil, fmt.Errorf("unexpected provider %q", opts.keyProvider)
+		}
+		return provider, func() error { return nil }, nil
+	}
+	t.Cleanup(func() { openEdgeCAKeyProvider = oldOpen })
+
+	handlePath := filepath.Join(dir, "edge.keyref.json")
+	csrPath := filepath.Join(dir, "edge.csr")
+	opts := edgeCAOptions{
+		csrMode: true, tenantID: "tenant-a", segmentID: "segment-a", commonName: "hardware edge CA",
+		keyProvider: "tpm2", keyGeneration: "1", keyHandleOut: handlePath, csrOut: csrPath,
+	}
+	if err := runEdgeCSR(opts); err != nil {
+		t.Fatalf("hardware edge-csr: %v", err)
+	}
+	handleRaw, err := os.ReadFile(handlePath) // #nosec G304 -- t.TempDir path (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(handleRaw), "PRIVATE KEY") || strings.Contains(string(handleRaw), "private_key") {
+		t.Fatalf("opaque handle file contains private-key material: %s", handleRaw)
+	}
+	var handle crypto.EdgeCAKeyHandle
+	if err := json.Unmarshal(handleRaw, &handle); err != nil || handle.Provider != "tpm2" || handle.KeyID == "" {
+		t.Fatalf("handle = %+v, err=%v", handle, err)
+	}
+	csrDER, err := os.ReadFile(csrPath) // #nosec G304 -- t.TempDir path (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parentSigner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(parentSigner.Destroy)
+	parent, err := crypto.SelfSignedHierarchyCA(parentSigner, crypto.HierarchyCAProfile{
+		CommonName: "parent", MaxPathLen: 1, TTL: 24 * time.Hour, PermittedDNSDomains: []string{"edge.example.test"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delegation, err := crypto.MintDelegatedEdgeCAFromCSR(parent.CertificateDER, parentSigner, csrDER, crypto.EdgeCARequest{
+		CommonName: "hardware edge CA", PermittedDNSDomains: []string{"edge.example.test"}, TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delegationPath := filepath.Join(dir, "edge-ca.crt")
+	if err := os.WriteFile(delegationPath, delegation.CertificatePEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runEdgeIssue(edgeCAOptions{
+		issueMode: true, keyProvider: "tpm2", caCert: delegationPath, caKeyHandle: handlePath,
+		leafCN: "db.edge.example.test", certOut: filepath.Join(dir, "leaf.crt"),
+		leafKeyOut: filepath.Join(dir, "leaf.key"), journal: filepath.Join(dir, "journal.json"),
+	}, "edge-host"); err != nil {
+		t.Fatalf("hardware edge-issue: %v", err)
+	}
+
+	openEdgeCAKeyProvider = func(edgeCAOptions) (crypto.EdgeCAKeyProvider, func() error, error) {
+		return nil, nil, fmt.Errorf("TPM unavailable")
+	}
+	if err := runEdgeIssue(edgeCAOptions{
+		issueMode: true, keyProvider: "tpm2", caCert: delegationPath, caKeyHandle: handlePath,
+		leafCN: "db.edge.example.test",
+	}, "edge-host"); err == nil || !strings.Contains(err.Error(), "TPM unavailable") {
+		t.Fatalf("unavailable device error = %v; hardware mode must not fall back to software", err)
 	}
 }

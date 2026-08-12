@@ -21,7 +21,7 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 		t.Fatalf("repo root: %v", err)
 	}
 	goModCache := hostGoModCache(t)
-	image := "trstctl-softhsm-go:kms-03"
+	image := "trstctl-softhsm-go:aud-26-edge-custody"
 	if out, err := exec.Command("docker", "image", "inspect", image).CombinedOutput(); err != nil {
 		build := exec.Command("docker", "build", "-t", image, filepath.Join("testdata", "softhsm")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		if buildOut, buildErr := build.CombinedOutput(); buildErr != nil {
@@ -45,7 +45,10 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 		"test -n \"$TRSTCTL_SOFTHSM_MODULE\"",
 		"export TRSTCTL_SOFTHSM_TOKEN_LABEL=trstctl-kms03",
 		"export TRSTCTL_SOFTHSM_USER_PIN=987654",
-		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test -tags=pkcs11cgo ./internal/kms/pkcs11 -run TestSoftHSMRealBindingGenerateSign -count=1 -v",
+		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test -tags=pkcs11cgo ./internal/kms/pkcs11 -run 'TestSoftHSMRealBindingGenerateSign|TestSoftHSMEdgeCAHandleSurvivesSessionRestart' -count=1 -v",
+		"pkcs11-tool --module \"$TRSTCTL_SOFTHSM_MODULE\" --token-label trstctl-kms03 --login --pin 987654 --list-objects --type privkey >/tmp/private-objects.txt",
+		"grep -qi 'sensitive' /tmp/private-objects.txt",
+		"grep -qi 'never extractable' /tmp/private-objects.txt",
 	}, "\n")
 
 	args := []string{
@@ -63,6 +66,9 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "SOFTHSM_PKCS11_OK") {
 		t.Fatalf("SoftHSM integration did not report success:\n%s", out)
+	}
+	if !strings.Contains(string(out), "SOFTHSM_EDGE_CA_OK") {
+		t.Fatalf("SoftHSM edge CA restart journey did not report success:\n%s", out)
 	}
 }
 

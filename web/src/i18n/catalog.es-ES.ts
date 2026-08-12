@@ -4431,6 +4431,14 @@ const esESCatalog = {
   "source.edge.attested.key.b6edge00014": "Clave atestada",
   "source.edge.reconcile.note.b6edge00015":
     "Las emisiones realizadas mientras un host está inalcanzable solo se hacen visibles cuando su diario se reconcilia; una delegación sin ninguna listada puede seguir emitiendo. Las hojas reconciliadas fuera de las restricciones de la delegación se registran como violaciones, de forma visible.",
+  "source.edge.allowed.custody.aud2600018": "Custodia permitida",
+  "source.edge.custody.aud2600019": "Custodia de clave",
+  "source.edge.assurance.aud2600020": "Garantía de custodia",
+  "source.edge.exportable.aud2600021": "EXPORTABLE",
+  "source.edge.nonexportable.aud2600022": "no exportable",
+  "source.edge.assurance.hardware.aud2600023": "Clave CSR atestada por TPM",
+  "source.edge.assurance.operator.claim.aud2600024": "Host atestado; custodia del token declarada por el operador",
+  "source.edge.assurance.software.exception.aud2600025": "Host atestado; excepción de software exportable",
   // F4 AD CS certificate-database panel — Machine-authored translations, FLAG FOR HUMAN REVIEW.
   "source.adcs.database.f4adcs0001": "Base de datos de certificados de AD CS",
   "source.adcs.database.intro.f4adcs0002":

@@ -6,5 +6,6 @@ RUN apt-get update \
         findutils \
         gcc \
         libc6-dev \
+        opensc \
         softhsm2 \
     && rm -rf /var/lib/apt/lists/*

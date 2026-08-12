@@ -2943,9 +2943,14 @@ EdgeDelegation = TypedDict(
         'ca_id': str,
         'certificate_pem': str,
         'common_name': str,
+        'csr_key_sha256': str,
+        'custody_assurance': str,
         'excluded_dns_domains': list[str],
         'host': str,
         'id': str,
+        'key_exportable': bool,
+        'key_provider': str,
+        'key_storage': str,
         'not_after': str,
         'not_before': str,
         'permitted_dns_domains': list[str],
@@ -2984,6 +2989,7 @@ EdgeDelegationMintInput = TypedDict(
         'common_name': str,
         'csr_der': str,
         'host': str,
+        'key_provider': str,
         'segment_id': str,
         'ttl_seconds': int,
     },
@@ -3038,6 +3044,7 @@ EdgeReconcileResult = TypedDict(
 EdgeSegmentPolicy = TypedDict(
     'EdgeSegmentPolicy',
     {
+        'allowed_key_providers': list[str],
         'attestation_roots': int,
         'enabled': bool,
         'excluded_dns_domains': list[str],
@@ -3052,6 +3059,7 @@ EdgeSegmentPolicy = TypedDict(
 EdgeSegmentPolicyInput = TypedDict(
     'EdgeSegmentPolicyInput',
     {
+        'allowed_key_providers': list[str],
         'attestation_roots_pem': list[str],
         'enabled': bool,
         'excluded_dns_domains': list[str],

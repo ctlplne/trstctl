@@ -6387,6 +6387,38 @@ export const messages = {
       "Issuances made while a host is unreachable become visible only when its journal reconciles; a delegation listing none may still be issuing. Reconciled leaves outside the delegation's constraints are recorded as violations, visibly.",
     description: "B6: the honesty rule — silence from an air-gapped host is absence of evidence, and the panel must not render it as inactivity.",
   },
+  "source.edge.allowed.custody.aud2600018": {
+    defaultMessage: "Allowed custody",
+    description: "AUD-26: segment policy column listing the only edge CA key providers the mint accepts.",
+  },
+  "source.edge.custody.aud2600019": {
+    defaultMessage: "Key custody",
+    description: "AUD-26: provider, storage locus, and exportability of a delegated edge CA key.",
+  },
+  "source.edge.assurance.aud2600020": {
+    defaultMessage: "Custody assurance",
+    description: "AUD-26: what the recorded proof actually establishes about the delegated key.",
+  },
+  "source.edge.exportable.aud2600021": {
+    defaultMessage: "EXPORTABLE",
+    description: "AUD-26: high-salience warning that private key bytes can leave their store.",
+  },
+  "source.edge.nonexportable.aud2600022": {
+    defaultMessage: "non-exportable",
+    description: "AUD-26: custody property for TPM/PKCS#11 edge CA keys.",
+  },
+  "source.edge.assurance.hardware.aud2600023": {
+    defaultMessage: "CSR key attested by TPM",
+    description: "AUD-26: strongest edge custody lane; attestation and CSR name the same TPM key.",
+  },
+  "source.edge.assurance.operator.claim.aud2600024": {
+    defaultMessage: "Host attested; token custody operator-declared",
+    description: "AUD-26: honest PKCS#11 evidence label; host TPM proof does not attest a separate token object.",
+  },
+  "source.edge.assurance.software.exception.aud2600025": {
+    defaultMessage: "Host attested; exportable software exception",
+    description: "AUD-26: explicit software fallback label that cannot be mistaken for hardware custody.",
+  },
   "source.crypto.readiness.m2seq00001": {
     defaultMessage: "Crypto migration sequencing",
     description: "M2: panel heading — crypto assets ordered by observed dependency, not severity alone.",

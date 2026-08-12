@@ -59,6 +59,7 @@ export function EdgeDelegationsPanel() {
                     <th className="pr-4 font-medium">{translateNow("source.edge.segment.b6edge00010")}</th>
                     <th className="pr-4 font-medium">{translateNow("source.edge.enabled.b6edge00011")}</th>
                     <th className="pr-4 font-medium">{translateNow("source.edge.attestation.roots.b6edge00012")}</th>
+                    <th className="pr-4 font-medium">{translateNow("source.edge.allowed.custody.aud2600018")}</th>
                     <th className="pr-4 font-medium">{translateNow("source.edge.constraints.b6edge00007")}</th>
                   </tr>
                 </thead>
@@ -68,6 +69,7 @@ export function EdgeDelegationsPanel() {
                       <td className="py-1 pr-4">{p.segment_name || p.segment_id}</td>
                       <td className="py-1 pr-4">{p.enabled ? translateNow("source.edge.on.b6edge00016") : translateNow("source.edge.off.b6edge00017")}</td>
                       <td className="py-1 pr-4 tabular-nums">{p.attestation_roots}</td>
+                      <td className="py-1 pr-4 font-mono text-xs">{(p.allowed_key_providers ?? ["tpm2"]).join(", ")}</td>
                       <td className="py-1 pr-4 font-mono text-xs">
                         {(p.permitted_dns_domains ?? []).join(", ")}
                         {(p.excluded_dns_domains ?? []).length > 0 ? (
@@ -94,7 +96,8 @@ export function EdgeDelegationsPanel() {
                     <th className="pr-4 font-medium">{translateNow("source.edge.status.b6edge00008")}</th>
                     <th className="pr-4 font-medium">{translateNow("source.edge.constraints.b6edge00007")}</th>
                     <th className="pr-4 font-medium">{translateNow("source.edge.expires.b6edge00009")}</th>
-                    <th className="pr-4 font-medium">{translateNow("source.edge.attested.key.b6edge00014")}</th>
+                    <th className="pr-4 font-medium">{translateNow("source.edge.custody.aud2600019")}</th>
+                    <th className="pr-4 font-medium">{translateNow("source.edge.assurance.aud2600020")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -111,7 +114,11 @@ export function EdgeDelegationsPanel() {
                       </td>
                       <td className="py-1 pr-4 font-mono text-xs">{(d.permitted_dns_domains ?? []).join(", ")}</td>
                       <td className="py-1 pr-4 tabular-nums">{new Date(d.not_after).toISOString().slice(0, 10)}</td>
-                      <td className="py-1 pr-4 font-mono text-xs">{d.attested_key_sha256 ? d.attested_key_sha256.slice(0, 16) : "—"}</td>
+                      <td className="py-1 pr-4 font-mono text-xs">
+                        {d.key_provider} · {d.key_storage} ·{" "}
+                        {d.key_exportable ? translateNow("source.edge.exportable.aud2600021") : translateNow("source.edge.nonexportable.aud2600022")}
+                      </td>
+                      <td className="py-1 pr-4">{edgeCustodyAssuranceLabel(d.custody_assurance)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -123,4 +130,15 @@ export function EdgeDelegationsPanel() {
       )}
     </section>
   );
+}
+
+export function edgeCustodyAssuranceLabel(value: EdgeDelegationList["items"][number]["custody_assurance"]): string {
+  switch (value) {
+    case "hardware_key_attested":
+      return translateNow("source.edge.assurance.hardware.aud2600023");
+    case "host_attested_operator_claim":
+      return translateNow("source.edge.assurance.operator.claim.aud2600024");
+    case "host_attested_software_exception":
+      return translateNow("source.edge.assurance.software.exception.aud2600025");
+  }
 }

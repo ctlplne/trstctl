@@ -2071,9 +2071,14 @@ export interface EdgeDelegation {
   ca_id: string;
   certificate_pem?: string;
   common_name: string;
+  csr_key_sha256: string;
+  custody_assurance: "hardware_key_attested" | "host_attested_operator_claim" | "host_attested_software_exception";
   excluded_dns_domains?: string[];
   host: string;
   id: string;
+  key_exportable: boolean;
+  key_provider: "tpm2" | "pkcs11" | "software";
+  key_storage: "device_bound" | "pkcs11" | "file";
   not_after: string;
   not_before: string;
   permitted_dns_domains: string[];
@@ -2100,6 +2105,7 @@ export interface EdgeDelegationMintInput {
   common_name?: string;
   csr_der: string;
   host: string;
+  key_provider?: "tpm2" | "pkcs11" | "software";
   segment_id: string;
   ttl_seconds?: number;
 }
@@ -2134,6 +2140,7 @@ export interface EdgeReconcileResult {
 }
 
 export interface EdgeSegmentPolicy {
+  allowed_key_providers: ("tpm2" | "pkcs11" | "software")[];
   attestation_roots: number;
   enabled: boolean;
   excluded_dns_domains?: string[];
@@ -2144,6 +2151,7 @@ export interface EdgeSegmentPolicy {
 }
 
 export interface EdgeSegmentPolicyInput {
+  allowed_key_providers?: ("tpm2" | "pkcs11" | "software")[];
   attestation_roots_pem?: string[];
   enabled: boolean;
   excluded_dns_domains?: string[];

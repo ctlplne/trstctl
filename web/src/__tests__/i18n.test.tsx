@@ -608,8 +608,14 @@ describe("i18n boundary", () => {
       // The es/de wording preserves that incomplete means missing evidence,
       // never a safe or inferred custody state. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "9f6dc41cda383a48a4eb81ae037342e80dc904cc5fcd448dca408da9dbf082eb",
-      "de-DE": "f21c4aee0a4c7b04ae229f74038193758fc55f4f7e2b481167e7c84142603aab",
+      // AUD-26/AUD-123 edge-custody re-pin: eight source.edge.* keys name
+      // TPM-backed, PKCS#11-backed, and deliberately exceptional software
+      // custody. The wording must not translate a host-attested PKCS#11
+      // operator claim into TPM same-key proof, or an exportable software key
+      // into hardware custody. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "5fc5388582347ae775a0d21cd52e918744cc53f0a5d0c7c784689ebaf9e01259",
+      "de-DE": "1b9f6a6d10d88d1f9397f883d5c87f3ef66df374b2f81c9db86ec0ba73307671",
     });
   });
 

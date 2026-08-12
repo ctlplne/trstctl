@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	172: true,
 	170: true,
 	167: true,
 	164: true,
@@ -58,6 +59,79 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0172BackfillsTruthfulEdgeCustodyAndConstrainsNewRows(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 172)
+	if target.noTx || target.name != "0172_edge_ca_key_custody.sql" {
+		t.Fatalf("migration 0172 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	segmentID := uuid(tenantA, 17201)
+	delegationID := uuid(tenantA, 17202)
+	caID := uuid(tenantA, 17203)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO edge_segment_policies
+		       (tenant_id, segment_id, enabled, attestation_roots_pem,
+		        permitted_dns_domains, excluded_dns_domains, updated_at, event_sequence)
+		VALUES ($1, $2, true, ARRAY['root'], ARRAY['edge.example.test'], ARRAY[]::text[], now(), 1)`,
+		tenantA, segmentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO edge_delegations
+		       (tenant_id, id, segment_id, ca_id, host, common_name, serial,
+		        certificate_pem, permitted_dns_domains, excluded_dns_domains,
+		        attested_key_sha256, attestation_cert_sha256, status,
+		        not_before, not_after, revoked_at, revoke_reason,
+		        created_at, updated_at, event_sequence)
+		VALUES ($1, $2, $3, $4, 'edge-01', 'edge CA', '17:02', 'cert',
+		        ARRAY['edge.example.test'], ARRAY[]::text[], 'same-key-digest',
+		        'attestation-cert', 'active', now(), now() + interval '1 day',
+		        NULL, '', now(), now(), 2)`, tenantA, delegationID, segmentID, caID); err != nil {
+		t.Fatal(err)
+	}
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	var providers []string
+	if err := pool.QueryRow(ctx, `SELECT allowed_key_providers FROM edge_segment_policies WHERE tenant_id=$1 AND segment_id=$2`,
+		tenantA, segmentID).Scan(&providers); err != nil {
+		t.Fatal(err)
+	}
+	if len(providers) != 1 || providers[0] != "tpm2" {
+		t.Fatalf("legacy provider policy = %v, want TPM2-only", providers)
+	}
+	var csrDigest, provider, storage, assurance string
+	var exportable bool
+	if err := pool.QueryRow(ctx, `
+		SELECT csr_key_sha256, key_provider, key_storage, key_exportable, custody_assurance
+		  FROM edge_delegations WHERE tenant_id=$1 AND id=$2`, tenantA, delegationID).
+		Scan(&csrDigest, &provider, &storage, &exportable, &assurance); err != nil {
+		t.Fatal(err)
+	}
+	if csrDigest != "same-key-digest" || provider != "tpm2" || storage != "device_bound" || exportable || assurance != "hardware_key_attested" {
+		t.Fatalf("legacy custody = digest:%q provider:%q storage:%q exportable:%t assurance:%q", csrDigest, provider, storage, exportable, assurance)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE edge_delegations SET key_provider='software' WHERE tenant_id=$1 AND id=$2`, tenantA, delegationID); err == nil {
+		t.Fatal("0172 accepted a half-updated software claim with device-bound/non-exportable TPM evidence")
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE edge_delegations
+		   SET key_provider='software', key_storage='file', key_exportable=true,
+		       custody_assurance='host_attested_software_exception'
+		 WHERE tenant_id=$1 AND id=$2`, tenantA, delegationID); err != nil {
+		t.Fatalf("0172 refused the one explicit software custody tuple: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE edge_delegations SET key_storage='somewhere' WHERE tenant_id=$1 AND id=$2`, tenantA, delegationID); err == nil {
+		t.Fatal("0172 accepted an unknown edge key storage locus")
+	}
 }
 
 func TestMigration0167PreservesLegacyIncidentRowsAndAddsFailClosedPlanDefaultsAUD41(t *testing.T) {

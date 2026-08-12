@@ -8004,6 +8004,17 @@
           "common_name": {
             "type": "string"
           },
+          "csr_key_sha256": {
+            "type": "string"
+          },
+          "custody_assurance": {
+            "enum": [
+              "hardware_key_attested",
+              "host_attested_operator_claim",
+              "host_attested_software_exception"
+            ],
+            "type": "string"
+          },
           "excluded_dns_domains": {
             "items": {
               "type": "string"
@@ -8014,6 +8025,25 @@
             "type": "string"
           },
           "id": {
+            "type": "string"
+          },
+          "key_exportable": {
+            "type": "boolean"
+          },
+          "key_provider": {
+            "enum": [
+              "tpm2",
+              "pkcs11",
+              "software"
+            ],
+            "type": "string"
+          },
+          "key_storage": {
+            "enum": [
+              "device_bound",
+              "pkcs11",
+              "file"
+            ],
             "type": "string"
           },
           "not_after": {
@@ -8060,6 +8090,11 @@
           "common_name",
           "serial",
           "permitted_dns_domains",
+          "csr_key_sha256",
+          "key_provider",
+          "key_storage",
+          "key_exportable",
+          "custody_assurance",
           "status",
           "not_before",
           "not_after"
@@ -8118,6 +8153,14 @@
             "type": "string"
           },
           "host": {
+            "type": "string"
+          },
+          "key_provider": {
+            "enum": [
+              "tpm2",
+              "pkcs11",
+              "software"
+            ],
             "type": "string"
           },
           "segment_id": {
@@ -8237,6 +8280,17 @@
       },
       "EdgeSegmentPolicy": {
         "properties": {
+          "allowed_key_providers": {
+            "items": {
+              "enum": [
+                "tpm2",
+                "pkcs11",
+                "software"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "attestation_roots": {
             "type": "integer"
           },
@@ -8270,12 +8324,24 @@
           "segment_id",
           "enabled",
           "attestation_roots",
+          "allowed_key_providers",
           "updated_at"
         ],
         "type": "object"
       },
       "EdgeSegmentPolicyInput": {
         "properties": {
+          "allowed_key_providers": {
+            "items": {
+              "enum": [
+                "tpm2",
+                "pkcs11",
+                "software"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "attestation_roots_pem": {
             "items": {
               "type": "string"

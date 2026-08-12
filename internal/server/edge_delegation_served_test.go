@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/deviceattesttest"
 	"trstctl.com/trstctl/internal/crypto/edgetest"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -68,7 +69,16 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TPM fixture: %v", err)
 	}
-	csrDER := identity.CSRDER()
+	// Drive the same opaque-handle CSR primitive the shipping agent calls. The
+	// fixture provider uses the exact credential key its WebAuthn TPM evidence
+	// attests, closing the former test gap where served mint bypassed edge-csr.
+	edgeProvider := identity.EdgeCAKeyProvider()
+	edgeHandle, csrDER, err := crypto.GenerateEdgeCAKeyHandleAndCSR(
+		ctx, "served-edge-generation-1", "bunker-01 edge CA", crypto.ECDSAP256, edgeProvider,
+	)
+	if err != nil {
+		t.Fatalf("shipping handle CSR path: %v", err)
+	}
 	challenge := crypto.EdgeAttestationChallenge(h.tenant, segment.ID, csrDER)
 	credentialJSON, err := identity.CredentialJSON(challenge)
 	if err != nil {
@@ -138,6 +148,71 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 			"license delegating a different one — that gap would let a software key ride any "+
 			"hardware attestation on the host.", code, body)
 	}
+	// A valid host TPM is not permission to hide an EXPORTABLE software CA key.
+	// The provider is policy-bound first; the default policy allows only TPM2.
+	softwareMint := mintBody(segment.ID, mismatchedCredential)
+	softwareMint["csr_der"] = otherCSR
+	softwareMint["key_provider"] = "software"
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/edge/delegations", operator, "edge-mint-software-default-refused", softwareMint)
+	if code != http.StatusForbidden || !strings.Contains(string(body), "software") || !strings.Contains(string(body), "policy") {
+		t.Fatalf("default software custody = %d body=%s; want an explicit policy refusal", code, body)
+	}
+
+	// The operator may declare a software disaster-recovery exception, but the
+	// evidence must say FILE + EXPORTABLE + SOFTWARE_EXCEPTION. The host TPM
+	// still proves which enrolled machine submitted the CSR; it does not get
+	// mislabeled as attesting the unrelated software key.
+	code, body = doBearer(t, h.ts, http.MethodPut, "/api/v1/edge/segments/"+segment.ID, operator, "edge-policy-software-exception", map[string]any{
+		"enabled":               true,
+		"attestation_roots_pem": []string{string(identity.RootPEM())},
+		"permitted_dns_domains": []string{"edge.example.test"},
+		"excluded_dns_domains":  []string{"blocked.edge.example.test"},
+		"allowed_key_providers": []string{"tpm2", "software", "pkcs11"},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("declare custody exceptions = %d body=%s", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/edge/delegations", operator, "edge-mint-software-exception", softwareMint)
+	if code != http.StatusCreated {
+		t.Fatalf("explicit software exception mint = %d body=%s", code, body)
+	}
+	var softwareEvidence struct {
+		KeyProvider       string `json:"key_provider"`
+		KeyStorage        string `json:"key_storage"`
+		KeyExportable     bool   `json:"key_exportable"`
+		CustodyAssurance  string `json:"custody_assurance"`
+		CSRKeySHA256      string `json:"csr_key_sha256"`
+		AttestedKeySHA256 string `json:"attested_key_sha256"`
+	}
+	if err := json.Unmarshal(body, &softwareEvidence); err != nil {
+		t.Fatal(err)
+	}
+	if softwareEvidence.KeyProvider != "software" || softwareEvidence.KeyStorage != "file" ||
+		!softwareEvidence.KeyExportable || softwareEvidence.CustodyAssurance != "host_attested_software_exception" ||
+		softwareEvidence.CSRKeySHA256 == "" || softwareEvidence.CSRKeySHA256 == softwareEvidence.AttestedKeySHA256 {
+		t.Fatalf("dishonest software custody evidence: %+v", softwareEvidence)
+	}
+
+	pkcs11Mint := mintBody(segment.ID, mismatchedCredential)
+	pkcs11Mint["csr_der"] = otherCSR
+	pkcs11Mint["key_provider"] = "pkcs11"
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/edge/delegations", operator, "edge-mint-pkcs11", pkcs11Mint)
+	if code != http.StatusCreated {
+		t.Fatalf("policy-approved PKCS#11 mint = %d body=%s", code, body)
+	}
+	var tokenEvidence struct {
+		KeyProvider      string `json:"key_provider"`
+		KeyStorage       string `json:"key_storage"`
+		KeyExportable    bool   `json:"key_exportable"`
+		CustodyAssurance string `json:"custody_assurance"`
+	}
+	if err := json.Unmarshal(body, &tokenEvidence); err != nil {
+		t.Fatal(err)
+	}
+	if tokenEvidence.KeyProvider != "pkcs11" || tokenEvidence.KeyStorage != "pkcs11" ||
+		tokenEvidence.KeyExportable || tokenEvidence.CustodyAssurance != "host_attested_operator_claim" {
+		t.Fatalf("dishonest PKCS#11 custody evidence: %+v", tokenEvidence)
+	}
 	// A TTL past the 30-day ceiling is refused, not clamped.
 	long := mintBody(segment.ID, credentialJSON)
 	long["ttl_seconds"] = int((45 * 24 * time.Hour).Seconds())
@@ -159,12 +234,19 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 		PermittedDNSDomains []string  `json:"permitted_dns_domains"`
 		ExcludedDNSDomains  []string  `json:"excluded_dns_domains"`
 		NotAfter            time.Time `json:"not_after"`
+		KeyProvider         string    `json:"key_provider"`
+		KeyStorage          string    `json:"key_storage"`
+		KeyExportable       bool      `json:"key_exportable"`
+		CustodyAssurance    string    `json:"custody_assurance"`
 	}
 	if err := json.Unmarshal(body, &minted); err != nil || minted.ID == "" {
 		t.Fatalf("decode mint: %v body=%s", err, body)
 	}
 	if len(minted.PermittedDNSDomains) != 1 || minted.PermittedDNSDomains[0] != "edge.example.test" {
 		t.Fatalf("minted constraints = %v, want the SEGMENT POLICY's, not the request's", minted.PermittedDNSDomains)
+	}
+	if minted.KeyProvider != "tpm2" || minted.KeyStorage != "device_bound" || minted.KeyExportable || minted.CustodyAssurance != "hardware_key_attested" {
+		t.Fatalf("TPM custody evidence = %+v, want a non-exportable same-key attestation", minted)
 	}
 	if until := time.Until(minted.NotAfter); until > 2*time.Hour {
 		t.Fatalf("delegation lives %s, want the requested hour: auto-expiry is the bound", until)
@@ -177,23 +259,19 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 
 	// Local issuance on the "host": in-constraint works, out-of-constraint and
 	// excluded names FAIL CLOSED, enforced from the certificate itself.
-	hostKeyPEM, err := identity.CredentialKeyPEM()
-	if err != nil {
-		t.Fatalf("fixture key: %v", err)
-	}
 	delegationPEM := []byte(minted.CertificatePEM)
-	goodLeaf, err := crypto.IssueEdgeLeaf(delegationPEM, hostKeyPEM, crypto.EdgeLeafRequest{
+	goodLeaf, err := crypto.IssueEdgeLeafWithKeyHandle(ctx, delegationPEM, edgeHandle, edgeProvider, crypto.EdgeLeafRequest{
 		CommonName: "db.edge.example.test", TTL: 30 * time.Minute,
 	}, now)
 	if err != nil {
 		t.Fatalf("in-constraint local issue: %v", err)
 	}
-	if _, err := crypto.IssueEdgeLeaf(delegationPEM, hostKeyPEM, crypto.EdgeLeafRequest{
+	if _, err := crypto.IssueEdgeLeafWithKeyHandle(ctx, delegationPEM, edgeHandle, edgeProvider, crypto.EdgeLeafRequest{
 		CommonName: "evil.other.example.test",
 	}, now); err == nil {
 		t.Fatal("out-of-constraint local issue succeeded; the acceptance requires it to fail closed")
 	}
-	if _, err := crypto.IssueEdgeLeaf(delegationPEM, hostKeyPEM, crypto.EdgeLeafRequest{
+	if _, err := crypto.IssueEdgeLeafWithKeyHandle(ctx, delegationPEM, edgeHandle, edgeProvider, crypto.EdgeLeafRequest{
 		CommonName: "x.blocked.edge.example.test",
 	}, now); err == nil {
 		t.Fatal("excluded-subtree local issue succeeded; exclusion must beat permission")
@@ -252,6 +330,11 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 	// A leaf signed by the DELEGATED KEY outside the constraints — the host's
 	// tooling bypassed, the certificate real. The report is recorded AS A
 	// VIOLATION, visibly, never silently dropped and never silently accepted.
+	hostKeyPEM, err := identity.CredentialKeyPEM()
+	if err != nil {
+		t.Fatalf("fixture-only rogue key export: %v", err)
+	}
+	defer secret.Wipe(hostKeyPEM)
 	rogue, err := edgetest.RogueLeaf(delegationPEM, hostKeyPEM, "evil.other.example.test")
 	if err != nil {
 		t.Fatalf("rogue leaf fixture: %v", err)

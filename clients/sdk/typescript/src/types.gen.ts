@@ -7399,9 +7399,17 @@ export interface components {
             ca_id: string;
             certificate_pem?: string;
             common_name: string;
+            csr_key_sha256: string;
+            /** @enum {string} */
+            custody_assurance: "hardware_key_attested" | "host_attested_operator_claim" | "host_attested_software_exception";
             excluded_dns_domains?: string[];
             host: string;
             id: string;
+            key_exportable: boolean;
+            /** @enum {string} */
+            key_provider: "tpm2" | "pkcs11" | "software";
+            /** @enum {string} */
+            key_storage: "device_bound" | "pkcs11" | "file";
             /** Format: date-time */
             not_after: string;
             /** Format: date-time */
@@ -7431,6 +7439,8 @@ export interface components {
             /** Format: byte */
             csr_der: string;
             host: string;
+            /** @enum {string} */
+            key_provider?: "tpm2" | "pkcs11" | "software";
             segment_id: string;
             ttl_seconds?: number;
         };
@@ -7464,6 +7474,7 @@ export interface components {
             violations: number;
         };
         EdgeSegmentPolicy: {
+            allowed_key_providers: ("tpm2" | "pkcs11" | "software")[];
             attestation_roots: number;
             enabled: boolean;
             excluded_dns_domains?: string[];
@@ -7474,6 +7485,7 @@ export interface components {
             updated_at: string;
         };
         EdgeSegmentPolicyInput: {
+            allowed_key_providers?: ("tpm2" | "pkcs11" | "software")[];
             attestation_roots_pem?: string[];
             enabled: boolean;
             excluded_dns_domains?: string[];
