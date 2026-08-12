@@ -590,8 +590,12 @@ describe("i18n boundary", () => {
       // RFC 3161 proof status, authority time, chain head, and honest offline
       // verification guidance. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "1bd2f5c25c74c6bc94a94b2a44283cee7204aae0d1bb5b6022524aed880f8641",
-      "de-DE": "41976aff62a9b1f886c5bc9753e1d1e483684c30a7644d4b9cf6c0e3a3772ecf",
+      // AUD-54 signed-drill-history re-pin: six platform.dr.history.* keys name
+      // durable evidence, completion time, exact signer, signature state, and
+      // download action. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
+      // REVIEW BEFORE RELEASE.
+      "es-ES": "ba868133fa4a3aaccd6f2440c592e3834540672f0a3abff69d69f591742c34de",
+      "de-DE": "ae50483b6b712a84a926b1188d4ca4c44603c26a52b6d0b43c270ea7401043d4",
     });
   });
 
