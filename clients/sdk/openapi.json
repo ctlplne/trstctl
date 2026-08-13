@@ -6993,6 +6993,9 @@
           },
           "summary": {
             "$ref": "#/components/schemas/ContextualRiskSummary"
+          },
+          "urgent_summary": {
+            "$ref": "#/components/schemas/UrgentRiskSummary"
           }
         },
         "required": [
@@ -7000,6 +7003,7 @@
           "generated_at",
           "coverage",
           "summary",
+          "urgent_summary",
           "priorities"
         ],
         "type": "object"
@@ -24493,6 +24497,74 @@
           "arch",
           "url",
           "sha256"
+        ],
+        "type": "object"
+      },
+      "UrgentRiskProjectionSummary": {
+        "properties": {
+          "analyzed": {
+            "type": "integer"
+          },
+          "critical": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "analyzed",
+          "critical",
+          "high"
+        ],
+        "type": "object"
+      },
+      "UrgentRiskSummary": {
+        "properties": {
+          "contextual_priorities": {
+            "$ref": "#/components/schemas/UrgentRiskProjectionSummary"
+          },
+          "credential_risk": {
+            "$ref": "#/components/schemas/UrgentRiskProjectionSummary"
+          },
+          "critical": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "included_projections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete"
+            ],
+            "type": "string"
+          },
+          "unique_analyzed": {
+            "type": "integer"
+          },
+          "urgent": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "scope",
+          "included_projections",
+          "unique_analyzed",
+          "urgent",
+          "critical",
+          "high",
+          "credential_risk",
+          "contextual_priorities"
         ],
         "type": "object"
       },

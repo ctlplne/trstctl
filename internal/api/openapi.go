@@ -4188,6 +4188,22 @@ func componentSchemas() map[string]*Schema {
 		"near_expiry":         {Type: "integer"},
 		"recommendations":     {Type: "integer"},
 	}, "total_analyzed", "priorities", "critical", "high", "medium", "low", "high_blast_radius", "weak_crypto_context", "orphaned", "near_expiry", "recommendations")
+	urgentRiskProjectionSummary := object(map[string]*Schema{
+		"analyzed": {Type: "integer"},
+		"critical": {Type: "integer"},
+		"high":     {Type: "integer"},
+	}, "analyzed", "critical", "high")
+	urgentRiskSummary := object(map[string]*Schema{
+		"status":                {Type: "string", Enum: []string{"complete"}},
+		"scope":                 str(),
+		"included_projections":  {Type: "array", Items: str()},
+		"unique_analyzed":       {Type: "integer"},
+		"urgent":                {Type: "integer"},
+		"critical":              {Type: "integer"},
+		"high":                  {Type: "integer"},
+		"credential_risk":       ref("UrgentRiskProjectionSummary"),
+		"contextual_priorities": ref("UrgentRiskProjectionSummary"),
+	}, "status", "scope", "included_projections", "unique_analyzed", "urgent", "critical", "high", "credential_risk", "contextual_priorities")
 	contextualRiskPriority := object(map[string]*Schema{
 		"rank":                      {Type: "integer"},
 		"credential_id":             uuid(),
@@ -4212,12 +4228,13 @@ func componentSchemas() map[string]*Schema {
 		"recommended_action":        str(),
 	}, "rank", "credential_id", "subject", "kind", "severity", "contextual_score", "base_score", "blast_radius", "resource_blast_radius", "workload_blast_radius", "credential_blast_radius", "crypto_asset_blast_radius", "weak_crypto_context", "privilege", "sensitivity", "owner_active", "expires_at", "components", "priority_reasons", "evidence_refs", "recommended_action")
 	contextualRiskPriorities := object(map[string]*Schema{
-		"capability":   str(),
-		"generated_at": timestamp(),
-		"coverage":     {Type: "array", Items: str()},
-		"summary":      ref("ContextualRiskSummary"),
-		"priorities":   {Type: "array", Items: ref("ContextualRiskPriority")},
-	}, "capability", "generated_at", "coverage", "summary", "priorities")
+		"capability":     str(),
+		"generated_at":   timestamp(),
+		"coverage":       {Type: "array", Items: str()},
+		"summary":        ref("ContextualRiskSummary"),
+		"urgent_summary": ref("UrgentRiskSummary"),
+		"priorities":     {Type: "array", Items: ref("ContextualRiskPriority")},
+	}, "capability", "generated_at", "coverage", "summary", "urgent_summary", "priorities")
 	cbomScanReq := object(map[string]*Schema{
 		"tls_endpoints": {Type: "array", Items: str()},
 		"host_configs":  {Type: "array", Items: str()},
@@ -4948,6 +4965,8 @@ func componentSchemas() map[string]*Schema {
 		"CredentialRisk":                           credentialRisk,
 		"CredentialRiskList":                       credentialRiskList,
 		"ContextualRiskSummary":                    contextualRiskSummary,
+		"UrgentRiskProjectionSummary":              urgentRiskProjectionSummary,
+		"UrgentRiskSummary":                        urgentRiskSummary,
 		"ContextualRiskPriority":                   contextualRiskPriority,
 		"ContextualRiskPriorities":                 contextualRiskPriorities,
 		"CBOMScanRequest":                          cbomScanReq,

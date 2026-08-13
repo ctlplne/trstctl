@@ -2236,7 +2236,16 @@ than sending an operator looking for a credential that was never there.
   trust config; its metadata flows through the served agent inventory report
   path. The credential graph and risk-scoring read APIs (`/api/v1/graph*`,
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`) are
-  also served, as is the AI/RCA/MCP surface behind `ai.enable_api`.
+  also served. The contextual-priorities response carries a canonical
+  `urgent_summary`: it merges the named credential-score and contextual-priority
+  projections for one tenant, exposes both source counts, and deduplicates the union
+  by `credential_id`. Dashboard and Risk use that same answer, and a projection read
+  failure is unavailable rather than zero. Critical/high discovery findings enqueue
+  one same-transaction `notification.risk` / `risk.urgent` outbox intent from the
+  same score band. `status=complete` means every named projection read completed; it
+  does not mean an undiscovered machine is safe, because discovery coverage still
+  bounds what these projections can know. The AI/RCA/MCP surface is also served
+  behind `ai.enable_api`.
 - Ownership depth (I1): owners carry an application/service model —
   `application_id`, `service`, `business_unit`, `environment` — plus a stored
   `escalation_chain`, attributed `ownership_verified_by`, verification time, and

@@ -20,6 +20,7 @@ const { apiMock } = vi.hoisted(() => ({
     identities: vi.fn(),
     auditEvents: vi.fn(),
     risk: vi.fn(),
+    contextualRiskPriorities: vi.fn(),
     rotationRuns: vi.fn(),
     connectorDeliveries: vi.fn(),
     secretPage: vi.fn(),
@@ -101,6 +102,40 @@ function sessionForRole(role: "viewer" | "auditor" | "ra-officer"): Me {
   }
 }
 
+function contextualRiskFixture(critical: number, high: number) {
+  const urgent = critical + high;
+  return {
+    capability: "CAP-POST-05",
+    generated_at: "2026-08-13T15:00:00Z",
+    coverage: ["credential_risk_scores", "contextual_priorities"],
+    summary: {
+      total_analyzed: urgent,
+      priorities: urgent,
+      critical,
+      high,
+      medium: 0,
+      low: 0,
+      high_blast_radius: 0,
+      weak_crypto_context: 0,
+      orphaned: 0,
+      near_expiry: 0,
+      recommendations: urgent,
+    },
+    urgent_summary: {
+      status: "complete",
+      scope: "All served credential-risk and contextual-priority projections for this tenant; totals deduplicate credential_id.",
+      included_projections: ["credential_risk_scores", "contextual_priorities"],
+      unique_analyzed: urgent,
+      urgent,
+      critical,
+      high,
+      credential_risk: { analyzed: 0, critical: 0, high: 0 },
+      contextual_priorities: { analyzed: urgent, critical, high },
+    },
+    priorities: [],
+  };
+}
+
 describe("auth + dashboards", () => {
   beforeEach(() => {
     apiMock.me.mockReset();
@@ -112,12 +147,14 @@ describe("auth + dashboards", () => {
     apiMock.identities.mockReset();
     apiMock.auditEvents.mockReset();
     apiMock.risk.mockReset();
+    apiMock.contextualRiskPriorities.mockReset();
     apiMock.certificates.mockResolvedValue([]);
     apiMock.logout.mockResolvedValue(undefined);
     apiMock.certificatePage.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);
     apiMock.auditEvents.mockResolvedValue([]);
     apiMock.risk.mockResolvedValue([]);
+    apiMock.contextualRiskPriorities.mockResolvedValue(contextualRiskFixture(0, 0));
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     // D2: nothing observed by default, so the verified tile stays absent.
     apiMock.endpointVerifications.mockReset();
@@ -236,7 +273,7 @@ describe("auth + dashboards", () => {
     const dash = screen.getByRole("region", { name: "Dashboard" });
     expect(within(dash).getByRole("link", { name: /Issue credential/i })).toHaveAttribute("href", "/request");
     expect(within(dash).getByText(/Identities \(NHI\)/)).toBeInTheDocument();
-    expect(within(dash).getByText(/High-risk/)).toBeInTheDocument();
+    expect(within(dash).getByText(/Urgent risk/)).toBeInTheDocument();
     // Real mode shows the served daily issuance chart, never the demo monthly trend (S-N0 / DA-01).
     expect(within(dash).getByText(/Issuance rate/)).toBeInTheDocument();
     expect(within(dash).queryByText(/Issuance trend/)).not.toBeInTheDocument();
@@ -395,6 +432,7 @@ describe("auth + dashboards", () => {
       { credential_id: "c1", subject: "CN=soon", kind: "certificate", score: 92, exposure: 2, owner_active: false },
       { credential_id: "c2", subject: "CN=later", kind: "certificate", score: 20, exposure: 1, owner_active: true },
     ]);
+    apiMock.contextualRiskPriorities.mockResolvedValue(contextualRiskFixture(1, 0));
     apiMock.secretPage.mockResolvedValue({ items: [{ name: "demo/a" }, { name: "demo/b" }] });
     apiMock.incidentExecutions.mockResolvedValue({
       items: [
@@ -423,9 +461,9 @@ describe("auth + dashboards", () => {
     await waitFor(() => expect(within(expiring).getByText("1")).toBeInTheDocument());
     expect(expiring).toHaveAttribute("href", "/certificates?expiry=7d");
 
-    // High-risk: one row ≥ threshold.
-    const highRisk = kpiTile(dash, /High-risk/);
-    await waitFor(() => expect(within(highRisk).getByText("1")).toBeInTheDocument());
+    // Canonical urgent risk: one deduplicated row across all projections.
+    const urgentRisk = kpiTile(dash, /Urgent risk/);
+    await waitFor(() => expect(within(urgentRisk).getByText("1")).toBeInTheDocument());
 
     // Open incidents: one non-completed execution, served.
     const incidents = kpiTile(dash, /Open incidents/);
@@ -439,6 +477,31 @@ describe("auth + dashboards", () => {
     // Secrets KPI comes from the served secret store, not a stub.
     const secrets = kpiTile(dash, /^Secrets$/);
     await waitFor(() => expect(within(secrets).getByText("2")).toBeInTheDocument());
+  });
+
+  it("AUD-67 reports contextual critical work when certificate risk is empty", async () => {
+    apiMock.me.mockResolvedValue(sessionForRole("viewer"));
+    apiMock.risk.mockResolvedValue([]);
+    apiMock.contextualRiskPriorities.mockResolvedValue(contextualRiskFixture(3, 0));
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    await waitFor(() => expect(apiMock.contextualRiskPriorities).toHaveBeenCalledTimes(1));
+    const urgent = kpiTile(dash, /Urgent risk/);
+    await waitFor(() => expect(within(urgent).getByText("3")).toBeInTheDocument());
+    expect(within(urgent).getByText(/all risk projections/i)).toBeInTheDocument();
+  });
+
+  it("AUD-67 reports an unavailable urgent summary instead of a safe zero", async () => {
+    apiMock.me.mockResolvedValue(sessionForRole("viewer"));
+    apiMock.contextualRiskPriorities.mockRejectedValue(new Error("contextual projection failed"));
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const urgent = kpiTile(dash, /Urgent risk/);
+    await waitFor(() => expect(within(urgent).getByText(/summary unavailable/i)).toBeInTheDocument(), { timeout: 3_000 });
+    expect(within(urgent).getByText("—")).toBeInTheDocument();
+    expect(within(urgent).queryByText("0")).not.toBeInTheDocument();
   });
 
   it("renders no fabricated demo markers in real mode (S-N0)", async () => {

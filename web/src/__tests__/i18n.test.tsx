@@ -668,8 +668,12 @@ describe("i18n boundary", () => {
       // CSV/NDJSON exports. The translations keep unknown distinct from safe
       // and stale distinct from completed. Machine-authored es/de — FLAGGED
       // FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "a1ad6dc41fd0dc14a3238c4a21e12e67962ef4b9393691c60fab7a12a33fc59e",
-      "de-DE": "872cbce0befc9f71c666d42fb13bc377cb0c3fafd4770acd61821e4ecb46c126",
+      // AUD-67 canonical urgent-risk re-pin: fifteen keys distinguish the
+      // all-projection count, its two named sources, loading, and unavailable
+      // authority. "Unavailable" must never collapse to a translated zero.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "8b37e041829689f4dcb42e5fe139ac2d0eca7faeb8dfd34f6f446d2e2d4c5348",
+      "de-DE": "527e83c28b742bc86495a421416dd67f38aef1dffe49654882608db74449523c",
     });
   });
 

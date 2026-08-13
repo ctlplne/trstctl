@@ -137,4 +137,5 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("SecretWorkloadInjectionCRD", "status", observationPredicate, "internal/api/secrets_posture.go:buildSecretWorkloadInjection"),
 	evidence("ThirdPartySecretScanReceipt", "status", observationPredicate, "internal/api/secrets_scanning.go:API.ingestThirdPartySecretScan"),
 	evidence("UnownedIdentity", "status", observationPredicate, "internal/api/owners_unowned.go:API.listUnownedIdentities"),
+	evidence("UrgentRiskSummary", "status", predicate(evidenceObservation, "complete is written only after both tenant-scoped credential-risk and contextual-priority readers return successfully; either read failure returns an API error, so a partial projection cannot become a safe zero"), "internal/api/risk.go:API.listContextualRiskPriorities"),
 }

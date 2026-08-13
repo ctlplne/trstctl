@@ -643,6 +643,8 @@ public final class OpenApiSchemas {
       "UnvaultedSecretSummary",
       "UnvaultedSecretVaultProvider",
       "UpgradeArtifact",
+      "UrgentRiskProjectionSummary",
+      "UrgentRiskSummary",
       "UsageMeterDefinition",
       "WorkloadAttesterTrustSource",
       "WorkloadAttesterTrustSourceList",

@@ -1008,6 +1008,40 @@ describe("operational console surface", () => {
     expect(screen.queryByText(/waiting on console support/i)).not.toBeInTheDocument();
     expect(screen.getByText(/No certificate risk scores match/i)).toBeInTheDocument();
   });
+
+  it("AUD-67 gives the Risk headline the canonical contextual critical count and scope", async () => {
+    apiMock.risk.mockResolvedValue([]);
+    apiMock.contextualRiskPriorities.mockResolvedValue({
+      ...emptyContextualRiskPriorities(),
+      summary: {
+        ...emptyContextualRiskPriorities().summary,
+        total_analyzed: 3,
+        priorities: 3,
+        critical: 3,
+        recommendations: 3,
+      },
+      urgent_summary: {
+        status: "complete",
+        scope: "All served credential-risk and contextual-priority projections for this tenant; totals deduplicate credential_id.",
+        included_projections: ["credential_risk_scores", "contextual_priorities"],
+        unique_analyzed: 3,
+        urgent: 3,
+        critical: 3,
+        high: 0,
+        credential_risk: { analyzed: 0, critical: 0, high: 0 },
+        contextual_priorities: { analyzed: 3, critical: 3, high: 0 },
+      },
+    });
+
+    renderAt("/risk");
+
+    const critical = await screen.findByText("Critical urgent");
+    const tile = critical.closest("div.rounded-panel");
+    expect(tile).not.toBeNull();
+    expect(within(tile as HTMLElement).getByText("3")).toBeInTheDocument();
+    expect(screen.getByText(/all served credential-risk and contextual-priority projections/i)).toBeInTheDocument();
+    expect(screen.queryByText("Critical (90+)")).not.toBeInTheDocument();
+  });
 });
 
 function riskRow(overrides: Partial<ReturnType<typeof riskRowBase>> = {}) {

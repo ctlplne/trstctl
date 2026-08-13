@@ -1787,6 +1787,7 @@ export interface ContextualRiskPriorities {
   generated_at: string;
   priorities: ContextualRiskPriority[];
   summary: ContextualRiskSummary;
+  urgent_summary: UrgentRiskSummary;
 }
 
 export interface ContextualRiskPriority {
@@ -6251,6 +6252,24 @@ export interface UpgradeArtifact {
   os: string;
   sha256: string;
   url: string;
+}
+
+export interface UrgentRiskProjectionSummary {
+  analyzed: number;
+  critical: number;
+  high: number;
+}
+
+export interface UrgentRiskSummary {
+  contextual_priorities: UrgentRiskProjectionSummary;
+  credential_risk: UrgentRiskProjectionSummary;
+  critical: number;
+  high: number;
+  included_projections: string[];
+  scope: string;
+  status: "complete";
+  unique_analyzed: number;
+  urgent: number;
 }
 
 export interface UsageMeterDefinition {

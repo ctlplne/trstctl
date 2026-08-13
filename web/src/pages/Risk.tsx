@@ -320,7 +320,7 @@ export function Risk() {
         description="A ranked list of individual credentials by urgency — what to rotate first. For fleet-wide crypto hygiene like configuration drift and post-quantum readiness, see Crypto posture."
       />
 
-      <RiskPosture risks={data ?? []} />
+      <RiskPosture summary={contextualRisk?.urgent_summary ?? null} loading={contextualRiskLoading} error={contextualRiskError} />
       {/* M2: which crypto to migrate FIRST, ordered by who actually depends on
           it rather than by severity alone. Sits above the per-credential list
           because it answers the sequencing question that comes before "what do

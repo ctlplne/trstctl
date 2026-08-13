@@ -56,6 +56,10 @@ const (
 	// DestinationRestoreDrill carries failed, skipped, or objective-breaching
 	// disaster-recovery drill alerts (J2/AUD-54).
 	DestinationRestoreDrill = "notification.restore_drill"
+	// DestinationRisk carries canonical urgent-risk alerts. It is separate from
+	// discovery delivery because the alert names the risk decision, while the
+	// immutable discovery event remains its evidence source.
+	DestinationRisk = "notification.risk"
 )
 
 // Alert kinds.
@@ -107,6 +111,7 @@ const (
 	KindRestoreDrillFailed     = "backup.restore_drill_failed"
 	KindRestoreDrillSkipped    = "backup.restore_drill_skipped"
 	KindRestoreDrillObjective  = "backup.restore_drill_objective_breached"
+	KindUrgentRisk             = "risk.urgent"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

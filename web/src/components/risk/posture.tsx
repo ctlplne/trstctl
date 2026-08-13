@@ -1,23 +1,48 @@
 import { DashboardGrid } from "@/components/dashboard";
 import { StatTile } from "@/components/charts";
-import type { CredentialRisk } from "@/lib/api";
+import { UnavailableState } from "@/components/StatePrimitives";
+import { useTranslation } from "@/i18n/I18nProvider";
+import type { UrgentRiskSummary } from "@/lib/api";
 
-/** RiskPosture is a non-duplicating summary of the credential-risk read model.
- * It never renders individual subjects (the Risk page's grid owns those rows);
- * it only reports counts and bands so it can sit above that grid without
- * fighting it in tests or confusing the operator with the same name twice. */
-export function RiskPosture({ risks }: { risks: CredentialRisk[] }) {
-  const critical = risks.filter((risk) => risk.score >= 90).length;
-  const high = risks.filter((risk) => risk.score >= 70 && risk.score < 90).length;
-  const orphaned = risks.filter((risk) => !risk.owner_active).length;
-  const avg = risks.length ? Math.round(risks.reduce((sum, risk) => sum + risk.score, 0) / risks.length) : 0;
+/** RiskPosture renders only the server's canonical union. It never recomputes
+ * one projection locally, because a locally correct zero can still be a false
+ * estate-wide all-clear when contextual discovery is critical (AUD-67). */
+export function RiskPosture({ summary, loading, error }: { summary: UrgentRiskSummary | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  if (loading) {
+    return <p className="mb-4 text-sm text-muted-foreground">{t("risk.urgent.loading")}</p>;
+  }
+  if (error || !summary || summary.status !== "complete") {
+    return (
+      <div className="mb-4">
+        <UnavailableState title={t("risk.urgent.unavailableTitle")}>{error ?? t("risk.urgent.unavailableDetail")}</UnavailableState>
+      </div>
+    );
+  }
   return (
-    <DashboardGrid>
-      <StatTile label="Credentials scored" value={risks.length} />
-      <StatTile label="Critical (90+)" value={critical} tone={critical ? "critical" : undefined} />
-      <StatTile label="High (70-89)" value={high} tone={high ? "high" : undefined} />
-      <StatTile label="Orphaned" value={orphaned} tone={orphaned ? "warning" : undefined} />
-      <StatTile label="Average score" value={avg} />
-    </DashboardGrid>
+    <section aria-label={t("risk.urgent.scopeLabel")} className="mb-4 space-y-2">
+      <DashboardGrid>
+        <StatTile label={t("risk.urgent.analyzed")} value={summary.unique_analyzed} />
+        <StatTile label={t("risk.urgent.critical")} value={summary.critical} tone={summary.critical ? "critical" : undefined} />
+        <StatTile label={t("risk.urgent.high")} value={summary.high} tone={summary.high ? "high" : undefined} />
+        <StatTile
+          label={t("risk.urgent.credentialProjection")}
+          value={summary.credential_risk.critical + summary.credential_risk.high}
+          hint={t("risk.urgent.sourceHint", {
+            critical: summary.credential_risk.critical,
+            high: summary.credential_risk.high,
+          })}
+        />
+        <StatTile
+          label={t("risk.urgent.contextualProjection")}
+          value={summary.contextual_priorities.critical + summary.contextual_priorities.high}
+          hint={t("risk.urgent.sourceHint", {
+            critical: summary.contextual_priorities.critical,
+            high: summary.contextual_priorities.high,
+          })}
+        />
+      </DashboardGrid>
+      <p className="text-caption text-muted-foreground">{summary.scope}</p>
+    </section>
   );
 }

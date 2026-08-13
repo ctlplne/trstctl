@@ -135,6 +135,7 @@ import type {
   ConnectorTargetActionRequest,
   RelayPluginRuntime,
   ContextualRiskPriorities as GenContextualRiskPriorities,
+  UrgentRiskSummary as GenUrgentRiskSummary,
   ContextualRiskPriority as GenContextualRiskPriority,
   CredentialRisk as GenCredentialRisk,
   CredentialRiskList,
@@ -608,6 +609,7 @@ export type AIAnswer = GenAIAnswer;
 export type AIStatus = GenAIStatus;
 export type CredentialRisk = GenCredentialRisk;
 export type ContextualRiskPriorities = GenContextualRiskPriorities;
+export type UrgentRiskSummary = GenUrgentRiskSummary;
 export type ContextualRiskPriority = GenContextualRiskPriority;
 export type Approval = GenApproval;
 export type ApprovalAction = ApprovalRequest["action"];

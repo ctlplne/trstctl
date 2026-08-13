@@ -47,6 +47,17 @@ by blast-radius impact, CBOM crypto context, owner state, staleness, and expiry 
 returning priority reasons, evidence refs, severity, and a recommended action — useful
 when two credentials score similarly but differ sharply in blast radius.
 
+`GET /api/v1/risk/contextual-priorities` also returns the canonical tenant-scoped
+`urgent_summary`. Think of this as counting red lights after combining both served
+maps, rather than counting only one map and accidentally showing zero. It names the
+included credential-score and contextual-priority projections, reports each
+projection's analyzed/critical/high counts, and deduplicates their union by
+`credential_id`. Dashboard and Risk consume this same contract. A failed projection
+read is an unavailable summary, never a fabricated zero. Recording a critical or high
+discovery finding atomically creates one `notification.risk` / `risk.urgent` outbox
+intent from the same score band; replaying the immutable event reuses the same
+idempotency key rather than creating a second alert.
+
 NHI posture reads the same unified inventory as the dashboard — managed identities,
 access tokens, and discovery findings — across four conditions:
 
@@ -177,10 +188,13 @@ look-alike rows.
 
 ### In the console
 
-The overview dashboard surfaces a severity-ranked alert center from served risk and
-certificate-expiry events (no dedicated alerts endpoint — a projection of events the
-backend already serves); `/risk` renders a risk-posture summary (counts by band,
-orphaned credentials, average score) above the scored-credential grid. `/notifications`
+The overview dashboard's **Urgent risk** KPI and `/risk` summary both render the
+server's deduplicated `urgent_summary` across credential scores and contextual
+priorities. Each projection remains visible, so an operator can see where the urgent
+row came from; loading or failure renders unknown/unavailable instead of zero. The
+overview's rotate-first list uses the same contextual priorities. Critical/high
+discovery findings also surface through the durable `notification.risk` alert intent;
+certificate-expiry alerts keep their existing event-backed path. `/notifications`
 serves routing-policy authoring and channel-test delivery; scheduled digest delivery
 stays outside the served workflow. See [The web console](../web-console.md).
 

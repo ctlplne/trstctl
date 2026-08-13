@@ -20,6 +20,7 @@ type contextualRiskResponse struct {
 	GeneratedAt time.Time                 `json:"generated_at"`
 	Coverage    []string                  `json:"coverage"`
 	Summary     contextualRiskSummary     `json:"summary"`
+	Urgent      risk.UrgentSummary        `json:"urgent_summary"`
 	Priorities  []risk.ContextualPriority `json:"priorities"`
 }
 
@@ -131,6 +132,14 @@ func (a *API) listContextualRiskPriorities(w http.ResponseWriter, r *http.Reques
 	if priorities == nil {
 		priorities = []risk.ContextualPriority{}
 	}
+	base, err := risk.ScoreInventory(r.Context(), a.store, tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if base == nil {
+		base = []risk.CredentialRisk{}
+	}
 	a.writeJSON(w, http.StatusOK, contextualRiskResponse{
 		Capability:  "CAP-POST-05",
 		GeneratedAt: time.Now().UTC(),
@@ -142,6 +151,7 @@ func (a *API) listContextualRiskPriorities(w http.ResponseWriter, r *http.Reques
 			"owner_and_rotation_context",
 		},
 		Summary:    summarizeContextualRisk(priorities),
+		Urgent:     risk.SummarizeUrgentRisk(base, priorities),
 		Priorities: priorities,
 	})
 }

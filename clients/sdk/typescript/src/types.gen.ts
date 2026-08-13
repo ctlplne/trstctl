@@ -7278,6 +7278,7 @@ export interface components {
             generated_at: string;
             priorities: components["schemas"]["ContextualRiskPriority"][];
             summary: components["schemas"]["ContextualRiskSummary"];
+            urgent_summary: components["schemas"]["UrgentRiskSummary"];
         };
         ContextualRiskPriority: {
             base_score: number;
@@ -11940,6 +11941,23 @@ export interface components {
             os: string;
             sha256: string;
             url: string;
+        };
+        UrgentRiskProjectionSummary: {
+            analyzed: number;
+            critical: number;
+            high: number;
+        };
+        UrgentRiskSummary: {
+            contextual_priorities: components["schemas"]["UrgentRiskProjectionSummary"];
+            credential_risk: components["schemas"]["UrgentRiskProjectionSummary"];
+            critical: number;
+            high: number;
+            included_projections: string[];
+            scope: string;
+            /** @enum {string} */
+            status: "complete";
+            unique_analyzed: number;
+            urgent: number;
         };
         UsageMeterDefinition: {
             classification: string;

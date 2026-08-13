@@ -2543,6 +2543,7 @@ ContextualRiskPriorities = TypedDict(
         'generated_at': str,
         'priorities': list[dict[str, Any]],
         'summary': dict[str, Any],
+        'urgent_summary': dict[str, Any],
     },
     total=False,
 )
@@ -8771,6 +8772,32 @@ UpgradeArtifact = TypedDict(
         'os': str,
         'sha256': str,
         'url': str,
+    },
+    total=False,
+)
+
+UrgentRiskProjectionSummary = TypedDict(
+    'UrgentRiskProjectionSummary',
+    {
+        'analyzed': int,
+        'critical': int,
+        'high': int,
+    },
+    total=False,
+)
+
+UrgentRiskSummary = TypedDict(
+    'UrgentRiskSummary',
+    {
+        'contextual_priorities': dict[str, Any],
+        'credential_risk': dict[str, Any],
+        'critical': int,
+        'high': int,
+        'included_projections': list[str],
+        'scope': str,
+        'status': str,
+        'unique_analyzed': int,
+        'urgent': int,
     },
     total=False,
 )

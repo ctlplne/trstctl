@@ -36,6 +36,7 @@ import (
 	"trstctl.com/trstctl/internal/privacyref"
 	"trstctl.com/trstctl/internal/revcacheposture"
 	"trstctl.com/trstctl/internal/revocationhealth"
+	"trstctl.com/trstctl/internal/risk"
 	"trstctl.com/trstctl/internal/rotationcommand"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/ticketintake"
@@ -4308,11 +4309,18 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if err := p.store.ApplyDiscoveryFindingRecordedTx(ctx, tx, store.DiscoveryFinding{
+		finding := store.DiscoveryFinding{
 			ID: pl.ID, TenantID: e.TenantID, RunID: pl.RunID, SourceID: pl.SourceID,
 			Kind: pl.Kind, Ref: pl.Ref, Provenance: pl.Provenance, Fingerprint: pl.Fingerprint,
 			RiskScore: pl.RiskScore, Metadata: pl.Metadata, DiscoveredAt: e.Time,
-		}); err != nil {
+		}
+		alertDestination, alertPayload, alertKey, err := discoveryUrgentRiskAlert(finding)
+		if err != nil {
+			return err
+		}
+		if err := p.store.ApplyDiscoveryFindingRecordedWithAlertTx(
+			ctx, tx, finding, alertDestination, alertPayload, alertKey,
+		); err != nil {
 			return err
 		}
 		if pl.Kind != "ssh_key" || pl.Fingerprint == "" {
@@ -5854,6 +5862,64 @@ type adcsTemplateDriftAlert struct {
 	Subject     string `json:"subject,omitempty"`
 	Detail      string `json:"detail,omitempty"`
 	Severity    string `json:"severity,omitempty"`
+}
+
+// discoveryRiskAlert mirrors the credential-free subset consumed by notify.
+// Importing notify here would create a cycle because notification delivery
+// projects its own receipt events; JSON is the stable outbox boundary.
+type discoveryRiskAlert struct {
+	Kind        string `json:"kind"`
+	TenantID    string `json:"tenant_id"`
+	OperationID string `json:"operation_id"`
+	Subject     string `json:"subject"`
+	Detail      string `json:"detail"`
+	Severity    string `json:"severity"`
+}
+
+func discoveryUrgentRiskAlert(finding store.DiscoveryFinding) (string, []byte, string, error) {
+	urgency := risk.DiscoveryUrgency(finding.RiskScore)
+	if urgency == "" {
+		return "", nil, "", nil
+	}
+	var metadata struct {
+		DisplayName string `json:"display_name"`
+		Principal   string `json:"principal"`
+	}
+	if len(finding.Metadata) != 0 {
+		if err := json.Unmarshal(finding.Metadata, &metadata); err != nil {
+			return "", nil, "", fmt.Errorf("projections: decode discovery risk metadata: %w", err)
+		}
+	}
+	subject := strings.TrimSpace(metadata.DisplayName)
+	if subject == "" {
+		subject = strings.TrimSpace(metadata.Principal)
+	}
+	if subject == "" {
+		subject = strings.TrimSpace(finding.Ref)
+	}
+	if subject == "" {
+		subject = finding.ID
+	}
+	severity := "warning"
+	if urgency == "critical" {
+		severity = "critical"
+	}
+	key := "urgent-risk:" + finding.ID
+	payload, err := json.Marshal(discoveryRiskAlert{
+		Kind:        "risk.urgent",
+		TenantID:    finding.TenantID,
+		OperationID: key,
+		Subject:     subject,
+		Detail: fmt.Sprintf(
+			"Canonical urgent-risk summary includes this discovery at score %d; review discovery.finding:%s.",
+			finding.RiskScore, finding.ID,
+		),
+		Severity: severity,
+	})
+	if err != nil {
+		return "", nil, "", fmt.Errorf("projections: encode discovery risk alert: %w", err)
+	}
+	return "notification.risk", payload, key, nil
 }
 
 func adcsDriftTemplateNames(pl ADCSTemplateDriftObserved) []string {

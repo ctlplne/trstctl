@@ -490,6 +490,26 @@ export const messages = {
     defaultMessage: "No audit events yet.",
     description: "Dashboard recent-activity empty state when the served audit stream has no events.",
   },
+  "dashboard.urgentRisk.label": {
+    defaultMessage: "Urgent risk",
+    description: "Dashboard KPI label for the canonical all-projection urgent risk count.",
+  },
+  "dashboard.urgentRisk.allProjections": {
+    defaultMessage: "all risk projections",
+    description: "Dashboard KPI scope label when the canonical urgent risk summary is complete.",
+  },
+  "dashboard.urgentRisk.loading": {
+    defaultMessage: "loading all projections",
+    description: "Dashboard KPI state while every risk projection is loading.",
+  },
+  "dashboard.urgentRisk.unavailable": {
+    defaultMessage: "summary unavailable",
+    description: "Dashboard KPI state when the canonical risk summary could not be loaded.",
+  },
+  "dashboard.rotateFirst.contextualRisk": {
+    defaultMessage: "contextual risk {score}",
+    description: "Dashboard rotate-first row detail sourced from the contextual risk projection.",
+  },
   "dashboard.readiness.viewAll": {
     defaultMessage: "View in Certificates →",
     description: "Dashboard 47-day readiness panel header link into the Certificates renewal-readiness tab (C-D1).",
@@ -4739,6 +4759,46 @@ export const messages = {
   "risk.contextual.heading": {
     defaultMessage: "Contextual priorities",
     description: "Risk page section heading for blast-radius contextual prioritization.",
+  },
+  "risk.urgent.loading": {
+    defaultMessage: "Loading urgent risk across every projection.",
+    description: "Risk headline loading state before the canonical merged summary is available.",
+  },
+  "risk.urgent.unavailableTitle": {
+    defaultMessage: "Urgent risk summary unavailable",
+    description: "Risk headline error title when any included projection cannot be read.",
+  },
+  "risk.urgent.unavailableDetail": {
+    defaultMessage: "Every risk projection must load before trstctl can report a safe zero.",
+    description: "Risk headline honesty text that refuses a partial-projection zero.",
+  },
+  "risk.urgent.scopeLabel": {
+    defaultMessage: "Urgent risk across all projections",
+    description: "Accessible label for the canonical urgent risk summary region.",
+  },
+  "risk.urgent.analyzed": {
+    defaultMessage: "Unique credentials analyzed",
+    description: "Canonical risk tile for deduplicated analyzed credentials.",
+  },
+  "risk.urgent.critical": {
+    defaultMessage: "Critical urgent",
+    description: "Canonical risk tile for critical credentials across all projections.",
+  },
+  "risk.urgent.high": {
+    defaultMessage: "High urgent",
+    description: "Canonical risk tile for high-risk credentials across all projections.",
+  },
+  "risk.urgent.credentialProjection": {
+    defaultMessage: "Credential-score projection",
+    description: "Canonical risk tile exposing the credential-score source count.",
+  },
+  "risk.urgent.contextualProjection": {
+    defaultMessage: "Contextual projection",
+    description: "Canonical risk tile exposing the contextual-priority source count.",
+  },
+  "risk.urgent.sourceHint": {
+    defaultMessage: "{critical} critical / {high} high",
+    description: "Critical and high source counts beneath one canonical risk projection tile.",
   },
   "risk.contextual.summary": {
     defaultMessage: "CAP-POST-05: {priorities} prioritized of {total} credentials; {highBlast} high-blast-radius, {weakCrypto} with weak crypto context.",

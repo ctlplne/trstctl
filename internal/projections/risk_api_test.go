@@ -213,7 +213,7 @@ func TestContextualRiskPrioritizationCAPPOST05(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed API-key identity: %v", err)
 	}
-	seedContextualDiscoveryFinding(t, s, now)
+	seedContextualDiscoveryFinding(t, s, tenantA, now)
 	for _, asset := range []store.CryptoAsset{
 		{TenantID: tenantA, Kind: "tls-protocol", Location: "payments-db", Protocol: "TLSv1.0", Strength: "weak", OutOfPolicy: true, Reasons: []string{"legacy protocol"}},
 		{TenantID: tenantA, Kind: "cipher", Location: "payments-db", Cipher: "3DES", Strength: "weak", OutOfPolicy: true, Reasons: []string{"weak cipher"}},
@@ -303,13 +303,43 @@ func TestContextualRiskPrioritizationCAPPOST05(t *testing.T) {
 	}
 }
 
-func seedContextualDiscoveryFinding(t *testing.T, s *store.Store, now time.Time) {
+// TestAUD67CanonicalUrgentSummaryDoesNotReportFalseZero proves the regression
+// literally: the certificate-only projection is empty while one discovered
+// credential is critical, and the tenant headline still says critical=1.
+func TestAUD67CanonicalUrgentSummaryDoesNotReportFalseZero(t *testing.T) {
+	srv, s := newGraphAPI(t)
+	const aud67Tenant = "67676767-6767-4767-8767-676767676767"
+	if err := s.UpsertTenant(context.Background(), store.Tenant{TenantID: aud67Tenant, Name: "AUD67"}); err != nil {
+		t.Fatalf("create isolated AUD67 tenant: %v", err)
+	}
+	now := time.Now().UTC()
+	seedContextualDiscoveryFinding(t, s, aud67Tenant, now)
+
+	status, _, body := do(t, srv, http.MethodGet, "/api/v1/risk/contextual-priorities", reqOpts{tenant: aud67Tenant})
+	if status != http.StatusOK {
+		t.Fatalf("GET contextual priorities = %d: %s", status, body)
+	}
+	var response struct {
+		Urgent risk.UrgentSummary `json:"urgent_summary"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		t.Fatalf("decode urgent summary: %v", err)
+	}
+	if response.Urgent.Status != risk.UrgentSummaryComplete || response.Urgent.Urgent != 1 || response.Urgent.Critical != 1 {
+		t.Fatalf("urgent summary = %+v, want complete with one critical", response.Urgent)
+	}
+	if response.Urgent.CredentialRisk.Analyzed != 0 || response.Urgent.ContextualPriorities.Critical != 1 {
+		t.Fatalf("projection scope = %+v, want base empty and contextual critical", response.Urgent)
+	}
+}
+
+func seedContextualDiscoveryFinding(t *testing.T, s *store.Store, tenantID string, now time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := s.ApplyDiscoverySourceUpsertedTx(ctx, tx, store.DiscoverySource{
 			ID:        "00000000-0000-0000-0000-00000000c017",
-			TenantID:  tenantA,
+			TenantID:  tenantID,
 			Kind:      "apikey",
 			Name:      "ci-token-source",
 			Config:    json.RawMessage(`{"mode":"metadata_only"}`),
@@ -320,7 +350,7 @@ func seedContextualDiscoveryFinding(t *testing.T, s *store.Store, now time.Time)
 		}
 		if err := s.ApplyDiscoveryRunQueuedTx(ctx, tx, store.DiscoveryRun{
 			ID:          "00000000-0000-0000-0000-00000000b017",
-			TenantID:    tenantA,
+			TenantID:    tenantID,
 			SourceID:    "00000000-0000-0000-0000-00000000c017",
 			Status:      "succeeded",
 			RequestedBy: "test",
@@ -330,7 +360,7 @@ func seedContextualDiscoveryFinding(t *testing.T, s *store.Store, now time.Time)
 		}
 		return s.ApplyDiscoveryFindingRecordedTx(ctx, tx, store.DiscoveryFinding{
 			ID:           "00000000-0000-0000-0000-00000000d017",
-			TenantID:     tenantA,
+			TenantID:     tenantID,
 			RunID:        "00000000-0000-0000-0000-00000000b017",
 			SourceID:     "00000000-0000-0000-0000-00000000c017",
 			Kind:         "api_key",

@@ -24,8 +24,6 @@ import { isOnboardingComplete } from "@/lib/onboardingState";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime, formatShortDate, type FormatPolicy } from "@/i18n/format";
 
-const highRiskThreshold = 70;
-
 function emptyNhiInventory(): NHIInventoryResponse {
   return { generated_at: new Date(0).toISOString(), items: [], summary: {}, coverage: [] };
 }
@@ -146,6 +144,7 @@ export function Dashboard() {
   // catch up the moment the operator returns (certctl PERF-H1 pattern).
   const certs = useApiQuery(["certificates"], api.certificates, { live: { intervalMs: 30_000 } });
   const risk = useApiQuery(["risk", { sort: "score" }], () => api.risk({ sort: "score" }), { live: { intervalMs: 30_000 } });
+  const urgentRisk = useApiQuery(["risk", "contextual-priorities"], () => api.contextualRiskPriorities(), { live: { intervalMs: 30_000 } });
   const identities = useApiQuery(["identities"], api.identities, { live: { intervalMs: 30_000 } });
   const nhiInventory = useApiQuery(["nhi-inventory"], readNhiInventory, { live: { intervalMs: 30_000 } });
   const rotationRuns = useApiQuery(["rotation-runs", { limit: 100 }], () => api.rotationRuns({ limit: 100 }), { live: { intervalMs: 30_000 } });
@@ -163,9 +162,16 @@ export function Dashboard() {
   const [dismissed, setDismissed] = useState(false);
 
   const riskRows = risk.data ?? [];
+  const urgentSummary = urgentRisk.data?.urgent_summary;
   const inventoryTotal = nhiInventory.data?.items?.length ?? identities.data?.length ?? 0;
-  const resourcesLoading = certs.loading || risk.loading || identities.loading || nhiInventory.loading;
-  const realEmpty = !resourcesLoading && (certs.data?.length ?? 0) === 0 && riskRows.length === 0 && inventoryTotal === 0;
+  const resourcesLoading = certs.loading || risk.loading || urgentRisk.loading || identities.loading || nhiInventory.loading;
+  const realEmpty =
+    !resourcesLoading &&
+    (certs.data?.length ?? 0) === 0 &&
+    riskRows.length === 0 &&
+    inventoryTotal === 0 &&
+    urgentSummary?.status === "complete" &&
+    urgentSummary.urgent === 0;
   // A real, empty tenant that has not completed first-run setup is sent to the
   // wizard. Preview is populated by the isolated read-model catalog.
   const showOnboarding = realEmpty && !preview && !readOnboardingDone() && !dismissed;
@@ -173,7 +179,13 @@ export function Dashboard() {
   const servedRotationRuns = rotationRuns.data?.items ?? [];
 
   const topRisk = [...riskRows].sort((a, b) => b.score - a.score).slice(0, 5);
-  const highRisk = riskRows.filter((r) => r.score >= highRiskThreshold).length;
+  const urgentValue = urgentSummary?.status === "complete" ? urgentSummary.urgent : "—";
+  const urgentSub =
+    urgentSummary?.status === "complete"
+      ? t("dashboard.urgentRisk.allProjections")
+      : urgentRisk.loading
+        ? t("dashboard.urgentRisk.loading")
+        : t("dashboard.urgentRisk.unavailable");
 
   const kpis = {
     certificates: certs.data?.length ?? 0,
@@ -182,12 +194,22 @@ export function Dashboard() {
     agentsOnline: inventoryCount(nhiInventory.data, "agent"),
     agentsTotal: inventoryCount(nhiInventory.data, "agent"),
     expiring7d: servedCertificates.filter((c) => expiresWithinDays(c, 7)).length,
-    highRisk,
+    urgentRisk: urgentValue,
     openIncidents: openIncidents.data ?? 0,
     pqcReady: servedCertificates.filter(isPqcReady).length,
   };
 
-  const rotateFirst = topRisk.map((r) => ({ subject: r.subject, detail: `risk score ${Math.round(r.score)}`, score: Math.round(r.score) }));
+  const contextualRotateFirst = (urgentRisk.data?.priorities ?? [])
+    .filter((row) => row.severity === "critical" || row.severity === "high")
+    .slice(0, 5)
+    .map((row) => ({
+      subject: row.subject,
+      detail: t("dashboard.rotateFirst.contextualRisk", { score: Math.round(row.contextual_score) }),
+      score: Math.round(row.contextual_score),
+    }));
+  const rotateFirst = contextualRotateFirst.length
+    ? contextualRotateFirst
+    : topRisk.map((r) => ({ subject: r.subject, detail: `risk score ${Math.round(r.score)}`, score: Math.round(r.score) }));
 
   if (showOnboarding) {
     return (
@@ -267,7 +289,14 @@ export function Dashboard() {
           tone="warn"
           to="/certificates?expiry=7d"
         />
-        <Kpi icon={<ShieldAlert className="h-4 w-4" />} label="High-risk" value={kpis.highRisk} sub="rotate" tone="crit" to="/risk?sort=score" />
+        <Kpi
+          icon={<ShieldAlert className="h-4 w-4" />}
+          label={t("dashboard.urgentRisk.label")}
+          value={kpis.urgentRisk}
+          sub={urgentSub}
+          tone={typeof kpis.urgentRisk === "number" && kpis.urgentRisk > 0 ? "crit" : undefined}
+          to="/risk?sort=score"
+        />
         {/* D2: verified % is a percentage of OBSERVED endpoints, not of the
             estate. Endpoints nobody has configured a listener address for are
             absent rather than counted — counting them as unverified would
@@ -460,7 +489,7 @@ function Kpi({
 }: {
   icon: ReactNode;
   label: string;
-  value: number;
+  value: number | string;
   // valueSuffix renders immediately after the formatted number — "%" for a
   // ratio tile. Kept separate from the value so the number still goes through
   // formatNumber and stays localized.
@@ -483,7 +512,7 @@ function Kpi({
         </div>
         <div className="mt-2 flex min-w-0 items-end justify-between gap-2">
           <span className="text-display font-semibold tracking-tight tabular-nums">
-            {formatNumber(value)}
+            {typeof value === "number" ? formatNumber(value) : value}
             {valueSuffix ? <span className="text-title font-medium text-muted-foreground">{valueSuffix}</span> : null}
           </span>
           {spark && <Sparkline points={spark} width={84} height={28} className="shrink" />}

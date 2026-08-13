@@ -342,6 +342,17 @@ const previewReaders: Record<string, () => unknown> = {
       orphaned: 1,
       weak_crypto_context: 2,
     },
+    urgent_summary: {
+      status: "complete",
+      scope: "All served credential-risk and contextual-priority projections for this tenant; totals deduplicate credential_id.",
+      included_projections: ["credential_risk_scores", "contextual_priorities"],
+      unique_analyzed: 3,
+      urgent: 3,
+      critical: 1,
+      high: 2,
+      credential_risk: { analyzed: 3, critical: 1, high: 2 },
+      contextual_priorities: { analyzed: 3, critical: 1, high: 2 },
+    },
     priorities: [
       {
         rank: 1,

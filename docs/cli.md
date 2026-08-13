@@ -520,6 +520,9 @@ trstctl-cli external-cas issue digicert -f upstream-issue.json
 
 # Rank credentials by risk — what to rotate first.
 trstctl-cli risk credentials --sort score
+# The contextual response includes the canonical urgent_summary: both named
+# tenant projections, per-source counts, and a credential_id-deduplicated total.
+# If either projection read fails, the command returns the API error, not zero.
 trstctl-cli risk contextual-priorities
 
 # Export a signed SOC 2 evidence pack from audit, access, and change evidence.

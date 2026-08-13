@@ -1,23 +1,34 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { RiskPosture } from "@/components/risk/posture";
-import type { CredentialRisk } from "@/lib/api";
+import type { UrgentRiskSummary } from "@/lib/api";
 
-const risks = [
-  { credential_id: "c1", subject: "high-svc", kind: "x509", score: 90, owner_active: true },
-  { credential_id: "c2", subject: "low-svc", kind: "secret", score: 12, owner_active: false },
-] as unknown as CredentialRisk[];
+const summary = {
+  status: "complete",
+  scope: "All served credential-risk and contextual-priority projections for this tenant; totals deduplicate credential_id.",
+  included_projections: ["credential_risk_scores", "contextual_priorities"],
+  unique_analyzed: 2,
+  urgent: 1,
+  critical: 1,
+  high: 0,
+  credential_risk: { analyzed: 2, critical: 1, high: 0 },
+  contextual_priorities: { analyzed: 2, critical: 1, high: 0 },
+} as UrgentRiskSummary;
 
 describe("U3-3 risk posture dashboard", () => {
-  it("summarizes scored credentials by band, orphan state, and average — without duplicating subject rows", () => {
-    render(<RiskPosture risks={risks} />);
-    expect(screen.getByText("Credentials scored")).toBeInTheDocument();
-    expect(screen.getByText("Critical (90+)")).toBeInTheDocument();
-    expect(screen.getByText("Orphaned")).toBeInTheDocument();
-    expect(screen.getByText("Average score")).toBeInTheDocument();
-    // (90 + 12) / 2 = 51, rounded.
-    expect(screen.getByText("51")).toBeInTheDocument();
-    // It must NOT render individual risk subjects (the Risk grid owns those).
-    expect(screen.queryByText("high-svc")).not.toBeInTheDocument();
+  it("summarizes the deduplicated all-projection contract and exposes each source count", () => {
+    render(<RiskPosture summary={summary} loading={false} error={null} />);
+    expect(screen.getByText("Unique credentials analyzed")).toBeInTheDocument();
+    expect(screen.getByText("Critical urgent")).toBeInTheDocument();
+    expect(screen.getByText("Credential-score projection")).toBeInTheDocument();
+    expect(screen.getByText("Contextual projection")).toBeInTheDocument();
+    expect(screen.getByText(summary.scope)).toBeInTheDocument();
+  });
+
+  it("renders a missing authority as unavailable instead of a safe zero", () => {
+    render(<RiskPosture summary={null} loading={false} error="contextual projection failed" />);
+    expect(screen.getByText("Urgent risk summary unavailable")).toBeInTheDocument();
+    expect(screen.getByText("contextual projection failed")).toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
 });

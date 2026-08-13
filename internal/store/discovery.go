@@ -3,6 +3,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -314,6 +315,61 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		  WHERE tenant_id = $1::uuid AND id = $2::uuid`,
 		f.TenantID, existingID, canonicalID, f.DiscoveredAt, recordedID)
 	return err
+}
+
+// ApplyDiscoveryFindingRecordedWithAlertTx projects one finding and its
+// canonical urgent-risk notification intent atomically (AN-2/AN-6). The caller
+// supplies a closed, credential-free alert payload derived from the same score
+// contract used by the headline summary. Empty alert fields mean this finding
+// is below the urgent bands.
+func (s *Store) ApplyDiscoveryFindingRecordedWithAlertTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	f DiscoveryFinding,
+	alertDestination string,
+	alertPayload []byte,
+	alertKey string,
+) error {
+	if (alertDestination == "") != (len(alertPayload) == 0) ||
+		(alertDestination == "") != (alertKey == "") {
+		return errors.New("store: discovery risk alert intent is incomplete")
+	}
+	if err := s.ApplyDiscoveryFindingRecordedTx(ctx, tx, f); err != nil {
+		return err
+	}
+	if alertDestination == "" {
+		return nil
+	}
+
+	// The finding's natural-key insert serializes exact observation races. This
+	// second tenant+receiver lock also protects callers whose event IDs differ
+	// but intentionally bind to the same semantic alert key.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"discovery-risk-alert\x1f"+f.TenantID+"\x1f"+alertKey); err != nil {
+		return fmt.Errorf("store: lock discovery risk alert: %w", err)
+	}
+	var existingDestination string
+	var existingPayload []byte
+	err := tx.QueryRow(ctx,
+		`SELECT destination, payload FROM outbox
+		  WHERE tenant_id = $1 AND idempotency_key = $2 ORDER BY id LIMIT 1`,
+		f.TenantID, alertKey).Scan(&existingDestination, &existingPayload)
+	if err == nil {
+		if existingDestination != alertDestination || !bytes.Equal(existingPayload, alertPayload) {
+			return fmt.Errorf("%w: discovery risk alert key is already bound", ErrIdempotencyConflict)
+		}
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key)
+		 VALUES ($1, $2, $2, $3, $4)`,
+		f.TenantID, alertDestination, alertPayload, alertKey); err != nil {
+		return fmt.Errorf("store: enqueue discovery risk alert: %w", err)
+	}
+	return nil
 }
 
 // ApplyDiscoveryFindingTriageChangedTx projects a discovery.finding.triage_changed event.
