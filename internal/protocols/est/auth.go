@@ -53,12 +53,15 @@ func NewBasicAuthenticator(cfg BasicAuthConfig) *BasicAuthenticator {
 }
 
 // Authenticate implements Authenticator.
-func (a *BasicAuthenticator) Authenticate(r *http.Request) bool {
+func (a *BasicAuthenticator) Authenticate(r *http.Request) AuthenticationResult {
 	user, pass, ok := r.BasicAuth()
 	if !ok || user == "" || len(a.password) == 0 {
-		return false
+		return AuthenticationResult{StatusCode: http.StatusUnauthorized, Challenge: `Basic realm="est"`}
 	}
-	return crypto.ConstantTimeEqual([]byte(pass), a.password)
+	if !crypto.ConstantTimeEqual([]byte(pass), a.password) {
+		return AuthenticationResult{StatusCode: http.StatusUnauthorized, Challenge: `Basic realm="est"`}
+	}
+	return AuthenticationResult{Allowed: true}
 }
 
 func (a *BasicAuthenticator) TooManyFailures(r *http.Request) bool {

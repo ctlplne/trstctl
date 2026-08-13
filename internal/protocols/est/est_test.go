@@ -55,7 +55,9 @@ func (e realEnroller) Enroll(_ context.Context, csrDER []byte, _, _, _ string) (
 
 type allowAuth struct{}
 
-func (allowAuth) Authenticate(*http.Request) bool { return true }
+func (allowAuth) Authenticate(*http.Request) est.AuthenticationResult {
+	return est.AuthenticationResult{Allowed: true}
+}
 
 type recordingIdempotencyEnroller struct {
 	ca              caFixture
@@ -199,7 +201,9 @@ func TestEnrollRequiresAuth(t *testing.T) {
 
 type denyAuth struct{}
 
-func (denyAuth) Authenticate(*http.Request) bool { return false }
+func (denyAuth) Authenticate(*http.Request) est.AuthenticationResult {
+	return est.AuthenticationResult{StatusCode: http.StatusUnauthorized, Challenge: `Basic realm="est"`}
+}
 
 func TestMalformedEnrollFailsClosed(t *testing.T) {
 	s, _ := newServer(t, nil, nil)

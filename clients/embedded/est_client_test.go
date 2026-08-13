@@ -21,7 +21,9 @@ import (
 
 type allowAll struct{}
 
-func (allowAll) Authenticate(*http.Request) bool { return true }
+func (allowAll) Authenticate(*http.Request) est.AuthenticationResult {
+	return est.AuthenticationResult{Allowed: true}
+}
 
 type signingEnroller struct {
 	caCertDER []byte

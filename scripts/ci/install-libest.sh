@@ -36,6 +36,11 @@ perl -0pi -e 's/FIPS_mode\(\)/0/g; s/FIPS_mode_set\(1\)/0/g' \
 perl -0pi -e 's/\bossl_dump_ssl_errors\b/example_ossl_dump_ssl_errors/g' \
 	"${src}/example/util/utils.c" \
 	"${src}/example/util/utils.h"
+# The reference example prints its Bearer credential in verbose conformance
+# logs. Preserve the protocol behavior but make the transcript safe to archive.
+perl -0pi -e 's/printf\("Returning access token = %s\\n\\n", auth_credentials->auth_token\);/printf("Returning configured access token (redacted)\\n\\n");/' \
+	"${src}/example/client/estclient.c"
+grep -Fq 'Returning configured access token (redacted)' "${src}/example/client/estclient.c"
 
 configure_args=(
 	--enable-client-only

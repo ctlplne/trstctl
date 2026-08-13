@@ -3418,7 +3418,13 @@ This is a deliberate, documented trust boundary, not an accident.
   isolated signer, tenant-scoped, recorded as immutable events, idempotent,
   and profile-gated:
   - EST at `/.well-known/est/...` (Bearer-API-token authenticated on top of
-    TLS), SCEP at `/scep`, CMP at `/cmp` — mounted on the control-plane mux
+    TLS). The challenge is emitted by the configured authenticator: the served
+    tenant route advertises Bearer plus `certs:request` and returns bounded RFC
+    6750 `invalid_request`, `invalid_token`, or `insufficient_scope` results,
+    while BasicAuthenticator continues to advertise Basic. The conventional
+    uppercase header spelling and a strict libest token wrapper keep the pinned
+    challenge-driven reference client interoperable without changing ordinary
+    raw Bearer behavior. SCEP at `/scep`, CMP at `/cmp` — mounted on the control-plane mux
     and exercised by served round-trip acceptance tests (a stock
     base64-PKCS#10 EST enroll, a CMS-enveloped SCEP `PKIOperation`, a CMP
     `p10cr`) that each download a real, signer-issued certificate verifying
@@ -3515,8 +3521,10 @@ This is a deliberate, documented trust boundary, not an accident.
     certificates). EST: a differential against the OpenSSL `pkcs7`
     parser/verifier on every `make test` (so `/cacerts` and `/simpleenroll`
     output is validated by code we did not write), plus a dedicated CI job
-    that builds a checksum-pinned libest `estclient` from source and
-    requires it to perform simpleenroll against the served EST endpoint.
+    that builds a checksum-pinned libest `estclient` from source, removes its
+    verbose access-token print before archiving transcripts, and requires it to
+    follow the Bearer challenge and perform simpleenroll against the served EST
+    endpoint.
     SPIFFE Workload API: a served stock-client differential — the real
     go-spiffe `workloadapi` client fetches an X.509-SVID, a JWT-SVID, and
     JWT bundles, and validates the JWT-SVID over the served UDS; stock

@@ -43,7 +43,12 @@ fetches the CA chain from `/cacerts` (no auth, to bootstrap trust), then POSTs a
 certificate. trstctl implements all four endpoints (including `/csrattrs`),
 authenticates via an injected authenticator, caps request bodies, verifies the CSR's
 self-signature, and honors an `Idempotency-Key` header (or one derived from the CSR)
-so a retry never mints twice.
+so a retry never mints twice. The served tenant route accepts scoped API tokens and
+answers an unauthenticated enrollment with `WWW-Authenticate: Bearer realm="est",
+scope="certs:request"`. Invalid tokens receive RFC 6750 `invalid_token`; recognized
+tokens without enrollment scope receive `insufficient_scope`. A Basic-authenticator
+deployment still advertises Basic because the authenticator, not the EST handler,
+owns the challenge.
 
 EST also serves the C3 parity extensions: EST `/serverkeygen` (when a profile opts in)
 has the signer generate the key, returning the certificate plus encrypted private key
@@ -155,6 +160,7 @@ curl -s https://trstctl.example.com/.well-known/est/cacerts -o cacerts.p7
 
 # 2) enroll: POST a base64 PKCS#10 CSR, get back a PKCS#7 cert
 curl -s -H "Content-Type: application/pkcs10" \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      --data-binary @request.b64 \
      https://trstctl.example.com/.well-known/est/simpleenroll

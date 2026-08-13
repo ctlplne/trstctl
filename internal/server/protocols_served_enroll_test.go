@@ -89,8 +89,8 @@ func TestServedESTEndToEnd(t *testing.T) {
 		t.Fatalf("EST read-only-token enroll: %v", err)
 	}
 	_ = rresp.Body.Close()
-	if rresp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("EST enroll with a token lacking certs:request returned %d, want 401", rresp.StatusCode)
+	if rresp.StatusCode != http.StatusForbidden {
+		t.Errorf("EST enroll with a token lacking certs:request returned %d, want 403", rresp.StatusCode)
 	}
 }
 

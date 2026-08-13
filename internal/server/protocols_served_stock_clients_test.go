@@ -203,16 +203,22 @@ func TestServedESTLibestSimpleEnroll(t *testing.T) {
 	)
 	cmd.Env = append(os.Environ(), "EST_OPENSSL_CACERT="+caFile)
 	out, err := cmd.CombinedOutput()
-	if werr := os.WriteFile(logOut, out, 0o600); werr != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
+	safeOut := bytes.ReplaceAll(out, []byte(token), []byte("[REDACTED]"))
+	safeOut = bytes.ReplaceAll(safeOut, []byte(base64.StdEncoding.EncodeToString([]byte(token))), []byte("[REDACTED]"))
+	leaked := !bytes.Equal(out, safeOut)
+	if werr := os.WriteFile(logOut, safeOut, 0o600); werr != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatalf("write libest log: %v", werr)
 	}
+	if leaked {
+		t.Fatal("libest output attempted to expose the Bearer credential; use the checksum-pinned redacted build")
+	}
 	if err != nil {
-		t.Fatalf("libest estclient simpleenroll failed against served EST endpoint: %v\n%s", err, out)
+		t.Fatalf("libest estclient simpleenroll failed against served EST endpoint: %v\n%s", err, safeOut)
 	}
 	p7Path := filepath.Join(outDir, "cert-0-0.pkcs7")
 	gotB64, err := os.ReadFile(p7Path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 	if err != nil {
-		t.Fatalf("libest estclient did not write %s: %v\n%s", p7Path, err, out)
+		t.Fatalf("libest estclient did not write %s: %v\n%s", p7Path, err, safeOut)
 	}
 	p7, err := base64.StdEncoding.DecodeString(string(bytes.TrimSpace(gotB64)))
 	if err != nil {

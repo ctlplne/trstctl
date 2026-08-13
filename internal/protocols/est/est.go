@@ -60,10 +60,21 @@ type ServerKeyGenerator interface {
 	ServerKeygen(ctx context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) (ServerKeygenResult, error)
 }
 
+// AuthenticationResult is one atomic authentication decision. The authenticator
+// owns the challenge because only it knows which credential scheme it accepts.
+// Keeping the HTTP status and public challenge beside Allowed prevents the EST
+// handler from advertising Basic while the injected authenticator accepts Bearer.
+type AuthenticationResult struct {
+	Allowed    bool
+	StatusCode int
+	Challenge  string
+}
+
 // Authenticator authorizes an enrolling client (RFC 7030 §3.2.3 HTTP auth, on top
-// of TLS). A real deployment checks an enrollment credential; tests inject a double.
+// of TLS). A real deployment checks an enrollment credential and returns only a
+// fixed, secret-free challenge; tests inject a double.
 type Authenticator interface {
-	Authenticate(r *http.Request) bool
+	Authenticate(r *http.Request) AuthenticationResult
 }
 
 // Server is the EST endpoint set. Mount Handler() under the control plane's TLS
@@ -479,17 +490,39 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 		http.Error(w, "too many failed enrollment attempts", http.StatusTooManyRequests)
 		return false
 	}
-	if s.auth == nil || !s.auth.Authenticate(r) {
+	result := AuthenticationResult{StatusCode: http.StatusUnauthorized}
+	if s.auth != nil {
+		result = s.auth.Authenticate(r)
+	}
+	if !result.Allowed {
 		if limiter, ok := s.auth.(limitedAuthenticator); ok {
 			limiter.RecordFailure(r)
 		}
-		w.Header().Set("WWW-Authenticate", `Basic realm="est"`)
-		s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusUnauthorized, nil),
+		status := result.StatusCode
+		if status < http.StatusBadRequest || status >= http.StatusInternalServerError {
+			status = http.StatusUnauthorized
+		}
+		challenge := strings.TrimSpace(result.Challenge)
+		if challenge != "" && !strings.ContainsAny(challenge, "\r\n") {
+			setWWWAuthenticate(w, challenge)
+		}
+		s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, status, nil),
 			r.Method+" "+r.URL.Path, "principal:unauthorized")
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, "unauthorized", status)
 		return false
 	}
 	return true
+}
+
+// setWWWAuthenticate preserves the conventional RFC field spelling on the
+// HTTP/1 wire. Header names are case-insensitive, but the pinned libest
+// reference client compares this name case-sensitively and rejects Go's normal
+// "Www-Authenticate" canonicalization. Direct map assignment is therefore an
+// interoperability boundary, not a second authentication policy.
+func setWWWAuthenticate(w http.ResponseWriter, challenge string) {
+	header := w.Header()
+	delete(header, http.CanonicalHeaderKey("WWW-Authenticate"))
+	header["WWW-Authenticate"] = []string{challenge}
 }
 
 func estFallbackIdempotencyKey(opType string, csrDER []byte) string {

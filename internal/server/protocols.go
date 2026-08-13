@@ -5,6 +5,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -23,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/protocols/est"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -425,46 +427,91 @@ type servedEnrollAuth struct {
 	tenantID string
 }
 
-// Authenticate implements est.Authenticator. It returns true only for a Bearer
+// Authenticate implements est.Authenticator. It allows only a Bearer
 // trstctl API token (trst_…) that resolves in the store, is unexpired, and is bound to
 // this endpoint's tenant (AN-1: a token for another tenant cannot enroll here).
-func (a servedEnrollAuth) Authenticate(r *http.Request) bool {
-	if a.store == nil {
-		return false
+// Every denial carries a fixed RFC 6750 challenge; no token or store error is
+// reflected into the response.
+func (a servedEnrollAuth) Authenticate(r *http.Request) est.AuthenticationResult {
+	h := strings.TrimSpace(r.Header.Get("Authorization"))
+	if h == "" {
+		return servedESTBearerDenial(http.StatusUnauthorized, "")
 	}
-	const prefix = "Bearer "
-	h := r.Header.Get("Authorization")
-	if !strings.HasPrefix(h, prefix) {
-		return false
+	scheme, credential, ok := strings.Cut(h, " ")
+	credential = strings.TrimSpace(credential)
+	if !ok || !strings.EqualFold(scheme, "Bearer") || credential == "" || strings.ContainsAny(credential, " \t") {
+		return servedESTBearerDenial(http.StatusBadRequest, "invalid_request")
 	}
-	tok := []byte(strings.TrimSpace(h[len(prefix):]))
+	tok, ok := servedESTBearerCredential([]byte(credential))
+	if !ok {
+		return servedESTBearerDenial(http.StatusUnauthorized, "invalid_token")
+	}
 	defer secret.Wipe(tok)
-	if !bytes.HasPrefix(tok, []byte(auth.TokenPrefix)) {
-		return false
-	}
 	hash, err := auth.HashAPIToken(tok)
 	if err != nil {
-		return false
+		return servedESTBearerDenial(http.StatusUnauthorized, "invalid_token")
+	}
+	if a.store == nil {
+		return servedESTBearerDenial(http.StatusUnauthorized, "invalid_token")
 	}
 	rec, err := a.store.LookupAPITokenByHash(r.Context(), hash)
 	if err != nil {
-		return false
+		return servedESTBearerDenial(http.StatusUnauthorized, "invalid_token")
 	}
 	if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
-		return false
+		return servedESTBearerDenial(http.StatusUnauthorized, "invalid_token")
 	}
 	// AN-1: the token's tenant must match the endpoint's tenant, then AN-5/S8.1
 	// authz requires enrollment authority. A valid token without certs:request is
 	// authenticated but not authorized to mint via EST.
 	if a.tenantID != "" && rec.TenantID != a.tenantID {
-		return false
+		return servedESTBearerDenial(http.StatusUnauthorized, "invalid_token")
 	}
 	tenantID := a.tenantID
 	if tenantID == "" {
 		tenantID = rec.TenantID
 	}
 	principal := auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal()
-	return principal.Can(authz.CertsRequest, authz.Scope{TenantID: tenantID})
+	if !principal.Can(authz.CertsRequest, authz.Scope{TenantID: tenantID}) {
+		return servedESTBearerDenial(http.StatusForbidden, "insufficient_scope")
+	}
+	return est.AuthenticationResult{Allowed: true}
+}
+
+func servedESTBearerCredential(candidate []byte) ([]byte, bool) {
+	// RFC 6750 clients send the opaque token directly. The pinned libest
+	// reference client instead base64-encodes the callback token before placing
+	// it after "Bearer". Accept that one strict wrapper so the stock client and
+	// ordinary Bearer callers reach the same hash authority.
+	if len(candidate) > 256 {
+		secret.Wipe(candidate)
+		return nil, false
+	}
+	if bytes.HasPrefix(candidate, []byte(auth.TokenPrefix)) {
+		return candidate, true
+	}
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(candidate)))
+	n, err := base64.StdEncoding.Strict().Decode(decoded, candidate)
+	secret.Wipe(candidate)
+	if err != nil {
+		secret.Wipe(decoded)
+		return nil, false
+	}
+	decoded = decoded[:n]
+	if !bytes.HasPrefix(decoded, []byte(auth.TokenPrefix)) {
+		secret.Wipe(decoded)
+		return nil, false
+	}
+	return decoded, true
+}
+
+func servedESTBearerDenial(status int, code string) est.AuthenticationResult {
+	challenge := `Bearer realm="est"`
+	if code != "" {
+		challenge += `, error="` + code + `"`
+	}
+	challenge += `, scope="certs:request"`
+	return est.AuthenticationResult{StatusCode: status, Challenge: challenge}
 }
 
 // auditIssued emits the served protocol issuance as an AN-2 event so a
