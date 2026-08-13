@@ -336,7 +336,10 @@ func sameOptionalTime(left, right *time.Time) bool {
 	if left == nil || right == nil {
 		return left == nil && right == nil
 	}
-	return left.Equal(*right)
+	// PostgreSQL timestamptz and pgx retain microseconds. Ignore only the
+	// sub-microsecond bits an immutable event cannot recover after its first
+	// projection; one retained microsecond still represents different evidence.
+	return left.UTC().Truncate(time.Microsecond).Equal(right.UTC().Truncate(time.Microsecond))
 }
 
 func rotationRunStatusTerminal(status string) bool {

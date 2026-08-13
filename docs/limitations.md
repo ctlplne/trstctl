@@ -214,7 +214,11 @@ never live in the API process. What you can do end to end against the running bi
   `connector.delivery.recorded` receipts and scheduled renewals emit
   `lifecycle.rotation.recorded` runs, both readable through the API, CLI, and
   console. The receipt is routing/status metadata only — no private key or secret
-  bytes are returned.
+  bytes are returned. Rotation replay compares `completed_at` at PostgreSQL's
+  microsecond precision: sub-microsecond bits that cannot survive the first database
+  write are one observation, while a difference of one stored microsecond still fails
+  closed as changed terminal evidence. This lets exact JetStream replay converge
+  without weakening the run ID, tenant, outbox, binding, outcome, or sequence checks.
 - Automated endpoint binding: `POST /api/v1/lifecycle/endpoint-bindings` creates the
   X.509 identity for an existing owner, provisions or references the connector
   target, binds the identity to that endpoint, and queues issue/deploy work through

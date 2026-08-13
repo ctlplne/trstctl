@@ -396,6 +396,58 @@ func TestRotationRunProjectionDoesNotRegressTerminalState(t *testing.T) {
 	}
 }
 
+// TestRotationRunProjectionReplaysPostgreSQLNormalizedCompletionAUD126 pins
+// the storage precision boundary on exact at-least-once replay. Event JSON can
+// retain nanoseconds, while PostgreSQL timestamptz stores microseconds. Those two
+// encodings still describe the same immutable completion observation.
+func TestRotationRunProjectionReplaysPostgreSQLNormalizedCompletionAUD126(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+
+	outboxID := int64(126)
+	completedAt := time.Date(2026, 8, 13, 21, 11, 9, 534027882, time.UTC)
+	recorded := projections.LifecycleRotationRecorded{
+		ID:         "10000000-0000-4000-8000-000000000126",
+		IdentityID: "10000000-0000-4000-8000-000000000127", OutboxID: &outboxID,
+		Status: "succeeded", Trigger: "scheduled", Reason: "renewal window",
+		PredecessorFingerprint: "sha256:precision-old", SuccessorFingerprint: "sha256:precision-new",
+		RollbackRef: "restore sha256:precision-old", IdempotencyKey: "lifecycle.renew:precision",
+		CompletedAt: &completedAt,
+	}
+	event := projectorEvent(t, projections.EventLifecycleRotationRecorded, recorded)
+	event.Sequence = 126
+	event.Time = time.Date(2026, 8, 13, 21, 11, 9, 670315632, time.UTC)
+	proj := projections.New(s)
+	if err := proj.Apply(ctx, event); err != nil {
+		t.Fatalf("first terminal projection: %v", err)
+	}
+	if err := proj.Apply(ctx, event); err != nil {
+		t.Fatalf("identical same-sequence replay after PostgreSQL timestamp encoding: %v", err)
+	}
+
+	got, err := s.GetRotationRun(ctx, tenantA, recorded.ID)
+	if err != nil {
+		t.Fatalf("get replayed rotation run: %v", err)
+	}
+	if got.LatestEventSequence != event.Sequence || got.CompletedAt == nil || !got.CompletedAt.Equal(completedAt.Truncate(time.Microsecond)) {
+		t.Fatalf("replayed rotation run = %+v, want sequence %d and PostgreSQL-normalized completion %s", got, event.Sequence, completedAt.Truncate(time.Microsecond))
+	}
+
+	changedAt := completedAt.Add(time.Microsecond)
+	changed := recorded
+	changed.CompletedAt = &changedAt
+	changedEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, changed)
+	changedEvent.ID = event.ID
+	changedEvent.Sequence = event.Sequence
+	changedEvent.Time = event.Time
+	if err := proj.Apply(ctx, changedEvent); !errors.Is(err, store.ErrIdempotencyConflict) || !strings.Contains(err.Error(), "differing_same_sequence_fields=completed_at") {
+		t.Fatalf("same-sequence retained-microsecond change error = %v, want completed_at idempotency conflict", err)
+	}
+}
+
 // TestRotationRunProjectionOrdersByLocalStreamSequence proves the immutable
 // local JetStream order, not a producer/import wall clock, decides which
 // lifecycle observation is current. Federation preserves source timestamps and
