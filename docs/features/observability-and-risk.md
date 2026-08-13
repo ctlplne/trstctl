@@ -98,7 +98,12 @@ separately readable as audit history. Each run records one bounded immutable out
 configured log. A failed log therefore stays failed with its diagnostic while a working
 peer still advances its checkpoint and keeps its findings; the aggregate run is `partial`
 when both happened. The console separates active health from retired history so an old
-404 endpoint cannot make the current watchlist look broken.
+404 endpoint cannot make the current watchlist look broken. While a run is queued or
+running, the CT panel polls its run record to a terminal state and then reloads the
+per-log checkpoints in place. The Discovery page's Refresh action reloads this panel as
+well. Failed runs show a bounded, credential-redacted diagnostic beside their status;
+operators get the repair clue without storing or serving an echoed bearer token or an
+unbounded upstream response.
 
 **Where to find it.** CT monitoring is a **discovery** capability — it answers "is
 someone issuing certificates for my domains?" — so its home is the **Discovery**

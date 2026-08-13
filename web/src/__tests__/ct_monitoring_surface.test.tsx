@@ -64,10 +64,10 @@ const monitoring = {
   ],
 };
 
-function renderPanel() {
+function renderPanel(props: React.ComponentProps<typeof CTMonitoringPanel> = {}) {
   return render(
     <MemoryRouter>
-      <CTMonitoringPanel />
+      <CTMonitoringPanel {...props} />
     </MemoryRouter>,
   );
 }
@@ -75,7 +75,8 @@ function renderPanel() {
 describe("C5 certificate transparency monitoring surface", () => {
   beforeEach(() => {
     vi.spyOn(api, "ctMonitoring").mockResolvedValue(monitoring as never);
-    vi.spyOn(api, "updateCTMonitoring").mockResolvedValue({ ...monitoring, run: { id: "run-9" } } as never);
+    vi.spyOn(api, "updateCTMonitoring").mockResolvedValue({ ...monitoring, run: { id: "run-9", status: "queued" } } as never);
+    vi.spyOn(api, "getDiscoveryRun").mockResolvedValue({ id: "run-9", status: "succeeded" } as never);
   });
 
   it("shows the watchlist, per-log checkpoint state, and unexpected issuance on one surface", async () => {
@@ -126,6 +127,75 @@ describe("C5 certificate transparency monitoring surface", () => {
     // "Save" alone would leave the operator waiting on the next schedule to find
     // out whether their watchlist works.
     expect(sent.run_now).toBe(true);
-    expect(await screen.findByText("run run-9")).toBeInTheDocument();
+    expect(await screen.findByText("run run-9 succeeded")).toBeInTheDocument();
+  });
+
+  it("AUD-71 follows parent refresh authority without a remount", async () => {
+    const first = monitoring;
+    const refreshed = {
+      ...monitoring,
+      logs: [{ ...monitoring.logs[0], next_index: 5000 }],
+    };
+    vi.mocked(api.ctMonitoring)
+      .mockReset()
+      .mockResolvedValueOnce(first as never)
+      .mockResolvedValueOnce(refreshed as never);
+
+    const view = renderPanel({ refreshToken: 0 });
+    expect(await screen.findByText(/next index 4211/i)).toBeInTheDocument();
+
+    view.rerender(
+      <MemoryRouter>
+        <CTMonitoringPanel refreshToken={1} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/next index 5000/i)).toBeInTheDocument();
+    expect(api.ctMonitoring).toHaveBeenCalledTimes(2);
+  });
+
+  it("AUD-71 polls an active run to terminal and refreshes mixed-log checkpoints in place", async () => {
+    const user = userEvent.setup();
+    const terminal = {
+      ...monitoring,
+      run: { id: "run-9", status: "partial", error: "1 of 2 CT logs failed: get-sth returned 503" },
+      logs: [
+        { ...monitoring.logs[0], next_index: 4250, status: "succeeded" },
+        { ...monitoring.logs[1], next_index: 0, status: "failed", last_error: "get-sth returned 503" },
+      ],
+    };
+    vi.mocked(api.ctMonitoring)
+      .mockReset()
+      .mockResolvedValueOnce(monitoring as never)
+      .mockResolvedValueOnce(terminal as never);
+    vi.mocked(api.getDiscoveryRun)
+      .mockReset()
+      .mockResolvedValueOnce({ id: "run-9", status: "running" } as never)
+      .mockResolvedValueOnce(terminal.run as never);
+    const onRunTerminal = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ pollIntervalMs: 5, onRunTerminal });
+
+    await screen.findByText(/next index 4211/i);
+    await user.click(screen.getByRole("button", { name: "Save and run now" }));
+
+    expect(await screen.findByText(/next index 4250/i)).toBeInTheDocument();
+    expect(api.getDiscoveryRun).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(onRunTerminal).toHaveBeenCalledWith(expect.objectContaining({ id: "run-9", status: "partial" })));
+    expect(screen.getByText("Last error: get-sth returned 503")).toBeInTheDocument();
+  });
+
+  it("AUD-71 cancels active-run polling when the panel unmounts", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getDiscoveryRun)
+      .mockReset()
+      .mockResolvedValue({ id: "run-9", status: "running" } as never);
+    const view = renderPanel({ pollIntervalMs: 5 });
+    await screen.findByText(/next index 4211/i);
+    await user.click(screen.getByRole("button", { name: "Save and run now" }));
+    await waitFor(() => expect(api.getDiscoveryRun).toHaveBeenCalled());
+    view.unmount();
+    const callsAtUnmount = vi.mocked(api.getDiscoveryRun).mock.calls.length;
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(api.getDiscoveryRun).toHaveBeenCalledTimes(callsAtUnmount);
   });
 });

@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/discovery/serviceaccount"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -1119,7 +1120,7 @@ func toDiscoveryRunResponse(run store.DiscoveryRun) discoveryRunResponse {
 		Execution: run.Execution, Segment: run.Segment, RequiredAgentRole: run.RequiredAgentRole,
 		RequiredAgentID: run.RequiredAgentID, ExecutedByAgentID: run.ExecutedByAgentID,
 		Targets: run.Targets, Discovered: run.Discovered, Failed: run.Failed, Rejected: run.Rejected,
-		Blocked: run.Blocked, Error: run.Error, StartedAt: run.StartedAt, CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt,
+		Blocked: run.Blocked, Error: orchestrator.SanitizeDiscoveryRunError(run.Error), StartedAt: run.StartedAt, CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt,
 	}
 }
 
@@ -1142,7 +1143,7 @@ func toDiscoveryMonitoringSource(row store.DiscoveryMonitoringSource) DiscoveryM
 		SourceID: row.SourceID, Kind: row.Kind, Name: row.Name,
 		Scheduled:  row.ScheduleID != "" && row.ScheduleEnabled,
 		ScheduleID: row.ScheduleID, MonitoringIntervalSeconds: row.MonitoringIntervalSeconds,
-		LastRunID: row.LastRunID, LastRunStatus: row.LastRunStatus, LastRunError: row.LastRunError,
+		LastRunID: row.LastRunID, LastRunStatus: row.LastRunStatus, LastRunError: orchestrator.SanitizeDiscoveryRunError(row.LastRunError),
 		LastRunCompletedAt: row.LastRunCompletedAt, LastDiscoveryAt: row.LastDiscoveryAt,
 		RunCount: row.RunCount, CompletedRunCount: row.CompletedRunCount,
 		FailedRunCount: row.FailedRunCount, FindingCount: row.FindingCount,

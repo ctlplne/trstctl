@@ -988,7 +988,10 @@ never live in the API process. What you can do end to end against the running bi
   counts so an empty list is not read as an all-clear. Replacing a named watchlist
   retires URLs absent from the new source configuration in the source event's same
   tenant transaction; one failed active log does not discard a peer's successful
-  checkpoint or finding. It also only sees what a
+  checkpoint or finding. The console polls queued/running CT runs to completion,
+  refreshes per-log checkpoints in place, follows the parent Discovery refresh, and
+  shows a bounded credential-redacted diagnostic for a failed discovery run. It also
+  only sees what a
   CA chose to log, which in practice means public issuance.
   For a **drift** source the worker compares configured
   credential paths against expected fingerprints/permissions and records

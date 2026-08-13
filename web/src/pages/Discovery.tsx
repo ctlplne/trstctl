@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { CheckCircle2, Activity, ClipboardList, Code2, Eye, Play, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, Upload, XCircle } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
@@ -568,6 +568,7 @@ export function Discovery() {
   const [shadowPosture, setShadowPosture] = useState<NHIShadowPosture | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ctRefreshToken, setCTRefreshToken] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<SourceKind>("network");
@@ -591,7 +592,7 @@ export function Discovery() {
   const sourceNameRef = useRef<HTMLInputElement>(null);
   const scheduleNameRef = useRef<HTMLInputElement>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setNotice(null);
     const [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult, coverageResult] = await Promise.allSettled([
@@ -622,11 +623,16 @@ export function Discovery() {
     );
     if (rejected?.status === "rejected") setNotice(noticeForError(rejected.reason, "Could not load discovery records"));
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
+
+  const refreshAll = useCallback(async () => {
+    await load();
+    setCTRefreshToken((current) => current + 1);
+  }, [load]);
 
   useEffect(() => {
     if (!scheduleSourceID && sources[0]) setScheduleSourceID(sources[0].id);
@@ -812,7 +818,7 @@ export function Discovery() {
         title={translateNow("source.discovery.80fc402133")}
         description="Manage tenant discovery sources, schedules, runs, and findings."
         actions={
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+          <Button type="button" variant="outline" onClick={() => void refreshAll()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
             {translateNow("source.refresh.0e91610117")}
           </Button>
@@ -840,7 +846,7 @@ export function Discovery() {
 
       {tab === "findings" && (
         <>
-          <CTMonitoringPanel />
+          <CTMonitoringPanel refreshToken={ctRefreshToken} onRunTerminal={load} />
           <DriftPanel findings={findings} sources={sources} />
           <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
           <ShadowPosturePanel posture={shadowPosture} />
@@ -1807,6 +1813,18 @@ function RunTable({ runs, sourceByID }: { runs: DiscoveryRun[]; sourceByID: Map<
       id: "failed",
       header: "Failed",
       cell: (run) => run.failed + run.rejected + run.blocked,
+    },
+    {
+      id: "failure-detail",
+      header: "Failure detail",
+      cell: (run) =>
+        run.error ? (
+          <span className="block max-w-[28rem] break-words text-xs text-risk-critical" title={run.error}>
+            {run.error}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       id: "executor",

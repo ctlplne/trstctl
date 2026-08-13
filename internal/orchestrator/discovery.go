@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/discovery"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
@@ -23,6 +24,11 @@ import (
 )
 
 const discoveryRunDestination = "discovery.run"
+
+const (
+	maxDiscoveryRunErrorBytes = 1024
+	discoveryRunErrorWithheld = "withheld: discovery error still contained secret-like material after redaction"
+)
 
 // ErrDiscoveryScheduleNotDue is the benign loser of a concurrent scheduler
 // race. The winner already committed the run/outbox pair; callers should not
@@ -651,6 +657,10 @@ func (o *Orchestrator) CompleteDiscoveryRunWithEventID(ctx context.Context, tena
 }
 
 func (o *Orchestrator) completeDiscoveryRun(ctx context.Context, tenantID string, in store.DiscoveryRun, eventID string) error {
+	in.Error = sanitizeDiscoveryRunError(in.Error)
+	for i := range in.TargetResults {
+		in.TargetResults[i].Error = sanitizeDiscoveryRunError(in.TargetResults[i].Error)
+	}
 	if err := validateDiscoveryTargetResults(in.TargetResults); err != nil {
 		return err
 	}
@@ -683,6 +693,42 @@ func (o *Orchestrator) completeDiscoveryRun(ctx context.Context, tenantID string
 		})
 	}
 	return err
+}
+
+// sanitizeDiscoveryRunError keeps the operator-useful failure class while
+// refusing to make an upstream body, credential echo, or unbounded transport
+// transcript part of immutable tenant history. The event is the authority, so
+// redaction belongs here before append rather than only in the API renderer.
+func sanitizeDiscoveryRunError(detail string) string {
+	detail = strings.ToValidUTF8(detail, "")
+	detail = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, detail)
+	detail = strings.Join(strings.Fields(detail), " ")
+	if detail == "" {
+		return ""
+	}
+	detail = aimodel.DefaultRedactor(detail)
+	if aimodel.ResidualSecret(detail) {
+		return discoveryRunErrorWithheld
+	}
+	if len(detail) <= maxDiscoveryRunErrorBytes {
+		return detail
+	}
+	end := maxDiscoveryRunErrorBytes
+	for end > 0 && !utf8.RuneStart(detail[end]) {
+		end--
+	}
+	return strings.TrimSpace(detail[:end])
+}
+
+// SanitizeDiscoveryRunError is the shared egress guard for historical rows
+// written before discovery errors were sanitized at event append time.
+func SanitizeDiscoveryRunError(detail string) string {
+	return sanitizeDiscoveryRunError(detail)
 }
 
 func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error {

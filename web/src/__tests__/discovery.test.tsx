@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { ApiError } from "@/lib/api";
@@ -19,6 +19,9 @@ const { apiMock } = vi.hoisted(() => ({
     createDiscoverySource: vi.fn(),
     createDiscoverySchedule: vi.fn(),
     startDiscoveryRun: vi.fn(),
+    ctMonitoring: vi.fn(),
+    updateCTMonitoring: vi.fn(),
+    getDiscoveryRun: vi.fn(),
   },
 }));
 
@@ -124,6 +127,22 @@ function seedDiscoveryMocks() {
       },
     ],
   });
+  apiMock.ctMonitoring.mockResolvedValue({
+    capability: "ct_log",
+    findings_path: "/api/v1/discovery/findings",
+    runs_path: "/api/v1/discovery/runs",
+    sources_path: "/api/v1/discovery/sources",
+    watchlist_path: "/api/v1/discovery/ct-monitoring",
+    notification_destination: "notification.ct",
+    outbox_backed_alerts: true,
+    watched_domains: [],
+    logs: [],
+    retired_logs: [],
+    findings: [],
+    summary: {},
+  });
+  apiMock.updateCTMonitoring.mockResolvedValue({});
+  apiMock.getDiscoveryRun.mockResolvedValue({ id: "run-ct", status: "succeeded" });
   apiMock.discoveryCoverage.mockResolvedValue({
     generated_at: "2026-06-20T10:05:00Z",
     observed: 1,
@@ -895,5 +914,36 @@ describe("discovery control-plane surface", () => {
     expect(screen.getByText("No discovery schedules")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Runs" }));
     expect(screen.getByText("No discovery runs")).toBeInTheDocument();
+  });
+
+  it("AUD-71 renders the served failure detail and parent refresh reloads CT state", async () => {
+    apiMock.discoveryRuns.mockResolvedValueOnce({
+      items: [
+        {
+          id: "run-failed",
+          tenant_id: "tenant-1",
+          source_id: "source-1",
+          status: "failed",
+          dry_run: false,
+          execution: "control_plane",
+          targets: 1,
+          discovered: 0,
+          failed: 1,
+          rejected: 0,
+          blocked: 0,
+          error: "ctmonitor: GET /ct/v1/get-sth: 404 Not Found",
+          created_at: "2026-06-20T10:02:00Z",
+          completed_at: "2026-06-20T10:02:05Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=runs"]);
+
+    expect(await screen.findByText("ctmonitor: GET /ct/v1/get-sth: 404 Not Found")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Findings" }));
+    await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledTimes(2));
   });
 });

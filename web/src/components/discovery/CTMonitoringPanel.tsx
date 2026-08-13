@@ -5,7 +5,7 @@ import { StatTile } from "@/components/charts";
 import { useCan } from "@/components/rbac";
 import { Button } from "@/components/ui/button";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
-import { api, ApiError, type CTMonitoring, type DiscoveryFinding } from "@/lib/api";
+import { api, ApiError, type CTMonitoring, type DiscoveryFinding, type DiscoveryRun } from "@/lib/api";
 
 // Certificate Transparency monitoring, as a headline discovery capability (C5).
 //
@@ -59,7 +59,17 @@ function pollStatusLabel(status: string, t: I18nContextValue["t"]): string {
   return t("discovery.ct.neverPolled");
 }
 
-export function CTMonitoringPanel() {
+type CTMonitoringPanelProps = {
+  refreshToken?: number;
+  pollIntervalMs?: number;
+  onRunTerminal?: (run: DiscoveryRun) => void | Promise<void>;
+};
+
+function discoveryRunIsActive(run: DiscoveryRun | undefined): boolean {
+  return run?.status === "queued" || run?.status === "running";
+}
+
+export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onRunTerminal }: CTMonitoringPanelProps) {
   const { formatDateTime, t } = useTranslation();
   const canRead = useCan("discovery:read");
   const canWrite = useCan("discovery:write");
@@ -75,7 +85,7 @@ export function CTMonitoringPanel() {
   }, [canRead]);
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, refreshToken]);
   const monitoring = read?.kind === "ready" ? read.monitoring : null;
 
   const [domains, setDomains] = useState<string | null>(null);
@@ -84,6 +94,36 @@ export function CTMonitoringPanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [activeRunID, setActiveRunID] = useState<string | null>(null);
+  const runToPoll = activeRunID ?? (discoveryRunIsActive(monitoring?.run) ? monitoring?.run?.id : null);
+
+  useEffect(() => {
+    if (!runToPoll) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const run = await api.getDiscoveryRun(runToPoll);
+        if (cancelled) return;
+        if (discoveryRunIsActive(run)) {
+          timer = setTimeout(() => void poll(), Math.max(1, pollIntervalMs));
+          return;
+        }
+        setResult(`run ${run.id} ${run.status}`);
+        await refresh();
+        if (cancelled) return;
+        await onRunTerminal?.(run);
+        if (!cancelled) setActiveRunID(null);
+      } catch {
+        if (!cancelled) timer = setTimeout(() => void poll(), Math.max(1, pollIntervalMs));
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [onRunTerminal, pollIntervalMs, refresh, runToPoll]);
 
   if (!canRead) return null;
 
@@ -110,7 +150,12 @@ export function CTMonitoringPanel() {
       setResult(next.run?.id ? `run ${next.run.id}` : "saved");
       setDomains(null);
       setLogs(null);
-      await refresh();
+      setRead({ kind: "ready", monitoring: next });
+      if (discoveryRunIsActive(next.run)) {
+        setActiveRunID(next.run?.id ?? null);
+      } else {
+        await refresh();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
