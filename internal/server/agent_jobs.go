@@ -665,6 +665,19 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 			return nil, status.Errorf(codes.Internal, "record CMDB page failure: %v", err)
 		}
 	}
+	if claim.Destination == agentJobKindTicketSync {
+		if a.recordTicketSyncFailure == nil {
+			return nil, status.Error(codes.Internal, "ticket failure receiver is not configured")
+		}
+		ticketDetail := redactAgentDetail(detail)
+		if ticketDetail == "" {
+			ticketDetail = "ticket relay attempt failed without a safe detail"
+		}
+		if err := a.recordTicketSyncFailure(ctx, info.TenantID, claim.IdempotencyKey,
+			claim.Payload, req.Attempt, time.Unix(req.IssuedAtUnix, 0).UTC(), ticketDetail); err != nil {
+			return nil, status.Errorf(codes.Internal, "record ticket page failure: %v", err)
+		}
+	}
 	// A rollback that can never succeed leaves the queue instead of being
 	// retried forever. The claim path has no attempts predicate, so a
 	// requeued job is re-claimed every poll — and each rollback attempt

@@ -10,10 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/google/uuid"
 
-	"trstctl.com/trstctl/internal/crypto/mtls"
-	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/ticketintake"
@@ -53,10 +51,12 @@ type TicketIntakeResult struct {
 
 func ticketSyncIntent(sched store.TicketIntakeSchedule) ticketintake.SyncIntent {
 	return ticketintake.SyncIntent{
-		InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef, SNTable: sched.SNTable, Query: sched.Query,
+		System: sched.System, InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef,
+		SNTable: sched.SNTable, JiraProject: sched.JiraProject, Query: sched.Query,
 		SubjectField: sched.SubjectField, ProfileField: sched.ProfileField,
 		RequesterField: sched.RequesterField, JustificationField: sched.JustificationField,
-		PageLimit: ticketIntakePageLimit,
+		PageLimit: ticketIntakePageLimit, SweepID: sched.CurrentSweepID,
+		Cursor: sched.Cursor, ReadCount: sched.ReadCount, ExpectedCount: sched.ExpectedCount,
 	}
 }
 
@@ -72,11 +72,13 @@ func (s *Server) RunTicketIntake(ctx context.Context) {
 			return
 		}
 		for _, tenantID := range tenants {
-			sched, due, err := s.store.TicketIntakeDue(ctx, tenantID, time.Now())
-			if err != nil || !due {
+			due, err := s.store.TicketIntakeDueSchedules(ctx, tenantID, time.Now())
+			if err != nil {
 				continue
 			}
-			s.dispatchTicketSyncJob(ctx, tenantID, sched)
+			for _, sched := range due {
+				s.dispatchTicketSyncJob(ctx, tenantID, sched)
+			}
 		}
 	}
 	sweep()
@@ -96,13 +98,13 @@ func (s *Server) RunTicketIntake(ctx context.Context) {
 // contains no network client and receives no credential material.
 func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey string, intent ticketintake.SyncIntent, report ticketintake.SyncReport) (TicketIntakeResult, error) {
 	var out TicketIntakeResult
-	if err := ticketintake.ValidateReport(report); err != nil {
+	if err := ticketintake.ValidateReport(intent, report); err != nil {
 		return out, err
 	}
 	out.Read = len(report.Tickets)
 	for _, ticket := range report.Tickets {
-		sysID, subject, profile := strings.TrimSpace(ticket.SysID), strings.TrimSpace(ticket.Subject), strings.TrimSpace(ticket.Profile)
-		if sysID == "" {
+		sourceRef, subject, profile := strings.TrimSpace(ticket.SourceRef), strings.TrimSpace(ticket.Subject), strings.TrimSpace(ticket.Profile)
+		if sourceRef == "" {
 			out.Skipped++
 			continue
 		}
@@ -114,7 +116,14 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 			out.Skipped++
 			continue
 		}
-		ticketRef := intent.SNTable + ":" + sysID
+		ticketKey := strings.TrimSpace(ticket.ExternalKey)
+		if ticketKey == "" {
+			ticketKey = sourceRef
+		}
+		ticketRef := intent.System + ":" + ticketKey
+		if intent.System == ticketintake.SystemServiceNow {
+			ticketRef = intent.SNTable + ":" + sourceRef
+		}
 		exists, err := s.store.IssuanceRequestExistsForTicket(ctx, tenantID, ticketRef)
 		if err != nil {
 			return out, err
@@ -131,14 +140,14 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 			// The lifecycle's separation-of-duties check needs a requester.
 			// The ticket system is the closest attributable actor when the
 			// ticket does not name one.
-			requester = "servicenow:" + intent.SNTable
+			requester = intent.System + ":" + ticketKey
 		}
 		if _, err := s.orch.OpenIssuanceRequestFromRelay(ctx, tenantID, resultKey, projections.IssuanceRequestOpened{
 			Subject:       subject,
 			Profile:       profile,
 			Requester:     requester,
 			Justification: strings.TrimSpace(ticket.Justification),
-			Origin:        "servicenow",
+			Origin:        intent.System,
 			TicketRef:     ticketRef,
 			ExpiresAt:     report.ObservedAt.UTC().Add(ticketIntakeRequestTTL),
 		}); err != nil {
@@ -150,36 +159,40 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 }
 
 func (s *Server) dispatchTicketSyncJob(ctx context.Context, tenantID string, sched store.TicketIntakeSchedule) {
-	pending, err := s.store.HasPendingAgentJob(ctx, tenantID, agentJobKindTicketSync)
+	pending, err := s.store.HasPendingTicketSyncJob(ctx, tenantID, sched.System)
 	if err != nil {
 		s.logger.Warn("ticket relay dispatch: pending check failed", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
 		return
 	}
 	if pending {
-		_ = s.store.MarkTicketIntakeRun(ctx, tenantID, sched.System, time.Now().UTC(),
-			"a dispatched ticket.sync job is still waiting; if no network relay is enrolled and claiming, none will run it")
+		// An in-flight page remains honestly incomplete. Queueing or waiting is
+		// not a successful provider observation and cannot stamp last_run_at.
 		return
 	}
-	payload, err := json.Marshal(ticketSyncIntent(sched))
-	if err != nil {
-		return
+	intent := ticketSyncIntent(sched)
+	now := time.Now().UTC()
+	if intent.SweepID != "" && !sched.CoverageComplete {
+		err = s.orch.ResumeTicketIntakeSweep(ctx, tenantID, intent)
+	} else {
+		intent.SweepID = uuid.NewString()
+		intent.Cursor = ""
+		intent.ReadCount = 0
+		intent.ExpectedCount = nil
+		err = s.orch.QueueTicketIntakeSweep(ctx, tenantID, intent, now)
 	}
-	key := "ticket-sync:" + tenantID + ":" + time.Now().UTC().Format(time.RFC3339)
-	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-			TenantID: tenantID, Destination: agentJobKindTicketSync, IdempotencyKey: key, Payload: payload,
-			RequiredAgentRole: mtls.AgentRoleNetwork,
-		})
-		return err
-	})
 	if err != nil {
 		s.logger.Warn("ticket relay dispatch failed", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
 		return
 	}
-	_ = s.store.MarkTicketIntakeRun(ctx, tenantID, sched.System, time.Now().UTC(), "")
 }
 
 func (s *Server) recordTicketSync(ctx context.Context, tenantID, agentName, idempotencyKey string, jobPayload []byte, reportJSON string) error {
+	return s.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		return s.recordTicketSyncLocked(lockCtx, tenantID, agentName, idempotencyKey, jobPayload, reportJSON)
+	})
+}
+
+func (s *Server) recordTicketSyncLocked(ctx context.Context, tenantID, agentName, idempotencyKey string, jobPayload []byte, reportJSON string) error {
 	var intent ticketintake.SyncIntent
 	if err := json.Unmarshal(jobPayload, &intent); err != nil {
 		return fmt.Errorf("server: decode durable ticket sync intent: %w", err)
@@ -194,16 +207,48 @@ func (s *Server) recordTicketSync(ctx context.Context, tenantID, agentName, idem
 	if err := json.Unmarshal([]byte(reportJSON), &report); err != nil {
 		return fmt.Errorf("server: decode ticket relay report: %w", err)
 	}
+	if err := ticketintake.ValidateReport(intent, report); err != nil {
+		return err
+	}
 	res, err := s.ingestTicketReport(ctx, tenantID, idempotencyKey, intent, report)
-	msg := ""
 	if err != nil {
-		msg = err.Error()
-	} else {
-		s.logger.Info("ticket relay intake complete", slog.String("tenant_id", tenantID), slog.String("agent", agentName),
-			slog.Int("read", res.Read), slog.Int("opened", res.Opened), slog.Int("already", res.Already), slog.Int("skipped", res.Skipped))
+		return err
 	}
-	if stampErr := s.store.MarkTicketIntakeRun(ctx, tenantID, "servicenow", time.Now().UTC(), msg); stampErr != nil && err == nil {
-		err = stampErr
+	var next *ticketintake.SyncIntent
+	if !report.Complete {
+		continued := intent
+		continued.Cursor = report.NextCursor
+		continued.ReadCount = report.ReadCount
+		continued.ExpectedCount = report.ExpectedCount
+		next = &continued
 	}
-	return err
+	if err := s.orch.RecordTicketIntakeSweepPage(ctx, tenantID, idempotencyKey, projections.TicketIntakeSweepPageObserved{
+		Intent: intent, ObservedAt: report.ObservedAt, SourceRefs: report.SourceRefs,
+		ReadCount: report.ReadCount, ExpectedCount: report.ExpectedCount,
+		Complete: report.Complete, NextCursor: report.NextCursor,
+		Eligible: res.Read - res.Skipped, Skipped: res.Skipped, NextIntent: next,
+	}); err != nil {
+		return err
+	}
+	s.logger.Info("ticket relay intake page committed", slog.String("tenant_id", tenantID),
+		slog.String("agent", agentName), slog.String("system", intent.System),
+		slog.String("sweep_id", intent.SweepID), slog.Int("read", res.Read),
+		slog.Int("opened", res.Opened), slog.Int("already", res.Already),
+		slog.Int("skipped", res.Skipped), slog.Bool("complete", report.Complete))
+	return nil
+}
+
+func (s *Server) recordTicketSyncFailure(
+	ctx context.Context,
+	tenantID, idempotencyKey string,
+	payload []byte,
+	attempt int,
+	failedAt time.Time,
+	detail string,
+) error {
+	var intent ticketintake.SyncIntent
+	if err := json.Unmarshal(payload, &intent); err != nil {
+		return fmt.Errorf("server: decode failed ticket sync intent: %w", err)
+	}
+	return s.orch.RecordTicketIntakeSweepFailure(ctx, tenantID, idempotencyKey, attempt, intent, failedAt, detail)
 }

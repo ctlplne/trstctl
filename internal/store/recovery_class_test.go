@@ -317,3 +317,16 @@ func TestCMDBCIInventoryIsRebuiltAndSnapshotSafeAUD46(t *testing.T) {
 		t.Fatalf("SnapshotFormatVersion = %d; a v28 payload cannot restore bounded CMDB sweep inventory", SnapshotFormatVersion)
 	}
 }
+
+func TestTicketIntakeCheckpointIsSnapshotSafeAUD47(t *testing.T) {
+	const table = "ticket_intake_schedules"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Fatalf("%s is event-derived but missing from the cold-rebuild truncate set", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s is missing from snapshots, so restore would erase an incomplete ticket continuation", table)
+	}
+	if SnapshotFormatVersion < 30 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v29 payload cannot restore a bounded ticket intake sweep", SnapshotFormatVersion)
+	}
+}

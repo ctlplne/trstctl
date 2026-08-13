@@ -13312,6 +13312,22 @@ export const messages = {
     defaultMessage: "Coverage incomplete. The committed cursor {cursor} is retained for the next relay page.",
     description: "AUD-46: makes partial CMDB coverage and its exact restart boundary explicit.",
   },
+  "ticket.intake.coverage.unknown.aud470001": {
+    defaultMessage: "{provider}: {read} tickets read across {pages} pages; the provider did not report a total.",
+    description: "AUD-47: bounded ITSM progress when the provider omits its total.",
+  },
+  "ticket.intake.coverage.known.aud470002": {
+    defaultMessage: "{provider}: {read} of {expected} tickets read across {pages} pages.",
+    description: "AUD-47: bounded ITSM progress with the provider's observed total.",
+  },
+  "ticket.intake.coverage.complete.aud470003": {
+    defaultMessage: "Terminal coverage complete: {eligible} eligible and {skipped} skipped tickets.",
+    description: "AUD-47: shown only after the provider terminal page commits.",
+  },
+  "ticket.intake.coverage.incomplete.aud470004": {
+    defaultMessage: "Coverage incomplete. The committed cursor {cursor} is retained for the next relay page.",
+    description: "AUD-47: makes a partial ticket sweep and its exact restart boundary explicit.",
+  },
   "source.ownership.source.column.i2own00006": {
     defaultMessage: "Ownership source",
     description: "I2: column header for where an ownership claim came from.",

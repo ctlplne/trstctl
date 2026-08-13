@@ -5916,34 +5916,46 @@ export interface TicketIntakeInput {
   enabled?: boolean;
   instance_url: string;
   interval_seconds: number;
+  jira_project?: string;
   justification_field?: string;
   private_egress_cidrs?: string[];
   profile_field: string;
   query?: string;
   requester_field?: string;
-  sn_table: "incident" | "sc_req_item" | "sc_request" | "change_request";
+  sn_table?: "incident" | "sc_req_item" | "sc_request" | "change_request";
   subject_field: string;
-  system: "servicenow";
+  system: "servicenow" | "jira";
   token_ref: string;
 }
 
 export interface TicketIntakeSchedule {
   allow_private_endpoint?: boolean;
   configured: boolean;
+  coverage_complete: boolean;
+  eligible_count: number;
   enabled: boolean;
+  expected_count?: number;
   guidance: string;
   instance_url?: string;
   interval_seconds?: number;
+  jira_project?: string;
   justification_field?: string;
+  last_attempt_at?: string;
   last_error?: string;
   last_run_at?: string;
+  next_cursor?: string;
+  pages_completed: number;
   private_egress_cidrs?: string[];
   profile_field?: string;
   query?: string;
+  read_count: number;
   requester_field?: string;
+  skipped_count: number;
   sn_table?: "incident" | "sc_req_item" | "sc_request" | "change_request";
   subject_field?: string;
-  system?: "servicenow";
+  sweep_id?: string;
+  sweep_started_at?: string;
+  system?: "servicenow" | "jira";
   token_ref?: string;
 }
 

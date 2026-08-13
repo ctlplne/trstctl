@@ -1,0 +1,55 @@
+name: github-action-conformance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "clients/github-action/**"
+      - "internal/api/attested_issuance.go"
+      - "internal/server/github_action_served_test.go"
+      - ".github/workflows/github-action-conformance.yml"
+  pull_request:
+    paths:
+      - "clients/github-action/**"
+      - "internal/api/attested_issuance.go"
+      - "internal/server/github_action_served_test.go"
+      - ".github/workflows/github-action-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  served-action:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: github-action-conformance against served deployment
+        run: go test ./internal/server -run TestShippedGitHubActionRunsAgainstServedDeploymentAUD47 -count=1
+
+      # On an untrusted fork PR, execute the checked-out composite Action with
+      # inert inputs. It must stop on GitHub's fork event before OIDC or network
+      # access. The served-deployment test above executes the same literal run
+      # block for the success and rerun paths.
+      - name: Execute local Action fork refusal
+        id: fork_refusal
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        continue-on-error: true
+        uses: ./clients/github-action
+        with:
+          url: http://127.0.0.1:1
+          token: deliberately-unusable
+
+      - name: Require local Action fork refusal
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && steps.fork_refusal.outcome != 'failure'
+        run: exit 1

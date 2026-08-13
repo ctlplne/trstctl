@@ -13,8 +13,8 @@ import { api } from "./api";
 // "absent" looks like for it. There is deliberately no default: an empty object
 // would let a panel render zeros as though they were measurements, which is the
 // other half of this same mistake.
-export function optionalApiCall<T>(name: keyof typeof api, fallback: T): Promise<T> {
+export function optionalApiCall<T>(name: keyof typeof api, fallback: T, ...args: unknown[]): Promise<T> {
   const client = api as unknown as Record<string, unknown>;
   const fn = client[name as string];
-  return typeof fn === "function" ? (fn as () => Promise<T>)() : Promise.resolve(fallback);
+  return typeof fn === "function" ? (fn as (...callArgs: unknown[]) => Promise<T>)(...args) : Promise.resolve(fallback);
 }

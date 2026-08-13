@@ -2499,9 +2499,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The configured ticket intake with its last outcome */
+        /** Read one provider's durable ticket-intake cursor, coverage, terminal run, and last failure */
         get: operations["getTicketIntakeSchedule"];
-        /** Configure ITSM ticket intake: tickets become issuance requests, idempotently by ticket reference */
+        /** Configure bounded ServiceNow or Jira ticket intake with durable relay paging */
         put: operations["putTicketIntakeSchedule"];
         post?: never;
         delete?: never;
@@ -11451,37 +11451,52 @@ export interface components {
             enabled?: boolean;
             instance_url: string;
             interval_seconds: number;
+            jira_project?: string;
             justification_field?: string;
             private_egress_cidrs?: string[];
             profile_field: string;
             query?: string;
             requester_field?: string;
             /** @enum {string} */
-            sn_table: "incident" | "sc_req_item" | "sc_request" | "change_request";
+            sn_table?: "incident" | "sc_req_item" | "sc_request" | "change_request";
             subject_field: string;
             /** @enum {string} */
-            system: "servicenow";
+            system: "servicenow" | "jira";
             token_ref: string;
         };
         TicketIntakeSchedule: {
             allow_private_endpoint?: boolean;
             configured: boolean;
+            coverage_complete: boolean;
+            eligible_count: number;
             enabled: boolean;
+            expected_count?: number;
             guidance: string;
             instance_url?: string;
             interval_seconds?: number;
+            jira_project?: string;
             justification_field?: string;
+            /** Format: date-time */
+            last_attempt_at?: string;
             last_error?: string;
             last_run_at?: string;
+            next_cursor?: string;
+            pages_completed: number;
             private_egress_cidrs?: string[];
             profile_field?: string;
             query?: string;
+            read_count: number;
             requester_field?: string;
+            skipped_count: number;
             /** @enum {string} */
             sn_table?: "incident" | "sc_req_item" | "sc_request" | "change_request";
             subject_field?: string;
+            /** Format: uuid */
+            sweep_id?: string;
+            /** Format: date-time */
+            sweep_started_at?: string;
             /** @enum {string} */
-            system?: "servicenow";
+            system?: "servicenow" | "jira";
             token_ref?: string;
         };
         TransitCiphertext: {
@@ -18983,7 +18998,10 @@ export interface operations {
     };
     getTicketIntakeSchedule: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description provider schedule to read: servicenow (default) or jira */
+                system?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

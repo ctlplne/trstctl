@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/ticketintake"
 )
 
 const (
@@ -769,6 +770,42 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			if intent != nil {
 				entry, err := cmdbSweepOutboxEntry(ev.TenantID, *intent)
+				if err != nil {
+					return fmt.Errorf("orchestrator: reconcile %s (seq %d): %w", ev.Type, ev.Sequence, err)
+				}
+				if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+					if inserted {
+						healed++
+					}
+					return err
+				}); err != nil {
+					return err
+				}
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
+		if ev.Type == projections.EventTicketIntakeSweepDispatched || ev.Type == projections.EventTicketIntakeSweepPageObserved {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var intent *ticketintake.SyncIntent
+			switch ev.Type {
+			case projections.EventTicketIntakeSweepDispatched:
+				var dispatched projections.TicketIntakeSweepDispatched
+				if err := json.Unmarshal(ev.Data, &dispatched); err != nil {
+					return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+				}
+				intent = &dispatched.Intent
+			case projections.EventTicketIntakeSweepPageObserved:
+				var page projections.TicketIntakeSweepPageObserved
+				if err := json.Unmarshal(ev.Data, &page); err != nil {
+					return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+				}
+				intent = page.NextIntent
+			}
+			if intent != nil {
+				entry, err := ticketIntakeOutboxEntry(ev.TenantID, *intent)
 				if err != nil {
 					return fmt.Errorf("orchestrator: reconcile %s (seq %d): %w", ev.Type, ev.Sequence, err)
 				}

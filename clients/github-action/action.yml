@@ -55,6 +55,23 @@ runs:
         TRSTCTL_OUT_DIR: ${{ inputs.out-dir }}
       run: |
         set -euo pipefail
+        for required in GITHUB_RUN_ID GITHUB_JOB GITHUB_ACTION GITHUB_EVENT_PATH; do
+          if [ -z "${!required:-}" ]; then
+            echo "::error::GitHub did not provide $required; refusing an unbound issuance request" >&2
+            exit 1
+          fi
+        done
+
+        # pull_request_target can expose upstream secrets while a fork controls
+        # the proposed code. Refuse fork PRs locally before requesting OIDC; the
+        # server's allowed_owners check remains the cryptographic boundary.
+        if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] || [ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ]; then
+          if jq -e '.pull_request.head.repo.fork == true' "$GITHUB_EVENT_PATH" >/dev/null; then
+            echo "::error::attested issuance is refused for pull_request events whose .head.repo.fork is true" >&2
+            exit 1
+          fi
+        fi
+
         # The id-token: write permission is what makes the two request
         # variables exist. Failing here with the fix beats a 401 later.
         if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
@@ -74,6 +91,8 @@ runs:
 
         PAYLOAD_B64="$(printf '%s' "$OIDC_JWT" | base64 | tr -d '\n')"
         PUBKEY_JSON="$(jq -Rs '.' < "$TRSTCTL_OUT_DIR/public.pem")"
+        RUN_BINDING="$(printf '%s\0%s\0%s' "$GITHUB_RUN_ID" "$GITHUB_JOB" "$GITHUB_ACTION" \
+          | openssl dgst -sha256 | awk '{print $2}')"
 
         HTTP_CODE="$(jq -n \
             --arg method "github_oidc" \
@@ -85,7 +104,7 @@ runs:
             -X POST "${TRSTCTL_URL%/}/api/v1/workloads/attested-issuance" \
             -H "Authorization: Bearer ${TRSTCTL_TOKEN}" \
             -H "Content-Type: application/json" \
-            -H "Idempotency-Key: gha-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}" \
+            -H "Idempotency-Key: gha-${RUN_BINDING}" \
             --data-binary @-)"
         if [ "$HTTP_CODE" != "201" ]; then
           echo "::error::attested issuance failed with HTTP $HTTP_CODE: $(cat "$TRSTCTL_OUT_DIR/response.json")" >&2

@@ -284,9 +284,12 @@ type agentService struct {
 	// recordMDMSync turns a relay's MDM observation into device correlation
 	// (I5). The control plane has no MDM poll path.
 	recordMDMSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
-	// recordTicketSync turns mapped ServiceNow fields into issuance requests;
+	// recordTicketSync turns mapped ServiceNow/Jira fields into issuance requests;
 	// it runs before the job is closed so a projection failure remains retryable.
 	recordTicketSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
+	// recordTicketSyncFailure retains the exact provider cursor; failure is an
+	// attempt observation, never terminal coverage (AUD-47).
+	recordTicketSyncFailure func(ctx context.Context, tenantID, idempotencyKey string, payload []byte, attempt int, failedAt time.Time, detail string) error
 	// recordDiscoveryScan validates and projects a network relay's signed scan
 	// report before the exact job claim is closed (AUD-28/C2).
 	recordDiscoveryScan func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error

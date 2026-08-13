@@ -104,7 +104,11 @@ import (
 // Bumped to 29 when bounded CMDB sweep checkpoints and their minimal CI source
 // inventory joined the read model. A v28 payload cannot resume the exact page
 // or safely detect a later source deletion, so it must replay those events.
-const SnapshotFormatVersion = 29
+// Bumped to 30 when ticket intake gained durable provider-specific sweep
+// checkpoints. A v29 payload can restore the schedule but not the exact
+// ServiceNow keyset or Jira continuation token, so accepting one could restart
+// page one while the projection head skips the page events that moved it.
+const SnapshotFormatVersion = 30
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

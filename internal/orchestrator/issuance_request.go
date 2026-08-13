@@ -138,6 +138,13 @@ func (o *Orchestrator) ConfigureTicketIntake(ctx context.Context, tenantID strin
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventTicketIntakeConfigured, tenantID, payload)
-	return err
+	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		if current, found, loadErr := o.store.GetTicketIntakeSchedule(lockCtx, tenantID, in.System); loadErr != nil {
+			return loadErr
+		} else if found && current.CurrentSweepID != "" && !current.CoverageComplete {
+			return ErrTicketIntakeSweepInProgress
+		}
+		_, err := o.emit(lockCtx, projections.EventTicketIntakeConfigured, tenantID, payload)
+		return err
+	})
 }

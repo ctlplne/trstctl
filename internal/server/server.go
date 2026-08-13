@@ -1772,6 +1772,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		recordMDMSync:              s.recordMDMSync,
 		recordDiscoveryScan:        s.recordDiscoveryScan,
 		recordTicketSync:           s.recordTicketSync,
+		recordTicketSyncFailure:    s.recordTicketSyncFailure,
 		recordEndpointVerification: s.recordEndpointVerificationSweep,
 		recordDeployVerification:   s.recordDeployVerification,
 		// B2: the CSR that comes back UP from a host-generated renewal is signed

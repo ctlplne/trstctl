@@ -151,8 +151,9 @@ type TicketIntakeSchedule struct {
 	InstanceURL string
 	TokenRef    string
 	// SNTable is bounded by the schema CHECK to the request-shaped tables.
-	SNTable string
-	Query   string
+	SNTable     string
+	JiraProject string
+	Query       string
 	// The field mapping is explicit, never inferred. A ticket missing the
 	// mapped subject or profile is skipped and counted, not guessed at.
 	SubjectField         string
@@ -165,19 +166,45 @@ type TicketIntakeSchedule struct {
 	PrivateEgressCIDRs   []string
 	LastRunAt            *time.Time
 	LastError            string
+	CurrentSweepID       string
+	SweepStartedAt       *time.Time
+	LastAttemptAt        *time.Time
+	Cursor               string
+	ReadCount            int
+	ExpectedCount        *int
+	PagesCompleted       int
+	CoverageComplete     bool
+	EligibleCount        int
+	SkippedCount         int
 }
 
-const ticketIntakeCols = `tenant_id::text, system, instance_url, token_ref, sn_table, query,
+const ticketIntakeCols = `tenant_id::text, system, instance_url, token_ref, sn_table, jira_project, query,
 	subject_field, profile_field, requester_field, justification_field,
 	interval_seconds, enabled, allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
-	last_run_at, last_error`
+	last_run_at, last_error, coalesce(current_sweep_id::text, ''), sweep_started_at,
+	last_attempt_at, cursor, read_count, expected_count, pages_completed, coverage_complete,
+	eligible_count, skipped_count`
+
+// Keep this statement literal so the AN-1 analyzer can prove the tenant
+// predicate instead of having to trust a dynamically assembled SELECT list.
+const ticketIntakeDueSQL = `SELECT tenant_id::text, system, instance_url, token_ref,
+	sn_table, jira_project, query, subject_field, profile_field, requester_field,
+	justification_field, interval_seconds, enabled, allow_private_endpoint,
+	coalesce(private_egress_cidrs, '{}'), last_run_at, last_error,
+	coalesce(current_sweep_id::text, ''), sweep_started_at, last_attempt_at,
+	cursor, read_count, expected_count, pages_completed, coverage_complete,
+	eligible_count, skipped_count
+	FROM ticket_intake_schedules WHERE tenant_id = $1 AND enabled AND interval_seconds > 0
+	ORDER BY system`
 
 func scanTicketIntake(row pgx.Row) (TicketIntakeSchedule, error) {
 	var s TicketIntakeSchedule
-	err := row.Scan(&s.TenantID, &s.System, &s.InstanceURL, &s.TokenRef, &s.SNTable, &s.Query,
+	err := row.Scan(&s.TenantID, &s.System, &s.InstanceURL, &s.TokenRef, &s.SNTable, &s.JiraProject, &s.Query,
 		&s.SubjectField, &s.ProfileField, &s.RequesterField, &s.JustificationField,
 		&s.IntervalSeconds, &s.Enabled, &s.AllowPrivateEndpoint, &s.PrivateEgressCIDRs,
-		&s.LastRunAt, &s.LastError)
+		&s.LastRunAt, &s.LastError, &s.CurrentSweepID, &s.SweepStartedAt, &s.LastAttemptAt,
+		&s.Cursor, &s.ReadCount, &s.ExpectedCount, &s.PagesCompleted, &s.CoverageComplete,
+		&s.EligibleCount, &s.SkippedCount)
 	return s, err
 }
 
@@ -222,45 +249,65 @@ func (s *Store) TenantsWithEnabledTicketIntake(ctx context.Context) ([]string, e
 	return out, rows.Err()
 }
 
-// TicketIntakeDue reports whether the tenant's schedule is due at now.
-func (s *Store) TicketIntakeDue(ctx context.Context, tenantID string, now time.Time) (TicketIntakeSchedule, bool, error) {
-	sched, found, err := s.GetTicketIntakeSchedule(ctx, tenantID, "servicenow")
-	if err != nil || !found || !sched.Enabled || sched.IntervalSeconds <= 0 {
-		return TicketIntakeSchedule{}, false, err
-	}
-	if sched.LastRunAt != nil && now.Sub(*sched.LastRunAt) < time.Duration(sched.IntervalSeconds)*time.Second {
-		return TicketIntakeSchedule{}, false, nil
-	}
-	return sched, true, nil
+// TicketIntakeDueSchedules returns every provider schedule that needs a new
+// sweep or has an incomplete cursor to resume. ServiceNow must not starve Jira.
+func (s *Store) TicketIntakeDueSchedules(ctx context.Context, tenantID string, now time.Time) ([]TicketIntakeSchedule, error) {
+	var out []TicketIntakeSchedule
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, ticketIntakeDueSQL, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			sched, err := scanTicketIntake(rows)
+			if err != nil {
+				return err
+			}
+			if sched.CurrentSweepID != "" && !sched.CoverageComplete {
+				out = append(out, sched)
+				continue
+			}
+			if sched.LastRunAt == nil || now.Sub(*sched.LastRunAt) >= time.Duration(sched.IntervalSeconds)*time.Second {
+				out = append(out, sched)
+			}
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
-// MarkTicketIntakeRun stamps the attempt.
-func (s *Store) MarkTicketIntakeRun(ctx context.Context, tenantID, system string, at time.Time, runErr string) error {
-	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`UPDATE ticket_intake_schedules SET last_run_at = $3, last_error = $4, updated_at = now()
-			  WHERE tenant_id = $1 AND system = $2`, tenantID, system, at.UTC(), runErr)
-		return err
-	})
+// TicketIntakeDue is retained for older embedders and returns the first due
+// provider in stable system order.
+func (s *Store) TicketIntakeDue(ctx context.Context, tenantID string, now time.Time) (TicketIntakeSchedule, bool, error) {
+	due, err := s.TicketIntakeDueSchedules(ctx, tenantID, now)
+	if err != nil || len(due) == 0 {
+		return TicketIntakeSchedule{}, false, err
+	}
+	return due[0], true, nil
 }
 
 // ApplyTicketIntakeConfiguredTx projects ticket.intake.configured (I3).
 func (s *Store) ApplyTicketIntakeConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in TicketIntakeSchedule) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO ticket_intake_schedules
-		   (tenant_id, system, instance_url, token_ref, sn_table, query,
+		   (tenant_id, system, instance_url, token_ref, sn_table, jira_project, query,
 		    subject_field, profile_field, requester_field, justification_field,
 		    interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		 ON CONFLICT (tenant_id, system) DO UPDATE SET
 		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref,
-		   sn_table = EXCLUDED.sn_table, query = EXCLUDED.query,
+		   sn_table = EXCLUDED.sn_table, jira_project = EXCLUDED.jira_project, query = EXCLUDED.query,
 		   subject_field = EXCLUDED.subject_field, profile_field = EXCLUDED.profile_field,
 		   requester_field = EXCLUDED.requester_field, justification_field = EXCLUDED.justification_field,
 		   interval_seconds = EXCLUDED.interval_seconds, enabled = EXCLUDED.enabled,
 		   allow_private_endpoint = EXCLUDED.allow_private_endpoint,
-		   private_egress_cidrs = EXCLUDED.private_egress_cidrs, updated_at = now()`,
-		tenantID, in.System, in.InstanceURL, in.TokenRef, in.SNTable, in.Query,
+		   private_egress_cidrs = EXCLUDED.private_egress_cidrs,
+		   current_sweep_id = NULL, sweep_started_at = NULL, last_attempt_at = NULL,
+		   cursor = '', read_count = 0, expected_count = NULL, pages_completed = 0,
+		   coverage_complete = false, eligible_count = 0, skipped_count = 0,
+		   last_error = '', updated_at = now()`,
+		tenantID, in.System, in.InstanceURL, in.TokenRef, in.SNTable, in.JiraProject, in.Query,
 		in.SubjectField, in.ProfileField, in.RequesterField, in.JustificationField,
 		in.IntervalSeconds, in.Enabled, false, nil)
 	return err

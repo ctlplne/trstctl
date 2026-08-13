@@ -3815,28 +3815,32 @@ func componentSchemas() map[string]*Schema {
 	}, "items", "guidance")
 	ticketIntakeSchema := object(map[string]*Schema{
 		"configured":   {Type: "boolean"},
-		"system":       {Type: "string", Enum: []string{"servicenow"}},
+		"system":       {Type: "string", Enum: []string{"servicenow", "jira"}},
 		"instance_url": str(), "token_ref": str(),
-		"sn_table":      {Type: "string", Enum: []string{"incident", "sc_req_item", "sc_request", "change_request"}},
-		"query":         str(),
+		"sn_table":     {Type: "string", Enum: []string{"incident", "sc_req_item", "sc_request", "change_request"}},
+		"jira_project": str(), "query": str(),
 		"subject_field": str(), "profile_field": str(),
 		"requester_field": str(), "justification_field": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"allow_private_endpoint": {Type: "boolean"},
 		"private_egress_cidrs":   {Type: "array", Items: str()},
-		"last_run_at":            str(), "last_error": str(), "guidance": str(),
-	}, "configured", "enabled", "guidance")
+		"last_run_at":            str(), "sweep_id": uuid(), "sweep_started_at": timestamp(), "last_attempt_at": timestamp(),
+		"next_cursor": str(), "read_count": {Type: "integer"}, "expected_count": {Type: "integer"},
+		"pages_completed": {Type: "integer"}, "coverage_complete": {Type: "boolean"},
+		"eligible_count": {Type: "integer"}, "skipped_count": {Type: "integer"},
+		"last_error": str(), "guidance": str(),
+	}, "configured", "enabled", "read_count", "pages_completed", "coverage_complete", "eligible_count", "skipped_count", "guidance")
 	ticketIntakeInput := object(map[string]*Schema{
-		"system":       {Type: "string", Enum: []string{"servicenow"}},
+		"system":       {Type: "string", Enum: []string{"servicenow", "jira"}},
 		"instance_url": str(), "token_ref": str(),
-		"sn_table":      {Type: "string", Enum: []string{"incident", "sc_req_item", "sc_request", "change_request"}},
-		"query":         str(),
+		"sn_table":     {Type: "string", Enum: []string{"incident", "sc_req_item", "sc_request", "change_request"}},
+		"jira_project": str(), "query": str(),
 		"subject_field": str(), "profile_field": str(),
 		"requester_field": str(), "justification_field": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"allow_private_endpoint": {Type: "boolean"},
 		"private_egress_cidrs":   {Type: "array", Items: str()},
-	}, "system", "instance_url", "token_ref", "sn_table", "subject_field", "profile_field", "interval_seconds")
+	}, "system", "instance_url", "token_ref", "subject_field", "profile_field", "interval_seconds")
 	mdmTraceStepSchema := object(map[string]*Schema{
 		"stage":   {Type: "string", Enum: []string{"requested", "issued", "installed", "renewing"}},
 		"outcome": {Type: "string", Enum: []string{"ok", "failed", "pending", "unknown"}},

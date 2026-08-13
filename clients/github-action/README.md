@@ -10,6 +10,12 @@ is generated inside the runner and never leaves it.
 
 ## Sample workflow
 
+The first release carrying the bounded/fork-closed Action is `v0.6.0`. Do not
+replace it with `main`: the tag is created only by the gated release workflow,
+which publishes the Action archive, `SHA256SUMS`, and SLSA provenance. Until
+that tag exists in GitHub, the release is not published and this example is
+intentionally unavailable.
+
 ```yaml
 name: issue-deploy-cert
 on: [push]
@@ -20,7 +26,7 @@ jobs:
   issue:
     runs-on: ubuntu-latest
     steps:
-      - uses: <owner>/trstctl/clients/github-action@main
+      - uses: ctlplne/trstctl/clients/github-action@v0.6.0
         id: cert
         with:
           url: https://trstctl.example.com
@@ -46,3 +52,36 @@ The issued SVID's identity comes from the VERIFIED token claims — repository,
 ref, workflow — not from anything the workflow asserts about itself. A fork
 cannot impersonate the upstream repository: its token carries its own
 `repository` claim, and an `allowed_owners` pin refuses it outright.
+The Action also reads GitHub's event document and refuses fork pull requests
+before requesting OIDC. That local check is defense in depth; `allowed_owners`
+on the server is the signed-token security boundary.
+
+## Reruns and idempotency
+
+The idempotency key binds `GITHUB_RUN_ID`, `GITHUB_JOB`, and `GITHUB_ACTION`;
+it deliberately excludes `GITHUB_RUN_ATTEMPT`. A rerun on a fresh runner
+creates a different private key, so the server's exact request binding returns
+HTTP 409 instead of minting a second certificate or returning a certificate
+that does not match the new key. Start a new workflow run when a new credential
+is required.
+
+## Verify the released Action
+
+Download these three assets from the same `v0.6.0` GitHub Release:
+
+- `trstctl-github-action-v0.6.0.tar.gz`
+- `SHA256SUMS`
+- `trstctl-github-action.intoto.jsonl`
+
+Verify the archive digest before inspecting or vendoring it:
+
+```bash
+sha256sum -c SHA256SUMS
+tar -tzf trstctl-github-action-v0.6.0.tar.gz
+```
+
+The release workflow re-runs the full test suite at the exact tag, creates a
+deterministic archive from `clients/github-action`, checks its digest, and
+publishes SLSA provenance. For maximum pin stability after publication,
+resolve `v0.6.0` to its full 40-character commit and use that commit in the
+`uses:` line; GitHub accepts the same subdirectory syntax with a commit SHA.

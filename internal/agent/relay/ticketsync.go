@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/secrettext"
@@ -66,12 +68,35 @@ func runTicketSync(ctx context.Context, ch Channel, client *http.Client, job Job
 		report(ctx, ch, job, OutcomeFailed, fmt.Sprintf("ticket intake read failed with status %d", resp.StatusCode))
 		return false
 	}
-	tickets, err := ticketintake.Parse(io.LimitReader(resp.Body, maxCMDBResponseBytes), intent)
+	page, err := ticketintake.ParsePage(io.LimitReader(resp.Body, maxCMDBResponseBytes), intent)
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "ticket intake response could not be parsed")
 		return false
 	}
-	detail, err := json.Marshal(ticketintake.SyncReport{ObservedAt: time.Now().UTC(), Tickets: tickets})
+	expected := page.ExpectedCount
+	if intent.System == ticketintake.SystemServiceNow {
+		if raw := strings.TrimSpace(resp.Header.Get("X-Total-Count")); raw != "" {
+			remaining, parseErr := strconv.Atoi(raw)
+			if parseErr != nil || remaining < len(page.SourceRefs) {
+				report(ctx, ch, job, OutcomeFailed, "ticket intake total count is not usable")
+				return false
+			}
+			whole := intent.ReadCount + remaining
+			expected = &whole
+		} else {
+			expected = intent.ExpectedCount
+		}
+	}
+	nextCursor := page.NextCursor
+	if page.Complete {
+		nextCursor = ""
+	}
+	detail, err := json.Marshal(ticketintake.SyncReport{
+		System: intent.System, SweepID: intent.SweepID, Cursor: intent.Cursor,
+		ObservedAt: time.Now().UTC(), SourceRefs: page.SourceRefs, Tickets: page.Tickets,
+		ReadCount: intent.ReadCount + len(page.SourceRefs), ExpectedCount: expected,
+		Complete: page.Complete, NextCursor: nextCursor,
+	})
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "ticket intake report could not be encoded")
 		return false

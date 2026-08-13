@@ -38,6 +38,7 @@ import (
 	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/rotationcommand"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/ticketintake"
 )
 
 // Event types for the served domain (AN-2). Every served mutation emits one of
@@ -75,6 +76,12 @@ const (
 	// I3: a tenant's standing instruction to read its ITSM for
 	// certificate-request tickets.
 	EventTicketIntakeConfigured = "ticket.intake.configured"
+	// AUD-47: a ticket sweep is a named chain of signed provider pages. The
+	// event log is both the durable checkpoint authority and the outbox repair
+	// source after an append/SQL crash window.
+	EventTicketIntakeSweepDispatched   = "ticket.intake.sweep.dispatched"
+	EventTicketIntakeSweepPageObserved = "ticket.intake.sweep.page_observed"
+	EventTicketIntakeSweepFailed       = "ticket.intake.sweep.failed"
 	// I4: one typed enrollment refusal. The envelope carries tenant_id and time;
 	// PostgreSQL collapses repeats into a tenant-local bounded projection.
 	EventEnrollmentDiagnosticObserved = "enrollment.diagnostic.observed"
@@ -499,7 +506,8 @@ type TicketIntakeConfigured struct {
 	System             string   `json:"system"`
 	InstanceURL        string   `json:"instance_url"`
 	TokenRef           string   `json:"token_ref"`
-	SNTable            string   `json:"sn_table"`
+	SNTable            string   `json:"sn_table,omitempty"`
+	JiraProject        string   `json:"jira_project,omitempty"`
 	Query              string   `json:"query,omitempty"`
 	SubjectField       string   `json:"subject_field"`
 	ProfileField       string   `json:"profile_field"`
@@ -509,6 +517,32 @@ type TicketIntakeConfigured struct {
 	Enabled            bool     `json:"enabled"`
 	AllowPrivate       bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateCIDRs       []string `json:"private_egress_cidrs,omitempty"`
+}
+
+type TicketIntakeSweepDispatched struct {
+	Intent       ticketintake.SyncIntent `json:"intent"`
+	DispatchedAt time.Time               `json:"dispatched_at"`
+}
+
+type TicketIntakeSweepPageObserved struct {
+	Intent        ticketintake.SyncIntent  `json:"intent"`
+	ObservedAt    time.Time                `json:"observed_at"`
+	SourceRefs    []string                 `json:"source_refs"`
+	ReadCount     int                      `json:"read_count"`
+	ExpectedCount *int                     `json:"expected_count,omitempty"`
+	Complete      bool                     `json:"complete"`
+	NextCursor    string                   `json:"next_cursor,omitempty"`
+	Eligible      int                      `json:"eligible"`
+	Skipped       int                      `json:"skipped"`
+	NextIntent    *ticketintake.SyncIntent `json:"next_intent,omitempty"`
+}
+
+type TicketIntakeSweepFailed struct {
+	System   string    `json:"system"`
+	SweepID  string    `json:"sweep_id"`
+	Cursor   string    `json:"cursor,omitempty"`
+	FailedAt time.Time `json:"failed_at"`
+	Detail   string    `json:"detail"`
 }
 
 // ADCSDatabaseIngested is the payload of adcs.ca_database.ingested (F4): the
@@ -3038,6 +3072,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventApprovalDecisionRecorded:                 {1: true},
 	EventApprovalStatusChanged:                    {1: true},
 	EventTicketIntakeConfigured:                   {1: true},
+	EventTicketIntakeSweepDispatched:              {1: true},
+	EventTicketIntakeSweepPageObserved:            {1: true},
+	EventTicketIntakeSweepFailed:                  {1: true},
 	EventEnrollmentDiagnosticObserved:             {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
 	EventMDMPollConfigured:                        {1: true},
@@ -3411,12 +3448,35 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyTicketIntakeConfiguredTx(ctx, tx, e.TenantID, store.TicketIntakeSchedule{
 			System: pl.System, InstanceURL: pl.InstanceURL, TokenRef: pl.TokenRef,
-			SNTable: pl.SNTable, Query: pl.Query,
+			SNTable: pl.SNTable, JiraProject: pl.JiraProject, Query: pl.Query,
 			SubjectField: pl.SubjectField, ProfileField: pl.ProfileField,
 			RequesterField: pl.RequesterField, JustificationField: pl.JustificationField,
 			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
 		})
+	case EventTicketIntakeSweepDispatched:
+		var pl TicketIntakeSweepDispatched
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyTicketIntakeSweepDispatchedTx(ctx, tx, e.TenantID, pl.Intent, pl.DispatchedAt)
+	case EventTicketIntakeSweepPageObserved:
+		var pl TicketIntakeSweepPageObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyTicketIntakeSweepPageTx(ctx, tx, e.TenantID, store.TicketIntakeSweepPage{
+			System: pl.Intent.System, SweepID: pl.Intent.SweepID, Cursor: pl.Intent.Cursor,
+			ReadBefore: pl.Intent.ReadCount, PageLimit: pl.Intent.PageLimit, ObservedAt: pl.ObservedAt,
+			ReadCount: pl.ReadCount, ExpectedCount: pl.ExpectedCount, Complete: pl.Complete,
+			NextCursor: pl.NextCursor, Eligible: pl.Eligible, Skipped: pl.Skipped,
+		})
+	case EventTicketIntakeSweepFailed:
+		var pl TicketIntakeSweepFailed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyTicketIntakeSweepFailedTx(ctx, tx, e.TenantID, pl.System, pl.SweepID, pl.Cursor, pl.FailedAt, pl.Detail)
 	case EventEnrollmentDiagnosticObserved:
 		var pl EnrollmentDiagnosticObserved
 		if err := decode(e, &pl); err != nil {

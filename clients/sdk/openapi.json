@@ -23181,6 +23181,9 @@
           "interval_seconds": {
             "type": "integer"
           },
+          "jira_project": {
+            "type": "string"
+          },
           "justification_field": {
             "type": "string"
           },
@@ -23213,7 +23216,8 @@
           },
           "system": {
             "enum": [
-              "servicenow"
+              "servicenow",
+              "jira"
             ],
             "type": "string"
           },
@@ -23225,7 +23229,6 @@
           "system",
           "instance_url",
           "token_ref",
-          "sn_table",
           "subject_field",
           "profile_field",
           "interval_seconds"
@@ -23240,8 +23243,17 @@
           "configured": {
             "type": "boolean"
           },
+          "coverage_complete": {
+            "type": "boolean"
+          },
+          "eligible_count": {
+            "type": "integer"
+          },
           "enabled": {
             "type": "boolean"
+          },
+          "expected_count": {
+            "type": "integer"
           },
           "guidance": {
             "type": "string"
@@ -23252,7 +23264,14 @@
           "interval_seconds": {
             "type": "integer"
           },
+          "jira_project": {
+            "type": "string"
+          },
           "justification_field": {
+            "type": "string"
+          },
+          "last_attempt_at": {
+            "format": "date-time",
             "type": "string"
           },
           "last_error": {
@@ -23260,6 +23279,12 @@
           },
           "last_run_at": {
             "type": "string"
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "pages_completed": {
+            "type": "integer"
           },
           "private_egress_cidrs": {
             "items": {
@@ -23273,8 +23298,14 @@
           "query": {
             "type": "string"
           },
+          "read_count": {
+            "type": "integer"
+          },
           "requester_field": {
             "type": "string"
+          },
+          "skipped_count": {
+            "type": "integer"
           },
           "sn_table": {
             "enum": [
@@ -23288,9 +23319,18 @@
           "subject_field": {
             "type": "string"
           },
+          "sweep_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sweep_started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "system": {
             "enum": [
-              "servicenow"
+              "servicenow",
+              "jira"
             ],
             "type": "string"
           },
@@ -23301,6 +23341,11 @@
         "required": [
           "configured",
           "enabled",
+          "read_count",
+          "pages_completed",
+          "coverage_complete",
+          "eligible_count",
+          "skipped_count",
           "guidance"
         ],
         "type": "object"
@@ -34980,6 +35025,16 @@
     "/api/v1/issuance-requests/intake-schedule": {
       "get": {
         "operationId": "getTicketIntakeSchedule",
+        "parameters": [
+          {
+            "description": "provider schedule to read: servicenow (default) or jira",
+            "in": "query",
+            "name": "system",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -35020,7 +35075,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "The configured ticket intake with its last outcome",
+        "summary": "Read one provider's durable ticket-intake cursor, coverage, terminal run, and last failure",
         "x-trstctl-permission": "certs:read"
       },
       "put": {
@@ -35086,7 +35141,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Configure ITSM ticket intake: tickets become issuance requests, idempotently by ticket reference",
+        "summary": "Configure bounded ServiceNow or Jira ticket intake with durable relay paging",
         "x-trstctl-permission": "certs:write"
       }
     },

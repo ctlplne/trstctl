@@ -2272,50 +2272,60 @@ than sending an operator looking for a credential that was never there.
   because one total cannot say whether a queue needs attention or is merely long
   with history. TICKET-DRIVEN INTAKE is now real: `PUT/GET
   /api/v1/issuance-requests/intake-schedule` (`trstctl issuance-requests
-  intake-schedule set|show`) configures a per-tenant ServiceNow read — a
-  leader-only ticker polls one of the four request-shaped tables (`incident`,
-  `sc_req_item`, `sc_request`, `change_request`; the closed set is a schema
-  CHECK, because an unbounded table name would aim the intake token at records
-  that are not tickets) and opens one issuance request per ticket,
+  intake-schedule set|show`) configures a per-tenant ServiceNow or Jira read.
+  Each provider has its own schedule row, so a slow ServiceNow sweep cannot
+  hide or replace Jira progress. ServiceNow is bounded to one of the four
+  request-shaped tables (`incident`, `sc_req_item`, `sc_request`,
+  `change_request`); Jira is bounded to one validated project key. Both bounds
+  are database CHECKs, because an unbounded source name would aim the intake
+  token at records that are not this tenant's certificate-request queue. The
+  intake opens one issuance request per ticket,
   IDEMPOTENTLY by ticket reference: a re-seen ticket opens nothing, and a
   DENIED request does not reopen — the denial was the answer to that ticket,
   and a fresh ask needs a fresh ticket. The field mapping is explicit
   (`subject_field`, `profile_field`, optional requester/justification); a
   ticket missing the mapped subject or profile is SKIPPED AND COUNTED, never
   guessed at, because an intake that opened requests from prose would fill the
-  approval queue with noise. Requests opened here carry `origin=servicenow`
-  and the exact ticket reference, and the existing lifecycle — separation of
+  approval queue with noise. Requests opened here carry `origin=servicenow|jira`
+  and the exact provider ticket reference, and the existing lifecycle — separation of
   duties, denial with a reason, expiry (7 days for intake-opened requests) —
   decides them unchanged. Each sweep first commits a tenant-scoped
-  `ticket.sync` outbox job. A NETWORK relay redeems the `secret://` ServiceNow
-  token for one attempt, issues the fixed bounded GET, and reports only the
-  mapped typed fields — never the raw upstream body. The signed report is
-  bounded and projected before claim completion; a failed projection remains
-  retryable, and stable request/event identities collapse replay to one request.
-  The control plane has no ServiceNow HTTP/token fallback. The GITHUB ACTION is
-  published in-repo at
+  `ticket.sync` outbox job. A NETWORK relay redeems the provider's `secret://`
+  token for one attempt and performs the only external call; the control plane
+  has no ServiceNow/Jira HTTP or token fallback. ServiceNow advances by strict
+  ascending `sys_id` keyset pages and Jira advances by the provider's opaque
+  enhanced-search `nextPageToken`, with a hard 100-ticket page bound. The
+  signed report must echo the exact provider, sweep ID, input cursor, source
+  references, read count, and provider total. The page event and next outbox
+  command commit together. Dispatch or failure updates `last_attempt_at` and
+  retained error only; `last_run_at` and `coverage_complete=true` appear only
+  after a terminal page whose observed count equals the provider total. The
+  API and console serve `read_count`, optional `expected_count`,
+  `pages_completed`, `next_cursor`, eligible/skipped counts, retained failure,
+  and terminal coverage separately. Replay, relay retries, scheduler restart,
+  snapshot restore, and cold event rebuild therefore resume the same cursor;
+  stable request/page identities collapse duplicates without skipping later
+  tickets. The GITHUB ACTION lives in-repo at
   `clients/github-action` (composite, `action.yml` + README with the sample
   workflow): the workflow's ambient OIDC token is fetched with the requested
   audience, an EC key is generated INSIDE the runner (only the public half
   travels), and `POST /api/v1/workloads/attested-issuance` with
-  `method=github_oidc` returns the certificate — idempotent per run attempt.
-  The flow is CI-proven against the served binary
-  (`TestServedGitHubActionFlowIssuesAndRefusesForeignOwners`): the exact
-  request shape the action sends issues for the pinned owner and a FORK's
-  token — valid signature, right audience, wrong `repository_owner` — is
-  refused, which is the property that makes the action safe in public
-  repositories; a contract guard pins `action.yml` to the served route and
-  field names so the two cannot drift apart silently. Scope, stated exactly:
-  JIRA INTAKE IS NOT BUILT and the config refuses `system: jira` by name
-  rather than accepting a poll that never runs; the intake reads one page
-  (100 tickets) per sweep; the action requires an API token scoped to
-  `certs:issue` alongside the OIDC attestation (the token authorizes nothing
-  but issuance — that is the point); marketplace publication is a push-time
-  act this unpushed repository cannot perform, so "published" means the
-  in-repo action a workflow references by path; and approving a request does
-  not itself mint — `issued` is set by the caller that performs the issuance
-  and links the identity, so an approved request is outstanding work until
-  then.
+  `method=github_oidc` returns the certificate. Its idempotency identity binds
+  run, job, and Action but excludes `GITHUB_RUN_ATTEMPT`; a fresh-runner rerun
+  presents a new public key and receives HTTP 409 from exact request binding,
+  so it cannot mint twice or receive a certificate for the wrong private key.
+  Fork pull requests are refused locally before OIDC, and the server still
+  verifies the signed `repository_owner` against `allowed_owners`. CI extracts
+  and executes the shipped composite run block against the full served test
+  deployment, then proves success, foreign-owner refusal, rerun conflict, and
+  one certificate row. The tag release pipeline packages the Action,
+  `SHA256SUMS`, and SLSA provenance. Repository state is release-ready for
+  `v0.6.0`, but that immutable tag is not published until an authenticated
+  maintainer pushes the reviewed commits and creates the tag; the current
+  local remediation does neither. The Action still requires an API token
+  scoped to `certs:issue` alongside the OIDC attestation. Approving a request
+  does not itself mint: `issued` is set by the caller that performs issuance
+  and links the identity, so an approved request remains outstanding work.
 - Attested issuance is reachable (AUD-10, I3 prerequisite): `attested_issuance`
   in the config file turns on `POST /api/v1/workloads/attested-issuance` and
   `POST /api/v1/ssh/attested-user-certs`. Before this there was NO config key at

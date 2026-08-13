@@ -7,8 +7,22 @@ function readIssuanceRequests(): Promise<IssuanceRequestList> {
   return optionalApiCall<IssuanceRequestList>("issuanceRequests", { items: [], open: 0, guidance: "" });
 }
 
-function readTicketIntakeSchedule(): Promise<TicketIntakeSchedule> {
-  return optionalApiCall<TicketIntakeSchedule>("ticketIntakeSchedule", { configured: false, enabled: false, guidance: "" });
+function readTicketIntakeSchedule(system: "servicenow" | "jira"): Promise<TicketIntakeSchedule> {
+  return optionalApiCall<TicketIntakeSchedule>(
+    "ticketIntakeSchedule",
+    {
+      configured: false,
+      system,
+      enabled: false,
+      read_count: 0,
+      pages_completed: 0,
+      coverage_complete: false,
+      eligible_count: 0,
+      skipped_count: 0,
+      guidance: "",
+    },
+    system,
+  );
 }
 
 // IssuanceRequestsPanel shows the request queue with its real lifecycle (I3).
@@ -21,28 +35,62 @@ function readTicketIntakeSchedule(): Promise<TicketIntakeSchedule> {
 // a request approved but never minted would otherwise vanish from every queue.
 export function IssuanceRequestsPanel() {
   const requests = useApiQuery(["issuance-requests"], readIssuanceRequests);
-  const schedule = useApiQuery(["ticket-intake-schedule"], readTicketIntakeSchedule);
+  const serviceNowSchedule = useApiQuery(["ticket-intake-schedule", "servicenow"], () => readTicketIntakeSchedule("servicenow"));
+  const jiraSchedule = useApiQuery(["ticket-intake-schedule", "jira"], () => readTicketIntakeSchedule("jira"));
   const items = requests.data?.items ?? [];
-  if (items.length === 0 && !schedule.data?.configured) return null;
+  const schedules = [serviceNowSchedule.data, jiraSchedule.data].filter((schedule): schedule is TicketIntakeSchedule => Boolean(schedule?.configured));
+  if (items.length === 0 && schedules.length === 0) return null;
   return (
     <section aria-labelledby="issuance-requests-heading" className="ui-panel space-y-3 p-comfortable">
       <h2 id="issuance-requests-heading" className="text-title font-semibold">
         {translateNow("source.issuance.requests.heading.i3req00001")}
       </h2>
-      {schedule.data?.configured ? (
-        <div className="space-y-1">
+      {schedules.map((schedule) => (
+        <div className="space-y-1" key={schedule.system}>
           <h3 className="text-sm font-semibold">{translateNow("source.vantage.relay.a3vant0003")}</h3>
           <p className="text-caption text-muted-foreground">
-            <span className="font-medium">{schedule.data.system ?? "—"}</span>
+            <span className="font-medium">{schedule.system ?? "—"}</span>
             {" · "}
-            {translateNow(schedule.data.enabled ? "protocols.ari.schedulerEnabled" : "protocols.ari.schedulerDisabled")}
+            {translateNow(schedule.enabled ? "protocols.ari.schedulerEnabled" : "protocols.ari.schedulerDisabled")}
             {" · "}
-            {translateNow("discovery.monitoring.columnLastRun")}: {schedule.data.last_run_at?.slice(0, 16).replace("T", " ") ?? "—"}
+            {translateNow("discovery.monitoring.columnLastRun")}: {schedule.last_run_at?.slice(0, 16).replace("T", " ") ?? "—"}
           </p>
-          {schedule.data.last_error ? <p className="text-caption text-risk-critical">{schedule.data.last_error}</p> : null}
-          <p className="text-caption text-muted-foreground">{schedule.data.guidance}</p>
+          {schedule.sweep_id ? (
+            <div className="rounded-control border border-border bg-muted/30 p-3 text-sm" role="status">
+              <p>
+                {schedule.expected_count == null
+                  ? translateNow("ticket.intake.coverage.unknown.aud470001", {
+                      provider: schedule.system ?? "ITSM",
+                      read: String(schedule.read_count),
+                      pages: String(schedule.pages_completed),
+                    })
+                  : translateNow("ticket.intake.coverage.known.aud470002", {
+                      provider: schedule.system ?? "ITSM",
+                      read: String(schedule.read_count),
+                      expected: String(schedule.expected_count),
+                      pages: String(schedule.pages_completed),
+                    })}
+              </p>
+              {schedule.coverage_complete ? (
+                <p className="mt-1 text-success">
+                  {translateNow("ticket.intake.coverage.complete.aud470003", {
+                    eligible: String(schedule.eligible_count),
+                    skipped: String(schedule.skipped_count),
+                  })}
+                </p>
+              ) : (
+                <p className="mt-1 text-risk-warning">
+                  {translateNow("ticket.intake.coverage.incomplete.aud470004", {
+                    cursor: schedule.next_cursor || "start",
+                  })}
+                </p>
+              )}
+            </div>
+          ) : null}
+          {schedule.last_error ? <p className="text-caption text-risk-critical">{schedule.last_error}</p> : null}
+          <p className="text-caption text-muted-foreground">{schedule.guidance}</p>
         </div>
-      ) : null}
+      ))}
       {items.length > 0 ? (
         <>
           <p className="text-sm">

@@ -36,20 +36,11 @@ func TestSignedTicketResultStaysRetryableUntilProjectionSucceeds(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("configure ticket intake: %d %s", status, body)
 	}
-	seedRoleJob(t, ctx, h, agentJobKindTicketSync, "ticket-result-job")
-	intentBytes, err := json.Marshal(ticketintake.SyncIntent{
-		InstanceURL: "https://servicenow.internal.example", TokenRef: servedTicketIntakeTokenRef,
-		SNTable: "incident", SubjectField: "u_subject", ProfileField: "u_profile", PageLimit: ticketIntakePageLimit,
-	})
-	if err != nil {
-		t.Fatal(err)
+	sched, found, err := h.store.GetTicketIntakeSchedule(ctx, h.tenant, ticketintake.SystemServiceNow)
+	if err != nil || !found {
+		t.Fatalf("load schedule: found=%v err=%v", found, err)
 	}
-	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE outbox SET payload = $2 WHERE tenant_id = $1 AND idempotency_key = 'ticket-result-job'`, h.tenant, intentBytes)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	h.servedHarness.srv.dispatchTicketSyncJob(ctx, h.tenant, sched)
 	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{agentJobKindTicketSync}, Limit: 1})
 	if err != nil || len(claimed.Jobs) != 1 {
 		t.Fatalf("claim: jobs=%d err=%v", len(claimed.Jobs), err)
@@ -64,8 +55,8 @@ func TestSignedTicketResultStaysRetryableUntilProjectionSucceeds(t *testing.T) {
 			"subject_field": "u_subject", "profile_field": "u_profile",
 			"interval_seconds": 3600, "enabled": true,
 		})
-	if status != http.StatusOK {
-		t.Fatalf("change ticket schedule after claim: %d %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("change ticket schedule during named sweep: %d %s", status, body)
 	}
 
 	// This report is correctly signed but structurally unusable. The receiver
@@ -82,9 +73,16 @@ func TestSignedTicketResultStaysRetryableUntilProjectionSucceeds(t *testing.T) {
 		t.Fatalf("failed result closed the claim: completed=%v err=%v", completed, err)
 	}
 
+	var intent ticketintake.SyncIntent
+	if err := json.Unmarshal(job.Payload, &intent); err != nil {
+		t.Fatal(err)
+	}
+	expected := 1
 	reportBytes, err := json.Marshal(ticketintake.SyncReport{
-		ObservedAt: time.Now().UTC(),
-		Tickets:    []ticketintake.Ticket{{SysID: "tick-77", Subject: "api.example.test", Profile: "tls-server", Requester: "Dana Ops"}},
+		System: intent.System, SweepID: intent.SweepID, Cursor: intent.Cursor,
+		ObservedAt: time.Now().UTC(), SourceRefs: []string{"tick-77"},
+		Tickets:   []ticketintake.Ticket{{SourceRef: "tick-77", Subject: "api.example.test", Profile: "tls-server", Requester: "Dana Ops"}},
+		ReadCount: 1, ExpectedCount: &expected, Complete: true,
 	})
 	if err != nil {
 		t.Fatal(err)

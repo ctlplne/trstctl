@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 var (
@@ -59,33 +61,43 @@ type AttestedSVID struct {
 //trstctl:mutation
 func (a *API) issueAttestedSVID(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	var req attestedSVIDJSON
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	method := strings.TrimSpace(req.Method)
+	if method == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "method is required"))
+		return
+	}
+	payload, err := base64.StdEncoding.DecodeString(req.PayloadBase64)
+	if err != nil || len(payload) == 0 {
+		a.writeError(w, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64"))
+		return
+	}
+	block, _ := pem.Decode([]byte(req.PublicKeyPEM))
+	if block == nil || block.Type != "PUBLIC KEY" || len(block.Bytes) == 0 {
+		a.writeError(w, errStatus(http.StatusBadRequest, "public_key_pem must contain one PUBLIC KEY PEM block"))
+		return
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	binding, err := attestedSVIDRequestBinding(principal, method, payload, block.Bytes, req.TTLSeconds)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		start := time.Now()
 		var opErr error
 		defer func() { a.observeFeature("attestation", "issue_svid", start, opErr) }()
 		if a.attestedIssuer == nil {
 			opErr = ErrAttestedIssuanceUnavailable
 			return 0, nil, ErrAttestedIssuanceUnavailable
-		}
-		var req attestedSVIDJSON
-		if err := decodeJSON(r, &req); err != nil {
-			opErr = err
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
-		}
-		method := strings.TrimSpace(req.Method)
-		if method == "" {
-			opErr = errors.New("method is required")
-			return 0, nil, errStatus(http.StatusBadRequest, "method is required")
-		}
-		payload, err := base64.StdEncoding.DecodeString(req.PayloadBase64)
-		if err != nil || len(payload) == 0 {
-			opErr = errors.New("payload_base64 must be non-empty standard base64")
-			return 0, nil, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
-		}
-		block, _ := pem.Decode([]byte(req.PublicKeyPEM))
-		if block == nil || block.Type != "PUBLIC KEY" || len(block.Bytes) == 0 {
-			opErr = errors.New("public_key_pem must contain one PUBLIC KEY PEM block")
-			return 0, nil, errStatus(http.StatusBadRequest, "public_key_pem must contain one PUBLIC KEY PEM block")
 		}
 		issued, err := a.attestedIssuer.IssueAttestedSVID(ctx, tenantID, idempotencyKey, AttestedSVIDRequest{
 			Method:       method,
@@ -99,6 +111,27 @@ func (a *API) issueAttestedSVID(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, issued, nil
 	})
+}
+
+func attestedSVIDRequestBinding(principal, method string, payload, publicKeyDER []byte, ttlSeconds int64) (string, error) {
+	if strings.TrimSpace(principal) == "" || strings.TrimSpace(method) == "" || len(payload) == 0 || len(publicKeyDER) == 0 {
+		return "", errors.New("api: incomplete attested issuance request binding")
+	}
+	canonical, err := json.Marshal(struct {
+		Principal       string `json:"principal"`
+		Method          string `json:"method"`
+		PayloadSHA256   string `json:"payload_sha256"`
+		PublicKeySHA256 string `json:"public_key_sha256"`
+		TTLSeconds      int64  `json:"ttl_seconds"`
+	}{
+		Principal: principal, Method: strings.TrimSpace(method),
+		PayloadSHA256: crypto.SHA256Hex(payload), PublicKeySHA256: crypto.SHA256Hex(publicKeyDER),
+		TTLSeconds: ttlSeconds,
+	})
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(append([]byte("attested-svid-request-v1\x00"), canonical...)), nil
 }
 
 func (a *API) writeAttestedIssuanceError(w http.ResponseWriter, err error) bool {

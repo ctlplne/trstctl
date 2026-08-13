@@ -1398,8 +1398,8 @@ export interface Api {
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
   issuanceRequests(): Promise<IssuanceRequestList>;
-  /** I3/AUD-45: durable ServiceNow relay schedule and its last observable outcome. */
-  ticketIntakeSchedule(): Promise<TicketIntakeSchedule>;
+  /** I3/AUD-47: one provider's durable relay cursor, coverage, terminal run, and failure. */
+  ticketIntakeSchedule(system?: "servicenow" | "jira"): Promise<TicketIntakeSchedule>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
   mdmDevices(): Promise<MDMDeviceList>;
   /** I5/AUD-45: relay-only Intune/Jamf schedules, including waiting/failure state. */
@@ -1787,7 +1787,7 @@ const liveApi: Api = {
     }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
-  ticketIntakeSchedule: () => req<TicketIntakeSchedule>("/api/v1/issuance-requests/intake-schedule"),
+  ticketIntakeSchedule: (system = "servicenow") => req<TicketIntakeSchedule>(`/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}`),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
   mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),
   mdmDeviceTrace: (mdm, id) => req<MDMDeviceTrace>(`/api/v1/mdm/${encodeURIComponent(mdm)}/devices/${encodeURIComponent(id)}/trace`),

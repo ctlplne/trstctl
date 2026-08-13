@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	178: true,
 	176: true,
 	175: true,
 	173: true,
@@ -62,6 +63,79 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0178RetiresOnlyUnnamedTicketSyncJobsAUD47(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 178)
+	if target.noTx || target.name != "0178_ticket_intake_bounded_sweeps.sql" {
+		t.Fatalf("migration 0178 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name) VALUES ($1, 'aud47')`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO ticket_intake_schedules
+		       (tenant_id, system, instance_url, token_ref, sn_table, subject_field,
+		        profile_field, interval_seconds, enabled)
+		VALUES ($1, 'servicenow', 'https://now.example', 'secret://itsm/token', 'incident',
+		        'u_subject', 'u_profile', 3600, true)`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	for key, payload := range map[string]string{
+		"legacy": `{"system":"servicenow","instance_url":"https://now.example","page_limit":100}`,
+		"named":  `{"system":"servicenow","instance_url":"https://now.example","page_limit":100,"sweep_id":"11111111-1111-4111-8111-111111111111","read_count":0}`,
+	} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status)
+			VALUES ($1, 'ticket.sync', convert_to($2, 'UTF8'), $3, 'pending')`, tenantA, payload, key); err != nil {
+			t.Fatalf("seed %s job: %v", key, err)
+		}
+	}
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	statuses := map[string]string{}
+	rows, err := pool.Query(ctx, `SELECT idempotency_key, status FROM outbox WHERE tenant_id = $1 ORDER BY id`, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key, status string
+		if err := rows.Scan(&key, &status); err != nil {
+			t.Fatal(err)
+		}
+		statuses[key] = status
+	}
+	if statuses["legacy"] != "failed" || statuses["named"] != "pending" {
+		t.Fatalf("post-migration ticket jobs = %v, want only the unnamed command retired", statuses)
+	}
+	var sweepID, project string
+	var complete bool
+	if err := pool.QueryRow(ctx, `
+		SELECT coalesce(current_sweep_id::text, ''), coverage_complete, jira_project
+		  FROM ticket_intake_schedules WHERE tenant_id = $1 AND system = 'servicenow'`, tenantA).
+		Scan(&sweepID, &complete, &project); err != nil {
+		t.Fatal(err)
+	}
+	if sweepID != "" || complete || project != "" {
+		t.Fatalf("migrated schedule = sweep %q complete=%t project=%q, want a fresh provider-bound sweep", sweepID, complete, project)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO ticket_intake_schedules
+		       (tenant_id, system, instance_url, token_ref, sn_table, jira_project,
+		        subject_field, profile_field, interval_seconds, enabled)
+		VALUES ($1, 'jira', 'https://acme.atlassian.net', 'secret://itsm/jira', '', 'NHI',
+		        'customfield_1', 'customfield_2', 3600, true)`, tenantA); err != nil {
+		t.Fatalf("bounded Jira schedule was rejected after migration: %v", err)
+	}
 }
 
 func TestMigration0176RetiresOnlyCursorlessCMDBJobsAUD46(t *testing.T) {
