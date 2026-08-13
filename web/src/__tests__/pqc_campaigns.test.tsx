@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     pqcCampaigns: vi.fn(),
     pqcCampaign: vi.fn(),
     createPQCCampaign: vi.fn(),
+    createCryptoReadinessAction: vi.fn(),
     setPQCCampaignReadiness: vi.fn(),
     dispositionPQCCampaignFinding: vi.fn(),
     closePQCCampaign: vi.fn(),
@@ -85,6 +86,7 @@ describe("core PQC migration campaigns", () => {
     apiMock.pqcCampaigns.mockResolvedValue({ items: [campaign], next_cursor: "" });
     apiMock.pqcCampaign.mockResolvedValue(campaign);
     apiMock.createPQCCampaign.mockResolvedValue(campaign);
+    apiMock.createCryptoReadinessAction.mockResolvedValue(campaign);
     apiMock.setPQCCampaignReadiness.mockResolvedValue({ ...campaign, readiness_status: "passed" });
     apiMock.dispositionPQCCampaignFinding.mockResolvedValue({
       ...campaign,
@@ -121,7 +123,7 @@ describe("core PQC migration campaigns", () => {
     await user.click(screen.getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: "Create campaign" }));
     await waitFor(() =>
-      expect(apiMock.createPQCCampaign).toHaveBeenCalledWith(
+      expect(apiMock.createCryptoReadinessAction).toHaveBeenCalledWith(
         expect.objectContaining({
           name: "Gateway migration",
           owner: "team:edge",

@@ -663,8 +663,13 @@ describe("i18n boundary", () => {
       // production-unit consumption, and remaining bundled non-production slots.
       // Currency, counts, and placeholders stay exact. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "de224bd5ddea8929c25411766936e4047da518259c8196e232f3a0eb162eb2c6",
-      "de-DE": "8c2b8c44880a9ec468cf039f71aeea49cc4bfe3d21e3594e8729dc329414cf85",
+      // AUD-65 crypto-readiness re-pin: thirteen keys name the canonical
+      // dataset digest, graph-bound actions, stale-topology refusal, and signed
+      // CSV/NDJSON exports. The translations keep unknown distinct from safe
+      // and stale distinct from completed. Machine-authored es/de — FLAGGED
+      // FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "a1ad6dc41fd0dc14a3238c4a21e12e67962ef4b9393691c60fab7a12a33fc59e",
+      "de-DE": "872cbce0befc9f71c666d42fb13bc377cb0c3fafd4770acd61821e4ecb46c126",
     });
   });
 

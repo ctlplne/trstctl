@@ -158,7 +158,7 @@ exhaustive subcommand list:
 | `endpoints`                        | Read live endpoint identity and key-custody evidence, including one exact signed verification (`verifications` · `verifications get` · `key-custody`)       |
 | `enrollment diagnostics`           | Read exact tenant refusal evidence, export aggregate-only support counts, and queue signed proof after a successful retry (`list` · `support-addendum` · `prove-fixed`) |
 | `external-cas`                     | List and issue through configured upstream CA integrations (`list` · `issue`)                                                                                |
-| `graph`                            | Query the credential graph, reachability, and blast radius (`nodes` · `reachable` · `blast-radius` · `query`)                                                |
+| `graph`                            | Query the credential graph and operate its canonical crypto-readiness workflow (`nodes` · `reachable` · `blast-radius` · `crypto-readiness` · `crypto-readiness actions create` · `crypto-readiness export` · `query`) |
 | `identities`                       | Identity lifecycle: create, list, transition, dual-control approvals, bulk-revoke (`create` · `list` · `get` · `transition` · `approve` · `approve issue` · `approve rotate` · `approve revoke` · `bulk-revoke`) |
 | `incidents executions`             | Execute credential-compromise remediation and inspect evidence packs (`execute` · `list` · `get`)                                                            |
 | `incidents response-integrations`  | Dispatch an incident packet to SIEM/SOAR/chat/ITSM integrations (`dispatch`)                                                                                  |
@@ -759,6 +759,16 @@ trstctl-cli discovery findings list
 # Correlate one managed issuer to observed trust stores. Authoritative counts use
 # exact certificate/SPKI identity; name-only candidates are returned separately.
 trstctl-cli graph trust-stores iss:<issuer-id>
+
+# Read the canonical tenant-bound readiness dataset, create an action against
+# its current row/owner digest, then download the independently verifiable
+# JSON envelope carrying the exact CSV and NDJSON bytes.
+trstctl-cli graph crypto-readiness
+cat > crypto-readiness-action.json <<'JSON'
+{"name":"Payments crypto blocker","owner":"team:payments","deadline":"2026-12-01T00:00:00Z","wave":"wave-1","readiness_criteria":["owner approved","rollback documented"],"finding_ids":["<cbom-finding-id>"]}
+JSON
+trstctl-cli --idempotency-key payments-crypto-1 graph crypto-readiness actions create -f crypto-readiness-action.json
+trstctl-cli graph crypto-readiness export > crypto-readiness-evidence.json
 
 # In a cluster, add --inventory-k8s-secrets to inventory the kubernetes.io/tls
 # Secrets in the agent's own namespace (reads tls.crt, never tls.key; needs list

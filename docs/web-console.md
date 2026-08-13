@@ -152,12 +152,19 @@ Backed by `/api/v1/discovery/sources`, `/schedules`, `/runs`, and `/findings`.
 CT and drift findings, the drift-remediation decision workflow, a CBOM scan trigger
 and cryptographic inventory, and a PQC readiness gauge — readiness percentage plus
 quantum-vulnerable/PQC-ready/out-of-policy counts, framed against NIST FIPS
-203/204 — derived from the served CBOM `migration_progress`. Queuing or rolling back a
+203/204 — derived from the served CBOM `migration_progress`. The readiness table joins
+the same digest-bound graph rows used by Risk, including observed dependency paths,
+attributed owners, recommendations, and event-backed owner actions. Missing graph
+placement renders as `Unknown`, never ready. Creating a campaign here calls the
+graph-bound action route, so an owner must be currently attributed and later topology
+drift blocks stale evidence mutation. Risk downloads the matching CSV, NDJSON, or
+audit-key-signed JSON/JWKS export. Queuing or rolling back a
 PQC re-issuance run is a licensed API capability (`POST /api/v1/pqc/migrations`) not
 yet exposed here as a control. See
 [Lifecycle & PQC → PQC](features/lifecycle-and-pqc.md). Backed by
-`/api/v1/cbom/assets`, `/api/v1/cbom/scans`, `/api/v1/discovery/ct-monitoring`, and
-`/api/v1/discovery/drift-remediation`.
+`/api/v1/cbom/assets`, `/api/v1/cbom/scans`, `/api/v1/graph/crypto-readiness`,
+`/api/v1/graph/crypto-readiness/actions`, `/api/v1/graph/crypto-readiness/export`,
+`/api/v1/discovery/ct-monitoring`, and `/api/v1/discovery/drift-remediation`.
 
 ### CA migration (`/migration`)
 

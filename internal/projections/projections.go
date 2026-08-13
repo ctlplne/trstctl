@@ -1326,14 +1326,15 @@ type PQCMigrationCampaignStarted struct {
 }
 
 type PQCMigrationCampaignFinding struct {
-	FindingID     string `json:"finding_id"`
-	FindingDigest string `json:"finding_digest"`
-	Kind          string `json:"kind"`
-	Location      string `json:"location"`
-	Algorithm     string `json:"algorithm,omitempty"`
-	KeyBits       int    `json:"key_bits,omitempty"`
-	Protocol      string `json:"protocol,omitempty"`
-	Cipher        string `json:"cipher,omitempty"`
+	FindingID       string `json:"finding_id"`
+	FindingDigest   string `json:"finding_digest"`
+	ReadinessDigest string `json:"readiness_digest,omitempty"`
+	Kind            string `json:"kind"`
+	Location        string `json:"location"`
+	Algorithm       string `json:"algorithm,omitempty"`
+	KeyBits         int    `json:"key_bits,omitempty"`
+	Protocol        string `json:"protocol,omitempty"`
+	Cipher          string `json:"cipher,omitempty"`
 }
 
 type PQCMigrationCampaignUpdated struct {
@@ -5465,9 +5466,13 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 				finding.Kind == "" || finding.Location == "" {
 				return fmt.Errorf("projections: %s finding requires finding_id, finding_digest, kind, and location", e.Type)
 			}
+			if finding.ReadinessDigest != "" && !validSHA256Reference(finding.ReadinessDigest) {
+				return fmt.Errorf("projections: %s finding readiness_digest must use sha256:<64 lowercase hex>", e.Type)
+			}
 			findings = append(findings, store.PQCMigrationCampaignFinding{
 				TenantID: e.TenantID, CampaignID: pl.ID, FindingID: finding.FindingID,
-				FindingDigest: finding.FindingDigest, Kind: finding.Kind, Location: finding.Location,
+				FindingDigest: finding.FindingDigest, ReadinessDigest: finding.ReadinessDigest,
+				Kind: finding.Kind, Location: finding.Location,
 				Algorithm: finding.Algorithm, KeyBits: finding.KeyBits, Protocol: finding.Protocol,
 				Cipher: finding.Cipher, Disposition: "pending", CreatedAt: e.Time, UpdatedAt: e.Time,
 			})
@@ -6326,6 +6331,14 @@ func discoveryMetadataBool(raw json.RawMessage) bool {
 	}
 	value, _ = strconv.ParseBool(text)
 	return value
+}
+
+func validSHA256Reference(value string) bool {
+	if !strings.HasPrefix(value, "sha256:") || len(value) != len("sha256:")+64 {
+		return false
+	}
+	decoded, err := hex.DecodeString(strings.TrimPrefix(value, "sha256:"))
+	return err == nil && len(decoded) == 32 && strings.ToLower(value) == value
 }
 
 func decode(e events.Event, v any) error {

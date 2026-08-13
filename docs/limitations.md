@@ -400,6 +400,17 @@ never live in the API process. What you can do end to end against the running bi
   (workload -> credential), so tests no longer reverse that relationship. Scope: this
   sequences only dependencies an agent actually reports. It does not infer network traffic,
   and its ordering is only as complete as the reporters feeding it.
+  AUD-65 makes this one exportable workflow instead of a Risk-only readout.
+  `GET /api/v1/graph/crypto-readiness` is the canonical tenant dataset consumed by
+  Risk and CBOM/Posture; it includes a digest and event-projected owner actions.
+  `POST /api/v1/graph/crypto-readiness/actions` binds an existing core PQC campaign
+  finding to the exact row digest and current attributed owner. Missing, foreign,
+  unlocated/unowned, or later-changed topology is refused rather than guessed; stale
+  actions stay visible but return `409` on mutation. `GET
+  /api/v1/graph/crypto-readiness/export` returns the same ordered rows as bounded CSV
+  and NDJSON plus an audit-key JWS/JWKS, and compliance evidence-pack v5 embeds the
+  same dataset in its signed manifest. This still cannot discover dependencies no
+  reporter observed; the coverage guidance travels in every format.
   CORRECTION (D2/D3, B2, R1, F1, H2 — 2026-08-05): FIVE agent-claimable job kinds
   dead-lettered before any agent could claim them. The control-plane dispatcher is
   the sole handler for every outbox sweep, and its default branch returns a hard

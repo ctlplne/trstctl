@@ -73,6 +73,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("CertificateHealthItem", "status", observationPredicate, "internal/api/certificates.go:toCertificateHealthDashboard"),
 	evidence("CodeSigningIdentity", "status", eventProjectionPredicate, "internal/api/codesign_identities.go:API.listCodeSigningIdentities"),
 	evidence("ConnectorDelivery", "status", predicate(evidenceObservation, "the connector receipt registry binds each value to queued, contacted, mutated, or independently verified evidence"), "internal/orchestrator/commands.go:Orchestrator.RecordConnectorDelivery"),
+	evidence("CryptoReadinessAction", "status", predicate(evidenceEventProjection, "open and closed are copied only from the tenant's event-projected PQC campaign row, and the action is served on this dataset only when its finding carries an exact crypto-readiness row digest; stale topology remains separately visible and blocks further mutation"), "internal/store/pqc_migration_campaign.go:Store.ListCryptoReadinessActions"),
 	evidence("DRDrill", "outcome", predicate(evidenceObservation, "restored requires the delivered full backup set to restore into isolated ephemeral data and messaging targets; failed and skipped record why that predicate was not met"), "internal/server/drill.go:RunRestoreDrill"),
 	evidence("DiscoveryCoverageClass", "status", observationPredicate, "internal/api/discovery.go:API.getDiscoveryCoverage"),
 	evidence("DiscoveryRun", "status", eventProjectionPredicate, "internal/orchestrator/discovery.go:Orchestrator.CompleteDiscoveryRun"),

@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/graph"
 )
@@ -75,6 +76,7 @@ type Report struct {
 	OperatorAttests  []string                                   `json:"operator_attests"`
 	FIPSProfile      *compliance.FIPSRegulatedDeploymentProfile `json:"fips_regulated_deployment_profile,omitempty"`
 	ADCS             api.ADCSComplianceEvidence                 `json:"adcs"`
+	CryptoReadiness  cryptoreadiness.Dataset                    `json:"crypto_readiness"`
 }
 
 // Reporter generates and signs reports.
@@ -105,6 +107,10 @@ func (r *Reporter) Generate(fw Framework, records []audit.Record, cbom *graph.Gr
 	if err != nil {
 		return Report{}, err
 	}
+	readiness, err := cryptoreadiness.FromGraph(tenantID, cbom, nil)
+	if err != nil {
+		return Report{}, fmt.Errorf("governance: build crypto readiness: %w", err)
+	}
 	var fipsProfile *compliance.FIPSRegulatedDeploymentProfile
 	if fw == FIPS140 {
 		status, err := crypto.PowerOnSelfTest(false)
@@ -127,7 +133,7 @@ func (r *Reporter) Generate(fw Framework, records []audit.Record, cbom *graph.Gr
 		TenantID: tenantID, Framework: string(fw), GeneratedAt: window.Through,
 		EvidenceWindow: window, Controls: controls, Posture: p, Custody: c,
 		ProductEvidences: productEvidencesFor(controls), OperatorAttests: operatorAttestsFor(fw),
-		FIPSProfile: fipsProfile, ADCS: adcsEvidence,
+		FIPSProfile: fipsProfile, ADCS: adcsEvidence, CryptoReadiness: readiness,
 	}, nil
 }
 

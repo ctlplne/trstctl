@@ -119,6 +119,15 @@ then record work performed manually or by any external tool. No licence is requi
 readiness, finding-disposition, close, and evidence routes serve the complete workflow.
 The same operations are available under `trstctl-cli pqc campaigns` and on `/posture`.
 
+The preferred UI/API entry point is the graph-bound action route,
+`POST /api/v1/graph/crypto-readiness/actions`. It refuses a missing, foreign,
+unlocated, or unattributed row, and stores the exact current readiness-row digest in
+the immutable campaign-start event. Existing `/api/v1/pqc/campaigns` remains the
+manual campaign API; those legacy/manual campaigns do not claim a graph binding.
+Graph-bound campaigns refuse further mutation with `409 Conflict` when a dependent
+edge or attributed owner changes. This prevents old coordination evidence from being
+applied to a newly different blast radius.
+
 Campaign mutations emit immutable `pqc.migration_campaign.*` events. PostgreSQL
 projections carry `tenant_id` and forced row-level security. Closure is rejected until
 the readiness gate passes and every selected finding is marked `remediated` or
@@ -126,6 +135,11 @@ the readiness gate passes and every selected finding is marked `remediated` or
 persistent audit key and binds the tenant, campaign, frozen finding digests,
 dispositions, evidence digests, and timestamps; its included public JWKS permits
 offline verification.
+
+The canonical read and evidence routes are `GET /api/v1/graph/crypto-readiness` and
+`GET /api/v1/graph/crypto-readiness/export`. The latter packages the same ordered
+rows, owners, actions, evidence references, recommendations, and coverage limitation
+as CSV and NDJSON, with an audit-key JWS and public JWKS for offline verification.
 
 The edition boundary is explicit: the core response says automated fleet execution is
 unavailable while keeping all tracking and proof actions live. The licensed engine may

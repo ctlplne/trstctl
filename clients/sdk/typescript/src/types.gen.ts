@@ -2215,6 +2215,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/graph/crypto-readiness/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a tenant action bound to current crypto readiness topology and owner */
+        post: operations["startCryptoReadinessAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/graph/crypto-readiness/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export signed canonical crypto readiness as JSON, CSV, and NDJSON */
+        get: operations["exportCryptoReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/graph/query": {
         parameters: {
             query?: never;
@@ -7097,6 +7131,7 @@ export interface components {
         };
         ComplianceEvidencePack: {
             adcs: components["schemas"]["ADCSComplianceEvidence"];
+            crypto_readiness: components["schemas"]["CryptoReadiness"];
             custody: components["schemas"]["CertificateCustodySummary"];
             format: string;
             /** @enum {string} */
@@ -7306,12 +7341,43 @@ export interface components {
             via: components["schemas"]["GraphNode"];
         };
         CryptoReadiness: {
-            guidance: string;
+            coverage_guidance: string;
+            dataset_digest: string;
+            format: string;
             items: components["schemas"]["CryptoReadinessRow"][];
+            /** Format: uuid */
+            tenant_id: string;
             unlocated: number;
             urgent: number;
         };
+        CryptoReadinessAction: {
+            /** Format: uuid */
+            campaign_id: string;
+            /** Format: date-time */
+            deadline: string;
+            disposition: string;
+            evidence_digests: string[];
+            evidence_refs: string[];
+            name: string;
+            owner: string;
+            readiness_digest: string;
+            readiness_status: string;
+            stale: boolean;
+            status: string;
+            wave: string;
+        };
+        CryptoReadinessExport: {
+            csv: string;
+            dataset: components["schemas"]["CryptoReadiness"];
+            dataset_digest: string;
+            ndjson: string;
+            public_jwks: {
+                [key: string]: unknown;
+            };
+            signed_export: string;
+        };
         CryptoReadinessRow: {
+            actions: components["schemas"]["CryptoReadinessAction"][];
             asset: components["schemas"]["GraphNode"];
             dependents?: components["schemas"]["CryptoDependent"][];
             exhibitors?: components["schemas"]["GraphNode"][];
@@ -10161,6 +10227,7 @@ export interface components {
             kind: string;
             location: string;
             protocol?: string;
+            readiness_digest?: string;
             remediation_method?: string;
         };
         PQCMigrationCampaignList: {
@@ -18267,6 +18334,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CryptoReadiness"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startCryptoReadinessAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PQCMigrationCampaignStartRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    exportCryptoReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CryptoReadinessExport"];
                 };
             };
             /** @description client error */

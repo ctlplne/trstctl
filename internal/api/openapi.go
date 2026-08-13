@@ -1292,7 +1292,7 @@ func componentSchemas() map[string]*Schema {
 	}, "disposition", "method", "reason", "evidence_digests")
 	pqcCampaignCloseReq := object(map[string]*Schema{"closed_by": str()})
 	pqcCampaignFinding := object(map[string]*Schema{
-		"finding_id": uuid(), "finding_digest": str(), "kind": str(), "location": str(),
+		"finding_id": uuid(), "finding_digest": str(), "readiness_digest": str(), "kind": str(), "location": str(),
 		"algorithm": str(), "key_bits": {Type: "integer"}, "protocol": str(), "cipher": str(),
 		"disposition":        {Type: "string", Enum: []string{"pending", "remediated", "excepted"}},
 		"remediation_method": str(), "disposition_reason": str(),
@@ -3102,13 +3102,14 @@ func componentSchemas() map[string]*Schema {
 		"unrecorded_certificates": {Type: "array", Items: ref("UnrecordedCustodyCertificate")},
 	}, "total", "recorded", "unrecorded", "origins", "storage", "exportability", "unrecorded_certificates")
 	complianceEvidencePack := object(map[string]*Schema{
-		"format":         str(),
-		"framework":      {Type: "string", Enum: complianceFrameworkValues()},
-		"signed_export":  {Type: "object"},
-		"public_key_der": {Type: "string", Format: "byte"},
-		"custody":        ref("CertificateCustodySummary"),
-		"adcs":           ref("ADCSComplianceEvidence"),
-	}, "format", "framework", "signed_export", "public_key_der", "custody", "adcs")
+		"format":           str(),
+		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
+		"signed_export":    {Type: "object"},
+		"public_key_der":   {Type: "string", Format: "byte"},
+		"custody":          ref("CertificateCustodySummary"),
+		"adcs":             ref("ADCSComplianceEvidence"),
+		"crypto_readiness": ref("CryptoReadiness"),
+	}, "format", "framework", "signed_export", "public_key_der", "custody", "adcs", "crypto_readiness")
 	complianceReportScheduleReq := object(map[string]*Schema{
 		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
@@ -3672,6 +3673,12 @@ func componentSchemas() map[string]*Schema {
 	cryptoDependent := object(map[string]*Schema{
 		"node": ref("GraphNode"), "via": ref("GraphNode"), "edge": str(),
 	}, "node", "via", "edge")
+	cryptoReadinessAction := object(map[string]*Schema{
+		"campaign_id": uuid(), "name": str(), "owner": str(), "deadline": timestamp(),
+		"wave": str(), "status": str(), "readiness_status": str(), "disposition": str(),
+		"evidence_refs": {Type: "array", Items: str()}, "evidence_digests": {Type: "array", Items: str()},
+		"readiness_digest": str(), "stale": {Type: "boolean"},
+	}, "campaign_id", "name", "owner", "deadline", "wave", "status", "readiness_status", "disposition", "evidence_refs", "evidence_digests", "readiness_digest", "stale")
 	cryptoReadinessRow := object(map[string]*Schema{
 		"asset":              ref("GraphNode"),
 		"exhibitors":         {Type: "array", Items: ref("GraphNode")},
@@ -3681,13 +3688,18 @@ func componentSchemas() map[string]*Schema {
 		"out_of_policy":      {Type: "boolean"},
 		"unlocated":          {Type: "boolean"},
 		"recommendation":     str(),
-	}, "asset", "quantum_vulnerable", "out_of_policy", "unlocated", "recommendation")
+		"actions":            {Type: "array", Items: ref("CryptoReadinessAction")},
+	}, "asset", "quantum_vulnerable", "out_of_policy", "unlocated", "recommendation", "actions")
 	cryptoReadiness := object(map[string]*Schema{
-		"items":     {Type: "array", Items: ref("CryptoReadinessRow")},
-		"urgent":    {Type: "integer"},
-		"unlocated": {Type: "integer"},
-		"guidance":  str(),
-	}, "items", "urgent", "unlocated", "guidance")
+		"format": str(), "tenant_id": uuid(), "dataset_digest": str(),
+		"items":  {Type: "array", Items: ref("CryptoReadinessRow")},
+		"urgent": {Type: "integer"}, "unlocated": {Type: "integer"},
+		"coverage_guidance": str(),
+	}, "format", "tenant_id", "dataset_digest", "items", "urgent", "unlocated", "coverage_guidance")
+	cryptoReadinessExport := object(map[string]*Schema{
+		"dataset": ref("CryptoReadiness"), "dataset_digest": str(), "csv": str(), "ndjson": str(),
+		"signed_export": str(), "public_jwks": {Type: "object", AdditionalProperties: &Schema{}},
+	}, "dataset", "dataset_digest", "csv", "ndjson", "signed_export", "public_jwks")
 
 	// I2: what a bulk ownership import did, and what it refused to do. Applied
 	// and refused are separate numbers on purpose — one total hides the rows
@@ -5279,6 +5291,8 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipConflict":                        ownershipConflictSchema,
 		"CryptoReadiness":                          cryptoReadiness,
 		"CryptoReadinessRow":                       cryptoReadinessRow,
+		"CryptoReadinessAction":                    cryptoReadinessAction,
+		"CryptoReadinessExport":                    cryptoReadinessExport,
 		"CryptoDependent":                          cryptoDependent,
 		"GraphTrustStores":                         graphTrustStores,
 		"UnownedIdentity":                          unownedIdentity,

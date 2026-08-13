@@ -56,6 +56,7 @@ type pqcCampaignResponse struct {
 type pqcCampaignFindingResponse struct {
 	FindingID         string     `json:"finding_id"`
 	FindingDigest     string     `json:"finding_digest"`
+	ReadinessDigest   string     `json:"readiness_digest,omitempty"`
 	Kind              string     `json:"kind"`
 	Location          string     `json:"location"`
 	Algorithm         string     `json:"algorithm,omitempty"`
@@ -322,7 +323,7 @@ func mapPQCCampaignError(err error) error {
 		return ae
 	case store.IsNotFound(err):
 		return errStatus(http.StatusNotFound, "PQC migration campaign or finding not found")
-	case errors.Is(err, store.ErrPQCCampaignClosed), errors.Is(err, store.ErrPQCCampaignExists), errors.Is(err, store.ErrPQCCampaignNotReady):
+	case errors.Is(err, store.ErrPQCCampaignClosed), errors.Is(err, store.ErrPQCCampaignExists), errors.Is(err, store.ErrPQCCampaignNotReady), errors.Is(err, store.ErrPQCCampaignTopologyStale):
 		return errStatus(http.StatusConflict, err.Error())
 	default:
 		return errStatus(http.StatusBadRequest, err.Error())
@@ -358,7 +359,7 @@ func toPQCCampaignFindings(findings []store.PQCMigrationCampaignFinding) []pqcCa
 	out := make([]pqcCampaignFindingResponse, 0, len(findings))
 	for _, finding := range findings {
 		out = append(out, pqcCampaignFindingResponse{
-			FindingID: finding.FindingID, FindingDigest: finding.FindingDigest,
+			FindingID: finding.FindingID, FindingDigest: finding.FindingDigest, ReadinessDigest: finding.ReadinessDigest,
 			Kind: finding.Kind, Location: finding.Location, Algorithm: finding.Algorithm,
 			KeyBits: finding.KeyBits, Protocol: finding.Protocol, Cipher: finding.Cipher,
 			Disposition: finding.Disposition, RemediationMethod: finding.RemediationMethod,

@@ -157,6 +157,24 @@ produces an offline-verifiable signed artifact. Automated fleet execution remain
 optional Enterprise executor and is stated as unavailable by edition; campaign
 tracking itself does not degrade into an upsell-only shell.
 
+The migration surface is one canonical tenant dataset, not separate Risk and CBOM
+interpretations. `GET /api/v1/graph/crypto-readiness` returns graph-built ordered rows,
+the exact dependent path and attributed owners, bound campaign actions, explicit
+coverage limits, and a `dataset_digest`. `/posture` joins those same rows to CBOM;
+`/risk` reads the same query key. `POST /api/v1/graph/crypto-readiness/actions` creates
+an idempotent event-sourced campaign only when every selected finding has a current
+graph row and the requested owner is attributed by it. The immutable start event binds
+each finding to its row digest. If topology or ownership changes, the action remains
+visible as stale and evidence/readiness/closure mutations return `409` until an
+operator creates a new action against current authority.
+
+`GET /api/v1/graph/crypto-readiness/export` returns the exact dataset plus bounded CSV
+and NDJSON. Its audit-key JWS binds the dataset and SHA-256 hashes of both byte formats;
+the included JWKS supports offline verification. The same dataset is embedded in the
+signed compliance manifest. A spreadsheet, log shipper, API client, CBOM view, Risk
+view, workflow, and auditor can therefore compare one digest instead of reconciling
+look-alike rows.
+
 ### In the console
 
 The overview dashboard surfaces a severity-ranked alert center from served risk and

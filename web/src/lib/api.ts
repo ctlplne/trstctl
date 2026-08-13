@@ -14,6 +14,7 @@ import * as estate from "./estateApi";
 import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import type {
   CryptoReadiness,
+  CryptoReadinessExport,
   CMDBReconcileSchedule,
   IssuanceRequestList,
   MDMDeviceList,
@@ -482,7 +483,7 @@ export interface UsageEvidence {
 
 export type { CTMonitoring, CTMonitoringRequest };
 export type { DRPosture, DRDrill } from "./api-types.gen";
-export type { CryptoReadiness, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
+export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileSchedule } from "./api-types.gen";
 export type { IssuanceRequestList, IssuanceRequest } from "./api-types.gen";
@@ -1419,6 +1420,7 @@ export interface Api {
   usageEvidence(periodStart: string, periodEnd: string): Promise<UsageEvidence>;
   /** M2: crypto assets sequenced for migration by observed dependency, not severity alone. */
   cryptoReadiness(): Promise<CryptoReadiness>;
+  cryptoReadinessExport(): Promise<CryptoReadinessExport>;
   /** I2: ownership an import refused to overwrite, and changes it made and recorded. */
   ownershipConflicts(): Promise<OwnershipConflictList>;
   /** I2: close a disagreement. The reason is required — see the route's own guard. */
@@ -1678,6 +1680,7 @@ export interface Api {
   pqcCampaigns(options?: { limit?: number; cursor?: string }): Promise<PQCMigrationCampaignList>;
   pqcCampaign(id: string): Promise<PQCMigrationCampaign>;
   createPQCCampaign(input: PQCMigrationCampaignStartRequest): Promise<PQCMigrationCampaign>;
+  createCryptoReadinessAction(input: PQCMigrationCampaignStartRequest): Promise<PQCMigrationCampaign>;
   updatePQCCampaign(id: string, input: PQCMigrationCampaignUpdateRequest): Promise<PQCMigrationCampaign>;
   setPQCCampaignReadiness(id: string, input: PQCMigrationCampaignReadinessRequest): Promise<PQCMigrationCampaign>;
   dispositionPQCCampaignFinding(id: string, findingId: string, input: PQCMigrationFindingDispositionRequest): Promise<PQCMigrationCampaign>;
@@ -1809,6 +1812,7 @@ const liveApi: Api = {
   usageEvidence: (periodStart, periodEnd) =>
     req<UsageEvidence>(`/api/v1/provider/usage-evidence?period_start=${encodeURIComponent(periodStart)}&period_end=${encodeURIComponent(periodEnd)}`),
   cryptoReadiness: () => req<CryptoReadiness>("/api/v1/graph/crypto-readiness"),
+  cryptoReadinessExport: () => req<CryptoReadinessExport>("/api/v1/graph/crypto-readiness/export"),
   ownershipConflicts: () => req<OwnershipConflictList>("/api/v1/owners/ownership-conflicts"),
   // Through mutate(), not a hand-rolled req(): mutate is what attaches the
   // Idempotency-Key (AN-5). Rolling the request by hand skipped it, and a
@@ -2133,6 +2137,7 @@ const liveApi: Api = {
   pqcCampaigns: (options) => req<PQCMigrationCampaignList>(`/api/v1/pqc/campaigns${pageQueryString(options)}`),
   pqcCampaign: (id) => req<PQCMigrationCampaign>(`/api/v1/pqc/campaigns/${encodeURIComponent(id)}`),
   createPQCCampaign: (input) => mutate<PQCMigrationCampaign>("POST", "/api/v1/pqc/campaigns", input),
+  createCryptoReadinessAction: (input) => mutate<PQCMigrationCampaign>("POST", "/api/v1/graph/crypto-readiness/actions", input),
   updatePQCCampaign: (id, input) => mutate<PQCMigrationCampaign>("PUT", `/api/v1/pqc/campaigns/${encodeURIComponent(id)}`, input),
   setPQCCampaignReadiness: (id, input) => mutate<PQCMigrationCampaign>("POST", `/api/v1/pqc/campaigns/${encodeURIComponent(id)}/readiness`, input),
   dispositionPQCCampaignFinding: (id, findingId, input) =>

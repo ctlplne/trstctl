@@ -208,6 +208,8 @@ public final class OpenApiSchemas {
       "CredentialRiskList",
       "CryptoDependent",
       "CryptoReadiness",
+      "CryptoReadinessAction",
+      "CryptoReadinessExport",
       "CryptoReadinessRow",
       "CustodyExportabilityCounts",
       "CustodyOriginCounts",

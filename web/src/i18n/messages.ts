@@ -6875,6 +6875,31 @@ export const messages = {
     defaultMessage: "no location recorded",
     description: "M2: the CBOM could not place this usage, so it has no graph position.",
   },
+  "cryptoReadiness.export.changed": {
+    defaultMessage: "Readiness changed while exporting. The table is refreshing; export again from the new digest.",
+    description: "AUD-65: refuses to download evidence for a dataset different from the visible one.",
+  },
+  "cryptoReadiness.noDependents": { defaultMessage: "No dependents observed", description: "AUD-65: absence is observation-limited, not a safe verdict." },
+  "cryptoReadiness.ownerUnknown": { defaultMessage: "Owner unknown", description: "AUD-65: graph did not attribute an owner." },
+  "cryptoReadiness.stale": { defaultMessage: "(stale topology)", description: "AUD-65: action binding no longer matches current graph authority." },
+  "cryptoReadiness.actions.none": { defaultMessage: "No owner action recorded", description: "AUD-65: no graph-bound campaign action exists." },
+  "cryptoReadiness.rowUnknown": {
+    defaultMessage: "Unknown — no canonical graph row was observed",
+    description: "AUD-65: CBOM asset could not be joined to graph readiness.",
+  },
+  "cryptoReadiness.recommendationUnknown": {
+    defaultMessage: "Unknown until discovery places this CBOM asset in the production graph.",
+    description: "AUD-65: refuses an invented recommendation without graph placement.",
+  },
+  "cryptoReadiness.coverageUnknown": {
+    defaultMessage: "Coverage unknown: discovery has not produced a canonical readiness dataset.",
+    description: "AUD-65: missing readiness is explicit rather than green.",
+  },
+  "cryptoReadiness.unavailable": { defaultMessage: "Crypto readiness unavailable", description: "AUD-65: canonical readiness query error heading." },
+  "cryptoReadiness.header.inventory": { defaultMessage: "Inventory", description: "AUD-65: CBOM inventory column." },
+  "cryptoReadiness.header.dependencies": { defaultMessage: "Observed dependencies and owners", description: "AUD-65: canonical topology column." },
+  "cryptoReadiness.header.recommendation": { defaultMessage: "Recommendation", description: "AUD-65: canonical recommendation column." },
+  "cryptoReadiness.header.action": { defaultMessage: "Owner action", description: "AUD-65: graph-bound campaign column." },
   "source.deployment.truth.d3tri00001": {
     defaultMessage: "Deployment truth",
     description: "D3: panel heading \u2014 issued/delivered/verified counted separately.",

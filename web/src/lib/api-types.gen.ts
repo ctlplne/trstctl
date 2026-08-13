@@ -1652,6 +1652,7 @@ export interface CodeSigningSignature {
 
 export interface ComplianceEvidencePack {
   adcs: ADCSComplianceEvidence;
+  crypto_readiness: CryptoReadiness;
   custody: CertificateCustodySummary;
   format: string;
   framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
@@ -1850,13 +1851,41 @@ export interface CryptoDependent {
 }
 
 export interface CryptoReadiness {
-  guidance: string;
+  coverage_guidance: string;
+  dataset_digest: string;
+  format: string;
   items: CryptoReadinessRow[];
+  tenant_id: string;
   unlocated: number;
   urgent: number;
 }
 
+export interface CryptoReadinessAction {
+  campaign_id: string;
+  deadline: string;
+  disposition: string;
+  evidence_digests: string[];
+  evidence_refs: string[];
+  name: string;
+  owner: string;
+  readiness_digest: string;
+  readiness_status: string;
+  stale: boolean;
+  status: string;
+  wave: string;
+}
+
+export interface CryptoReadinessExport {
+  csv: string;
+  dataset: CryptoReadiness;
+  dataset_digest: string;
+  ndjson: string;
+  public_jwks: Record<string, unknown>;
+  signed_export: string;
+}
+
 export interface CryptoReadinessRow {
+  actions: CryptoReadinessAction[];
   asset: GraphNode;
   dependents?: CryptoDependent[];
   exhibitors?: GraphNode[];
@@ -4563,6 +4592,7 @@ export interface PQCMigrationCampaignFinding {
   kind: string;
   location: string;
   protocol?: string;
+  readiness_digest?: string;
   remediation_method?: string;
 }
 

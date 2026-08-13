@@ -6378,6 +6378,9 @@
           "adcs": {
             "$ref": "#/components/schemas/ADCSComplianceEvidence"
           },
+          "crypto_readiness": {
+            "$ref": "#/components/schemas/CryptoReadiness"
+          },
           "custody": {
             "$ref": "#/components/schemas/CertificateCustodySummary"
           },
@@ -6418,7 +6421,8 @@
           "signed_export",
           "public_key_der",
           "custody",
-          "adcs"
+          "adcs",
+          "crypto_readiness"
         ],
         "type": "object"
       },
@@ -7240,7 +7244,13 @@
       },
       "CryptoReadiness": {
         "properties": {
-          "guidance": {
+          "coverage_guidance": {
+            "type": "string"
+          },
+          "dataset_digest": {
+            "type": "string"
+          },
+          "format": {
             "type": "string"
           },
           "items": {
@@ -7248,6 +7258,10 @@
               "$ref": "#/components/schemas/CryptoReadinessRow"
             },
             "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
           },
           "unlocated": {
             "type": "integer"
@@ -7257,15 +7271,119 @@
           }
         },
         "required": [
+          "format",
+          "tenant_id",
+          "dataset_digest",
           "items",
           "urgent",
           "unlocated",
-          "guidance"
+          "coverage_guidance"
+        ],
+        "type": "object"
+      },
+      "CryptoReadinessAction": {
+        "properties": {
+          "campaign_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string"
+          },
+          "evidence_digests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "readiness_digest": {
+            "type": "string"
+          },
+          "readiness_status": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "wave": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "campaign_id",
+          "name",
+          "owner",
+          "deadline",
+          "wave",
+          "status",
+          "readiness_status",
+          "disposition",
+          "evidence_refs",
+          "evidence_digests",
+          "readiness_digest",
+          "stale"
+        ],
+        "type": "object"
+      },
+      "CryptoReadinessExport": {
+        "properties": {
+          "csv": {
+            "type": "string"
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/CryptoReadiness"
+          },
+          "dataset_digest": {
+            "type": "string"
+          },
+          "ndjson": {
+            "type": "string"
+          },
+          "public_jwks": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "signed_export": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset",
+          "dataset_digest",
+          "csv",
+          "ndjson",
+          "signed_export",
+          "public_jwks"
         ],
         "type": "object"
       },
       "CryptoReadinessRow": {
         "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/CryptoReadinessAction"
+            },
+            "type": "array"
+          },
           "asset": {
             "$ref": "#/components/schemas/GraphNode"
           },
@@ -7305,7 +7423,8 @@
           "quantum_vulnerable",
           "out_of_policy",
           "unlocated",
-          "recommendation"
+          "recommendation",
+          "actions"
         ],
         "type": "object"
       },
@@ -17950,6 +18069,9 @@
             "type": "string"
           },
           "protocol": {
+            "type": "string"
+          },
+          "readiness_digest": {
             "type": "string"
           },
           "remediation_method": {
@@ -34025,6 +34147,121 @@
         ],
         "summary": "Sequence crypto assets for migration by observed dependency and exposure",
         "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/graph/crypto-readiness/actions": {
+      "post": {
+        "operationId": "startCryptoReadinessAction",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PQCMigrationCampaignStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PQCMigrationCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a tenant action bound to current crypto readiness topology and owner",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/graph/crypto-readiness/export": {
+      "get": {
+        "operationId": "exportCryptoReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CryptoReadinessExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export signed canonical crypto readiness as JSON, CSV, and NDJSON",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/graph/query": {

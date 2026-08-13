@@ -76,7 +76,7 @@ export function PQCCampaigns({ assets }: { assets: CBOMAsset[] }) {
     setOperationError(null);
     setNotice(null);
     try {
-      const campaign = await api.createPQCCampaign({
+      const campaign = await api.createCryptoReadinessAction({
         name: values.name,
         owner: values.owner,
         deadline: new Date(values.deadline).toISOString(),

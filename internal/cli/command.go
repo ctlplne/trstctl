@@ -369,6 +369,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"brand", "show"}, Method: "GET", Path: "/api/v1/brand", Summary: "Resolve the white-label brand for this host"},
 	{Name: []string{"usage", "evidence"}, Method: "GET", Path: "/api/v1/provider/usage-evidence", Query: []string{"period_start", "period_end", "customer_id", "format"}, Summary: "Pull this tenancy's usage as signed invoice evidence; format=csv exports the table with the verdict on every row"},
 	{Name: []string{"graph", "crypto-readiness"}, Method: "GET", Path: "/api/v1/graph/crypto-readiness", Summary: "Sequence crypto assets for migration by observed dependency, not severity alone"},
+	{Name: []string{"graph", "crypto-readiness", "actions", "create"}, Method: "POST", Path: "/api/v1/graph/crypto-readiness/actions", Body: bodyFile, Summary: "Create an event-sourced owner action bound to the current crypto-readiness topology"},
+	{Name: []string{"graph", "crypto-readiness", "export"}, Method: "GET", Path: "/api/v1/graph/crypto-readiness/export", Summary: "Export the canonical crypto-readiness dataset as signed JSON with exact CSV and NDJSON"},
 	{Name: []string{"graph", "trust-stores"}, Method: "GET", Path: "/api/v1/graph/trust-stores/{id}", Summary: "List the discovered trust stores that carry a CA's anchor, and the hosts they sit on"},
 	{Name: []string{"migrations", "assess"}, Method: "POST", Path: "/api/v1/migrations/assess", Summary: "Assess a migration plan read-only: what it would touch and what is unknown"},
 	{Name: []string{"migrations", "start"}, Method: "POST", Path: "/api/v1/migrations/runs", Body: bodyFile, Summary: "Start exact-agent trust distribution, then release successor leaves only after signed readback"},

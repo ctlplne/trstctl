@@ -1,0 +1,1 @@
+import{f as e,h as t,p as n,t as r}from"./utils-e1JlYeky.js";var i=t(n(),1),a=e(),o=(0,i.forwardRef)(function({className:e,...t},n){return(0,a.jsx)(`textarea`,{ref:n,className:r(`ui-input`,e),...t})});export{o as t};

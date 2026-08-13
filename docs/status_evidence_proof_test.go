@@ -26,11 +26,30 @@ type highRiskVerdictProof struct {
 	ConsoleTokens []string
 }
 
-// These are the three cross-surface claims that exposed AUD-57. Merely naming
+// These are the cross-surface claims that exposed AUD-57. Merely naming
 // their production writer is insufficient: each must retain an assembled
 // negative proof and an operator-visible console rendering. References are
 // declaration-checked below, so renaming or deleting a proof fails CI.
 var highRiskVerdictProofs = []highRiskVerdictProof{
+	{
+		Verdict: "CryptoReadinessAction.status",
+		NegativeTests: []negativeProofReference{
+			{
+				Test: "internal/server/aud65_test.go:TestAUD65ServedReadinessActionAndSignedExportShareProductionDataset",
+				RequiredTokens: []string{
+					"unobserved-owner",
+					"stale readiness action mutation",
+					"http.StatusConflict",
+				},
+			},
+		},
+		Console: "web/src/components/CryptoReadinessPanel.tsx:CryptoReadinessPanel",
+		ConsoleTokens: []string{
+			"action.status",
+			"action.disposition",
+			"action.stale",
+		},
+	},
 	{
 		Verdict: "OutboxReconciliationConflict.status",
 		NegativeTests: []negativeProofReference{

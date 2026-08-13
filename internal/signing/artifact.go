@@ -74,6 +74,7 @@ var auditEvidenceKinds = map[string]bool{
 	jose.ArtifactBillingInvoice:     true,
 	jose.ArtifactDoctorReceipt:      true,
 	jose.ArtifactPQCCampaignClosure: true,
+	jose.ArtifactCryptoReadiness:    true,
 	jose.ArtifactRestoreDrill:       true,
 }
 

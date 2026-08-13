@@ -19,6 +19,7 @@ import {
   type CBOMInventory,
   type CBOMMigrationProgress,
   type CBOMScan,
+  type CryptoReadiness,
   type CTMonitoring,
   type DiscoveryFinding,
   type DriftRemediation,
@@ -27,6 +28,7 @@ import {
   type DiscoveryRun,
   type DiscoverySource,
 } from "@/lib/api";
+import { useApiQuery } from "@/lib/query";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { PQCCampaigns } from "@/pages/posture/PQCCampaigns";
 
@@ -40,6 +42,7 @@ const emptyCBOMProgress: CBOMMigrationProgress = {
 
 export function Posture() {
   const { t } = useTranslation();
+  const cryptoReadiness = useApiQuery(["crypto-readiness"], api.cryptoReadiness);
   const [discoverySources, setDiscoverySources] = useState<DiscoverySource[]>([]);
   const [discoveryRuns, setDiscoveryRuns] = useState<DiscoveryRun[]>([]);
   const [discoveryFindings, setDiscoveryFindings] = useState<DiscoveryFinding[]>([]);
@@ -484,7 +487,12 @@ export function Posture() {
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.crypto.agility.means.the.system.can.see.we.6ff0a0d217")}</p>
           </div>
         </div>
-        <CBOMReadinessTable assets={cbomInventory.items} loading={cbomLoading} />
+        <CBOMReadinessTable
+          assets={cbomInventory.items}
+          loading={cbomLoading || cryptoReadiness.loading}
+          readiness={cryptoReadiness.data}
+          readinessError={cryptoReadiness.error}
+        />
         <PQCCampaigns assets={cbomInventory.items} />
         <PQCMigrationWorkflow assets={cbomInventory.items} />
       </section>
@@ -752,33 +760,88 @@ function safeFindingSummary(finding: DiscoveryFinding): string {
   return finding.provenance;
 }
 
-function CBOMReadinessTable({ assets, loading }: { assets: CBOMAsset[]; loading: boolean }) {
+function CBOMReadinessTable({
+  assets,
+  loading,
+  readiness,
+  readinessError,
+}: {
+  assets: CBOMAsset[];
+  loading: boolean;
+  readiness: CryptoReadiness | null;
+  readinessError: string | null;
+}) {
   if (loading) return <LoadingState>{translateNow("source.loading.cbom.readiness.0b111b06ca")}</LoadingState>;
   if (assets.length === 0) return <EmptyState title={translateNow("source.no.cbom.readiness.assets.returned.yet.e6abce03d0")} />;
+  const readinessByAsset = new Map((readiness?.items ?? []).map((row) => [row.asset.id.replace(/^crypto:/, ""), row]));
 
   return (
-    <PreviewTable
-      title={translateNow("source.crypto.agility.readiness.7bc9bc7019")}
-      headers={["Asset", "Inventory", "Readiness", "Migration target", "Evidence"]}
-    >
-      {assets.map((asset) => (
-        <tr key={asset.id} className="align-top">
-          <td className="font-medium">
-            <span className="block">{asset.location}</span>
-            <span className="text-xs text-muted-foreground">{asset.kind}</span>
-          </td>
-          <td>
-            {algorithmLabel(asset)}
-            {transportLabel(asset) !== "not reported" ? translateNow("source.value1.550e636eaf", { value1: transportLabel(asset) }) : ""}
-          </td>
-          <td>
-            <StatusBadge value={readinessValue(asset)} label={readinessLabel(asset)} tone={readinessTone(asset)} vocabulary="risk" />
-          </td>
-          <td>{asset.migration_target}</td>
-          <td>{asset.reasons?.length ? asset.reasons.join("; ") : asset.strength}</td>
-        </tr>
-      ))}
-    </PreviewTable>
+    <>
+      {readinessError ? <ErrorState title={translateNow("cryptoReadiness.unavailable")}>{readinessError}</ErrorState> : null}
+      <PreviewTable
+        title={translateNow("source.crypto.agility.readiness.7bc9bc7019")}
+        headers={[
+          translateNow("source.crypto.asset.m2seq00005"),
+          translateNow("cryptoReadiness.header.inventory"),
+          translateNow("cryptoReadiness.header.dependencies"),
+          translateNow("cryptoReadiness.header.recommendation"),
+          translateNow("cryptoReadiness.header.action"),
+        ]}
+      >
+        {assets.map((asset) => {
+          const row = readinessByAsset.get(asset.id);
+          return (
+            <tr key={asset.id} className="align-top">
+              <td className="font-medium">
+                <span className="block">{asset.location}</span>
+                <span className="text-xs text-muted-foreground">{asset.kind}</span>
+              </td>
+              <td>
+                {algorithmLabel(asset)}
+                {transportLabel(asset) !== "not reported" ? translateNow("source.value1.550e636eaf", { value1: transportLabel(asset) }) : ""}
+              </td>
+              <td>
+                {row ? (
+                  <div className="grid gap-1 text-xs">
+                    <span>
+                      {(row.dependents ?? []).length > 0
+                        ? (row.dependents ?? []).map((dependent, index) => (
+                            <span key={`${dependent.node.id}:${dependent.via.id}`}>
+                              {index > 0 ? ", " : ""}
+                              <span>{dependent.node.name}</span>{" "}
+                              <span>{translateNow("source.crypto.readiness.via.m2crp00001", { value1: dependent.via.name })}</span>
+                            </span>
+                          ))
+                        : translateNow("cryptoReadiness.noDependents")}
+                    </span>
+                    <span className="text-muted-foreground">{(row.owners ?? []).join(", ") || translateNow("cryptoReadiness.ownerUnknown")}</span>
+                  </div>
+                ) : (
+                  <span className="text-status-warning">{translateNow("cryptoReadiness.rowUnknown")}</span>
+                )}
+              </td>
+              <td>{row?.recommendation ?? translateNow("cryptoReadiness.recommendationUnknown")}</td>
+              <td>
+                {(row?.actions ?? []).length > 0 ? (
+                  <ul className="grid gap-1 text-xs">
+                    {(row?.actions ?? []).map((action) => (
+                      <li key={action.campaign_id}>
+                        <span className="font-medium">{action.name}</span> — {action.owner} / {action.disposition}
+                        {action.stale ? <span className="text-status-danger"> {translateNow("cryptoReadiness.stale")}</span> : null}
+                        {action.evidence_refs.length > 0 ? <span className="block text-muted-foreground">{action.evidence_refs.join(", ")}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-muted-foreground">{translateNow("cryptoReadiness.actions.none")}</span>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </PreviewTable>
+      <p className="text-xs text-muted-foreground">{readiness?.coverage_guidance ?? translateNow("cryptoReadiness.coverageUnknown")}</p>
+    </>
   );
 }
 
@@ -874,24 +937,6 @@ function AlgorithmRollup({ assets, loading }: { assets: CBOMAsset[]; loading: bo
       ))}
     </PreviewTable>
   );
-}
-
-function readinessValue(asset: CBOMAsset): string {
-  if (asset.out_of_policy) return "out_of_policy";
-  if (asset.quantum_vulnerable) return "quantum_vulnerable";
-  return "ready";
-}
-
-function readinessLabel(asset: CBOMAsset): string {
-  if (asset.out_of_policy) return "Out of policy";
-  if (asset.quantum_vulnerable) return "Quantum vulnerable";
-  return "Ready";
-}
-
-function readinessTone(asset: CBOMAsset) {
-  if (asset.out_of_policy) return "critical";
-  if (asset.quantum_vulnerable) return "warning";
-  return "success";
 }
 
 function runStatusLabel(value: string): string {

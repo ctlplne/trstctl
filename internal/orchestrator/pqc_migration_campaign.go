@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -35,6 +36,8 @@ type PQCMigrationCampaignStartRequest struct {
 	Wave              string    `json:"wave"`
 	ReadinessCriteria []string  `json:"readiness_criteria"`
 	FindingIDs        []string  `json:"finding_ids"`
+	readinessBindings map[string]string
+	requireBindings   bool
 }
 
 type PQCMigrationCampaignUpdateRequest struct {
@@ -59,6 +62,40 @@ type PQCMigrationFindingDispositionRequest struct {
 // Keeping the callback inside that lock prevents the signature from racing a
 // readiness, ownership, wave, or finding-disposition event.
 type PQCMigrationCampaignClosureBuilder func(store.PQCMigrationCampaign) (projections.PQCMigrationCampaignClosed, error)
+
+// StartCryptoReadinessAction creates the existing event-sourced campaign, but
+// only after binding every selected CBOM finding to its exact production graph
+// row and one owner actually attributed by that row.
+func (o *Orchestrator) StartCryptoReadinessAction(ctx context.Context, tenantID string, in PQCMigrationCampaignStartRequest) (store.PQCMigrationCampaign, error) {
+	dataset, err := cryptoreadiness.Build(ctx, o.store, tenantID)
+	if err != nil {
+		return store.PQCMigrationCampaign{}, err
+	}
+	rows := make(map[string]cryptoreadiness.Item, len(dataset.Items))
+	for _, item := range dataset.Items {
+		rows[strings.TrimPrefix(item.Asset.ID, "crypto:")] = item
+	}
+	owner := strings.TrimSpace(in.Owner)
+	bindings := make(map[string]string, len(in.FindingIDs))
+	for _, rawID := range in.FindingIDs {
+		findingID := strings.TrimSpace(rawID)
+		item, ok := rows[findingID]
+		if !ok {
+			return store.PQCMigrationCampaign{}, fmt.Errorf("CBOM finding %s has no current crypto readiness row", findingID)
+		}
+		if !containsString(item.Owners, owner) {
+			return store.PQCMigrationCampaign{}, fmt.Errorf("owner %q is not attributed to CBOM finding %s by current graph readiness", owner, findingID)
+		}
+		digest, err := cryptoreadiness.RowDigest(tenantID, item.CryptoReadinessRow)
+		if err != nil {
+			return store.PQCMigrationCampaign{}, err
+		}
+		bindings[findingID] = digest
+	}
+	in.readinessBindings = bindings
+	in.requireBindings = true
+	return o.StartPQCMigrationCampaign(ctx, tenantID, in)
+}
 
 func (o *Orchestrator) StartPQCMigrationCampaign(ctx context.Context, tenantID string, in PQCMigrationCampaignStartRequest) (store.PQCMigrationCampaign, error) {
 	payload, err := o.normalizePQCMigrationCampaign(ctx, tenantID, in)
@@ -87,6 +124,10 @@ func (o *Orchestrator) StartPQCMigrationCampaign(ctx context.Context, tenantID s
 
 func (o *Orchestrator) UpdatePQCMigrationCampaign(ctx context.Context, tenantID, campaignID string, in PQCMigrationCampaignUpdateRequest) (store.PQCMigrationCampaign, error) {
 	campaignID = strings.TrimSpace(campaignID)
+	owner := strings.TrimSpace(in.Owner)
+	if _, err := o.validatePQCMigrationCampaignTopology(ctx, tenantID, campaignID, owner); err != nil {
+		return store.PQCMigrationCampaign{}, err
+	}
 	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := o.store.LockPQCMigrationCampaignTx(ctx, tx, tenantID, campaignID); err != nil {
 			return err
@@ -113,6 +154,9 @@ func (o *Orchestrator) UpdatePQCMigrationCampaign(ctx context.Context, tenantID,
 func (o *Orchestrator) DispositionPQCMigrationFinding(ctx context.Context, tenantID, campaignID, findingID string, in PQCMigrationFindingDispositionRequest) (store.PQCMigrationCampaign, error) {
 	campaignID = strings.TrimSpace(campaignID)
 	findingID = strings.TrimSpace(findingID)
+	if _, err := o.validatePQCMigrationCampaignTopology(ctx, tenantID, campaignID, ""); err != nil {
+		return store.PQCMigrationCampaign{}, err
+	}
 	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := o.store.LockPQCMigrationCampaignTx(ctx, tx, tenantID, campaignID); err != nil {
 			return err
@@ -150,6 +194,9 @@ func (o *Orchestrator) ClosePQCMigrationCampaign(ctx context.Context, tenantID, 
 	campaignID = strings.TrimSpace(campaignID)
 	if build == nil {
 		return store.PQCMigrationCampaign{}, errors.New("PQC migration campaign closure builder is required")
+	}
+	if _, err := o.validatePQCMigrationCampaignTopology(ctx, tenantID, campaignID, ""); err != nil {
+		return store.PQCMigrationCampaign{}, err
 	}
 	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := o.store.LockPQCMigrationCampaignTx(ctx, tx, tenantID, campaignID); err != nil {
@@ -246,6 +293,10 @@ func (o *Orchestrator) normalizePQCMigrationCampaign(ctx context.Context, tenant
 			Algorithm: asset.Algorithm, KeyBits: asset.KeyBits, Protocol: asset.Protocol,
 			Cipher: asset.Cipher,
 		}
+		finding.ReadinessDigest = in.readinessBindings[findingID]
+		if in.requireBindings && finding.ReadinessDigest == "" {
+			return projections.PQCMigrationCampaignStarted{}, fmt.Errorf("CBOM finding %s lacks required crypto readiness binding", findingID)
+		}
 		digestInput, err := json.Marshal(finding)
 		if err != nil {
 			return projections.PQCMigrationCampaignStarted{}, err
@@ -257,6 +308,55 @@ func (o *Orchestrator) normalizePQCMigrationCampaign(ctx context.Context, tenant
 		ID: id, Name: name, OwnerRef: owner, Deadline: in.Deadline.UTC(),
 		Wave: wave, ReadinessCriteria: criteria, Findings: findings,
 	}, nil
+}
+
+// validatePQCMigrationCampaignTopology leaves legacy manual campaigns alone.
+// A graph-bound action, however, may mutate only while every row digest and its
+// attributed owner still match current production graph authority.
+func (o *Orchestrator) validatePQCMigrationCampaignTopology(ctx context.Context, tenantID, campaignID, requestedOwner string) (store.PQCMigrationCampaign, error) {
+	campaign, err := o.store.GetPQCMigrationCampaign(ctx, tenantID, campaignID)
+	if err != nil {
+		return store.PQCMigrationCampaign{}, err
+	}
+	bound := false
+	for _, finding := range campaign.Findings {
+		if finding.ReadinessDigest != "" {
+			bound = true
+			break
+		}
+	}
+	if !bound {
+		return campaign, nil
+	}
+	dataset, err := cryptoreadiness.Build(ctx, o.store, tenantID)
+	if err != nil {
+		return store.PQCMigrationCampaign{}, err
+	}
+	rows := make(map[string]cryptoreadiness.Item, len(dataset.Items))
+	for _, item := range dataset.Items {
+		rows[strings.TrimPrefix(item.Asset.ID, "crypto:")] = item
+	}
+	owner := campaign.OwnerRef
+	if requestedOwner != "" {
+		owner = requestedOwner
+	}
+	for _, finding := range campaign.Findings {
+		if finding.ReadinessDigest == "" {
+			continue
+		}
+		item, ok := rows[finding.FindingID]
+		if !ok {
+			return store.PQCMigrationCampaign{}, fmt.Errorf("%w: finding %s no longer has a readiness row", store.ErrPQCCampaignTopologyStale, finding.FindingID)
+		}
+		digest, err := cryptoreadiness.RowDigest(tenantID, item.CryptoReadinessRow)
+		if err != nil {
+			return store.PQCMigrationCampaign{}, err
+		}
+		if digest != finding.ReadinessDigest || !containsString(item.Owners, owner) {
+			return store.PQCMigrationCampaign{}, fmt.Errorf("%w: finding %s or owner %q changed", store.ErrPQCCampaignTopologyStale, finding.FindingID, owner)
+		}
+	}
+	return campaign, nil
 }
 
 func normalizePQCMigrationCampaignUpdate(campaign store.PQCMigrationCampaign, in PQCMigrationCampaignUpdateRequest) (projections.PQCMigrationCampaignUpdated, error) {

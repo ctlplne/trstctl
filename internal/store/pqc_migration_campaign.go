@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	ErrPQCCampaignClosed   = errors.New("pqc migration campaign is closed")
-	ErrPQCCampaignExists   = errors.New("pqc migration campaign already exists")
-	ErrPQCCampaignNotReady = errors.New("pqc migration campaign is not ready to close")
+	ErrPQCCampaignClosed        = errors.New("pqc migration campaign is closed")
+	ErrPQCCampaignExists        = errors.New("pqc migration campaign already exists")
+	ErrPQCCampaignNotReady      = errors.New("pqc migration campaign is not ready to close")
+	ErrPQCCampaignTopologyStale = errors.New("pqc migration campaign readiness topology is stale")
 )
 
 // PQCMigrationCampaign is the tenant-scoped read model projected from immutable
@@ -53,6 +54,7 @@ type PQCMigrationCampaignFinding struct {
 	CampaignID        string
 	FindingID         string
 	FindingDigest     string
+	ReadinessDigest   string
 	Kind              string
 	Location          string
 	Algorithm         string
@@ -67,6 +69,27 @@ type PQCMigrationCampaignFinding struct {
 	DispositionedAt   *time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+}
+
+// CryptoReadinessAction is the flattened event-projected campaign/finding
+// state joined into the canonical graph-readiness dataset. Only findings with
+// a non-empty readiness digest are returned; legacy manual campaigns are not
+// silently represented as graph-bound owner actions.
+type CryptoReadinessAction struct {
+	TenantID              string
+	CampaignID            string
+	Name                  string
+	OwnerRef              string
+	Deadline              time.Time
+	Wave                  string
+	ReadinessStatus       string
+	ReadinessEvidenceRefs []string
+	Status                string
+	FindingID             string
+	ReadinessDigest       string
+	Disposition           string
+	EvidenceRefs          []string
+	EvidenceDigests       []string
 }
 
 type PQCMigrationCampaignUpdate struct {
@@ -117,12 +140,12 @@ func (s *Store) ApplyPQCMigrationCampaignStartedTx(ctx context.Context, tx pgx.T
 	for _, finding := range findings {
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO pqc_migration_campaign_findings
-			        (tenant_id, campaign_id, finding_id, finding_digest, kind, location,
+			        (tenant_id, campaign_id, finding_id, finding_digest, readiness_digest, kind, location,
 			         algorithm, key_bits, protocol, cipher, disposition, created_at, updated_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $11)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12, $12)
 			 ON CONFLICT (tenant_id, campaign_id, finding_id) DO NOTHING`,
 			finding.TenantID, finding.CampaignID, finding.FindingID, finding.FindingDigest,
-			finding.Kind, finding.Location, finding.Algorithm, finding.KeyBits,
+			finding.ReadinessDigest, finding.Kind, finding.Location, finding.Algorithm, finding.KeyBits,
 			finding.Protocol, finding.Cipher, campaign.CreatedAt); err != nil {
 			return err
 		}
@@ -346,7 +369,7 @@ func scanPQCMigrationCampaign(row pgx.Row) (PQCMigrationCampaign, error) {
 
 func listPQCMigrationCampaignFindingsTx(ctx context.Context, tx pgx.Tx, tenantID, campaignID string) ([]PQCMigrationCampaignFinding, error) {
 	rows, err := tx.Query(ctx,
-		`SELECT tenant_id::text, campaign_id::text, finding_id::text, finding_digest,
+		`SELECT tenant_id::text, campaign_id::text, finding_id::text, finding_digest, COALESCE(readiness_digest, ''),
 		        kind, location, algorithm, key_bits, protocol, cipher, disposition,
 		        remediation_method, disposition_reason, evidence_refs, evidence_digests,
 		        dispositioned_at, created_at, updated_at
@@ -362,7 +385,7 @@ func listPQCMigrationCampaignFindingsTx(ctx context.Context, tx pgx.Tx, tenantID
 	for rows.Next() {
 		var finding PQCMigrationCampaignFinding
 		if err := rows.Scan(&finding.TenantID, &finding.CampaignID, &finding.FindingID,
-			&finding.FindingDigest, &finding.Kind, &finding.Location, &finding.Algorithm,
+			&finding.FindingDigest, &finding.ReadinessDigest, &finding.Kind, &finding.Location, &finding.Algorithm,
 			&finding.KeyBits, &finding.Protocol, &finding.Cipher, &finding.Disposition,
 			&finding.RemediationMethod, &finding.DispositionReason, &finding.EvidenceRefs,
 			&finding.EvidenceDigests, &finding.DispositionedAt, &finding.CreatedAt,
@@ -372,6 +395,42 @@ func listPQCMigrationCampaignFindingsTx(ctx context.Context, tx pgx.Tx, tenantID
 		out = append(out, finding)
 	}
 	return out, rows.Err()
+}
+
+// ListCryptoReadinessActions reads graph-bound campaign actions for one tenant.
+func (s *Store) ListCryptoReadinessActions(ctx context.Context, tenantID string) ([]CryptoReadinessAction, error) {
+	var out []CryptoReadinessAction
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT c.tenant_id::text, c.id::text, c.name, c.owner_ref, c.deadline, c.wave,
+			        c.readiness_status, c.readiness_evidence_refs, c.status,
+			        f.finding_id::text, COALESCE(f.readiness_digest, ''), f.disposition,
+			        f.evidence_refs, f.evidence_digests
+			   FROM pqc_migration_campaigns c
+			   JOIN pqc_migration_campaign_findings f
+			     ON f.tenant_id = c.tenant_id AND f.campaign_id = c.id
+			  WHERE c.tenant_id = $1
+			    AND f.tenant_id = $1
+			    AND f.readiness_digest IS NOT NULL
+			    AND f.readiness_digest <> ''
+			  ORDER BY f.finding_id, c.id`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var action CryptoReadinessAction
+			if err := rows.Scan(&action.TenantID, &action.CampaignID, &action.Name, &action.OwnerRef,
+				&action.Deadline, &action.Wave, &action.ReadinessStatus, &action.ReadinessEvidenceRefs,
+				&action.Status, &action.FindingID, &action.ReadinessDigest, &action.Disposition,
+				&action.EvidenceRefs, &action.EvidenceDigests); err != nil {
+				return err
+			}
+			out = append(out, action)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 func nonNilStrings(values []string) []string {

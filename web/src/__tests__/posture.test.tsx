@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     driftRemediation: vi.fn(),
     decideDriftRemediation: vi.fn(),
     listCBOMAssets: vi.fn(),
+    cryptoReadiness: vi.fn(),
     startCBOMScan: vi.fn(),
     editions: vi.fn(),
     planPQCMigration: vi.fn(),
@@ -317,6 +318,48 @@ describe("posture collector disclosures", () => {
         },
       ],
     });
+    apiMock.cryptoReadiness.mockReset().mockResolvedValue({
+      format: "trstctl.crypto-readiness.v1",
+      tenant_id: "tenant-1",
+      dataset_digest: "sha256:aud65",
+      urgent: 1,
+      unlocated: 0,
+      coverage_guidance: "Discovery-observed topology only.",
+      items: [
+        {
+          asset: { id: "crypto:11111111-1111-1111-1111-111111111111", kind: "crypto_asset", name: "RSA" },
+          exhibitors: [{ id: "res:legacy mesh edge", kind: "resource", name: "legacy mesh edge" }],
+          dependents: [
+            {
+              node: { id: "wl:checkout", kind: "workload", name: "checkout-service" },
+              via: { id: "res:legacy mesh edge", kind: "resource", name: "legacy mesh edge" },
+              edge: "CONNECTS_TO",
+            },
+          ],
+          owners: ["payments-team"],
+          quantum_vulnerable: true,
+          out_of_policy: true,
+          unlocated: false,
+          recommendation: "Coordinate this migration with payments-team.",
+          actions: [
+            {
+              campaign_id: "campaign-a",
+              name: "Payments crypto blocker",
+              owner: "payments-team",
+              deadline: "2026-09-13T13:15:00Z",
+              wave: "wave-1",
+              status: "open",
+              readiness_status: "pending",
+              disposition: "pending",
+              evidence_refs: ["change:CAB-2048"],
+              evidence_digests: [],
+              readiness_digest: "sha256:row-a",
+              stale: false,
+            },
+          ],
+        },
+      ],
+    });
     apiMock.startCBOMScan.mockReset();
     apiMock.editions.mockReset().mockResolvedValue({
       tier: "community",
@@ -342,6 +385,16 @@ describe("posture collector disclosures", () => {
     apiMock.startPQCMigration.mockReset();
     apiMock.getPQCMigrationProgress.mockReset();
     apiMock.rollbackPQCMigration.mockReset();
+  });
+
+  it("joins canonical graph readiness and owner actions into the CBOM inventory", async () => {
+    await renderPosture();
+
+    await waitFor(() => expect(apiMock.cryptoReadiness).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("checkout-service")).toBeInTheDocument();
+    expect(screen.getAllByText("payments-team").length).toBeGreaterThan(0);
+    expect(screen.getByText("Payments crypto blocker")).toBeInTheDocument();
+    expect(screen.getByText("Coordinate this migration with payments-team.")).toBeInTheDocument();
   });
 
   it("renders CT monitoring through Discovery findings", async () => {
@@ -426,10 +479,12 @@ describe("posture collector disclosures", () => {
     expect(screen.getByRole("heading", { name: "Crypto-agility readiness" })).toBeInTheDocument();
     const readiness = screen.getByRole("region", { name: "Crypto-agility readiness" });
     expect(
-      within(readiness).getByRole("row", { name: /legacy mesh edge tls_endpoint RSA-1024 \/ TLS 1\.0 \/ RC4 Out of policy ML-KEM hybrid/i }),
+      within(readiness).getByRole("row", {
+        name: /legacy mesh edge tls_endpoint RSA-1024 \/ TLS 1\.0 \/ RC4 checkout-service via legacy mesh edge payments-team/i,
+      }),
     ).toBeInTheDocument();
     expect(
-      within(readiness).getByRole("row", { name: /https:\/\/edge\.example\.com:443 tls_endpoint ECDSA-256 \/ TLS 1\.3 \/ AES-GCM Ready/i }),
+      within(readiness).getByRole("row", { name: /https:\/\/edge\.example\.com:443 tls_endpoint ECDSA-256 \/ TLS 1\.3 \/ AES-GCM Unknown/i }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/fixture/i)).not.toBeInTheDocument();

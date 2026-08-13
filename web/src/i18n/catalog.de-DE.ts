@@ -4755,6 +4755,20 @@ const deDECatalog = {
   "source.adcs.private.help.aud370022":
     "Durch Kommas oder Zeilenumbrüche getrennte RFC1918-/IPv6-ULA-Präfixe. Link-lokale, Metadaten-, Loopback-, Multicast- und CGNAT-Adressen bleiben gesperrt.",
   "source.adcs.private.placeholder.aud370023": "10.42.8.0/24",
+  "cryptoReadiness.export.changed":
+    "Die Bereitschaft hat sich während des Exports geändert. Die Tabelle wird aktualisiert; exportieren Sie erneut mit dem neuen Digest.",
+  "cryptoReadiness.noDependents": "Keine Abhängigen beobachtet",
+  "cryptoReadiness.ownerUnknown": "Verantwortliche Stelle unbekannt",
+  "cryptoReadiness.stale": "(veraltete Topologie)",
+  "cryptoReadiness.actions.none": "Keine Verantwortlichenaktion erfasst",
+  "cryptoReadiness.rowUnknown": "Unbekannt — keine kanonische Graphzeile beobachtet",
+  "cryptoReadiness.recommendationUnknown": "Unbekannt, bis die Erkennung dieses CBOM-Asset im Produktionsgraphen platziert.",
+  "cryptoReadiness.coverageUnknown": "Abdeckung unbekannt: Die Erkennung hat noch keinen kanonischen Bereitschaftsdatensatz erzeugt.",
+  "cryptoReadiness.unavailable": "Krypto-Bereitschaft nicht verfügbar",
+  "cryptoReadiness.header.inventory": "Inventar",
+  "cryptoReadiness.header.dependencies": "Beobachtete Abhängigkeiten und Verantwortliche",
+  "cryptoReadiness.header.recommendation": "Empfehlung",
+  "cryptoReadiness.header.action": "Verantwortlichenaktion",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

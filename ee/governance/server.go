@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/server"
@@ -66,17 +67,28 @@ func (s *evidenceService) ExportEvidencePack(ctx context.Context, tenantID strin
 	if err != nil {
 		return api.ComplianceEvidencePack{}, fmt.Errorf("governance: generate compliance report: %w", err)
 	}
+	// Production factories always provide a store. Unit seams that inject an
+	// already-built graph may omit it; Generate already supplied the same
+	// canonical actionless dataset for that case.
+	if s.store != nil {
+		readiness, err := cryptoreadiness.BuildFromGraph(ctx, s.store, tenantID, g)
+		if err != nil {
+			return api.ComplianceEvidencePack{}, fmt.Errorf("governance: join crypto readiness actions: %w", err)
+		}
+		report.CryptoReadiness = readiness
+	}
 	signed, err := reporter.Export(report)
 	if err != nil {
 		return api.ComplianceEvidencePack{}, fmt.Errorf("governance: sign compliance evidence: %w", err)
 	}
 	return api.ComplianceEvidencePack{
-		Format:       api.ComplianceEvidencePackFormat,
-		Framework:    string(framework),
-		SignedExport: json.RawMessage(append([]byte(nil), signed...)),
-		PublicKeyDER: append([]byte(nil), s.signer.Public().DER...),
-		Custody:      report.Custody,
-		ADCS:         report.ADCS,
+		Format:          api.ComplianceEvidencePackFormat,
+		Framework:       string(framework),
+		SignedExport:    json.RawMessage(append([]byte(nil), signed...)),
+		PublicKeyDER:    append([]byte(nil), s.signer.Public().DER...),
+		Custody:         report.Custody,
+		ADCS:            report.ADCS,
+		CryptoReadiness: report.CryptoReadiness,
 	}, nil
 }
 

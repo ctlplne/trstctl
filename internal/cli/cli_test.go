@@ -119,6 +119,37 @@ func TestDiscoverySegmentCreatePropagatesStructuredFailureAUD118(t *testing.T) {
 	}
 }
 
+func TestCryptoReadinessActionAndExportCommandsShareHeadlessSurfaceAUD65(t *testing.T) {
+	actionBody := `{"name":"Payments crypto blocker","owner":"payments-team","deadline":"2026-12-01T00:00:00Z","wave":"wave-1","readiness_criteria":["owner approved"],"finding_ids":["finding-1"]}`
+	var action capture
+	actionServer := mockServer(t, http.StatusCreated,
+		`{"id":"campaign-1","status":"open","findings":[{"finding_id":"finding-1","readiness_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`,
+		&action)
+	actionEnv := cli.Env{Server: actionServer.URL, Token: "risk-token", Tenant: "tenant-a", HTTPClient: actionServer.Client()}
+	code, stdout, stderr := run(t, []string{"graph", "crypto-readiness", "actions", "create", "-f", "-"}, actionEnv, actionBody)
+	if code != 0 || !strings.Contains(stdout, `"readiness_digest"`) {
+		t.Fatalf("action command = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if action.Method != http.MethodPost || action.Path != "/api/v1/graph/crypto-readiness/actions" ||
+		action.Header.Get("Idempotency-Key") == "" || !sameJSON(action.Body, []byte(actionBody)) {
+		t.Fatalf("action request = %s %s key=%q body=%s", action.Method, action.Path,
+			action.Header.Get("Idempotency-Key"), action.Body)
+	}
+
+	var exported capture
+	exportServer := mockServer(t, http.StatusOK,
+		`{"dataset_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","csv":"sequence,dataset_digest\\n","ndjson":"","signed_export":"header.payload.signature"}`,
+		&exported)
+	exportEnv := cli.Env{Server: exportServer.URL, Token: "audit-token", Tenant: "tenant-a", HTTPClient: exportServer.Client()}
+	code, stdout, stderr = run(t, []string{"graph", "crypto-readiness", "export"}, exportEnv, "")
+	if code != 0 || !strings.Contains(stdout, `"signed_export"`) {
+		t.Fatalf("export command = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if exported.Method != http.MethodGet || exported.Path != "/api/v1/graph/crypto-readiness/export" || exported.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("export request = %s %s key=%q", exported.Method, exported.Path, exported.Header.Get("Idempotency-Key"))
+	}
+}
+
 func sameJSON(left, right []byte) bool {
 	var l, r any
 	return json.Unmarshal(left, &l) == nil && json.Unmarshal(right, &r) == nil && reflect.DeepEqual(l, r)

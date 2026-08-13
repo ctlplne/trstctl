@@ -201,9 +201,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// to 379 and expose the same standing collector state as the API and console.
 	// The parity sweep also closes the already-served AD CS drift read, yielding
 	// 380. AUD-53 adds the served verification-key download and the server-free
-	// offline verifier, yielding 382.
-	if len(out) != 382 {
-		t.Fatalf("CLI commands = %d, want 382", len(out))
+	// offline verifier, yielding 382. AUD-65 adds graph-bound readiness action
+	// creation plus the signed canonical JSON/CSV/NDJSON export, yielding 384.
+	if len(out) != 384 {
+		t.Fatalf("CLI commands = %d, want 384", len(out))
 	}
 	return out
 }

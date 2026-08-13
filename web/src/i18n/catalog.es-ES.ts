@@ -4740,6 +4740,19 @@ const esESCatalog = {
   "source.adcs.private.help.aud370022":
     "Prefijos RFC1918/ULA de IPv6 separados por comas o saltos de línea. Las direcciones link-local, de metadatos, loopback, multicast y CGNAT permanecen bloqueadas.",
   "source.adcs.private.placeholder.aud370023": "10.42.8.0/24",
+  "cryptoReadiness.export.changed": "La preparación cambió durante la exportación. La tabla se está actualizando; vuelva a exportar desde el nuevo resumen.",
+  "cryptoReadiness.noDependents": "No se observaron dependientes",
+  "cryptoReadiness.ownerUnknown": "Responsable desconocido",
+  "cryptoReadiness.stale": "(topología obsoleta)",
+  "cryptoReadiness.actions.none": "No se registró ninguna acción del responsable",
+  "cryptoReadiness.rowUnknown": "Desconocido — no se observó una fila canónica del grafo",
+  "cryptoReadiness.recommendationUnknown": "Desconocido hasta que el descubrimiento ubique este activo CBOM en el grafo de producción.",
+  "cryptoReadiness.coverageUnknown": "Cobertura desconocida: el descubrimiento no ha producido un conjunto de preparación canónico.",
+  "cryptoReadiness.unavailable": "Preparación criptográfica no disponible",
+  "cryptoReadiness.header.inventory": "Inventario",
+  "cryptoReadiness.header.dependencies": "Dependencias y responsables observados",
+  "cryptoReadiness.header.recommendation": "Recomendación",
+  "cryptoReadiness.header.action": "Acción del responsable",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

@@ -1,0 +1,1 @@
+import{V as e}from"./index-Bmd3gTG2.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

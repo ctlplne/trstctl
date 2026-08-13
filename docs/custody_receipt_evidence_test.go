@@ -32,7 +32,7 @@ func TestCustodyReceiptAndEvidencePackStayEndToEndAUD25(t *testing.T) {
 			`"credential_kind"`, `"certificate"`, `"key_origin"`, `"key_storage"`, `"key_exportable"`, `"key_generated_by"`,
 		}},
 		{"../ee/governance/governance.go", []string{"Custody", "custodyPosture", "SummarizeCertificates"}},
-		{"../internal/api/compliance.go", []string{"trstctl.compliance.evidence-pack.v4", "custody.CertificateSummary"}},
+		{"../internal/api/compliance.go", []string{"trstctl.compliance.evidence-pack.v5", "custody.CertificateSummary"}},
 		{"../web/src/components/ComplianceEvidencePackPanel.tsx", []string{
 			"custody.unrecorded_certificates", "missing_fields", "policy.compliance.custodyGaps",
 		}},

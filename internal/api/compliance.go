@@ -10,18 +10,20 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/store"
 )
 
 // ComplianceEvidencePackFormat is the stable wire marker for signed compliance
-// evidence packs. Version 4 binds the signed manifest to a tenant and bounded
+// evidence packs. Version 5 binds the signed manifest to a tenant and bounded
 // evidence window, carries exact immutable event/object references plus
 // missing prerequisites, and includes certificate-custody counts plus explicit
-// incomplete rows and complete AD CS posture/drift evidence. The signed_export field is self-verifying;
+// incomplete rows, complete AD CS posture/drift evidence, and the canonical
+// crypto-readiness dataset/actions. The signed_export field is self-verifying;
 // public_key_der is the verifier material an auditor needs offline.
-const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v4"
+const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v5"
 
 // ComplianceFramework is the stable path/API value for a governance evidence pack.
 type ComplianceFramework string
@@ -123,6 +125,10 @@ type ComplianceEvidencePack struct {
 	// manifest is authoritative; this copy lets API/console clients render the
 	// exact relay findings without first decoding the signed envelope.
 	ADCS ADCSComplianceEvidence `json:"adcs"`
+	// CryptoReadiness is the convenience copy of the exact canonical dataset in
+	// the signed manifest. Its digest lets API, Posture, Risk, workflow, and an
+	// offline auditor prove they consumed the same ordered topology/actions.
+	CryptoReadiness cryptoreadiness.Dataset `json:"crypto_readiness"`
 }
 
 // ADCSAuditReference binds a rendered posture fact to its immutable tenant

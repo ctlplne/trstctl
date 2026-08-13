@@ -78,16 +78,17 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 Use `pci-dss`, `hipaa`, `soc2`, `nist-800-53`, `nist-csf-2.0`, `fedramp`,
 `cmmc-2.0`, `cnsa-2.0`, `fips-140`, `common-criteria`, `cabf-br`, `webtrust`,
 `etsi`, `eidas`, or `nis2` as the framework path value. The JSON response
-has six stable fields:
+has seven stable fields:
 
 | Field | Meaning |
 | --- | --- |
-| `format` | Wire marker: `trstctl.compliance.evidence-pack.v4`; v4 adds signed AD CS posture/drift evidence while retaining the v3 certificate-custody summary. |
+| `format` | Wire marker: `trstctl.compliance.evidence-pack.v5`; v5 adds canonical crypto-readiness workflow/export evidence while retaining v4 AD CS posture/drift and v3 certificate custody. |
 | `framework` | The normalized framework id used to build the report. |
 | `signed_export` | A signed envelope whose manifest binds `tenant_id`, `generated_at`, the inclusive `evidence_window`, per-control verdicts/windows, exact evidence references, missing prerequisites, CBOM crypto posture, and operator-attestation gaps. |
 | `public_key_der` | PKIX DER public key bytes for offline verification. |
 | `custody` | Convenience copy of the tenant certificate-custody summary. The authoritative copy is `signed_export.manifest.custody`; offline verification must verify that manifest before trusting any count or row. |
 | `adcs` | Convenience copy of the latest complete per-domain AD CS v2 observations and bounded semantic drift. The authoritative copy is `signed_export.manifest.adcs`; each row carries its immutable audit reference. |
+| `crypto_readiness` | Convenience copy of the canonical ordered graph-readiness dataset, bound actions, evidence references, recommendations, coverage wording, and `dataset_digest`. The authoritative copy is `signed_export.manifest.crypto_readiness`. |
 
 The v4 manifest is derived from tenant-scoped facts, not static product
 capability labels. An audit-event reference contains the immutable event ID,
@@ -119,7 +120,11 @@ changing a count, deleting a gap row, or changing a storage locus invalidates th
 export signature.
 
 The manifest also includes CBOM-derived post-quantum and quantum-vulnerable
-counts and separates what trstctl can prove from what your organization must
+counts. Its `crypto_readiness` member is built from the same graph rows and
+event-projected actions served to API, CBOM/Posture, Risk, and CSV/NDJSON export;
+matching `dataset_digest` values prove those consumers saw the same ordered facts.
+It carries the discovery coverage limitation, so zero observed dependents cannot be
+misread as safe. The report separates what trstctl can prove from what your organization must
 still attest:
 
 - `soc2` marks CC6 only with a current credential inventory, complete ownership,

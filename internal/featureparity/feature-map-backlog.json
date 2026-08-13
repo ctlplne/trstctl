@@ -12425,6 +12425,8 @@
                 "getSecret",
                 "graphBlastRadius",
                 "graphCryptoReadiness",
+				"startCryptoReadinessAction",
+				"exportCryptoReadiness",
                 "graphTrustStores",
                 "assessMigration",
                 "getCARetirementChecklist",
@@ -13851,6 +13853,8 @@
                 "graph reachable",
                 "graph blast-radius",
                 "graph crypto-readiness",
+                "graph crypto-readiness actions create",
+                "graph crypto-readiness export",
                 "graph query"
             ],
             "cli_na": "",
@@ -13880,6 +13884,9 @@
                         "CLI command: graph nodes",
                         "CLI command: graph reachable",
                         "CLI command: graph blast-radius",
+                        "CLI command: graph crypto-readiness",
+                        "CLI command: graph crypto-readiness actions create",
+                        "CLI command: graph crypto-readiness export",
                         "CLI command: graph query"
                     ],
                     "refs": [

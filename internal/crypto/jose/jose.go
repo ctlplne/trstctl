@@ -301,6 +301,7 @@ const (
 	ArtifactBillingInvoice     = "trstctl.audit-evidence/billing-invoice/v1"
 	ArtifactDoctorReceipt      = "trstctl.audit-evidence/doctor-receipt/v1"
 	ArtifactPQCCampaignClosure = "trstctl.audit-evidence/pqc-campaign-closure/v1"
+	ArtifactCryptoReadiness    = "trstctl.audit-evidence/crypto-readiness-export/v1"
 	ArtifactRestoreDrill       = "trstctl.audit-evidence/restore-drill/v1"
 )
 

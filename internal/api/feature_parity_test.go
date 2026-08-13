@@ -158,9 +158,12 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// validated local copy.
 	// AUD-49 adds exact signed endpoint-result readback, an authorized redacted
 	// support addendum, and the prove-fixed mutation. AUD-53 raises the ratchet to
-	// 370 with the public-only audit verification-key bootstrap.
-	if len(out) != 370 {
-		t.Fatalf("OpenAPI operationIds = %d, want 370", len(out))
+	// 370 with the public-only audit verification-key bootstrap. AUD-65 adds the
+	// graph-bound readiness action and signed multi-format export, raising it to
+	// 372; both map beside graphCryptoReadiness because they complete that same
+	// CBOM/graph workflow rather than creating a parallel product feature.
+	if len(out) != 372 {
+		t.Fatalf("OpenAPI operationIds = %d, want 372", len(out))
 	}
 	return out
 }

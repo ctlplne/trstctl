@@ -3,10 +3,16 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // graphResponse is the full credential graph for a tenant.
@@ -188,52 +194,108 @@ func nonNilNodes(ns []graph.Node) []graph.Node {
 	return ns
 }
 
-// cryptoReadinessResponse is the sequenced crypto migration order (M2).
-//
-// It reports CBOM findings — including each usage”'s quantum-vulnerability flag —
-// ordered by observed dependency. That is deliberately all it is: CBOM campaign
-// records and findings are core, while the licensed algorithm material the
-// PACKAGING-007 boundary reserves for ee/ is not implemented, named, or reachable
-// from here. Sequencing what the CBOM already found is bookkeeping over the trust
-// graph, not a licensed migration surface.
-type cryptoReadinessResponse struct {
-	Items []graph.CryptoReadinessRow `json:"items"`
-	// Urgent is how many rows are quantum-vulnerable or out of policy.
-	Urgent int `json:"urgent"`
-	// Unlocated is how many crypto usages the CBOM recorded with no location, so
-	// they have no place on the graph and no computable blast radius. Served as
-	// its own count because an unplaceable asset is unmeasured, not low-risk,
-	// and a total that quietly absorbed them would read as full coverage.
-	Unlocated int    `json:"unlocated"`
-	Guidance  string `json:"guidance"`
-}
-
-const cryptoReadinessGuidance = "Sequenced by exposure, not severity alone: two identically weak " +
-	"algorithms are ordered by how many parties actually depend on them, because severity says " +
-	"which crypto is worst while only dependency says which change is hard. Dependents are what " +
-	"DISCOVERY HAS OBSERVED — the graph is built from scans, so an asset with zero dependents reads " +
-	"identically to one on a resource nothing has scanned. No row is ever labelled safe to rotate; " +
-	"confirm coverage of an asset's exhibitors before treating a low count as a low-coordination " +
-	"change."
-
-// graphCryptoReadiness sequences crypto assets by dependency and exposure (M2).
+// graphCryptoReadiness serves the one dataset used by API, CBOM/Posture, Risk,
+// workflow, and offline evidence. It is built from tenant-scoped graph authority
+// plus event-projected actions; no handler owns a parallel interpretation.
 func (a *API) graphCryptoReadiness(w http.ResponseWriter, r *http.Request) {
-	g, tenantOK := a.buildGraph(w, r)
-	if !tenantOK {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	rows := g.CryptoReadiness()
-	out := cryptoReadinessResponse{Items: rows, Guidance: cryptoReadinessGuidance}
-	if out.Items == nil {
-		out.Items = []graph.CryptoReadinessRow{}
+	dataset, err := cryptoreadiness.Build(r.Context(), a.store, tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
 	}
-	for _, row := range rows {
-		if row.QuantumVulnerable || row.OutOfPolicy {
-			out.Urgent++
+	a.writeJSON(w, http.StatusOK, dataset)
+}
+
+// startCryptoReadinessAction creates a real event-sourced campaign action bound
+// to the exact graph row and attributed owner the operator is looking at.
+//
+//trstctl:mutation
+func (a *API) startCryptoReadinessAction(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.orch == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "crypto readiness actions are not configured")
 		}
-		if row.Unlocated {
-			out.Unlocated++
+		var req orchestrator.PQCMigrationCampaignStartRequest
+		if err := decodePQCCampaignRequest(r, &req); err != nil {
+			return 0, nil, err
 		}
+		campaign, err := a.orch.StartCryptoReadinessAction(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, mapPQCCampaignError(err)
+		}
+		return http.StatusCreated, toPQCCampaignResponse(campaign, true), nil
+	})
+}
+
+type cryptoReadinessExportPayload struct {
+	Format     string                  `json:"format"`
+	Dataset    cryptoreadiness.Dataset `json:"dataset"`
+	CSVHash    string                  `json:"csv_sha256"`
+	NDJSONHash string                  `json:"ndjson_sha256"`
+}
+
+type cryptoReadinessExportResponse struct {
+	Dataset       cryptoreadiness.Dataset `json:"dataset"`
+	DatasetDigest string                  `json:"dataset_digest"`
+	CSV           string                  `json:"csv"`
+	NDJSON        string                  `json:"ndjson"`
+	SignedExport  string                  `json:"signed_export"`
+	PublicJWKS    json.RawMessage         `json:"public_jwks"`
+}
+
+// exportCryptoReadiness signs hashes of the bounded CSV and NDJSON plus the
+// complete canonical dataset. An offline verifier can prove every format came
+// from the same tenant-bound rows without trusting this HTTP server.
+func (a *API) exportCryptoReadiness(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
 	}
-	a.writeJSON(w, http.StatusOK, out)
+	if a.pqcCampaignSigner == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "crypto readiness evidence signing is not configured"))
+		return
+	}
+	dataset, err := cryptoreadiness.Build(r.Context(), a.store, tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	csvBytes, err := cryptoreadiness.CSV(dataset)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	ndjsonBytes, err := cryptoreadiness.NDJSON(dataset)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	payload, err := json.Marshal(cryptoReadinessExportPayload{
+		Format: jose.ArtifactCryptoReadiness, Dataset: dataset,
+		CSVHash: "sha256:" + crypto.SHA256Hex(csvBytes), NDJSONHash: "sha256:" + crypto.SHA256Hex(ndjsonBytes),
+	})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	signed, err := a.pqcCampaignSigner.SignArtifact(jose.ArtifactCryptoReadiness, payload)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "sign crypto readiness evidence: "+err.Error()))
+		return
+	}
+	jwks, err := a.pqcCampaignSigner.PublicJWKS()
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "publish crypto readiness verifier: "+err.Error()))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, cryptoReadinessExportResponse{
+		Dataset: dataset, DatasetDigest: dataset.DatasetDigest, CSV: string(csvBytes),
+		NDJSON: string(ndjsonBytes), SignedExport: signed, PublicJWKS: json.RawMessage(jwks),
+	})
 }

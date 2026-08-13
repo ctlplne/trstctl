@@ -2356,6 +2356,7 @@ ComplianceEvidencePack = TypedDict(
     'ComplianceEvidencePack',
     {
         'adcs': dict[str, Any],
+        'crypto_readiness': dict[str, Any],
         'custody': dict[str, Any],
         'format': str,
         'framework': str,
@@ -2630,10 +2631,45 @@ CryptoDependent = TypedDict(
 CryptoReadiness = TypedDict(
     'CryptoReadiness',
     {
-        'guidance': str,
+        'coverage_guidance': str,
+        'dataset_digest': str,
+        'format': str,
         'items': list[dict[str, Any]],
+        'tenant_id': str,
         'unlocated': int,
         'urgent': int,
+    },
+    total=False,
+)
+
+CryptoReadinessAction = TypedDict(
+    'CryptoReadinessAction',
+    {
+        'campaign_id': str,
+        'deadline': str,
+        'disposition': str,
+        'evidence_digests': list[str],
+        'evidence_refs': list[str],
+        'name': str,
+        'owner': str,
+        'readiness_digest': str,
+        'readiness_status': str,
+        'stale': bool,
+        'status': str,
+        'wave': str,
+    },
+    total=False,
+)
+
+CryptoReadinessExport = TypedDict(
+    'CryptoReadinessExport',
+    {
+        'csv': str,
+        'dataset': dict[str, Any],
+        'dataset_digest': str,
+        'ndjson': str,
+        'public_jwks': dict[str, Any],
+        'signed_export': str,
     },
     total=False,
 )
@@ -2641,6 +2677,7 @@ CryptoReadiness = TypedDict(
 CryptoReadinessRow = TypedDict(
     'CryptoReadinessRow',
     {
+        'actions': list[dict[str, Any]],
         'asset': dict[str, Any],
         'dependents': list[dict[str, Any]],
         'exhibitors': list[dict[str, Any]],
@@ -6403,6 +6440,7 @@ PQCMigrationCampaignFinding = TypedDict(
         'kind': str,
         'location': str,
         'protocol': str,
+        'readiness_digest': str,
         'remediation_method': str,
     },
     total=False,
