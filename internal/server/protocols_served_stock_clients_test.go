@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -55,13 +56,18 @@ func TestServedACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 	servedWriteExecutable(t, authHook, servedCertbotAuthHookScript())
 	servedWriteExecutable(t, cleanupHook, servedCertbotCleanupHookScript())
 
+	const dnsWebhookToken = "certbot-aud73-webhook-token" // #nosec G101 -- fabricated test-only webhook credential (CWE-798)
+	dns := newServedDNSWebhookFixture(t, dnsWebhookToken)
 	validators := acmesrv.Validators{
 		DNS01: acmesrv.DNS01Validator{Resolver: servedCertbotDNSResolver{recordsPath: recordsPath}},
 	}
 	h := newServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		withSecretsEnabled(t, nil),
 		func(d *Deps) { d.ACMEValidators = &validators },
 	)
+	startServedOutboxPump(t, h.srv)
+	seedServedCertbotDNSPolicyAUD73(t, h, dns, domain, dnsWebhookToken)
 	if !protoContains(h.srv.ServedProtocols(), "acme") {
 		t.Fatal("ACME is not reported as served")
 	}
@@ -133,6 +139,7 @@ func TestServedACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 		"--no-random-sleep-on-renew",
 	}, commonArgs...), env, renewLogPath)
 	servedAssertCertbotIssuedDomain(t, certPath, domain)
+	servedAssertCertbotDNSProofAUD73(t, dns, recordsPath, hookLogPath, domain, 2)
 
 	leafDER := servedReadPEMCert(t, certPath)
 	if err := crypto.VerifyLeafSignedByCA(leafDER, caCertDER(t, h.caPEM)); err != nil {
@@ -154,6 +161,106 @@ func TestServedACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 
 	servedArchiveConformanceTranscripts(t, "served-acme-certbot", caFile, recordsPath,
 		hookLogPath, issueLogPath, renewLogPath, revokeLogPath, certPath, fullchainPath, renewalPath)
+}
+
+func seedServedCertbotDNSPolicyAUD73(t *testing.T, h *servedHarness, dns *servedDNSWebhookFixture, domain, bearerToken string) string {
+	t.Helper()
+	const zone = "served.test"
+	if domain != zone && !strings.HasSuffix(domain, "."+zone) {
+		t.Fatalf("Certbot domain %q is outside required test zone %q", domain, zone)
+	}
+	// The secret and provider policies belong to a live tenant epoch. API-token
+	// fixtures alone authenticate a caller but do not create that event-sourced
+	// lifecycle root, so assemble it before either production mutation.
+	registerServedTenant(t, h, "Certbot DNS policy tenant")
+	token := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token, map[string]any{
+		"name":  "dns/certbot-aud73/bearer-token",
+		"value": bearerToken,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create Certbot DNS webhook secret: status %d body %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", token, map[string]any{
+		"name":     "certbot-aud73-webhook",
+		"provider": "webhook",
+		"zone":     zone,
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated secret reference, never raw credential material (CWE-798)
+			"bearer_token_ref": "secret://dns/certbot-aud73/bearer-token",
+		},
+		"config": map[string]any{
+			"endpoint": dns.URL(),
+		},
+		"allowed_methods": []string{acmesrv.ChallengeDNS01},
+		"allow_wildcards": false,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create Certbot DNS-01 provider policy: status %d body %s", status, body)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode Certbot DNS-01 provider policy: %v body=%s", err, body)
+	}
+	if created.ID == "" {
+		t.Fatalf("Certbot DNS-01 provider policy returned no id: %s", body)
+	}
+	t.Cleanup(func() {
+		cleanupStatus, cleanupBody := secretsReq(t, h, http.MethodDelete,
+			"/api/v1/acme/dns-01/provider-configs/"+url.PathEscape(created.ID), token, nil)
+		if cleanupStatus != http.StatusNoContent {
+			t.Errorf("delete Certbot DNS-01 provider policy: status %d body %s", cleanupStatus, cleanupBody)
+		}
+	})
+	methods, constrained, err := h.srv.acmeDNS01.AllowedMethods(context.Background(), h.tenant, domain)
+	if err != nil {
+		t.Fatalf("read Certbot DNS-01 provider policy: %v", err)
+	}
+	if !constrained || len(methods) != 1 || methods[0] != acmesrv.ChallengeDNS01 {
+		t.Fatalf("Certbot DNS-01 provider policy = constrained %t methods %v, want dns-01 only", constrained, methods)
+	}
+	return created.ID
+}
+
+func servedAssertCertbotDNSProofAUD73(t *testing.T, dns *servedDNSWebhookFixture, recordsPath, hookLogPath, domain string, minimumAuthorizations int) {
+	t.Helper()
+	records, err := os.ReadFile(recordsPath) // #nosec G304 -- test reads its own tempdir fixture (CWE-22)
+	if err != nil {
+		t.Fatalf("read Certbot DNS records: %v", err)
+	}
+	hooks, err := os.ReadFile(hookLogPath) // #nosec G304 -- test reads its own tempdir fixture (CWE-22)
+	if err != nil {
+		t.Fatalf("read Certbot hook log: %v", err)
+	}
+	wantName := acmesrv.DNS01RecordName(domain)
+	var proofs [][2]string
+	for _, line := range strings.Split(strings.TrimSpace(string(records)), "\n") {
+		fields := strings.Split(line, "\t")
+		if len(fields) != 2 || fields[0] != wantName || fields[1] == "" {
+			t.Fatalf("invalid Certbot DNS record proof %q for %s", line, wantName)
+		}
+		proofs = append(proofs, [2]string{fields[0], fields[1]})
+	}
+	var authCount, cleanupCount int
+	for _, line := range strings.Split(strings.TrimSpace(string(hooks)), "\n") {
+		fields := strings.Fields(line)
+		switch {
+		case len(fields) == 3 && fields[0] == "auth" && fields[1] == wantName && fields[2] != "":
+			authCount++
+		case len(fields) == 2 && fields[0] == "cleanup" && fields[1] == wantName:
+			cleanupCount++
+		default:
+			t.Fatalf("invalid Certbot hook proof %q for %s", line, wantName)
+		}
+	}
+	if authCount < minimumAuthorizations || cleanupCount != authCount || len(proofs) != authCount {
+		t.Fatalf("Certbot DNS proof counts = records %d auth %d cleanup %d, want at least %d matched cycles",
+			len(proofs), authCount, cleanupCount, minimumAuthorizations)
+	}
+	for _, proof := range proofs {
+		dns.assertPresentedAndCleaned(t, proof[0], proof[1])
+	}
 }
 
 // TestServedESTLibestSimpleEnroll proves the required libest estclient job reaches
