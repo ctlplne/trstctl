@@ -30,7 +30,11 @@ func readinessGraph() *Graph {
 	g.AddNode(Node{ID: "cred:lb-tls", Kind: KindCredential, Name: "lb tls"})
 	g.AddEdge(Edge{From: "cred:lb-tls", To: "res:lb-edge", Type: EdgeDeployedTo})
 	g.AddNode(Node{ID: "wl:platform", Kind: KindWorkload, Name: "platform-team"})
-	g.AddEdge(Edge{From: "cred:lb-tls", To: "wl:platform", Type: EdgeOwns})
+	// Match production Build: owner workload → credential. AUD-64's
+	// store-backed acceptance separately proves CONNECTS_TO is built from an
+	// event-projected agent observation rather than only existing in this small
+	// traversal fixture.
+	g.AddEdge(Edge{From: "wl:platform", To: "cred:lb-tls", Type: EdgeOwns})
 
 	// A lab box exhibiting equally weak crypto and nothing depending on it.
 	g.AddNode(Node{ID: "res:lab-01", Kind: KindResource, Name: "lab-01"})

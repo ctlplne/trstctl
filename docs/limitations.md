@@ -388,8 +388,18 @@ never live in the API process. What you can do end to end against the running bi
   And a CBOM usage recorded with NO LOCATION has no place on the graph and no
   computable blast radius; it is counted separately as unplaceable rather than sorted
   to the bottom, because an asset that cannot be placed is unmeasured, not low-risk.
-  Scope: this sequences what the graph knows. It does not discover new dependencies,
-  and its ordering is only as complete as the discovery feeding it.
+  AUD-64 fixes the production source and direction of those claims. A host/network
+  reporter sends a metadata-only `service_dependency` finding through the tenant-bound
+  `agent.mtls.ReportInventory` channel. Source kind and finding kind must BOTH be
+  `service_dependency`; `workload`, `target`, and the target `ref` must be present and
+  agree; and the verified agent certificate stamps the observing host. The immutable
+  discovery event survives restart/rebuild. `graph.Build` joins the exact workload name
+  to that tenant's owner row and emits workload -> resource `CONNECTS_TO`; an unknown
+  owner or mismatched target fails the graph read rather than silently reporting zero.
+  Credential owner attribution separately follows the INCOMING production `OWNS` edge
+  (workload -> credential), so tests no longer reverse that relationship. Scope: this
+  sequences only dependencies an agent actually reports. It does not infer network traffic,
+  and its ordering is only as complete as the reporters feeding it.
   CORRECTION (D2/D3, B2, R1, F1, H2 — 2026-08-05): FIVE agent-claimable job kinds
   dead-lettered before any agent could claim them. The control-plane dispatcher is
   the sole handler for every outbox sweep, and its default branch returns a hard

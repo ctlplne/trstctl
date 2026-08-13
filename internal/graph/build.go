@@ -5,14 +5,22 @@ package graph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
+	"trstctl.com/trstctl/internal/dependencyobs"
 	"trstctl.com/trstctl/internal/store"
 )
 
 // pageSize bounds each keyset page when reading the paginated inventory tables.
 const pageSize = 500
+
+// serviceDependencyFindingKind is the metadata-only observation reported by a
+// host/network agent when one known workload relies on one resource. The
+// immutable discovery event is the authority; graph.Build only joins its exact
+// workload name to the tenant's owner model and its exact target to a resource.
+const serviceDependencyFindingKind = dependencyobs.Kind
 
 // Build constructs the credential graph for a tenant from its inventory. The
 // mapping (F21):
@@ -39,6 +47,7 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 	if err != nil {
 		return nil, err
 	}
+	ownerByName := make(map[string]string, len(owners))
 	for _, o := range owners {
 		g.AddNode(Node{
 			ID:    workloadID(o.ID),
@@ -46,6 +55,13 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 			Name:  o.Name,
 			Attrs: map[string]string{"owner_kind": string(o.Kind)},
 		})
+		if _, duplicate := ownerByName[o.Name]; duplicate {
+			// An empty ID is an ambiguity marker. Guessing which same-named
+			// owner a workload means would manufacture a dependency edge.
+			ownerByName[o.Name] = ""
+			continue
+		}
+		ownerByName[o.Name] = o.ID
 	}
 
 	issuers, err := st.ListIssuers(ctx, tenantID)
@@ -200,6 +216,13 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		return nil, err
 	}
 	for _, f := range findings {
+		dependency, err := addServiceDependencyFinding(g, f, ownerByName)
+		if err != nil {
+			return nil, fmt.Errorf("graph: service dependency finding %s: %w", f.ID, err)
+		}
+		if dependency {
+			continue
+		}
 		// H1: a trust-store anchor becomes a relationship rather than another
 		// flat credential row. Handled first so the generic path below does not
 		// also emit a duplicate node for it.
@@ -228,6 +251,35 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 	}
 
 	return g, nil
+}
+
+// addServiceDependencyFinding maps one event-projected agent observation to a
+// production CONNECTS_TO edge. It fails closed on an unmapped workload or an
+// ambiguous owner instead of silently reporting zero dependents. Both owners
+// and findings were read under the same forced tenant scope before this
+// function runs.
+func addServiceDependencyFinding(g *Graph, finding store.DiscoveryFinding, ownerByName map[string]string) (bool, error) {
+	if finding.Kind != serviceDependencyFindingKind {
+		return false, nil
+	}
+	metadata, err := dependencyobs.ParseJSON(finding.Metadata, finding.Ref)
+	if err != nil {
+		return true, err
+	}
+	ownerID, ok := ownerByName[metadata.Workload]
+	if !ok {
+		return true, fmt.Errorf("workload %q has no exact tenant owner mapping", metadata.Workload)
+	}
+	if ownerID == "" {
+		return true, fmt.Errorf("workload %q has an ambiguous tenant owner mapping", metadata.Workload)
+	}
+	ensureResource(g, metadata.Target)
+	g.AddEdge(Edge{
+		From: workloadID(ownerID),
+		To:   resourceID(metadata.Target),
+		Type: EdgeConnectsTo,
+	})
+	return true, nil
 }
 
 // certificateNode is the one certificate-to-graph mapping. Governance exports

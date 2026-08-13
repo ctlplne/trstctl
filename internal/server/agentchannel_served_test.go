@@ -33,6 +33,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jks"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/sshinv"
 	"trstctl.com/trstctl/internal/store"
@@ -737,6 +739,125 @@ func TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph(t *testing.T)
 		if !h.hasEvent(t, eventType) {
 			t.Fatalf("missing %s event; agent inventory ingest is not event-sourced", eventType)
 		}
+	}
+}
+
+// TestAUD64ServedAgentDependencyFeedsCryptoReadiness closes the fixture gap:
+// CONNECTS_TO must arrive through the real tenant-bound agent RPC and immutable
+// discovery events, not by calling Graph.AddEdge in a unit test.
+func TestAUD64ServedAgentDependencyFeedsCryptoReadiness(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	ctx := context.Background()
+	projector := projections.New(h.store)
+	base := time.Date(2026, time.August, 13, 12, 40, 0, 0, time.UTC)
+	apply := func(sequence uint64, eventType string, payload any) {
+		t.Helper()
+		data, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := projector.Apply(ctx, events.Event{
+			ID: fmt.Sprintf("66400000-0000-4000-8000-%012d", sequence), Type: eventType,
+			TenantID: h.tenant, Sequence: sequence, Time: base.Add(time.Duration(sequence) * time.Second), Data: data,
+		}); err != nil {
+			t.Fatalf("apply %s: %v", eventType, err)
+		}
+	}
+	const (
+		paymentsOwner = "66400000-0000-4000-8000-000000000001"
+		checkoutOwner = "66400000-0000-4000-8000-000000000002"
+		identityID    = "66400000-0000-4000-8000-000000000003"
+		targetID      = "66400000-0000-4000-8000-000000000004"
+		assetID       = "66400000-0000-4000-8000-000000000005"
+	)
+	apply(1, projections.EventOwnerCreated, projections.OwnerCreated{ID: paymentsOwner, Kind: "service", Name: "payments-team"})
+	apply(2, projections.EventOwnerCreated, projections.OwnerCreated{ID: checkoutOwner, Kind: "service", Name: "checkout-service"})
+	apply(3, projections.EventDeploymentTargetUpserted, projections.DeploymentTargetUpserted{
+		ID: targetID, Name: "lb-edge", Connector: "f5", Config: json.RawMessage(`{"address_ref":"lb-edge"}`),
+	})
+	apply(4, projections.EventIdentityCreated, projections.IdentityCreated{
+		ID: identityID, Kind: "x509_certificate", Name: "lb-tls", OwnerID: paymentsOwner,
+		Attributes: json.RawMessage(`{"deployment_target":"lb-edge"}`),
+	})
+	apply(5, projections.EventCBOMAssetObserved, projections.CBOMAssetObserved{
+		ID: assetID, Kind: "public-key", Location: "lb-edge", Algorithm: "RSA", KeyBits: 1024,
+		Strength: "weak", QuantumVulnerable: true, OutOfPolicy: true,
+	})
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channelCtx, cancelChannel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); h.srv.serveAgentChannel(channelCtx, ln) }()
+	t.Cleanup(func() { cancelChannel(); <-done })
+	a := enrollAgent(t, h, "aud64-relay", "agent.trstctl.local")
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	report, err := client.ReportInventory(callCtx, &transport.InventoryRequest{
+		SourceKind: agentServiceDependencyFindingKind,
+		Findings: []transport.InventoryFinding{{
+			Kind: agentServiceDependencyFindingKind, Ref: "lb-edge", Provenance: "relay:aud64-relay:lb-edge",
+			Metadata: map[string]string{"workload": "checkout-service", "target": "lb-edge", "protocol": "https"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("report service dependency over mTLS: %v", err)
+	}
+	if report.TenantID != h.tenant || report.Recorded != 1 || report.Rejected != 0 || report.RunID == "" {
+		t.Fatalf("dependency report = %+v", report)
+	}
+	findings, err := h.store.ListDiscoveryFindingsPage(ctx, h.tenant, report.RunID, store.ZeroUUID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("persisted dependency findings = %d, want 1", len(findings))
+	}
+	var persistedMetadata map[string]string
+	if err := json.Unmarshal(findings[0].Metadata, &persistedMetadata); err != nil {
+		t.Fatal(err)
+	}
+	if persistedMetadata["host"] != "aud64-relay" {
+		t.Fatalf("persisted observing host = %q, want verified mTLS peer aud64-relay", persistedMetadata["host"])
+	}
+
+	tok := seedScopedToken(t, h.store, h.tenant, "graph:read")
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/graph/crypto-readiness", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("served readiness = %d body=%s", status, body)
+	}
+	var response struct {
+		Items []graph.CryptoReadinessRow `json:"items"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Items) != 1 {
+		t.Fatalf("readiness rows = %d body=%s", len(response.Items), body)
+	}
+	row := response.Items[0]
+	dependents := map[string]bool{}
+	for _, dependent := range row.Dependents {
+		dependents[dependent.Node.ID] = true
+	}
+	if !dependents["id:"+identityID] || !dependents["wl:"+checkoutOwner] {
+		t.Fatalf("served dependents = %v, want owned credential and observed checkout workload", dependents)
+	}
+	owners := strings.Join(row.Owners, ",")
+	if !strings.Contains(owners, "payments-team") || !strings.Contains(owners, "checkout-service") {
+		t.Fatalf("served owners = %v", row.Owners)
 	}
 }
 

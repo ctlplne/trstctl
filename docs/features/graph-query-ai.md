@@ -34,6 +34,16 @@ database layer, so a traversal can never escape the tenant boundary. On top: `Re
 (breadth-first reach), `BlastRadius` (compromise impact by kind), and a minimal
 Cypher-style `Query`.
 
+`CONNECTS_TO` is not guessed from a test fixture. A host/network agent reports an exact
+metadata-only `service_dependency` observation over its mTLS inventory channel. The
+event-projected row binds the observing agent, an owner-model workload name, and one
+target resource; `graph.Build` emits the edge only when that workload maps exactly inside
+the same tenant. Credential owners are recovered by walking the incoming canonical
+`workload → credential` `OWNS` edge. An unmapped workload or mismatched target makes the
+graph unavailable instead of turning missing topology into a reassuring zero. This is
+observed dependency truth, not passive traffic inference: unreported connections remain
+unknown.
+
 **Served** — `GET /api/v1/graph`, `/graph/reachable/{id}`, `/graph/blast-radius/{id}`,
 `POST /api/v1/graph/query`, plus the `graph` CLI group.
 

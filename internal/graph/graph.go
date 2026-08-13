@@ -37,7 +37,7 @@ const (
 	EdgeOwns         EdgeType = "OWNS"          // workload → credential it holds/uses
 	EdgeDeployedTo   EdgeType = "DEPLOYED_TO"   // credential → resource it is installed on
 	EdgeGrantsAccess EdgeType = "GRANTS_ACCESS" // credential → resource it can authenticate to
-	EdgeConnectsTo   EdgeType = "CONNECTS_TO"   // workload/resource → workload it talks to
+	EdgeConnectsTo   EdgeType = "CONNECTS_TO"   // workload/resource → resource/workload it talks to
 	EdgeExhibits     EdgeType = "EXHIBITS"      // resource → crypto asset it exhibits (CBOM, F52)
 	// EdgeTrusts is trust-store → issuer whose anchor it contains (epic H1).
 	//
@@ -82,6 +82,7 @@ type Edge struct {
 type Graph struct {
 	nodes map[string]Node
 	out   map[string][]Edge // adjacency by source node ID
+	in    map[string][]Edge // reverse adjacency by destination node ID
 	edges []Edge            // insertion-deduplicated edge list
 	seen  map[string]bool   // dedup key "From|Type|To"
 }
@@ -91,6 +92,7 @@ func New() *Graph {
 	return &Graph{
 		nodes: map[string]Node{},
 		out:   map[string][]Edge{},
+		in:    map[string][]Edge{},
 		seen:  map[string]bool{},
 	}
 }
@@ -108,6 +110,7 @@ func (g *Graph) AddEdge(e Edge) {
 	g.seen[key] = true
 	g.edges = append(g.edges, e)
 	g.out[e.From] = append(g.out[e.From], e)
+	g.in[e.To] = append(g.in[e.To], e)
 }
 
 // Node returns the node with the given ID.
@@ -166,6 +169,27 @@ func (g *Graph) Neighbors(id string, types ...EdgeType) []Node {
 		}
 		if n, ok := g.nodes[e.To]; ok {
 			seen[e.To] = true
+			out = append(out, n)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// IncomingNeighbors returns the direct predecessors of a node, optionally
+// restricted to edge types. Production OWNS points workload → credential, so
+// asking who owns a credential is an incoming-edge question. Keeping the
+// reverse index beside the forward adjacency prevents consumers from reversing
+// production edges in fixtures just to make attribution appear to work.
+func (g *Graph) IncomingNeighbors(id string, types ...EdgeType) []Node {
+	var out []Node
+	seen := map[string]bool{}
+	for _, e := range g.in[id] {
+		if !allows(types, e.Type) || seen[e.From] {
+			continue
+		}
+		if n, ok := g.nodes[e.From]; ok {
+			seen[e.From] = true
 			out = append(out, n)
 		}
 	}

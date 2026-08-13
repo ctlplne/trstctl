@@ -56,6 +56,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/dependencyobs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/plugincensus"
@@ -93,6 +94,12 @@ const agentMaxInventoryFindings = 1000
 // kind correctly but left each finding as x509_certificate, so the receiver keeps
 // a narrow compatibility translation for that one historical shape.
 const agentTrustStoreFindingKind = "trust-store"
+
+// agentServiceDependencyFindingKind is a metadata-only network observation:
+// one exact owner-model workload relies on one exact resource. It travels over
+// the already tenant-bound agent mTLS channel and becomes an immutable
+// discovery.finding.recorded event before graph.Build consumes it.
+const agentServiceDependencyFindingKind = dependencyobs.Kind
 
 type agentChannelService interface {
 	transport.AgentServiceServer
@@ -797,10 +804,11 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 	if len(req.Findings) > agentMaxInventoryFindings {
 		return nil, status.Errorf(codes.InvalidArgument, "inventory report has %d findings; maximum is %d", len(req.Findings), agentMaxInventoryFindings)
 	}
+	sourceKind := strings.TrimSpace(req.SourceKind)
 	findings := make([]store.DiscoveryFinding, 0, len(req.Findings))
 	for _, f := range req.Findings {
-		kind := f.Kind
-		if req.SourceKind == agentTrustStoreFindingKind {
+		kind := strings.TrimSpace(f.Kind)
+		if sourceKind == agentTrustStoreFindingKind {
 			switch kind {
 			case agentTrustStoreFindingKind:
 				// Current agents already send the canonical kind.
@@ -815,11 +823,14 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 		} else if kind == agentTrustStoreFindingKind {
 			return nil, status.Errorf(codes.InvalidArgument, "trust-store inventory finding %q requires source kind %q", f.Ref, agentTrustStoreFindingKind)
 		}
+		if err := validateAgentServiceDependencyFinding(sourceKind, f); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "service dependency inventory finding %q: %v", f.Ref, err)
+		}
 		findingMetadata := f.Metadata
-		if kind == agentTrustStoreFindingKind {
+		if kind == agentTrustStoreFindingKind || kind == agentServiceDependencyFindingKind {
 			// The peer certificate, not client-provided metadata or a certificate
-			// path, names the machine for H1 host counts. Clone before stamping so
-			// request objects remain immutable to interceptors and tests.
+			// path, names the observing machine. Clone before stamping so request
+			// objects remain immutable to interceptors and tests.
 			findingMetadata = make(map[string]string, len(f.Metadata)+1)
 			for key, value := range f.Metadata {
 				findingMetadata[key] = value
@@ -842,11 +853,24 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 			RiskScore: risk, Metadata: meta,
 		})
 	}
-	run, recorded, rejected, err := a.orch.RecordAgentInventory(ctx, info.TenantID, info.CommonName, req.SourceKind, findings)
+	run, recorded, rejected, err := a.orch.RecordAgentInventory(ctx, info.TenantID, info.CommonName, sourceKind, findings)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "record agent inventory: %v", err)
 	}
 	return &transport.InventoryResponse{TenantID: info.TenantID, RunID: run.ID, Recorded: recorded, Rejected: rejected}, nil
+}
+
+func validateAgentServiceDependencyFinding(sourceKind string, finding transport.InventoryFinding) error {
+	sourceIsDependency := strings.TrimSpace(sourceKind) == agentServiceDependencyFindingKind
+	kindIsDependency := strings.TrimSpace(finding.Kind) == agentServiceDependencyFindingKind
+	if sourceIsDependency != kindIsDependency {
+		return fmt.Errorf("source kind and finding kind must both be %q", agentServiceDependencyFindingKind)
+	}
+	if !sourceIsDependency {
+		return nil
+	}
+	_, err := dependencyobs.ParseMap(finding.Metadata, finding.Ref)
+	return err
 }
 
 func metadataJSON(meta map[string]string) (json.RawMessage, error) {

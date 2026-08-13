@@ -156,7 +156,11 @@ func cryptoOwners(g *Graph, deps []CryptoDependent) []string {
 			}
 			continue
 		}
-		for _, owner := range g.Neighbors(d.Node.ID, EdgeOwns) {
+		// Production Build emits OWNS as workload → credential. Attribution
+		// therefore walks the credential's incoming OWNS edges; using Neighbors
+		// here made the old unit fixture reverse the relationship and hid that the
+		// served graph could never recover an actual credential owner.
+		for _, owner := range g.IncomingNeighbors(d.Node.ID, EdgeOwns) {
 			if owner.Kind == KindWorkload && !seen[owner.Name] && owner.Name != "" {
 				seen[owner.Name] = true
 				out = append(out, owner.Name)
