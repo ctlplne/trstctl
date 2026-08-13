@@ -1753,6 +1753,10 @@ jobs:
           docker compose -f deploy/demo/docker-compose.yml logs --no-color --tail=200
           exit 1
 
+      - name: Prove the demo seed converges on preserved volumes
+        working-directory: .
+        run: scripts/ci/demo-seed-convergence.sh
+
       - name: Shell smoke
         run: npm run e2e -- e2e/shell.spec.ts
 

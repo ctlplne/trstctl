@@ -88,7 +88,7 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":                "http://127.0.0.1:4566",
 		"TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK": "true",
 		"TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE":  "/demo-managed-keys/aws-secret-access-key",
-		"TRSTCTL_LIFECYCLE_RENEW_BEFORE":                   "168h",
+		"TRSTCTL_LIFECYCLE_RENEW_BEFORE":                   "5m",
 		"TRSTCTL_PROTOCOLS_ACME_TENANT_ID":                 "11111111-1111-4111-8111-111111111111",
 		"TRSTCTL_PROTOCOLS_EST_TENANT_ID":                  "11111111-1111-4111-8111-111111111111",
 	} {
@@ -805,12 +805,10 @@ func TestDemoSeedUsesOnlyEventSourcedSingleSecretWrites(t *testing.T) {
 		t.Fatal("demo seed invokes the intentionally unavailable non-event-sourced bulk import route")
 	}
 	for _, want := range []string{
-		`name: "demo/stripe/api-key"`,
-		`name: "demo/github/actions/deploy-token"`,
-		`name: "demo/aws/iam/rotator"`,
-		`stableKey("secret-demo-stripe-api-key")`,
-		`stableKey("secret-demo-github-actions-deploy-token")`,
-		`stableKey("secret-demo-aws-iam-rotator")`,
+		`ensureSecret("demo/stripe/api-key", "demo-stripe-api-key", 1, secretItems)`,
+		`ensureSecret("demo/github/actions/deploy-token", "demo-github-actions-deploy-token", 1, secretItems)`,
+		`ensureSecret("demo/aws/iam/rotator", "demo-aws-iam-rotator", 1, secretItems)`,
+		"stableKey(`secret-${valueLabel}`)",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("demo seed missing event-sourced single-secret write %q", want)
@@ -869,7 +867,7 @@ func validateAUD68ProofSource(body string) error {
 		{label: "project-unique control image", needle: `export TRSTCTL_DEMO_CONTROL_IMAGE="${proof_control_image}"`},
 		{label: "project-unique seed image", needle: `export TRSTCTL_DEMO_SEED_IMAGE="${proof_seed_image}"`},
 		{label: "complete service-name collision census", needle: "readonly -a proof_services=(\n  postgres nats localstack oidc-keys managedkeys-config signer trstctl demo-oidc\n  oidc-loopback localstack-loopback localstack-signer-loopback demo-seed\n)"},
-		{label: "complete volume-name collision census", needle: "readonly -a proof_volumes=(\n  pgdata natsdata localstack signersock signerkeys secrets trstctldata demoidp managedkeys\n)"},
+		{label: "complete volume-name collision census", needle: "readonly -a proof_volumes=(\n  pgdata natsdata localstack signersock signerkeys seedstate secrets trstctldata demoidp managedkeys\n)"},
 		{label: "exact container collision", needle: `assert_named_object_absent container "${proof_project}-${service_name}-1"`},
 		{label: "exact volume collision", needle: `assert_named_object_absent volume "${proof_project}_${volume_name}"`},
 		{label: "exact network collision", needle: `assert_named_object_absent network "${proof_project}_default"`},
@@ -1131,6 +1129,8 @@ func validateDemoSeedCustody(cf composeFile) error {
 		"--auth-secret=/data/secrets/sign-auth.bin",
 		"--legacy-audit-key=/data/audit/signing-key.pem",
 		"--license=/etc/trstctl/demo-provider-license.json",
+		"--license-deployment-id=trstctl-local-demo",
+		"--license-environment=non_production",
 		"--managed-keys-config=/demo-managed-keys/provider.json",
 	}
 	if !slices.Equal(signer.Command, wantSignerCommand) {
@@ -1163,6 +1163,7 @@ func validateDemoSeedCustody(cf composeFile) error {
 		"secrets:/data/secrets:ro",
 		"trstctldata:/data:ro",
 		"trstctldata:/trstctl-data:ro",
+		"seedstate:/seed-state",
 	}
 	if !sameStringSet(seed.Volumes, wantSeedVolumes) {
 		return fmt.Errorf("demo custody: demo-seed volumes=%v, want exact custody mount allowlist %v (no signerkeys or aliases)", seed.Volumes, wantSeedVolumes)

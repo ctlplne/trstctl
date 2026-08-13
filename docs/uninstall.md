@@ -24,6 +24,10 @@ docker compose -f deploy/demo/docker-compose.yml down            # stop, keep de
 docker compose -f deploy/demo/docker-compose.yml down --volumes  # reset demo seed data
 ```
 
+Keeping the volumes also keeps the seed-version checkpoint and the mode-0600
+bootstrap bearer used only by the seed job. Removing the volumes deletes both;
+the next demo start creates a fresh bearer and rebuilds the seed from events.
+
 For a standalone container, stop and remove it, then drop the image:
 
 ```bash

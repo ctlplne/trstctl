@@ -106,6 +106,8 @@ services:
       - "--auth-secret=/data/secrets/sign-auth.bin"
       - "--legacy-audit-key=/data/audit/signing-key.pem"
       - "--license=/etc/trstctl/demo-provider-license.json"
+      - "--license-deployment-id=trstctl-local-demo"
+      - "--license-environment=non_production"
       - "--managed-keys-config=/demo-managed-keys/provider.json"
     volumes:
       - signersock:/run/trstctl
@@ -192,10 +194,16 @@ services:
       # volume; it is never placed inline in Compose or rendered by the UI.
       TRSTCTL_SECRETS_AUTH_SECRET_FILE: /data/secrets/machine-auth.bin
       TRSTCTL_LICENSE_FILE: /etc/trstctl/demo-provider-license.json
-      # Demo-issued leaf certificates live for 30 days. Keep automatic renewal
-      # below that lifetime so the 30-day worklist stays stable for the human
-      # "find expiring, renew one" job instead of renewing every minute.
-      TRSTCTL_LIFECYCLE_RENEW_BEFORE: "168h"
+      # The demo is explicitly one licensed non-production deployment. Binding
+      # the runtime identity to the baked v2 entitlement prevents copying the
+      # click-through license to an unrelated control plane.
+      TRSTCTL_LICENSE_DEPLOYMENT_ID: trstctl-local-demo
+      TRSTCTL_LICENSE_ENVIRONMENT: non_production
+      # The shortest seeded profile lives for one hour. A 5-minute renewal
+      # window keeps that exact issued/deployed demo lifecycle stable while the
+      # walkthrough runs; the old 168-hour window renewed 1h/7d rows as soon as
+      # they were seeded and made preserved-volume convergence impossible.
+      TRSTCTL_LIFECYCLE_RENEW_BEFORE: "5m"
       TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
       TRSTCTL_AUTH_OIDC_ENABLED: "true"
       TRSTCTL_AUTH_OIDC_ISSUER: "http://127.0.0.1:19081"
@@ -374,6 +382,7 @@ services:
       TRSTCTL_SERVER: "https://trstctl:8443"
       TRSTCTL_DEMO_URL: "https://localhost:9443"
       TRSTCTL_TENANT: "11111111-1111-4111-8111-111111111111"
+      TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE: /seed-state/bootstrap.token
       NODE_TLS_REJECT_UNAUTHORIZED: "0"
     volumes:
       - signersock:/run/trstctl
@@ -382,6 +391,10 @@ services:
       - secrets:/data/secrets:ro
       - trstctldata:/data:ro
       - trstctldata:/trstctl-data:ro
+      # The seed's own bootstrap bearer is persisted separately from signer/KEK
+      # custody. Replays reuse it, so an ordinary compose restart does not mint a
+      # new admin token merely to discover that the seed already completed.
+      - seedstate:/seed-state
 
 volumes:
   pgdata:
@@ -389,6 +402,7 @@ volumes:
   localstack:
   signersock:
   signerkeys:
+  seedstate:
   secrets:
   trstctldata:
   demoidp:

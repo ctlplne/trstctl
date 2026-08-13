@@ -20,6 +20,27 @@ secret, transit encryption/signing keys, LocalStack KMS-backed managed keys,
 discovery jobs/runs, API tokens, ephemeral API keys, agent enrollment tokens,
 audit-producing lifecycle transitions, and notification-facing preview rows.
 
+The seed is a convergent, versioned migration. It first reads each logical
+resource, refuses duplicate or same-name/different-policy preserved data, and
+advances lifecycle state only when that transition is still needed. Its final
+event-sourced member is the durable `demo-seed-v1` completion checkpoint. The
+bootstrap bearer needed to inspect preserved state lives in the non-public
+`seedstate` volume as a mode-0600 file; it is never printed and is not part of
+signer or KEK custody.
+
+Re-running the same command with its volumes intact is safe. To wait for the
+first seed and prove a second complete pass leaves logical inventory, immutable
+event count, API-token count, and outbox count unchanged, run:
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml wait demo-seed
+scripts/ci/demo-seed-convergence.sh
+```
+
+The proof fails instead of choosing one row when preserved data already has a
+duplicate logical owner or another conflicting demo resource. That is a data
+repair signal, not permission for the seed to overwrite history.
+
 To validate the demo plan without starting the stack:
 
 ```bash
@@ -54,6 +75,9 @@ To reset the demo to a fresh seed:
 docker compose -f deploy/demo/docker-compose.yml down --volumes
 docker compose -f deploy/demo/docker-compose.yml up --build
 ```
+
+`down --volumes` also removes the seed checkpoint and its persisted bootstrap
+bearer, so the next `up` performs a genuinely fresh seed.
 
 ## Prove bootstrap custody across containers and restarts
 

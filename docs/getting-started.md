@@ -11,7 +11,11 @@ If you want a pre-populated sales/demo environment instead of a blank
 first-run, use the demo stack: `docker compose -f deploy/demo/docker-compose.yml up --build`
 serves a seeded UI (owners, certificates, secrets, transit keys, managed keys)
 with local SSO at <https://localhost:9443>. Everything below uses the blank
-stack at <https://localhost:8443>; the two can run side by side.
+stack at <https://localhost:8443>; the two can run side by side. The demo seed
+stores a terminal version checkpoint and reads lifecycle state before acting,
+so repeating `up --build` with the same volumes preserves the exact seeded
+inventory. `scripts/ci/demo-seed-convergence.sh` waits for the first seed and
+proves a second pass changes neither logical inventory nor event/outbox counts.
 
 ## Prerequisites
 

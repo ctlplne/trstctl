@@ -1,13 +1,21 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 
 const tenant = process.env.TRSTCTL_TENANT || "11111111-1111-4111-8111-111111111111";
 const server = process.env.TRSTCTL_SERVER || "https://trstctl:8443";
 const demoURL = process.env.TRSTCTL_DEMO_URL || "https://localhost:9443";
+const bootstrapTokenFile = process.env.TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE || "/seed-state/bootstrap.token";
 const seedVersion = "demo-seed-v1";
+const seedCheckpointSubject = "trstctl-demo-seed-checkpoint";
+const demoDiscoverySegment = {
+  name: "demo-control-plane",
+  ranges: ["compose:trstctl:8443"],
+  staleness_hours: 24,
+};
 const checkMode = process.argv.includes("--check");
 const DAY_MS = 24 * 60 * 60 * 1000;
 const demoNow = new Date(process.env.TRSTCTL_DEMO_NOW || new Date().toISOString());
@@ -34,8 +42,11 @@ function daysAgo(days) {
   return new Date(demoNow.getTime() - days * DAY_MS).toISOString();
 }
 
-function runtimeDemoValue(label) {
-  return `demo-${label}-${randomUUID()}`;
+function stableDemoValue(label) {
+  const digest = createHash("sha256")
+    .update(`${seedVersion}\0${tenant}\0${label}`)
+    .digest("hex");
+  return `demo-${label}-${digest}`;
 }
 
 function buildDemoHistory() {
@@ -46,14 +57,14 @@ function buildDemoHistory() {
     { key: "secops-analyst", subject: "secops-analyst", body: { display_name: "SecOps Analyst", email: "secops-analyst@trstctl.local", roles: ["auditor"], source: "demo-seed" }, daysAgo: 83 },
   ];
   const owners = [
-    { key: "platform", body: { kind: "team", name: "Platform SRE", email: "platform-sre@acme.example" }, daysAgo: 180 },
-    { key: "payments", body: { kind: "workload", name: "Payments API", email: "payments-api@acme.example" }, daysAgo: 168 },
-    { key: "edge", body: { kind: "workload", name: "Edge Gateway", email: "edge-gateway@acme.example" }, daysAgo: 162 },
-    { key: "release", body: { kind: "service", name: "CI Release Bot", email: "release-bot@acme.example" }, daysAgo: 143 },
-    { key: "mobile", body: { kind: "workload", name: "Mobile MDM", email: "mobile-mdm@acme.example" }, daysAgo: 121 },
-    { key: "data", body: { kind: "workload", name: "Data Warehouse", email: "data-platform@acme.example" }, daysAgo: 96 },
-    { key: "iot", body: { kind: "workload", name: "Factory IoT Gateways", email: "factory-iot@acme.example" }, daysAgo: 61 },
-    { key: "security", body: { kind: "team", name: "Security Engineering", email: "security@acme.example" }, daysAgo: 38 },
+    { key: "platform", body: { kind: "team", name: "Platform SRE", email: "platform-sre@acme.example", application_id: "app-platform", service: "shared-platform", business_unit: "Engineering", environment: "production", escalation_chain: ["demo-admin", "secops-analyst"] }, daysAgo: 180 },
+    { key: "payments", body: { kind: "workload", name: "Payments API", email: "payments-api@acme.example", application_id: "app-payments", service: "payments-api", business_unit: "Payments", environment: "production", escalation_chain: ["payments-bot", "demo-admin"] }, daysAgo: 168 },
+    { key: "edge", body: { kind: "workload", name: "Edge Gateway", email: "edge-gateway@acme.example", application_id: "app-edge", service: "edge-gateway", business_unit: "Engineering", environment: "production", escalation_chain: ["se-demo-operator", "demo-admin"] }, daysAgo: 162 },
+    { key: "release", body: { kind: "service", name: "CI Release Bot", email: "release-bot@acme.example", application_id: "app-release", service: "release-automation", business_unit: "Engineering", environment: "production", escalation_chain: ["se-demo-operator", "secops-analyst"] }, daysAgo: 143 },
+    { key: "mobile", body: { kind: "workload", name: "Mobile MDM", email: "mobile-mdm@acme.example", application_id: "app-mobile", service: "mobile-device-management", business_unit: "IT", environment: "production", escalation_chain: ["demo-admin", "secops-analyst"] }, daysAgo: 121 },
+    { key: "data", body: { kind: "workload", name: "Data Warehouse", email: "data-platform@acme.example", application_id: "app-warehouse", service: "data-warehouse", business_unit: "Data", environment: "production", escalation_chain: ["se-demo-operator", "demo-admin"] }, daysAgo: 96 },
+    { key: "iot", body: { kind: "workload", name: "Factory IoT Gateways", email: "factory-iot@acme.example", application_id: "app-factory-iot", service: "iot-gateway", business_unit: "Manufacturing", environment: "production", escalation_chain: ["demo-admin", "secops-analyst"] }, daysAgo: 61 },
+    { key: "security", body: { kind: "team", name: "Security Engineering", email: "security@acme.example", application_id: "app-security", service: "security-operations", business_unit: "Security", environment: "production", escalation_chain: ["secops-analyst", "demo-admin"] }, daysAgo: 38 },
   ];
   const profiles = [
     { key: "service-mtls-30d", name: "service-mtls-30d", spec: { max_validity: "720h", eku: ["serverAuth", "clientAuth"], san_policy: "internal-dns" }, daysAgo: 179 },
@@ -65,9 +76,9 @@ function buildDemoHistory() {
     { key: "ssh-host-12h", name: "ssh-host-12h", spec: { max_validity: "12h", ssh: { principals: "hostnames", renewal: "agent" } }, daysAgo: 23 },
   ];
   const managedIdentities = [
-    { key: "payments-api", ownerKey: "payments", name: "payments-api.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "k8s/payments/deployment/payments-api", connector: "envoy", daysAgo: 168 },
+    { key: "payments-api", ownerKey: "payments", name: "payments-api.demo.trstctl.local", targetState: "deployed", profile: "service-mtls-30d", protocol: "acme", deployment: "k8s/payments/deployment/payments-api", connector: "envoy", daysAgo: 168 },
     { key: "edge-gateway", ownerKey: "edge", name: "edge-gateway.demo.trstctl.local", targetState: "deployed", profile: "service-mtls-30d", protocol: "acme", deployment: "edge/traefik/gateway", connector: "traefik", daysAgo: 151 },
-    { key: "release-bot", ownerKey: "release", name: "release-bot.demo.trstctl.local", targetState: "issued", profile: "humanless-api-key-1h", protocol: "api", deployment: "github-actions/release", connector: "api-token", daysAgo: 132 },
+    { key: "release-bot", ownerKey: "release", name: "release-bot.demo.trstctl.local", targetState: "deployed", profile: "humanless-api-key-1h", protocol: "api", deployment: "github-actions/release", connector: "api-token", daysAgo: 132 },
     { key: "legacy-vpn", ownerKey: "platform", name: "legacy-vpn.demo.trstctl.local", targetState: "revoked", profile: "service-mtls-30d", protocol: "manual", deployment: "vpn-appliance-02:/etc/ssl/vpn.crt", connector: "manual", daysAgo: 118, revocationReason: "cessationOfOperation" },
     { key: "mobile-mdm", ownerKey: "mobile", name: "mdm-scep.demo.trstctl.local", targetState: "deployed", profile: "scep-intune-mobile-7d", protocol: "scep", deployment: "intune/profile/mobile-mdm", connector: "intune", daysAgo: 84 },
     { key: "iot-est-gateway", ownerKey: "iot", name: "iot-est-gateway.demo.trstctl.local", targetState: "deployed", profile: "est-serverkeygen-iot-24h", protocol: "est", deployment: "factory-floor/gateway-17", connector: "caddy", daysAgo: 63 },
@@ -251,8 +262,19 @@ async function waitForHealth() {
 }
 
 function mintBootstrapToken(subject = "demo-seeder") {
+  if (!/^[a-z0-9-]{1,64}$/.test(subject)) {
+    throw new Error(`demo bootstrap subject is not a bounded safe label: ${subject}`);
+  }
+  const tokenFile = subject === "demo-seeder" ? bootstrapTokenFile : `${bootstrapTokenFile}.${subject}`;
+  if (existsSync(tokenFile)) {
+    const persisted = readFileSync(tokenFile, "utf8").trim();
+    if (!persisted) {
+      throw new Error(`persisted demo bootstrap token is empty at ${tokenFile}`);
+    }
+    return persisted;
+  }
   const env = { ...process.env };
-  return run("/usr/local/bin/trstctl", [
+  const token = run("/usr/local/bin/trstctl", [
     "token",
     "create",
     "--tenant",
@@ -264,6 +286,8 @@ function mintBootstrapToken(subject = "demo-seeder") {
     "--scopes",
     "*",
   ], { env });
+  writeFileSync(tokenFile, `${token}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  return token;
 }
 
 async function api(method, path, body, idem, okStatuses = [], actorBearer = bearer) {
@@ -308,6 +332,595 @@ async function api(method, path, body, idem, okStatuses = [], actorBearer = bear
     throw new Error(`${method} ${path} returned ${res.status}: ${text}`);
   }
   throw new Error(`${method} ${path} exhausted retries`);
+}
+
+function canonicalValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalValue(value[key])]),
+    );
+  }
+  return value;
+}
+
+function canonicalJSON(value) {
+  return JSON.stringify(canonicalValue(value));
+}
+
+// Observation timestamps make the demo look old enough to exercise expiry and
+// audit views, but they are not part of a resource's logical identity. Remove
+// only those seed-owned timestamps before comparing preserved data. Everything
+// else must match exactly, so a same-name resource with different policy or
+// routing cannot be mistaken for the demo resource.
+function stableSeedSemantics(value) {
+  if (Array.isArray(value)) {
+    return value.map(stableSeedSemantics);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "demo_observed_at" && key !== "observed_at")
+        .map(([key, item]) => [key, stableSeedSemantics(item)]),
+    );
+  }
+  return value;
+}
+
+function seedInventoryDigest(value) {
+  return createHash("sha256").update(canonicalJSON(value)).digest("hex");
+}
+
+function seedManifest(history) {
+  return {
+    seed_version: seedVersion,
+    members: history.members.map(({ key, subject, body }) => ({ key, subject, body })),
+    owners: history.owners.map(({ key, body }) => ({ key, body })),
+    profiles: history.profiles.map(({ key, name, spec }) => ({ key, name, spec })),
+    identities: history.managedIdentities.map(({ daysAgo: _daysAgo, ...identity }) => identity),
+    imported_certificates: history.importedCertificates.map(({ observedDaysAgo: _observedDaysAgo, ...certificate }) => certificate),
+    discovery_segment: demoDiscoverySegment,
+    discovery_sources: history.discoverySources.map(
+      ({ daysAgo: _daysAgo, ...source }) => stableSeedSemantics(source),
+    ),
+  };
+}
+
+function checkpointSource(manifestDigest, inventoryDigest) {
+  return `${seedVersion}:complete:${manifestDigest}:${inventoryDigest}`;
+}
+
+async function listAll(path, maximum = 1000) {
+  const items = [];
+  let cursor = "";
+  for (let page = 0; page < 100; page += 1) {
+    const separator = path.includes("?") ? "&" : "?";
+    const cursorQuery = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+    const response = await api("GET", `${path}${separator}limit=100${cursorQuery}`);
+    const pageItems = Array.isArray(response?.items) ? response.items : [];
+    items.push(...pageItems);
+    if (items.length > maximum) {
+      throw new Error(`${path} exceeded the bounded ${maximum}-row demo seed scan`);
+    }
+    cursor = response?.next_cursor || "";
+    if (!cursor) {
+      return items;
+    }
+  }
+  throw new Error(`${path} exceeded the bounded 100-page demo seed scan`);
+}
+
+function findUniqueLogicalRecord(items, predicate, label) {
+  const matches = items.filter(predicate);
+  if (matches.length > 1) {
+    throw new Error(`${label} is duplicated ${matches.length} times in preserved demo data`);
+  }
+  return matches[0];
+}
+
+function assertFields(record, expected, label) {
+  for (const [field, want] of Object.entries(expected)) {
+    const got = record?.[field];
+    if (canonicalJSON(got) !== canonicalJSON(want)) {
+      throw new Error(`${label} conflicts on ${field}: got ${canonicalJSON(got)}, want ${canonicalJSON(want)}`);
+    }
+  }
+  return record;
+}
+
+async function readSeedCheckpoint(history) {
+  const members = await listAll("/api/v1/access/members?include_offboarded=true");
+  const checkpoint = findUniqueLogicalRecord(
+    members,
+    (member) => member.subject === seedCheckpointSubject,
+    `seed checkpoint ${seedCheckpointSubject}`,
+  );
+  if (!checkpoint) {
+    return null;
+  }
+  const manifestDigest = seedInventoryDigest(seedManifest(history));
+  const prefix = `${seedVersion}:complete:${manifestDigest}:`;
+  if (checkpoint.status !== "active" || typeof checkpoint.source !== "string" || !checkpoint.source.startsWith(prefix)) {
+    throw new Error(
+      `preserved demo seed checkpoint conflicts with ${seedVersion}; bump the seed version or reset the demo volumes`,
+    );
+  }
+  const inventoryDigest = checkpoint.source.slice(prefix.length);
+  if (!/^[0-9a-f]{64}$/.test(inventoryDigest)) {
+    throw new Error("preserved demo seed checkpoint has an invalid inventory digest");
+  }
+  return { ...checkpoint, manifest_digest: manifestDigest, inventory_digest: inventoryDigest };
+}
+
+async function writeSeedCheckpoint(history, inventory) {
+  const manifestDigest = seedInventoryDigest(seedManifest(history));
+  const inventoryDigest = seedInventoryDigest(inventory);
+  return api("PUT", `/api/v1/access/members/${seedCheckpointSubject}`, {
+    display_name: "trstctl demo seed checkpoint",
+    email: "",
+    roles: [],
+    source: checkpointSource(manifestDigest, inventoryDigest),
+  }, stableKey(`checkpoint-${manifestDigest}-${inventoryDigest}`));
+}
+
+async function validateCompletedSeed(history, checkpoint) {
+  const manifestDigest = seedInventoryDigest(seedManifest(history));
+  if (checkpoint.manifest_digest !== manifestDigest) {
+    throw new Error(`completed demo seed manifest changed without a seed-version bump`);
+  }
+  console.log(`trstctl demo seed ${seedVersion} already complete; preserved data left unchanged`);
+  console.log(`  Inventory digest: ${checkpoint.inventory_digest}`);
+}
+
+async function ensureMember(member, members) {
+  const existing = findUniqueLogicalRecord(
+    members,
+    (candidate) => candidate.subject === member.subject,
+    `member ${member.subject}`,
+  );
+  const expected = {
+    display_name: member.body.display_name,
+    email: member.body.email,
+    roles: [...member.body.roles].sort(),
+    source: member.body.source,
+    status: "active",
+  };
+  if (existing) {
+    assertFields({ ...existing, roles: [...(existing.roles || [])].sort() }, expected, `member ${member.subject}`);
+    return existing;
+  }
+  const created = await api("PUT", `/api/v1/access/members/${member.subject}`, {
+    ...member.body,
+    demo_observed_at: daysAgo(member.daysAgo),
+  }, stableKey(`member-${member.key}`));
+  members.push(created);
+  return created;
+}
+
+async function ensureOwner(owner, ownerItems) {
+  const existing = findUniqueLogicalRecord(
+    ownerItems,
+    (candidate) => candidate.name === owner.body.name || candidate.email === owner.body.email,
+    `owner ${owner.key}`,
+  );
+  let resolved = existing;
+  if (existing) {
+    assertFields(existing, {
+      kind: owner.body.kind,
+      name: owner.body.name,
+      email: owner.body.email,
+    }, `owner ${owner.key}`);
+    let needsModel = false;
+    for (const field of ["application_id", "service", "business_unit", "environment"]) {
+      if (!existing[field]) {
+        needsModel = true;
+      } else if (existing[field] !== owner.body[field]) {
+        throw new Error(`owner ${owner.key} conflicts on ${field}: got ${canonicalJSON(existing[field])}, want ${canonicalJSON(owner.body[field])}`);
+      }
+    }
+    const existingChain = existing.escalation_chain || [];
+    if (existingChain.length === 0) {
+      needsModel = true;
+    } else if (canonicalJSON(existingChain) !== canonicalJSON(owner.body.escalation_chain)) {
+      throw new Error(`owner ${owner.key} conflicts on escalation_chain`);
+    }
+    if (needsModel) {
+      resolved = await api(
+        "PUT",
+        `/api/v1/owners/${existing.id}`,
+        owner.body,
+        stableKey(`owner-${owner.key}-application-model`),
+      );
+    }
+  } else {
+    resolved = await api("POST", "/api/v1/owners", owner.body, stableKey(`owner-${owner.key}`));
+    ownerItems.push(resolved);
+  }
+  if (!resolved.ownership_current) {
+    resolved = await api(
+      "POST",
+      `/api/v1/owners/${resolved.id}/attest`,
+      undefined,
+      stableKey(`owner-${owner.key}-attest`),
+    );
+  }
+  if (!resolved.ownership_complete || !resolved.ownership_current) {
+    throw new Error(`owner ${owner.key} did not reach current attested ownership readiness`);
+  }
+  return resolved;
+}
+
+async function ensureProfile(profile, profileItems) {
+  const existing = findUniqueLogicalRecord(
+    profileItems,
+    (candidate) => candidate.name === profile.name,
+    `profile ${profile.name}`,
+  );
+  if (existing) {
+    if (!existing.active) {
+      throw new Error(`profile ${profile.name} exists but is not active`);
+    }
+    assertFields(
+      { spec: stableSeedSemantics(existing.spec) },
+      { spec: stableSeedSemantics(profile.spec) },
+      `profile ${profile.name}`,
+    );
+    return existing;
+  }
+  const created = await api("POST", "/api/v1/profiles", {
+    name: profile.name,
+    spec: { ...profile.spec, demo_observed_at: daysAgo(profile.daysAgo) },
+  }, stableKey(`profile-${profile.key}`));
+  profileItems.push(created);
+  return created;
+}
+
+async function ensureIssuer(issuerItems) {
+  const name = "trstctl Demo Internal CA";
+  const existing = findUniqueLogicalRecord(
+    issuerItems,
+    (candidate) => candidate.name === name,
+    `issuer ${name}`,
+  );
+  if (existing) {
+    return assertFields(existing, { kind: "x509_ca", name, internal: true }, `issuer ${name}`);
+  }
+  const created = await api("POST", "/api/v1/issuers", {
+    kind: "x509_ca",
+    name,
+    chain: [await readCA()],
+    internal: true,
+  }, stableKey("issuer-internal-ca"));
+  issuerItems.push(created);
+  return created;
+}
+
+async function ensureIdentity(item, ownerID, issuerID, identityItems) {
+  const attributes = {
+    environment: item.key.includes("legacy") ? "legacy" : "production",
+    dns_names: [item.name],
+    demo_lane: "live-clickthrough",
+    demo_observed_at: daysAgo(item.daysAgo),
+    deployment_location: item.deployment,
+    connector: item.connector,
+    profile: item.profile,
+    protocol: item.protocol,
+  };
+  const existing = findUniqueLogicalRecord(
+    identityItems,
+    (candidate) => candidate.name === item.name,
+    `identity ${item.name}`,
+  );
+  if (existing) {
+    return assertFields({ ...existing, attributes: stableSeedSemantics(existing.attributes) }, {
+      kind: "x509_certificate",
+      name: item.name,
+      owner_id: ownerID,
+      issuer_id: issuerID,
+      attributes: stableSeedSemantics(attributes),
+    }, `identity ${item.name}`);
+  }
+  const created = await api("POST", "/api/v1/identities", {
+    kind: "x509_certificate",
+    name: item.name,
+    owner_id: ownerID,
+    issuer_id: issuerID,
+    attributes,
+  }, stableKey(`identity-${item.key}`));
+  identityItems.push(created);
+  return created;
+}
+
+async function advanceIdentity(item, identity, minimumCertificates, request = api, poll = pollCertificates) {
+  const terminal = new Set(["revoked", "retired"]);
+  let current = await request("GET", `/api/v1/identities/${identity.id}`);
+  if (terminal.has(current.status) && current.status !== item.targetState) {
+    throw new Error(`identity ${item.name} is ${current.status}; cannot converge it to ${item.targetState}`);
+  }
+  if (current.status === "requested" || current.status === "pending") {
+    current = await transitionIdentityIfNeeded(
+      identity.id,
+      "issued",
+      `demo seed: issue signer-backed certificate observed ${item.daysAgo} days ago`,
+      stableKey(`identity-${item.key}-issue`),
+      request,
+    );
+  }
+  if (item.targetState !== "issued") {
+    await poll(minimumCertificates);
+  }
+  if (item.targetState === "issued") {
+    if (current.status !== "issued") {
+      throw new Error(`identity ${item.name} reached ${current.status}, want issued`);
+    }
+    return current;
+  }
+  if (item.targetState === "deployed" && current.status === "issued") {
+    current = await transitionIdentityIfNeeded(
+      identity.id,
+      "deployed",
+      `demo seed: deployed through ${item.connector}`,
+      stableKey(`identity-${item.key}-deploy`),
+      request,
+    );
+  }
+  if (item.targetState === "revoked" && (current.status === "issued" || current.status === "deployed")) {
+    current = await transitionIdentityIfNeeded(
+      identity.id,
+      "revoked",
+      item.revocationReason || "cessationOfOperation",
+      stableKey(`identity-${item.key}-revoke`),
+      request,
+    );
+  }
+  if (current.status !== item.targetState) {
+    throw new Error(`identity ${item.name} reached ${current.status}, want ${item.targetState}`);
+  }
+  return current;
+}
+
+async function ensureImportedCertificate(cert, ownerID, certificateItems) {
+  const existing = findUniqueLogicalRecord(
+    certificateItems,
+    (candidate) =>
+      candidate.source === cert.source &&
+      candidate.deployment_location === cert.deploymentLocation &&
+      Array.isArray(candidate.sans) &&
+      candidate.sans.includes(cert.commonName),
+    `imported certificate ${cert.commonName}`,
+  );
+  if (existing) {
+    return assertFields(existing, { owner_id: ownerID }, `imported certificate ${cert.commonName}`);
+  }
+  const created = await api("POST", "/api/v1/certificates", {
+    pem: makeSelfSignedCert(cert.commonName, cert.validDays),
+    owner_id: ownerID,
+    deployment_location: cert.deploymentLocation,
+    source: cert.source,
+  }, stableKey(`cert-import-${cert.key}`));
+  certificateItems.push(created);
+  return created;
+}
+
+async function ensureSecret(name, valueLabel, wantedVersion, secretItems) {
+  let existing = findUniqueLogicalRecord(
+    secretItems,
+    (candidate) => candidate.name === name,
+    `secret ${name}`,
+  );
+  if (!existing) {
+    existing = await api("POST", "/api/v1/secrets/store", {
+      name,
+      value: stableDemoValue(valueLabel),
+    }, stableKey(`secret-${valueLabel}`));
+    secretItems.push(existing);
+  }
+  if (!Number.isInteger(existing.version) || existing.version < 1) {
+    throw new Error(`secret ${name} has invalid version ${existing.version}`);
+  }
+  if (existing.version > wantedVersion) {
+    throw new Error(`secret ${name} is version ${existing.version}, beyond demo target ${wantedVersion}`);
+  }
+  if (existing.version < wantedVersion) {
+    existing = await api("PUT", `/api/v1/secrets/store/${name}`, {
+      value: stableDemoValue(`${valueLabel}-rotated`),
+    }, stableKey(`secret-${valueLabel}-rotate`));
+  }
+  return existing;
+}
+
+async function ensureDiscoverySource(sourceDef, sourceItems) {
+  const existing = findUniqueLogicalRecord(
+    sourceItems,
+    (candidate) => candidate.name === sourceDef.name,
+    `discovery source ${sourceDef.name}`,
+  );
+  if (existing) {
+    return assertFields(
+      { ...existing, config: stableSeedSemantics(existing.config) },
+      { kind: sourceDef.kind, config: stableSeedSemantics(sourceDef.config) },
+      `discovery source ${sourceDef.name}`,
+    );
+  }
+  const created = await api("POST", "/api/v1/discovery/sources", {
+    name: sourceDef.name,
+    kind: sourceDef.kind,
+    config: {
+      ...sourceDef.config,
+      demo_observed_at: daysAgo(sourceDef.daysAgo),
+    },
+  }, stableKey(`discovery-source-${sourceDef.key}`));
+  sourceItems.push(created);
+  return created;
+}
+
+async function ensureDiscoverySegment(segments) {
+  const existing = findUniqueLogicalRecord(
+    segments,
+    (candidate) => candidate.name === demoDiscoverySegment.name,
+    `discovery segment ${demoDiscoverySegment.name}`,
+  );
+  if (existing) {
+    if (existing.status === "excluded") {
+      throw new Error(`discovery segment ${demoDiscoverySegment.name} conflicts: it is excluded`);
+    }
+    return assertFields(
+      { ...existing, ranges: [...(existing.ranges || [])].sort() },
+      {
+        name: demoDiscoverySegment.name,
+        ranges: [...demoDiscoverySegment.ranges].sort(),
+        staleness_hours: demoDiscoverySegment.staleness_hours,
+      },
+      `discovery segment ${demoDiscoverySegment.name}`,
+    );
+  }
+  const created = await api(
+    "POST",
+    "/api/v1/discovery/segments",
+    demoDiscoverySegment,
+    stableKey("discovery-segment-control-plane"),
+  );
+  segments.push(created);
+  return created;
+}
+
+async function collectSeedInventory(history, resolved) {
+  const members = await listAll("/api/v1/access/members?include_offboarded=true");
+  const owners = await listAll("/api/v1/owners");
+  const identities = await listAll("/api/v1/identities");
+  const profilesResponse = await api("GET", "/api/v1/profiles");
+  const profiles = Array.isArray(profilesResponse?.items) ? profilesResponse.items : [];
+  const issuers = await listAll("/api/v1/issuers");
+  const certificates = await listAll("/api/v1/certificates");
+  const secretsResponse = await api("GET", "/api/v1/secrets/store?limit=100");
+  const secrets = Array.isArray(secretsResponse?.items) ? secretsResponse.items : [];
+  const sources = await listAll("/api/v1/discovery/sources");
+  const coverage = await api("GET", "/api/v1/discovery/coverage");
+  const segments = Array.isArray(coverage?.segments) ? coverage.segments : [];
+
+  const inventory = {
+    members: history.members.map((definition) => {
+      const row = findUniqueLogicalRecord(members, (candidate) => candidate.subject === definition.subject, `member ${definition.subject}`);
+      if (!row || row.status !== "active") throw new Error(`completed seed is missing active member ${definition.subject}`);
+      return { key: definition.key, subject: row.subject, display_name: row.display_name, email: row.email, roles: [...(row.roles || [])].sort(), source: row.source };
+    }),
+    owners: history.owners.map((definition) => {
+      const row = findUniqueLogicalRecord(
+        owners,
+        (candidate) => candidate.name === definition.body.name && candidate.email === definition.body.email,
+        `owner ${definition.key}`,
+      );
+      if (!row) throw new Error(`completed seed is missing owner ${definition.key}`);
+      assertFields(row, definition.body, `owner ${definition.key}`);
+      return { key: definition.key, id: row.id, kind: row.kind, name: row.name, email: row.email };
+    }),
+    profiles: history.profiles.map((definition) => {
+      const row = findUniqueLogicalRecord(profiles, (candidate) => candidate.name === definition.name, `profile ${definition.name}`);
+      if (!row || !row.active) throw new Error(`completed seed is missing active profile ${definition.name}`);
+      assertFields(
+        { spec: stableSeedSemantics(row.spec) },
+        { spec: stableSeedSemantics(definition.spec) },
+        `profile ${definition.name}`,
+      );
+      return { key: definition.key, id: row.id, name: row.name, spec: stableSeedSemantics(row.spec) };
+    }),
+    issuers: ["trstctl Demo Internal CA"].map((name) => {
+      const row = findUniqueLogicalRecord(issuers, (candidate) => candidate.name === name, `issuer ${name}`);
+      if (!row) throw new Error(`completed seed is missing issuer ${name}`);
+      return { id: row.id, kind: row.kind, name: row.name, internal: row.internal };
+    }),
+    identities: history.managedIdentities.map((definition) => {
+      const row = findUniqueLogicalRecord(identities, (candidate) => candidate.name === definition.name, `identity ${definition.name}`);
+      if (!row) throw new Error(`completed seed is missing identity ${definition.name}`);
+      if (row.status !== definition.targetState) {
+        throw new Error(`completed seed identity ${definition.name} is ${row.status}, want ${definition.targetState}`);
+      }
+      assertFields(
+        { ...row, attributes: stableSeedSemantics(row.attributes) },
+        {
+          name: definition.name,
+          owner_id: resolved?.owners?.[definition.ownerKey]?.id || row.owner_id,
+          issuer_id: resolved?.issuer?.id || row.issuer_id,
+          attributes: stableSeedSemantics({
+            environment: definition.key.includes("legacy") ? "legacy" : "production",
+            dns_names: [definition.name],
+            demo_lane: "live-clickthrough",
+            deployment_location: definition.deployment,
+            connector: definition.connector,
+            profile: definition.profile,
+            protocol: definition.protocol,
+          }),
+        },
+        `identity ${definition.name}`,
+      );
+      return {
+        key: definition.key,
+        id: row.id,
+        name: row.name,
+        owner_id: row.owner_id,
+        issuer_id: row.issuer_id,
+        status: row.status,
+        attributes: stableSeedSemantics(row.attributes),
+      };
+    }),
+    imported_certificates: history.importedCertificates.map((definition) => {
+      const row = findUniqueLogicalRecord(
+        certificates,
+        (candidate) => candidate.source === definition.source && candidate.deployment_location === definition.deploymentLocation && candidate.sans?.includes(definition.commonName),
+        `imported certificate ${definition.commonName}`,
+      );
+      if (!row) throw new Error(`completed seed is missing imported certificate ${definition.commonName}`);
+      return { key: definition.key, id: row.id, owner_id: row.owner_id, source: row.source, deployment_location: row.deployment_location, sans: [...row.sans].sort() };
+    }),
+    secrets: [
+      ["payments/db/password", 2],
+      ["demo/stripe/api-key", 1],
+      ["demo/github/actions/deploy-token", 1],
+      ["demo/aws/iam/rotator", 1],
+    ].map(([name, version]) => {
+      const row = findUniqueLogicalRecord(secrets, (candidate) => candidate.name === name, `secret ${name}`);
+      if (!row || row.version !== version) throw new Error(`completed seed secret ${name} is not at version ${version}`);
+      return { name: row.name, version: row.version };
+    }),
+    discovery_segment: (() => {
+      const row = findUniqueLogicalRecord(
+        segments,
+        (candidate) => candidate.name === demoDiscoverySegment.name,
+        `discovery segment ${demoDiscoverySegment.name}`,
+      );
+      if (!row) throw new Error(`completed seed is missing discovery segment ${demoDiscoverySegment.name}`);
+      if (row.status === "excluded") throw new Error(`completed seed discovery segment ${demoDiscoverySegment.name} is excluded`);
+      assertFields(
+        { ...row, ranges: [...(row.ranges || [])].sort() },
+        {
+          name: demoDiscoverySegment.name,
+          ranges: [...demoDiscoverySegment.ranges].sort(),
+          staleness_hours: demoDiscoverySegment.staleness_hours,
+        },
+        `discovery segment ${demoDiscoverySegment.name}`,
+      );
+      return {
+        name: row.name,
+        ranges: [...row.ranges].sort(),
+        staleness_hours: row.staleness_hours,
+      };
+    })(),
+    discovery_sources: history.discoverySources.map((definition) => {
+      const row = findUniqueLogicalRecord(sources, (candidate) => candidate.name === definition.name, `discovery source ${definition.name}`);
+      if (!row) throw new Error(`completed seed is missing discovery source ${definition.name}`);
+      assertFields(
+        { ...row, config: stableSeedSemantics(row.config) },
+        { kind: definition.kind, config: stableSeedSemantics(definition.config) },
+        `discovery source ${definition.name}`,
+      );
+      return { key: definition.key, id: row.id, kind: row.kind, name: row.name, config: stableSeedSemantics(row.config) };
+    }),
+  };
+  return inventory;
 }
 
 async function readCA() {
@@ -363,12 +976,12 @@ async function pollCertificates(minimum) {
   throw new Error(`certificate inventory did not reach ${minimum} rows`);
 }
 
-async function transitionIdentityIfNeeded(identityID, targetState, reason, idemKey) {
-  const current = await api("GET", `/api/v1/identities/${identityID}`);
+async function transitionIdentityIfNeeded(identityID, targetState, reason, idemKey, request = api) {
+  const current = await request("GET", `/api/v1/identities/${identityID}`);
   if (current?.status === targetState) {
     return current;
   }
-  return api("POST", `/api/v1/identities/${identityID}/transitions`, {
+  return request("POST", `/api/v1/identities/${identityID}/transitions`, {
     to: targetState,
     reason,
   }, idemKey);
@@ -384,32 +997,33 @@ async function main() {
   await waitForHealth();
   bearer = mintBootstrapToken();
 
-  for (const member of history.members) {
-    await api("PUT", `/api/v1/access/members/${member.subject}`, {
-      ...member.body,
-      demo_observed_at: daysAgo(member.daysAgo),
-    }, stableKey(`member-${member.key}`));
+  const checkpoint = await readSeedCheckpoint(history);
+  if (checkpoint) {
+    await validateCompletedSeed(history, checkpoint);
+    return;
   }
 
+  const memberItems = await listAll("/api/v1/access/members?include_offboarded=true");
+  for (const member of history.members) {
+    await ensureMember(member, memberItems);
+  }
+
+  const ownerItems = await listAll("/api/v1/owners");
   const owners = {};
   for (const owner of history.owners) {
-    owners[owner.key] = await api("POST", "/api/v1/owners", owner.body, stableKey(`owner-${owner.key}`));
+    owners[owner.key] = await ensureOwner(owner, ownerItems);
   }
 
+  const profileResponse = await api("GET", "/api/v1/profiles");
+  const profileItems = Array.isArray(profileResponse?.items) ? profileResponse.items : [];
   for (const profile of history.profiles) {
-    await api("POST", "/api/v1/profiles", {
-      name: profile.name,
-      spec: { ...profile.spec, demo_observed_at: daysAgo(profile.daysAgo) },
-    }, stableKey(`profile-${profile.key}`));
+    await ensureProfile(profile, profileItems);
   }
 
-  const issuer = await api("POST", "/api/v1/issuers", {
-    kind: "x509_ca",
-    name: "trstctl Demo Internal CA",
-    chain: [await readCA()],
-    internal: true,
-  }, stableKey("issuer-internal-ca"));
+  const issuerItems = await listAll("/api/v1/issuers");
+  const issuer = await ensureIssuer(issuerItems);
 
+  const identityItems = await listAll("/api/v1/identities");
   const identities = {};
   let issuedIdentityCount = 0;
   for (const item of history.managedIdentities) {
@@ -417,78 +1031,27 @@ async function main() {
     if (!ownerID) {
       throw new Error(`demo owner ${item.ownerKey} was not created`);
     }
-    identities[item.key] = await api("POST", "/api/v1/identities", {
-      kind: "x509_certificate",
-      name: item.name,
-      owner_id: ownerID,
-      issuer_id: issuer.id,
-      attributes: {
-        environment: item.key.includes("legacy") ? "legacy" : "production",
-        dns_names: [item.name],
-        demo_lane: "live-clickthrough",
-        demo_observed_at: daysAgo(item.daysAgo),
-        deployment_location: item.deployment,
-        connector: item.connector,
-        profile: item.profile,
-        protocol: item.protocol,
-      },
-    }, stableKey(`identity-${item.key}`));
-    await api("POST", `/api/v1/identities/${identities[item.key].id}/transitions`, {
-      to: "issued",
-      reason: `demo seed: issue signer-backed certificate observed ${item.daysAgo} days ago`,
-    }, stableKey(`identity-${item.key}-issue`));
+    identities[item.key] = await ensureIdentity(item, ownerID, issuer.id, identityItems);
     issuedIdentityCount += 1;
-    if (item.targetState === "deployed") {
-      await pollCertificates(Math.min(issuedIdentityCount, 6));
-      await transitionIdentityIfNeeded(
-        identities[item.key].id,
-        "deployed",
-        `demo seed: deployed through ${item.connector}`,
-        stableKey(`identity-${item.key}-deploy`),
-      );
-    }
-    if (item.targetState === "revoked") {
-      await pollCertificates(Math.min(issuedIdentityCount, 6));
-      await transitionIdentityIfNeeded(
-        identities[item.key].id,
-        "revoked",
-        item.revocationReason || "cessationOfOperation",
-        stableKey(`identity-${item.key}-revoke`),
-      );
-    }
+    await advanceIdentity(item, identities[item.key], Math.min(issuedIdentityCount, 6));
   }
 
   await pollCertificates(Math.min(history.managedIdentities.length, 6));
+  const certificateItems = await listAll("/api/v1/certificates");
   for (const cert of history.importedCertificates) {
-    await api("POST", "/api/v1/certificates", {
-      pem: makeSelfSignedCert(cert.commonName, cert.validDays),
-      owner_id: owners[cert.ownerKey]?.id,
-      deployment_location: cert.deploymentLocation,
-      source: cert.source,
-    }, stableKey(`cert-import-${cert.key}`));
+    const ownerID = owners[cert.ownerKey]?.id;
+    if (!ownerID) throw new Error(`demo owner ${cert.ownerKey} was not created`);
+    await ensureImportedCertificate(cert, ownerID, certificateItems);
   }
 
-  await api("POST", "/api/v1/secrets/store", {
-    name: "payments/db/password",
-    value: runtimeDemoValue("payments-db-password"),
-  }, stableKey("secret-payments-db"));
-  await api("PUT", "/api/v1/secrets/store/payments/db/password", {
-    value: runtimeDemoValue("payments-db-password-rotated"),
-  }, stableKey("secret-payments-db-rotate"));
-  await api("POST", "/api/v1/secrets/store", {
-    name: "demo/stripe/api-key",
-    value: runtimeDemoValue("stripe-api-key"),
-  }, stableKey("secret-demo-stripe-api-key"));
-  await api("POST", "/api/v1/secrets/store", {
-    name: "demo/github/actions/deploy-token",
-    value: runtimeDemoValue("github-actions-deploy-token"),
-  }, stableKey("secret-demo-github-actions-deploy-token"));
-  await api("POST", "/api/v1/secrets/store", {
-    name: "demo/aws/iam/rotator",
-    value: runtimeDemoValue("aws-iam-rotator"),
-  }, stableKey("secret-demo-aws-iam-rotator"));
+  const secretResponse = await api("GET", "/api/v1/secrets/store?limit=100");
+  const secretItems = Array.isArray(secretResponse?.items) ? secretResponse.items : [];
+  await ensureSecret("payments/db/password", "payments-db", 2, secretItems);
+  await ensureSecret("demo/stripe/api-key", "demo-stripe-api-key", 1, secretItems);
+  await ensureSecret("demo/github/actions/deploy-token", "demo-github-actions-deploy-token", 1, secretItems);
+  await ensureSecret("demo/aws/iam/rotator", "demo-aws-iam-rotator", 1, secretItems);
   const share = await api("POST", "/api/v1/secrets/shares", {
-    value: runtimeDemoValue("breakglass-share"),
+    value: stableDemoValue("breakglass-share"),
     ttl_seconds: 86400,
   }, stableKey("secret-share-breakglass"));
   await api("POST", "/api/v1/secrets/pki", {
@@ -499,7 +1062,7 @@ async function main() {
   await api("POST", "/api/v1/transit/keys", { name: "payments-data", kind: "aead" }, stableKey("transit-payments-aead"), [409]);
   const encrypted = await api("POST", "/api/v1/transit/encrypt", {
     key: "payments-data",
-    plaintext: b64(runtimeDemoValue("card-token")),
+    plaintext: b64(stableDemoValue("card-token")),
     aad: b64("tenant=acme-demo"),
   }, stableKey("transit-payments-encrypt"));
   await api("POST", "/api/v1/transit/keys/rotate", { name: "payments-data" }, stableKey("transit-payments-rotate"), [409]);
@@ -579,11 +1142,24 @@ async function main() {
     await api("POST", "/api/v1/managed-keys/rotate", rotateBody, rotateKey);
   }
 
-  const demoAPIToken = await api("POST", "/api/v1/access/api-tokens", {
-    subject: "ci-release-bot",
-    scopes: ["certs:read", "secrets:read", "keys:read", "graph:read"],
-    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  }, stableKey("access-token-release-bot"));
+  const apiTokenItems = await listAll("/api/v1/access/api-tokens?subject=ci-release-bot");
+  let demoAPIToken = findUniqueLogicalRecord(
+    apiTokenItems,
+    (token) => token.subject === "ci-release-bot" && !token.revoked_at,
+    "API token ci-release-bot",
+  );
+  if (demoAPIToken) {
+    assertFields(
+      { ...demoAPIToken, scopes: [...(demoAPIToken.scopes || [])].sort() },
+      { subject: "ci-release-bot", scopes: ["certs:read", "graph:read", "keys:read", "secrets:read"] },
+      "API token ci-release-bot",
+    );
+  } else {
+    demoAPIToken = await api("POST", "/api/v1/access/api-tokens", {
+      subject: "ci-release-bot",
+      scopes: ["certs:read", "secrets:read", "keys:read", "graph:read"],
+    }, stableKey("access-token-release-bot"));
+  }
   const jitToken = await api("POST", "/api/v1/ephemeral/api-keys", {
     subject: "incident-rotator",
     scopes: ["certs:read", "keys:read"],
@@ -594,21 +1170,13 @@ async function main() {
     enrollmentTokens.push(await api("POST", "/api/v1/agents/enrollment-tokens", undefined, stableKey(`agent-enrollment-token-${token.key}`)));
   }
 
-  await api("POST", "/api/v1/discovery/segments", {
-    name: "demo-control-plane",
-    ranges: ["compose:trstctl:8443"],
-    staleness_hours: 24,
-  }, stableKey("discovery-segment-control-plane"));
+  const coverage = await api("GET", "/api/v1/discovery/coverage");
+  const segmentItems = Array.isArray(coverage?.segments) ? coverage.segments : [];
+  await ensureDiscoverySegment(segmentItems);
 
+  const sourceItems = await listAll("/api/v1/discovery/sources");
   for (const sourceDef of history.discoverySources) {
-    const source = await api("POST", "/api/v1/discovery/sources", {
-      name: sourceDef.name,
-      kind: sourceDef.kind,
-      config: {
-        ...sourceDef.config,
-        demo_observed_at: daysAgo(sourceDef.daysAgo),
-      },
-    }, stableKey(`discovery-source-${sourceDef.key}`));
+    const source = await ensureDiscoverySource(sourceDef, sourceItems);
     if (sourceDef.run !== false) {
       await api("POST", "/api/v1/discovery/runs", {
         source_id: source.id,
@@ -623,6 +1191,14 @@ async function main() {
   const runs = await api("GET", "/api/v1/discovery/runs?limit=100");
   const findings = await api("GET", "/api/v1/discovery/findings?limit=100");
   const notifications = await api("GET", "/api/v1/notifications?limit=100");
+
+  const inventory = await collectSeedInventory(history, { owners, issuer });
+  await writeSeedCheckpoint(history, inventory);
+  const committedCheckpoint = await readSeedCheckpoint(history);
+  if (!committedCheckpoint) {
+    throw new Error("demo seed checkpoint was not projected after the final phase");
+  }
+  await validateCompletedSeed(history, committedCheckpoint);
 
   console.log("");
   console.log("trstctl demo seed complete");
@@ -643,7 +1219,19 @@ async function main() {
   console.log("");
 }
 
-main().catch((err) => {
-  console.error(`demo seed failed: ${err.stack || err.message}`);
-  process.exit(1);
-});
+export {
+  advanceIdentity,
+  checkpointSource,
+  findUniqueLogicalRecord,
+  seedInventoryDigest,
+  stableDemoValue,
+  stableSeedSemantics,
+};
+
+const invokedAsProgram = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedAsProgram) {
+  main().catch((err) => {
+    console.error(`demo seed failed: ${err.stack || err.message}`);
+    process.exit(1);
+  });
+}

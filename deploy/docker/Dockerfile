@@ -109,6 +109,8 @@ RUN set -eu; \
       --customer "Local Provider demo" \
       --tier provider \
       --managed-customer-band 25 \
+      --production-deployment-id trstctl-local-provider-demo-production \
+      --non-production-deployment-ids trstctl-local-demo \
       --issued-at 2026-01-01T00:00:00Z \
       --expires-at "${DEMO_LICENSE_EXPIRES_AT}"; \
     license_keys_b64="$(base64 -w 0 /tmp/demo-license-public.pem)"; \

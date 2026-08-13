@@ -44,7 +44,7 @@ readonly -a proof_services=(
   oidc-loopback localstack-loopback localstack-signer-loopback demo-seed
 )
 readonly -a proof_volumes=(
-  pgdata natsdata localstack signersock signerkeys secrets trstctldata demoidp managedkeys
+  pgdata natsdata localstack signersock signerkeys seedstate secrets trstctldata demoidp managedkeys
 )
 proof_started=0
 proof_namespace_owned=0
