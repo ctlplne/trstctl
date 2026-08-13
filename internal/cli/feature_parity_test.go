@@ -199,9 +199,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// exact endpoint result, redacted diagnostic addendum, and prove-fixed
 	// mutation raise it to 377. AUD-52's audit feed set/list commands raise it
 	// to 379 and expose the same standing collector state as the API and console.
-	// The parity sweep also closes the already-served AD CS drift read, yielding 380.
-	if len(out) != 380 {
-		t.Fatalf("CLI commands = %d, want 380", len(out))
+	// The parity sweep also closes the already-served AD CS drift read, yielding
+	// 380. AUD-53 adds the served verification-key download and the server-free
+	// offline verifier, yielding 382.
+	if len(out) != 382 {
+		t.Fatalf("CLI commands = %d, want 382", len(out))
 	}
 	return out
 }

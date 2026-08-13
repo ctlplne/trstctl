@@ -1145,9 +1145,17 @@ never live in the API process. What you can do end to end against the running bi
   `protocols.tsa` is enabled the chain
   head is countersigned with an RFC 3161 timestamp over a domain-separated
   imprint; the artifact carries the timestamp info, signature, TSA certificate,
-  and CMS DER token. The offline verifier requires the separately pinned audit
-  JWK set and TSA root rather than trusting a root supplied by the artifact. This
-  is what makes a BACK-DATED head detectable: a chain rebuilt to
+  and CMS DER token. The shipped `trstctl-cli audit verify` command checks all
+  five saved formats offline. An auditor first downloads the public-only JWK set
+  through authenticated `GET /api/v1/audit/verification-keys`. The command
+  `trstctl-cli audit verification-keys` downloads it for separate `--audit-jwks`
+  pinning. The TSA issuer
+  root is separately pinned and supplied as PEM or DER with `--tsa-root`; the
+  verifier never promotes the TSA leaf embedded in evidence into a root. It
+  reconstructs the archived-prefix-aware chain, verifies the domain-separated
+  RFC 3161 imprint, and can enforce a maximum anchor delay with
+  `--max-anchor-delay`. This independently pinned trust is what makes a
+  BACK-DATED head detectable: a chain rebuilt to
   remove a record hashes differently, so no earlier token exists for it, and a
   freshly-taken token is dated long after the events the bundle describes.
   Scope, stated exactly: an anchor proves the head is no NEWER than the timestamp.

@@ -56,6 +56,14 @@ operator schedules exports (e.g. a nightly `trstctl-cli audit export`) and retai
 them in write-once / WORM storage. Translog inclusion and hardware-notary
 checkpoints remain separate roadmap controls.
 
+The shipped workflow is `trstctl-cli audit verification-keys` while connected,
+followed by `trstctl-cli audit verify --artifact <saved-file> --audit-jwks
+<pinned.jwks.json> --tsa-root <pinned-root.pem> --max-anchor-delay <duration>` in
+the offline environment. The JWK flag is required for JWS and unnecessary for the
+four record-stream shapes; the independently pinned TSA issuer root is required
+for every anchored shape. See
+[CLI: Verify audit exports offline](cli.md#verify-audit-exports-offline).
+
 ## Framework evidence packs
 
 An auditor or operator with `audit:read` can export a framework pack

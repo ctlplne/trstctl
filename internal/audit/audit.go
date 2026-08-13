@@ -369,6 +369,18 @@ func (s *Service) VerificationKeys() *jose.JWKSet {
 	return s.signer.JWKS()
 }
 
+// PublicVerificationJWKS returns the audit export signer's public JWK Set in its
+// portable JSON representation. This is trust-bootstrap material, not a secret:
+// auditors download and pin it before carrying evidence into an offline room.
+// The jose boundary constructs it from the public half only, so this method can
+// never serialize private RSA parameters.
+func (s *Service) PublicVerificationJWKS() ([]byte, error) {
+	if s.signer == nil {
+		return nil, ErrMissingSigner
+	}
+	return s.signer.PublicJWKS()
+}
+
 // VerifyBundle verifies a signed evidence bundle against keys and returns it. A
 // bad signature is an error; so is an internally inconsistent chain (the records
 // do not reproduce the signed ChainHead), which catches tampering with the

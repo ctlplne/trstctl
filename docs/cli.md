@@ -60,6 +60,71 @@ Responses are pretty-printed JSON on stdout. Exit code is **0** on success, **1*
 on a request/response error (the status is written to stderr), and **2** on a
 usage error — scriptable end to end.
 
+## Verify audit exports offline
+
+`trstctl-cli audit verify` is a local command: it opens no HTTP connection and
+does not need `TRSTCTL_SERVER`, a token, or a running control plane. It verifies
+the canonical JWS envelope and the exact CSV, NDJSON, Splunk HEC (`splunk-hec`),
+and Microsoft Sentinel (`sentinel`) record-stream shapes served by `audit export`.
+
+Bootstrap trust **before disconnecting** from the deployment:
+
+```bash
+# This authenticated read returns only the current audit signer's public RSA JWK.
+trstctl-cli audit verification-keys > audit.jwks.json
+
+# Obtain this out of band from the deployment PKI operator. Use the root CA that
+# issued the configured TSA certificate, not the TSA leaf carried by an export.
+cp /trusted/pki/trstctl-tsa-root.pem tsa-root.pem
+```
+
+Pin those two files in the auditor's trust inventory. The verification command
+never trusts a JWK, TSA root, or replacement authority supplied only by the saved
+artifact: an attacker who can replace evidence could replace embedded trust too.
+The TSA root may be PEM or DER. The JWK set is required for `jws`; record-stream
+formats rely on the hash chain plus the separately trusted RFC 3161 authority.
+
+Download any served shape while the control plane is online, then verify it after
+the server is gone:
+
+```bash
+trstctl-cli audit export --format jws > audit.jws.json
+trstctl-cli audit export --format csv > audit.csv
+trstctl-cli audit export --format ndjson > audit.ndjson
+trstctl-cli audit export --format splunk-hec > audit.splunk.ndjson
+trstctl-cli audit export --format sentinel > audit.sentinel.ndjson
+
+trstctl-cli audit verify \
+  --artifact audit.jws.json \
+  --format auto \
+  --audit-jwks audit.jwks.json \
+  --tsa-root tsa-root.pem \
+  --max-anchor-delay 24h
+
+# A record stream does not use the audit JWK, but gets the same chain/TSA checks.
+trstctl-cli audit verify --artifact audit.csv --format auto \
+  --tsa-root tsa-root.pem --max-anchor-delay 24h
+
+# Pipe a saved artifact instead of naming a file.
+trstctl-cli audit verify --artifact - --format ndjson \
+  --tsa-root tsa-root.pem < audit.ndjson
+```
+
+`auto` identifies only the five pinned served grammars; use an explicit format for
+an empty or otherwise ambiguous JSON stream. Verification starts from the trailer
+or signed bundle's `prev_hash`, so a live suffix after an archived prefix is checked
+as a continuation rather than incorrectly treated as a new genesis. It recomputes
+every record link and chain head, verifies the audit JWS domain where applicable,
+verifies the domain-separated RFC 3161 timestamp imprint and TSA chain, and applies
+the optional maximum anchor delay from the newest record to authority time.
+
+Success prints a non-secret JSON receipt with format, tenant when present, record
+count, archived-prefix hash, chain head, anchor kind/time, and newest-record time.
+Malformed input, duplicate authority fields, tamper, truncation, wrong trust, head
+mismatch, cross-tenant records, excessive input, or a delay-policy violation returns
+exit code 1 and writes a stable `audit verification failed` diagnostic to stderr.
+Invalid flags return exit code 2.
+
 ## Commands
 
 One row per command group — covering every core API operation — plus the local
@@ -74,7 +139,7 @@ exhaustive subcommand list:
 | `agents`                           | In-network agent inventory, enrollment tokens, cert revocation, offboarding (`list` · `enroll-token` · `revoke-cert` · `offboard`)                          |
 | `ai`                               | AI assistant status, question answering, root-cause analysis (`status` · `query` · `rca`)                                                                   |
 | `approval-requests`                | Review immutable certificate, secret, and managed-key operation requests within the caller's real permission domains (`list` · `approve` · `deny`)            |
-| `audit`                            | Query/export the signed audit log and configure native collector feeds (`events` · `export` · `feeds set` · `feeds list`)                                  |
+| `audit`                            | Query/export the signed audit log, pin public verification keys, verify every saved format offline, and configure native collector feeds (`events` · `export` · `verification-keys` · `verify` · `feeds set` · `feeds list`)                                  |
 | `breakglass`                       | Ceremony-gated online break-glass issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`) |
 | `broker agent-identities`          | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                         |
 | `ca ceremonies`                    | Start, inspect, and approve m-of-n CA key ceremonies (`start` · `get` · `approve`)                                                                           |

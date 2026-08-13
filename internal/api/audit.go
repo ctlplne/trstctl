@@ -3,6 +3,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +14,21 @@ import (
 	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/auditchain"
 )
+
+func (a *API) auditVerificationKeys(w http.ResponseWriter, r *http.Request) {
+	if a.audit == nil {
+		a.writeProblem(w, problem.New(http.StatusInternalServerError, "audit log is not configured"))
+		return
+	}
+	raw, err := a.audit.PublicVerificationJWKS()
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	// RawMessage preserves the standard JWK Set wire shape. Wrapping it would
+	// make stock JOSE tools and the offline CLI reject an otherwise valid set.
+	a.writeJSON(w, http.StatusOK, json.RawMessage(raw))
+}
 
 // auditQueryParams describes the audit query string for the OpenAPI document.
 //

@@ -314,7 +314,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"profiles", "get-version"}, Method: "GET", Path: "/api/v1/profiles/{name}/versions/{version}", Summary: "Get a certificate-profile version"},
 
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
-	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Export a signed audit bundle"},
+	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit", "format"}, Summary: "Export a signed audit bundle or record stream"},
+	{Name: []string{"audit", "verification-keys"}, Method: "GET", Path: "/api/v1/audit/verification-keys", Summary: "Download and pin public keys for offline audit verification"},
 	{Name: []string{"audit", "feeds", "set"}, Method: "PUT", Path: "/api/v1/audit/feeds/{id}", Body: bodyFile, Summary: "Configure a durable native Splunk HEC or Sentinel audit feed"},
 	{Name: []string{"audit", "feeds", "list"}, Method: "GET", Path: "/api/v1/audit/feeds", Summary: "List audit-feed schedules, lag, retries, failures, and collector receipts"},
 	{Name: []string{"compliance", "inventory-report"}, Method: "GET", Path: "/api/v1/compliance/inventory-report", Summary: "Get compliance and inventory reporting coverage"},
@@ -513,6 +514,7 @@ var coreCommandTable = []Command{
 }
 
 var specialCommandTable = []Command{
+	{Name: []string{"audit", "verify"}, Summary: "Verify any saved audit export completely offline"},
 	{Name: []string{"run"}, Summary: "Run a child process with fetched secrets injected into its environment"},
 	{Name: []string{"secrets", "scans", "staged-diff"}, Summary: "Scan staged or CI-diff Git files with Gitleaks before commit or merge"},
 	{Name: []string{"secrets", "scans", "pre-commit", "install"}, Summary: "Install a Git pre-commit hook that blocks leaked secrets"},

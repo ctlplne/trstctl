@@ -101,6 +101,7 @@ public final class OpenApiSchemas {
       "AuditFeedRequest",
       "AuditTimestampInfo",
       "AuditTimestampToken",
+      "AuditVerificationKeySet",
       "Brand",
       "BreakglassBundle",
       "BreakglassCeremony",

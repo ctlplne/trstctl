@@ -40,6 +40,33 @@ func newService(t *testing.T, log *events.Log) *audit.Service {
 	return audit.NewService(log, sk)
 }
 
+func TestPublicVerificationJWKSContainsNoPrivateAuditKeyMaterialAUD53(t *testing.T) {
+	t.Parallel()
+	svc := newService(t, openLog(t))
+
+	raw, err := svc.PublicVerificationJWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, err := jose.ParseJWKSet(raw)
+	if err != nil {
+		t.Fatalf("parse served public JWK set: %v", err)
+	}
+	if keys == nil || !strings.Contains(string(raw), `"kid":"audit-key-1"`) {
+		t.Fatalf("public JWK set = %s, want the audit verification key", raw)
+	}
+	for _, privateField := range []string{`"d"`, `"p"`, `"q"`, `"dp"`, `"dq"`, `"qi"`} {
+		if strings.Contains(string(raw), privateField+":") {
+			t.Fatalf("public JWK set contains private RSA field %s: %s", privateField, raw)
+		}
+	}
+
+	unsigned := audit.NewService(openLog(t), nil)
+	if _, err := unsigned.PublicVerificationJWKS(); !errors.Is(err, audit.ErrMissingSigner) {
+		t.Fatalf("unsigned service error = %v, want ErrMissingSigner", err)
+	}
+}
+
 func appendEvent(t *testing.T, log *events.Log, tenantID, typ string) uint64 {
 	t.Helper()
 	ev, err := log.Append(context.Background(), events.Event{Type: typ, TenantID: tenantID, Data: []byte(`{}`)})

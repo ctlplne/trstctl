@@ -37,6 +37,7 @@ var permScopedGETProbes = []string{
 	"/api/v1/profiles",
 	"/api/v1/audit/events",
 	"/api/v1/audit/export",
+	"/api/v1/audit/verification-keys",
 	"/api/v1/graph",
 	"/api/v1/risk/credentials",
 	"/api/v1/agents",

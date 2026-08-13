@@ -12189,6 +12189,7 @@
             "source_backend": [
                 "/api/v1/audit/events",
                 "/api/v1/audit/export",
+                "/api/v1/audit/verification-keys",
                 "/api/v1/audit/feeds",
                 "/api/v1/audit/feeds/{id}"
             ],
@@ -12200,6 +12201,7 @@
             "api_surface": [
                 "searchAudit",
                 "exportAudit",
+                "getAuditVerificationKeys",
                 "putAuditFeed",
                 "listAuditFeeds"
             ],
@@ -12207,6 +12209,8 @@
             "cli_surface": [
                 "audit events",
                 "audit export",
+                "audit verification-keys",
+                "audit verify",
                 "audit feeds set",
                 "audit feeds list"
             ],
@@ -12236,6 +12240,8 @@
                     "evidence": [
                         "CLI command: audit events",
                         "CLI command: audit export",
+                        "CLI command: audit verification-keys",
+                        "CLI command: audit verify",
                         "CLI command: audit feeds set",
                         "CLI command: audit feeds list"
                     ],
@@ -12248,6 +12254,7 @@
                     "evidence": [
                         "OpenAPI operationId: searchAudit",
                         "OpenAPI operationId: exportAudit",
+                        "OpenAPI operationId: getAuditVerificationKeys",
                         "OpenAPI operationId: putAuditFeed",
                         "OpenAPI operationId: listAuditFeeds"
                     ],

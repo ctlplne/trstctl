@@ -3,11 +3,15 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/cli"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -184,6 +189,112 @@ func TestServedSavedAuditArtifactsVerifyOfflineAUD51(t *testing.T) {
 	if err != nil || len(records) == 0 {
 		t.Fatalf("saved CSV did not verify offline: records=%d err=%v", len(records), err)
 	}
+}
+
+func TestServedAuditVerificationKeysAreDownloadableAndPublicOnlyAUD53(t *testing.T) {
+	ts, tok, srv, _ := newAnchoredAuditExportHarnessAUD51(t)
+
+	code, raw := doBearer(t, ts, http.MethodGet, "/api/v1/audit/verification-keys", tok, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("verification keys = %d: %s", code, raw)
+	}
+	want, err := srv.audit.PublicVerificationJWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(bytes.TrimSpace(raw), bytes.TrimSpace(want)) {
+		t.Fatalf("served JWK set differs from audit signer public authority: got=%s want=%s", raw, want)
+	}
+	for _, privateField := range []string{`"d"`, `"p"`, `"q"`, `"dp"`, `"dq"`, `"qi"`} {
+		if strings.Contains(string(raw), privateField+":") {
+			t.Fatalf("served JWK set contains private RSA field %s", privateField)
+		}
+	}
+}
+
+func TestDownloadedServedAuditArtifactsVerifyAfterServerShutdownThroughShippedCommandAUD53(t *testing.T) {
+	ts, tok, srv, rootDER := newAnchoredAuditExportHarnessAUD51(t)
+	onlineEnv := cli.Env{Server: ts.URL, Token: tok, HTTPClient: ts.Client()}
+	cliBinary := buildAuditVerifierCLI_AUD53(t)
+
+	artifacts := make(map[auditanchor.Format][]byte, len(auditanchor.Formats()))
+	for _, format := range auditanchor.Formats() {
+		var stdout, stderr bytes.Buffer
+		if exit := cli.Run(t.Context(), []string{"audit", "export", "--format", string(format)}, onlineEnv,
+			strings.NewReader(""), &stdout, &stderr); exit != 0 {
+			t.Fatalf("trstctl-cli audit export --format %s exit=%d stderr=%q", format, exit, stderr.String())
+		}
+		artifacts[format] = append([]byte(nil), stdout.Bytes()...)
+	}
+	var jwksStdout, jwksStderr bytes.Buffer
+	if exit := cli.Run(t.Context(), []string{"audit", "verification-keys"}, onlineEnv,
+		strings.NewReader(""), &jwksStdout, &jwksStderr); exit != 0 {
+		t.Fatalf("trstctl-cli audit verification-keys exit=%d stderr=%q", exit, jwksStderr.String())
+	}
+	publicJWKS := jwksStdout.Bytes()
+
+	// Everything below this line runs with the authenticated HTTP server and its
+	// control-plane dependencies gone. The saved bytes and separately pinned
+	// trust files are the only inputs the shipped command receives.
+	ts.Close()
+	if err := srv.Shutdown(context.Background()); err != nil {
+		t.Fatalf("shut down assembled server before offline verification: %v", err)
+	}
+	dir := t.TempDir()
+	rootPath := filepath.Join(dir, "tsa-root.pem")
+	if err := os.WriteFile(rootPath, crypto.EncodeCertificatePEM(rootDER), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	jwksPath := filepath.Join(dir, "audit.jwks.json")
+	if err := os.WriteFile(jwksPath, publicJWKS, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, format := range auditanchor.Formats() {
+		format := format
+		t.Run(string(format), func(t *testing.T) {
+			artifactPath := filepath.Join(dir, "served-audit."+string(format))
+			if err := os.WriteFile(artifactPath, artifacts[format], 0o600); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{
+				"audit", "verify", "--artifact", artifactPath, "--format", "auto",
+				"--tsa-root", rootPath, "--max-anchor-delay", "1h",
+			}
+			if format == auditanchor.FormatJWS {
+				args = append(args, "--audit-jwks", jwksPath)
+			}
+			command := exec.CommandContext(t.Context(), cliBinary, args...) // #nosec G204 -- fixed binary built by this test; arguments are fixed/test-owned paths and enum values (CWE-78)
+			stdout, err := command.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%s %s: %v\n%s", cliBinary, strings.Join(args, " "), err, stdout)
+			}
+			var receipt auditanchor.VerificationResult
+			if err := json.Unmarshal(stdout, &receipt); err != nil {
+				t.Fatalf("decode command receipt: %v: %s", err, stdout)
+			}
+			if receipt.Format != format || receipt.RecordCount == 0 || receipt.ChainHead == "" ||
+				receipt.AnchorKind != auditanchor.KindRFC3161 {
+				t.Fatalf("offline %s receipt = %+v", format, receipt)
+			}
+		})
+	}
+}
+
+func buildAuditVerifierCLI_AUD53(t *testing.T) string {
+	t.Helper()
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("working directory: %v", err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(workingDir, "../.."))
+	binary := filepath.Join(t.TempDir(), "trstctl-cli")
+	command := exec.Command("go", "build", "-o", binary, "./cmd/trstctl-cli") // #nosec G204 -- fixed repository binary and test-owned destination (CWE-78)
+	command.Dir = repoRoot
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build shipped trstctl-cli: %v\n%s", err, output)
+	}
+	return binary
 }
 
 func newAnchoredAuditExportHarnessAUD51(t *testing.T) (*httptest.Server, string, *Server, []byte) {

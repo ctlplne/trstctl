@@ -1223,6 +1223,14 @@ AuditTimestampToken = TypedDict(
     total=False,
 )
 
+AuditVerificationKeySet = TypedDict(
+    'AuditVerificationKeySet',
+    {
+        'keys': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 Brand = TypedDict(
     'Brand',
     {

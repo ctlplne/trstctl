@@ -312,6 +312,9 @@ func VerifyCSVArtifact(raw []byte, tsaRootDER []byte, tolerance time.Duration) (
 	if len(rows) < 2 {
 		return nil, errors.New("auditanchor: CSV is missing its integrity trailer")
 	}
+	if len(rows)-2 > maxArtifactRecords {
+		return nil, fmt.Errorf("auditanchor: CSV exceeds the %d-record limit", maxArtifactRecords)
+	}
 	if len(rows[0]) != len(csvColumns) {
 		return nil, errors.New("auditanchor: CSV header has an unsupported shape")
 	}

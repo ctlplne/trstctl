@@ -3025,6 +3025,12 @@ func componentSchemas() map[string]*Schema {
 		"chain_head":     str(),
 		"anchor":         ref("AuditAnchor"),
 	}, "schema_version", "format", "bundle", "chain_head", "anchor")
+	auditVerificationKey := object(map[string]*Schema{
+		"kty": str(), "kid": str(), "n": str(), "e": str(),
+	}, "kty", "kid", "n", "e")
+	auditVerificationKeySet := object(map[string]*Schema{
+		"keys": {Type: "array", Items: auditVerificationKey},
+	}, "keys")
 	auditFeedRequest := object(map[string]*Schema{
 		"name":         str(),
 		"provider":     {Type: "string", Enum: []string{"splunk-hec", "sentinel"}},
@@ -5143,6 +5149,7 @@ func componentSchemas() map[string]*Schema {
 		"AuditTimestampToken":                      auditTimestampToken,
 		"AuditAnchor":                              auditAnchor,
 		"AuditBundle":                              auditBundle,
+		"AuditVerificationKeySet":                  auditVerificationKeySet,
 		"AuditFeedRequest":                         auditFeedRequest,
 		"AuditFeed":                                auditFeed,
 		"AuditFeedList":                            auditFeedList,

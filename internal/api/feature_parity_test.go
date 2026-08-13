@@ -157,9 +157,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// upstream is healthy; this one asks whether isolated clients have a fresh
 	// validated local copy.
 	// AUD-49 adds exact signed endpoint-result readback, an authorized redacted
-	// support addendum, and the prove-fixed mutation.
-	if len(out) != 369 {
-		t.Fatalf("OpenAPI operationIds = %d, want 369", len(out))
+	// support addendum, and the prove-fixed mutation. AUD-53 raises the ratchet to
+	// 370 with the public-only audit verification-key bootstrap.
+	if len(out) != 370 {
+		t.Fatalf("OpenAPI operationIds = %d, want 370", len(out))
 	}
 	return out
 }

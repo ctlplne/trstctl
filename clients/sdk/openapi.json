@@ -3414,6 +3414,40 @@
         ],
         "type": "object"
       },
+      "AuditVerificationKeySet": {
+        "properties": {
+          "keys": {
+            "items": {
+              "properties": {
+                "e": {
+                  "type": "string"
+                },
+                "kid": {
+                  "type": "string"
+                },
+                "kty": {
+                  "type": "string"
+                },
+                "n": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kty",
+                "kid",
+                "n",
+                "e"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "type": "object"
+      },
       "Brand": {
         "properties": {
           "custom": {
@@ -27923,6 +27957,53 @@
         ],
         "summary": "Configure a durable native Splunk HEC or Sentinel audit feed",
         "x-trstctl-permission": "audit:write"
+      }
+    },
+    "/api/v1/audit/verification-keys": {
+      "get": {
+        "operationId": "getAuditVerificationKeys",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVerificationKeySet"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Download public keys for offline audit evidence verification",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/brand": {

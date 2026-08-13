@@ -869,6 +869,10 @@ export interface AuditTimestampToken {
   tsa_cert: string;
 }
 
+export interface AuditVerificationKeySet {
+  keys: { e: string; kid: string; kty: string; n: string }[];
+}
+
 export interface Brand {
   custom: boolean;
   login_message?: string;
