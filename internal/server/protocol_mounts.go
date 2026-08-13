@@ -256,7 +256,11 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	if acmeValidators != nil {
 		validators = *acmeValidators
 	}
-	acmeSrv := acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
+	acmeSrv := acme.New(protocolCAAdapter{
+		tenantID:  acmeTenant,
+		issuer:    issuer,
+		caCertDER: append([]byte(nil), s.caCertDER...),
+	}, validators).
 		WithQuota(acmeQuotaConfig(cfg.ACMEQuota)).
 		WithDeviceAttestationPolicy(acmeDeviceAttestationProfiles{
 			store:       s.store,

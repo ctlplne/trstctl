@@ -1288,10 +1288,13 @@ func TestServedACMEEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("finalize/create cert: %v", err)
 	}
-	if len(der) == 0 {
-		t.Fatal("served ACME returned no certificate")
+	if len(der) != 2 {
+		t.Fatalf("served ACME chain contains %d certificates, want leaf plus exact issuer", len(der))
 	}
 	leafDER := der[0]
+	if !bytes.Equal(der[1], caCertDER(t, h.caPEM)) {
+		t.Fatal("served ACME chain does not place the exact issuing CA after the leaf")
+	}
 
 	// The issued cert must verify against the SERVED issuing CA (a real, signer-issued
 	// chain, not a stub).
@@ -1506,10 +1509,13 @@ func TestServedACMEStateRebuildsAfterServerRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("finalize/create cert: %v", err)
 	}
-	if len(der) == 0 {
-		t.Fatal("served ACME returned no certificate")
+	if len(der) != 2 {
+		t.Fatalf("served ACME chain before restart contains %d certificates, want leaf plus exact issuer", len(der))
 	}
 	leafDER := der[0]
+	if !bytes.Equal(der[1], caCertDER(t, h.caPEM)) {
+		t.Fatal("served ACME chain before restart does not place the exact issuing CA after the leaf")
+	}
 	info, err := certinfo.Inspect(leafDER)
 	if err != nil {
 		t.Fatalf("inspect issued cert: %v", err)
@@ -1542,8 +1548,8 @@ func TestServedACMEStateRebuildsAfterServerRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch cert after restart: %v", err)
 	}
-	if len(fetched) == 0 || !bytes.Equal(fetched[0], leafDER) {
-		t.Fatal("restarted served ACME returned the wrong certificate")
+	if len(fetched) != 2 || !bytes.Equal(fetched[0], leafDER) || !bytes.Equal(fetched[1], caCertDER(t, h.caPEM)) {
+		t.Fatal("restarted served ACME returned the wrong leaf-plus-issuer chain")
 	}
 	renewal, err := http.Get(ts2.URL + "/acme/renewal-info/" + certID)
 	if err != nil {

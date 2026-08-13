@@ -42,6 +42,10 @@ three challenge types by default (`http-01`, `dns-01`, `tls-alpn-01`); finalize 
 [issuance path](issuance-and-cas.md) to mint the certificate. Account registration is
 idempotent by key thumbprint, per the spec. **Served** endpoints start at
 `GET /directory`; challenge and order endpoints live under `/acme/...`.
+The certificate URL returns `application/pem-certificate-chain` with the
+signer-issued leaf first and the exact public issuing certificate second. The same
+ordered bytes survive ACME state replay, so strict clients such as Certbot can build
+their `cert.pem` and `fullchain.pem` artifacts after either issuance or restart.
 
 Operators can require ACME External Account Binding (EAB, CAP-ISS-04) for account registration.
 When `protocols.acme_eab.required` is on, the directory advertises

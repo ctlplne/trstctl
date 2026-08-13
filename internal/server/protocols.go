@@ -366,17 +366,19 @@ func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolN
 // caCA adapts the protocol issuer to the ca.CA interface so the built-in ACME
 // server (which brokers issuance to a ca.CA) mints through the served signer path.
 type protocolCAAdapter struct {
-	tenantID string
-	issuer   *protocolIssuer
+	tenantID  string
+	issuer    *protocolIssuer
+	caCertDER []byte
 }
 
 // Name identifies the authority in events and the issued Certificate.
 func (a protocolCAAdapter) Name() string { return "trstctl-served-ca" }
 
 // Issue implements ca.CA: it mints the leaf through the served signer path and
-// returns it in the ca.Certificate shape the ACME server expects (leaf PEM + serial
-// + notAfter). The ACME order's DNS names are authorized by the ACME challenge flow
-// before finalize; here we sign the order's CSR.
+// returns it in the ca.Certificate shape the ACME server expects (leaf followed by
+// the exact public issuer PEM, plus serial and notAfter). The ACME order's DNS names
+// are authorized by the ACME challenge flow before finalize; here we sign the
+// order's CSR and bind the leaf back to the served trust authority.
 func (a protocolCAAdapter) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate, error) {
 	tenant := req.TenantID
 	if tenant == "" {
@@ -392,8 +394,23 @@ func (a protocolCAAdapter) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 	if err != nil {
 		return ca.Certificate{}, err
 	}
+	if len(a.caCertDER) == 0 {
+		return ca.Certificate{}, errors.New("server: ACME certificate chain has no served issuer")
+	}
+	issuerInfo, err := certinfo.Inspect(a.caCertDER)
+	if err != nil {
+		return ca.Certificate{}, fmt.Errorf("server: inspect ACME issuing certificate: %w", err)
+	}
+	if !issuerInfo.IsCA {
+		return ca.Certificate{}, errors.New("server: ACME issuing certificate is not a CA")
+	}
+	if err := crypto.VerifyLeafSignedByCA(leafDER, a.caCertDER); err != nil {
+		return ca.Certificate{}, fmt.Errorf("server: ACME leaf does not chain to served issuer: %w", err)
+	}
+	chainPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
+	chainPEM = append(chainPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: a.caCertDER})...)
 	return ca.Certificate{
-		CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}),
+		CertificatePEM: chainPEM,
 		Serial:         info.SerialNumber,
 		NotAfter:       info.NotAfter,
 		Issuer:         info.Issuer,
