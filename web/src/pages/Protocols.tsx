@@ -395,9 +395,7 @@ export function Protocols() {
     }
   }
 
-  const hasQueuedEnrollmentVerification = Boolean(
-    diagnostics?.items.some((item) => item.verification_status === "queued"),
-  );
+  const hasQueuedEnrollmentVerification = Boolean(diagnostics?.items.some((item) => item.verification_status === "queued"));
 
   useEffect(() => {
     if (!hasQueuedEnrollmentVerification || typeof api.enrollmentDiagnostics !== "function") return;
@@ -442,7 +440,7 @@ export function Protocols() {
   }, []);
 
   return (
-    <section aria-labelledby="protocols-heading" className="grid gap-6">
+    <section aria-labelledby="protocols-heading" className="grid min-w-0 gap-6 [&>*]:min-w-0">
       <PageHeader
         titleId="protocols-heading"
         title={translateNow("source.protocols.1019490835")}
@@ -1106,20 +1104,20 @@ export function Protocols() {
         )}
       </section>
 
-      <section aria-labelledby="client-setup-heading" className="grid gap-4">
+      <section aria-labelledby="client-setup-heading" className="grid min-w-0 gap-4 [&>*]:min-w-0">
         <h2 id="client-setup-heading" className="text-title font-semibold">
           {translateNow("source.client.setup.4ba2b51d20")}
         </h2>
         {protocolSurfaces.map((protocol) => (
-          <section key={protocol.id} aria-labelledby={`${protocol.id}-heading`} className="border-y border-border py-4">
-            <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
+          <section key={protocol.id} aria-labelledby={`${protocol.id}-heading`} className="min-w-0 border-y border-border py-4">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] [&>*]:min-w-0">
               <div>
                 <h3 id={`${protocol.id}-heading`} className="text-base font-semibold">
                   {protocol.name}
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">{protocol.capability}</p>
               </div>
-              <div className="grid gap-3">
+              <div className="grid min-w-0 gap-3 [&>*]:min-w-0">
                 {protocol.snippets.map((snippet) => {
                   const copiedKey = `${protocol.id}:${snippet.label}`;
                   return (

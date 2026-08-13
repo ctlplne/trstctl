@@ -1970,6 +1970,7 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	if s.protocols != nil {
 		s.protocols.routes(mux, s.bulk)
 	}
+	registerProtocolNamespaceFallbacks(mux, s.protocols)
 	if d.ProviderHandler != nil {
 		mux.Handle("/provider/", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, d.ProviderHandler))
 	} else {

@@ -1278,7 +1278,9 @@ async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeSt
       headers: { Accept: spec.accept ?? "*/*" },
     });
     const methodMismatchServed = spec.methodMismatchMeansServed === true && res.status === 405;
-    const ok = res.ok || methodMismatchServed;
+    const candidateStatus = res.ok || methodMismatchServed;
+    const contentMatches = candidateStatus && (await protocolProbeContentMatches(spec, res));
+    const ok = candidateStatus && contentMatches;
     return {
       protocol: spec.protocol,
       endpoint: spec.endpoint,
@@ -1289,7 +1291,9 @@ async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeSt
         ? methodMismatchServed
           ? (spec.methodMismatchDetail ?? "Responder is mounted and expects a protocol request.")
           : spec.successDetail
-        : protocolProbeFailureDetail(res),
+        : candidateStatus
+          ? "Unexpected responder content; protocol status could not be verified."
+          : protocolProbeFailureDetail(res),
     };
   } catch {
     return {
@@ -1301,6 +1305,64 @@ async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeSt
         return translateNow("source.responder.probe.failed.before.an.http.stat.e6657440c5");
       },
     };
+  }
+}
+
+async function protocolProbeContentMatches(spec: ProtocolProbeSpec, res: Response): Promise<boolean> {
+  const mediaType = (res.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > 1 << 20) return false;
+  const text = new TextDecoder().decode(bytes);
+
+  switch (spec.protocol) {
+    case "acme": {
+      if (mediaType !== "application/json") return false;
+      try {
+        const directory = JSON.parse(text) as Record<string, unknown>;
+        return ["newNonce", "newAccount", "newOrder", "keyChange", "revokeCert"].every(
+          (field) => typeof directory[field] === "string" && (directory[field] as string).length > 0,
+        );
+      } catch {
+        return false;
+      }
+    }
+    case "est": {
+      if (mediaType !== "application/pkcs7-mime" || res.headers.get("Content-Transfer-Encoding")?.toLowerCase() !== "base64") return false;
+      const encoded = text.replace(/\s/g, "");
+      if (!encoded || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) return false;
+      try {
+        const der = globalThis.atob(encoded);
+        return der.length > 1 && der.charCodeAt(0) === 0x30;
+      } catch {
+        return false;
+      }
+    }
+    case "scep": {
+      if (mediaType !== "text/plain") return false;
+      const capabilities = new Set(
+        text
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean),
+      );
+      return ["POSTPKIOperation", "SHA-256", "SCEPStandard"].every((capability) => capabilities.has(capability));
+    }
+    case "cmp":
+      return res.status === 405 && mediaType === "text/plain" && text.trim() === "cmp: POST required (RFC 6712)";
+    case "ssh":
+      return mediaType === "text/plain" && /^(?:ssh-(?:rsa|ed25519)|ecdsa-sha2-nistp(?:256|384|521))\s+[A-Za-z0-9+/]+={0,3}(?:\s|$)/.test(text.trim());
+    case "tsa":
+      return (
+        res.status === 405 &&
+        mediaType === "text/plain" &&
+        (res.headers.get("Allow") ?? "")
+          .split(",")
+          .map((method) => method.trim().toUpperCase())
+          .includes("POST") &&
+        text.trim() === "method not allowed"
+      );
+    default:
+      return false;
   }
 }
 

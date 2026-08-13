@@ -122,6 +122,29 @@ func protocolHTTPMountPatterns(protocol string) []string {
 	}
 }
 
+// protocolHTTPNamespacePatterns returns every path shape owned by an HTTP machine
+// protocol, including child paths that are not valid operations. The root mux
+// reserves this larger set before the browser SPA fallback so a disabled or
+// misspelled protocol URL can never become a successful console document.
+func protocolHTTPNamespacePatterns(protocol string) []string {
+	switch protocol {
+	case "acme":
+		return []string{"/directory", "/directory/", "/acme/"}
+	case "est":
+		return []string{"/.well-known/est/"}
+	case "scep":
+		return []string{"/scep", "/scep/"}
+	case "cmp":
+		return []string{"/cmp", "/cmp/"}
+	case "ssh":
+		return []string{"/ssh/"}
+	case "tsa":
+		return []string{"/tsa", "/tsa/"}
+	default:
+		return nil
+	}
+}
+
 func protocolAuthzRoutePatterns(protocol string) []string {
 	switch protocol {
 	case "acme":

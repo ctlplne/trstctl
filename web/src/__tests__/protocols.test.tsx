@@ -353,6 +353,14 @@ describe("protocol surface", () => {
     apiMock.deleteACMEDNS01ProviderConfig.mockResolvedValue(undefined);
   });
 
+  it("keeps wide protocol tables inside the page at narrow viewports (AUD-125)", async () => {
+    await renderProtocols();
+
+    expect(screen.getByRole("region", { name: "Protocols" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
+    expect(screen.getByRole("region", { name: "Client setup" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
+    expect(screen.getByRole("region", { name: "ACME" })).toHaveClass("min-w-0");
+  });
+
   it("renders ACME setup with live responder status", async () => {
     const writeText = installClipboardSpy();
     await renderProtocols();
@@ -556,10 +564,7 @@ describe("protocol surface", () => {
     });
     expect(await within(panel).findByText("Verified fixed")).toBeInTheDocument();
     expect(within(panel).getByText("sha256:network-proof")).toBeInTheDocument();
-    expect(within(panel).getByRole("link", { name: "Signed verification evidence" })).toHaveAttribute(
-      "href",
-      "/api/v1/endpoints/verifications/verify-1",
-    );
+    expect(within(panel).getByRole("link", { name: "Signed verification evidence" })).toHaveAttribute("href", "/api/v1/endpoints/verifications/verify-1");
   });
 
   it("does not render the prove-fixed control for a read-only operator", async () => {

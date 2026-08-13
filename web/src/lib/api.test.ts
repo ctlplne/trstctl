@@ -412,6 +412,86 @@ describe("eval protocol profile client", () => {
   });
 });
 
+describe("protocol responder truth (AUD-75)", () => {
+  it("refuses a successful console document for every machine-protocol probe", async () => {
+    const consoleHTML = '<!doctype html><html><body><div id="root"></div></body></html>';
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(consoleHTML, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } })),
+    );
+
+    const statuses = await api.protocolStatuses();
+
+    expect(statuses.items).toHaveLength(6);
+    for (const status of statuses.items) {
+      expect(status.enabled, status.protocol).toBe(false);
+      expect(status.served, status.protocol).toBe(false);
+      expect(status.status_code, status.protocol).toBe(200);
+      expect(status.detail, status.protocol).toMatch(/unexpected responder content/i);
+    }
+  });
+
+  it("accepts only each responder's protocol-specific status, MIME, and body", async () => {
+    const responses = new Map<string, () => Response>([
+      [
+        "/directory",
+        () =>
+          new Response(
+            JSON.stringify({
+              newNonce: "https://trstctl.example.test/acme/new-nonce",
+              newAccount: "https://trstctl.example.test/acme/new-account",
+              newOrder: "https://trstctl.example.test/acme/new-order",
+              keyChange: "https://trstctl.example.test/acme/key-change",
+              revokeCert: "https://trstctl.example.test/acme/revoke-cert",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+      ],
+      [
+        "/.well-known/est/cacerts",
+        () =>
+          new Response("MAA=\n", {
+            status: 200,
+            headers: { "Content-Type": "application/pkcs7-mime; smime-type=certs-only", "Content-Transfer-Encoding": "base64" },
+          }),
+      ],
+      [
+        "/scep?operation=GetCACaps",
+        () => new Response("POSTPKIOperation\nSHA-256\nSCEPStandard\n", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } }),
+      ],
+      ["/cmp", () => new Response("cmp: POST required (RFC 6712)\n", { status: 405, headers: { "Content-Type": "text/plain; charset=utf-8" } })],
+      [
+        "/ssh/ca",
+        () =>
+          new Response("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKnownPublicOnlyKey trstctl-ssh-ca\n", {
+            status: 200,
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          }),
+      ],
+      ["/tsa", () => new Response("method not allowed\n", { status: 405, headers: { Allow: "POST", "Content-Type": "text/plain; charset=utf-8" } })],
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (target: RequestInfo | URL) => {
+        const response = responses.get(String(target));
+        if (!response) throw new Error(`unexpected protocol probe ${String(target)}`);
+        return response();
+      }),
+    );
+
+    const statuses = await api.protocolStatuses();
+
+    expect(statuses.items.map((status) => [status.protocol, status.served, status.status_code])).toEqual([
+      ["acme", true, 200],
+      ["est", true, 200],
+      ["scep", true, 200],
+      ["cmp", true, 405],
+      ["ssh", true, 200],
+      ["tsa", true, 405],
+    ]);
+  });
+});
+
 describe("licensed PQC migration client", () => {
   const input = {
     asset_ids: ["asset-1"],
@@ -957,12 +1037,26 @@ describe("agent contract", () => {
 describe("protocol responder status contract", () => {
   it("checks served protocol responder paths without mutation headers", async () => {
     mockFetchSequence([
-      { status: 200, body: "{}" },
+      {
+        status: 200,
+        body: JSON.stringify({
+          newNonce: "/acme/new-nonce",
+          newAccount: "/acme/new-account",
+          newOrder: "/acme/new-order",
+          keyChange: "/acme/key-change",
+          revokeCert: "/acme/revoke-cert",
+        }),
+        headers: { "Content-Type": "application/json" },
+      },
       { status: 404, body: "not mounted" },
-      { status: 200, body: "GetCACaps\nPOSTPKIOperation" },
-      { status: 405, body: "method not allowed" },
-      { status: 200, body: "ssh-ed25519 AAAA..." },
-      { status: 405, body: "method not allowed" },
+      {
+        status: 200,
+        body: "POSTPKIOperation\nSHA-256\nSCEPStandard\n",
+        headers: { "Content-Type": "text/plain" },
+      },
+      { status: 405, body: "cmp: POST required (RFC 6712)\n", headers: { "Content-Type": "text/plain" } },
+      { status: 200, body: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKnownPublicOnlyKey\n", headers: { "Content-Type": "text/plain" } },
+      { status: 405, body: "method not allowed\n", headers: { "Content-Type": "text/plain", Allow: "POST" } },
     ]);
 
     const page = await api.protocolStatuses();

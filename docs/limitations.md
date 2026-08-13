@@ -3511,7 +3511,14 @@ This is a deliberate, documented trust boundary, not an accident.
   explicitly binds the served endpoint to a tenant; if a protocol is enabled without a
   tenant, startup validation fails before the route is exposed (per-tenant isolation
   forbids minting evidence into a blank tenant). All protocols activate only when an
-  issuing CA is provisioned.
+  issuing CA is provisioned. HTTP protocol namespaces stay machine-only even while a
+  toggle is off: `/directory` + `/acme/`, `/.well-known/est/`, `/scep`, `/cmp`,
+  `/ssh/`, and `/tsa` return a stable `404 application/problem+json` response instead
+  of falling through to the React console. Unknown `/directory/`, `/cmp/`, and `/tsa/`
+  children are reserved too. The Protocols register does not infer availability from
+  HTTP 200 alone; it verifies each responder's protocol-specific status, media type,
+  and public discovery payload, so console HTML cannot masquerade as ACME, EST, SCEP,
+  CMP, SSH CA, or TSA readiness.
   - Reference-implementation differentials: cross-checked against
     an *independent* implementation, not just our own parser. ACME: a
     differential against Pebble (the reference test ACME CA) as a dedicated

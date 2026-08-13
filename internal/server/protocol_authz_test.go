@@ -66,3 +66,36 @@ func TestProtocolAuthzManifestEnumeratesMountedProtocolSurfaces(t *testing.T) {
 		}
 	}
 }
+
+func TestProtocolHTTPNamespaceRegistryCoversEveryMountAUD75(t *testing.T) {
+	want := map[string][]string{
+		"acme": {"/directory", "/directory/", "/acme/"},
+		"est":  {"/.well-known/est/"},
+		"scep": {"/scep", "/scep/"},
+		"cmp":  {"/cmp", "/cmp/"},
+		"ssh":  {"/ssh/"},
+		"tsa":  {"/tsa", "/tsa/"},
+	}
+	if len(httpProtocolNames) != len(want) {
+		t.Fatalf("HTTP protocol registry has %d names, want %d: %v", len(httpProtocolNames), len(want), httpProtocolNames)
+	}
+	seen := make(map[string]struct{}, len(httpProtocolNames))
+	for _, protocol := range httpProtocolNames {
+		if _, duplicate := seen[protocol]; duplicate {
+			t.Fatalf("duplicate HTTP protocol registry name %q", protocol)
+		}
+		seen[protocol] = struct{}{}
+		if got := protocolHTTPNamespacePatterns(protocol); !reflect.DeepEqual(got, want[protocol]) {
+			t.Errorf("%s namespace patterns=%v, want %v", protocol, got, want[protocol])
+		}
+		reserved := make(map[string]struct{}, len(want[protocol]))
+		for _, pattern := range want[protocol] {
+			reserved[pattern] = struct{}{}
+		}
+		for _, pattern := range protocolHTTPMountPatterns(protocol) {
+			if _, ok := reserved[pattern]; !ok {
+				t.Errorf("%s enabled mount %q is not reserved from the SPA fallback", protocol, pattern)
+			}
+		}
+	}
+}

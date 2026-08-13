@@ -425,6 +425,86 @@ func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 	}
 }
 
+var httpProtocolNames = []string{"acme", "est", "scep", "cmp", "ssh", "tsa"}
+
+// registerProtocolNamespaceFallbacks owns every HTTP protocol-shaped path that no
+// enabled protocol handler owns. Without this layer, the final React handler treats
+// a machine URL as a client-side browser route and returns index.html with HTTP 200.
+func registerProtocolNamespaceFallbacks(mux *http.ServeMux, sp *servedProtocols) {
+	for _, protocol := range httpProtocolNames {
+		patterns := protocolHTTPNamespacePatterns(protocol)
+		handler := protocolNotServedHandler(protocol)
+		if sp.hasHTTPProtocol(protocol) {
+			patterns = unmatchedProtocolNamespacePatterns(protocol)
+			handler = protocolRouteNotFoundHandler(protocol)
+		}
+		for _, pattern := range patterns {
+			mux.Handle(pattern, handler)
+		}
+	}
+}
+
+func (sp *servedProtocols) hasHTTPProtocol(protocol string) bool {
+	if sp == nil {
+		return false
+	}
+	switch protocol {
+	case "acme":
+		return sp.acme != nil
+	case "est":
+		return sp.est != nil
+	case "scep":
+		return sp.scep != nil
+	case "cmp":
+		return sp.cmp != nil
+	case "ssh":
+		return sp.ssh != nil
+	case "tsa":
+		return sp.tsa != nil
+	default:
+		return false
+	}
+}
+
+// unmatchedProtocolNamespacePatterns are reservation-only child paths not already
+// covered by the enabled protocol's mount. Prefix mounts such as /acme/ delegate
+// their own unknown children to a protocol mux, which already returns non-HTML 404.
+func unmatchedProtocolNamespacePatterns(protocol string) []string {
+	mounted := make(map[string]struct{}, len(protocolHTTPMountPatterns(protocol)))
+	for _, pattern := range protocolHTTPMountPatterns(protocol) {
+		mounted[pattern] = struct{}{}
+	}
+	var unmatched []string
+	for _, pattern := range protocolHTTPNamespacePatterns(protocol) {
+		if _, ok := mounted[pattern]; !ok {
+			unmatched = append(unmatched, pattern)
+		}
+	}
+	return unmatched
+}
+
+func protocolNotServedHandler(protocol string) http.Handler {
+	return protocolNamespaceProblemHandler(protocol, "urn:trstctl:problem:protocol-not-served", "Protocol is not served")
+}
+
+func protocolRouteNotFoundHandler(protocol string) http.Handler {
+	return protocolNamespaceProblemHandler(protocol, "urn:trstctl:problem:protocol-route-not-found", "Protocol route not found")
+}
+
+func protocolNamespaceProblemHandler(protocol, problemType, title string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(struct {
+			Type     string `json:"type"`
+			Title    string `json:"title"`
+			Status   int    `json:"status"`
+			Protocol string `json:"protocol"`
+		}{Type: problemType, Title: title, Status: http.StatusNotFound, Protocol: protocol})
+	})
+}
+
 // tenantCtxHandler returns an http.Handler that injects a per-protocol tenant into
 // the request context (via the protocol's WithTenant) before delegating, so the
 // protocol's audit events are tenant-attributed.

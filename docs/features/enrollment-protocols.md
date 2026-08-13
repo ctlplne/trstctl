@@ -207,7 +207,10 @@ when an issuing CA is provisioned. EST and SCEP both rely on the device trusting
 `/cacerts`/`GetCACert` chain first; SCEP's security depends on the challenge gate (F56)
 since the protocol itself is weakly authenticated. For SCEP/CMP, keep
 `protocols.ra_key_file` on shared persistent storage in HA so all replicas use the same
-transport identity.
+transport identity. Disabled `/.well-known/est/`, `/scep`, and `/cmp` namespaces are
+still reserved by the control-plane mux and return `404 application/problem+json`;
+they never fall through to the browser SPA as HTTP 200. Unknown protocol children fail
+the same machine-route boundary rather than becoming console routes.
 
 An evaluation stack can instead select `protocols.profile=eval` with one
 `eval_tenant_id`, assembling ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE but keeping
