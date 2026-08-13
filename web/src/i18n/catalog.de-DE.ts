@@ -3487,6 +3487,10 @@ const deDECatalog = {
   "source.cmdb.sync.failing.i2own00013": "Der letzte Lesevorgang ist fehlgeschlagen: {value1}",
   "source.cmdb.sync.relay.i2own00014":
     "Ausgeführt von einem Netzwerk-Relay innerhalb des Segments; das Token wird pro Versuch eingelöst und der Abgleich läuft weiterhin in der Steuerungsebene.",
+  "cmdb.sync.coverage.unknown.aud460001": "{read} CIs auf {pages} Seiten gelesen; die CMDB hat keine Gesamtzahl bereitgestellt.",
+  "cmdb.sync.coverage.known.aud460002": "{read} von {expected} CIs auf {pages} Seiten gelesen.",
+  "cmdb.sync.coverage.complete.aud460003": "Abdeckung vollständig. {changed} geänderte und {removed} entfernte CIs wurden abgeglichen.",
+  "cmdb.sync.coverage.incomplete.aud460004": "Abdeckung unvollständig. Der bestätigte Cursor {cursor} bleibt für die nächste Relay-Seite erhalten.",
   "source.ownership.source.column.i2own00006": "Herkunft der Zust\u00e4ndigkeit",
   "source.ownership.source.observed.i2own00008": "{value1}, zuletzt gesehen {value2}",
   "source.ownership.source.unrecorded.i2own00007": "nicht erfasst",

@@ -4839,11 +4839,28 @@
           "allow_private_endpoint": {
             "type": "boolean"
           },
+          "changed_count": {
+            "type": "integer"
+          },
           "ci_query": {
             "type": "string"
           },
           "configured": {
             "type": "boolean"
+          },
+          "coverage_complete": {
+            "type": "boolean"
+          },
+          "coverage_status": {
+            "enum": [
+              "not_configured",
+              "paused",
+              "not_started",
+              "in_progress",
+              "failed",
+              "complete"
+            ],
+            "type": "string"
           },
           "enabled": {
             "type": "boolean"
@@ -4855,6 +4872,9 @@
             ],
             "type": "string"
           },
+          "expected_count": {
+            "type": "integer"
+          },
           "guidance": {
             "type": "string"
           },
@@ -4864,10 +4884,34 @@
           "interval_seconds": {
             "type": "integer"
           },
+          "last_attempt_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "last_error": {
             "type": "string"
           },
           "last_run_at": {
+            "type": "string"
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "pages_completed": {
+            "type": "integer"
+          },
+          "read_count": {
+            "type": "integer"
+          },
+          "removed_count": {
+            "type": "integer"
+          },
+          "sweep_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sweep_started_at": {
+            "format": "date-time",
             "type": "string"
           },
           "token_ref": {
@@ -4877,6 +4921,12 @@
         "required": [
           "configured",
           "enabled",
+          "read_count",
+          "pages_completed",
+          "coverage_complete",
+          "coverage_status",
+          "removed_count",
+          "changed_count",
           "guidance"
         ],
         "type": "object"
@@ -39182,7 +39232,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Read the CMDB reconcile schedule, including when it last ran and why it last failed",
+        "summary": "Read the CMDB schedule, bounded-page coverage, retained cursor, terminal run, and last failure",
         "x-trstctl-permission": "owners:read"
       },
       "put": {

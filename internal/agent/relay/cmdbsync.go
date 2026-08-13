@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/ownership"
@@ -41,7 +43,7 @@ func runCMDBSync(ctx context.Context, ch Channel, client *http.Client, job Job) 
 	if limit <= 0 || limit > 500 {
 		limit = 500
 	}
-	endpoint, err := ownership.CMDBEndpoint(intent.InstanceURL, intent.CIQuery, limit)
+	endpoint, err := ownership.CMDBPageEndpoint(intent.InstanceURL, intent.CIQuery, limit, intent.AfterSysID)
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "cmdb instance URL is not usable")
 		return false
@@ -95,16 +97,22 @@ func runCMDBSync(ctx context.Context, ch Channel, client *http.Client, job Job) 
 		return false
 	}
 
-	records, unattributed, err := ownership.ParseCMDB(io.LimitReader(resp.Body, maxCMDBResponseBytes))
+	page, err := ownership.ParseCMDBPage(io.LimitReader(resp.Body, maxCMDBResponseBytes))
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "cmdb response could not be parsed")
 		return false
 	}
-	detail, err := json.Marshal(struct {
-		ObservedAt   time.Time          `json:"observed_at"`
-		Records      []ownership.Record `json:"records"`
-		Unattributed []string           `json:"unattributed,omitempty"`
-	}{ObservedAt: time.Now().UTC(), Records: records, Unattributed: unattributed})
+	expected := intent.ExpectedCount
+	if remaining, parseErr := strconv.Atoi(strings.TrimSpace(resp.Header.Get("X-Total-Count"))); parseErr == nil && remaining >= 0 {
+		total := intent.ReadCount + remaining
+		expected = &total
+	}
+	detail, err := json.Marshal(ownership.CMDBSyncReport{
+		SweepID: intent.SweepID, AfterSysID: intent.AfterSysID, ObservedAt: time.Now().UTC(),
+		SourceRefs: page.SourceRefs, Records: page.Records, Unattributed: page.Unattributed,
+		ReadCount: intent.ReadCount + len(page.SourceRefs), ExpectedCount: expected,
+		Complete: len(page.SourceRefs) < limit,
+	})
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "cmdb records could not be encoded")
 		return false

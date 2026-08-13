@@ -3475,6 +3475,10 @@ const esESCatalog = {
   "source.cmdb.sync.failing.i2own00013": "La \u00faltima lectura fall\u00f3: {value1}",
   "source.cmdb.sync.relay.i2own00014":
     "Ejecutado por un relé de red dentro del segmento; el token se canjea por intento y la reconciliación sigue ejecutándose en el plano de control.",
+  "cmdb.sync.coverage.unknown.aud460001": "Se leyeron {read} CI en {pages} páginas; la CMDB no proporcionó un total.",
+  "cmdb.sync.coverage.known.aud460002": "Se leyeron {read} de {expected} CI en {pages} páginas.",
+  "cmdb.sync.coverage.complete.aud460003": "Cobertura completa. Se reconciliaron {changed} CI modificados y {removed} eliminados.",
+  "cmdb.sync.coverage.incomplete.aud460004": "Cobertura incompleta. El cursor confirmado {cursor} se conserva para la siguiente página del relé.",
   "source.ownership.source.column.i2own00006": "Origen de la propiedad",
   "source.ownership.source.observed.i2own00008": "{value1}, visto por \u00faltima vez {value2}",
   "source.ownership.source.unrecorded.i2own00007": "sin registrar",

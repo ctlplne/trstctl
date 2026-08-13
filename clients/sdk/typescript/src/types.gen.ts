@@ -3465,7 +3465,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read the CMDB reconcile schedule, including when it last ran and why it last failed */
+        /** Read the CMDB schedule, bounded-page coverage, retained cursor, terminal run, and last failure */
         get: operations["getCMDBReconcileSchedule"];
         /** Configure scheduled read-only reconciliation of ownership against a ServiceNow CMDB */
         put: operations["putCMDBReconcileSchedule"];
@@ -6588,16 +6588,31 @@ export interface components {
         };
         CMDBReconcileSchedule: {
             allow_private_endpoint?: boolean;
+            changed_count: number;
             ci_query?: string;
             configured: boolean;
+            coverage_complete: boolean;
+            /** @enum {string} */
+            coverage_status: "not_configured" | "paused" | "not_started" | "in_progress" | "failed" | "complete";
             enabled: boolean;
             /** @enum {string} */
             execution?: "relay" | "";
+            expected_count?: number;
             guidance: string;
             instance_url?: string;
             interval_seconds?: number;
+            /** Format: date-time */
+            last_attempt_at?: string;
             last_error?: string;
             last_run_at?: string;
+            next_cursor?: string;
+            pages_completed: number;
+            read_count: number;
+            removed_count: number;
+            /** Format: uuid */
+            sweep_id?: string;
+            /** Format: date-time */
+            sweep_started_at?: string;
             token_ref?: string;
         };
         CRLDistribution: {

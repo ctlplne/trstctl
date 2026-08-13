@@ -19,8 +19,8 @@ const (
 	// schedule's own interval decides when it is due; this is detection latency
 	// only, matching the discovery scheduler.
 	cmdbSchedulerInterval = time.Minute
-	// cmdbPageLimit bounds one sweep's read. A CMDB with a hundred thousand CIs
-	// must not turn one tick into an unbounded fetch-and-reconcile (AN-7).
+	// cmdbPageLimit bounds one relay job and one page event. A large CMDB is a
+	// chain of these bounded units, never one unbounded fetch/reconcile (AN-7).
 	cmdbPageLimit = 500
 )
 
@@ -31,13 +31,14 @@ type CMDBReconcileResult struct {
 	Unchanged    int
 	Conflicts    int
 	Unattributed []string
+	Observations []projections.CMDBCIObservation
 }
 
-// cmdbEndpoint is a pure builder kept beside the scheduler's fixed bound. Both
-// the relay executor and architecture tests use ownership.CMDBEndpoint; no
-// network client or credential exists in this control-plane package.
+// cmdbEndpoint is a compatibility helper for the architecture tests. The relay
+// executor uses the same ownership builder with a durable cursor; no network
+// client or credential exists in this control-plane package.
 func cmdbEndpoint(instanceURL, query string) (string, error) {
-	return ownership.CMDBEndpoint(instanceURL, query, cmdbPageLimit)
+	return ownership.CMDBPageEndpoint(instanceURL, query, cmdbPageLimit, "")
 }
 
 // reconcileCMDBRecords is the control-plane decision core for a typed relay
@@ -45,13 +46,26 @@ func cmdbEndpoint(instanceURL, query string) (string, error) {
 func (s *Server) reconcileCMDBRecords(ctx context.Context, tenantID, resultKey string, observedAt time.Time, records []ownership.Record, unattributed []string) (CMDBReconcileResult, error) {
 	out := CMDBReconcileResult{Read: len(records), Unattributed: unattributed}
 
-	owners, err := s.store.ListOwnersPage(ctx, tenantID, store.ZeroUUID, cmdbPageLimit)
+	names := make([]string, 0, len(records))
+	for _, record := range records {
+		names = append(names, record.OwnerName)
+	}
+	owners, err := s.store.ListOwnersByNames(ctx, tenantID, names)
 	if err != nil {
 		return out, err
 	}
 	byName := make(map[string]store.Owner, len(owners))
+	ambiguous := make(map[string]bool)
 	for _, o := range owners {
-		byName[strings.ToLower(strings.TrimSpace(o.Name))] = o
+		key := strings.ToLower(strings.TrimSpace(o.Name))
+		if _, duplicate := byName[key]; duplicate {
+			delete(byName, key)
+			ambiguous[key] = true
+			continue
+		}
+		if !ambiguous[key] {
+			byName[key] = o
+		}
 	}
 	if observedAt.IsZero() {
 		return out, fmt.Errorf("server: CMDB relay report has no observation time")
@@ -64,8 +78,14 @@ func (s *Server) reconcileCMDBRecords(ctx context.Context, tenantID, resultKey s
 			// that a trstctl owner should exist, and auto-creating would build a
 			// parallel estate out of the CMDB's typos. It is reported instead.
 			out.Unattributed = append(out.Unattributed, rec.OwnerName)
+			out.Observations = append(out.Observations, projections.CMDBCIObservation{SourceRef: rec.SourceRef})
 			continue
 		}
+		out.Observations = append(out.Observations, projections.CMDBCIObservation{
+			SourceRef: rec.SourceRef, OwnerID: existing.ID,
+			ApplicationID: rec.ApplicationID, Service: rec.Service,
+			BusinessUnit: rec.BusinessUnit, Environment: rec.Environment,
+		})
 		plan := ownership.Reconcile(rec, ownership.Existing{
 			OwnerID:       existing.ID,
 			ApplicationID: existing.ApplicationID,
@@ -86,6 +106,22 @@ func (s *Server) reconcileCMDBRecords(ctx context.Context, tenantID, resultKey s
 		if err := s.orch.ReconcileOwnershipFromRelay(ctx, tenantID, resultKey, event); err != nil {
 			return out, err
 		}
+		// A page may carry several CIs for one owner. Keep the in-memory row in
+		// step with each projected event so the stable sys_id order decides the
+		// final value, and a crash retry replays the same per-CI event sequence.
+		for _, applied := range plan.Apply {
+			switch applied.Field {
+			case "application_id":
+				existing.ApplicationID = applied.Value
+			case "service":
+				existing.Service = applied.Value
+			case "business_unit":
+				existing.BusinessUnit = applied.Value
+			case "environment":
+				existing.Environment = applied.Value
+			}
+		}
+		byName[strings.ToLower(strings.TrimSpace(rec.OwnerName))] = existing
 	}
 	return out, nil
 }

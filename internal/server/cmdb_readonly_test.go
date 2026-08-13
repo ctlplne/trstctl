@@ -89,8 +89,8 @@ func TestACIQueryCannotEscapeIntoThePath(t *testing.T) {
 	if u.Path != "/api/now/table/cmdb_ci" {
 		t.Fatalf("path = %q, want /api/now/table/cmdb_ci; the query escaped into the path", u.Path)
 	}
-	if got := u.Query().Get("sysparm_query"); got != "../../sys_user_password?x=1" {
-		t.Fatalf("sysparm_query = %q; the query must travel as an encoded parameter", got)
+	if got := u.Query().Get("sysparm_query"); got != "../../sys_user_password?x=1^ORDERBYsys_id" {
+		t.Fatalf("sysparm_query = %q; the filter must travel as an encoded parameter before the fixed keyset order", got)
 	}
 	if u.Query().Get("sysparm_display_value") != "all" {
 		t.Fatal("display values were not requested; reference fields would come back as sys_ids, and " +
@@ -146,7 +146,7 @@ func TestRelayCMDBSyncIsStructurallyReadOnly(t *testing.T) {
 				"record from a machine inside their network", forbidden)
 		}
 	}
-	if !strings.Contains(src, "ownership.CMDBEndpoint(") {
+	if !strings.Contains(src, "ownership.CMDBPageEndpoint(") {
 		t.Fatal("the relay builds its own CMDB URL instead of using the shared endpoint builder; " +
 			"two implementations of 'which table may be read' is how one drifts onto sys_user_password")
 	}

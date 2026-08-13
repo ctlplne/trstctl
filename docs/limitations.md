@@ -2223,16 +2223,25 @@ than sending an operator looking for a credential that was never there.
   stays in the control plane on the reported records, so the
   never-overwrite-an-attestation rule has exactly one implementation. The signed
   result is bounded before ingest and projected before the job closes; stable
-  event identities make a crash/retry converge. One sync in flight per tenant:
-  a second due tick
-  behind an unclaimed job stamps the schedule with the waiting state ("if no
-  network relay is enrolled and claiming, none will run it") instead of
-  stacking identical reads for the eventual relay to replay. Scope, stated
-  exactly: relay execution is mandatory, the dispatched read is one page (500
-  CIs); there is no run-now
-  endpoint (a newly enabled schedule is due
-  immediately and fires within one scheduler tick, and its outcome is served as
-  `last_run_at`/`last_error`); resolving a conflict is a read surface only —
+  event identities make a crash/retry converge. One relay job reads at most 500
+  CIs in strict `sys_id` keyset order. A full page commits an immutable page
+  event, the exact next cursor, cumulative read count, current expected count,
+  and the next `cmdb.sync` outbox intent in one tenant transaction. A short or
+  empty page is the only terminal proof. Dispatch and intermediate pages never
+  set `last_run_at`; `GET /api/v1/owners/cmdb-schedule`,
+  `trstctl owners cmdb-schedule show`, and the Owners console expose
+  `read_count`, optional `expected_count`, `pages_completed`, `next_cursor`,
+  `coverage_complete`, and the retained failure. Restart recovery derives the
+  same idempotent next job from the event/checkpoint, so it resumes rather than
+  rereading page one. The source inventory stores only CI key, matched local
+  owner ID, and the four contributed ownership values. At terminal completion
+  it withdraws a vanished/reassigned CI's still-identical, unattested values,
+  never a human attestation or later edit, and serves changed/removed counts.
+  One page is in flight per tenant; a second due tick leaves that incomplete
+  checkpoint untouched instead of stacking an identical read. Scope, stated
+  exactly: relay execution is mandatory; there is no run-now endpoint (a newly
+  enabled schedule is due immediately and fires within one scheduler tick);
+  resolving a conflict is a read surface only —
   a disagreement is CLOSED through `POST /api/v1/owners/ownership-conflicts/{id}/resolve`
   (`trstctl owners resolve-conflict`), which REQUIRES both a reason and an
   attributed operator — "resolved" with no explanation tells the next reader

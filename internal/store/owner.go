@@ -292,6 +292,63 @@ func (s *Store) ListOwnersPage(ctx context.Context, tenantID, afterID string, li
 	return out, err
 }
 
+// ListOwnersByNames resolves only the owner names present in one bounded CMDB
+// page. The old reconcile loaded the first 500 owner UUIDs, so a matching owner
+// at UUID position 501 was permanently invisible no matter how many CMDB pages
+// were fetched (AUD-46). This query is bounded by the page and tenant-filtered.
+func (s *Store) ListOwnersByNames(ctx context.Context, tenantID string, names []string) ([]Owner, error) {
+	seen := make(map[string]bool, len(names))
+	normalized := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		normalized = append(normalized, name)
+	}
+	if len(normalized) == 0 {
+		return []Owner{}, nil
+	}
+	if len(normalized) > 500 {
+		return nil, fmt.Errorf("store: owner-name lookup exceeds the 500-record CMDB page bound")
+	}
+	var out []Owner
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, kind, name, email, created_at,
+			        coalesce(application_id, ''), coalesce(service, ''),
+			        coalesce(business_unit, ''), coalesce(environment, ''),
+			        escalation_chain, ownership_verified_at,
+			        coalesce(ownership_verified_by, ''), coalesce(ownership_model_digest, ''),
+			        ownership_reattestation_requested_at, ownership_reattestation_requested_for,
+			        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
+			        ownership_source_observed_at
+			   FROM owners
+			  WHERE tenant_id = $1 AND lower(btrim(name)) = ANY($2::text[])
+			  ORDER BY id`, tenantID, normalized)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var owner Owner
+			var kind string
+			if err := rows.Scan(&owner.ID, &owner.TenantID, &kind, &owner.Name, &owner.Email, &owner.CreatedAt,
+				&owner.ApplicationID, &owner.Service, &owner.BusinessUnit, &owner.Environment,
+				&owner.EscalationChain, &owner.OwnershipVerifiedAt, &owner.OwnershipVerifiedBy, &owner.OwnershipModelDigest,
+				&owner.OwnershipReattestationRequestedAt, &owner.OwnershipReattestationRequestedFor,
+				&owner.OwnershipSource, &owner.OwnershipSourceRef, &owner.OwnershipSourceObservedAt); err != nil {
+				return err
+			}
+			owner.Kind = OwnerKind(kind)
+			out = append(out, owner)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // GetOwner loads an owner in its tenant context.
 func (s *Store) GetOwner(ctx context.Context, tenantID, id string) (Owner, error) {
 	var (
@@ -536,9 +593,19 @@ type CMDBReconcileSchedule struct {
 	// Execution says which vantage runs the sync (I2): "" or "control_plane"
 	// for the control plane's own fetch, "relay" to dispatch a cmdb.sync job a
 	// network relay inside the segment claims.
-	Execution string
-	LastRunAt *time.Time
-	LastError string
+	Execution        string
+	LastRunAt        *time.Time
+	LastError        string
+	CurrentSweepID   string
+	SweepStartedAt   *time.Time
+	LastAttemptAt    *time.Time
+	AfterSysID       string
+	ReadCount        int
+	ExpectedCount    *int
+	PagesCompleted   int
+	CoverageComplete bool
+	RemovedCount     int
+	ChangedCount     int
 }
 
 // GetCMDBReconcileSchedule returns the tenant's schedule, or ok=false when the
@@ -550,10 +617,16 @@ func (s *Store) GetCMDBReconcileSchedule(ctx context.Context, tenantID string) (
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, instance_url, token_ref, ci_query,
-			        allow_private_endpoint, interval_seconds, enabled, coalesce(execution, ''), last_run_at, last_error
+			        allow_private_endpoint, interval_seconds, enabled, coalesce(execution, ''), last_run_at, last_error,
+			        coalesce(current_sweep_id::text, ''), sweep_started_at, last_attempt_at,
+			        after_sys_id, read_count, expected_count, pages_completed, coverage_complete,
+			        removed_count, changed_count
 			   FROM cmdb_reconcile_schedules WHERE tenant_id = $1`, tenantID)
 		switch err := row.Scan(&out.ID, &out.TenantID, &out.InstanceURL, &out.TokenRef, &out.CIQuery,
-			&out.AllowPrivateEndpoint, &out.IntervalSeconds, &out.Enabled, &out.Execution, &out.LastRunAt, &out.LastError); {
+			&out.AllowPrivateEndpoint, &out.IntervalSeconds, &out.Enabled, &out.Execution, &out.LastRunAt, &out.LastError,
+			&out.CurrentSweepID, &out.SweepStartedAt, &out.LastAttemptAt, &out.AfterSysID,
+			&out.ReadCount, &out.ExpectedCount, &out.PagesCompleted, &out.CoverageComplete,
+			&out.RemovedCount, &out.ChangedCount); {
 		case errors.Is(err, pgx.ErrNoRows):
 			return nil
 		case err != nil:
@@ -586,9 +659,9 @@ func (s *Store) TenantsWithEnabledCMDBSchedules(ctx context.Context) ([]string, 
 	return out, rows.Err()
 }
 
-// CMDBScheduleDue reports whether the tenant's schedule is due at now. A failed
-// run still stamps last_run_at, so a CMDB that is down retries on the next
-// interval instead of hot-looping every sweep.
+// CMDBScheduleDue reports whether the tenant needs a new sweep or has an
+// incomplete cursor to resume. Only a terminal page supplies LastRunAt; a
+// failed current job remains pending under the agent/outbox retry backoff.
 func (s *Store) CMDBScheduleDue(ctx context.Context, tenantID string, now time.Time) (CMDBReconcileSchedule, bool, error) {
 	sched, found, err := s.GetCMDBReconcileSchedule(ctx, tenantID)
 	if err != nil || !found || !sched.Enabled {
@@ -597,20 +670,11 @@ func (s *Store) CMDBScheduleDue(ctx context.Context, tenantID string, now time.T
 	if sched.IntervalSeconds <= 0 {
 		return CMDBReconcileSchedule{}, false, nil
 	}
+	if sched.CurrentSweepID != "" && !sched.CoverageComplete {
+		return sched, true, nil
+	}
 	if sched.LastRunAt != nil && now.Sub(*sched.LastRunAt) < time.Duration(sched.IntervalSeconds)*time.Second {
 		return CMDBReconcileSchedule{}, false, nil
 	}
 	return sched, true, nil
-}
-
-// MarkCMDBScheduleRun stamps the attempt. runErr is recorded verbatim so an
-// operator reading the schedule sees why the last sync produced nothing rather
-// than a schedule that merely looks idle.
-func (s *Store) MarkCMDBScheduleRun(ctx context.Context, tenantID string, at time.Time, runErr string) error {
-	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`UPDATE cmdb_reconcile_schedules SET last_run_at = $2, last_error = $3, updated_at = now()
-			  WHERE tenant_id = $1`, tenantID, at, runErr)
-		return err
-	})
 }

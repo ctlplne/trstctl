@@ -1768,6 +1768,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		recordRevocationHealth:     s.recordRevocationHealth,
 		recordMigrationResult:      s.recordMigrationResult,
 		recordCMDBSync:             s.recordCMDBSync,
+		recordCMDBSyncFailure:      s.recordCMDBSyncFailure,
 		recordMDMSync:              s.recordMDMSync,
 		recordDiscoveryScan:        s.recordDiscoveryScan,
 		recordTicketSync:           s.recordTicketSync,

@@ -278,6 +278,9 @@ type agentService struct {
 	// recordCMDBSync turns a relay's CMDB observation into ownership
 	// reconciliation (I2). The control plane has no CMDB fetch path.
 	recordCMDBSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
+	// recordCMDBSyncFailure preserves the exact page cursor and makes a closed
+	// relay failure visible without calling it terminal coverage (AUD-46).
+	recordCMDBSyncFailure func(ctx context.Context, tenantID, idempotencyKey string, payload []byte, attempt int, failedAt time.Time, detail string) error
 	// recordMDMSync turns a relay's MDM observation into device correlation
 	// (I5). The control plane has no MDM poll path.
 	recordMDMSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error

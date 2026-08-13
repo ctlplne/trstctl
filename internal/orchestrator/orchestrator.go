@@ -17,6 +17,7 @@ import (
 
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -747,6 +748,42 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			healed = healedBefore
 			reconcileErr = o.quarantineOutboxReconciliationConflict(ctx, log, ev, conflict)
 		}()
+		if ev.Type == projections.EventCMDBSweepDispatched || ev.Type == projections.EventCMDBSweepPageObserved {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var intent *ownership.CMDBSyncIntent
+			switch ev.Type {
+			case projections.EventCMDBSweepDispatched:
+				var dispatched projections.CMDBSweepDispatched
+				if err := json.Unmarshal(ev.Data, &dispatched); err != nil {
+					return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+				}
+				intent = &dispatched.Intent
+			case projections.EventCMDBSweepPageObserved:
+				var page projections.CMDBSweepPageObserved
+				if err := json.Unmarshal(ev.Data, &page); err != nil {
+					return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+				}
+				intent = page.NextIntent
+			}
+			if intent != nil {
+				entry, err := cmdbSweepOutboxEntry(ev.TenantID, *intent)
+				if err != nil {
+					return fmt.Errorf("orchestrator: reconcile %s (seq %d): %w", ev.Type, ev.Sequence, err)
+				}
+				if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+					if inserted {
+						healed++
+					}
+					return err
+				}); err != nil {
+					return err
+				}
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventOwnerReattestationRequested {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err

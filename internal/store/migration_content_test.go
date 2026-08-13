@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	176: true,
 	175: true,
 	173: true,
 	172: true,
@@ -61,6 +62,68 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0176RetiresOnlyCursorlessCMDBJobsAUD46(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 176)
+	if target.noTx || target.name != "0176_cmdb_bounded_sweeps.sql" {
+		t.Fatalf("migration 0176 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name) VALUES ($1, 'aud46')`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO cmdb_reconcile_schedules
+		       (tenant_id, instance_url, token_ref, interval_seconds, enabled, execution)
+		VALUES ($1, 'https://now.example', 'secret://cmdb/token', 3600, true, 'relay')`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	for key, payload := range map[string]string{
+		"legacy": `{"instance_url":"https://now.example","token_ref":"secret://cmdb/token","page_limit":500}`,
+		"named":  `{"instance_url":"https://now.example","token_ref":"secret://cmdb/token","page_limit":500,"sweep_id":"11111111-1111-4111-8111-111111111111","read_count":0}`,
+	} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status)
+			VALUES ($1, 'cmdb.sync', convert_to($2, 'UTF8'), $3, 'pending')`, tenantA, payload, key); err != nil {
+			t.Fatalf("seed %s job: %v", key, err)
+		}
+	}
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	statuses := map[string]string{}
+	rows, err := pool.Query(ctx, `SELECT idempotency_key, status FROM outbox WHERE tenant_id = $1 ORDER BY id`, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key, status string
+		if err := rows.Scan(&key, &status); err != nil {
+			t.Fatal(err)
+		}
+		statuses[key] = status
+	}
+	if statuses["legacy"] != "failed" || statuses["named"] != "pending" {
+		t.Fatalf("post-migration CMDB jobs = %v, want only the cursorless command retired", statuses)
+	}
+	var sweepID string
+	var complete bool
+	if err := pool.QueryRow(ctx, `
+		SELECT coalesce(current_sweep_id::text, ''), coverage_complete
+		  FROM cmdb_reconcile_schedules WHERE tenant_id = $1`, tenantA).Scan(&sweepID, &complete); err != nil {
+		t.Fatal(err)
+	}
+	if sweepID != "" || complete {
+		t.Fatalf("migrated schedule checkpoint = sweep %q complete=%t, want a fresh named sweep on the next tick", sweepID, complete)
+	}
 }
 
 func TestMigration0173PreservesExistingAgentsAndRequiresCompleteCensusEvidence(t *testing.T) {

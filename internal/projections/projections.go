@@ -60,6 +60,12 @@ const (
 	EventOwnershipReconciled = "ownership.reconciled"
 	// I2: a tenant's standing instruction to re-read its CMDB.
 	EventCMDBScheduleConfigured = "cmdb.schedule.configured"
+	// AUD-46: the bounded CMDB sweep protocol. Dispatch is the durable first
+	// page intent, each page is both coverage evidence and continuation
+	// authority, and failure preserves that exact cursor for a retry.
+	EventCMDBSweepDispatched   = "cmdb.sweep.dispatched"
+	EventCMDBSweepPageObserved = "cmdb.sweep.page_observed"
+	EventCMDBSweepFailed       = "cmdb.sweep.failed"
 	// I3: a first-class issuance request and every decision on it. The whole
 	// point of the object is that a denial and an expiry are DIFFERENT and both
 	// visible, so the decision is an event rather than a column somebody
@@ -723,6 +729,48 @@ type CMDBScheduleConfigured struct {
 	// dispatch the read to a network relay inside the segment. Absent on old
 	// events, which decodes to "" — the control-plane behaviour they had.
 	Execution string `json:"execution,omitempty"`
+}
+
+// CMDBSweepDispatched is the immutable authority for the first bounded page.
+// TokenRef is a secret:// reference, never token material.
+type CMDBSweepDispatched struct {
+	Intent       ownership.CMDBSyncIntent `json:"intent"`
+	DispatchedAt time.Time                `json:"dispatched_at"`
+}
+
+// CMDBCIObservation is the tiny source inventory needed to make a later
+// deletion or owner move reversible. OwnerID is a trstctl identifier; a blank
+// value means the CI was unowned or named no unique local owner.
+type CMDBCIObservation struct {
+	SourceRef     string `json:"source_ref"`
+	OwnerID       string `json:"owner_id,omitempty"`
+	ApplicationID string `json:"application_id,omitempty"`
+	Service       string `json:"service,omitempty"`
+	BusinessUnit  string `json:"business_unit,omitempty"`
+	Environment   string `json:"environment,omitempty"`
+}
+
+// CMDBSweepPageObserved commits one bounded page. Intent is the page that was
+// executed; NextIntent, when present, is the exact outbox command a restart
+// must reconstruct. A terminal event omits it.
+type CMDBSweepPageObserved struct {
+	Intent        ownership.CMDBSyncIntent  `json:"intent"`
+	ObservedAt    time.Time                 `json:"observed_at"`
+	Observations  []CMDBCIObservation       `json:"observations"`
+	ReadCount     int                       `json:"read_count"`
+	ExpectedCount *int                      `json:"expected_count,omitempty"`
+	Complete      bool                      `json:"complete"`
+	Unattributed  int                       `json:"unattributed"`
+	NextIntent    *ownership.CMDBSyncIntent `json:"next_intent,omitempty"`
+}
+
+// CMDBSweepFailed records a closed relay failure while deliberately retaining
+// the cursor. Failure is evidence about an attempt, not terminal coverage.
+type CMDBSweepFailed struct {
+	SweepID    string    `json:"sweep_id"`
+	AfterSysID string    `json:"after_sys_id,omitempty"`
+	FailedAt   time.Time `json:"failed_at"`
+	Detail     string    `json:"detail"`
 }
 
 // OwnerDeleted is the payload of an owner.deleted event.
@@ -2981,6 +3029,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventOwnershipExceptionRevoked:                {1: true},
 	EventOwnershipReconciled:                      {1: true},
 	EventCMDBScheduleConfigured:                   {1: true},
+	EventCMDBSweepDispatched:                      {1: true},
+	EventCMDBSweepPageObserved:                    {1: true},
+	EventCMDBSweepFailed:                          {1: true},
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
 	EventApprovalRequested:                        {1: true},
@@ -3542,6 +3593,37 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			IntervalSeconds:      pl.IntervalSeconds, Enabled: pl.Enabled,
 			Execution: pl.Execution,
 		})
+	case EventCMDBSweepDispatched:
+		var pl CMDBSweepDispatched
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyCMDBSweepDispatchedTx(ctx, tx, e.TenantID, pl.Intent, pl.DispatchedAt)
+	case EventCMDBSweepPageObserved:
+		var pl CMDBSweepPageObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		observations := make([]store.CMDBCIObservation, 0, len(pl.Observations))
+		for _, observation := range pl.Observations {
+			observations = append(observations, store.CMDBCIObservation{
+				SourceRef: observation.SourceRef, OwnerID: observation.OwnerID,
+				ApplicationID: observation.ApplicationID, Service: observation.Service,
+				BusinessUnit: observation.BusinessUnit, Environment: observation.Environment,
+			})
+		}
+		return p.store.ApplyCMDBSweepPageObservedTx(ctx, tx, e.TenantID, store.CMDBSweepPage{
+			SweepID: pl.Intent.SweepID, AfterSysID: pl.Intent.AfterSysID,
+			ReadBefore: pl.Intent.ReadCount, PageLimit: pl.Intent.PageLimit,
+			ObservedAt: pl.ObservedAt, Observations: observations, ReadCount: pl.ReadCount,
+			ExpectedCount: pl.ExpectedCount, Complete: pl.Complete,
+		})
+	case EventCMDBSweepFailed:
+		var pl CMDBSweepFailed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyCMDBSweepFailedTx(ctx, tx, e.TenantID, pl.SweepID, pl.AfterSysID, pl.FailedAt, pl.Detail)
 	case EventOwnerDeleted:
 		var pl OwnerDeleted
 		if err := decode(e, &pl); err != nil {

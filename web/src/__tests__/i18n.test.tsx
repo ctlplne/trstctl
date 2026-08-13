@@ -633,8 +633,13 @@ describe("i18n boundary", () => {
       // unobserved state. “No report” must not become “healthy,” and stale must
       // remain distinct from empty in every locale. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "5e69390b6cf424ea6109727790c2a8d095598a35026e54a51a91e40e1a5a123b",
-      "de-DE": "44a0a7535b9ac122181ed45456bba18a44f5d5b2ab781e4bc57a589a11561db6",
+      // AUD-46 CMDB pagination re-pin: four keys name the read/expected/page
+      // denominator, distinguish an unavailable total, reserve “complete” for
+      // the terminal page, and say that an incomplete cursor survives for the
+      // next relay page. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "48e78080293b6e5643092a431a0306d174abf7d07d55290dd13cc7c5801afbae",
+      "de-DE": "350ba674a3c58ea82ba6c4c468722159ba3afbcb5a40868a68c95f93e8b3a27a",
     });
   });
 

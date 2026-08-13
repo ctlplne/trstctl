@@ -5884,7 +5884,8 @@ export const messages = {
     description: "Empty-state title for revocation cache posture.",
   },
   "protocols.revocationCache.emptyBody": {
-    defaultMessage: "No current network relay has supplied signed CRL or OCSP cache metadata. This does not prove that an isolated segment has fresh revocation data.",
+    defaultMessage:
+      "No current network relay has supplied signed CRL or OCSP cache metadata. This does not prove that an isolated segment has fresh revocation data.",
     description: "Empty-state explanation for revocation cache posture.",
   },
   "protocols.revocationCache.summary": {
@@ -5908,7 +5909,10 @@ export const messages = {
   },
   "protocols.revocationCache.noNextUpdate": { defaultMessage: "No signed expiry observed", description: "Missing revocation object nextUpdate state." },
   "protocols.revocationCache.signatureVerified": { defaultMessage: "Issuer signature verified", description: "Verified revocation object signature state." },
-  "protocols.revocationCache.signatureUnverified": { defaultMessage: "No verified issuer signature", description: "Unverified revocation object signature state." },
+  "protocols.revocationCache.signatureUnverified": {
+    defaultMessage: "No verified issuer signature",
+    description: "Unverified revocation object signature state.",
+  },
   "protocols.revocationCache.validated": { defaultMessage: "Validated: {at}", description: "Revocation object last validation timestamp." },
   "protocols.revocationCache.neverValidated": { defaultMessage: "Never validated", description: "Revocation object validation empty state." },
   "protocols.revocationCache.reported": { defaultMessage: "Heartbeat: {at}", description: "Relay-signed cache posture heartbeat timestamp." },
@@ -13291,6 +13295,22 @@ export const messages = {
   "source.cmdb.sync.relay.i2own00014": {
     defaultMessage: "Executed by a network relay inside the segment; the token is redeemed per attempt and the reconcile still runs in the control plane.",
     description: "I2: relay-mode syncs read from a different vantage, and an operator debugging one needs to know which machine performed the read.",
+  },
+  "cmdb.sync.coverage.unknown.aud460001": {
+    defaultMessage: "{read} CIs read across {pages} pages; the CMDB did not provide a total.",
+    description: "AUD-46: bounded CMDB sweep progress when ServiceNow omits its pagination denominator.",
+  },
+  "cmdb.sync.coverage.known.aud460002": {
+    defaultMessage: "{read} of {expected} CIs read across {pages} pages.",
+    description: "AUD-46: bounded CMDB sweep progress with the currently observed ServiceNow denominator.",
+  },
+  "cmdb.sync.coverage.complete.aud460003": {
+    defaultMessage: "Coverage complete. {changed} changed and {removed} removed CIs reconciled.",
+    description: "AUD-46: shown only after the short terminal CMDB page commits.",
+  },
+  "cmdb.sync.coverage.incomplete.aud460004": {
+    defaultMessage: "Coverage incomplete. The committed cursor {cursor} is retained for the next relay page.",
+    description: "AUD-46: makes partial CMDB coverage and its exact restart boundary explicit.",
   },
   "source.ownership.source.column.i2own00006": {
     defaultMessage: "Ownership source",

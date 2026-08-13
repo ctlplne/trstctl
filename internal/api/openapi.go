@@ -3887,8 +3887,14 @@ func componentSchemas() map[string]*Schema {
 		"execution": {Type: "string", Enum: []string{"relay", ""}},
 		// last_error is served rather than only logged: a sync failing for a week
 		// otherwise looks identical to one that found nothing to do.
-		"last_run_at": str(), "last_error": str(), "guidance": str(),
-	}, "configured", "enabled", "guidance")
+		"last_run_at": str(), "last_error": str(),
+		"sweep_id": uuid(), "sweep_started_at": timestamp(), "last_attempt_at": timestamp(),
+		"next_cursor": str(), "read_count": {Type: "integer"}, "expected_count": {Type: "integer"},
+		"pages_completed": {Type: "integer"}, "coverage_complete": {Type: "boolean"},
+		"coverage_status": {Type: "string", Enum: []string{"not_configured", "paused", "not_started", "in_progress", "failed", "complete"}},
+		"removed_count":   {Type: "integer"}, "changed_count": {Type: "integer"},
+		"guidance": str(),
+	}, "configured", "enabled", "read_count", "pages_completed", "coverage_complete", "coverage_status", "removed_count", "changed_count", "guidance")
 	ownershipResolveInput := object(map[string]*Schema{"resolution": str()}, "resolution")
 	ownershipConflictList := object(map[string]*Schema{
 		"items":    {Type: "array", Items: ref("OwnershipConflict")},

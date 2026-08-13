@@ -3,6 +3,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,13 +16,17 @@ import (
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
 const MaxOwnershipExceptionTTL = 30 * 24 * time.Hour
 
+var ErrCMDBSweepInProgress = errors.New("orchestrator: CMDB schedule has an incomplete sweep")
+
 var ownershipReattestationEventNamespace = uuid.MustParse("2d08f73a-3a9c-53a5-92f1-4d5b44aa0044")
+var cmdbSweepEventNamespace = uuid.MustParse("0f235a4f-5938-5bd4-a6a8-e26bf50856ab")
 
 // CreateOwnerRecord is the v2 owner command. The source-compatible CreateOwner
 // wrapper remains for older embedders, while every served API write uses this
@@ -319,7 +324,7 @@ func (o *Orchestrator) ReconcileOwnership(ctx context.Context, tenantID string, 
 // ReconcileOwnershipFromRelay binds a relay replay to one deterministic event.
 func (o *Orchestrator) ReconcileOwnershipFromRelay(ctx context.Context, tenantID, resultKey string, in projections.OwnershipReconciled) error {
 	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(
-		"cmdb-relay-result\x00"+tenantID+"\x00"+resultKey+"\x00"+in.OwnerID,
+		"cmdb-relay-result-v2\x00"+tenantID+"\x00"+resultKey+"\x00"+in.SourceRef+"\x00"+in.OwnerID,
 	)).String()
 	return o.reconcileOwnership(ctx, tenantID, eventID, in)
 }
@@ -352,8 +357,234 @@ func (o *Orchestrator) ConfigureCMDBSchedule(ctx context.Context, tenantID strin
 	if err != nil {
 		return err
 	}
-	_, err = o.emit(ctx, projections.EventCMDBScheduleConfigured, tenantID, payload)
-	return err
+	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		if current, found, loadErr := o.store.GetCMDBReconcileSchedule(lockCtx, tenantID); loadErr != nil {
+			return loadErr
+		} else if found && current.CurrentSweepID != "" && !current.CoverageComplete {
+			return ErrCMDBSweepInProgress
+		}
+		_, err := o.emit(lockCtx, projections.EventCMDBScheduleConfigured, tenantID, payload)
+		return err
+	})
+}
+
+const cmdbSyncDestination = "cmdb.sync"
+
+// QueueCMDBSweep commits the first-page checkpoint and network-relay intent in
+// one tenant transaction. The event append remains the recovery authority for
+// the narrow append/SQL crash window; ReconcileOutbox derives the same command.
+func (o *Orchestrator) QueueCMDBSweep(
+	ctx context.Context,
+	tenantID string,
+	intent ownership.CMDBSyncIntent,
+	dispatchedAt time.Time,
+) error {
+	if dispatchedAt.IsZero() || intent.AfterSysID != "" || intent.ReadCount != 0 {
+		return fmt.Errorf("orchestrator: invalid initial CMDB sweep checkpoint")
+	}
+	payload, err := json.Marshal(projections.CMDBSweepDispatched{Intent: intent, DispatchedAt: dispatchedAt.UTC()})
+	if err != nil {
+		return err
+	}
+	eventID := uuid.NewSHA1(cmdbSweepEventNamespace, []byte("dispatch\x00"+tenantID+"\x00"+intent.SweepID)).String()
+	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		return o.emitCMDBEventWithContinuation(lockCtx, events.Event{
+			ID: eventID, Type: projections.EventCMDBSweepDispatched, TenantID: tenantID, Data: payload,
+		}, &intent)
+	})
+}
+
+// ResumeCMDBSweep recreates a missing current-page outbox row from the exact
+// projected checkpoint. It changes no domain state; it is the scheduler-side
+// equivalent of boot ReconcileOutbox.
+func (o *Orchestrator) ResumeCMDBSweep(ctx context.Context, tenantID string, intent ownership.CMDBSyncIntent) error {
+	if o.outbox == nil {
+		return fmt.Errorf("orchestrator: CMDB sweep outbox is not configured")
+	}
+	entry, err := cmdbSweepOutboxEntry(tenantID, intent)
+	if err != nil {
+		return err
+	}
+	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := o.store.ValidateCMDBSweepIntentTx(ctx, tx, tenantID, intent); err != nil {
+			return err
+		}
+		_, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+		return err
+	})
+}
+
+// RecordCMDBSweepPage records the page checkpoint and, for a full page, its
+// exact next command atomically. A retried signed receipt uses the same event ID
+// and converges without advancing counts twice.
+func (o *Orchestrator) RecordCMDBSweepPage(
+	ctx context.Context,
+	tenantID, resultKey string,
+	page projections.CMDBSweepPageObserved,
+) error {
+	if err := validateCMDBSweepPageEvent(tenantID, resultKey, page); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(page)
+	if err != nil {
+		return err
+	}
+	eventID := uuid.NewSHA1(cmdbSweepEventNamespace,
+		[]byte("page\x00"+tenantID+"\x00"+resultKey)).String()
+	return o.emitCMDBEventWithContinuation(ctx, events.Event{
+		ID: eventID, Type: projections.EventCMDBSweepPageObserved, TenantID: tenantID, Data: payload,
+	}, page.NextIntent)
+}
+
+// RecordCMDBSweepFailure makes a failed relay attempt visible without moving
+// the cursor. Each claim attempt has a distinct deterministic event identity.
+func (o *Orchestrator) RecordCMDBSweepFailure(
+	ctx context.Context,
+	tenantID, resultKey string,
+	attempt int,
+	intent ownership.CMDBSyncIntent,
+	failedAt time.Time,
+	detail string,
+) error {
+	detail = strings.TrimSpace(detail)
+	if resultKey == "" || attempt <= 0 || failedAt.IsZero() || detail == "" {
+		return fmt.Errorf("orchestrator: invalid CMDB sweep failure receipt")
+	}
+	if _, err := cmdbSweepOutboxEntry(tenantID, intent); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(projections.CMDBSweepFailed{
+		SweepID: intent.SweepID, AfterSysID: intent.AfterSysID,
+		FailedAt: failedAt.UTC(), Detail: detail,
+	})
+	if err != nil {
+		return err
+	}
+	eventID := uuid.NewSHA1(cmdbSweepEventNamespace,
+		[]byte(fmt.Sprintf("failure\x00%s\x00%s\x00%d", tenantID, resultKey, attempt))).String()
+	event, err := o.emitPrepared(ctx, events.Event{
+		ID: eventID, Type: projections.EventCMDBSweepFailed, TenantID: tenantID, Data: payload,
+	})
+	if err != nil {
+		return err
+	}
+	if event.ID != eventID || event.Type != projections.EventCMDBSweepFailed ||
+		event.TenantID != tenantID || !bytes.Equal(event.Data, payload) {
+		return fmt.Errorf("%w: canonical CMDB sweep failure event differs", store.ErrIdempotencyConflict)
+	}
+	return nil
+}
+
+func (o *Orchestrator) emitCMDBEventWithContinuation(
+	ctx context.Context,
+	next events.Event,
+	continuation *ownership.CMDBSyncIntent,
+) error {
+	if o.outbox == nil {
+		return fmt.Errorf("orchestrator: CMDB sweep outbox is not configured")
+	}
+	var continuationEntry *Entry
+	if continuation != nil {
+		entry, err := cmdbSweepOutboxEntry(next.TenantID, *continuation)
+		if err != nil {
+			return err
+		}
+		continuationEntry = &entry
+	}
+	return o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
+		event, err := o.log.Append(ctx, next)
+		if err != nil {
+			return err
+		}
+		if event.ID != next.ID || event.Type != next.Type || event.TenantID != next.TenantID ||
+			!bytes.Equal(event.Data, next.Data) {
+			return fmt.Errorf("%w: canonical CMDB sweep event differs", store.ErrIdempotencyConflict)
+		}
+		if err := o.proj.ApplyTx(ctx, tx, event); err != nil {
+			return err
+		}
+		if continuationEntry == nil {
+			return nil
+		}
+		_, err = o.outbox.EnqueueIfAbsent(ctx, tx, *continuationEntry)
+		return err
+	})
+}
+
+func cmdbSweepOutboxEntry(tenantID string, intent ownership.CMDBSyncIntent) (Entry, error) {
+	sweepID, sweepErr := uuid.Parse(intent.SweepID)
+	if sweepErr != nil || sweepID == uuid.Nil || intent.PageLimit <= 0 || intent.PageLimit > 500 ||
+		intent.ReadCount < 0 || (intent.ExpectedCount != nil && *intent.ExpectedCount < intent.ReadCount) ||
+		(intent.AfterSysID == "" && intent.ReadCount != 0) || (intent.AfterSysID != "" && intent.ReadCount == 0) ||
+		!strings.HasPrefix(strings.TrimSpace(intent.TokenRef), "secret://") {
+		return Entry{}, fmt.Errorf("orchestrator: invalid CMDB sweep intent")
+	}
+	if _, err := ownership.CMDBPageEndpoint(intent.InstanceURL, intent.CIQuery, intent.PageLimit, intent.AfterSysID); err != nil {
+		return Entry{}, err
+	}
+	payload, err := json.Marshal(intent)
+	if err != nil {
+		return Entry{}, err
+	}
+	cursor := intent.AfterSysID
+	if cursor == "" {
+		cursor = "start"
+	}
+	return Entry{
+		TenantID: tenantID, Destination: cmdbSyncDestination,
+		IdempotencyKey: "cmdb-sync:" + tenantID + ":" + intent.SweepID + ":" + cursor,
+		Payload:        payload, RequiredAgentRole: "network",
+	}, nil
+}
+
+// validateCMDBSweepPageEvent keeps malformed data out of the immutable log.
+// The projector validates again inside PostgreSQL, but that is too late: an
+// append succeeds before its SQL transaction, so a bad event would poison every
+// later rebuild even though the live request returned an error.
+func validateCMDBSweepPageEvent(tenantID, resultKey string, page projections.CMDBSweepPageObserved) error {
+	if strings.TrimSpace(resultKey) == "" || page.ObservedAt.IsZero() || page.Unattributed < 0 ||
+		page.Unattributed > len(page.Observations) {
+		return fmt.Errorf("orchestrator: invalid CMDB page event")
+	}
+	if _, err := cmdbSweepOutboxEntry(tenantID, page.Intent); err != nil {
+		return err
+	}
+	pageSize := len(page.Observations)
+	if pageSize > page.Intent.PageLimit || page.ReadCount != page.Intent.ReadCount+pageSize ||
+		(page.ExpectedCount != nil && *page.ExpectedCount < page.ReadCount) ||
+		(page.Complete && pageSize >= page.Intent.PageLimit) ||
+		(!page.Complete && pageSize != page.Intent.PageLimit) {
+		return fmt.Errorf("orchestrator: invalid bounded CMDB page progress")
+	}
+	previous := page.Intent.AfterSysID
+	for _, observation := range page.Observations {
+		if !ownership.ValidCMDBSourceRef(observation.SourceRef) ||
+			(previous != "" && observation.SourceRef <= previous) {
+			return fmt.Errorf("orchestrator: invalid CMDB page source order")
+		}
+		previous = observation.SourceRef
+	}
+	if page.Complete {
+		if page.NextIntent != nil {
+			return fmt.Errorf("orchestrator: terminal CMDB page carries a continuation")
+		}
+		return nil
+	}
+	if page.NextIntent == nil || page.NextIntent.InstanceURL != page.Intent.InstanceURL ||
+		page.NextIntent.CIQuery != page.Intent.CIQuery || page.NextIntent.TokenRef != page.Intent.TokenRef ||
+		page.NextIntent.PageLimit != page.Intent.PageLimit || page.NextIntent.SweepID != page.Intent.SweepID ||
+		page.NextIntent.AfterSysID != previous || page.NextIntent.ReadCount != page.ReadCount ||
+		!sameCMDBExpectedCount(page.NextIntent.ExpectedCount, page.ExpectedCount) {
+		return fmt.Errorf("orchestrator: CMDB page continuation does not match its committed boundary")
+	}
+	return nil
+}
+
+func sameCMDBExpectedCount(left, right *int) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 // ResolveOwnershipConflict closes an ownership disagreement with attributable

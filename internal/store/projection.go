@@ -316,10 +316,9 @@ func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenan
 
 // ApplyCMDBScheduleConfiguredTx projects a cmdb.schedule.configured event (I2).
 //
-// last_run_at and last_error are deliberately NOT touched: they are the
-// scheduler's observations, not the operator's instruction, and a replay that
-// reset them would make a sync that has been failing for a week look like one
-// that had simply never run.
+// A new instruction resets only the IN-PROGRESS sweep: its old cursor describes
+// a different query or instance and cannot be resumed safely. The last terminal
+// run stays visible as historical evidence until the new sweep completes.
 func (s *Store) ApplyCMDBScheduleConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in CMDBReconcileSchedule) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO cmdb_reconcile_schedules (tenant_id, instance_url, token_ref, ci_query, allow_private_endpoint, interval_seconds, enabled, execution)
@@ -328,7 +327,11 @@ func (s *Store) ApplyCMDBScheduleConfiguredTx(ctx context.Context, tx pgx.Tx, te
 		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref,
 		   ci_query = EXCLUDED.ci_query, allow_private_endpoint = EXCLUDED.allow_private_endpoint,
 		   interval_seconds = EXCLUDED.interval_seconds,
-		   enabled = EXCLUDED.enabled, execution = EXCLUDED.execution, updated_at = now()`,
+		   enabled = EXCLUDED.enabled, execution = EXCLUDED.execution,
+		   current_sweep_id = NULL, sweep_started_at = NULL, last_attempt_at = NULL,
+		   after_sys_id = '', read_count = 0, expected_count = NULL,
+		   pages_completed = 0, coverage_complete = false,
+		   removed_count = 0, changed_count = 0, last_error = '', updated_at = now()`,
 		tenantID, in.InstanceURL, in.TokenRef, in.CIQuery, in.IntervalSeconds, in.Enabled)
 	return err
 }
@@ -669,13 +672,10 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
 var ReadModelTables = []string{"owners", "issuers", "identities", "ownership_readiness_exceptions", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "agent_cert_revocations", "kubernetes_controller_posture", "tenants", "tenant_key_domains", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "adcs_template_posture", "adcs_enrollment_service_posture", "notification_channels", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides",
-	// I2. Both are projections: owner_ownership_conflicts from ownership.reconciled,
-	// cmdb_reconcile_schedules from cmdb.schedule.configured. A rebuild does lose
-	// the schedule's last_run_at/last_error, which the SCHEDULER writes rather than
-	// the log — the cost is one extra sync within a minute of the rebuild, and the
-	// alternative (calling them independent PG state) would claim the operator's
-	// instruction is not event-sourced when it is.
-	"owner_ownership_conflicts", "cmdb_reconcile_schedules",
+	// I2/AUD-46. Conflicts, the bounded CI inventory, and every schedule
+	// checkpoint/failure are projections of ownership/CMDB events. A rebuild
+	// therefore resumes the same page instead of manufacturing a new run.
+	"owner_ownership_conflicts", "cmdb_ci_inventory", "cmdb_reconcile_schedules",
 	// I3: projected from issuance.request.opened / .decided.
 	"issuance_requests",
 	// I5: projected from mdm.device.correlated / mdm.poll.configured. A

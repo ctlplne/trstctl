@@ -7,14 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"regexp"
 	"strings"
+	"time"
 )
 
 // Reading ownership out of a ServiceNow CMDB (epic I2).
 //
-// This file only ever turns a cmdb_ci response into Records. It has no write
-// path and cannot acquire one by accident: nothing here builds a request, and
-// the ticket writer's table allow-list does not contain cmdb_ci. That is the
+// This file builds only the fixed cmdb_ci read URL and turns its response into
+// Records. It has no write path and cannot acquire one by accident: it creates
+// no HTTP request or client, and the ticket writer's table allow-list does not
+// contain cmdb_ci. That is the
 // acceptance criterion "no CMDB write unless explicitly configured" held as a
 // structural property rather than a runtime flag somebody can flip.
 //
@@ -46,6 +49,17 @@ type cmdbResponse struct {
 	Result []map[string]any `json:"result"`
 }
 
+// CMDBPage is one bounded, stably ordered Table API page. SourceRefs includes
+// every row, including CIs with no owner, because the final raw sys_id is the
+// continuation authority. Deriving a cursor from Records would lose an
+// unowned tail row and either repeat or skip it on the next request (AUD-46).
+type CMDBPage struct {
+	Records      []Record
+	Unattributed []string
+	SourceRefs   []string
+	NextCursor   string
+}
+
 // ParseCMDB maps a ServiceNow cmdb_ci Table API response into ownership records.
 //
 // Rows that name no owner are reported, not skipped: a CI whose ownership
@@ -53,11 +67,27 @@ type cmdbResponse struct {
 // accountable for — and silently dropping it would make the CMDB look better
 // covered than it is.
 func ParseCMDB(r io.Reader) (records []Record, unattributed []string, err error) {
+	page, err := ParseCMDBPage(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	return page.Records, page.Unattributed, nil
+}
+
+// ParseCMDBPage maps one ordered page and retains its continuation keys.
+// ServiceNow sys_id is the immutable key used by the keyset query. Refusing a
+// missing, duplicate, or descending key is fail-closed: accepting one would
+// make a signed report claim complete coverage that cannot be resumed exactly.
+func ParseCMDBPage(r io.Reader) (CMDBPage, error) {
 	var resp cmdbResponse
 	dec := json.NewDecoder(io.LimitReader(r, cmdbResponseLimit))
 	if err := dec.Decode(&resp); err != nil {
-		return nil, nil, fmt.Errorf("ownership: parse cmdb_ci response: %w", err)
+		return CMDBPage{}, fmt.Errorf("ownership: parse cmdb_ci response: %w", err)
 	}
+	page := CMDBPage{
+		Records: make([]Record, 0, len(resp.Result)), SourceRefs: make([]string, 0, len(resp.Result)),
+	}
+	previous := ""
 	for _, row := range resp.Result {
 		rec := CMDBRecord{
 			SysID:           cmdbField(row, "sys_id"),
@@ -70,6 +100,14 @@ func ParseCMDB(r io.Reader) (records []Record, unattributed []string, err error)
 			Environment:     cmdbField(row, "used_for"),
 			Company:         cmdbField(row, "company"),
 		}
+		if !ValidCMDBSourceRef(rec.SysID) {
+			return CMDBPage{}, fmt.Errorf("ownership: cmdb_ci page row has no usable sys_id continuation key")
+		}
+		if previous != "" && rec.SysID <= previous {
+			return CMDBPage{}, fmt.Errorf("ownership: cmdb_ci page sys_id %q is not strictly after %q", rec.SysID, previous)
+		}
+		previous = rec.SysID
+		page.SourceRefs = append(page.SourceRefs, rec.SysID)
 		owner, _ := cmdbOwner(rec)
 		if owner == "" {
 			// A CI with no ownership at all. Named so an operator can see the
@@ -81,11 +119,11 @@ func ParseCMDB(r io.Reader) (records []Record, unattributed []string, err error)
 				label = rec.SysID
 			}
 			if label != "" {
-				unattributed = append(unattributed, label)
+				page.Unattributed = append(page.Unattributed, label)
 			}
 			continue
 		}
-		records = append(records, Record{
+		page.Records = append(page.Records, Record{
 			OwnerName:     owner,
 			ApplicationID: firstNonEmpty(rec.UApplication, rec.BusinessService),
 			Service:       rec.BusinessService,
@@ -94,7 +132,10 @@ func ParseCMDB(r io.Reader) (records []Record, unattributed []string, err error)
 			SourceRef:     rec.SysID,
 		})
 	}
-	return records, unattributed, nil
+	if len(page.SourceRefs) > 0 {
+		page.NextCursor = page.SourceRefs[len(page.SourceRefs)-1]
+	}
+	return page, nil
 }
 
 // cmdbResponseLimit bounds a CMDB page. A ServiceNow instance answering with an
@@ -158,13 +199,29 @@ func firstNonEmpty(values ...string) string {
 
 // CMDBEndpoint builds the fixed read URL for one page of cmdb_ci.
 //
-// It lives beside ParseCMDB because BOTH vantages build it — the control
-// plane's own fetch and the relay's (I2) — and two implementations of "which
-// table may be read" is how one of them drifts onto sys_user_password. The
-// path is fixed to cmdb_ci; a schedule cannot name an arbitrary table.
+// It lives beside ParseCMDB so the network relay's request builder and the
+// control plane's durable-intent validator use the same fixed definition of
+// what may be read. Two definitions are how one drifts onto sys_user_password.
+// The path is fixed to cmdb_ci; a schedule cannot name an arbitrary table.
 // display_value=all is requested because a reference field's raw value is a
 // sys_id, and a sys_id in an owner column is a value nobody can act on.
 func CMDBEndpoint(instanceURL, query string, limit int) (string, error) {
+	return CMDBPageEndpoint(instanceURL, query, limit, "")
+}
+
+var cmdbSysIDPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
+
+// ValidCMDBSourceRef reports whether a value is safe to use as both a stored
+// CI key and an encoded-query keyset boundary. It deliberately rejects leading
+// or trailing whitespace instead of silently changing the signed receipt.
+func ValidCMDBSourceRef(value string) bool {
+	return value == strings.TrimSpace(value) && cmdbSysIDPattern.MatchString(value)
+}
+
+// CMDBPageEndpoint builds one keyset page. OFFSET is deliberately absent: an
+// insertion or deletion before offset 500 moves later rows and makes the next
+// page skip or duplicate one. sys_id > last_seen keeps the boundary fixed.
+func CMDBPageEndpoint(instanceURL, query string, limit int, afterSysID string) (string, error) {
 	base, err := url.Parse(strings.TrimSpace(instanceURL))
 	if err != nil {
 		return "", fmt.Errorf("ownership: parse ServiceNow instance URL: %w", err)
@@ -172,13 +229,32 @@ func CMDBEndpoint(instanceURL, query string, limit int) (string, error) {
 	if base.Scheme == "" || base.Host == "" {
 		return "", fmt.Errorf("ownership: ServiceNow instance URL must be absolute")
 	}
+	if limit <= 0 || limit > 500 {
+		return "", fmt.Errorf("ownership: CMDB page limit must be between 1 and 500")
+	}
+	afterSysID = strings.TrimSpace(afterSysID)
+	if afterSysID != "" && !ValidCMDBSourceRef(afterSysID) {
+		return "", fmt.Errorf("ownership: CMDB continuation sys_id is not usable")
+	}
+	filter := strings.TrimSpace(query)
+	upperFilter := strings.ToUpper(filter)
+	if strings.Contains(upperFilter, "ORDERBY") {
+		return "", fmt.Errorf("ownership: CMDB filter cannot set ordering; pagination is fixed to sys_id")
+	}
+	parts := make([]string, 0, 3)
+	if filter != "" {
+		parts = append(parts, strings.Trim(filter, "^"))
+	}
+	if afterSysID != "" {
+		parts = append(parts, "sys_id>"+afterSysID)
+	}
+	parts = append(parts, "ORDERBYsys_id")
 	base.Path = strings.TrimRight(base.Path, "/") + "/api/now/table/cmdb_ci"
 	q := url.Values{}
 	q.Set("sysparm_display_value", "all")
 	q.Set("sysparm_limit", fmt.Sprintf("%d", limit))
-	if trimmed := strings.TrimSpace(query); trimmed != "" {
-		q.Set("sysparm_query", trimmed)
-	}
+	q.Set("sysparm_query", strings.Join(parts, "^"))
+	q.Set("sysparm_suppress_pagination_header", "false")
 	base.RawQuery = q.Encode()
 	base.Fragment = ""
 	return base.String(), nil
@@ -194,8 +270,28 @@ func CMDBEndpoint(instanceURL, query string, limit int) (string, error) {
 // job-credential path for exactly one attempt. A token value here would be a
 // token value on the queue, in every backup of it.
 type CMDBSyncIntent struct {
-	InstanceURL string `json:"instance_url"`
-	CIQuery     string `json:"ci_query,omitempty"`
-	TokenRef    string `json:"token_ref"`
-	PageLimit   int    `json:"page_limit"`
+	InstanceURL   string `json:"instance_url"`
+	CIQuery       string `json:"ci_query,omitempty"`
+	TokenRef      string `json:"token_ref"`
+	PageLimit     int    `json:"page_limit"`
+	SweepID       string `json:"sweep_id"`
+	AfterSysID    string `json:"after_sys_id,omitempty"`
+	ReadCount     int    `json:"read_count"`
+	ExpectedCount *int   `json:"expected_count,omitempty"`
+}
+
+// CMDBSyncReport is one relay's bounded observation. The report echoes the
+// immutable sweep/page identity from its job, carries every source key, and
+// states whether this was the first short page. The control plane recomputes
+// and validates all three before it advances the durable checkpoint.
+type CMDBSyncReport struct {
+	SweepID       string    `json:"sweep_id"`
+	AfterSysID    string    `json:"after_sys_id,omitempty"`
+	ObservedAt    time.Time `json:"observed_at"`
+	SourceRefs    []string  `json:"source_refs"`
+	Records       []Record  `json:"records"`
+	Unattributed  []string  `json:"unattributed,omitempty"`
+	ReadCount     int       `json:"read_count"`
+	ExpectedCount *int      `json:"expected_count,omitempty"`
+	Complete      bool      `json:"complete"`
 }

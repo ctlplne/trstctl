@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -26,9 +27,10 @@ func cmdbJob(t *testing.T, intent ownership.CMDBSyncIntent) relay.Job {
 }
 
 func TestRelayCMDBSyncReadsParsesAndReportsRecords(t *testing.T) {
-	var seenPath, seenAuth, seenMethod string
+	var seenPath, seenAuth, seenMethod, seenQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seenPath, seenAuth, seenMethod = r.URL.Path, r.Header.Get("Authorization"), r.Method
+		seenPath, seenAuth, seenMethod, seenQuery = r.URL.Path, r.Header.Get("Authorization"), r.Method, r.URL.Query().Get("sysparm_query")
+		w.Header().Set("X-Total-Count", "1")
 		_, _ = w.Write([]byte(`{"result":[
 			{"sys_id":"ci-9","name":"api","owned_by":{"display_value":"payments"},
 			 "u_application":{"display_value":"APP-9"}}
@@ -37,7 +39,10 @@ func TestRelayCMDBSyncReadsParsesAndReportsRecords(t *testing.T) {
 	defer srv.Close()
 
 	ch := &fakeChannel{
-		jobs:     []relay.Job{cmdbJob(t, ownership.CMDBSyncIntent{InstanceURL: srv.URL, TokenRef: "secret://itsm/token", PageLimit: 100})},
+		jobs: []relay.Job{cmdbJob(t, ownership.CMDBSyncIntent{
+			InstanceURL: srv.URL, TokenRef: "secret://itsm/token", PageLimit: 100,
+			SweepID: "11111111-1111-4111-8111-111111111111", AfterSysID: "ci-8", ReadCount: 500,
+		})},
 		material: map[string][]byte{"secret://itsm/token": []byte("relay-redeemed-token")},
 	}
 	executed, err := relay.RunOnce(t.Context(), ch, srv.Client(), 4, 30)
@@ -54,6 +59,9 @@ func TestRelayCMDBSyncReadsParsesAndReportsRecords(t *testing.T) {
 	if seenAuth != "Bearer relay-redeemed-token" {
 		t.Fatalf("Authorization = %q; the token must come from THIS attempt's redemption, not the payload", seenAuth)
 	}
+	if seenQuery != "sys_id>ci-8^ORDERBYsys_id" {
+		t.Fatalf("query = %q, want the exact durable keyset continuation", seenQuery)
+	}
 	if ch.redeemed != 1 {
 		t.Fatalf("redeemed %d times, want exactly 1", ch.redeemed)
 	}
@@ -61,13 +69,72 @@ func TestRelayCMDBSyncReadsParsesAndReportsRecords(t *testing.T) {
 		t.Fatalf("reports = %+v", ch.reports)
 	}
 	var report struct {
-		Records []ownership.Record `json:"records"`
+		SweepID       string             `json:"sweep_id"`
+		AfterSysID    string             `json:"after_sys_id"`
+		SourceRefs    []string           `json:"source_refs"`
+		Records       []ownership.Record `json:"records"`
+		ReadCount     int                `json:"read_count"`
+		ExpectedCount *int               `json:"expected_count"`
+		Complete      bool               `json:"complete"`
 	}
 	if err := json.Unmarshal([]byte(ch.reports[0].detail), &report); err != nil {
 		t.Fatalf("report detail is not a records document: %v", err)
 	}
 	if len(report.Records) != 1 || report.Records[0].OwnerName != "payments" {
 		t.Fatalf("records = %+v; the relay parses and ships structure, not raw bytes", report.Records)
+	}
+	if report.SweepID != "11111111-1111-4111-8111-111111111111" || report.AfterSysID != "ci-8" {
+		t.Fatalf("report continuation = sweep %q after %q; it must bind to the durable job page", report.SweepID, report.AfterSysID)
+	}
+	if len(report.SourceRefs) != 1 || report.SourceRefs[0] != "ci-9" || report.ReadCount != 501 {
+		t.Fatalf("report coverage = refs %v read %d, want the complete observed page and cumulative 501", report.SourceRefs, report.ReadCount)
+	}
+	if report.ExpectedCount == nil || *report.ExpectedCount != 501 {
+		t.Fatalf("expected_count = %v, want read-before 500 + the CMDB's one remaining row", report.ExpectedCount)
+	}
+	if !report.Complete {
+		t.Fatal("one row under a 100-row bound did not report terminal completion")
+	}
+}
+
+// A full page is never called terminal, even when the denominator happens to
+// equal the cumulative read. The CMDB can add the next sys_id between the
+// response and report; one short/empty page is the only bounded terminal proof.
+func TestRelayCMDBSyncFullPageCarriesContinuationInsteadOfSuccessAUD46(t *testing.T) {
+	var seen url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.URL.Query()
+		w.Header().Set("X-Total-Count", "2")
+		_, _ = w.Write([]byte(`{"result":[
+			{"sys_id":"ci-0501","owned_by":"payments"},
+			{"sys_id":"ci-0502","owned_by":"platform"}
+		]}`))
+	}))
+	defer srv.Close()
+
+	ch := &fakeChannel{
+		jobs: []relay.Job{cmdbJob(t, ownership.CMDBSyncIntent{
+			InstanceURL: srv.URL, TokenRef: "secret://itsm/token", PageLimit: 2,
+			SweepID: "22222222-2222-4222-8222-222222222222", AfterSysID: "ci-0500", ReadCount: 500,
+		})},
+		material: map[string][]byte{"secret://itsm/token": []byte("t")},
+	}
+	if _, err := relay.RunOnce(t.Context(), ch, srv.Client(), 4, 30); err != nil {
+		t.Fatal(err)
+	}
+	if seen.Get("sysparm_offset") != "" || seen.Get("sysparm_query") != "sys_id>ci-0500^ORDERBYsys_id" {
+		t.Fatalf("request query = %v; continuation must be stable keyset pagination", seen)
+	}
+	var report struct {
+		SourceRefs []string `json:"source_refs"`
+		ReadCount  int      `json:"read_count"`
+		Complete   bool     `json:"complete"`
+	}
+	if err := json.Unmarshal([]byte(ch.reports[0].detail), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Complete || report.ReadCount != 502 || len(report.SourceRefs) != 2 || report.SourceRefs[1] != "ci-0502" {
+		t.Fatalf("report = %+v, want an incomplete full page ending at ci-0502", report)
 	}
 }
 

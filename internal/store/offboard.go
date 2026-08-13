@@ -94,10 +94,13 @@ var TenantScopedTables = []string{
 	// and because a conflict about an owner who no longer exists is not something
 	// an offboarded tenant should leave behind.
 	"owner_ownership_conflicts",
-	// I2: a tenant's standing instruction to poll its own CMDB. It names the
-	// tenant's instance and credential reference, so it leaves with the tenant —
-	// and a schedule that outlived its tenant would keep dialling an external
-	// system on behalf of an account that no longer exists.
+	// AUD-46: bounded CMDB source inventory is tenant operational evidence and
+	// must leave before its schedule and matched owners.
+	"cmdb_ci_inventory",
+	// I2: a tenant's standing instruction to reconcile its own CMDB. It names
+	// the tenant's instance and credential reference, so it leaves with the
+	// tenant — and a schedule that outlived its tenant would keep dispatching
+	// relay reads on behalf of an account that no longer exists.
 	"cmdb_reconcile_schedules",
 	// I3: the ticket intake, for the same reason — a schedule that outlived
 	// its tenant would keep reading an ITSM for an account that is gone.

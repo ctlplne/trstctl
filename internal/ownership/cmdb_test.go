@@ -3,6 +3,8 @@
 package ownership
 
 import (
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -118,4 +120,107 @@ func TestAnOversizedCMDBResponseIsBounded(t *testing.T) {
 	if _, _, err := ParseCMDB(strings.NewReader(huge)); err == nil {
 		t.Fatal("a response larger than the limit parsed successfully; the limit is not enforced")
 	}
+}
+
+// AUD-46: a page number is not a stable continuation. If ci-10 disappears
+// while page two is waiting, OFFSET 500 moves ci-501 into page one and page two
+// skips it. A sys_id keyset does not move: the next read starts strictly after
+// the last row the prior signed report actually carried.
+func TestCMDBPageEndpointUsesAStableKeysetCursorAUD46(t *testing.T) {
+	t.Parallel()
+	endpoint, err := CMDBPageEndpoint("https://example.service-now.com/root", "active=true", 500, "ci-0500")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Path != "/root/api/now/table/cmdb_ci" {
+		t.Fatalf("path = %q, want the fixed read-only cmdb_ci table", parsed.Path)
+	}
+	query := parsed.Query()
+	if got := query.Get("sysparm_query"); got != "active=true^sys_id>ci-0500^ORDERBYsys_id" {
+		t.Fatalf("sysparm_query = %q, want the operator filter, strict continuation, and stable order", got)
+	}
+	if got := query.Get("sysparm_limit"); got != "500" {
+		t.Fatalf("sysparm_limit = %q, want 500", got)
+	}
+	if got := query.Get("sysparm_offset"); got != "" {
+		t.Fatalf("sysparm_offset = %q; offset pagination skips rows when the CMDB changes mid-sweep", got)
+	}
+	if got := query.Get("sysparm_suppress_pagination_header"); got != "false" {
+		t.Fatalf("pagination header flag = %q, want false so the report can carry an honest denominator", got)
+	}
+}
+
+// The continuation is derived from EVERY returned CI, including a row with no
+// owner. Deriving it only from ownership.Record would repeat or skip an unowned
+// tail row and make the coverage count disagree with the CMDB response.
+func TestParseCMDBPageCarriesEveryOrderedSourceReferenceAUD46(t *testing.T) {
+	t.Parallel()
+	page, err := ParseCMDBPage(strings.NewReader(`{"result":[
+		{"sys_id":"ci-0501","name":"owned","owned_by":"payments"},
+		{"sys_id":"ci-0502","name":"orphan"}
+	]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := page.SourceRefs, []string{"ci-0501", "ci-0502"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("source refs = %v, want %v", got, want)
+	}
+	if len(page.Records) != 1 || page.Records[0].SourceRef != "ci-0501" {
+		t.Fatalf("records = %+v, want the attributable CI", page.Records)
+	}
+	if len(page.Unattributed) != 1 || page.Unattributed[0] != "orphan" {
+		t.Fatalf("unattributed = %v, want the unowned CI represented", page.Unattributed)
+	}
+	if page.NextCursor != "ci-0502" {
+		t.Fatalf("next cursor = %q, want the final raw CI even though it has no owner", page.NextCursor)
+	}
+}
+
+func TestParseCMDBPageRejectsMissingOrUnorderedContinuationKeysAUD46(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"missing sys_id":    `{"result":[{"name":"api","owned_by":"payments"}]}`,
+		"duplicate sys_id":  `{"result":[{"sys_id":"ci-1"},{"sys_id":"ci-1"}]}`,
+		"descending sys_id": `{"result":[{"sys_id":"ci-2"},{"sys_id":"ci-1"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParseCMDBPage(strings.NewReader(body)); err == nil {
+				t.Fatal("page parsed without a strict ordered key; a next cursor derived from it can duplicate or skip CIs")
+			}
+		})
+	}
+}
+
+func FuzzParseCMDBPageNeverInventsContinuationAUD46(f *testing.F) {
+	f.Add(`{"result":[]}`)
+	f.Add(`{"result":[{"sys_id":"ci-0001","owned_by":"payments"},{"sys_id":"ci-0002","name":"orphan"}]}`)
+	f.Add(`{"result":[{"sys_id":"ci-0002"},{"sys_id":"ci-0001"}]}`)
+	f.Fuzz(func(t *testing.T, body string) {
+		page, err := ParseCMDBPage(strings.NewReader(body))
+		if err != nil {
+			return
+		}
+		if len(page.Records)+len(page.Unattributed) != len(page.SourceRefs) {
+			t.Fatalf("accepted page classified %d owned + %d unowned rows but carried %d continuation keys",
+				len(page.Records), len(page.Unattributed), len(page.SourceRefs))
+		}
+		if len(page.SourceRefs) == 0 {
+			if page.NextCursor != "" {
+				t.Fatalf("empty accepted page invented cursor %q", page.NextCursor)
+			}
+			return
+		}
+		for i := 1; i < len(page.SourceRefs); i++ {
+			if page.SourceRefs[i] <= page.SourceRefs[i-1] {
+				t.Fatalf("accepted page is not strictly ordered: %q then %q", page.SourceRefs[i-1], page.SourceRefs[i])
+			}
+		}
+		if want := page.SourceRefs[len(page.SourceRefs)-1]; page.NextCursor != want {
+			t.Fatalf("accepted page cursor = %q, want final raw key %q", page.NextCursor, want)
+		}
+	})
 }

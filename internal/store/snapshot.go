@@ -101,7 +101,10 @@ import (
 // projection. A v27 payload has the agent row but none of its signed cache
 // evidence, so resuming after its covered sequence would show an empty cache
 // surface even though the retained heartbeat observation was already skipped.
-const SnapshotFormatVersion = 28
+// Bumped to 29 when bounded CMDB sweep checkpoints and their minimal CI source
+// inventory joined the read model. A v28 payload cannot resume the exact page
+// or safely detect a later source deletion, so it must replay those events.
+const SnapshotFormatVersion = 29
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -148,7 +151,7 @@ var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme
 	// (parent_id, replaces_id) and both always point at strictly older rows,
 	// so creation order is insertion-safe.
 	"tenant_members", "ca_authorities", "agent_cert_revocations",
-	"owner_ownership_conflicts", "cmdb_reconcile_schedules", "issuance_requests",
+	"owner_ownership_conflicts", "cmdb_ci_inventory", "cmdb_reconcile_schedules", "issuance_requests",
 	"mdm_device_correlations", "agent_upgrade_campaigns", "agent_upgrade_dispatches",
 	// Format 14: the I5 poll schedule joined ReadModelTables, so it must join
 	// the snapshot set in the same change — the class test enforces exactly
@@ -384,6 +387,7 @@ SELECT jsonb_build_object(
   'agent_cert_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_cert_revocations t),
   'owner_ownership_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM owner_ownership_conflicts t),
   'cmdb_reconcile_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM cmdb_reconcile_schedules t),
+  'cmdb_ci_inventory', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.source_ref), '[]'::jsonb) FROM cmdb_ci_inventory t),
   'issuance_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM issuance_requests t),
   'mdm_device_correlations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_device_correlations t),
   'agent_upgrade_campaigns', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_upgrade_campaigns t),
