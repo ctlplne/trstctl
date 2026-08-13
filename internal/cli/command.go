@@ -315,6 +315,8 @@ var coreCommandTable = []Command{
 
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
 	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Export a signed audit bundle"},
+	{Name: []string{"audit", "feeds", "set"}, Method: "PUT", Path: "/api/v1/audit/feeds/{id}", Body: bodyFile, Summary: "Configure a durable native Splunk HEC or Sentinel audit feed"},
+	{Name: []string{"audit", "feeds", "list"}, Method: "GET", Path: "/api/v1/audit/feeds", Summary: "List audit-feed schedules, lag, retries, failures, and collector receipts"},
 	{Name: []string{"compliance", "inventory-report"}, Method: "GET", Path: "/api/v1/compliance/inventory-report", Summary: "Get compliance and inventory reporting coverage"},
 	{Name: []string{"compliance", "nhi-report"}, Method: "GET", Path: "/api/v1/compliance/nhi-report", Summary: "Get audit-ready NHI compliance mappings"},
 	{Name: []string{"compliance", "report-schedules", "create"}, Method: "POST", Path: "/api/v1/compliance/report-schedules", Body: bodyFile, Summary: "Create a scheduled compliance or inventory report"},
@@ -404,6 +406,7 @@ var coreCommandTable = []Command{
 	// triaging a dangerous template wants it in the same place they already run
 	// discovery from, not only in a browser.
 	{Name: []string{"posture", "adcs"}, Method: "GET", Path: "/api/v1/posture/adcs", Summary: "Show AD CS certificate template posture observed by an in-domain relay"},
+	{Name: []string{"posture", "adcs", "drift"}, Method: "GET", Path: "/api/v1/posture/adcs/drift", Summary: "List immutable semantic AD CS template drift history"},
 
 	{Name: []string{"acme", "eab", "list"}, Method: "GET", Path: "/api/v1/acme/eab-credentials", Summary: "List ACME external account binding credentials and their authorization scope"},
 	{Name: []string{"acme", "eab", "disable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/disable", Body: bodyNone, Summary: "Disable an ACME external account binding credential"},

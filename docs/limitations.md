@@ -1135,6 +1135,13 @@ never live in the API process. What you can do end to end against the running bi
   `trstctl_record` and `integrity` columns and ends with an RFC-safe trailer row.
   Every saved form therefore retains the record count, archived-prefix predecessor
   hash, chain head, and complete anchor without depending on HTTP headers. When
+  operators need continuous delivery rather than a download, tenant-scoped
+  `GET|PUT /api/v1/audit/feeds[/{id}]` schedules bounded Splunk HEC or Sentinel
+  batches through the durable outbox. It persists exact record lag, cursor,
+  retries, safe terminal error codes, and collector request IDs; it does not store
+  credential values or remote response bodies. This native feed is separate from
+  the metadata-only OTLP log exporter and from incident-response SIEM dispatch.
+  When
   `protocols.tsa` is enabled the chain
   head is countersigned with an RFC 3161 timestamp over a domain-separated
   imprint; the artifact carries the timestamp info, signature, TSA certificate,

@@ -66,6 +66,45 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	106: true,
 }
 
+func TestMigration0180CreatesForcedRLSAuditFeedAuthorityAUD52(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 180)
+	if target.noTx || target.name != "0180_audit_feeds.sql" {
+		t.Fatalf("migration 0180 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	for _, table := range []string{"audit_feed_destinations", "audit_feed_deliveries"} {
+		var forced, enabled bool
+		if err := pool.QueryRow(ctx,
+			`SELECT relforcerowsecurity, relrowsecurity FROM pg_class WHERE oid = $1::regclass`, table,
+		).Scan(&forced, &enabled); err != nil {
+			t.Fatalf("inspect %s RLS: %v", table, err)
+		}
+		if !forced || !enabled {
+			t.Fatalf("%s RLS = forced:%t enabled:%t, want both true", table, forced, enabled)
+		}
+	}
+	var tokenDefault *string
+	if err := pool.QueryRow(ctx, `
+		SELECT column_default
+		  FROM information_schema.columns
+		 WHERE table_schema = 'public' AND table_name = 'audit_feed_destinations'
+		   AND column_name = 'token_ref'`).Scan(&tokenDefault); err != nil {
+		t.Fatalf("inspect token_ref: %v", err)
+	}
+	if tokenDefault != nil {
+		t.Fatalf("token_ref has default %q; credentials must remain explicit references", *tokenDefault)
+	}
+}
+
 func TestMigration0179PreservesLegacyDiagnosticsAndPermitsExactOperationsAUD49(t *testing.T) {
 	ctx := context.Background()
 	prefix, target := splitMigrationsAtVersion(t, 179)

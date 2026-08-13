@@ -88,6 +88,9 @@ var TenantScopedTables = []string{
 	// window are tenant operational telemetry and leave with the tenant.
 	"enrollment_diagnostic_observations",
 	"enrollment_diagnostics",
+	// AUD-52: exact delivery receipts reference their standing destination.
+	"audit_feed_deliveries",
+	"audit_feed_destinations",
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
 	// I2: ownership disagreements reference an owner_id. Listed BEFORE owners so
 	// the order stays correct if that reference ever becomes a real foreign key —

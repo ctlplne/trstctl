@@ -726,6 +726,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit/feeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List audit-feed schedules, lag, retries, failures, and collector receipts */
+        get: operations["listAuditFeeds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit/feeds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Configure a durable native Splunk HEC or Sentinel audit feed */
+        put: operations["putAuditFeed"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brand": {
         parameters: {
             query?: never;
@@ -6167,6 +6201,60 @@ export interface components {
         AuditEventList: {
             count?: number;
             events: components["schemas"]["AuditEvent"][];
+        };
+        AuditFeed: {
+            allow_private_endpoint: boolean;
+            attempts: number;
+            batch_size: number;
+            collector_request_id?: string;
+            enabled: boolean;
+            endpoint_url: string;
+            /** Format: uuid */
+            id: string;
+            interval_seconds: number;
+            lag_records: number;
+            /** Format: date-time */
+            last_attempt_at?: string;
+            /** Format: uuid */
+            last_batch_id?: string;
+            last_batch_record_count: number;
+            last_batch_start_sequence: number;
+            /** Format: date-time */
+            last_delivered_at?: string;
+            last_delivered_sequence: number;
+            last_error_code?: string;
+            last_queued_sequence: number;
+            name: string;
+            /** Format: date-time */
+            next_attempt_at?: string;
+            /** Format: date-time */
+            next_run_at: string;
+            private_egress_cidrs: string[];
+            /** @enum {string} */
+            provider: "splunk-hec" | "sentinel";
+            /** @enum {string} */
+            status: "not_started" | "queued" | "delivering" | "retrying" | "delivered" | "failed";
+            /** Format: uuid */
+            tenant_id: string;
+            token_ref: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AuditFeedList: {
+            count?: number;
+            items: components["schemas"]["AuditFeed"][];
+        };
+        AuditFeedRequest: {
+            allow_private_endpoint?: boolean;
+            batch_size: number;
+            enabled: boolean;
+            endpoint_url: string;
+            interval_seconds: number;
+            name: string;
+            private_egress_cidrs?: string[];
+            /** @enum {string} */
+            provider: "splunk-hec" | "sentinel";
+            token_ref: string;
         };
         AuditTimestampInfo: {
             /** Format: date-time */
@@ -13969,6 +14057,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditBundle"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAuditFeeds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditFeedList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    putAuditFeed: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditFeedRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditFeed"];
                 };
             };
             /** @description client error */

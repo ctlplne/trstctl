@@ -134,6 +134,28 @@ leader-only background worker carrying the event-stream sequence, so a downstrea
 SIEM or OpenTelemetry Collector pipeline can dedupe replayed records and alert on
 gaps.
 
+### Native Splunk HEC and Microsoft Sentinel audit delivery
+
+OTLP is the metadata-only observability stream. Native audit feeds are the
+tenant-governed evidence stream: they deliver the production Splunk HEC or Sentinel
+mapping, including each audit record and a final chain trailer, in bounded batches.
+Configure them from the Audit console or `PUT /api/v1/audit/feeds/{id}` and inspect
+them with `GET /api/v1/audit/feeds` or `trstctl-cli audit feeds list`.
+
+The status response is the durable operator signal. `last_delivered_sequence` is
+the highest accepted record, `lag_records` is the exact queued batch size still
+owed to the collector, `attempts` and `next_attempt_at` explain retries, and
+`last_error_code` plus `collector_request_id` correlate a terminal failure or
+vendor receipt. Credentials are represented only by an allowlisted `env:NAME`
+reference. Remote response bodies are deliberately not retained because a
+collector can echo a credential or customer payload in an error page.
+
+Delivery is outbox-backed and owns the `audit.feed.*` bulkhead family. A transient
+failure retries the byte-identical batch and deterministic batch ID. Startup
+reconciliation recreates a missing outbox row only after the event history still
+matches the recorded range, IDs, seed, and head. A changed range fails closed; it
+is never silently replaced by whichever records happen to be current.
+
 ## Structured logs
 
 The control plane logs structured JSON (or text — set `TRSTCTL_LOG_FORMAT`) via

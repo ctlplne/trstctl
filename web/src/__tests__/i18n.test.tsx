@@ -638,8 +638,14 @@ describe("i18n boundary", () => {
       // the terminal page, and say that an incomplete cursor survives for the
       // next relay page. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "48e78080293b6e5643092a431a0306d174abf7d07d55290dd13cc7c5801afbae",
-      "de-DE": "350ba674a3c58ea82ba6c4c468722159ba3afbcb5a40868a68c95f93e8b3a27a",
+      // AUD-52 native collector-feed re-pin: fifty-four keys explain exact
+      // Splunk/Sentinel batches, durable cursor/lag/retry/failure receipts,
+      // credential references, private-egress controls, and every form state.
+      // Product names, example URLs, env references, IDs, and numeric bounds
+      // stay byte-identical. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "f8f9bd33bb51c61539bc70703580661691586221fe6e98af3b9944849e584b89",
+      "de-DE": "de3fa816347996a6b2c3f152c59117557f1b4ca491a3f9481f772d38174366ab",
     });
   });
 

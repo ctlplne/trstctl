@@ -197,9 +197,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// plus exception list/grant/revoke commands raise it to 373 and expose the
 	// ownership-readiness gate from a headless incident terminal. AUD-49's
 	// exact endpoint result, redacted diagnostic addendum, and prove-fixed
-	// mutation raise it to 377.
-	if len(out) != 377 {
-		t.Fatalf("CLI commands = %d, want 377", len(out))
+	// mutation raise it to 377. AUD-52's audit feed set/list commands raise it
+	// to 379 and expose the same standing collector state as the API and console.
+	// The parity sweep also closes the already-served AD CS drift read, yielding 380.
+	if len(out) != 380 {
+		t.Fatalf("CLI commands = %d, want 380", len(out))
 	}
 	return out
 }

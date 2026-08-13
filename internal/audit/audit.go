@@ -43,15 +43,17 @@ var ErrMissingSigner = errors.New("audit: signing key is required for signed exp
 // Query selects a slice of the audit log. TenantID is required for tenant
 // isolation; the zero value of the other fields means "unbounded".
 type Query struct {
-	TenantID     string    `json:"tenant_id"`
-	Types        []string  `json:"types,omitempty"`          // exact event-type filter
-	FeatureID    string    `json:"feature_id,omitempty"`     // catalog feature id (COVER-008); resolved to event types via the ledger
-	Action       string    `json:"action,omitempty"`         // catalog action (COVER-008); resolved to event types via the ledger
-	Since        time.Time `json:"since,omitempty"`          // inclusive lower time bound
-	Until        time.Time `json:"until,omitempty"`          // inclusive upper time bound
-	AsOfSequence uint64    `json:"as_of_sequence,omitempty"` // point-in-time over tenant-local Sequence
-	Contains     string    `json:"contains,omitempty"`       // substring match on type or data
-	Limit        int       `json:"limit,omitempty"`          // cap on records returned (0 = all)
+	TenantID            string    `json:"tenant_id"`
+	Types               []string  `json:"types,omitempty"`                 // exact event-type filter
+	ExcludeTypePrefixes []string  `json:"exclude_type_prefixes,omitempty"` // internal stream cursors may omit their own control events
+	FeatureID           string    `json:"feature_id,omitempty"`            // catalog feature id (COVER-008); resolved to event types via the ledger
+	Action              string    `json:"action,omitempty"`                // catalog action (COVER-008); resolved to event types via the ledger
+	Since               time.Time `json:"since,omitempty"`                 // inclusive lower time bound
+	Until               time.Time `json:"until,omitempty"`                 // inclusive upper time bound
+	AsOfSequence        uint64    `json:"as_of_sequence,omitempty"`        // point-in-time over tenant-local Sequence
+	AfterSequence       uint64    `json:"after_sequence,omitempty"`        // exclusive tenant-local cursor for durable stream consumers
+	Contains            string    `json:"contains,omitempty"`              // substring match on type or data
+	Limit               int       `json:"limit,omitempty"`                 // cap on records returned (0 = all)
 }
 
 // featureActionTypes resolves the query's feature_id/action selector to the event
@@ -249,8 +251,16 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error)
 }
 
 func (q Query) matches(e events.Event, tenantSequence uint64) bool {
+	if q.AfterSequence != 0 && tenantSequence <= q.AfterSequence {
+		return false
+	}
 	if q.AsOfSequence != 0 && tenantSequence > q.AsOfSequence {
 		return false
+	}
+	for _, prefix := range q.ExcludeTypePrefixes {
+		if prefix = strings.TrimSpace(prefix); prefix != "" && strings.HasPrefix(e.Type, prefix) {
+			return false
+		}
 	}
 	if !q.Since.IsZero() && e.Time.Before(q.Since) {
 		return false

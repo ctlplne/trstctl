@@ -87,7 +87,17 @@ subsystem; a rising 429 rate points at a tenant over budget. A rising
 `trstctl_outbox_delivery_timeouts_total` series points at a slow destination and
 includes the affected tenant and destination labels.
 
-For SIEM pipelines, enable OTLP export to your OpenTelemetry Collector. Served HTTP
-spans arrive as OTLP traces, and event-sourced audit records arrive as OTLP logs
-with `trstctl.audit.sequence` and `trstctl.tenant.id` attributes. Use the sequence
-attribute to dedupe restarted streams and to alert on gaps.
+For metadata-only SIEM pipelines, enable OTLP export to your OpenTelemetry
+Collector. Served HTTP spans arrive as OTLP traces, and event-sourced audit records
+arrive as OTLP logs with `trstctl.audit.sequence` and `trstctl.tenant.id`
+attributes. Use the sequence attribute to dedupe restarted streams and alert on
+gaps.
+
+For native evidence delivery, configure a Splunk HEC or Microsoft Sentinel feed
+and watch `GET /api/v1/audit/feeds`. A non-zero `lag_records` means one exact batch
+is still owed; `retrying` is recoverable and carries `next_attempt_at`; `failed` is
+terminal and keeps its safe error code and collector request ID. Re-saving a
+corrected configuration emits a new immutable configuration version. Never repair
+the cursor, outbox row, or feed projection with SQL: startup reconciliation checks
+the queued event against the retained audit range and either recreates the exact
+intent or fails closed.

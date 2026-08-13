@@ -61,6 +61,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("AgentUpgradeCampaign", "status", eventProjectionPredicate, "internal/orchestrator/agent_upgrade.go:Orchestrator.OpenAgentUpgradeCampaign"),
 	evidence("Approval", "status", operationApprovalPredicate, "internal/api/approvals.go:approvalResponseFor"),
 	evidence("ApprovalDecision", "status", operationApprovalPredicate, "internal/api/approvals.go:approvalResponseFor"),
+	evidence("AuditFeed", "status", predicate(evidenceEventProjection, "configured, queued, delivered, and failed are derived only from the tenant's immutable audit.feed.* events and their projection; delivered additionally requires the exact collector receipt while failed preserves the terminal delivery error and lag"), "internal/store/audit_feed.go:AuditFeed.EffectiveStatus"),
 	evidence("BreakglassCeremony", "status", eventProjectionPredicate, "internal/api/breakglass.go:API.startBreakglassIssueCeremony"),
 	evidence("BulkRevokeItem", "status", workflowPredicate, "internal/api/bulk_revoke.go:API.bulkRevoke"),
 	evidence("BulkRevokeRequest", "status", workflowPredicate, "internal/api/bulk_revoke.go:API.bulkRevoke"),

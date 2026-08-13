@@ -87,6 +87,7 @@ func newStore(t *testing.T) *store.Store {
 		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
 		          secret_rotation_schedule_ticks, tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits,
 		          enrollment_diagnostic_observations, enrollment_diagnostics, migration_runs,
+		          audit_feed_deliveries, audit_feed_destinations,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,

@@ -193,6 +193,222 @@ export const messages = {
     defaultMessage: "One audit stream, filtered to this module. Clear to see all events.",
     description: "Explanatory note beside the audit module-scope chip.",
   },
+  "audit.feeds.heading": {
+    defaultMessage: "Scheduled collector feeds",
+    description: "Heading for native scheduled audit delivery to external collectors.",
+  },
+  "audit.feeds.description": {
+    defaultMessage: "Deliver exact, bounded audit batches to Splunk HEC or Microsoft Sentinel. Retries reuse the same batch, and this table keeps durable lag, failure, and collector-receipt evidence.",
+    description: "Technical explanation of native audit feed delivery guarantees.",
+  },
+  "audit.feeds.listLabel": {
+    defaultMessage: "Scheduled audit collector feeds",
+    description: "Accessible label for the audit feed table.",
+  },
+  "audit.feeds.loading": {
+    defaultMessage: "Loading collector feeds.",
+    description: "Audit feed table loading state.",
+  },
+  "audit.feeds.loadFailed": {
+    defaultMessage: "Collector feeds unavailable",
+    description: "Audit feed table error heading.",
+  },
+  "audit.feeds.permissionDenied": {
+    defaultMessage: "Your session cannot read audit collector feeds.",
+    description: "Audit feed permission-denied heading.",
+  },
+  "audit.feeds.empty": {
+    defaultMessage: "No collector feeds configured",
+    description: "Audit feed table empty-state heading.",
+  },
+  "audit.feeds.emptyBody": {
+    defaultMessage: "Configure a destination below; no external call happens until the immutable schedule event and outbox row are committed.",
+    description: "Audit feed table empty-state explanation.",
+  },
+  "audit.feeds.destination": {
+    defaultMessage: "Destination",
+    description: "Audit feed table destination column.",
+  },
+  "audit.feeds.status": {
+    defaultMessage: "Status",
+    description: "Audit feed table delivery-status column.",
+  },
+  "audit.feeds.lag": {
+    defaultMessage: "Lag",
+    description: "Audit feed table queued-record lag column.",
+  },
+  "audit.feeds.delivery": {
+    defaultMessage: "Delivery evidence",
+    description: "Audit feed table delivery evidence column.",
+  },
+  "audit.feeds.actions": {
+    defaultMessage: "Actions",
+    description: "Audit feed table actions column.",
+  },
+  "audit.feeds.edit": {
+    defaultMessage: "Edit configuration",
+    description: "Action that loads an audit feed into the configuration form.",
+  },
+  "audit.feeds.enabled": {
+    defaultMessage: "Enabled",
+    description: "Audit feed enabled status.",
+  },
+  "audit.feeds.disabled": {
+    defaultMessage: "Disabled",
+    description: "Audit feed disabled status.",
+  },
+  "audit.feeds.recordCount": {
+    defaultMessage: "{count} queued records",
+    description: "Persistent audit feed lag count.",
+  },
+  "audit.feeds.sequence": {
+    defaultMessage: "Delivered through sequence {sequence}",
+    description: "Last audit sequence durably accepted by the collector.",
+  },
+  "audit.feeds.attempts": {
+    defaultMessage: "{count} attempts",
+    description: "Number of attempts for the current audit feed batch.",
+  },
+  "audit.feeds.nextRun": {
+    defaultMessage: "Next action: {time}",
+    description: "Next audit feed schedule or retry time.",
+  },
+  "audit.feeds.configure": {
+    defaultMessage: "Configure a collector feed",
+    description: "Audit feed configuration-form heading.",
+  },
+  "audit.feeds.id": {
+    defaultMessage: "Feed ID",
+    description: "Immutable UUID field for an audit feed.",
+  },
+  "audit.feeds.name": {
+    defaultMessage: "Name",
+    description: "Human-readable audit feed name field.",
+  },
+  "audit.feeds.provider": {
+    defaultMessage: "Collector",
+    description: "Audit feed collector-provider field.",
+  },
+  "audit.feeds.provider.splunk": {
+    defaultMessage: "Splunk HEC",
+    description: "Native Splunk HTTP Event Collector provider option.",
+  },
+  "audit.feeds.provider.sentinel": {
+    defaultMessage: "Microsoft Sentinel",
+    description: "Native Microsoft Sentinel provider option.",
+  },
+  "audit.feeds.endpoint": {
+    defaultMessage: "Collector endpoint URL",
+    description: "Audit feed collector endpoint field.",
+  },
+  "audit.feeds.endpointPlaceholder": {
+    defaultMessage: "https://collector.example.test/events",
+    description: "Non-production absolute HTTPS example for the collector endpoint field.",
+  },
+  "audit.feeds.tokenRef": {
+    defaultMessage: "Credential reference",
+    description: "Audit feed credential-reference field.",
+  },
+  "audit.feeds.tokenRefHelp": {
+    defaultMessage: "Use an operator-allowlisted env:NAME reference. The credential value is never stored or returned.",
+    description: "Security guidance for the audit feed credential reference.",
+  },
+  "audit.feeds.tokenRefPlaceholder": {
+    defaultMessage: "env:AUDIT_COLLECTOR_TOKEN",
+    description: "Example environment-backed credential reference for a collector token.",
+  },
+  "audit.feeds.interval": {
+    defaultMessage: "Interval (seconds)",
+    description: "Audit feed schedule interval field.",
+  },
+  "audit.feeds.batch": {
+    defaultMessage: "Maximum records per batch",
+    description: "Audit feed bounded batch-size field.",
+  },
+  "audit.feeds.cidrs": {
+    defaultMessage: "Approved private CIDRs",
+    description: "Audit feed private egress allowlist field.",
+  },
+  "audit.feeds.cidrsHelp": {
+    defaultMessage: "One CIDR per line. Required only when private endpoint delivery is enabled.",
+    description: "Audit feed private CIDR field guidance.",
+  },
+  "audit.feeds.enabledLabel": {
+    defaultMessage: "Run this schedule",
+    description: "Audit feed enabled checkbox label.",
+  },
+  "audit.feeds.privateEndpoint": {
+    defaultMessage: "Allow an approved private endpoint",
+    description: "Audit feed private-endpoint checkbox label.",
+  },
+  "audit.feeds.save": {
+    defaultMessage: "Save collector feed",
+    description: "Audit feed configuration submit button.",
+  },
+  "audit.feeds.saving": {
+    defaultMessage: "Saving collector feed...",
+    description: "Audit feed configuration submit progress.",
+  },
+  "audit.feeds.saved": {
+    defaultMessage: "Collector feed saved. Delivery will begin from the next immutable schedule checkpoint.",
+    description: "Audit feed configuration success notice.",
+  },
+  "audit.feeds.mutationFailed": {
+    defaultMessage: "Could not save collector feed",
+    description: "Audit feed configuration error fallback.",
+  },
+  "audit.feeds.validation.required": {
+    defaultMessage: "This value is required.",
+    description: "Required audit feed field validation.",
+  },
+  "audit.feeds.validation.uuid": {
+    defaultMessage: "Enter a non-zero UUID.",
+    description: "Audit feed ID validation.",
+  },
+  "audit.feeds.validation.url": {
+    defaultMessage: "Enter an absolute collector URL.",
+    description: "Audit feed URL validation.",
+  },
+  "audit.feeds.validation.tokenRef": {
+    defaultMessage: "Use an env:NAME reference with an uppercase environment variable name.",
+    description: "Audit feed credential-reference validation.",
+  },
+  "audit.feeds.validation.interval": {
+    defaultMessage: "Use an interval of at least 60 seconds.",
+    description: "Audit feed interval validation.",
+  },
+  "audit.feeds.validation.batch": {
+    defaultMessage: "Use a batch size from 1 through 500.",
+    description: "Audit feed batch-size validation.",
+  },
+  "audit.feeds.validation.cidrs": {
+    defaultMessage: "Add at least one approved private CIDR.",
+    description: "Audit feed private CIDR validation.",
+  },
+  "audit.feeds.status.notStarted": {
+    defaultMessage: "Not started",
+    description: "Audit feed delivery status before its first batch.",
+  },
+  "audit.feeds.status.queued": {
+    defaultMessage: "Queued",
+    description: "Audit feed batch queued status.",
+  },
+  "audit.feeds.status.delivering": {
+    defaultMessage: "Delivering",
+    description: "Audit feed batch delivery-in-progress status.",
+  },
+  "audit.feeds.status.retrying": {
+    defaultMessage: "Retrying exact batch",
+    description: "Audit feed batch retry status.",
+  },
+  "audit.feeds.status.delivered": {
+    defaultMessage: "Delivered",
+    description: "Audit feed collector acceptance status.",
+  },
+  "audit.feeds.status.failed": {
+    defaultMessage: "Terminal failure",
+    description: "Audit feed exhausted-retry status.",
+  },
   "audit.export.anchorStatus": {
     defaultMessage: "External timestamp status",
     description: "Audit evidence label for whether a complete external timestamp is saved in the artifact.",

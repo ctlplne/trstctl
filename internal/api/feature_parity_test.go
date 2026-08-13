@@ -158,8 +158,8 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// validated local copy.
 	// AUD-49 adds exact signed endpoint-result readback, an authorized redacted
 	// support addendum, and the prove-fixed mutation.
-	if len(out) != 367 {
-		t.Fatalf("OpenAPI operationIds = %d, want 367", len(out))
+	if len(out) != 369 {
+		t.Fatalf("OpenAPI operationIds = %d, want 369", len(out))
 	}
 	return out
 }

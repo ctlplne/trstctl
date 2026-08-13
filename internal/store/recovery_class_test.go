@@ -343,3 +343,17 @@ func TestEnrollmentDiagnosticVerificationIsSnapshotSafeAUD49(t *testing.T) {
 		t.Fatalf("SnapshotFormatVersion = %d; a v30 payload cannot restore AUD-49 exact refusal references or prove-fixed state", SnapshotFormatVersion)
 	}
 }
+
+func TestAuditFeedCursorAndReceiptAreSnapshotSafeAUD52(t *testing.T) {
+	for _, table := range []string{"audit_feed_destinations", "audit_feed_deliveries"} {
+		if !containsRecoveryTable(ReadModelTables, table) {
+			t.Fatalf("%s is event-derived but missing from the cold-rebuild truncate set", table)
+		}
+		if !containsRecoveryTable(snapshotTables, table) {
+			t.Fatalf("%s is missing from snapshots, so restore would erase collector cursor or receipt evidence", table)
+		}
+	}
+	if SnapshotFormatVersion < 32 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v31 payload cannot restore AUD-52 collector cursors and receipts", SnapshotFormatVersion)
+	}
+}

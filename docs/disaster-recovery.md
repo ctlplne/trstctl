@@ -17,7 +17,7 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 
 | What | Why | How |
 | --- | --- | --- |
-| **Event log** (NATS JetStream) | The **source of truth**. Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
+| **Event log** (NATS JetStream) | The **source of truth**. Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, the attributed audit trail, and audit-feed configuration/cursor/receipt/failure projections). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
 | **PostgreSQL independent state and restore receivers** | The read model is rebuildable from the log, but **independently retained operational state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, outstanding one-time secret-share rows, policy bindings, federation peer import cursors, queued outbox work, durable scheduled-rotation tick/cursor authority and due-edge commands, and durable privacy-erasure idempotency evidence. The paired artifact also carries logical audit checkpoints so restore can prove every hidden tenant prefix still exists in the event artifact before mutation; `audit.archived` v2 can reconstruct those checkpoint rows during an event-only projection rebuild. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The key is a purpose-constrained `audit-export` handle inside the signer's sealed key store, captured with that store below. `TRSTCTL_AUDIT_SIGNING_KEY_FILE` names only the one-time legacy PEM migration path; new backups do not copy a separate plaintext key artifact. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
@@ -182,6 +182,15 @@ while old claim attempts are conservatively retained as possible receiver starts
 A missing, partial, or mismatched pair aborts the restore instead of guessing from a
 SQL allocation id. The restore exception is owner-only and transaction-local, so a
 normal or application-role insert cannot forge receiver authority afterward.
+Scheduled audit feeds use the same conservative rule. Replay rebuilds the tenant
+configuration, cursor, lag, safe error, and collector-receipt projections. If a
+queued event survived but its same-transaction outbox row did not, boot
+reconciliation re-reads the exact audit sequence range with privacy overlays,
+checks every recorded event ID plus the seed and head, and recreates only a
+byte-identical destination/payload/idempotency tuple. A shortened or changed range
+is an error, not permission to enqueue current records. The paired PostgreSQL
+artifact retains already-claimed outbox attempts so a full restore does not pretend
+the collector boundary was never crossed.
 Scheduled-rotation command receivers deliberately have no foreign key to their
 rebuildable schedule projection and restore before the final replay. The
 version-2 terminal event carries the exact due-edge tuple, so replay advances

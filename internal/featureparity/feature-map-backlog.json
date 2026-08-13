@@ -12188,7 +12188,9 @@
             ],
             "source_backend": [
                 "/api/v1/audit/events",
-                "/api/v1/audit/export"
+                "/api/v1/audit/export",
+                "/api/v1/audit/feeds",
+                "/api/v1/audit/feeds/{id}"
             ],
             "source_frontend": [
                 "web/src/pages/Audit.tsx"
@@ -12197,12 +12199,16 @@
             "notes": "Closed by route-level feature-map evidence. COMP-02 adds served OTLP/HTTP protobuf export for HTTP traces plus event-sourced audit records so SIEM/OpenTelemetry Collector pipelines consume the audit stream. Test evidence: go test./internal/server -run TestServedOTLPExporterStreamsTracesAndAuditEvents -count=1; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [
                 "searchAudit",
-                "exportAudit"
+                "exportAudit",
+                "putAuditFeed",
+                "listAuditFeeds"
             ],
             "api_na": "",
             "cli_surface": [
                 "audit events",
-                "audit export"
+                "audit export",
+                "audit feeds set",
+                "audit feeds list"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -12229,7 +12235,9 @@
                 "cli": {
                     "evidence": [
                         "CLI command: audit events",
-                        "CLI command: audit export"
+                        "CLI command: audit export",
+                        "CLI command: audit feeds set",
+                        "CLI command: audit feeds list"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -12239,7 +12247,9 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationId: searchAudit",
-                        "OpenAPI operationId: exportAudit"
+                        "OpenAPI operationId: exportAudit",
+                        "OpenAPI operationId: putAuditFeed",
+                        "OpenAPI operationId: listAuditFeeds"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -12275,7 +12285,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: searchAudit, exportAudit",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: searchAudit, exportAudit, putAuditFeed, listAuditFeeds",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -12668,6 +12678,7 @@
                 "owners update",
                 "platform system",
                 "posture adcs",
+                "posture adcs drift",
                 "privacy export",
                 "privacy retention list",
                 "privacy retention run",
@@ -12731,6 +12742,7 @@
                         "CLI command: profiles get-version",
                         "CLI command: audit events",
                         "CLI command: audit export",
+                        "CLI command: posture adcs drift",
                         "CLI command: privacy export",
                         "CLI command: graph nodes",
                         "CLI command: graph reachable",

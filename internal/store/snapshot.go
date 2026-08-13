@@ -111,7 +111,10 @@ import (
 // Bumped to 31 when exact enrollment-diagnostic operation refs and their
 // prove-fixed endpoint links joined the read model. A v30 payload would advance
 // past those events while restoring only the older protocol/step/cause rows.
-const SnapshotFormatVersion = 31
+// Bumped to 32 when AUD-52 added event-derived standing audit destinations and
+// exact delivery receipts. A v31 payload cannot restore their cursor or retry
+// evidence and therefore must replay the retained audit.feed.* events.
+const SnapshotFormatVersion = 32
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -180,7 +183,9 @@ var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "acme
 	"adcs_enrollment_service_posture",
 	// Format 21: parent before child keeps restore safe for the decision table's
 	// composite foreign key into the immutable request.
-	"operation_approval_requests", "operation_approval_decisions"}
+	"operation_approval_requests", "operation_approval_decisions",
+	// Format 32: parent before child for the delivery FK.
+	"audit_feed_destinations", "audit_feed_deliveries"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -409,7 +414,9 @@ SELECT jsonb_build_object(
   'enrollment_diagnostics', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM enrollment_diagnostics t),
   'outbox_reconciliation_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM outbox_reconciliation_conflicts t),
   'operation_approval_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM operation_approval_requests t),
-  'operation_approval_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM operation_approval_decisions t)
+  'operation_approval_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM operation_approval_decisions t),
+  'audit_feed_destinations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM audit_feed_destinations t),
+  'audit_feed_deliveries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.queued_at, t.batch_id), '[]'::jsonb) FROM audit_feed_deliveries t)
 ) || jsonb_build_object(
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,

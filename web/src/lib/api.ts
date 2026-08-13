@@ -77,6 +77,9 @@ import type {
   AttestedSVID as GenAttestedSVID,
   AttestedSVIDRequest,
   AuditBundle,
+  AuditFeed,
+  AuditFeedList,
+  AuditFeedRequest,
   AuditEvent as GenAuditEvent,
   BreakglassBundle,
   BreakglassIssueRequest,
@@ -669,6 +672,9 @@ export type {
   APITokenCreateResponse,
   APITokenList,
   AuditBundle,
+  AuditFeed,
+  AuditFeedList,
+  AuditFeedRequest,
   BreakglassBundle,
   BreakglassIssueRequest,
   BreakglassIssueResponse,
@@ -1564,6 +1570,8 @@ export interface Api {
   privacyCatalog(): Promise<PrivacyCatalog>;
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
+  auditFeeds(): Promise<AuditFeedList>;
+  putAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeed>;
   // J1: download a record stream (ndjson/csv/splunk-hec/sentinel) as a file.
   downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<string>;
   complianceEvidencePack(framework: ComplianceEvidencePack["framework"]): Promise<ComplianceEvidencePack>;
@@ -2020,6 +2028,8 @@ const liveApi: Api = {
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
   auditEvents: (options) => req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
+  auditFeeds: () => req<AuditFeedList>("/api/v1/audit/feeds"),
+  putAuditFeed: (id, input) => mutate<AuditFeed>("PUT", `/api/v1/audit/feeds/${encodeURIComponent(id)}`, input),
   downloadAuditExport: (options, format) => downloadAuditExportImpl(options, format),
   complianceEvidencePack: (framework) => req<ComplianceEvidencePack>(`/api/v1/compliance/evidence-packs/${encodeURIComponent(framework)}`),
   complianceInventoryReport: () => req<ComplianceInventoryReport>("/api/v1/compliance/inventory-report"),

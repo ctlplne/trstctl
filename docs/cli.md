@@ -74,7 +74,7 @@ exhaustive subcommand list:
 | `agents`                           | In-network agent inventory, enrollment tokens, cert revocation, offboarding (`list` · `enroll-token` · `revoke-cert` · `offboard`)                          |
 | `ai`                               | AI assistant status, question answering, root-cause analysis (`status` · `query` · `rca`)                                                                   |
 | `approval-requests`                | Review immutable certificate, secret, and managed-key operation requests within the caller's real permission domains (`list` · `approve` · `deny`)            |
-| `audit`                            | Query and export the signed audit log (`events` · `export`)                                                                                                 |
+| `audit`                            | Query/export the signed audit log and configure native collector feeds (`events` · `export` · `feeds set` · `feeds list`)                                  |
 | `breakglass`                       | Ceremony-gated online break-glass issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`) |
 | `broker agent-identities`          | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                         |
 | `ca ceremonies`                    | Start, inspect, and approve m-of-n CA key ceremonies (`start` · `get` · `approve`)                                                                           |
@@ -480,6 +480,17 @@ trstctl-cli compliance inventory-report
 # Show CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0,
 # DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2 evidence refs.
 trstctl-cli compliance nhi-report
+
+# Configure one tenant-scoped Splunk HEC schedule. token_ref is an
+# operator-allowlisted pointer; the credential value never enters the request.
+cat > audit-feed.json <<'JSON'
+{"name":"production-soc","provider":"splunk-hec","endpoint_url":"https://splunk.example.com/services/collector/event","token_ref":"env:SPLUNK_HEC_TOKEN","interval_seconds":300,"batch_size":100,"enabled":true}
+JSON
+trstctl-cli --idempotency-key audit-feed-production audit feeds set 52525252-5252-4525-8525-525252525252 -f audit-feed.json
+
+# Read schedule, cursor, exact record lag, retry/failure, and collector receipt
+# state. This is read-only and sends no Idempotency-Key.
+trstctl-cli audit feeds list
 
 # Record and list an audit-export report schedule definition. The delivery value is
 # metadata for the audit-export workflow; email/webhook delivery is not implied.

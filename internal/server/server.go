@@ -2306,6 +2306,7 @@ var outboxDispatchFamilies = func() []outboxDispatchFamily {
 		{pool: bulkhead.SubsystemOutboxNotifications, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"notification."}}},
 		{pool: bulkhead.SubsystemOutboxTenantSeal, scope: orchestrator.DestinationScope{IncludePrefixes: []string{store.TenantKeyDomainSealDestination}}},
 		{pool: bulkhead.SubsystemOutboxFleet, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"incident.fleet_reissuance."}}},
+		{pool: bulkhead.SubsystemOutboxAuditFeeds, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"audit.feed."}}},
 	}
 	excluded := make([]string, 0, 8)
 	for _, family := range named {

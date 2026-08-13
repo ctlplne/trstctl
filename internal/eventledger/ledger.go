@@ -104,6 +104,11 @@ const (
 	EventIncidentFleetReissuanceRecorded          = "incident.fleet_reissuance.recorded"
 	EventRemediationPlaybookRunRecorded           = "remediation.playbook_run.recorded"
 	EventResponseIntegrationDispatched            = "response.integration.dispatched"
+	EventAuditFeedDestinationConfigured           = "audit.feed.destination.configured"
+	EventAuditFeedScheduleChecked                 = "audit.feed.schedule.checked"
+	EventAuditFeedBatchQueued                     = "audit.feed.batch.queued"
+	EventAuditFeedBatchDelivered                  = "audit.feed.batch.delivered"
+	EventAuditFeedBatchFailed                     = "audit.feed.batch.failed"
 	EventOwnerCreated                             = "owner.created"
 	EventOwnerUpdated                             = "owner.updated"
 	EventOwnerDeleted                             = "owner.deleted"
@@ -262,6 +267,10 @@ var ledger = []FeatureEvent{
 	{"F47", "Incident remediation", "execute_incident", "executeIncident", []string{EventIncidentExecutionRecorded}},
 	{"F47", "Incident remediation", "run_playbook", "runRemediationPlaybook", []string{EventRemediationPlaybookRunRecorded}},
 	{"F47", "Incident remediation", "dispatch_response_integrations", "dispatchResponseIntegrations", []string{EventResponseIntegrationDispatched}},
+	{"F9", "Audit log surfaces", "configure_feed", "putAuditFeed", []string{EventAuditFeedDestinationConfigured}},
+	{"F9", "Audit log surfaces", "check_feed_schedule", "auditFeedScheduler", []string{EventAuditFeedScheduleChecked}},
+	{"F9", "Audit log surfaces", "queue_feed_batch", "auditFeedScheduler", []string{EventAuditFeedBatchQueued}},
+	{"F9", "Audit log surfaces", "deliver_feed_batch", "auditFeedOutboxWorker", []string{EventAuditFeedBatchDelivered, EventAuditFeedBatchFailed}},
 	{"F32", "CA compromise fleet reissuance", "start_fleet_reissuance", "startFleetReissuance", []string{EventIncidentFleetReissuanceRecorded}},
 	{"F32", "CA compromise fleet reissuance", "pause_fleet_reissuance", "pauseFleetReissuance", []string{EventIncidentFleetReissuanceRecorded}},
 	{"F32", "CA compromise fleet reissuance", "resume_fleet_reissuance", "resumeFleetReissuance", []string{EventIncidentFleetReissuanceRecorded}},

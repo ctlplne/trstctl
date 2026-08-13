@@ -3025,6 +3025,36 @@ func componentSchemas() map[string]*Schema {
 		"chain_head":     str(),
 		"anchor":         ref("AuditAnchor"),
 	}, "schema_version", "format", "bundle", "chain_head", "anchor")
+	auditFeedRequest := object(map[string]*Schema{
+		"name":         str(),
+		"provider":     {Type: "string", Enum: []string{"splunk-hec", "sentinel"}},
+		"endpoint_url": str(), "token_ref": str(),
+		"interval_seconds": {Type: "integer"}, "batch_size": {Type: "integer"},
+		"enabled": {Type: "boolean"}, "allow_private_endpoint": {Type: "boolean"},
+		"private_egress_cidrs": {Type: "array", Items: str()},
+	}, "name", "provider", "endpoint_url", "token_ref", "interval_seconds", "batch_size", "enabled")
+	auditFeed := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "name": str(),
+		"provider":     {Type: "string", Enum: []string{"splunk-hec", "sentinel"}},
+		"endpoint_url": str(), "token_ref": str(),
+		"interval_seconds": {Type: "integer"}, "batch_size": {Type: "integer"},
+		"enabled": {Type: "boolean"}, "allow_private_endpoint": {Type: "boolean"},
+		"private_egress_cidrs": {Type: "array", Items: str()},
+		"status":               {Type: "string", Enum: []string{"not_started", "queued", "delivering", "retrying", "delivered", "failed"}},
+		"last_batch_id":        uuid(), "last_batch_start_sequence": {Type: "integer"},
+		"last_queued_sequence": {Type: "integer"}, "last_delivered_sequence": {Type: "integer"},
+		"last_batch_record_count": {Type: "integer"}, "lag_records": {Type: "integer"},
+		"attempts": {Type: "integer"}, "last_error_code": str(), "collector_request_id": str(),
+		"next_run_at": timestamp(), "next_attempt_at": timestamp(), "last_attempt_at": timestamp(),
+		"last_delivered_at": timestamp(), "updated_at": timestamp(),
+	}, "id", "tenant_id", "name", "provider", "endpoint_url", "token_ref", "interval_seconds",
+		"batch_size", "enabled", "allow_private_endpoint", "private_egress_cidrs", "status",
+		"last_batch_start_sequence", "last_queued_sequence", "last_delivered_sequence",
+		"last_batch_record_count", "lag_records", "attempts", "next_run_at", "updated_at")
+	auditFeedList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("AuditFeed")},
+		"count": {Type: "integer"},
+	}, "items")
 	custodyOriginCounts := object(map[string]*Schema{
 		"requester": {Type: "integer"}, "host_agent": {Type: "integer"},
 		"device": {Type: "integer"}, "control_plane": {Type: "integer"}, "signer": {Type: "integer"},
@@ -5113,6 +5143,9 @@ func componentSchemas() map[string]*Schema {
 		"AuditTimestampToken":                      auditTimestampToken,
 		"AuditAnchor":                              auditAnchor,
 		"AuditBundle":                              auditBundle,
+		"AuditFeedRequest":                         auditFeedRequest,
+		"AuditFeed":                                auditFeed,
+		"AuditFeedList":                            auditFeedList,
 		"ComplianceEvidencePack":                   complianceEvidencePack,
 		"CertificateCustodySummary":                certificateCustodySummary,
 		"CustodyOriginCounts":                      custodyOriginCounts,

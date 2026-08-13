@@ -3162,6 +3162,199 @@
         ],
         "type": "object"
       },
+      "AuditFeed": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "batch_size": {
+            "type": "integer"
+          },
+          "collector_request_id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint_url": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "lag_records": {
+            "type": "integer"
+          },
+          "last_attempt_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_batch_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_batch_record_count": {
+            "type": "integer"
+          },
+          "last_batch_start_sequence": {
+            "type": "integer"
+          },
+          "last_delivered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_delivered_sequence": {
+            "type": "integer"
+          },
+          "last_error_code": {
+            "type": "string"
+          },
+          "last_queued_sequence": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_attempt_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "enum": [
+              "splunk-hec",
+              "sentinel"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "not_started",
+              "queued",
+              "delivering",
+              "retrying",
+              "delivered",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "token_ref": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "provider",
+          "endpoint_url",
+          "token_ref",
+          "interval_seconds",
+          "batch_size",
+          "enabled",
+          "allow_private_endpoint",
+          "private_egress_cidrs",
+          "status",
+          "last_batch_start_sequence",
+          "last_queued_sequence",
+          "last_delivered_sequence",
+          "last_batch_record_count",
+          "lag_records",
+          "attempts",
+          "next_run_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "AuditFeedList": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditFeed"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "AuditFeedRequest": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "batch_size": {
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint_url": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "enum": [
+              "splunk-hec",
+              "sentinel"
+            ],
+            "type": "string"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "provider",
+          "endpoint_url",
+          "token_ref",
+          "interval_seconds",
+          "batch_size",
+          "enabled"
+        ],
+        "type": "object"
+      },
       "AuditTimestampInfo": {
         "properties": {
           "gen_time": {
@@ -27606,6 +27799,130 @@
         ],
         "summary": "Export a signed audit evidence bundle",
         "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/audit/feeds": {
+      "get": {
+        "operationId": "listAuditFeeds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditFeedList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List audit-feed schedules, lag, retries, failures, and collector receipts",
+        "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/audit/feeds/{id}": {
+      "put": {
+        "operationId": "putAuditFeed",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditFeedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditFeed"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Configure a durable native Splunk HEC or Sentinel audit feed",
+        "x-trstctl-permission": "audit:write"
       }
     },
     "/api/v1/brand": {

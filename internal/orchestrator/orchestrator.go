@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/audit"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/ownership"
@@ -749,6 +750,50 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			healed = healedBefore
 			reconcileErr = o.quarantineOutboxReconciliationConflict(ctx, log, ev, conflict)
 		}()
+		if ev.Type == projections.EventAuditFeedBatchQueued {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var queued projections.AuditFeedBatchQueued
+			if err := json.Unmarshal(ev.Data, &queued); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if queued.StartSequence == 0 || queued.EndSequence < queued.StartSequence ||
+				queued.RecordCount < 1 || len(queued.RecordIDs) != queued.RecordCount ||
+				queued.ChainHead == "" {
+				return fmt.Errorf("orchestrator: reconcile %s (seq %d): queued range authority is incomplete", ev.Type, ev.Sequence)
+			}
+			auditService := audit.NewService(log, nil,
+				audit.WithCheckpoints(o.store), audit.WithPrivacyErasures(o.store))
+			records, seed, err := auditService.SearchWithSeed(ctx, audit.Query{
+				TenantID: ev.TenantID, AfterSequence: queued.StartSequence - 1,
+				AsOfSequence: queued.EndSequence, ExcludeTypePrefixes: []string{"audit.feed."},
+				Limit: queued.RecordCount,
+			})
+			if err != nil {
+				return fmt.Errorf("orchestrator: reconstruct %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if seed != queued.PrevHash || len(records) != queued.RecordCount ||
+				records[0].Sequence != queued.StartSequence ||
+				records[len(records)-1].Sequence != queued.EndSequence ||
+				records[len(records)-1].Hash != queued.ChainHead {
+				return fmt.Errorf("orchestrator: reconcile %s (seq %d): reconstructed range changed", ev.Type, ev.Sequence)
+			}
+			entry, err := auditFeedOutboxEntry(ev.TenantID, queued, records)
+			if err != nil {
+				return fmt.Errorf("orchestrator: reconcile %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+				if inserted {
+					healed++
+				}
+				return err
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventEnrollmentDiagnosticVerificationQueued {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err

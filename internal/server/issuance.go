@@ -306,6 +306,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleSplunkResponseIntegration(ctx, m)
 	case orchestrator.DestinationResponseJira:
 		return d.handleJiraResponseIntegration(ctx, m)
+	case orchestrator.DestinationAuditFeedSplunk, orchestrator.DestinationAuditFeedSentinel:
+		return d.handleAuditFeedBatch(ctx, m)
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
 	default:
@@ -386,6 +388,10 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 // outbox dead-letters a row. Subsystems that do not own a projected pending state
 // need no callback; secret integrations and licensed managed keys do.
 func (d *issuanceDispatcher) DeliverTerminalFailure(ctx context.Context, m orchestrator.Message, cause error) error {
+	if m.Destination == orchestrator.DestinationAuditFeedSplunk ||
+		m.Destination == orchestrator.DestinationAuditFeedSentinel {
+		return d.failAuditFeedBatchTerminal(ctx, m, cause)
+	}
 	if m.Destination == orchestrator.DestinationConnectorRightSize {
 		return d.failConnectorRightSizeTerminal(ctx, m)
 	}

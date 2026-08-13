@@ -470,6 +470,33 @@ func TestCreateSendsBodyFromStdin(t *testing.T) {
 	}
 }
 
+func TestAuditFeedCommandsExposeHeadlessCollectorWorkflowAUD52(t *testing.T) {
+	var configured capture
+	setServer := mockServer(t, http.StatusOK, `{"id":"feed-52"}`, &configured)
+	body := `{"name":"soc","provider":"splunk-hec","endpoint_url":"https://splunk.example.test/services/collector/event","token_ref":"env:SPLUNK_HEC_TOKEN","interval_seconds":300,"batch_size":100,"enabled":true}`
+	code, _, stderr := run(t,
+		[]string{"audit", "feeds", "set", "52525252-5252-4525-8525-525252525252", "-f", "-"},
+		cli.Env{Server: setServer.URL, HTTPClient: setServer.Client(), IdempotencyKey: "audit-feed-set-52"}, body)
+	if code != 0 {
+		t.Fatalf("audit feeds set exit=%d stderr=%q", code, stderr)
+	}
+	if configured.Method != http.MethodPut || configured.Path != "/api/v1/audit/feeds/52525252-5252-4525-8525-525252525252" ||
+		configured.Header.Get("Idempotency-Key") != "audit-feed-set-52" || !sameJSON(configured.Body, []byte(body)) {
+		t.Fatalf("set request=%s %s key=%q body=%s", configured.Method, configured.Path,
+			configured.Header.Get("Idempotency-Key"), configured.Body)
+	}
+
+	var listed capture
+	listServer := mockServer(t, http.StatusOK, `{"items":[],"count":0}`, &listed)
+	code, _, stderr = run(t, []string{"audit", "feeds", "list"}, cli.Env{Server: listServer.URL, HTTPClient: listServer.Client()}, "")
+	if code != 0 {
+		t.Fatalf("audit feeds list exit=%d stderr=%q", code, stderr)
+	}
+	if listed.Method != http.MethodGet || listed.Path != "/api/v1/audit/feeds" || listed.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("list request=%s %s key=%q", listed.Method, listed.Path, listed.Header.Get("Idempotency-Key"))
+	}
+}
+
 func TestOwnershipReadinessCommandsAUD44(t *testing.T) {
 	var calls []capture
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

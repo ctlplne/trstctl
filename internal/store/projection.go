@@ -697,7 +697,10 @@ var ReadModelTables = []string{"owners", "issuers", "identities", "ownership_rea
 	// AUD-77: projected from the immutable operation-approval event family. The
 	// legacy issuance_approval_* tables remain independent PostgreSQL history
 	// because old rows have no reconstructible request ID or intent digest.
-	"operation_approval_requests", "operation_approval_decisions"}
+	"operation_approval_requests", "operation_approval_decisions",
+	// AUD-52: standing collector configuration and exact immutable delivery
+	// receipts rebuild from the audit.feed.* event family.
+	"audit_feed_destinations", "audit_feed_deliveries"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

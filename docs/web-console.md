@@ -249,13 +249,23 @@ time, and whether the full token is present. Its download is the canonical JSON
 envelope from the served contract—not a display string—so the compact JWS and
 complete external timestamp remain together for offline verification against the
 operator's pinned audit JWK set and TSA root. CSV downloads likewise keep their
-proof in the final RFC-safe row rather than transient response headers. See
+proof in the final RFC-safe row rather than transient response headers.
+
+The same Audit screen configures tenant-scoped scheduled Splunk HEC and Microsoft
+Sentinel feeds. The table shows the durable delivered cursor, exact queued-record
+lag, retry attempt/time, terminal error code, and collector request ID. The form
+accepts only an operator-allowlisted `env:NAME` credential pointer—never a token
+value—and clearly separates public HTTPS from permission-gated private CIDRs. A
+save records configuration and a same-transaction outbox intent; the browser never
+calls the collector directly. See
 [Policy & governance](features/policy-and-governance.md)
 and [Compliance](compliance.md). Backed by
 `/api/v1/compliance/evidence-packs/{framework}`,
 `/api/v1/compliance/inventory-report`, `/api/v1/compliance/report-schedules`,
-`/api/v1/policy/dry-run`, `/api/v1/policy/versions`, `/api/v1/audit/events`, and
-`/api/v1/audit/export`. Email/webhook report dispatch is not served.
+`/api/v1/policy/dry-run`, `/api/v1/policy/versions`, `/api/v1/audit/events`,
+`/api/v1/audit/export`, and `/api/v1/audit/feeds[/{id}]`. Email/webhook compliance
+report dispatch is not served; native audit-feed delivery is a separate served
+workflow.
 
 ### Privacy / data governance (`/privacy`)
 

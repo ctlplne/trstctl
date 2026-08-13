@@ -49,6 +49,7 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxNotifications, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxTenantSeal, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxFleet, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxAuditFeeds, Workers: 1, Queue: 4},
 	)
 
 	connectorStarted := make(chan string, 2)
@@ -220,6 +221,7 @@ func waitForNonConnectorOutboxPools(t *testing.T, set *bulkhead.Set) {
 			bulkhead.SubsystemOutboxTransparency,
 			bulkhead.SubsystemOutboxNotifications,
 			bulkhead.SubsystemOutboxFleet,
+			bulkhead.SubsystemOutboxAuditFeeds,
 		} {
 			stats := set.Pool(name).Stats()
 			if stats.Completed != stats.Submitted || stats.Queued != 0 {
@@ -268,6 +270,8 @@ func TestOutboxDispatchFamiliesAreDisjointAndComplete(t *testing.T) {
 		"notification.expiry":             bulkhead.SubsystemOutboxNotifications,
 		"tenantseal.seal":                 bulkhead.SubsystemOutboxTenantSeal,
 		"incident.fleet_reissuance.batch": bulkhead.SubsystemOutboxFleet,
+		"audit.feed.splunk":               bulkhead.SubsystemOutboxAuditFeeds,
+		"audit.feed.sentinel":             bulkhead.SubsystemOutboxAuditFeeds,
 		"revocation.publish":              bulkhead.SubsystemOutbox,
 		"acme.dns01.present":              bulkhead.SubsystemOutbox,
 		"third-party.destination":         bulkhead.SubsystemOutbox,

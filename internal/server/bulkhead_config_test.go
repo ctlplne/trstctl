@@ -51,6 +51,7 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 		bulkhead.SubsystemOutboxNotifications: {workers: 2, queue: 19},
 		bulkhead.SubsystemOutboxTenantSeal:    {workers: 2, queue: 19},
 		bulkhead.SubsystemOutboxFleet:         {workers: 2, queue: 19},
+		bulkhead.SubsystemOutboxAuditFeeds:    {workers: 2, queue: 19},
 	} {
 		got := stats[name]
 		if got.Workers != want.workers || got.Capacity != want.queue {
@@ -69,6 +70,7 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 		bulkhead.SubsystemOutboxNotifications,
 		bulkhead.SubsystemOutboxTenantSeal,
 		bulkhead.SubsystemOutboxFleet,
+		bulkhead.SubsystemOutboxAuditFeeds,
 	} {
 		pool := deps.Bulkhead.Pool(name)
 		if prior, exists := seen[pool]; exists {

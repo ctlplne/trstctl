@@ -259,7 +259,10 @@ compliance mapping below are all live REST/CLI/console routes. `GET
 routes, evidence references, schedule rows, and inventory counts across certificates,
 CBOM assets, and discovery/report schedules; `POST`/`GET
 /api/v1/compliance/report-schedules` record and list idempotent, event-sourced
-schedules, with delivery limited to `audit_export` until a served runner exists. `GET
+schedules, with compliance-report delivery limited to `audit_export` until a served
+report runner exists. This limitation does not apply to the separate native audit
+feed: `PUT /api/v1/audit/feeds/{id}` and `GET /api/v1/audit/feeds` configure and
+observe durable Splunk HEC or Microsoft Sentinel batches. `GET
 /api/v1/compliance/nhi-report` builds a separate mapping (NIST SP 800-53 Rev. 5, NIST
 CSF 2.0, PCI DSS 4.0, DORA, ISO/IEC 27001:2022 Annex A, FedRAMP, CMMC 2.0, eIDAS, NIS2)
 from served NHI posture only — never documentation or unsupported claims — with finding
@@ -322,7 +325,9 @@ tenant's input, returning allow/deny/error plus a bounded trace and appending
 lifecycle policy version authoring, listing, activation, and rollback through
 `/api/v1/policy/versions`, activating a candidate after it compiles. The `/audit`
 screen is a filterable audit explorer (type presets such as *Policy decisions*, time and
-sequence windows) that downloads a signed evidence bundle; the `/privacy` screen renders
+sequence windows) that downloads a signed evidence bundle and manages scheduled
+Splunk HEC/Sentinel delivery with cursor, record lag, retry, failure, and collector
+receipt state; the `/privacy` screen renders
 the served data-subject controls and catalog. See [The web console](../web-console.md).
 
 ## Use it
@@ -335,6 +340,10 @@ trstctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --l
 
 # download a signed evidence bundle for a date range
 trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:00Z
+
+# configure and observe a native collector feed (request body shown in docs/cli.md)
+trstctl-cli --idempotency-key audit-feed-production audit feeds set <feed-uuid> -f audit-feed.json
+trstctl-cli audit feeds list
 
 # export a signed SOC 2 evidence pack
 trstctl-cli compliance evidence-pack soc2
@@ -426,7 +435,10 @@ auth:
 - **RBAC:** permissions `<resource>:<verb>`; roles `admin`, `operator`, `viewer`,
   `auditor`, `ra-officer`; `guard` middleware.
 - **Audit (served):** `GET /api/v1/audit/events` (`type`, `since`, `until`, `as_of`, `q`,
-  `limit`), `GET /api/v1/audit/export`; `Seal`/`VerifyChain`.
+  `limit`), `GET /api/v1/audit/export`, `GET /api/v1/audit/feeds`, and `PUT
+  /api/v1/audit/feeds/{id}`; `Seal`/`VerifyChain`. Feed configuration, queued exact
+  batches, delivery receipts, and terminal failures are immutable events; the
+  external call occurs only from the `audit.feed.*` outbox worker.
 - **Compliance reporting (served):** `GET /api/v1/compliance/evidence-packs/{framework}`,
   `GET /api/v1/compliance/inventory-report`, `GET /api/v1/compliance/nhi-report`,
   `POST|GET /api/v1/compliance/report-schedules`; report-schedule delivery is

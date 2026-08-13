@@ -40,6 +40,7 @@ func TestBulkheadEnvOverridesAndConfigs(t *testing.T) {
 		bulkhead.SubsystemOutboxNotifications: {Name: bulkhead.SubsystemOutboxNotifications, Workers: 5, Queue: 99},
 		bulkhead.SubsystemOutboxTenantSeal:    {Name: bulkhead.SubsystemOutboxTenantSeal, Workers: 5, Queue: 99},
 		bulkhead.SubsystemOutboxFleet:         {Name: bulkhead.SubsystemOutboxFleet, Workers: 5, Queue: 99},
+		bulkhead.SubsystemOutboxAuditFeeds:    {Name: bulkhead.SubsystemOutboxAuditFeeds, Workers: 5, Queue: 99},
 		bulkhead.SubsystemProtocols:           {Name: bulkhead.SubsystemProtocols, Workers: 13, Queue: 377},
 	} {
 		if got[name] != want {

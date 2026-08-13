@@ -807,6 +807,52 @@ export interface AuditEventList {
   events: AuditEvent[];
 }
 
+export interface AuditFeed {
+  allow_private_endpoint: boolean;
+  attempts: number;
+  batch_size: number;
+  collector_request_id?: string;
+  enabled: boolean;
+  endpoint_url: string;
+  id: string;
+  interval_seconds: number;
+  lag_records: number;
+  last_attempt_at?: string;
+  last_batch_id?: string;
+  last_batch_record_count: number;
+  last_batch_start_sequence: number;
+  last_delivered_at?: string;
+  last_delivered_sequence: number;
+  last_error_code?: string;
+  last_queued_sequence: number;
+  name: string;
+  next_attempt_at?: string;
+  next_run_at: string;
+  private_egress_cidrs: string[];
+  provider: "splunk-hec" | "sentinel";
+  status: "not_started" | "queued" | "delivering" | "retrying" | "delivered" | "failed";
+  tenant_id: string;
+  token_ref: string;
+  updated_at: string;
+}
+
+export interface AuditFeedList {
+  count?: number;
+  items: AuditFeed[];
+}
+
+export interface AuditFeedRequest {
+  allow_private_endpoint?: boolean;
+  batch_size: number;
+  enabled: boolean;
+  endpoint_url: string;
+  interval_seconds: number;
+  name: string;
+  private_egress_cidrs?: string[];
+  provider: "splunk-hec" | "sentinel";
+  token_ref: string;
+}
+
 export interface AuditTimestampInfo {
   gen_time: string;
   hash_algorithm: string;

@@ -1141,6 +1141,64 @@ AuditEventList = TypedDict(
     total=False,
 )
 
+AuditFeed = TypedDict(
+    'AuditFeed',
+    {
+        'allow_private_endpoint': bool,
+        'attempts': int,
+        'batch_size': int,
+        'collector_request_id': str,
+        'enabled': bool,
+        'endpoint_url': str,
+        'id': str,
+        'interval_seconds': int,
+        'lag_records': int,
+        'last_attempt_at': str,
+        'last_batch_id': str,
+        'last_batch_record_count': int,
+        'last_batch_start_sequence': int,
+        'last_delivered_at': str,
+        'last_delivered_sequence': int,
+        'last_error_code': str,
+        'last_queued_sequence': int,
+        'name': str,
+        'next_attempt_at': str,
+        'next_run_at': str,
+        'private_egress_cidrs': list[str],
+        'provider': str,
+        'status': str,
+        'tenant_id': str,
+        'token_ref': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+AuditFeedList = TypedDict(
+    'AuditFeedList',
+    {
+        'count': int,
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AuditFeedRequest = TypedDict(
+    'AuditFeedRequest',
+    {
+        'allow_private_endpoint': bool,
+        'batch_size': int,
+        'enabled': bool,
+        'endpoint_url': str,
+        'interval_seconds': int,
+        'name': str,
+        'private_egress_cidrs': list[str],
+        'provider': str,
+        'token_ref': str,
+    },
+    total=False,
+)
+
 AuditTimestampInfo = TypedDict(
     'AuditTimestampInfo',
     {

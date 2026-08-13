@@ -171,6 +171,7 @@ func TestProtectPERF005_DefaultSetRegistersIsolatedSubsystemPools(t *testing.T) 
 		bulkhead.SubsystemOutboxNotifications,
 		bulkhead.SubsystemOutboxTenantSeal,
 		bulkhead.SubsystemOutboxFleet,
+		bulkhead.SubsystemOutboxAuditFeeds,
 		bulkhead.SubsystemSigning,
 		bulkhead.SubsystemQuery,
 		bulkhead.SubsystemPolicy,

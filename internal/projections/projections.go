@@ -217,6 +217,11 @@ const (
 	EventIncidentFleetReissuanceRecorded          = "incident.fleet_reissuance.recorded"
 	EventRemediationPlaybookRunRecorded           = "remediation.playbook_run.recorded"
 	EventResponseIntegrationDispatched            = "response.integration.dispatched"
+	EventAuditFeedDestinationConfigured           = "audit.feed.destination.configured"
+	EventAuditFeedScheduleChecked                 = "audit.feed.schedule.checked"
+	EventAuditFeedBatchQueued                     = "audit.feed.batch.queued"
+	EventAuditFeedBatchDelivered                  = "audit.feed.batch.delivered"
+	EventAuditFeedBatchFailed                     = "audit.feed.batch.failed"
 	EventPrivacySubjectErased                     = "privacy.subject.erased"
 	EventHistoryTenantDataRewriteContinuity       = "history.tenant_data_rewrite.continuity"
 	EventPrivacyRetentionEnforced                 = "privacy.retention.enforced"
@@ -2530,6 +2535,71 @@ type ResponseIntegrationDispatchedDestination struct {
 	AllowPrivateEndpoint bool   `json:"allow_private_endpoint,omitempty"`
 }
 
+// AuditFeedDestinationConfigured is the standing tenant instruction. TokenRef
+// is an opaque credential pointer, never an authentication value.
+type AuditFeedDestinationConfigured struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	Provider             string   `json:"provider"`
+	EndpointURL          string   `json:"endpoint_url"`
+	TokenRef             string   `json:"token_ref"`
+	IntervalSeconds      int      `json:"interval_seconds"`
+	BatchSize            int      `json:"batch_size"`
+	Enabled              bool     `json:"enabled"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
+}
+
+// AuditFeedScheduleChecked advances an empty schedule through the immutable
+// stream. It prevents an empty feed from being re-read on every scheduler tick.
+type AuditFeedScheduleChecked struct {
+	DestinationID       string `json:"destination_id"`
+	ConfigEventSequence uint64 `json:"config_event_sequence"`
+	Cursor              uint64 `json:"cursor"`
+	IntervalSeconds     int    `json:"interval_seconds"`
+	ScheduledFor        string `json:"scheduled_for"`
+}
+
+// AuditFeedBatchQueued binds one exact audit range to one exact outbox command.
+// RecordIDs let recovery reject a changed reconstruction without duplicating
+// tenant audit payloads inside this control event.
+type AuditFeedBatchQueued struct {
+	BatchID              string   `json:"batch_id"`
+	DestinationID        string   `json:"destination_id"`
+	Provider             string   `json:"provider"`
+	EndpointURL          string   `json:"endpoint_url"`
+	TokenRef             string   `json:"token_ref"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
+	IntervalSeconds      int      `json:"interval_seconds"`
+	StartSequence        uint64   `json:"start_sequence"`
+	EndSequence          uint64   `json:"end_sequence"`
+	RecordCount          int      `json:"record_count"`
+	RecordIDs            []string `json:"record_ids"`
+	PrevHash             string   `json:"prev_hash,omitempty"`
+	ChainHead            string   `json:"chain_head"`
+	OutboxIdempotencyKey string   `json:"outbox_idempotency_key"`
+}
+
+type AuditFeedBatchDelivered struct {
+	BatchID              string `json:"batch_id"`
+	DestinationID        string `json:"destination_id"`
+	Provider             string `json:"provider"`
+	StartSequence        uint64 `json:"start_sequence"`
+	EndSequence          uint64 `json:"end_sequence"`
+	RecordCount          int    `json:"record_count"`
+	ChainHead            string `json:"chain_head"`
+	OutboxIdempotencyKey string `json:"outbox_idempotency_key"`
+	CollectorRequestID   string `json:"collector_request_id,omitempty"`
+}
+
+type AuditFeedBatchFailed struct {
+	BatchID              string `json:"batch_id"`
+	DestinationID        string `json:"destination_id"`
+	OutboxIdempotencyKey string `json:"outbox_idempotency_key"`
+	ErrorCode            string `json:"error_code"`
+}
+
 // RestoreDrillAttestationKind is the immutable evidence projection discriminator.
 // It is not credential-issuance attestation data even though it shares the
 // generic append-only evidence table.
@@ -3209,6 +3279,11 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIncidentFleetReissuanceRecorded:          {1: true},
 	EventRemediationPlaybookRunRecorded:           {1: true},
 	EventResponseIntegrationDispatched:            {1: true},
+	EventAuditFeedDestinationConfigured:           {1: true},
+	EventAuditFeedScheduleChecked:                 {1: true},
+	EventAuditFeedBatchQueued:                     {1: true},
+	EventAuditFeedBatchDelivered:                  {1: true},
+	EventAuditFeedBatchFailed:                     {1: true},
 	EventPrivacySubjectErased:                     {1: true, PrivacySubjectErasedOperationEventSchemaVersion: true, PrivacySubjectErasedEventSchemaVersion: true},
 	EventHistoryTenantDataRewriteContinuity:       {1: true},
 	EventPrivacyRetentionEnforced:                 {1: true},
@@ -5110,6 +5185,83 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			}
 		}
 		return nil
+	case EventAuditFeedDestinationConfigured:
+		var pl AuditFeedDestinationConfigured
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.EndpointURL == "" || pl.TokenRef == "" ||
+			(pl.Provider != "splunk-hec" && pl.Provider != "sentinel") ||
+			pl.IntervalSeconds < 60 || pl.BatchSize < 1 || pl.BatchSize > 500 {
+			return fmt.Errorf("projections: %s has invalid destination configuration", e.Type)
+		}
+		return p.store.ApplyAuditFeedConfiguredTx(ctx, tx, store.AuditFeed{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Provider: pl.Provider,
+			EndpointURL: pl.EndpointURL, TokenRef: pl.TokenRef,
+			IntervalSeconds: pl.IntervalSeconds, BatchSize: pl.BatchSize, Enabled: pl.Enabled,
+			AllowPrivateEndpoint: pl.AllowPrivateEndpoint, PrivateEgressCIDRs: pl.PrivateEgressCIDRs,
+			ConfigEventSequence: e.Sequence, NextRunAt: e.Time, CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventAuditFeedScheduleChecked:
+		var pl AuditFeedScheduleChecked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.DestinationID == "" || pl.ConfigEventSequence == 0 ||
+			pl.IntervalSeconds < 60 || pl.ScheduledFor == "" {
+			return fmt.Errorf("projections: %s has invalid empty-schedule authority", e.Type)
+		}
+		return p.store.ApplyAuditFeedScheduleCheckedTx(ctx, tx, e.TenantID, pl.DestinationID,
+			pl.ConfigEventSequence, pl.Cursor, pl.IntervalSeconds, e.Time)
+	case EventAuditFeedBatchQueued:
+		var pl AuditFeedBatchQueued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.BatchID == "" || pl.DestinationID == "" || pl.RecordCount < 1 ||
+			len(pl.RecordIDs) != pl.RecordCount || pl.StartSequence == 0 ||
+			pl.EndSequence < pl.StartSequence || pl.ChainHead == "" ||
+			pl.OutboxIdempotencyKey == "" || pl.IntervalSeconds < 60 {
+			return fmt.Errorf("projections: %s has incomplete exact batch authority", e.Type)
+		}
+		return p.store.ApplyAuditFeedBatchQueuedTx(ctx, tx, store.AuditFeedBatch{
+			BatchID: pl.BatchID, TenantID: e.TenantID, DestinationID: pl.DestinationID,
+			Provider: pl.Provider, StartSequence: pl.StartSequence, EndSequence: pl.EndSequence,
+			RecordCount: pl.RecordCount, ChainHead: pl.ChainHead,
+			OutboxIdempotencyKey: pl.OutboxIdempotencyKey, Status: "queued", QueuedAt: e.Time,
+		}, pl.IntervalSeconds)
+	case EventAuditFeedBatchDelivered:
+		var pl AuditFeedBatchDelivered
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.BatchID == "" || pl.DestinationID == "" || pl.StartSequence == 0 ||
+			pl.EndSequence < pl.StartSequence || pl.RecordCount < 1 || pl.ChainHead == "" ||
+			pl.OutboxIdempotencyKey == "" {
+			return fmt.Errorf("projections: %s has incomplete receipt authority", e.Type)
+		}
+		acceptedAt := e.Time
+		return p.store.ApplyAuditFeedBatchDeliveredTx(ctx, tx, store.AuditFeedBatch{
+			BatchID: pl.BatchID, TenantID: e.TenantID, DestinationID: pl.DestinationID,
+			Provider: pl.Provider, StartSequence: pl.StartSequence, EndSequence: pl.EndSequence,
+			RecordCount: pl.RecordCount, ChainHead: pl.ChainHead,
+			OutboxIdempotencyKey: pl.OutboxIdempotencyKey, Status: "delivered",
+			AcceptedAt: &acceptedAt, CollectorRequestID: pl.CollectorRequestID,
+		})
+	case EventAuditFeedBatchFailed:
+		var pl AuditFeedBatchFailed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.BatchID == "" || pl.DestinationID == "" || pl.OutboxIdempotencyKey == "" || pl.ErrorCode == "" {
+			return fmt.Errorf("projections: %s has incomplete terminal failure authority", e.Type)
+		}
+		failedAt := e.Time
+		return p.store.ApplyAuditFeedBatchFailedTx(ctx, tx, store.AuditFeedBatch{
+			BatchID: pl.BatchID, TenantID: e.TenantID, DestinationID: pl.DestinationID,
+			OutboxIdempotencyKey: pl.OutboxIdempotencyKey, Status: "failed",
+			AcceptedAt: &failedAt, ErrorCode: pl.ErrorCode,
+		})
 	case EventPrivacySubjectErased:
 		var pl PrivacySubjectErased
 		if err := decode(e, &pl); err != nil {

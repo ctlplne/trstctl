@@ -1170,6 +1170,10 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),
 			startRuntimeWorker(workCtx, srv.RunFederation),
 			startRuntimeWorker(workCtx, srv.RunOTLPAuditStream),
+			// J1/AUD-52: standing Splunk HEC and Sentinel feeds. This producer
+			// selects exact tenant audit ranges and records outbox intent only;
+			// the bounded audit-feed family performs every collector call.
+			startRuntimeWorker(workCtx, srv.RunAuditFeedScheduler),
 			startRuntimeWorker(workCtx, srv.RunTelemetry),
 			startRuntimeWorker(workCtx, srv.RunDynamicLeaseWorker),
 			startRuntimeWorker(workCtx, srv.RunPAMSessionExpiry),

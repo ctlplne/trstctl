@@ -482,12 +482,35 @@ or CIDR. It is intended for disconnected networks and is paired with the Helm
 | `TRSTCTL_AIRGAP_ALLOW_PRIVATE` | `true` | Allows loopback, private, and link-local IP destinations. Leave true for private PostgreSQL/NATS/OTLP/local model endpoints. |
 | `TRSTCTL_AIRGAP_ALLOW_HOSTS` | — | Comma-separated host allowlist for operator-owned local services such as `otel-collector.observability.svc`. Hosts only; URLs are rejected. |
 | `TRSTCTL_AIRGAP_ALLOW_CIDRS` | — | Comma-separated CIDR allowlist for private service ranges, e.g. `10.0.0.0/8,172.16.0.0/12`. Invalid CIDRs fail startup. |
-| `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS` | — | Comma-separated `env:NAME` references that API-authored discovery and response-integration requests may use for outbound credentials. Unknown env refs are rejected before outbox enqueue. |
+| `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS` | — | Comma-separated `env:NAME` references that API-authored discovery, response-integration, and scheduled audit-feed requests may use for outbound credentials. Unknown env refs are rejected before event/outbox enqueue. |
 
 When `TRSTCTL_AIRGAP_ENABLED=true`, trstctl rejects
 `TRSTCTL_TELEMETRY_ENABLED=true` and `TRSTCTL_AI_MODEL_MODE=cloud` at startup.
 Local OTLP collectors and local AI runtimes are still allowed when their hosts or
 CIDRs are private or explicitly allowlisted.
+
+### Scheduled Splunk HEC and Sentinel audit feeds
+
+Audit-feed schedules are tenant configuration, not process-global environment
+settings. Create them with `PUT /api/v1/audit/feeds/{id}`, `trstctl-cli audit
+feeds set`, or the Audit console. Each request chooses `splunk-hec` or `sentinel`,
+an absolute endpoint URL, an interval of at least 60 seconds, and an exact maximum
+batch size from 1 through 500.
+
+The request stores only an `env:NAME` pointer. Put that pointer in
+`TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`, then inject the named environment variable
+into the control-plane process. The secret value is read only by the delivery
+worker; it never enters the configuration event, projection, API response, log, or
+collector error receipt. Public HTTPS is the default. A private endpoint also
+requires the caller's private-egress permission plus exact `private_egress_cidrs`;
+the SSRF-safe client rejects addresses outside that tenant configuration.
+
+The scheduler does no network I/O. It commits `audit.feed.batch.queued`, the exact
+sequence range and record IDs, the destination projection, and one deterministic
+outbox intent before a worker can call the collector. A retry or restart therefore
+uses the same batch ID and bytes. `GET /api/v1/audit/feeds` exposes the delivered
+cursor, persistent record-count lag, attempts, next retry, terminal error code,
+and collector request ID without exposing response bodies or credentials.
 
 ## ITSM and ServiceNow bindings
 
@@ -1590,6 +1613,7 @@ that is actually saturating.
 | `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TRANSPARENCY_QUEUE` | inherits outbox | Override transparency publication (`transparency.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_QUEUE` | inherits outbox | Override code-signing commands (`codesign.*`) without sharing transparency workers. |
 | `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_QUEUE` | inherits outbox | Override operator notifications (`notification.*`). |
+| `TRSTCTL_BULKHEAD_OUTBOX_AUDIT_FEEDS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_AUDIT_FEEDS_QUEUE` | inherits outbox | Override scheduled native audit delivery (`audit.feed.*`). A stopped SIEM cannot consume connector, notification, issuance, or API capacity. |
 | `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_QUEUE` | inherits outbox | Override the bounded H2 incident action lane, including exact predecessor revocation (`incident.fleet_reissuance.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_QUEUE` | inherits outbox | Override the zero-egress tenant seal commit worker (`tenantseal.seal`). It proves the accepted result is durable before acquiring the cross-replica seal fence. |
 | `TRSTCTL_BULKHEAD_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_SIGNING_QUEUE` | `4` / `64` | Control-plane work waiting on signer RPC. Do not set this above signer capacity. |
@@ -1618,7 +1642,8 @@ through an upstream CA, synchronize a secret, publish code-signing evidence, or 
 an operator. JSON config may override a family with `outbox_external_ca`,
 `outbox_connectors`, `outbox_secrets`, `outbox_secret_sync`,
 `outbox_managed_keys`, `outbox_transparency`, `outbox_code_signing`, or
-`outbox_notifications`, `outbox_tenant_seal`, or `outbox_fleet_reissuance` inside `bulkheads`.
+`outbox_notifications`, `outbox_audit_feeds`, `outbox_tenant_seal`, or
+`outbox_fleet_reissuance` inside `bulkheads`.
 
 ## Config file
 

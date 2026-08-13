@@ -6,11 +6,13 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Audit } from "@/pages/Audit";
 import { Policy } from "@/pages/Policy";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     accessChangeRequests: vi.fn(),
     auditEvents: vi.fn(),
+    auditFeeds: vi.fn(),
     complianceEvidencePack: vi.fn(),
     complianceInventoryReport: vi.fn(),
     nhiComplianceReport: vi.fn(),
@@ -42,9 +44,11 @@ function renderPolicy() {
 
 function renderAudit(initialEntry = "/audit") {
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Audit />
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Audit />
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
@@ -293,6 +297,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     vi.restoreAllMocks();
     apiMock.accessChangeRequests.mockReset().mockResolvedValue({ items: [accessChangeRequest()] });
     apiMock.auditEvents.mockReset();
+    apiMock.auditFeeds.mockReset().mockResolvedValue({ items: [] });
     apiMock.complianceEvidencePack.mockReset();
     apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());
     apiMock.nhiComplianceReport.mockReset().mockResolvedValue(nhiComplianceReport());

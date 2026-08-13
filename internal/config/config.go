@@ -1542,6 +1542,7 @@ type Bulkheads struct {
 	OutboxNotifications *BulkheadLimit `json:"outbox_notifications,omitempty"`
 	OutboxTenantSeal    *BulkheadLimit `json:"outbox_tenant_seal,omitempty"`
 	OutboxFleet         *BulkheadLimit `json:"outbox_fleet_reissuance,omitempty"`
+	OutboxAuditFeeds    *BulkheadLimit `json:"outbox_audit_feeds,omitempty"`
 	Signing             BulkheadLimit  `json:"signing"`
 	Query               BulkheadLimit  `json:"query"`
 	Policy              BulkheadLimit  `json:"policy"`
@@ -1604,6 +1605,7 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemOutboxNotifications, limit: familyLimit(b.OutboxNotifications)},
 		{name: bulkhead.SubsystemOutboxTenantSeal, limit: familyLimit(b.OutboxTenantSeal)},
 		{name: bulkhead.SubsystemOutboxFleet, limit: familyLimit(b.OutboxFleet)},
+		{name: bulkhead.SubsystemOutboxAuditFeeds, limit: familyLimit(b.OutboxAuditFeeds)},
 		{name: bulkhead.SubsystemSigning, limit: b.Signing},
 		{name: bulkhead.SubsystemQuery, limit: b.Query},
 		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
@@ -2590,6 +2592,7 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS", b.Outbox, &b.OutboxNotifications)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL", b.Outbox, &b.OutboxTenantSeal)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE", b.Outbox, &b.OutboxFleet)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_AUDIT_FEEDS", b.Outbox, &b.OutboxAuditFeeds)
 	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_WORKERS", &b.Signing.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_QUEUE", &b.Signing.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_QUERY_WORKERS", &b.Query.Workers)

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { moduleLabelKey, moduleScopeTerm } from "@/lib/navigation";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { AuditFeedPanel } from "@/pages/audit/AuditFeedPanel";
 
 type Notice = { kind: "permission" | "error"; message: string };
 
@@ -212,6 +213,8 @@ export function Audit() {
       {bundle && <EvidenceBundle bundle={bundle} />}
 
       {events && <HashChainPanel events={events} />}
+
+      <AuditFeedPanel />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <form
