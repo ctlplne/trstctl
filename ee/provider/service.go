@@ -71,6 +71,16 @@ type Config struct {
 	// a plane that cannot express the partition hands every operator the union
 	// of every customer's risk.
 	Delegations DelegationSource
+	// Access is the event-projected operator lifecycle and complete delegation
+	// inventory used by provider-admin access management. Nil fails that surface
+	// closed; it never falls back to token claims as directory state.
+	Access OperatorAccessStore
+	// SAML owns the Provider-plane SP endpoints and separate browser session.
+	// Nil simply means SAML is not one of the configured identity methods.
+	SAML *SAMLAuthenticator
+	// SCIM owns Provider workforce joiner/leaver provisioning. The handler binds
+	// it to Access and Mutations; nil means no Provider SCIM endpoint is served.
+	SCIM *SCIMConfig
 	// Brands is the durable white-label store (L3). NIL MEANS BRAND
 	// ADMINISTRATION REFUSES, like Quotas: a brand that cannot survive a
 	// restart is not a white-label guarantee.
@@ -169,6 +179,7 @@ type Service struct {
 	activity         ActivitySource
 	authenticator    OperatorAuthenticator
 	delegations      DelegationSource
+	access           OperatorAccessStore
 	telemetry        TelemetryReader
 	quotas           QuotaStore
 	brands           BrandStore
@@ -211,7 +222,7 @@ func NewService(cfg Config) *Service {
 	// safe default answer is none.
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
 		mutations: cfg.Mutations, activity: cfg.Activity,
-		delegations: cfg.Delegations, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
+		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
 		drills: cfg.Drills, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 

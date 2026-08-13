@@ -109,6 +109,7 @@ func TestOIDCAuthenticatorRefusesEverythingNotPositivelyVerified(t *testing.T) {
 		{"wrong issuer", func(c map[string]any) { c["iss"] = "https://evil.example" }, f.signer},
 		{"wrong audience", func(c map[string]any) { c["aud"] = "someone-else" }, f.signer},
 		{"expired", func(c map[string]any) { c["exp"] = f.now.Add(-time.Minute).Unix() }, f.signer},
+		{"expires now", func(c map[string]any) { c["exp"] = f.now.Unix() }, f.signer},
 		{"no expiry", func(c map[string]any) { delete(c, "exp") }, f.signer},
 		{"not yet valid", func(c map[string]any) { c["nbf"] = f.now.Add(time.Hour).Unix() }, f.signer},
 		{"no subject", func(c map[string]any) { c["sub"] = "" }, f.signer},

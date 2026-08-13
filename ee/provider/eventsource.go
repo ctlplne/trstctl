@@ -23,10 +23,12 @@ import (
 )
 
 const (
-	EventDelegationGranted = "provider.delegation.granted"
-	EventDelegationRevoked = "provider.delegation.revoked"
-	EventTenantQuotaSet    = "provider.tenant.quota.set"
-	EventTenantBrandSet    = "provider.tenant.brand.set"
+	EventDelegationGranted  = "provider.delegation.granted"
+	EventDelegationRevoked  = "provider.delegation.revoked"
+	EventOperatorUpserted   = "provider.operator.upserted"
+	EventOperatorOffboarded = "provider.operator.offboarded"
+	EventTenantQuotaSet     = "provider.tenant.quota.set"
+	EventTenantBrandSet     = "provider.tenant.brand.set"
 )
 
 var (
@@ -50,6 +52,8 @@ type DelegationMutation struct {
 	CustomerID string    `json:"customer_id"`
 	Operation  Operation `json:"operation"`
 	GrantedBy  string    `json:"granted_by,omitempty"`
+	Source     string    `json:"source,omitempty"`
+	ExpiresAt  time.Time `json:"expires_at,omitempty"`
 }
 
 // AuthorityEvent is the version-1 result envelope for every Provider authority
@@ -58,6 +62,7 @@ type DelegationMutation struct {
 // best-effort audit append that can disagree with the business state.
 type AuthorityEvent struct {
 	Tenant              *Tenant               `json:"tenant,omitempty"`
+	Operator            *OperatorIdentity     `json:"operator,omitempty"`
 	Delegation          *DelegationMutation   `json:"delegation,omitempty"`
 	Delegations         []DelegationMutation  `json:"delegations,omitempty"`
 	Quota               *billing.Quota        `json:"quota,omitempty"`
@@ -190,7 +195,7 @@ func (s *EventMutationSink) Append(
 	return canonical, nil
 }
 
-// AuthorityProjection owns the five PostgreSQL views of Provider authority.
+// AuthorityProjection owns the six PostgreSQL views of Provider authority.
 // It is registered through core's feature-neutral EventProjection seam, keeping
 // MPL core free of EE imports while making normal startup and explicit replay
 // rebuild the licensed views from the same log.
@@ -245,7 +250,9 @@ func (p *AuthorityProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 	}
 	for _, statement := range []string{
 		//trstctl:system-query — edition projection reset rebuilds every provider customer before a tenant is selected; each table remains tenant-filtered on normal reads.
-		`DELETE FROM provider_operator_delegations`,
+		`DELETE FROM provider_operator_delegations WHERE tenant_id = '` + providerAuthorityTenant + `'`,
+		//trstctl:system-query — the fixed Provider authority tenant is restored only from immutable Provider events.
+		`DELETE FROM provider_operators WHERE tenant_id = '` + providerAuthorityTenant + `'`,
 		//trstctl:system-query — same full-replay reset; this is a trusted projection writer, never a tenant route.
 		`DELETE FROM provider_breakglass_grants`,
 		//trstctl:system-query — same full-replay reset; the replay restores tenant_id on every row.
@@ -330,7 +337,7 @@ func (p *AuthorityProjection) advance(sequence uint64) {
 }
 
 func (p AuthorityEvent) hasState() bool {
-	return p.Tenant != nil || p.Delegation != nil || len(p.Delegations) > 0 ||
+	return p.Tenant != nil || p.Operator != nil || p.Delegation != nil || len(p.Delegations) > 0 ||
 		p.Quota != nil || p.Brand != nil || p.Grant != nil
 }
 
@@ -354,6 +361,7 @@ func nullTime(t time.Time) any {
 func providerAuthorityEvent(typ string) bool {
 	switch typ {
 	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantOffboarded,
+		EventOperatorUpserted, EventOperatorOffboarded,
 		EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
 		AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassAccessed:
 		return true
@@ -417,12 +425,44 @@ func validateAuthorityEvent(event eventspec.Event, payload AuthorityEvent) error
 				event.Type, event.TenantID, delegation.CustomerID)
 		}
 	}
+	if payload.Operator != nil && event.TenantID != providerAuthorityTenant {
+		return fmt.Errorf("provider: %s operator authority tenant mismatch %q", event.Type, event.TenantID)
+	}
 	return nil
 }
 
 func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event, payload AuthorityEvent) error {
 	effectiveAt := authorityEventTime(event, payload)
 	switch event.Type {
+	case EventOperatorUpserted, EventOperatorOffboarded:
+		if payload.Operator == nil {
+			return fmt.Errorf("provider: %s needs operator state", event.Type)
+		}
+		operator := payload.Operator
+		//trstctl:system-query — exact fixed-tenant Provider operator projection; no customer-selected tenant enters this statement.
+		if _, err := tx.Exec(ctx, `INSERT INTO provider_operators
+			(tenant_id, id, external_id, user_name, email, display_name, role, active, source,
+			 created_at, updated_at, deprovisioned_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			ON CONFLICT (tenant_id, id) DO UPDATE SET external_id = EXCLUDED.external_id,
+			user_name = EXCLUDED.user_name, email = EXCLUDED.email, display_name = EXCLUDED.display_name,
+			role = EXCLUDED.role, active = EXCLUDED.active, source = EXCLUDED.source,
+			created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at,
+			deprovisioned_at = EXCLUDED.deprovisioned_at`, providerAuthorityTenant,
+			operator.ID, operator.ExternalID, operator.UserName, operator.Email, operator.DisplayName,
+			string(operator.Role), operator.Active, operator.Source, operator.CreatedAt.UTC(),
+			operator.UpdatedAt.UTC(), nullTime(operator.DeprovisionedAt)); err != nil {
+			return err
+		}
+		if !operator.Active {
+			//trstctl:system-query — one provider-global leaver revokes only that operator's still-live customer authority.
+			if _, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
+				SET revoked_at = COALESCE(revoked_at, $3), revoked_by = CASE WHEN revoked_at IS NULL THEN $4 ELSE revoked_by END
+				WHERE tenant_id = $1 AND operator_id = $2 AND revoked_at IS NULL`,
+				providerAuthorityTenant, operator.ID, effectiveAt, payload.Audit.OperatorID); err != nil {
+				return err
+			}
+		}
 	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantOffboarded:
 		if payload.Tenant == nil {
 			return fmt.Errorf("provider: %s needs tenant state", event.Type)
@@ -438,8 +478,11 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			return err
 		}
 		if event.Type == AuditTenantOffboarded {
-			//trstctl:system-query — offboarding removes provider authority over this exact customer in the same projection transaction.
-			_, err := tx.Exec(ctx, `DELETE FROM provider_operator_delegations WHERE customer_tenant_id = $1`, event.TenantID)
+			//trstctl:system-query — offboarding retires authority over this exact customer but keeps the historical row.
+			_, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
+				SET revoked_at = COALESCE(revoked_at, $3), revoked_by = CASE WHEN revoked_at IS NULL THEN 'system:customer-offboard' ELSE revoked_by END
+				WHERE tenant_id = $1 AND customer_tenant_id = $2 AND revoked_at IS NULL`,
+				providerAuthorityTenant, event.TenantID, effectiveAt)
 			return err
 		}
 	case EventDelegationGranted:
@@ -450,11 +493,15 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 		for _, d := range delegations {
 			//trstctl:system-query — provider authority projection, keyed by exact operator/customer/operation.
 			if _, err := tx.Exec(ctx, `INSERT INTO provider_operator_delegations
-				(operator_id, customer_tenant_id, operation, granted_by, granted_at)
-				VALUES ($1, $2, $3, $4, $5)
-				ON CONFLICT (operator_id, customer_tenant_id, operation) DO UPDATE SET
-				granted_by = EXCLUDED.granted_by, granted_at = EXCLUDED.granted_at`,
-				d.OperatorID, d.CustomerID, string(d.Operation), d.GrantedBy, effectiveAt); err != nil {
+				(tenant_id, operator_id, customer_tenant_id, operation, granted_by, granted_at, source, expires_at,
+				 revoked_at, revoked_by)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, '')
+				ON CONFLICT (tenant_id, operator_id, customer_tenant_id, operation) DO UPDATE SET
+				granted_by = EXCLUDED.granted_by, granted_at = EXCLUDED.granted_at,
+				source = EXCLUDED.source, expires_at = EXCLUDED.expires_at,
+				revoked_at = NULL, revoked_by = ''`,
+				providerAuthorityTenant, d.OperatorID, d.CustomerID, string(d.Operation), d.GrantedBy, effectiveAt,
+				normalizeDelegationSource(d.Source), nullTime(d.ExpiresAt)); err != nil {
 				return err
 			}
 		}
@@ -464,10 +511,11 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			return errors.New("provider: delegation revoke event needs delegation state")
 		}
 		for _, d := range delegations {
-			//trstctl:system-query — provider authority projection, deleting the exact event-named grant.
-			if _, err := tx.Exec(ctx, `DELETE FROM provider_operator_delegations
-				WHERE operator_id = $1 AND customer_tenant_id = $2 AND operation = $3`,
-				d.OperatorID, d.CustomerID, string(d.Operation)); err != nil {
+			//trstctl:system-query — provider authority projection, retiring the exact event-named grant while retaining evidence.
+			if _, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
+				SET revoked_at = COALESCE(revoked_at, $5), revoked_by = CASE WHEN revoked_at IS NULL THEN $6 ELSE revoked_by END
+				WHERE tenant_id = $1 AND operator_id = $2 AND customer_tenant_id = $3 AND operation = $4`,
+				providerAuthorityTenant, d.OperatorID, d.CustomerID, string(d.Operation), effectiveAt, payload.Audit.OperatorID); err != nil {
 				return err
 			}
 		}
@@ -528,7 +576,39 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			nullTime(g.RevokedAt), g.UseCount, nullTime(g.SecondConsentedAt), g.SecondConsentedBy)
 		return err
 	}
+	if operation, ok := delegationOperationForEvent(event.Type); ok && payload.Audit.OperatorID != "" && event.TenantID != providerAuthorityTenant {
+		//trstctl:system-query — last use is derived from the exact successful immutable customer action and updates only its exact active authority row.
+		if _, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
+			SET last_used_at = $5
+			WHERE tenant_id = $1 AND operator_id = $2 AND customer_tenant_id = $3 AND operation = $4
+			  AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > $5)`,
+			providerAuthorityTenant, payload.Audit.OperatorID, event.TenantID, string(operation), effectiveAt); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func normalizeDelegationSource(source string) string {
+	if source = strings.TrimSpace(source); source != "" {
+		return source
+	}
+	return "legacy_local_command"
+}
+
+func delegationOperationForEvent(eventType string) (Operation, bool) {
+	switch eventType {
+	case AuditTenantProvisioned, EventTenantQuotaSet, EventTenantBrandSet:
+		return OpProvision, true
+	case AuditTenantSuspended:
+		return OpSuspend, true
+	case AuditTenantOffboarded:
+		return OpOffboard, true
+	case AuditBreakGlassRequested, AuditBreakGlassAccessed:
+		return OpBreakGlass, true
+	default:
+		return "", false
+	}
 }
 
 func authorityDelegations(payload AuthorityEvent) []DelegationMutation {

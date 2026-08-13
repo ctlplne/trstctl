@@ -42,6 +42,11 @@ type OIDCAuthenticatorConfig struct {
 	// naming the gap, not a 401 that reads as a broken credential.
 	MFAClaim  string
 	MFAValues []string
+	// Directory is the live SCIM/operator lifecycle authority. When
+	// RequireDirectory is true, a valid token for an absent or inactive subject
+	// is refused; token lifetime never becomes leaver lifetime.
+	Directory        OperatorDirectory
+	RequireDirectory bool
 	// Now overrides the clock (tests).
 	Now func() time.Time
 }
@@ -126,7 +131,7 @@ func (a *OIDCAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 	if !audienceContains(claims.Aud, a.cfg.Audience) {
 		return Operator{}, false
 	}
-	if claims.Exp == 0 || now.After(time.Unix(claims.Exp, 0)) {
+	if claims.Exp == 0 || !now.Before(time.Unix(claims.Exp, 0)) {
 		// A token with no expiry is a permanent credential minted by accident;
 		// refusing it is kinder than honouring it forever.
 		return Operator{}, false
@@ -162,7 +167,31 @@ func (a *OIDCAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 			break
 		}
 	}
-	return Operator{ID: claims.Sub, Email: strings.TrimSpace(claims.Email), Role: role, MFA: mfa}, true
+	operator := Operator{ID: claims.Sub, Email: strings.TrimSpace(claims.Email), Role: role, MFA: mfa}
+	if a.cfg.Directory != nil {
+		identity, err := a.cfg.Directory.ResolveOperator(r.Context(), claims.Sub)
+		if err != nil {
+			if a.cfg.RequireDirectory {
+				return Operator{}, false
+			}
+			return operator, true
+		}
+		if !identity.Active {
+			return Operator{}, false
+		}
+		role = lesserRole(role, identity.Role)
+		if role == "" {
+			return Operator{}, false
+		}
+		operator.ID = identity.ID
+		operator.Role = role
+		if strings.TrimSpace(identity.Email) != "" {
+			operator.Email = strings.TrimSpace(identity.Email)
+		}
+	} else if a.cfg.RequireDirectory {
+		return Operator{}, false
+	}
+	return operator, true
 }
 
 // audienceContains handles both aud shapes: a string and an array.

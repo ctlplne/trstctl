@@ -350,14 +350,20 @@ never live in the API process. What you can do end to end against the running bi
   mutations (403 at the act, not 401 at the door — the gap is MFA and the
   error should say so). Federation answers WHO; the per-customer delegation
   still answers WHICH customers, and the combined test proves a federated
-  admin delegated one customer cannot suspend another. Scope, stated exactly:
-  OIDC only — SAML federation and SCIM provisioning are NOT built (role
-  membership lives in the IdP's groups claim, so joiner/leaver flows are the
-  IdP's; a leaver's tokens expire and new ones fail the role mapping, but
-  standing DELEGATION rows are trstctl's and must be revoked with
-  `trstctl provider-grant` when an operator leaves); and there is no
-  interactive login flow on the plane — it verifies bearer tokens the
-  operator's own tooling obtains from the IdP.
+  admin delegated one customer cannot suspend another.
+  SAML AND SCIM ARE NOW SERVED (AUD-58): Provider SAML mounts a separate SP at
+  `/provider/v1/auth/saml/login`, `/acs`, and `/metadata`, verifies signed
+  assertions plus issuer/audience/time/request correlation and mapped role/MFA,
+  then issues a Provider-only HttpOnly session protected by double-submit CSRF.
+  Provider SCIM mounts `/provider/scim/v2`; its file-backed bearer is hashed and
+  wiped at startup. Join/update/leaver changes are immutable operator events.
+  When SCIM is enabled, OIDC and SAML query that directory row every request,
+  so a deprovisioned operator's still-valid credential is refused immediately
+  and the same projection revokes all standing customer authority. Provider
+  admin + MFA list/grant/revoke/role routes expose identity source, customer,
+  operation, expiry, last use, and retained revocation evidence. SCIM Bulk and
+  arbitrary custom Provider roles are not implemented; group remove/replace is
+  refused in favor of an explicit User `active:false`/DELETE leaver event.
   Crypto migration sequencing (M2): `GET /api/v1/graph/crypto-readiness` and a Risk
   console panel order every observed crypto asset by WHO DEPENDS ON IT, not by
   severity alone. The CBOM already said which algorithms are weak; it could not say
@@ -2549,7 +2555,7 @@ than sending an operator looking for a credential that was never there.
   beyond the 10-minute grace; and the verification remains a health signal
   (running the target build, answering the control plane), not a functional
   check of the agent's work.
-- Provider console (L3, PARTIAL): the web app gains a `/provider` route — a
+- Provider console (L3 + AUD-58): the web app has a `/provider` route — a
   console for the provider's own staff, separate from the tenant plane. It lists
   customer tenants with their lifecycle state and drives the `/provider/v1` API
   the plane already served but no web client consumed: provision a customer,
@@ -2575,7 +2581,8 @@ than sending an operator looking for a credential that was never there.
   duplicate custom domain is refused by the projection's uniqueness constraint
   and the refusal is surfaced. Customer lifecycle, quota, brand, delegation,
   and break-glass state now rebuild exactly from one immutable provider
-  authority history; the five PostgreSQL views expose no production mutator.
+  authority history; the six PostgreSQL views, now including
+  `provider_operators`, expose no production mutator.
   Every provider mutation requires a key bound to operator + method + path +
   body, and the console sends one; identical sequential or concurrent retries
   return the original HTTP bytes, while changed commands return 409. The
@@ -2586,13 +2593,16 @@ than sending an operator looking for a credential that was never there.
   events before serving, global drill evidence is admin-only, and the response
   deliberately omits command bindings, authority payloads, and break-glass
   snapshots.
-  Scope, stated exactly: delegation administration remains an offline
-  event-backed `trstctl provider-grant` command, and break-glass request,
-  consent, and result-use APIs are not yet exposed in this console. The auth
-  is a memory-held bearer the
-  operator supplies; the HttpOnly provider-session cookie flow (a proper OIDC
-  redirect + server session, so the token never enters JS) is the follow-on
-  hardening the posture calls for.
+  AUD-58 adds the Provider-admin/MFA access panel. It lists SCIM operator
+  lifecycle/source/role and exact customer-operation grants with expiry, last
+  use, and retained revocation; it grants, revokes, and changes the Provider
+  role through idempotent event-backed routes. SAML login is discovered from
+  `/provider/v1/auth/methods`; the browser uses the separate HttpOnly Provider
+  session and sends only the non-credential CSRF value from JavaScript. OIDC
+  bearer input remains as a memory-only option for operator tooling. The local
+  `trstctl provider-grant` command remains the install-time bootstrap path;
+  break-glass request, consent, and result-use APIs are still not exposed in
+  this console.
 - AD CS certificate-database lifecycle visibility (F4, PARTIAL): `POST
   /api/v1/adcs/ca-database/ingest` and `GET /api/v1/adcs/ca-database` (plus
   `trstctl adcs ca-database ingest|list` and a Posture console panel) turn

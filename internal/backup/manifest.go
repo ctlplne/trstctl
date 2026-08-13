@@ -143,9 +143,17 @@ var RecoveredFromPostgresBackup = []string{
 	// vanish and creation is unbounded again, which is the pre-durability
 	// defect reintroduced by a restore.
 	"provider_tenant_quotas",
-	// L1: provider operator delegations. RecoveredFromPostgresBackup, NOT a log
-	// projection — a grant is written directly by `trstctl provider-grant`, so
-	// there is no event to replay and a rebuild cannot reconstruct it.
+	// L1: Provider operator lifecycle. The full-binary EE projection CAN rebuild
+	// this table from Provider events, but core's recovery manifest cannot import
+	// EE or promise that licensed projection is attached during an event-only
+	// restore. The full PostgreSQL artifact therefore carries the projection as
+	// a redundant restore receiver; normal full-binary rebuild still erases and
+	// replays it from the immutable log.
+	"provider_operators",
+	// L1: provider operator delegations use the same dual recovery posture as
+	// provider_operators. AUD-62 made normal writes event-sourced; retaining the
+	// projected rows in a full backup also preserves pre-AUD-62 bootstrap state
+	// when a restore initially starts without the Provider edition attached.
 	//
 	// The failure mode of losing these is the QUIET one: the plane fails closed,
 	// so a restore that dropped the table would leave every operator refused on

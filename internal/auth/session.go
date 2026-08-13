@@ -174,33 +174,55 @@ func (s *SessionIssuer) Issue(subject, tenantID, email string, roles []string) (
 // Verify validates a session token's signature and expiry and returns the
 // session.
 func (s *SessionIssuer) Verify(token string) (Session, error) {
-	b, err := jose.VerifyHS256(s.secret, token)
+	rec, err := s.verifySignedRecord(token)
 	if err != nil {
-		return Session{}, err
-	}
-	var cookie sessionCookie
-	if err := json.Unmarshal(b, &cookie); err != nil {
 		return Session{}, err
 	}
 	now := s.now()
-	if cookie.ID == "" || cookie.ExpiresAt <= now.Unix() {
-		return Session{}, ErrSessionExpired
-	}
-	rec, err := s.store.Get(cookie.ID)
-	if err != nil {
-		return Session{}, err
-	}
 	if rec.RevokedAt != nil {
 		return Session{}, ErrSessionRevoked
-	}
-	if rec.ExpiresAt <= now.Unix() {
-		return Session{}, ErrSessionExpired
 	}
 	if s.idleTimeout > 0 && !rec.LastSeenAt.IsZero() && !rec.LastSeenAt.Add(s.idleTimeout).After(now) {
 		return Session{}, ErrSessionExpired
 	}
-	_ = s.store.Touch(cookie.ID, now)
+	_ = s.store.Touch(rec.ID, now)
 	return rec.Session, nil
+}
+
+// VerifyForLogout authenticates the signed, unexpired cookie but deliberately
+// returns an already-revoked record. This narrow seam lets an exact logout
+// transport retry reach its completed idempotency receipt after the first call
+// revoked the session. It does not refresh last-seen time and must never be
+// used to authorize any operation other than logout.
+func (s *SessionIssuer) VerifyForLogout(token string) (Session, error) {
+	rec, err := s.verifySignedRecord(token)
+	if err != nil {
+		return Session{}, err
+	}
+	return rec.Session, nil
+}
+
+func (s *SessionIssuer) verifySignedRecord(token string) (SessionRecord, error) {
+	b, err := jose.VerifyHS256(s.secret, token)
+	if err != nil {
+		return SessionRecord{}, err
+	}
+	var cookie sessionCookie
+	if err := json.Unmarshal(b, &cookie); err != nil {
+		return SessionRecord{}, err
+	}
+	now := s.now()
+	if cookie.ID == "" || cookie.ExpiresAt <= now.Unix() {
+		return SessionRecord{}, ErrSessionExpired
+	}
+	rec, err := s.store.Get(cookie.ID)
+	if err != nil {
+		return SessionRecord{}, err
+	}
+	if rec.ExpiresAt <= now.Unix() {
+		return SessionRecord{}, ErrSessionExpired
+	}
+	return rec, nil
 }
 
 func (s *SessionIssuer) Revoke(id string) error {

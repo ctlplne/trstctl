@@ -116,6 +116,169 @@ func TestProviderAuthorityRebuildsExactlyFromOneEventHistory(t *testing.T) {
 	}
 }
 
+// AUD-58 assembles the real seams in one journey: a signed IdP token is useful
+// only while its SCIM identity is active; the projected grant reveals exactly
+// one customer; a restart adds no bootstrap duplicates; and erasing PostgreSQL
+// views followed by event replay restores the leaver and revoked authority.
+func TestAUD58AssembledIdentityLifecycleScopeRestartAndRebuild(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	truncateProviderAuthority(t, st)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatalf("events.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	runtime := NewAuthorityRuntime(st, log)
+	now := time.Date(2026, 8, 8, 12, 0, 0, 0, time.UTC)
+	operator := OperatorIdentity{
+		ID: "provider-op-1", ExternalID: "op-1", UserName: "dana@provider.example",
+		Email: "dana@provider.example", DisplayName: "Dana", Role: OperatorAdmin,
+		Active: true, Source: "scim:entra", CreatedAt: now, UpdatedAt: now,
+	}
+	alpha, beta := CustomerID("aud58-alpha"), CustomerID("aud58-beta")
+	appendEvent := func(key, typ, tenantID string, payload AuthorityEvent) {
+		t.Helper()
+		payload.EffectiveAt = now
+		if payload.Audit.Type == "" {
+			payload.Audit.Type = typ
+		}
+		if payload.Audit.TenantID == "" {
+			payload.Audit.TenantID = tenantID
+		}
+		payload.Audit.At = now
+		if _, appendErr := runtime.Mutations.Append(ctx, key, typ, tenantID, payload); appendErr != nil {
+			t.Fatalf("append %s: %v", typ, appendErr)
+		}
+	}
+	appendEvent("aud58-operator", EventOperatorUpserted, providerAuthorityTenant,
+		AuthorityEvent{Operator: &operator, Audit: AuditEvent{OperatorID: "scim:entra", Subject: operator.ID}})
+	for _, tenant := range []Tenant{
+		{ID: alpha, Slug: "aud58-alpha", Name: "AUD58 Alpha", Status: TenantActive, CreatedAt: now, UpdatedAt: now},
+		{ID: beta, Slug: "aud58-beta", Name: "AUD58 Beta", Status: TenantActive, CreatedAt: now, UpdatedAt: now},
+	} {
+		copy := tenant
+		appendEvent("aud58-tenant-"+tenant.Slug, AuditTenantProvisioned, tenant.ID,
+			AuthorityEvent{Tenant: &copy, Audit: AuditEvent{OperatorID: "bootstrap-admin"}})
+	}
+	appendEvent("aud58-alpha-read", EventDelegationGranted, alpha, AuthorityEvent{
+		Delegation: &DelegationMutation{OperatorID: operator.ID, CustomerID: alpha, Operation: OpRead,
+			GrantedBy: "provider-admin", Source: "console"},
+		Audit: AuditEvent{OperatorID: "provider-admin", Subject: operator.ID},
+	})
+	appendEvent("aud58-alpha-suspend", EventDelegationGranted, alpha, AuthorityEvent{
+		Delegation: &DelegationMutation{OperatorID: operator.ID, CustomerID: alpha, Operation: OpSuspend,
+			GrantedBy: "provider-admin", Source: "console"},
+		Audit: AuditEvent{OperatorID: "provider-admin", Subject: operator.ID},
+	})
+
+	fixture := newOIDCFixture(t)
+	access := NewPGAccessStore(st)
+	authenticator := NewOIDCAuthenticator(OIDCAuthenticatorConfig{
+		Issuer: "https://idp.provider.example", Audience: "trstctl-provider", JWKS: fixture.auth.cfg.JWKS,
+		RoleClaim: "groups", AdminValues: []string{"trstctl-admins"}, MFAClaim: "amr", MFAValues: []string{"mfa"},
+		Directory: access, RequireDirectory: true, Now: func() time.Time { return now },
+	})
+	handler := NewHandler(Config{
+		License: providerLicense(t, 10), Store: NewPGStore(st), Access: access,
+		Authenticator: authenticator, Delegations: NewPGDelegationSource(st),
+		Mutations: runtime.Mutations,
+	})
+	request := fixture.request(t, fixture.signer, "idp-k1", fixture.baseClaims())
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "AUD58 Alpha") || strings.Contains(response.Body.String(), "AUD58 Beta") {
+		t.Fatalf("delegated customer list = %d %s; signed identity must see alpha and not beta", response.Code, response.Body.String())
+	}
+	alphaSuspend := fixture.request(t, fixture.signer, "idp-k1", fixture.baseClaims())
+	alphaSuspend.Method, alphaSuspend.URL.Path = http.MethodPost, "/provider/v1/tenants/"+alpha+"/suspend"
+	alphaSuspend.Header.Set("Idempotency-Key", "aud58-suspend-alpha")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, alphaSuspend)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("delegated alpha suspend = %d body=%s", response.Code, response.Body.String())
+	}
+	rows, err := access.ListOperatorAccess(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recordedLastUse bool
+	for _, row := range rows {
+		for _, delegation := range row.Delegations {
+			if delegation.CustomerID == alpha && delegation.Operation == OpSuspend && !delegation.LastUsedAt.IsZero() {
+				recordedLastUse = true
+			}
+		}
+	}
+	if !recordedLastUse {
+		t.Fatalf("successful delegated action did not project last-use evidence: %+v", rows)
+	}
+	betaSuspend := fixture.request(t, fixture.signer, "idp-k1", fixture.baseClaims())
+	betaSuspend.Method, betaSuspend.URL.Path = http.MethodPost, "/provider/v1/tenants/"+beta+"/suspend"
+	betaSuspend.Header.Set("Idempotency-Key", "aud58-suspend-beta")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, betaSuspend)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("cross-customer beta suspend = %d body=%s, want 403", response.Code, response.Body.String())
+	}
+
+	leaver := operator
+	leaver.Active, leaver.UpdatedAt, leaver.DeprovisionedAt = false, now.Add(time.Minute), now.Add(time.Minute)
+	appendEvent("aud58-leaver", EventOperatorOffboarded, providerAuthorityTenant,
+		AuthorityEvent{Operator: &leaver, Audit: AuditEvent{OperatorID: "scim:entra", Subject: "scim:entra"}})
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, fixture.request(t, fixture.signer, "idp-k1", fixture.baseClaims()))
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("post-deprovision signed token = %d body=%s, want immediate 401", response.Code, response.Body.String())
+	}
+
+	headBeforeRestart, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted := NewAuthorityRuntime(st, log)
+	if err := restarted.Bootstrap(ctx); err != nil {
+		t.Fatalf("restart bootstrap: %v", err)
+	}
+	headAfterRestart, err := log.LastSequence(ctx)
+	if err != nil || headAfterRestart != headBeforeRestart {
+		t.Fatalf("restart changed event head %d -> %d err=%v", headBeforeRestart, headAfterRestart, err)
+	}
+
+	truncateProviderAuthority(t, st)
+	if err := projections.New(st, restarted.ProjectionOptions...).Project(ctx, log); err != nil {
+		t.Fatalf("rebuild Provider authority: %v", err)
+	}
+	rebuiltIdentity, err := access.ResolveOperator(ctx, operator.ID)
+	if err != nil || rebuiltIdentity.Active || rebuiltIdentity.DeprovisionedAt.IsZero() {
+		t.Fatalf("rebuilt leaver = %+v err=%v", rebuiltIdentity, err)
+	}
+	delegations, err := NewPGDelegationSource(st).Delegations(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := Operator{ID: operator.ID, Email: operator.Email, Role: operator.Role, MFA: true}
+	if delegations.Authorize(actor, alpha, OpRead) == nil || delegations.Authorize(actor, beta, OpRead) == nil {
+		t.Fatalf("rebuilt leaver retained customer authority: %+v", delegations)
+	}
+	rebuiltRows, err := access.ListOperatorAccess(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retainedLifecycle bool
+	for _, row := range rebuiltRows {
+		for _, delegation := range row.Delegations {
+			if delegation.CustomerID == alpha && delegation.Operation == OpSuspend &&
+				!delegation.LastUsedAt.IsZero() && !delegation.RevokedAt.IsZero() && delegation.RevokedBy == "scim:entra" {
+				retainedLifecycle = true
+			}
+		}
+	}
+	if !retainedLifecycle {
+		t.Fatalf("rebuild lost delegated use/revocation lifecycle: %+v", rebuiltRows)
+	}
+}
+
 // A source-of-truth append can succeed while the synchronous projection fails.
 // That is not permission to write the read table directly or append a second
 // audit event: replay must finish the first event, and retrying its stable key
@@ -645,31 +808,32 @@ func TestProviderAuthorityFailedFullRebuildRollsBackItsProjection(t *testing.T) 
 }
 
 type authoritySnapshot struct {
-	tenants, delegations, quotas, brands, grants int
-	quotaLimit, useCount                         int
-	productName                                  string
+	tenants, operators, delegations, quotas, brands, grants int
+	quotaLimit, useCount                                    int
+	productName                                             string
 }
 
 func (s authoritySnapshot) nonzero() bool {
-	return s.tenants != 0 || s.delegations != 0 || s.quotas != 0 || s.brands != 0 || s.grants != 0
+	return s.tenants != 0 || s.operators != 0 || s.delegations != 0 || s.quotas != 0 || s.brands != 0 || s.grants != 0
 }
 
 func providerAuthoritySnapshot(t *testing.T, st *corestore.Store, tenantID, grantID string) authoritySnapshot {
 	t.Helper()
-	// This deliberately reads all five projection tables in one SQL statement,
+	// This deliberately reads all six projection tables in one SQL statement,
 	// making the before/after replay comparison exact and compact.
 	var out authoritySnapshot
 	err := st.SystemPool().QueryRow(context.Background(), `
 		SELECT
 		  (SELECT count(*) FROM provider_tenants WHERE tenant_id = $1),
-		  (SELECT count(*) FROM provider_operator_delegations WHERE customer_tenant_id = $1::text),
+		  (SELECT count(*) FROM provider_operators WHERE tenant_id = '`+providerAuthorityTenant+`'),
+		  (SELECT count(*) FROM provider_operator_delegations WHERE tenant_id = '`+providerAuthorityTenant+`' AND customer_tenant_id = $1::text),
 		  (SELECT count(*) FROM provider_tenant_quotas WHERE tenant_id = $1),
 		  (SELECT count(*) FROM tenant_branding WHERE tenant_id = $1),
 		  (SELECT count(*) FROM provider_breakglass_grants WHERE id = $2),
 		  COALESCE((SELECT max_certificates_stored FROM provider_tenant_quotas WHERE tenant_id = $1), 0),
 		  COALESCE((SELECT product_name FROM tenant_branding WHERE tenant_id = $1), ''),
 		  COALESCE((SELECT use_count FROM provider_breakglass_grants WHERE id = $2), 0)`, tenantID, grantID).
-		Scan(&out.tenants, &out.delegations, &out.quotas, &out.brands, &out.grants,
+		Scan(&out.tenants, &out.operators, &out.delegations, &out.quotas, &out.brands, &out.grants,
 			&out.quotaLimit, &out.productName, &out.useCount)
 	if err != nil {
 		t.Fatalf("authority snapshot: %v", err)
@@ -680,7 +844,7 @@ func providerAuthoritySnapshot(t *testing.T, st *corestore.Store, tenantID, gran
 func truncateProviderAuthority(t *testing.T, st *corestore.Store) {
 	t.Helper()
 	if _, err := st.SystemPool().Exec(context.Background(), `TRUNCATE
-		provider_operator_delegations, provider_breakglass_grants, provider_tenant_quotas,
+		provider_operator_delegations, provider_operators, provider_breakglass_grants, provider_tenant_quotas,
 		tenant_branding, provider_tenants RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate provider authority: %v", err)
 	}

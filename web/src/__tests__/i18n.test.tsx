@@ -272,6 +272,10 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // AUD-58 Provider workforce re-pin: twenty-two keys label SAML sign-in,
+      // SCIM lifecycle, exact customer/operation grants, expiry, last use, and
+      // retained revocation evidence. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
       // AUD-37 AD CS evidence re-pin: twenty-three keys expose configured IIS
       // probes, CA restriction unknown-state honesty, exact endpoint evidence,
       // signed compliance references, and an explicit private-CIDR SSRF
@@ -649,8 +653,8 @@ describe("i18n boundary", () => {
       // production-unit consumption, and remaining bundled non-production slots.
       // Currency, counts, and placeholders stay exact. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "a8bb4814da70f362e3f01ffa6e99c77baa2237015cae261e8045aa0e471c5dc3",
-      "de-DE": "e94a06c6d61b426c2e53061fa7dbfb79815f66cf1a7968ddd76b308f6ec01c0e",
+      "es-ES": "b4459397138ae2c635942e9e552b9affebc585b98603e8a9d97312cc6267f9d2",
+      "de-DE": "aa3e4efae6b7087f4069e02ba04b25cd13e3453d4fa80be66a1de09a7071f632",
     });
   });
 

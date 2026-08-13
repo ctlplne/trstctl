@@ -185,15 +185,37 @@ the table directly. When embedded NATS is configured, run the command while the
 control plane is offline so two processes do not open the same file-backed
 store.
 
-Provider OIDC bearer verification is built with pinned JWKS, issuer, audience,
-role, and MFA claims. SAML/SCIM federation and a provider access console for
-reviewing or changing delegation grants are not built.
+Provider OIDC bearer verification uses pinned JWKS, issuer, audience, expiry,
+not-before, role, and MFA claims. Provider SAML is a separate SP at
+`/provider/v1/auth/saml/{login,acs,metadata}`: the crypto boundary validates the
+signed assertion, issuer, audience/recipient, time window, request correlation,
+role, and MFA attributes before minting a Provider-only HttpOnly session. That
+cookie never becomes a customer-tenant session; state-changing requests also
+need its double-submit `X-Provider-CSRF-Token` value.
+
+Provider SCIM is served at `/provider/scim/v2`. Token bytes are read from
+custody-checked files, hashed, wiped, and never retained as strings. User
+join/update/`active:false`/delete emits immutable operator lifecycle events.
+When SCIM is enabled, OIDC and SAML re-read that projected operator row on
+**every request**. A still-valid token or browser session therefore stops at the
+first request after a leaver event; the leaver projection also revokes every
+standing customer grant for that operator.
+
+Provider administrators with current MFA use `GET /provider/v1/operators`,
+`GET /provider/v1/access/customers`, and the per-operator `/delegations`,
+`/revocations`, and `/role` mutation routes.
+The console shows the operator, SCIM source, role, exact customer/operation,
+grant source, expiry, last use, and retained revocation evidence. These routes
+are not the install-time bootstrap: the local `provider-grant` command remains
+available for creating the first authority before an administrator exists.
+`POST /provider/v1/auth/logout` revokes the Provider session, clears its cookie,
+and is protected by the same CSRF and idempotency contract as other mutations.
 
 ### Provider authority event source and retries
 
 Customer lifecycle, delegation, quota, white-label branding, and break-glass
 grant/use state share one tenant-scoped immutable authority history. The
-`provider_tenants`, `provider_operator_delegations`,
+`provider_tenants`, `provider_operators`, `provider_operator_delegations`,
 `provider_tenant_quotas`, `tenant_branding`, and
 `provider_breakglass_grants` tables are read models owned only by that
 projection; their PostgreSQL stores expose no direct mutators. An upgraded

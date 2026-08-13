@@ -3,6 +3,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { IntlProvider } from "@/i18n/I18nProvider";
+import { AppQueryProvider } from "@/lib/query";
 
 const { providerMock } = vi.hoisted(() => ({
   providerMock: {
@@ -15,6 +16,14 @@ const { providerMock } = vi.hoisted(() => ({
     setQuota: vi.fn(),
     setBrand: vi.fn(),
     runIsolationDrill: vi.fn(),
+    authMethods: vi.fn(),
+    session: vi.fn(),
+    listOperatorAccess: vi.fn(),
+    listAccessCustomers: vi.fn(),
+    grantOperatorAccess: vi.fn(),
+    revokeOperatorAccess: vi.fn(),
+    setOperatorRole: vi.fn(),
+    signOut: vi.fn(),
   },
 }));
 
@@ -29,7 +38,9 @@ import { setProviderToken, clearProviderToken } from "@/lib/providerApi";
 function renderProvider() {
   return render(
     <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
-      <Provider />
+      <AppQueryProvider>
+        <Provider />
+      </AppQueryProvider>
     </IntlProvider>,
   );
 }
@@ -39,6 +50,11 @@ describe("provider console (L3)", () => {
     clearProviderToken();
     for (const fn of Object.values(providerMock)) fn.mockReset();
     providerMock.listActivity.mockResolvedValue([]);
+    providerMock.authMethods.mockResolvedValue([]);
+    providerMock.session.mockRejectedValue(new Error("no provider session"));
+    providerMock.listOperatorAccess.mockResolvedValue([]);
+    providerMock.listAccessCustomers.mockResolvedValue([]);
+    providerMock.signOut.mockResolvedValue(undefined);
   });
 
   it("gates on an operator token before touching the provider plane", () => {
@@ -59,6 +75,15 @@ describe("provider console (L3)", () => {
     expect(screen.getByText("Globex")).toBeInTheDocument();
     // The suspended customer shows its status; the active one offers suspend.
     expect(screen.getByText("suspended")).toBeInTheDocument();
+  });
+
+  it("revokes the separate Provider session before returning to the login gate", async () => {
+    providerMock.listTenants.mockResolvedValue([]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(providerMock.signOut).toHaveBeenCalledOnce());
+    expect(await screen.findByLabelText("Operator bearer token")).toBeInTheDocument();
   });
 
   it("suspends a customer through the plane after confirmation", async () => {
@@ -192,5 +217,72 @@ describe("provider console (L3)", () => {
     expect(screen.getByText("operator@example.test")).toBeInTheDocument();
     expect(screen.getByText("tenant-acme")).toBeInTheDocument();
     expect(screen.getByText("#42")).toBeInTheDocument();
+  });
+
+  it("manages SCIM operators, exact customer grants, and revocation evidence", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "tenant-acme", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    providerMock.listOperatorAccess.mockResolvedValue([
+      {
+        identity: {
+          id: "op-2",
+          external_id: "entra-2",
+          user_name: "casey@example.test",
+          email: "casey@example.test",
+          display_name: "Casey",
+          role: "operator",
+          active: true,
+          source: "scim:entra",
+          created_at: "2026-08-13T12:00:00Z",
+          updated_at: "2026-08-13T12:00:00Z",
+        },
+        delegations: [
+          {
+            operator_id: "op-2",
+            customer_id: "tenant-acme",
+            operation: "read",
+            source: "console",
+            granted_by: "admin-1",
+            granted_at: "2026-08-13T12:01:00Z",
+            last_used_at: "2026-08-13T12:02:00Z",
+          },
+        ],
+      },
+    ]);
+    providerMock.listAccessCustomers.mockResolvedValue([
+      { id: "tenant-acme", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    providerMock.revokeOperatorAccess.mockResolvedValue({
+      identity: {
+        id: "op-2",
+        external_id: "entra-2",
+        user_name: "casey@example.test",
+        email: "casey@example.test",
+        display_name: "Casey",
+        role: "operator",
+        active: true,
+        source: "scim:entra",
+        created_at: "2026-08-13T12:00:00Z",
+        updated_at: "2026-08-13T12:03:00Z",
+      },
+      delegations: [],
+    });
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    expect(await screen.findByRole("heading", { name: "Operator access" })).toBeInTheDocument();
+    expect(screen.getByText("Casey")).toBeInTheDocument();
+    expect(screen.getByText("scim:entra")).toBeInTheDocument();
+    expect(screen.getByText("tenant-acme")).toBeInTheDocument();
+    expect(screen.getByText(/Last used/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    await waitFor(() =>
+      expect(providerMock.revokeOperatorAccess).toHaveBeenCalledWith("op-2", {
+        customer_id: "tenant-acme",
+        operations: ["read"],
+        reason: "Revoked in Provider access console",
+      }),
+    );
   });
 });

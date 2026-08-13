@@ -1185,13 +1185,14 @@ type ServiceNowBinding struct {
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
 
-// Provider configures the Provider/MSP plane (L1). OIDC is the operator
-// authenticator: without it the plane refuses every request — closed until
-// wired, deliberately, because the safe stand-in for "who is this caller"
-// does not exist and a placeholder verifier is how the original
-// accept-anything defect came to ship.
+// Provider configures the Provider/MSP plane (L1). OIDC and SAML prove who an
+// operator is; SCIM owns whether that identity is still active. A configured
+// identity method is deliberately incomplete without its pinned verifier or
+// credential file: startup fails instead of accepting a weaker substitute.
 type Provider struct {
 	OIDC ProviderOIDC `json:"oidc"`
+	SAML ProviderSAML `json:"saml"`
+	SCIM ProviderSCIM `json:"scim"`
 }
 
 // ProviderOIDC pins what a provider-operator bearer token must prove. The
@@ -1221,6 +1222,49 @@ type ProviderOIDC struct {
 func (p ProviderOIDC) Configured() bool {
 	return strings.TrimSpace(p.Issuer) != "" || strings.TrimSpace(p.Audience) != "" ||
 		strings.TrimSpace(p.JWKSFile) != "" || strings.TrimSpace(p.JWKSJSON) != ""
+}
+
+// ProviderSAML configures the separate Provider-plane SAML Service Provider.
+// It intentionally does not reuse the customer login session: a provider
+// operator can act across customer boundaries and therefore needs its own
+// cookie, role mapping, MFA proof, and signing metadata.
+type ProviderSAML struct {
+	Enabled           bool     `json:"enabled,omitempty"`
+	EntityID          string   `json:"entity_id,omitempty"`
+	MetadataURL       string   `json:"metadata_url,omitempty"`
+	ACSURL            string   `json:"acs_url,omitempty"`
+	IDPMetadataFile   string   `json:"idp_metadata_file,omitempty"`
+	IDPMetadataXML    string   `json:"idp_metadata_xml,omitempty"`
+	SessionSecretFile string   `json:"session_secret_file,omitempty"`
+	SessionTTL        string   `json:"session_ttl,omitempty"`
+	LoginRedirect     string   `json:"login_redirect,omitempty"`
+	SubjectAttribute  string   `json:"subject_attribute,omitempty"`
+	EmailAttribute    string   `json:"email_attribute,omitempty"`
+	RoleAttribute     string   `json:"role_attribute,omitempty"`
+	AdminValues       []string `json:"admin_values,omitempty"`
+	OperatorValues    []string `json:"operator_values,omitempty"`
+	MFAAttribute      string   `json:"mfa_attribute,omitempty"`
+	MFAValues         []string `json:"mfa_values,omitempty"`
+}
+
+func (p ProviderSAML) SessionTTLDuration() (time.Duration, error) {
+	if strings.TrimSpace(p.SessionTTL) == "" {
+		return 12 * time.Hour, nil
+	}
+	return time.ParseDuration(p.SessionTTL)
+}
+
+// ProviderSCIM is the provider workforce directory joiner/leaver feed. Token
+// bytes are loaded from files and hashed at startup; configuration never embeds
+// the live bearer credential in an immutable Go string.
+type ProviderSCIM struct {
+	Enabled bool                `json:"enabled,omitempty"`
+	Tokens  []ProviderSCIMToken `json:"tokens,omitempty"`
+}
+
+type ProviderSCIMToken struct {
+	Name      string `json:"name,omitempty"`
+	TokenFile string `json:"token_file,omitempty"`
 }
 
 // AttestedIssuance turns on the attestation-gated workload SVID mint (I3/F30).
@@ -2167,24 +2211,14 @@ func Load(getenv func(string) string) (*Config, error) {
 // file or default values.
 func (c *Config) applyEnv(getenv func(string) string) {
 	applyServerAndSpineEnv(getenv, c)
-	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
-	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
-	setString(getenv, "TRSTCTL_LIFECYCLE_NOT_BEFORE_SKEW", &c.Lifecycle.NotBeforeSkew)
-	setString(getenv, "TRSTCTL_LIFECYCLE_LEAF_VALIDITY", &c.Lifecycle.LeafValidity)
-	setString(getenv, "TRSTCTL_LIFECYCLE_OWNERSHIP_ATTESTATION_CADENCE", &c.Lifecycle.OwnershipAttestationCadence)
+	applyLifecycleEnv(getenv, &c.Lifecycle)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ENABLED", &c.Connectors.Enabled)
 	setString(getenv, "TRSTCTL_CONNECTORS_HTTP_TIMEOUT", &c.Connectors.HTTPTimeout)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ALLOW_PRIVATE_CIDRS", &c.Connectors.AllowPrivateCIDRs)
 	setBool(getenv, "TRSTCTL_CONNECTORS_ALLOW_INSECURE_HTTP", &c.Connectors.AllowInsecureHTTP)
 	setNotificationEnv(getenv, &c.Notifications)
 	applyCodeSigningEnv(getenv, &c.CodeSigning)
-	setString(getenv, "TRSTCTL_PROVIDER_OIDC_ISSUER", &c.Provider.OIDC.Issuer)
-	setString(getenv, "TRSTCTL_PROVIDER_OIDC_AUDIENCE", &c.Provider.OIDC.Audience)
-	setString(getenv, "TRSTCTL_PROVIDER_OIDC_JWKS_FILE", &c.Provider.OIDC.JWKSFile)
-	setString(getenv, "TRSTCTL_PROVIDER_OIDC_JWKS_JSON", &c.Provider.OIDC.JWKSJSON)
-	setString(getenv, "TRSTCTL_PROVIDER_OIDC_ROLE_CLAIM", &c.Provider.OIDC.RoleClaim)
-	setCSV(getenv, "TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES", &c.Provider.OIDC.AdminValues)
-	setCSV(getenv, "TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES", &c.Provider.OIDC.OperatorValues)
+	applyProviderEnv(getenv, &c.Provider)
 	setServiceNowEnv(getenv, &c.ITSM.ServiceNow)
 	setBool(getenv, "TRSTCTL_AIRGAP_ENABLED", &c.AirGap.Enabled)
 	setBool(getenv, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", &c.AirGap.AllowPrivate)
@@ -2312,6 +2346,49 @@ func (c *Config) applyEnv(getenv func(string) string) {
 		c.Federation.Peers = []FederationPeer{peer}
 	}
 	applyPCASEnv(getenv, &c.PCAS)
+}
+
+func applyLifecycleEnv(getenv func(string) string, lifecycle *Lifecycle) {
+	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &lifecycle.RenewBefore)
+	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &lifecycle.AlertBefore)
+	setString(getenv, "TRSTCTL_LIFECYCLE_NOT_BEFORE_SKEW", &lifecycle.NotBeforeSkew)
+	setString(getenv, "TRSTCTL_LIFECYCLE_LEAF_VALIDITY", &lifecycle.LeafValidity)
+	setString(getenv, "TRSTCTL_LIFECYCLE_OWNERSHIP_ATTESTATION_CADENCE", &lifecycle.OwnershipAttestationCadence)
+}
+
+func applyProviderEnv(getenv func(string) string, provider *Provider) {
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_ISSUER", &provider.OIDC.Issuer)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_AUDIENCE", &provider.OIDC.Audience)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_JWKS_FILE", &provider.OIDC.JWKSFile)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_JWKS_JSON", &provider.OIDC.JWKSJSON)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_ROLE_CLAIM", &provider.OIDC.RoleClaim)
+	setCSV(getenv, "TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES", &provider.OIDC.AdminValues)
+	setCSV(getenv, "TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES", &provider.OIDC.OperatorValues)
+	setString(getenv, "TRSTCTL_PROVIDER_OIDC_MFA_CLAIM", &provider.OIDC.MFAClaim)
+	setCSV(getenv, "TRSTCTL_PROVIDER_OIDC_MFA_VALUES", &provider.OIDC.MFAValues)
+	setBool(getenv, "TRSTCTL_PROVIDER_SAML_ENABLED", &provider.SAML.Enabled)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_ENTITY_ID", &provider.SAML.EntityID)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_METADATA_URL", &provider.SAML.MetadataURL)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_ACS_URL", &provider.SAML.ACSURL)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_IDP_METADATA_FILE", &provider.SAML.IDPMetadataFile)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_IDP_METADATA_XML", &provider.SAML.IDPMetadataXML)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_SESSION_SECRET_FILE", &provider.SAML.SessionSecretFile)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_SESSION_TTL", &provider.SAML.SessionTTL)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_LOGIN_REDIRECT", &provider.SAML.LoginRedirect)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_SUBJECT_ATTRIBUTE", &provider.SAML.SubjectAttribute)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_EMAIL_ATTRIBUTE", &provider.SAML.EmailAttribute)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_ROLE_ATTRIBUTE", &provider.SAML.RoleAttribute)
+	setCSV(getenv, "TRSTCTL_PROVIDER_SAML_ADMIN_VALUES", &provider.SAML.AdminValues)
+	setCSV(getenv, "TRSTCTL_PROVIDER_SAML_OPERATOR_VALUES", &provider.SAML.OperatorValues)
+	setString(getenv, "TRSTCTL_PROVIDER_SAML_MFA_ATTRIBUTE", &provider.SAML.MFAAttribute)
+	setCSV(getenv, "TRSTCTL_PROVIDER_SAML_MFA_VALUES", &provider.SAML.MFAValues)
+	setBool(getenv, "TRSTCTL_PROVIDER_SCIM_ENABLED", &provider.SCIM.Enabled)
+	token := ProviderSCIMToken{}
+	setString(getenv, "TRSTCTL_PROVIDER_SCIM_TOKEN_NAME", &token.Name)
+	setString(getenv, "TRSTCTL_PROVIDER_SCIM_TOKEN_FILE", &token.TokenFile)
+	if token.Name != "" || token.TokenFile != "" {
+		provider.SCIM.Tokens = []ProviderSCIMToken{token}
+	}
 }
 
 // applyAgentChannelEnv resolves the served agent steady-state mTLS gRPC channel
@@ -2785,30 +2862,87 @@ func setInt(getenv func(string) string, key string, dst *int) {
 
 // Validate reports whether the configuration is internally consistent,
 // reporting all problems together.
-// validateProviderConfig checks the provider OIDC pinning (L1): a partial pin
-// would leave the plane refusing everything while the operator believes it is
-// wired, and the error must say which piece is missing rather than 401-ing
-// forever.
+// validateProviderConfig checks every Provider identity input (L1). Partial
+// setup must stop startup because an operator must never believe SAML or SCIM is
+// protecting the plane while the runtime silently fell back to bearer-only.
 func validateProviderConfig(c *Config) []error {
 	var errs []error
 	oidc := c.Provider.OIDC
-	if !oidc.Configured() {
-		return nil
+	if oidc.Configured() {
+		if strings.TrimSpace(oidc.Issuer) == "" {
+			errs = append(errs, errors.New("provider.oidc.issuer is required when provider OIDC is configured"))
+		}
+		if strings.TrimSpace(oidc.Audience) == "" {
+			errs = append(errs, errors.New("provider.oidc.audience is required when provider OIDC is configured"))
+		}
+		if strings.TrimSpace(oidc.JWKSFile) == "" && strings.TrimSpace(oidc.JWKSJSON) == "" {
+			errs = append(errs, errors.New("provider.oidc needs jwks_file or jwks_json: the IdP's keys are pinned offline, never fetched from a URL the token's minter might control"))
+		}
+		if strings.TrimSpace(oidc.JWKSFile) != "" && strings.TrimSpace(oidc.JWKSJSON) != "" {
+			errs = append(errs, errors.New("provider.oidc.jwks_file and jwks_json are mutually exclusive; two key sets invite the wrong one to win silently"))
+		}
+		if len(oidc.AdminValues) == 0 && len(oidc.OperatorValues) == 0 {
+			errs = append(errs, errors.New("provider.oidc needs admin_values and/or operator_values: without a role mapping every authenticated token is refused, and the plane reads as broken rather than unmapped"))
+		}
 	}
-	if strings.TrimSpace(oidc.Issuer) == "" {
-		errs = append(errs, errors.New("provider.oidc.issuer is required when provider OIDC is configured"))
+
+	saml := c.Provider.SAML
+	if saml.Enabled {
+		require := func(value, name string) {
+			if strings.TrimSpace(value) == "" {
+				errs = append(errs, fmt.Errorf("provider.saml.%s is required when provider.saml.enabled is true", name))
+			}
+		}
+		require(saml.EntityID, "entity_id")
+		require(saml.MetadataURL, "metadata_url")
+		require(saml.ACSURL, "acs_url")
+		require(saml.SessionSecretFile, "session_secret_file")
+		require(saml.RoleAttribute, "role_attribute")
+		require(saml.MFAAttribute, "mfa_attribute")
+		if strings.TrimSpace(saml.IDPMetadataFile) == "" && strings.TrimSpace(saml.IDPMetadataXML) == "" {
+			errs = append(errs, errors.New("provider.saml requires idp_metadata_file or idp_metadata_xml when enabled"))
+		}
+		if strings.TrimSpace(saml.IDPMetadataFile) != "" && strings.TrimSpace(saml.IDPMetadataXML) != "" {
+			errs = append(errs, errors.New("provider.saml.idp_metadata_file and idp_metadata_xml are mutually exclusive"))
+		}
+		if len(saml.AdminValues) == 0 && len(saml.OperatorValues) == 0 {
+			errs = append(errs, errors.New("provider.saml needs admin_values and/or operator_values"))
+		}
+		if len(saml.MFAValues) == 0 {
+			errs = append(errs, errors.New("provider.saml.mfa_values requires at least one accepted MFA proof"))
+		}
+		for _, endpoint := range []struct{ value, name string }{{saml.EntityID, "entity_id"}, {saml.MetadataURL, "metadata_url"}, {saml.ACSURL, "acs_url"}} {
+			if strings.TrimSpace(endpoint.value) == "" {
+				continue
+			}
+			u, err := url.Parse(endpoint.value)
+			if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname()))) {
+				errs = append(errs, fmt.Errorf("provider.saml.%s %q must be an absolute https URL (http is allowed only for loopback)", endpoint.name, endpoint.value))
+			}
+		}
+		if ttl, err := saml.SessionTTLDuration(); err != nil || ttl <= 0 {
+			errs = append(errs, fmt.Errorf("provider.saml.session_ttl %q must be a positive Go duration", saml.SessionTTL))
+		}
 	}
-	if strings.TrimSpace(oidc.Audience) == "" {
-		errs = append(errs, errors.New("provider.oidc.audience is required when provider OIDC is configured"))
-	}
-	if strings.TrimSpace(oidc.JWKSFile) == "" && strings.TrimSpace(oidc.JWKSJSON) == "" {
-		errs = append(errs, errors.New("provider.oidc needs jwks_file or jwks_json: the IdP's keys are pinned offline, never fetched from a URL the token's minter might control"))
-	}
-	if strings.TrimSpace(oidc.JWKSFile) != "" && strings.TrimSpace(oidc.JWKSJSON) != "" {
-		errs = append(errs, errors.New("provider.oidc.jwks_file and jwks_json are mutually exclusive; two key sets invite the wrong one to win silently"))
-	}
-	if len(oidc.AdminValues) == 0 && len(oidc.OperatorValues) == 0 {
-		errs = append(errs, errors.New("provider.oidc needs admin_values and/or operator_values: without a role mapping every authenticated token is refused, and the plane reads as broken rather than unmapped"))
+
+	if scim := c.Provider.SCIM; scim.Enabled {
+		if len(scim.Tokens) == 0 {
+			errs = append(errs, errors.New("provider.scim.tokens requires at least one file-backed bearer token when enabled"))
+		}
+		seen := map[string]bool{}
+		for i, token := range scim.Tokens {
+			name := strings.TrimSpace(token.Name)
+			if name == "" {
+				errs = append(errs, fmt.Errorf("provider.scim.tokens[%d].name is required", i))
+			}
+			if strings.TrimSpace(token.TokenFile) == "" {
+				errs = append(errs, fmt.Errorf("provider.scim.tokens[%d].token_file is required", i))
+			}
+			if seen[name] && name != "" {
+				errs = append(errs, fmt.Errorf("provider.scim token name %q is duplicated", name))
+			}
+			seen[name] = true
+		}
 	}
 	return errs
 }

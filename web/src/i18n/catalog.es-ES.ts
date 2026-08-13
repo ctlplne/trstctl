@@ -4591,7 +4591,7 @@ const esESCatalog = {
   // L3 provider console — Machine-authored translations, FLAG FOR HUMAN REVIEW.
   "source.provider.console.l3prov0001": "Consola del proveedor",
   "source.provider.login.intro.l3prov0002":
-    "Inicie sesión con el token de operador de su IdP de proveedor. Este plano gestiona los inquilinos de clientes, por lo que está separado de la consola de inquilino y guarda su propia credencial de operador de corta duración solo en esta pestaña.",
+    "Inicie sesión con SAML cuando esté disponible o pegue un token OIDC de operador de corta duración. Este plano gestiona inquilinos de clientes, por lo que su identidad y sesión están separadas de la consola del inquilino.",
   "source.provider.token.l3prov0003": "Token de portador del operador",
   "source.provider.signin.l3prov0004": "Iniciar sesión",
   "source.provider.customers.intro.l3prov0005": "Sus inquilinos de clientes y su estado de ciclo de vida.",
@@ -4637,6 +4637,29 @@ const esESCatalog = {
   "source.provider.drill.run.l3prov0038": "Ejecutar simulacro de aislamiento",
   "source.provider.drill.pass.l3prov0039": "El aislamiento se mantiene: todas las comprobaciones pasaron.",
   "source.provider.drill.fail.l3prov0040": "El simulacro de aislamiento FALLÓ: investigue de inmediato.",
+  "source.provider.access.title.aud580001": "Acceso de operadores",
+  "source.provider.access.intro.aud580002":
+    "SCIM controla las altas y bajas. Conceda solo el cliente y la operación necesarios; las filas vencidas y revocadas permanecen visibles como evidencia.",
+  "source.provider.access.operator.aud580003": "Operador",
+  "source.provider.access.customer.aud580004": "Cliente",
+  "source.provider.access.operation.aud580005": "Operación",
+  "source.provider.access.expiry.aud580006": "Vence (opcional)",
+  "source.provider.access.grant.aud580007": "Conceder acceso",
+  "source.provider.access.empty.aud580008": "SCIM aún no ha aprovisionado operadores del proveedor.",
+  "source.provider.access.identity.aud580009": "Identidad",
+  "source.provider.access.role.aud580010": "Rol del proveedor",
+  "source.provider.access.source.aud580011": "Origen de identidad",
+  "source.provider.access.scope.aud580012": "Autoridad del cliente",
+  "source.provider.access.active.aud580013": "activo",
+  "source.provider.access.inactive.aud580014": "dado de baja",
+  "source.provider.access.none.aud580015": "Sin autoridad de cliente",
+  "source.provider.access.expires.aud580016": "Vence",
+  "source.provider.access.lastused.aud580017": "Último uso",
+  "source.provider.access.revoked.aud580018": "Revocado",
+  "source.provider.access.revoke.aud580019": "Revocar",
+  "source.provider.saml.signin.aud580020": "Iniciar sesión con SAML",
+  "source.provider.access.role.admin.aud580021": "administrador",
+  "source.provider.access.role.operator.aud580022": "operador",
   // E4 relay plugin census — Machine-authored translations, FLAG FOR HUMAN REVIEW.
   "connectors.relayPlugins.title": "Plugins de relay verificados",
   "connectors.relayPlugins.help":

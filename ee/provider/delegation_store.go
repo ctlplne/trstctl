@@ -48,9 +48,10 @@ func (p *PGDelegationSource) Delegations(ctx context.Context) (*DelegationSet, e
 	if p == nil || p.store == nil {
 		return nil, fmt.Errorf("provider: no delegation store")
 	}
-	//trstctl:system-query — cross-tenant by design: the provider plane asks which customers an operator may touch BEFORE any tenant is selected, so there is no tenant context to scope to; the table is provider-plane grant data, not customer data, and no tenant-facing route reads it.
+	//trstctl:system-query — Provider-global authority lives in one fixed forced-RLS partition; customer_tenant_id is only the delegated target.
 	rows, err := p.store.SystemPool().Query(ctx,
-		`SELECT operator_id, customer_tenant_id, operation FROM provider_operator_delegations`)
+		`SELECT operator_id, customer_tenant_id, operation FROM provider_operator_delegations
+		 WHERE tenant_id = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())`, providerAuthorityTenant)
 	if err != nil {
 		return nil, err
 	}

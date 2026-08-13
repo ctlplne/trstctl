@@ -618,6 +618,78 @@ Operators can trigger and inspect the same served path with
 `POST /api/v1/privacy/retention-runs`, `GET /api/v1/privacy/retention-runs`, or
 the matching `trstctl privacy retention run/list` CLI commands.
 
+## Provider workforce identity and customer access
+
+The Provider plane is a different privilege domain from tenant login. OIDC or
+SAML proves which Provider employee is calling. SCIM is the live joiner/leaver
+directory. A customer delegation then narrows that active employee to one
+customer and one operation. Think of the chain as three locks: a request opens
+only when identity, employment state, and exact customer authority all agree.
+
+OIDC verifies an offline-pinned JWKS plus issuer, audience, time, mapped role,
+and MFA. SAML serves login, ACS, and metadata at
+`/provider/v1/auth/saml/{login,acs,metadata}` and verifies signed assertions
+inside `internal/crypto`. Its HttpOnly cookie is Provider-only and mutations use
+double-submit CSRF. When Provider SCIM is enabled, both methods resolve the
+SCIM-projected operator on every request, so deprovisioning immediately refuses
+an otherwise valid token/session and revokes the operator's live delegations.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_PROVIDER_OIDC_ISSUER` / `TRSTCTL_PROVIDER_OIDC_AUDIENCE` | unset | Required OIDC issuer and audience. |
+| `TRSTCTL_PROVIDER_OIDC_JWKS_FILE` / `TRSTCTL_PROVIDER_OIDC_JWKS_JSON` | unset | Exactly one offline-pinned IdP signing-key source. |
+| `TRSTCTL_PROVIDER_OIDC_ROLE_CLAIM` | `roles` | Signed claim containing Provider role values. |
+| `TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES` / `TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES` | unset | Maps signed values to the two Provider roles. |
+| `TRSTCTL_PROVIDER_OIDC_MFA_CLAIM` / `TRSTCTL_PROVIDER_OIDC_MFA_VALUES` | `amr` / `mfa,otp,hwk,swk` | Signed claim and accepted values that positively prove MFA. |
+| `TRSTCTL_PROVIDER_SAML_ENABLED` | `false` | Enables the separate Provider SAML SP. |
+| `TRSTCTL_PROVIDER_SAML_ENTITY_ID` / `TRSTCTL_PROVIDER_SAML_METADATA_URL` / `TRSTCTL_PROVIDER_SAML_ACS_URL` | unset | HTTPS SP identity and served endpoint URLs. |
+| `TRSTCTL_PROVIDER_SAML_IDP_METADATA_FILE` / `TRSTCTL_PROVIDER_SAML_IDP_METADATA_XML` | unset | Exactly one offline IdP signing-metadata source. |
+| `TRSTCTL_PROVIDER_SAML_SESSION_SECRET_FILE` | unset | Custody-checked file for the Provider session HMAC secret; created with 32 random bytes if absent. |
+| `TRSTCTL_PROVIDER_SAML_ROLE_ATTRIBUTE` / `TRSTCTL_PROVIDER_SAML_ADMIN_VALUES` / `TRSTCTL_PROVIDER_SAML_OPERATOR_VALUES` | unset | Assertion attribute and values mapped onto Provider roles. |
+| `TRSTCTL_PROVIDER_SAML_MFA_ATTRIBUTE` / `TRSTCTL_PROVIDER_SAML_MFA_VALUES` | unset | Assertion attribute and values that positively prove MFA. |
+| `TRSTCTL_PROVIDER_SCIM_ENABLED` | `false` | Serves Provider workforce provisioning at `/provider/scim/v2`. |
+| `TRSTCTL_PROVIDER_SCIM_TOKEN_NAME` / `TRSTCTL_PROVIDER_SCIM_TOKEN_FILE` | unset | Audit source name and custody-checked raw bearer-token file. The runtime retains only its SHA-256 hash. |
+
+Multi-token JSON configuration and a complete SAML block:
+
+```json
+{
+  "provider": {
+    "oidc": {
+      "issuer": "https://idp.provider.example",
+      "audience": "trstctl-provider",
+      "jwks_file": "/etc/trstctl/provider-idp.jwks",
+      "role_claim": "groups",
+      "admin_values": ["provider-admin"],
+      "operator_values": ["provider-operator"]
+    },
+    "saml": {
+      "enabled": true,
+      "entity_id": "https://trstctl.provider.example/provider/v1/auth/saml/metadata",
+      "metadata_url": "https://trstctl.provider.example/provider/v1/auth/saml/metadata",
+      "acs_url": "https://trstctl.provider.example/provider/v1/auth/saml/acs",
+      "idp_metadata_file": "/etc/trstctl/provider-idp-metadata.xml",
+      "session_secret_file": "/var/lib/trstctl/provider-saml-session.secret",
+      "role_attribute": "groups",
+      "admin_values": ["provider-admin"],
+      "operator_values": ["provider-operator"],
+      "mfa_attribute": "amr",
+      "mfa_values": ["mfa"]
+    },
+    "scim": {
+      "enabled": true,
+      "tokens": [
+        {"name": "entra", "token_file": "/etc/trstctl/provider-scim-entra.token"}
+      ]
+    }
+  }
+}
+```
+
+The operator console lists SCIM lifecycle and every current/historical
+delegation. Grant/revoke/role mutations require a Provider admin, current MFA,
+and `Idempotency-Key`; exact retries return the same event result.
+
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.

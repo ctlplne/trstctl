@@ -585,12 +585,6 @@ func seedRecoveredFromPostgresTables(
 			// freely again — which is the pre-durability defect a restore must
 			// not reintroduce.
 			{`INSERT INTO provider_tenant_quotas (tenant_id, max_certificates_stored, updated_by) VALUES ($1, $2, $3)`, []any{tenantA, 25, "full-dr-admin"}},
-			// L1: a provider operator's delegation over a customer. Nothing in the
-			// event log can rebuild it — the grant is written directly by
-			// `trstctl provider-grant` — and losing it fails CLOSED, so a restore
-			// that dropped this table would leave every operator refused on every
-			// customer and read as a broken plane rather than a lost table.
-			{`INSERT INTO provider_operator_delegations (operator_id, customer_tenant_id, operation, granted_by) VALUES ($1, $2, $3, $4)`, []any{"full-dr-operator", tenantA, "suspend", "full-dr-admin"}},
 			// L3: the provider's customer registry is the business-level source used
 			// to list and manage tenants. It is not projected from the event log, so
 			// a full restore must carry the actual slug, name, and lifecycle state.
@@ -720,6 +714,32 @@ func seedRecoveredFromPostgresTables(
 	if err != nil {
 		t.Fatalf("seed independent PostgreSQL tables: %v", err)
 	}
+	// AUD-58 moved Provider workforce identities and grants into one fixed,
+	// FORCE-RLS authority partition. They are not customer-owned rows, so seed
+	// the DR drill through the same owner-role projection boundary that receives
+	// immutable Provider events. A customer-scoped transaction must not be able
+	// to forge or even see this authority.
+	if err := st.WithTenantProjection(ctx, store.ZeroUUID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO provider_operators
+			(tenant_id, id, external_id, user_name, email, display_name, role, active, source, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
+			store.ZeroUUID, "full-dr-operator", "scim-full-dr-operator", "operator@example.test",
+			"operator@example.test", "Full DR Operator", "admin", true, "scim:full-dr", now,
+		); err != nil {
+			return fmt.Errorf("seed Provider operator authority: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO provider_operator_delegations
+			(tenant_id, operator_id, customer_tenant_id, operation, granted_by, granted_at, source, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			store.ZeroUUID, "full-dr-operator", tenantA, "suspend", "full-dr-admin", now,
+			"provider_access_api", now.Add(time.Hour),
+		); err != nil {
+			return fmt.Errorf("seed Provider delegation authority: %w", err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed fixed-partition Provider authority: %v", err)
+	}
 	// Cursor/tick receipt columns are deliberately unavailable to trstctl_app.
 	// Seed this trusted DR fixture through the same narrow owner-role boundary as
 	// the production tick state machine, using a coherent terminal receiver.
@@ -788,6 +808,11 @@ type recoveredProviderState struct {
 	Name               string
 	Status             string
 	OperatorID         string
+	OperatorUser       string
+	OperatorSource     string
+	OperatorActive     bool
+	DelegatedOperation string
+	DelegationSource   string
 	Reason             string
 	FirstApprover      string
 	SecondApprover     string
@@ -799,13 +824,23 @@ func providerRecoveryState(t *testing.T, st *store.Store) recoveredProviderState
 	var got recoveredProviderState
 	err := st.SystemPool().QueryRow(context.Background(),
 		`SELECT tenant.slug, tenant.name, tenant.status,
-		        bg.operator_id, bg.reason, bg.consented_by,
+		        operator.id, operator.user_name, operator.source, operator.active,
+		        delegation.operation, delegation.source,
+		        bg.reason, bg.consented_by,
 		        COALESCE(bg.consented_by_2, ''), bg.use_count
 		   FROM provider_tenants AS tenant
 		   JOIN provider_breakglass_grants AS bg ON bg.tenant_id = tenant.tenant_id
+		   JOIN provider_operators AS operator
+		     ON operator.tenant_id = $3 AND operator.id = bg.operator_id
+		   JOIN provider_operator_delegations AS delegation
+		     ON delegation.tenant_id = $3
+		    AND delegation.operator_id = operator.id
+		    AND delegation.customer_tenant_id = tenant.tenant_id::text
 		  WHERE tenant.tenant_id = $1 AND bg.id = $2`,
-		tenantA, "full-dr-breakglass").Scan(
-		&got.Slug, &got.Name, &got.Status, &got.OperatorID, &got.Reason,
+		tenantA, "full-dr-breakglass", store.ZeroUUID).Scan(
+		&got.Slug, &got.Name, &got.Status,
+		&got.OperatorID, &got.OperatorUser, &got.OperatorSource, &got.OperatorActive,
+		&got.DelegatedOperation, &got.DelegationSource, &got.Reason,
 		&got.FirstApprover, &got.SecondApprover, &got.BreakGlassUseCount,
 	)
 	if err != nil {

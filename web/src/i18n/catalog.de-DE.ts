@@ -4604,7 +4604,7 @@ const deDECatalog = {
   // L3 provider console — Machine-authored translations, FLAG FOR HUMAN REVIEW.
   "source.provider.console.l3prov0001": "Anbieterkonsole",
   "source.provider.login.intro.l3prov0002":
-    "Melden Sie sich mit dem Bediener-Token Ihres Anbieter-IdP an. Diese Ebene verwaltet Kundenmandanten und ist daher von der Mandantenkonsole getrennt; sie hält ihre eigene kurzlebige Bediener-Anmeldeinformation nur in diesem Tab.",
+    "Melden Sie sich mit SAML an, wenn es angeboten wird, oder fügen Sie ein kurzlebiges OIDC-Operator-Token ein. Diese Ebene verwaltet Kundenmandanten; Identität und Sitzung sind daher von der Mandantenkonsole getrennt.",
   "source.provider.token.l3prov0003": "Bediener-Bearer-Token",
   "source.provider.signin.l3prov0004": "Anmelden",
   "source.provider.customers.intro.l3prov0005": "Ihre Kundenmandanten und ihr Lebenszyklusstatus.",
@@ -4651,6 +4651,29 @@ const deDECatalog = {
   "source.provider.drill.run.l3prov0038": "Isolationsübung ausführen",
   "source.provider.drill.pass.l3prov0039": "Die Isolierung hält — jede Prüfung wurde bestanden.",
   "source.provider.drill.fail.l3prov0040": "Isolationsübung FEHLGESCHLAGEN — sofort untersuchen.",
+  "source.provider.access.title.aud580001": "Operatorzugriff",
+  "source.provider.access.intro.aud580002":
+    "SCIM steuert Ein- und Austritte. Gewähren Sie nur den benötigten Kunden und Vorgang; abgelaufene und widerrufene Einträge bleiben als Nachweis sichtbar.",
+  "source.provider.access.operator.aud580003": "Operator",
+  "source.provider.access.customer.aud580004": "Kunde",
+  "source.provider.access.operation.aud580005": "Vorgang",
+  "source.provider.access.expiry.aud580006": "Läuft ab (optional)",
+  "source.provider.access.grant.aud580007": "Zugriff gewähren",
+  "source.provider.access.empty.aud580008": "SCIM hat noch keine Provider-Operatoren bereitgestellt.",
+  "source.provider.access.identity.aud580009": "Identität",
+  "source.provider.access.role.aud580010": "Provider-Rolle",
+  "source.provider.access.source.aud580011": "Identitätsquelle",
+  "source.provider.access.scope.aud580012": "Kundenberechtigung",
+  "source.provider.access.active.aud580013": "aktiv",
+  "source.provider.access.inactive.aud580014": "deprovisioniert",
+  "source.provider.access.none.aud580015": "Keine Kundenberechtigung",
+  "source.provider.access.expires.aud580016": "Läuft ab",
+  "source.provider.access.lastused.aud580017": "Zuletzt verwendet",
+  "source.provider.access.revoked.aud580018": "Widerrufen",
+  "source.provider.access.revoke.aud580019": "Widerrufen",
+  "source.provider.saml.signin.aud580020": "Mit SAML anmelden",
+  "source.provider.access.role.admin.aud580021": "Administrator",
+  "source.provider.access.role.operator.aud580022": "Operator",
   // E4 relay plugin census — Machine-authored translations, FLAG FOR HUMAN REVIEW.
   "connectors.relayPlugins.title": "Verifizierte Relay-Plugins",
   "connectors.relayPlugins.help":

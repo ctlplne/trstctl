@@ -6,6 +6,8 @@ import type { MessageKey } from "@/i18n/messages";
 import { formatDateTime } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useApiQuery } from "@/lib/query";
+import { ProviderAccessPanel } from "@/pages/provider/ProviderAccessPanel";
 import {
   providerApi,
   providerToken,
@@ -45,10 +47,20 @@ export function Provider() {
 
 function ProviderLogin({ onAuthed }: { onAuthed: () => void }) {
   const [token, setToken] = useState("");
+  const methods = useApiQuery(["provider", "auth-methods"], providerApi.authMethods);
+  const session = useApiQuery(["provider", "session"], providerApi.session);
+  useEffect(() => {
+    if (session.data) onAuthed();
+  }, [session.data, onAuthed]);
   return (
     <main className="mx-auto max-w-lg p-comfortable">
       <h1 className="text-headline font-semibold">{translateNow("source.provider.console.l3prov0001")}</h1>
       <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.provider.login.intro.l3prov0002")}</p>
+      {(methods.data ?? []).includes("saml") ? (
+        <Button type="button" className="mt-4 w-full" onClick={() => window.location.assign("/provider/v1/auth/saml/login")}>
+          {translateNow("source.provider.saml.signin.aud580020")}
+        </Button>
+      ) : null}
       <form
         className="mt-4 grid gap-3"
         onSubmit={(e) => {
@@ -332,8 +344,13 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
           type="button"
           variant="outline"
           onClick={() => {
-            clearProviderToken();
-            onSignOut();
+            void providerApi
+              .signOut()
+              .catch(() => undefined)
+              .finally(() => {
+                clearProviderToken();
+                onSignOut();
+              });
           }}
         >
           {translateNow("source.provider.signout.l3prov0006")}
@@ -341,6 +358,13 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
       </header>
 
       {error ? <p className="mt-3 text-caption text-status-danger">{error}</p> : null}
+
+      <ProviderAccessPanel
+        onAuthError={() => {
+          clearProviderToken();
+          onSignOut();
+        }}
+      />
 
       <section className="mt-5">
         <h2 className="text-title font-semibold">{translateNow("source.provider.provision.l3prov0007")}</h2>

@@ -4,9 +4,9 @@
 //
 // /provider/v1 is a SEPARATE plane from /api/v1: its caller is the provider's
 // own staff, authenticated by the provider IdP (L1) rather than a tenant
-// session. So it does not go through the tenant `req<T>` client — it carries an
-// operator BEARER token, and a request without one is refused by the plane
-// rather than falling back to a tenant cookie that would mean nothing here.
+// session. So it does not go through the tenant `req<T>` client. OIDC callers
+// may carry a memory-only bearer; SAML callers use the separate HttpOnly
+// Provider session cookie and a readable, non-credential CSRF cookie.
 //
 // The token is held IN MEMORY only — never web storage. The SPA's XSS posture
 // (SURFACE-I01) is that auth state must not sit in browser storage where a
@@ -102,6 +102,49 @@ export interface ProviderTenantSnapshot {
   active_certificates: number;
 }
 
+export type ProviderOperatorRole = "admin" | "operator";
+export type ProviderOperation = "read" | "provision" | "suspend" | "offboard" | "break_glass";
+
+export interface ProviderOperator {
+  id: string;
+  email: string;
+  role: ProviderOperatorRole;
+  mfa: boolean;
+  session?: string;
+}
+
+export interface ProviderOperatorIdentity {
+  id: string;
+  external_id: string;
+  user_name: string;
+  email?: string;
+  display_name?: string;
+  role: ProviderOperatorRole;
+  active: boolean;
+  source: string;
+  created_at: string;
+  updated_at: string;
+  deprovisioned_at?: string;
+}
+
+export interface ProviderDelegation {
+  operator_id: string;
+  customer_id: string;
+  operation: ProviderOperation;
+  source: string;
+  granted_by?: string;
+  granted_at: string;
+  expires_at?: string;
+  last_used_at?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+}
+
+export interface ProviderOperatorAccess {
+  identity: ProviderOperatorIdentity;
+  delegations: ProviderDelegation[];
+}
+
 /** ProviderAuthError is thrown when no operator token is present or the plane
  * refuses the credential — the console renders the login gate rather than an
  * error banner, because "not signed in" is not a failure. */
@@ -123,18 +166,18 @@ function newProviderIdempotencyKey(): string {
 
 async function providerReq<T>(path: string, init?: RequestInit): Promise<T> {
   const token = providerToken();
-  if (!token) {
-    throw new ProviderAuthError("no provider operator token");
-  }
   const method = String(init?.method ?? "GET").toUpperCase();
   const mutationHeaders: Record<string, string> = method === "GET" || method === "HEAD" ? {} : { "Idempotency-Key": newProviderIdempotencyKey() };
+  const csrf = providerCSRFCookie();
   const res = await fetch(path, {
     ...init,
+    credentials: "same-origin",
     headers: {
       Accept: "application/json",
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...mutationHeaders,
+      ...(csrf && method !== "GET" && method !== "HEAD" ? { "X-Provider-CSRF-Token": csrf } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -148,7 +191,22 @@ async function providerReq<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+function providerCSRFCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  for (const part of document.cookie.split(";")) {
+    const [name, ...value] = part.trim().split("=");
+    if (name === "trstctl_provider_csrf") return decodeURIComponent(value.join("="));
+  }
+  return null;
+}
+
 export const providerApi = {
+  authMethods: async (): Promise<string[]> => {
+    const out = await providerReq<{ methods: string[] | null }>("/provider/v1/auth/methods");
+    return out.methods ?? [];
+  },
+  session: (): Promise<ProviderOperator> => providerReq<ProviderOperator>("/provider/v1/auth/session"),
+  signOut: (): Promise<void> => providerReq<void>("/provider/v1/auth/logout", { method: "POST" }),
   listTenants: async (): Promise<ProviderTenant[]> => {
     const out = await providerReq<{ tenants: ProviderTenant[] | null }>("/provider/v1/tenants");
     return out.tenants ?? [];
@@ -157,6 +215,35 @@ export const providerApi = {
     const out = await providerReq<{ items: ProviderActivity[] | null }>("/provider/v1/activity?limit=100");
     return out.items ?? [];
   },
+  listOperatorAccess: async (): Promise<ProviderOperatorAccess[]> => {
+    const out = await providerReq<{ operators: ProviderOperatorAccess[] | null }>("/provider/v1/operators");
+    return out.operators ?? [];
+  },
+  listAccessCustomers: async (): Promise<ProviderTenant[]> => {
+    const out = await providerReq<{ tenants: ProviderTenant[] | null }>("/provider/v1/access/customers");
+    return out.tenants ?? [];
+  },
+  grantOperatorAccess: (
+    operatorId: string,
+    input: { customer_id: string; operations: ProviderOperation[]; expires_at?: string },
+  ): Promise<ProviderOperatorAccess> =>
+    providerReq<ProviderOperatorAccess>(`/provider/v1/operators/${encodeURIComponent(operatorId)}/delegations`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  revokeOperatorAccess: (
+    operatorId: string,
+    input: { customer_id: string; operations: ProviderOperation[]; reason: string },
+  ): Promise<ProviderOperatorAccess> =>
+    providerReq<ProviderOperatorAccess>(`/provider/v1/operators/${encodeURIComponent(operatorId)}/revocations`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  setOperatorRole: (operatorId: string, role: ProviderOperatorRole): Promise<ProviderOperatorAccess> =>
+    providerReq<ProviderOperatorAccess>(`/provider/v1/operators/${encodeURIComponent(operatorId)}/role`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    }),
   provisionTenant: (input: { slug: string; name: string }): Promise<ProviderTenant> =>
     providerReq<ProviderTenant>("/provider/v1/tenants", { method: "POST", body: JSON.stringify(input) }),
   suspendTenant: (id: string): Promise<void> =>

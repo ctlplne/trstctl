@@ -34,9 +34,10 @@ describe("provider API idempotency", () => {
     await providerApi.requestBreakGlass({ tenant_id: "tenant-acme", reason: "incident", ttl: "15m" });
     await providerApi.consentBreakGlass("grant-1", "tenant-acme");
     await providerApi.breakGlassResults("grant-1");
+    await providerApi.signOut();
 
     const calls = vi.mocked(fetch).mock.calls;
-    expect(calls).toHaveLength(9);
+    expect(calls).toHaveLength(10);
     const keys = calls.map(([, init]) => (init?.headers as Record<string, string>)["Idempotency-Key"]);
     expect(keys.every((key) => typeof key === "string" && key.length > 0)).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
@@ -51,5 +52,24 @@ describe("provider API idempotency", () => {
       const headers = init?.headers as Record<string, string>;
       expect(headers["Idempotency-Key"]).toBeUndefined();
     }
+  });
+
+  it("uses the separate SAML cookie session and double-submit CSRF without a JavaScript bearer", async () => {
+    clearProviderToken();
+    document.cookie = "trstctl_provider_csrf=csrf-proof; Path=/";
+    vi.mocked(fetch).mockResolvedValueOnce(response(200, { id: "op-1", email: "admin@example.test", role: "admin", mfa: true, session: "sid-1" }));
+    await providerApi.session();
+    vi.mocked(fetch).mockResolvedValueOnce(response(204));
+    await providerApi.suspendTenant("tenant-acme");
+
+    const [, readInit] = vi.mocked(fetch).mock.calls[0];
+    expect(readInit?.credentials).toBe("same-origin");
+    expect((readInit?.headers as Record<string, string>).Authorization).toBeUndefined();
+    const [, mutationInit] = vi.mocked(fetch).mock.calls[1];
+    const headers = mutationInit?.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+    expect(headers["X-Provider-CSRF-Token"]).toBe("csrf-proof");
+    expect(headers["Idempotency-Key"]).toBeTruthy();
+    document.cookie = "trstctl_provider_csrf=; Max-Age=0; Path=/";
   });
 });

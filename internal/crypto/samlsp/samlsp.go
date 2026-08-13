@@ -23,6 +23,11 @@ type Config struct {
 	MetadataURL    string
 	ACSURL         string
 	IDPMetadataXML string
+	// RequireRequestCorrelation refuses IdP-initiated assertions and requires
+	// both the Response and SubjectConfirmation InResponseTo values to match one
+	// of the caller-supplied request IDs. Provider workforce login enables this
+	// because the browser always starts at its SP login route.
+	RequireRequestCorrelation bool
 }
 
 // Redirect is an SP-initiated login redirect plus the generated request ID.
@@ -69,11 +74,14 @@ func NewServiceProvider(cfg Config) (*ServiceProvider, error) {
 		MetadataURL:           metadataURL,
 		AcsURL:                acsURL,
 		IDPMetadata:           idpMetadata,
-		AllowIDPInitiated:     true,
+		AllowIDPInitiated:     !cfg.RequireRequestCorrelation,
 		AuthnNameIDFormat:     saml.EmailAddressNameIDFormat,
 		ValidateRequestID:     validateRequestIDWhenPresent,
 		DefaultRedirectURI:    "/",
 		MetadataValidDuration: saml.DefaultValidDuration,
+	}
+	if cfg.RequireRequestCorrelation {
+		sp.ValidateRequestID = validateRequiredRequestID
 	}
 	return &ServiceProvider{sp: sp}, nil
 }
@@ -124,6 +132,18 @@ func parseAbsoluteURL(raw, name string) (url.URL, error) {
 func validateRequestIDWhenPresent(response saml.Response, possibleRequestIDs []string) error {
 	if len(possibleRequestIDs) == 0 {
 		return nil
+	}
+	for _, id := range possibleRequestIDs {
+		if id != "" && response.InResponseTo == id {
+			return nil
+		}
+	}
+	return fmt.Errorf("samlsp: InResponseTo %q does not match %v", response.InResponseTo, possibleRequestIDs)
+}
+
+func validateRequiredRequestID(response saml.Response, possibleRequestIDs []string) error {
+	if len(possibleRequestIDs) == 0 || response.InResponseTo == "" {
+		return errors.New("samlsp: request correlation is required")
 	}
 	for _, id := range possibleRequestIDs {
 		if id != "" && response.InResponseTo == id {

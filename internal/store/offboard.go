@@ -91,6 +91,14 @@ var TenantScopedTables = []string{
 	// AUD-52: exact delivery receipts reference their standing destination.
 	"audit_feed_deliveries",
 	"audit_feed_destinations",
+	// AUD-58 Provider workforce authority uses the fixed zero-UUID Provider
+	// partition, not a customer tenant. Keeping both tables in the exhaustive
+	// tenant_id catalog makes that exception visible: a customer offboard runs
+	// the normal tenant predicate and therefore deletes no global operator or
+	// retained delegation evidence; the Provider authority event separately
+	// revokes that customer's standing grants.
+	"provider_operator_delegations",
+	"provider_operators",
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
 	// I2: ownership disagreements reference an owner_id. Listed BEFORE owners so
 	// the order stays correct if that reference ever becomes a real foreign key —

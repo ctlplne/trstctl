@@ -24,24 +24,132 @@ import (
 
 // NewHandler returns the licensed Provider/MSP HTTP surface.
 func NewHandler(cfg Config) http.Handler {
-	return &handler{svc: NewService(cfg), idem: cfg.Idempotency}
+	return &handler{
+		svc: NewService(cfg), idem: cfg.Idempotency, saml: cfg.SAML,
+		scim: newSCIMHandler(cfg.SCIM, cfg.Access, cfg.Mutations, cfg.Clock),
+	}
 }
 
 type handler struct {
 	svc  *Service
 	idem *orchestrator.Idempotency
+	saml *SAMLAuthenticator
+	scim *providerSCIMHandler
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.idem != nil && h.isMutation(r) {
+	if h.svc == nil || h.svc.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
+		http.NotFound(w, r)
+		return
+	}
+	if h.serveIdentityRoute(w, r) {
+		return
+	}
+	if h.isMutation(r) {
 		// Authentication runs before idempotency validation so an anonymous
 		// caller receives 401, not details about a missing/reused mutation key.
-		if _, ok := h.operatorFromRequest(r); ok {
+		op, ok := h.operatorForMutation(r)
+		if !ok {
+			writeProviderError(w, ErrProviderUnauthenticated)
+			return
+		}
+		if op.Session != "" && !validProviderSessionCSRF(r) {
+			writeProviderError(w, ErrForbidden)
+			return
+		}
+		if h.idem != nil {
 			h.serveIdempotentMutation(w, r)
 			return
 		}
+		h.serve(w, r)
+		return
 	}
 	h.serve(w, r)
+}
+
+// serveIdentityRoute handles routes whose authentication model is not the
+// normal Provider operator credential: SAML bootstrap is public, and SCIM uses
+// its own file-backed bearer. Returning true means the request was consumed.
+func (h *handler) serveIdentityRoute(w http.ResponseWriter, r *http.Request) bool {
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/auth/methods":
+		writeJSON(w, http.StatusOK, map[string]any{"methods": providerAuthMethods(h.svc.authenticator)})
+		return true
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/auth/session":
+		operator, ok := h.operatorFromRequest(r)
+		if !ok {
+			writeProviderError(w, ErrProviderUnauthenticated)
+		} else {
+			writeJSON(w, http.StatusOK, operator)
+		}
+		return true
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/auth/saml/login":
+		if h.saml == nil {
+			http.NotFound(w, r)
+		} else {
+			h.saml.ServeLogin(w, r)
+		}
+		return true
+	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/auth/saml/acs":
+		if h.saml == nil {
+			http.NotFound(w, r)
+		} else {
+			h.saml.ServeACS(w, r)
+		}
+		return true
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/auth/saml/metadata":
+		if h.saml == nil {
+			http.NotFound(w, r)
+		} else {
+			h.saml.ServeMetadata(w, r)
+		}
+		return true
+	case strings.HasPrefix(r.URL.Path, "/provider/scim/v2"):
+		if h.scim == nil {
+			http.NotFound(w, r)
+		} else if h.svc.license.Mode(license.FeatureProviderPlane) == license.ModeReadOnly && r.Method != http.MethodGet {
+			writeProviderSCIMError(w, http.StatusForbidden, "mutability", "Provider plane is read-only under the current entitlement")
+		} else {
+			h.scim.ServeHTTP(w, r)
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func providerAuthMethods(authenticator OperatorAuthenticator) []string {
+	methods := []string{}
+	var add func(OperatorAuthenticator)
+	seen := map[string]bool{}
+	add = func(item OperatorAuthenticator) {
+		switch typed := item.(type) {
+		case *OIDCAuthenticator:
+			if !seen["oidc"] {
+				seen["oidc"], methods = true, append(methods, "oidc")
+			}
+		case *SAMLAuthenticator:
+			if !seen["saml"] {
+				seen["saml"], methods = true, append(methods, "saml")
+			}
+		case AnyAuthenticator:
+			for _, child := range typed {
+				add(child)
+			}
+		}
+	}
+	add(authenticator)
+	return methods
+}
+
+func validProviderSessionCSRF(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	cookie, err := r.Cookie(providerCSRFCookie)
+	header := strings.TrimSpace(r.Header.Get(providerCSRFHeader))
+	return err == nil && cookie.Value != "" && header != "" &&
+		crypto.ConstantTimeEqual([]byte(cookie.Value), []byte(header))
 }
 
 func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
@@ -56,6 +164,18 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.listTenants(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/activity":
 		h.listActivity(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/operators":
+		h.listOperatorAccess(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/access/customers":
+		h.listAccessCustomers(w, r)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/operators/") && strings.HasSuffix(r.URL.Path, "/delegations"):
+		h.grantOperatorAccess(w, r)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/operators/") && strings.HasSuffix(r.URL.Path, "/revocations"):
+		h.revokeOperatorAccess(w, r)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/operators/") && strings.HasSuffix(r.URL.Path, "/role"):
+		h.setOperatorRole(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/auth/logout":
+		h.logout(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/suspend"):
 		h.updateTenant(w, r, TenantSuspended, "/suspend")
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/offboard"):
@@ -157,7 +277,7 @@ func (h *handler) serveIdempotentMutation(w http.ResponseWriter, r *http.Request
 		writeProviderError(w, errors.New("provider: mutation body exceeds 2 MiB"))
 		return
 	}
-	op, ok := h.operatorFromRequest(r)
+	op, ok := h.operatorForMutation(r)
 	if !ok {
 		writeProviderError(w, ErrProviderUnauthenticated)
 		return
@@ -226,6 +346,14 @@ func (h *handler) mutationTenant(r *http.Request, body []byte) string {
 			return customer
 		}
 	}
+	if strings.HasPrefix(path, "operators/") {
+		var request struct {
+			CustomerID string `json:"customer_id"`
+		}
+		if json.Unmarshal(body, &request) == nil && strings.TrimSpace(request.CustomerID) != "" {
+			return strings.TrimSpace(request.CustomerID)
+		}
+	}
 	if path == "tenants" {
 		var request ProvisionRequest
 		if json.Unmarshal(body, &request) == nil && strings.TrimSpace(request.Slug) != "" {
@@ -247,6 +375,150 @@ func (h *handler) mutationTenant(r *http.Request, body []byte) string {
 		}
 	}
 	return corestore.ZeroUUID
+}
+
+func (h *handler) listOperatorAccess(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	items, err := h.svc.ListOperatorAccess(r.Context(), op)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"operators": items})
+}
+
+func (h *handler) listAccessCustomers(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	tenants, err := h.svc.ListAccessCustomers(r.Context(), op)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tenants": tenants})
+}
+
+type providerDelegationRequest struct {
+	CustomerID string      `json:"customer_id"`
+	Operations []Operation `json:"operations"`
+	ExpiresAt  string      `json:"expires_at,omitempty"`
+	Reason     string      `json:"reason,omitempty"`
+}
+
+func (h *handler) grantOperatorAccess(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	r, ok = h.withMutationKey(w, r)
+	if !ok {
+		return
+	}
+	operatorID := providerOperatorPathID(r.URL.Path, "/delegations")
+	var body providerDelegationRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	var expiresAt time.Time
+	if strings.TrimSpace(body.ExpiresAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(body.ExpiresAt))
+		if err != nil {
+			writeProviderError(w, errors.New("provider: expires_at must be RFC3339"))
+			return
+		}
+		expiresAt = parsed
+	}
+	access, err := h.svc.GrantDelegations(r.Context(), op, operatorID, body.CustomerID, body.Operations, expiresAt)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, access)
+}
+
+func (h *handler) revokeOperatorAccess(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	r, ok = h.withMutationKey(w, r)
+	if !ok {
+		return
+	}
+	operatorID := providerOperatorPathID(r.URL.Path, "/revocations")
+	var body providerDelegationRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	access, err := h.svc.RevokeDelegations(r.Context(), op, operatorID, body.CustomerID, body.Operations, body.Reason)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, access)
+}
+
+func providerOperatorPathID(path, suffix string) string {
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(path, "/provider/v1/operators/"), suffix))
+}
+
+func (h *handler) setOperatorRole(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	r, ok = h.withMutationKey(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Role OperatorRole `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	access, err := h.svc.SetOperatorRole(r.Context(), op, providerOperatorPathID(r.URL.Path, "/role"), body.Role)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, access)
+}
+
+func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	r, ok = h.withMutationKey(w, r)
+	if !ok {
+		return
+	}
+	if op.Session != "" {
+		if h.saml == nil {
+			writeProviderError(w, errors.New("provider: session authenticator is not configured"))
+			return
+		}
+		if err := h.saml.RevokeSession(w, op.Session); err != nil {
+			writeProviderError(w, err)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *handler) createTenant(w http.ResponseWriter, r *http.Request) {
@@ -556,6 +828,16 @@ func (h *handler) operatorFromRequest(r *http.Request) (Operator, bool) {
 		return Operator{}, false
 	}
 	return op, true
+}
+
+func (h *handler) operatorForMutation(r *http.Request) (Operator, bool) {
+	if op, ok := h.operatorFromRequest(r); ok {
+		return op, true
+	}
+	if h != nil && h.saml != nil && r != nil && r.Method == http.MethodPost && r.URL.Path == "/provider/v1/auth/logout" {
+		return h.saml.AuthenticateLogout(r)
+	}
+	return Operator{}, false
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

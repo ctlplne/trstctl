@@ -6436,7 +6436,7 @@ export const messages = {
   },
   "source.provider.login.intro.l3prov0002": {
     defaultMessage:
-      "Sign in with your provider IdP operator token. This plane manages customer tenants, so it is separate from the tenant console and holds its own short-lived operator credential in this tab only.",
+      "Sign in with SAML when offered, or paste a short-lived OIDC operator token. This plane manages customer tenants, so its identity and session are separate from the tenant console.",
     description: "L3: provider login intro.",
   },
   "source.provider.token.l3prov0003": {
@@ -6592,6 +6592,38 @@ export const messages = {
     defaultMessage: "Isolation drill FAILED — investigate immediately.",
     description: "L3: isolation-drill failed result.",
   },
+  "source.provider.access.title.aud580001": {
+    defaultMessage: "Operator access",
+    description: "AUD-58: Provider workforce access-management heading.",
+  },
+  "source.provider.access.intro.aud580002": {
+    defaultMessage:
+      "SCIM owns joiner/leaver state. Grant only the customer and operation this operator needs; expired and revoked rows remain visible as evidence.",
+    description: "AUD-58: Exact authority and retained lifecycle explanation.",
+  },
+  "source.provider.access.operator.aud580003": { defaultMessage: "Operator", description: "AUD-58: Operator selector." },
+  "source.provider.access.customer.aud580004": { defaultMessage: "Customer", description: "AUD-58: Customer scope selector." },
+  "source.provider.access.operation.aud580005": { defaultMessage: "Operation", description: "AUD-58: Delegated operation selector." },
+  "source.provider.access.expiry.aud580006": { defaultMessage: "Expires (optional)", description: "AUD-58: Delegation expiry field." },
+  "source.provider.access.grant.aud580007": { defaultMessage: "Grant access", description: "AUD-58: Exact authority grant action." },
+  "source.provider.access.empty.aud580008": {
+    defaultMessage: "No Provider operators have been provisioned by SCIM yet.",
+    description: "AUD-58: Empty workforce directory.",
+  },
+  "source.provider.access.identity.aud580009": { defaultMessage: "Identity", description: "AUD-58: Operator identity column." },
+  "source.provider.access.role.aud580010": { defaultMessage: "Provider role", description: "AUD-58: Provider role column/control." },
+  "source.provider.access.source.aud580011": { defaultMessage: "Identity source", description: "AUD-58: IdP/SCIM source column." },
+  "source.provider.access.scope.aud580012": { defaultMessage: "Customer authority", description: "AUD-58: Exact grants column." },
+  "source.provider.access.active.aud580013": { defaultMessage: "active", description: "AUD-58: Active operator lifecycle." },
+  "source.provider.access.inactive.aud580014": { defaultMessage: "deprovisioned", description: "AUD-58: SCIM leaver lifecycle." },
+  "source.provider.access.none.aud580015": { defaultMessage: "No customer authority", description: "AUD-58: Empty delegation set." },
+  "source.provider.access.expires.aud580016": { defaultMessage: "Expires", description: "AUD-58: Delegation expiry evidence." },
+  "source.provider.access.lastused.aud580017": { defaultMessage: "Last used", description: "AUD-58: Delegation last-use evidence." },
+  "source.provider.access.revoked.aud580018": { defaultMessage: "Revoked", description: "AUD-58: Revocation evidence." },
+  "source.provider.access.revoke.aud580019": { defaultMessage: "Revoke", description: "AUD-58: Exact grant revocation action." },
+  "source.provider.saml.signin.aud580020": { defaultMessage: "Sign in with SAML", description: "AUD-58: Provider SAML login action." },
+  "source.provider.access.role.admin.aud580021": { defaultMessage: "admin", description: "AUD-58: Provider administrator role option." },
+  "source.provider.access.role.operator.aud580022": { defaultMessage: "operator", description: "AUD-58: Delegated Provider operator role option." },
   "source.adcs.database.error.f4adcs0013": {
     defaultMessage: "Could not load the AD CS certificate-database summary.",
     description: "F4: error state heading.",

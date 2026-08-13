@@ -12,8 +12,11 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	corestore "trstctl.com/trstctl/internal/store"
 )
 
 // contentPrefixVersion is the historical schema point the SCHEMA-003 content test
@@ -26,6 +29,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	181: true,
 	179: true,
 	178: true,
 	176: true,
@@ -64,6 +68,78 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0181CreatesProviderOperatorLifecycleAuthorityAUD58(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 181)
+	if !target.noTx || target.name != "0181_provider_operator_lifecycle.sql" {
+		t.Fatalf("migration 0181 classification = name:%q no_tx:%t, want concurrent-index no-transaction upgrade", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	if _, err := pool.Exec(ctx, `INSERT INTO provider_operator_delegations
+		(operator_id, customer_tenant_id, operation, granted_by, granted_at)
+		VALUES ('legacy-op', 'legacy-customer', 'suspend', 'legacy-admin', '2026-08-01T12:00:00Z')`); err != nil {
+		t.Fatalf("seed populated pre-0181 delegation: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	var tenantID, operatorID, customerID, operation, grantedBy, source, revokedBy string
+	var expiresAt, lastUsedAt, revokedAt *time.Time
+	var grantedAt time.Time
+	if err := pool.QueryRow(ctx, `SELECT tenant_id::text, operator_id, customer_tenant_id, operation,
+		granted_by, granted_at, source, expires_at, last_used_at, revoked_at, revoked_by
+		FROM provider_operator_delegations WHERE tenant_id = $1 AND operator_id = 'legacy-op'`, corestore.ZeroUUID).Scan(
+		&tenantID, &operatorID, &customerID, &operation, &grantedBy, &grantedAt, &source,
+		&expiresAt, &lastUsedAt, &revokedAt, &revokedBy); err != nil {
+		t.Fatalf("read migrated legacy delegation: %v", err)
+	}
+	if tenantID != corestore.ZeroUUID || operatorID != "legacy-op" || customerID != "legacy-customer" ||
+		operation != "suspend" || grantedBy != "legacy-admin" || !grantedAt.Equal(time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)) ||
+		source != "legacy_local_command" || expiresAt != nil || lastUsedAt != nil || revokedAt != nil || revokedBy != "" {
+		t.Fatalf("migrated legacy delegation changed content: tenant=%q operator=%q customer=%q operation=%q by=%q at=%s source=%q expiry=%v last=%v revoked=%v/%q",
+			tenantID, operatorID, customerID, operation, grantedBy, grantedAt, source, expiresAt, lastUsedAt, revokedAt, revokedBy)
+	}
+
+	for _, table := range []string{"provider_operators", "provider_operator_delegations"} {
+		var forced, enabled bool
+		if err := pool.QueryRow(ctx,
+			`SELECT relforcerowsecurity, relrowsecurity FROM pg_class WHERE oid = $1::regclass`, table,
+		).Scan(&forced, &enabled); err != nil {
+			t.Fatal(err)
+		}
+		if !forced || !enabled {
+			t.Fatalf("%s RLS = forced:%t enabled:%t, want both true", table, forced, enabled)
+		}
+	}
+	for _, column := range []string{"tenant_id", "source", "expires_at", "last_used_at", "revoked_at", "revoked_by"} {
+		var exists bool
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = 'provider_operator_delegations' AND column_name = $1
+		)`, column).Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		if !exists {
+			t.Errorf("provider_operator_delegations.%s is absent", column)
+		}
+	}
+	var identityIndexUnique bool
+	if err := pool.QueryRow(ctx, `SELECT indisunique
+		FROM pg_index
+		WHERE indexrelid = 'provider_operator_delegations_tenant_identity_idx'::regclass`,
+	).Scan(&identityIndexUnique); err != nil {
+		t.Fatalf("read Provider delegation identity index: %v", err)
+	}
+	if !identityIndexUnique {
+		t.Fatal("Provider delegation tenant identity index is not unique")
+	}
 }
 
 func TestMigration0180CreatesForcedRLSAuditFeedAuthorityAUD52(t *testing.T) {

@@ -16,6 +16,7 @@ import (
 
 type authorityCoverage struct {
 	tenants     map[string]bool
+	operators   map[string]bool
 	delegations map[string]bool
 	quotas      map[string]bool
 	brands      map[string]bool
@@ -24,7 +25,7 @@ type authorityCoverage struct {
 
 func newAuthorityCoverage() authorityCoverage {
 	return authorityCoverage{
-		tenants: map[string]bool{}, delegations: map[string]bool{}, quotas: map[string]bool{},
+		tenants: map[string]bool{}, operators: map[string]bool{}, delegations: map[string]bool{}, quotas: map[string]bool{},
 		brands: map[string]bool{}, grants: map[string]bool{},
 	}
 }
@@ -51,6 +52,9 @@ func (r *AuthorityRuntime) Bootstrap(ctx context.Context) error {
 		if payload.Tenant != nil {
 			coverage.tenants[payload.Tenant.ID] = true
 		}
+		if payload.Operator != nil {
+			coverage.operators[payload.Operator.ID] = true
+		}
 		if payload.Delegation != nil {
 			coverage.delegations[delegationCoverageKey(*payload.Delegation)] = true
 		}
@@ -73,6 +77,9 @@ func (r *AuthorityRuntime) Bootstrap(ctx context.Context) error {
 	if err := r.bootstrapTenants(ctx, coverage); err != nil {
 		return err
 	}
+	if err := r.bootstrapOperators(ctx, coverage); err != nil {
+		return err
+	}
 	if err := r.bootstrapDelegations(ctx, coverage); err != nil {
 		return err
 	}
@@ -83,6 +90,36 @@ func (r *AuthorityRuntime) Bootstrap(ctx context.Context) error {
 		return err
 	}
 	return r.bootstrapBreakGlass(ctx, coverage)
+}
+
+func (r *AuthorityRuntime) bootstrapOperators(ctx context.Context, coverage authorityCoverage) error {
+	//trstctl:system-query — one-time fixed-tenant Provider-directory capture before projection reset.
+	rows, err := r.Projection.store.SystemPool().Query(ctx, `SELECT id, external_id, user_name, email,
+		display_name, role, active, source, created_at, updated_at, deprovisioned_at
+		FROM provider_operators WHERE tenant_id = $1 ORDER BY id`, providerAuthorityTenant)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		operator, scanErr := scanOperatorIdentity(rows)
+		if scanErr != nil {
+			return scanErr
+		}
+		if coverage.operators[operator.ID] {
+			continue
+		}
+		typ := EventOperatorUpserted
+		if !operator.Active {
+			typ = EventOperatorOffboarded
+		}
+		if _, err := r.Mutations.Append(ctx, "bootstrap:operator:"+operator.ID, typ, providerAuthorityTenant,
+			AuthorityEvent{Operator: &operator, EffectiveAt: operator.UpdatedAt,
+				Audit: AuditEvent{Type: typ, Subject: "system:provider-authority-bootstrap", At: operator.UpdatedAt}}); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 func (r *AuthorityRuntime) bootstrapTenants(ctx context.Context, coverage authorityCoverage) error {
@@ -122,17 +159,24 @@ func (r *AuthorityRuntime) bootstrapTenants(ctx context.Context, coverage author
 
 func (r *AuthorityRuntime) bootstrapDelegations(ctx context.Context, coverage authorityCoverage) error {
 	//trstctl:system-query — one-time provider-global upgrade capture before projection reset.
-	rows, err := r.Projection.store.SystemPool().Query(ctx, `SELECT operator_id, customer_tenant_id, operation, granted_by, granted_at
-		FROM provider_operator_delegations ORDER BY operator_id, customer_tenant_id, operation`)
+	rows, err := r.Projection.store.SystemPool().Query(ctx, `SELECT operator_id, customer_tenant_id, operation, granted_by,
+		source, expires_at, granted_at
+		FROM provider_operator_delegations WHERE tenant_id = $1
+		ORDER BY operator_id, customer_tenant_id, operation`, providerAuthorityTenant)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var mutation DelegationMutation
+		var expiresAt *time.Time
 		var at time.Time
-		if err := rows.Scan(&mutation.OperatorID, &mutation.CustomerID, &mutation.Operation, &mutation.GrantedBy, &at); err != nil {
+		if err := rows.Scan(&mutation.OperatorID, &mutation.CustomerID, &mutation.Operation,
+			&mutation.GrantedBy, &mutation.Source, &expiresAt, &at); err != nil {
 			return err
+		}
+		if expiresAt != nil {
+			mutation.ExpiresAt = expiresAt.UTC()
 		}
 		if coverage.delegations[delegationCoverageKey(mutation)] {
 			continue

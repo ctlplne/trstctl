@@ -1023,6 +1023,10 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// meters': an obviously absent cap gets re-set, a silently absent one
 		// gets discovered when the customer sails past it.
 		"provider_tenant_quotas",
+		// AUD-58: restore operator identities before their per-customer grants.
+		// There is no FK, but this order prevents a partially inspected restore
+		// from showing grants whose operator lifecycle has not arrived yet.
+		"provider_operators",
 		// L1: provider operator delegations. No foreign keys either, and it
 		// restores after the meters for the same reason they restore last: this
 		// is authority data, and a half-restored grant table is worse than an

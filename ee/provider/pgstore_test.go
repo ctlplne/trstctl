@@ -5,6 +5,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -28,6 +29,13 @@ import (
 var providerTestDSN string
 
 func TestMain(m *testing.M) {
+	// Native fuzz workers run only the selected in-memory target. Starting one
+	// embedded PostgreSQL per worker consumes the whole fuzz window before a
+	// single input executes; ordinary package tests still get the real database.
+	flag.Parse()
+	if fuzz := flag.Lookup("test.fuzz"); fuzz != nil && fuzz.Value.String() != "" {
+		os.Exit(m.Run())
+	}
 	dir, err := os.MkdirTemp("", "trstctl-provider-pg")
 	if err != nil {
 		panic(err)

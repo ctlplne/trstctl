@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"strings"
@@ -48,6 +49,9 @@ import (
 	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	cryptosamlsp "trstctl.com/trstctl/internal/crypto/samlsp"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
@@ -394,32 +398,17 @@ func attachEEProviderAPI(
 	if lic == nil || !lic.Has(license.FeatureProviderPlane) {
 		return nil
 	}
-	// L1 operator authentication is closed until an offline-pinned JWKS is
-	// configured. The token minter never gets to choose a verification URL.
-	var operatorAuth eeprovider.OperatorAuthenticator
-	if cfg.Provider.OIDC.Configured() {
-		jwksJSON := cfg.Provider.OIDC.JWKSJSON
-		if path := strings.TrimSpace(cfg.Provider.OIDC.JWKSFile); path != "" {
-			raw, readErr := os.ReadFile(path) // #nosec G304 -- operator-supplied path to their own IdP's JWKS (CWE-22)
-			if readErr != nil {
-				return fmt.Errorf("provider.oidc.jwks_file: %w", readErr)
-			}
-			jwksJSON = string(raw)
-		}
-		jwks, parseErr := crypto.ParseJWKS([]byte(jwksJSON))
-		if parseErr != nil {
-			return fmt.Errorf("provider.oidc jwks: %w", parseErr)
-		}
-		operatorAuth = eeprovider.NewOIDCAuthenticator(eeprovider.OIDCAuthenticatorConfig{
-			Issuer:         cfg.Provider.OIDC.Issuer,
-			Audience:       cfg.Provider.OIDC.Audience,
-			JWKS:           jwks,
-			RoleClaim:      cfg.Provider.OIDC.RoleClaim,
-			AdminValues:    cfg.Provider.OIDC.AdminValues,
-			OperatorValues: cfg.Provider.OIDC.OperatorValues,
-			MFAClaim:       cfg.Provider.OIDC.MFAClaim,
-			MFAValues:      cfg.Provider.OIDC.MFAValues,
-		})
+	// One event-projected directory is the request-time leaver gate for BOTH
+	// cryptographic identity methods. Without SCIM, legacy OIDC remains usable;
+	// when SCIM is enabled an absent/inactive row refuses even a valid token.
+	access := eeprovider.NewPGAccessStore(deps.Store)
+	operatorAuthenticators := eeprovider.AnyAuthenticator{}
+	oidc, err := providerOIDCAuthenticator(cfg, access)
+	if err != nil {
+		return err
+	}
+	if oidc != nil {
+		operatorAuthenticators = append(operatorAuthenticators, oidc)
 	}
 	// Delegations and durable stores fail closed when PostgreSQL is unavailable.
 	delegations := eeprovider.NewPGDelegationSource(deps.Store)
@@ -438,6 +427,21 @@ func attachEEProviderAPI(
 		providerIdempotency = orchestrator.NewIdempotency(deps.Store,
 			orchestrator.WithResultProtector(deps.IdempotencyResultProtector))
 	}
+	samlAuth, err := providerSAMLAuthenticator(cfg, access)
+	if err != nil {
+		return err
+	}
+	if samlAuth != nil {
+		operatorAuthenticators = append(operatorAuthenticators, samlAuth)
+	}
+	var operatorAuth eeprovider.OperatorAuthenticator
+	if len(operatorAuthenticators) > 0 {
+		operatorAuth = operatorAuthenticators
+	}
+	providerSCIM, err := providerSCIMConfig(cfg)
+	if err != nil {
+		return err
+	}
 	if deps.RestoreDrill != nil {
 		deps.RestoreDrill = server.RestoreDrillRunner(cfg, attachEEProjectionOptions)
 	}
@@ -450,6 +454,9 @@ func attachEEProviderAPI(
 		Idempotency:   providerIdempotency,
 		Authenticator: operatorAuth,
 		Delegations:   delegations,
+		Access:        access,
+		SAML:          samlAuth,
+		SCIM:          providerSCIM,
 		Telemetry:     eeprovider.NewPGStore(deps.Store),
 		Quotas:        eebilling.NewPGStore(deps.Store),
 		Brands:        providerBrandStore(brandInstall),
@@ -460,11 +467,12 @@ func attachEEProviderAPI(
 	}
 	if operatorAuth == nil {
 		log.Warn("Provider plane attached but NO operator authenticator is configured; "+
-			"/provider/ will refuse every request until provider.oidc is wired",
+			"/provider/ will refuse every operator request until provider.oidc or provider.saml is wired",
 			slog.String("feature", string(license.FeatureProviderPlane)))
 	} else {
-		log.Info("Provider plane attached with OIDC operator federation",
-			slog.String("issuer", cfg.Provider.OIDC.Issuer),
+		log.Info("Provider plane attached with verified operator federation",
+			slog.Bool("oidc", cfg.Provider.OIDC.Configured()), slog.Bool("saml", cfg.Provider.SAML.Enabled),
+			slog.Bool("scim_lifecycle", cfg.Provider.SCIM.Enabled),
 			slog.String("feature", string(license.FeatureProviderPlane)))
 	}
 	if delegations == nil {
@@ -473,6 +481,116 @@ func attachEEProviderAPI(
 			slog.String("feature", string(license.FeatureProviderPlane)))
 	}
 	return nil
+}
+
+func providerOIDCAuthenticator(
+	cfg *config.Config,
+	directory eeprovider.OperatorDirectory,
+) (*eeprovider.OIDCAuthenticator, error) {
+	if !cfg.Provider.OIDC.Configured() {
+		return nil, nil
+	}
+	jwksJSON := cfg.Provider.OIDC.JWKSJSON
+	if path := strings.TrimSpace(cfg.Provider.OIDC.JWKSFile); path != "" {
+		raw, err := os.ReadFile(path) // #nosec G304 -- operator-supplied path to their own IdP's JWKS (CWE-22)
+		if err != nil {
+			return nil, fmt.Errorf("provider.oidc.jwks_file: %w", err)
+		}
+		jwksJSON = string(raw)
+	}
+	jwks, err := crypto.ParseJWKS([]byte(jwksJSON))
+	if err != nil {
+		return nil, fmt.Errorf("provider.oidc jwks: %w", err)
+	}
+	return eeprovider.NewOIDCAuthenticator(eeprovider.OIDCAuthenticatorConfig{
+		Issuer: cfg.Provider.OIDC.Issuer, Audience: cfg.Provider.OIDC.Audience, JWKS: jwks,
+		RoleClaim: cfg.Provider.OIDC.RoleClaim, AdminValues: cfg.Provider.OIDC.AdminValues,
+		OperatorValues: cfg.Provider.OIDC.OperatorValues, MFAClaim: cfg.Provider.OIDC.MFAClaim,
+		MFAValues: cfg.Provider.OIDC.MFAValues, Directory: directory,
+		RequireDirectory: cfg.Provider.SCIM.Enabled,
+	}), nil
+}
+
+func providerSAMLAuthenticator(
+	cfg *config.Config,
+	directory eeprovider.OperatorDirectory,
+) (*eeprovider.SAMLAuthenticator, error) {
+	if !cfg.Provider.SAML.Enabled {
+		return nil, nil
+	}
+	metadata := cfg.Provider.SAML.IDPMetadataXML
+	if path := strings.TrimSpace(cfg.Provider.SAML.IDPMetadataFile); path != "" {
+		raw, err := os.ReadFile(path) // #nosec G304 -- operator-pinned local IdP metadata, validated as configuration.
+		if err != nil {
+			return nil, fmt.Errorf("provider.saml.idp_metadata_file: %w", err)
+		}
+		metadata = string(raw)
+	}
+	sp, err := cryptosamlsp.NewServiceProvider(cryptosamlsp.Config{
+		EntityID: cfg.Provider.SAML.EntityID, MetadataURL: cfg.Provider.SAML.MetadataURL,
+		ACSURL: cfg.Provider.SAML.ACSURL, IDPMetadataXML: metadata, RequireRequestCorrelation: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("provider.saml: %w", err)
+	}
+	sessionSecret, err := secretfile.LoadOrCreate(cfg.Provider.SAML.SessionSecretFile, func() ([]byte, error) {
+		return crypto.RandomBytes(32)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("provider.saml.session_secret_file: %w", err)
+	}
+	if len(sessionSecret) < 32 {
+		secret.Wipe(sessionSecret)
+		return nil, errors.New("provider.saml.session_secret_file must contain at least 32 bytes")
+	}
+	ttl, err := cfg.Provider.SAML.SessionTTLDuration()
+	if err != nil {
+		secret.Wipe(sessionSecret)
+		return nil, fmt.Errorf("provider.saml.session_ttl: %w", err)
+	}
+	auth := eeprovider.NewSAMLAuthenticator(eeprovider.SAMLAuthenticatorConfig{
+		Provider: sp, SubjectAttribute: cfg.Provider.SAML.SubjectAttribute,
+		EmailAttribute: cfg.Provider.SAML.EmailAttribute, RoleAttribute: cfg.Provider.SAML.RoleAttribute,
+		AdminValues: cfg.Provider.SAML.AdminValues, OperatorValues: cfg.Provider.SAML.OperatorValues,
+		MFAAttribute: cfg.Provider.SAML.MFAAttribute, MFAValues: cfg.Provider.SAML.MFAValues,
+		Directory: directory, RequireDirectory: cfg.Provider.SCIM.Enabled,
+		SessionSecret: sessionSecret, SessionTTL: ttl, LoginRedirect: cfg.Provider.SAML.LoginRedirect,
+		Secure: cfg.Server.TLS.Mode != config.TLSDisabled || strings.HasPrefix(strings.ToLower(cfg.Provider.SAML.ACSURL), "https://"),
+	})
+	if auth == nil {
+		secret.Wipe(sessionSecret)
+		return nil, errors.New("provider.saml configuration did not produce an authenticator")
+	}
+	// The authenticator owns sessionSecret for its lifetime; it is []byte and
+	// never converted to or logged as an immutable string (AN-8).
+	return auth, nil
+}
+
+func providerSCIMConfig(cfg *config.Config) (*eeprovider.SCIMConfig, error) {
+	if !cfg.Provider.SCIM.Enabled {
+		return nil, nil
+	}
+	result := &eeprovider.SCIMConfig{}
+	seen := map[string]bool{}
+	for index, token := range cfg.Provider.SCIM.Tokens {
+		raw, err := secretfile.Load(token.TokenFile)
+		if err != nil {
+			return nil, fmt.Errorf("provider.scim.tokens[%d].token_file: %w", index, err)
+		}
+		trimmed := bytes.TrimSpace(raw)
+		if len(trimmed) == 0 {
+			secret.Wipe(raw)
+			return nil, fmt.Errorf("provider.scim.tokens[%d].token_file is empty", index)
+		}
+		hash := crypto.SHA256Hex(trimmed)
+		secret.Wipe(raw)
+		if seen[hash] {
+			return nil, fmt.Errorf("provider.scim.tokens[%d] duplicates another token", index)
+		}
+		seen[hash] = true
+		result.Tokens = append(result.Tokens, eeprovider.SCIMToken{Name: token.Name, TokenHash: hash})
+	}
+	return result, nil
 }
 
 func attachEEProviderMetering(ctx context.Context, log *slog.Logger, lic *license.Manager, deps *server.Deps) {
