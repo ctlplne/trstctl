@@ -71,6 +71,13 @@ never enters the isolated signing service: it's sealed at rest under
 `protocols.ra_key_file` and shared across replicas, so a device that cached `GetCACert`
 material can still enroll after a restart or rolling deploy.
 
+When that RA is separate, `GetCACert` is an `application/x-x509-ca-ra-cert` bundle,
+not one misleadingly named certificate. The required stock `sscep` gate accepts its
+numbered output files in either order, identifies the exact public issuing CA by
+certificate fingerprint and constraints, uses the remaining signing certificate as
+the protocol RA for `PKIOperation`, and archives both public certificates beside the
+request and response transcript.
+
 SCEP also has per-profile SCEP RA material (distinct RA certificates and keys per
 profile, same issuance path), a per-device rate limiter capping repeated attempts, and
 a challenge hook that can require an MDM-issued challenge before any CSR is signed.

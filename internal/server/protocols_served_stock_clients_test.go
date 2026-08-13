@@ -392,15 +392,15 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sscep getca failed against served SCEP endpoint: %v\n%s", err, getCAOut)
 	}
-	if stat, err := os.Stat(caFile); err != nil {
-		t.Fatalf("sscep getca did not write CA file: %v\n%s", err, getCAOut)
-	} else if stat.Size() == 0 {
-		t.Fatalf("sscep getca wrote an empty CA file\n%s", getCAOut)
+	servedIssuerDER := caCertDER(t, h.caPEM)
+	caFiles, err := servedDiscoverSSCEPGetCACertFiles(caFile, servedIssuerDER)
+	if err != nil {
+		t.Fatalf("classify sscep GetCACert output: %v\n%s", err, getCAOut)
 	}
 
 	enroll := exec.Command(sscep, "enroll", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		"-u", scepURL,
-		"-c", caFile,
+		"-c", caFiles.RAPath,
 		"-k", clientKeyFile,
 		"-r", csrFile,
 		"-l", issuedFile,
@@ -419,7 +419,7 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 		t.Fatalf("sscep enroll failed against served SCEP endpoint: %v\n%s", err, enrollOut)
 	}
 	issuedDER := servedReadCertificateFile(t, issuedFile)
-	if err := crypto.VerifyLeafSignedByCA(issuedDER, caCertDER(t, h.caPEM)); err != nil {
+	if err := crypto.VerifyLeafSignedByCA(issuedDER, servedIssuerDER); err != nil {
 		t.Fatalf("sscep-issued served SCEP cert does not verify against served CA: %v", err)
 	}
 	if !h.hasEvent(t, "certificate.recorded") {
@@ -427,7 +427,9 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 	}
 
 	pkiReq, pkiResp := recorder.pkioOperationFiles(t)
-	servedArchiveConformanceTranscripts(t, "served-scep-sscep", caFile, issuedFile, selfSignedFile, getCALog, enrollLog, pkiReq, pkiResp)
+	transcriptPaths := append([]string(nil), caFiles.AllPaths...)
+	transcriptPaths = append(transcriptPaths, issuedFile, selfSignedFile, getCALog, enrollLog, pkiReq, pkiResp)
+	servedArchiveConformanceTranscripts(t, "served-scep-sscep", transcriptPaths...)
 }
 
 // TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp enrolls against

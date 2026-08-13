@@ -3534,8 +3534,10 @@ This is a deliberate, documented trust boundary, not an accident.
     endpoint, accepts the protected response, and uploads the
     request/response/cert/log artifacts. SCEP: a dedicated stock-client CI
     transcript — a SHA-256-pinned `sscep` v0.10.0 build fetches the served
-    CA, enrolls through `/scep/pkiclient.exe`, and uploads the captured
-    PKIOperation request/response plus client logs. TSA: a dedicated
+    CA-plus-RA bundle, classifies its numbered public files by exact issuing
+    certificate and signing constraints rather than suffix order, enrolls through
+    `/scep/pkiclient.exe`, and uploads both CA/RA files plus the captured
+    PKIOperation request/response and client logs. TSA: a dedicated
     stock-client CI transcript — OpenSSL `ts -query` creates a DER
     `TimeStampReq`, CI POSTs it to the served `/tsa` endpoint, OpenSSL
     `ts -verify` validates the returned `TimeStampResp`, and public

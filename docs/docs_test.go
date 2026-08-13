@@ -3119,6 +3119,65 @@ func TestACMEAndARICoreInteropEvidenceStaysRequired(t *testing.T) {
 	}
 }
 
+func TestSCEPStockClientCAAndRAEvidenceStaysRequiredAUD74(t *testing.T) {
+	installer := read(t, "../scripts/ci/install-sscep.sh")
+	for _, want := range []string{
+		`version="0.10.0"`,
+		`archive_sha256="489cc8e093986776eb3f15082bf766778f707176f3cd604bf0ef1008da06b8e5"`,
+	} {
+		if !strings.Contains(installer, want) {
+			t.Errorf("AUD-74: sscep installer no longer pins %q", want)
+		}
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"scep-client-conformance:",
+		"scep client conformance (sscep transcript)",
+		`bash scripts/ci/install-sscep.sh "${RUNNER_TEMP}/sscep"`,
+		`TRSTCTL_REQUIRE_SSCEP: "1"`,
+		"go test ./internal/server -run 'TestServedSCEPSSCEPClientEnrollment'",
+		"scep-sscep-enroll-transcripts",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("AUD-74: CI no longer requires pinned served sscep evidence %q", want)
+		}
+	}
+
+	served := read(t, "../internal/server/protocols_served_stock_clients_test.go")
+	for _, want := range []string{
+		"servedDiscoverSSCEPGetCACertFiles",
+		`"-c", caFiles.RAPath`,
+		"caFiles.AllPaths",
+		"crypto.VerifyLeafSignedByCA(issuedDER, servedIssuerDER)",
+	} {
+		if !strings.Contains(served, want) {
+			t.Errorf("AUD-74: served sscep journey no longer preserves %q", want)
+		}
+	}
+
+	classifier := read(t, "../internal/server/protocols_sscep_aud74_test.go")
+	for _, want := range []string{
+		"one certificate is both issuer and RA",
+		"RA then issuer",
+		"issuer then RA",
+		"duplicate issuer",
+		"SHA256Fingerprint",
+		"KeyUsageDigitalSig",
+	} {
+		if !strings.Contains(classifier, want) {
+			t.Errorf("AUD-74: CA/RA role classifier no longer proves %q", want)
+		}
+	}
+
+	doc := read(t, "features/enrollment-protocols.md")
+	for _, want := range []string{"application/x-x509-ca-ra-cert", "numbered output files", "archives both public certificates"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("AUD-74: enrollment docs no longer explain %q", want)
+		}
+	}
+}
+
 // TestPluginSandboxClaimIsHonest cross-checks the R3.4 rescope (B8/N2): the docs
 // no longer claim the shipped connectors are sandboxed, the in-process trust model
 // and its blast radius are documented, and the plugin host genuinely holds no
