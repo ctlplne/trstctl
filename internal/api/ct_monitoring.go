@@ -49,6 +49,7 @@ type ctMonitoringResponse struct {
 	OutboxBackedAlerts      bool                       `json:"outbox_backed_alerts"`
 	WatchedDomains          []string                   `json:"watched_domains"`
 	Logs                    []ctMonitoringLogResponse  `json:"logs"`
+	RetiredLogs             []ctMonitoringLogResponse  `json:"retired_logs"`
 	Summary                 ctMonitoringSummary        `json:"summary"`
 	Source                  *discoverySourceResponse   `json:"source,omitempty"`
 	Run                     *discoveryRunResponse      `json:"run,omitempty"`
@@ -56,14 +57,20 @@ type ctMonitoringResponse struct {
 }
 
 type ctMonitoringLogResponse struct {
-	URL       string `json:"url"`
-	NextIndex int64  `json:"next_index"`
+	URL          string     `json:"url"`
+	NextIndex    int64      `json:"next_index"`
+	Status       string     `json:"status"`
+	LastError    string     `json:"last_error,omitempty"`
+	LastPolledAt *time.Time `json:"last_polled_at,omitempty"`
+	RetiredAt    *time.Time `json:"retired_at,omitempty"`
 }
 
 type ctMonitoringSummary struct {
 	SourceCount             int `json:"source_count"`
 	WatchedDomainCount      int `json:"watched_domain_count"`
 	LogCount                int `json:"log_count"`
+	RetiredLogCount         int `json:"retired_log_count"`
+	FailedLogCount          int `json:"failed_log_count"`
 	FindingCount            int `json:"finding_count"`
 	UnexpectedIssuanceCount int `json:"unexpected_issuance_count"`
 	OpenFindingCount        int `json:"open_finding_count"`
@@ -328,9 +335,16 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 	} else {
 		return out, err
 	}
-	if checkpoints, err := a.store.ListCTLogCheckpoints(ctx, tenantID); err == nil {
+	if checkpoints, err := a.store.ListCTLogCheckpointHistory(ctx, tenantID); err == nil {
 		for _, checkpoint := range checkpoints {
-			addCTLog(&out.Logs, checkpoint.LogURL, checkpoint.NextIndex)
+			if checkpoint.Active {
+				addCTCheckpoint(&out.Logs, checkpoint)
+				if checkpoint.LastPollStatus == store.CTPollFailed {
+					out.Summary.FailedLogCount++
+				}
+			} else {
+				addCTCheckpoint(&out.RetiredLogs, checkpoint)
+			}
 		}
 	} else {
 		return out, err
@@ -356,8 +370,10 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 	}
 	sort.Strings(out.WatchedDomains)
 	sort.Slice(out.Logs, func(i, j int) bool { return out.Logs[i].URL < out.Logs[j].URL })
+	sort.Slice(out.RetiredLogs, func(i, j int) bool { return out.RetiredLogs[i].URL < out.RetiredLogs[j].URL })
 	out.Summary.WatchedDomainCount = len(out.WatchedDomains)
 	out.Summary.LogCount = len(out.Logs)
+	out.Summary.RetiredLogCount = len(out.RetiredLogs)
 	return out, nil
 }
 
@@ -370,7 +386,7 @@ func addCTConfigToStatus(out *ctMonitoringResponse, raw json.RawMessage) {
 		addString(&out.WatchedDomains, domain)
 	}
 	for _, logURL := range cfg.Logs {
-		addCTLog(&out.Logs, logURL, 0)
+		addCTLog(&out.Logs, logURL, 0, store.CTPollNever)
 	}
 }
 
@@ -387,7 +403,7 @@ func addString(values *[]string, value string) {
 	*values = append(*values, value)
 }
 
-func addCTLog(logs *[]ctMonitoringLogResponse, logURL string, nextIndex int64) {
+func addCTLog(logs *[]ctMonitoringLogResponse, logURL string, nextIndex int64, status string) {
 	logURL = strings.TrimSpace(logURL)
 	if logURL == "" {
 		return
@@ -397,8 +413,24 @@ func addCTLog(logs *[]ctMonitoringLogResponse, logURL string, nextIndex int64) {
 			if nextIndex > (*logs)[i].NextIndex {
 				(*logs)[i].NextIndex = nextIndex
 			}
+			if status != "" {
+				(*logs)[i].Status = status
+			}
 			return
 		}
 	}
-	*logs = append(*logs, ctMonitoringLogResponse{URL: logURL, NextIndex: nextIndex})
+	*logs = append(*logs, ctMonitoringLogResponse{URL: logURL, NextIndex: nextIndex, Status: status})
+}
+
+func addCTCheckpoint(logs *[]ctMonitoringLogResponse, checkpoint store.CTCheckpoint) {
+	addCTLog(logs, checkpoint.LogURL, checkpoint.NextIndex, checkpoint.LastPollStatus)
+	for i := range *logs {
+		if (*logs)[i].URL != checkpoint.LogURL {
+			continue
+		}
+		(*logs)[i].LastError = checkpoint.LastPollError
+		(*logs)[i].LastPolledAt = checkpoint.LastPolledAt
+		(*logs)[i].RetiredAt = checkpoint.RetiredAt
+		return
+	}
 }

@@ -1404,6 +1404,7 @@ export interface CTMonitoring {
   logs: CTMonitoringLog[];
   notification_destination: string;
   outbox_backed_alerts: boolean;
+  retired_logs: CTMonitoringLog[];
   run?: DiscoveryRun;
   runs_path: string;
   source?: DiscoverySource;
@@ -1414,7 +1415,11 @@ export interface CTMonitoring {
 }
 
 export interface CTMonitoringLog {
+  last_error?: string;
+  last_polled_at?: string;
   next_index: number;
+  retired_at?: string;
+  status: "never" | "succeeded" | "failed";
   url: string;
 }
 
@@ -1431,10 +1436,12 @@ export interface CTMonitoringRequest {
 }
 
 export interface CTMonitoringSummary {
+  failed_log_count: number;
   finding_count: number;
   log_count: number;
   open_finding_count: number;
   outbox_alert_channel_count: number;
+  retired_log_count: number;
   source_count: number;
   unexpected_issuance_count: number;
   watched_domain_count: number;

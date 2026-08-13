@@ -26,12 +26,23 @@ const monitoring = {
   outbox_backed_alerts: true,
   watched_domains: ["example.test"],
   logs: [
-    { url: "https://ct.example.test/log-a", next_index: 4211 },
-    { url: "https://ct.example.test/log-b", next_index: 0 },
+    { url: "https://ct.example.test/log-a", next_index: 4211, status: "succeeded", last_polled_at: "2026-08-01T01:00:00Z" },
+    { url: "https://ct.example.test/log-b", next_index: 0, status: "failed", last_error: "get-sth returned 503" },
+  ],
+  retired_logs: [
+    {
+      url: "https://ct.example.test/obsolete",
+      next_index: 17,
+      status: "failed",
+      last_error: "get-sth returned 404",
+      retired_at: "2026-08-01T02:00:00Z",
+    },
   ],
   summary: {
     finding_count: 1,
     log_count: 2,
+    retired_log_count: 1,
+    failed_log_count: 1,
     open_finding_count: 1,
     outbox_alert_channel_count: 2,
     source_count: 1,
@@ -72,11 +83,18 @@ describe("C5 certificate transparency monitoring surface", () => {
 
     expect(await screen.findByText("Certificate Transparency monitoring")).toBeInTheDocument();
 
-    // Per-log checkpoint state: a log being polled and one that has never been
-    // reached must read differently. "Configured" is not the same as "working".
+    // Per-log checkpoint state: success and failure must read differently.
+    // "Configured" is not the same as "working".
     expect(await screen.findByText("https://ct.example.test/log-a")).toBeInTheDocument();
-    expect(screen.getByText("next index 4211")).toBeInTheDocument();
-    expect(screen.getByText("never polled")).toBeInTheDocument();
+    expect(screen.getByText(/last poll succeeded.*next index 4211/i)).toBeInTheDocument();
+    expect(screen.getByText(/last poll failed.*next index 0/i)).toBeInTheDocument();
+    expect(screen.getByText("Last error: get-sth returned 503")).toBeInTheDocument();
+
+    // Removed logs remain audit-readable but are visibly outside active polling.
+    expect(screen.getByText("Retired log history (not polled)")).toBeInTheDocument();
+    expect(screen.getByText("https://ct.example.test/obsolete")).toBeInTheDocument();
+    expect(screen.getByText(/last poll failed.*next index 17/i)).toBeInTheDocument();
+    expect(screen.getByText("Last error: get-sth returned 404")).toBeInTheDocument();
 
     // The finding, with enough certificate detail to act on.
     expect(screen.getByText("shadow.example.test")).toBeInTheDocument();

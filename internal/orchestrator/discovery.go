@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -650,22 +651,71 @@ func (o *Orchestrator) CompleteDiscoveryRunWithEventID(ctx context.Context, tena
 }
 
 func (o *Orchestrator) completeDiscoveryRun(ctx context.Context, tenantID string, in store.DiscoveryRun, eventID string) error {
+	if err := validateDiscoveryTargetResults(in.TargetResults); err != nil {
+		return err
+	}
+	targetResults := make([]projections.DiscoveryTargetResult, 0, len(in.TargetResults))
+	for _, result := range in.TargetResults {
+		targetResults = append(targetResults, projections.DiscoveryTargetResult{
+			Kind: result.Kind, Target: result.Target, Status: result.Status,
+			Cursor: result.Cursor, Error: result.Error,
+		})
+	}
 	payload, err := json.Marshal(projections.DiscoveryRunCompleted{
 		ID: in.ID, Status: in.Status, Targets: in.Targets, Discovered: in.Discovered,
 		Failed: in.Failed, Rejected: in.Rejected, Blocked: in.Blocked, Error: in.Error,
 		Segment: in.Segment, ExecutedByAgentID: in.ExecutedByAgentID,
+		TargetResults: targetResults,
 	})
 	if err != nil {
 		return err
 	}
+	schemaVersion := 0
+	if len(targetResults) > 0 {
+		schemaVersion = projections.DiscoveryTargetResultsEventSchemaVersion
+	}
 	if eventID == "" {
-		_, err = o.emit(ctx, projections.EventDiscoveryRunCompleted, tenantID, payload)
+		_, err = o.emitVersioned(ctx, projections.EventDiscoveryRunCompleted, tenantID, schemaVersion, payload)
 	} else {
 		_, err = o.emitPreparedExact(ctx, events.Event{
-			ID: eventID, Type: projections.EventDiscoveryRunCompleted, TenantID: tenantID, Data: payload,
+			ID: eventID, Type: projections.EventDiscoveryRunCompleted, TenantID: tenantID,
+			SchemaVersion: schemaVersion, Data: payload,
 		})
 	}
 	return err
+}
+
+func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error {
+	seen := make(map[string]struct{}, len(results))
+	for _, result := range results {
+		if result.Kind != "ct_log" {
+			return fmt.Errorf("orchestrator: unsupported discovery target result kind %q", result.Kind)
+		}
+		target := strings.TrimSpace(result.Target)
+		if target == "" {
+			return errors.New("orchestrator: discovery target result target is required")
+		}
+		if target != result.Target {
+			return errors.New("orchestrator: discovery target result target must be canonical")
+		}
+		if _, ok := seen[target]; ok {
+			return fmt.Errorf("orchestrator: duplicate discovery target result %q", target)
+		}
+		seen[target] = struct{}{}
+		if result.Status != "succeeded" && result.Status != "failed" {
+			return fmt.Errorf("orchestrator: invalid discovery target result status %q", result.Status)
+		}
+		if result.Cursor < 0 {
+			return errors.New("orchestrator: discovery target result cursor must be non-negative")
+		}
+		if result.Status == "succeeded" && result.Error != "" {
+			return errors.New("orchestrator: successful discovery target result cannot carry an error")
+		}
+		if len(result.Error) > 1024 || !utf8.ValidString(result.Error) {
+			return errors.New("orchestrator: discovery target result error must be valid UTF-8 and at most 1024 bytes")
+		}
+	}
+	return nil
 }
 
 // emitPreparedExact verifies that duplicate suppression returned the same

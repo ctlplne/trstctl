@@ -6875,6 +6875,7 @@ export interface components {
             logs: components["schemas"]["CTMonitoringLog"][];
             notification_destination: string;
             outbox_backed_alerts: boolean;
+            retired_logs: components["schemas"]["CTMonitoringLog"][];
             run?: components["schemas"]["DiscoveryRun"];
             runs_path: string;
             source?: components["schemas"]["DiscoverySource"];
@@ -6884,7 +6885,14 @@ export interface components {
             watchlist_path: string;
         };
         CTMonitoringLog: {
+            last_error?: string;
+            /** Format: date-time */
+            last_polled_at?: string;
             next_index: number;
+            /** Format: date-time */
+            retired_at?: string;
+            /** @enum {string} */
+            status: "never" | "succeeded" | "failed";
             url: string;
         };
         CTMonitoringRequest: {
@@ -6900,10 +6908,12 @@ export interface components {
             watched_domains: string[];
         };
         CTMonitoringSummary: {
+            failed_log_count: number;
             finding_count: number;
             log_count: number;
             open_finding_count: number;
             outbox_alert_channel_count: number;
+            retired_log_count: number;
             source_count: number;
             unexpected_issuance_count: number;
             watched_domain_count: number;

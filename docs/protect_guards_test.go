@@ -2011,7 +2011,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		"EventDiscoveryRunStarted: {1: true}",
 		"EventDiscoveryFindingRecorded: {1: true}",
 		"EventDiscoveryFindingTriageChanged: {1: true}",
-		"EventDiscoveryRunCompleted: {1: true}",
+		"EventDiscoveryRunCompleted: {1: true, DiscoveryTargetResultsEventSchemaVersion: true}",
 		"EventNotificationRead: {1: true}",
 		"EventNotificationThresholdDelivered: {1: true}",
 		"EventIncidentFleetReissuanceRecorded: {1: true}",

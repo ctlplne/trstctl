@@ -894,6 +894,26 @@ export const messages = {
     defaultMessage: "never polled",
     description: "C5: a configured log with no checkpoint yet.",
   },
+  "discovery.ct.pollSucceeded": {
+    defaultMessage: "last poll succeeded",
+    description: "AUD-70: one active CT log completed its latest poll.",
+  },
+  "discovery.ct.pollFailed": {
+    defaultMessage: "last poll failed",
+    description: "AUD-70: one active or retired CT log failed its latest poll.",
+  },
+  "discovery.ct.lastPollError": {
+    defaultMessage: "Last error: {detail}",
+    description: "AUD-70: bounded diagnostic for one CT log, distinct from peer-log health.",
+  },
+  "discovery.ct.retiredLogs": {
+    defaultMessage: "Retired log history (not polled)",
+    description: "AUD-70: audit-only CT checkpoints removed from the active watchlist.",
+  },
+  "discovery.ct.retiredAt": {
+    defaultMessage: "Retired {value}",
+    description: "AUD-70: when a CT log left the active watchlist.",
+  },
   "discovery.ct.nextIndex": {
     defaultMessage: "next index {value}",
     description: "C5: the checkpoint position CT monitoring has reached in one log.",

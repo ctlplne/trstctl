@@ -111,6 +111,11 @@ const (
 var edgeIssuanceCertNamespace = uuid.MustParse("7be1a6f4-52f0-5c2e-9d61-8a7ce3f14b02")
 
 const (
+	// DiscoveryTargetResultsEventSchemaVersion adds bounded per-target outcomes
+	// to discovery.run.completed. Version 1 remains readable for every historical
+	// aggregate-only completion.
+	DiscoveryTargetResultsEventSchemaVersion = 2
+
 	// I2: an operator closing an ownership disagreement. An event because the
 	// resolution is a JUDGEMENT — which side was right and why — and a
 	// judgement that lives only in a mutable column cannot be audited later.
@@ -1866,16 +1871,27 @@ type DiscoveryFindingTriageChanged struct {
 
 // DiscoveryRunCompleted is the payload of discovery.run.completed.
 type DiscoveryRunCompleted struct {
-	ID                string `json:"id"`
-	Status            string `json:"status"`
-	Targets           int    `json:"targets"`
-	Discovered        int    `json:"discovered"`
-	Failed            int    `json:"failed"`
-	Rejected          int    `json:"rejected"`
-	Blocked           int    `json:"blocked,omitempty"`
-	Error             string `json:"error,omitempty"`
-	Segment           string `json:"segment,omitempty"`
-	ExecutedByAgentID string `json:"executed_by_agent_id,omitempty"`
+	ID                string                  `json:"id"`
+	Status            string                  `json:"status"`
+	Targets           int                     `json:"targets"`
+	Discovered        int                     `json:"discovered"`
+	Failed            int                     `json:"failed"`
+	Rejected          int                     `json:"rejected"`
+	Blocked           int                     `json:"blocked,omitempty"`
+	Error             string                  `json:"error,omitempty"`
+	Segment           string                  `json:"segment,omitempty"`
+	ExecutedByAgentID string                  `json:"executed_by_agent_id,omitempty"`
+	TargetResults     []DiscoveryTargetResult `json:"target_results,omitempty"`
+}
+
+// DiscoveryTargetResult is one bounded target outcome. It is immutable event
+// evidence; projectors decide which read model, if any, the result may update.
+type DiscoveryTargetResult struct {
+	Kind   string `json:"kind"`
+	Target string `json:"target"`
+	Status string `json:"status"`
+	Cursor int64  `json:"cursor"`
+	Error  string `json:"error,omitempty"`
 }
 
 // ACMEDNS01ProviderConfigUpserted is the payload of
@@ -3238,7 +3254,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryRunStarted:                      {1: true},
 	EventDiscoveryFindingRecorded:                 {1: true},
 	EventDiscoveryFindingTriageChanged:            {1: true},
-	EventDiscoveryRunCompleted:                    {1: true},
+	EventDiscoveryRunCompleted:                    {1: true, DiscoveryTargetResultsEventSchemaVersion: true},
 	EventADCSInventoryObserved:                    {1: true, adcsdiscovery.InventoryEventSchemaVersion: true},
 	EventADCSTemplateDriftObserved:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventADCSTemplateDriftWorsened:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
@@ -4370,6 +4386,17 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			CompletedAt: &completedAt,
 		}); err != nil {
 			return err
+		}
+		for _, result := range pl.TargetResults {
+			if result.Kind != "ct_log" {
+				continue
+			}
+			if err := p.store.ApplyCTLogPollResultFromEventTx(
+				ctx, tx, e.TenantID, pl.ID, result.Target, result.Cursor,
+				result.Status, result.Error, completedAt,
+			); err != nil {
+				return err
+			}
 		}
 		if pl.Segment != "" {
 			if err := p.store.ApplyDiscoverySegmentSweepTx(ctx, tx, e.TenantID, pl.Segment,

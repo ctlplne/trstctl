@@ -2020,6 +2020,7 @@ CTMonitoring = TypedDict(
         'logs': list[dict[str, Any]],
         'notification_destination': str,
         'outbox_backed_alerts': bool,
+        'retired_logs': list[dict[str, Any]],
         'run': dict[str, Any],
         'runs_path': str,
         'source': dict[str, Any],
@@ -2034,7 +2035,11 @@ CTMonitoring = TypedDict(
 CTMonitoringLog = TypedDict(
     'CTMonitoringLog',
     {
+        'last_error': str,
+        'last_polled_at': str,
         'next_index': int,
+        'retired_at': str,
+        'status': str,
         'url': str,
     },
     total=False,
@@ -2059,10 +2064,12 @@ CTMonitoringRequest = TypedDict(
 CTMonitoringSummary = TypedDict(
     'CTMonitoringSummary',
     {
+        'failed_log_count': int,
         'finding_count': int,
         'log_count': int,
         'open_finding_count': int,
         'outbox_alert_channel_count': int,
+        'retired_log_count': int,
         'source_count': int,
         'unexpected_issuance_count': int,
         'watched_domain_count': int,

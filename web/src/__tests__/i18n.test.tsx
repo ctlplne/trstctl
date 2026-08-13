@@ -677,8 +677,12 @@ describe("i18n boundary", () => {
       // cancellation; and expired/revoked token truth. Protocol tokens such
       // as UUID, RFC3339, JSON, OpenAPI, and Idempotency-Key stay exact.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "2af864fe4b5b75fc2e47fe474c64b250c2c0b544de5b872454f377a952cf27a0",
-      "de-DE": "8798780aac2fa49edc2983491e8105de0d9c82bf5a77d7df8a6a545f4700621e",
+      // AUD-70 CT replacement re-pin: five keys distinguish per-log success,
+      // per-log failure, bounded diagnostic detail, and retired audit history
+      // that is explicitly not polled. Machine-authored es/de; human review is
+      // required before release.
+      "es-ES": "9c8cde2c6f83e9019810c9257fafe84d2d21f72823886ff28b304cdd71725920",
+      "de-DE": "dc0fb1e720b8f80a4cf91aa4306366c947bb63c0e59165057a9fe2e6b0a54fab",
     });
   });
 

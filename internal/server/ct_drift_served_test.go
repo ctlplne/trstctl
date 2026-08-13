@@ -3,8 +3,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,8 +17,10 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/notify/webhook"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -198,6 +202,143 @@ func TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings(t *testing.T)
 	}
 	if len(dashboard.Findings) != 1 || dashboard.Findings[0].Kind != "ct_unexpected_issuance" || !strings.Contains(dashboard.Findings[0].Ref, "shadow.example.com") {
 		t.Fatalf("bad CT dashboard findings: %+v", dashboard.Findings)
+	}
+}
+
+// AUD-70: a dead configured endpoint is replaceable through the exact served
+// watchlist operation. The failed checkpoint remains audit-readable, but only
+// the working RFC 6962 fixture is active and the second aggregate run is green.
+func TestAUD70ServedCTWatchlistReplacementRetiresDeadLogAndRecovers(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
+
+	dead := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(dead.Close)
+	leafDER, leafTBS, err := ctlogtest.IssueCert("replacement", "replacement.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	working := ctlogtest.NewServer(ctlogtest.PrecertEntry(leafDER, leafTBS))
+	t.Cleanup(working.Close)
+
+	put := func(idempotencyKey, logURL string) string {
+		t.Helper()
+		status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/discovery/ct-monitoring", tok, idempotencyKey, map[string]any{
+			"name":                   "aud70-replaceable-watch",
+			"logs":                   []string{logURL},
+			"watched_domains":        []string{"example.com"},
+			"max_batch":              25,
+			"run_now":                true,
+			"allow_private_endpoint": true,
+			"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, logURL)},
+		})
+		if status != http.StatusOK {
+			t.Fatalf("replace CT watchlist with %s: status=%d body=%s", logURL, status, body)
+		}
+		var response struct {
+			Run struct {
+				ID string `json:"id"`
+			} `json:"run"`
+		}
+		if err := json.Unmarshal(body, &response); err != nil || response.Run.ID == "" {
+			t.Fatalf("decode CT replacement response: run=%+v err=%v body=%s", response.Run, err, body)
+		}
+		return response.Run.ID
+	}
+	readRun := func(runID string) store.DiscoveryRun {
+		t.Helper()
+		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+runID, tok, nil)
+		if status != http.StatusOK {
+			t.Fatalf("read CT run %s: status=%d body=%s", runID, status, body)
+		}
+		var run store.DiscoveryRun
+		if err := json.Unmarshal(body, &run); err != nil {
+			t.Fatalf("decode CT run %s: %v body=%s", runID, err, body)
+		}
+		return run
+	}
+
+	failedRunID := put("aud70-dead-watch", dead.URL)
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain dead CT run: %v", err)
+	}
+	failedRun := readRun(failedRunID)
+	if failedRun.Status != "failed" || failedRun.Targets != 1 || failedRun.Failed != 1 || !strings.Contains(failedRun.Error, "404") {
+		t.Fatalf("dead CT run = %+v, want one explicit failed log", failedRun)
+	}
+
+	workingRunID := put("aud70-working-watch", working.URL())
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain replacement CT run: %v", err)
+	}
+	workingRun := readRun(workingRunID)
+	if workingRun.Status != "succeeded" || workingRun.Targets != 1 || workingRun.Failed != 0 || workingRun.Discovered != 1 {
+		t.Fatalf("replacement CT run = %+v, want one successful active log", workingRun)
+	}
+	completionByRun := map[string]projections.DiscoveryRunCompleted{}
+	if err := h.log.Replay(context.Background(), 0, func(event events.Event) error {
+		if event.Type != projections.EventDiscoveryRunCompleted || event.TenantID != h.tenant {
+			return nil
+		}
+		var completed projections.DiscoveryRunCompleted
+		if err := json.Unmarshal(event.Data, &completed); err != nil {
+			return err
+		}
+		if completed.ID == failedRunID || completed.ID == workingRunID {
+			if event.SchemaVersion != projections.DiscoveryTargetResultsEventSchemaVersion {
+				t.Fatalf("CT completion %s schema = %d, want per-target v%d", completed.ID, event.SchemaVersion, projections.DiscoveryTargetResultsEventSchemaVersion)
+			}
+			completionByRun[completed.ID] = completed
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay CT completion evidence: %v", err)
+	}
+	if result := completionByRun[failedRunID].TargetResults; len(result) != 1 || result[0].Target != dead.URL || result[0].Status != "failed" || !strings.Contains(result[0].Error, "404") {
+		t.Fatalf("dead completion target evidence = %+v", result)
+	}
+	if result := completionByRun[workingRunID].TargetResults; len(result) != 1 || result[0].Target != working.URL() || result[0].Status != "succeeded" || result[0].Cursor != 1 || result[0].Error != "" {
+		t.Fatalf("working completion target evidence = %+v", result)
+	}
+	if err := h.srv.proj.Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("rebuild reconciled CT authority from immutable history: %v", err)
+	}
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/ct-monitoring", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("read reconciled CT monitoring: status=%d body=%s", status, body)
+	}
+	var monitoring struct {
+		Logs []struct {
+			URL       string `json:"url"`
+			NextIndex int64  `json:"next_index"`
+			Status    string `json:"status"`
+			LastError string `json:"last_error"`
+		} `json:"logs"`
+		RetiredLogs []struct {
+			URL       string     `json:"url"`
+			NextIndex int64      `json:"next_index"`
+			Status    string     `json:"status"`
+			LastError string     `json:"last_error"`
+			RetiredAt *time.Time `json:"retired_at"`
+		} `json:"retired_logs"`
+		Summary struct {
+			LogCount        int `json:"log_count"`
+			RetiredLogCount int `json:"retired_log_count"`
+			FailedLogCount  int `json:"failed_log_count"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(body, &monitoring); err != nil {
+		t.Fatalf("decode reconciled CT monitoring: %v body=%s", err, body)
+	}
+	if len(monitoring.Logs) != 1 || monitoring.Logs[0].URL != working.URL() || monitoring.Logs[0].NextIndex != 1 || monitoring.Logs[0].Status != "succeeded" || monitoring.Logs[0].LastError != "" {
+		t.Fatalf("active CT logs = %+v, want only successful replacement", monitoring.Logs)
+	}
+	if len(monitoring.RetiredLogs) != 1 || monitoring.RetiredLogs[0].URL != dead.URL || monitoring.RetiredLogs[0].Status != "failed" || !strings.Contains(monitoring.RetiredLogs[0].LastError, "404") || monitoring.RetiredLogs[0].RetiredAt == nil {
+		t.Fatalf("retired CT audit = %+v, want failed dead log with retirement evidence", monitoring.RetiredLogs)
+	}
+	if monitoring.Summary.LogCount != 1 || monitoring.Summary.RetiredLogCount != 1 || monitoring.Summary.FailedLogCount != 0 {
+		t.Fatalf("reconciled CT summary = %+v", monitoring.Summary)
 	}
 }
 

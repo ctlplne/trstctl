@@ -1825,18 +1825,24 @@ func componentSchemas() map[string]*Schema {
 		"private_egress_cidrs":   {Type: "array", Items: str()},
 	}, "logs", "watched_domains")
 	ctMonitoringLog := object(map[string]*Schema{
-		"url":        str(),
-		"next_index": {Type: "integer"},
-	}, "url", "next_index")
+		"url":            str(),
+		"next_index":     {Type: "integer"},
+		"status":         {Type: "string", Enum: []string{"never", "succeeded", "failed"}},
+		"last_error":     str(),
+		"last_polled_at": timestamp(),
+		"retired_at":     timestamp(),
+	}, "url", "next_index", "status")
 	ctMonitoringSummary := object(map[string]*Schema{
 		"source_count":               {Type: "integer"},
 		"watched_domain_count":       {Type: "integer"},
 		"log_count":                  {Type: "integer"},
+		"retired_log_count":          {Type: "integer"},
+		"failed_log_count":           {Type: "integer"},
 		"finding_count":              {Type: "integer"},
 		"unexpected_issuance_count":  {Type: "integer"},
 		"open_finding_count":         {Type: "integer"},
 		"outbox_alert_channel_count": {Type: "integer"},
-	}, "source_count", "watched_domain_count", "log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "outbox_alert_channel_count")
+	}, "source_count", "watched_domain_count", "log_count", "retired_log_count", "failed_log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "outbox_alert_channel_count")
 	ctMonitoring := object(map[string]*Schema{
 		"capability":               str(),
 		"watchlist_path":           str(),
@@ -1847,11 +1853,12 @@ func componentSchemas() map[string]*Schema {
 		"outbox_backed_alerts":     {Type: "boolean"},
 		"watched_domains":          {Type: "array", Items: str()},
 		"logs":                     {Type: "array", Items: ref("CTMonitoringLog")},
+		"retired_logs":             {Type: "array", Items: ref("CTMonitoringLog")},
 		"summary":                  ref("CTMonitoringSummary"),
 		"source":                   ref("DiscoverySource"),
 		"run":                      ref("DiscoveryRun"),
 		"findings":                 {Type: "array", Items: ref("DiscoveryFinding")},
-	}, "capability", "watchlist_path", "sources_path", "runs_path", "findings_path", "notification_destination", "outbox_backed_alerts", "watched_domains", "logs", "summary", "findings")
+	}, "capability", "watchlist_path", "sources_path", "runs_path", "findings_path", "notification_destination", "outbox_backed_alerts", "watched_domains", "logs", "retired_logs", "summary", "findings")
 	driftRemediationDecisionReq := object(map[string]*Schema{
 		"decision":            {Type: "string", Enum: []string{"investigate", "mark_managed", "dismiss"}},
 		"managed_identity_id": uuid(),

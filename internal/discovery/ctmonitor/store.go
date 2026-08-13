@@ -75,14 +75,39 @@ func (a *StoreAlerter) Raise(ctx context.Context, tenantID string, f Finding) er
 // seam: watched domains and CT-log checkpoints live in PostgreSQL (AN-1
 // tenant-scoped), so monitoring resumes across restarts.
 type StorePersistence struct {
-	store *store.Store
+	store          *store.Store
+	boundedDomains []string
+	boundedLogs    map[string]struct{}
+	projectResults bool
 }
 
 // NewStorePersistence builds a Persistence backed by the store.
-func NewStorePersistence(s *store.Store) *StorePersistence { return &StorePersistence{store: s} }
+func NewStorePersistence(s *store.Store) *StorePersistence {
+	return &StorePersistence{store: s, projectResults: true}
+}
+
+// NewStorePersistenceForWatchlist bounds one discovery-source run to that
+// source's current domains and logs. The store still enforces the tenant's
+// event-projected active set, while a second CT source cannot be polled or have
+// findings attributed to this run by accident.
+func NewStorePersistenceForWatchlist(s *store.Store, domains, logs []string) *StorePersistence {
+	allowed := make(map[string]struct{}, len(logs))
+	for _, logURL := range logs {
+		allowed[logURL] = struct{}{}
+	}
+	return &StorePersistence{
+		store:          s,
+		boundedDomains: append([]string(nil), domains...),
+		boundedLogs:    allowed,
+		projectResults: false,
+	}
+}
 
 // WatchedDomains returns the tenant's watched domains.
 func (p *StorePersistence) WatchedDomains(ctx context.Context, tenantID string) ([]string, error) {
+	if p.boundedDomains != nil {
+		return append([]string(nil), p.boundedDomains...), nil
+	}
 	return p.store.ListWatchedDomains(ctx, tenantID)
 }
 
@@ -93,13 +118,29 @@ func (p *StorePersistence) Checkpoints(ctx context.Context, tenantID string) ([]
 		return nil, err
 	}
 	out := make([]LogState, len(cps))
-	for i, c := range cps {
-		out[i] = LogState{URL: c.LogURL, Checkpoint: c.NextIndex}
+	out = out[:0]
+	for _, c := range cps {
+		if p.boundedLogs != nil {
+			if _, ok := p.boundedLogs[c.LogURL]; !ok {
+				continue
+			}
+		}
+		out = append(out, LogState{URL: c.LogURL, Checkpoint: c.NextIndex})
 	}
 	return out, nil
 }
 
-// SaveCheckpoint persists a log's advanced checkpoint.
-func (p *StorePersistence) SaveCheckpoint(ctx context.Context, tenantID, logURL string, next int64) error {
-	return p.store.SaveCTLogCheckpoint(ctx, tenantID, logURL, next)
+// SavePollResult persists one active log's progress or failure detail.
+func (p *StorePersistence) SavePollResult(ctx context.Context, tenantID string, result LogPollResult) error {
+	// A served discovery run carries these facts in discovery.run.completed;
+	// its projector owns the durable checkpoint/health write (AN-2). The
+	// unbounded constructor preserves the small library compatibility seam.
+	if !p.projectResults {
+		return nil
+	}
+	status := store.CTPollSucceeded
+	if result.Status == LogPollFailed {
+		status = store.CTPollFailed
+	}
+	return p.store.SaveCTLogPollResult(ctx, tenantID, result.URL, result.Checkpoint, status, result.Error)
 }

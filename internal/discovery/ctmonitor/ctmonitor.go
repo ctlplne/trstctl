@@ -18,9 +18,11 @@ package ctmonitor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto/ctlog"
@@ -34,6 +36,21 @@ const defaultMaxBatch = 256
 type LogState struct {
 	URL        string
 	Checkpoint int64
+}
+
+const (
+	LogPollSucceeded = "succeeded"
+	LogPollFailed    = "failed"
+)
+
+// LogPollResult is the outcome of exactly one configured log. Error is bounded
+// again before durable storage; it exists here so the served run can distinguish
+// partial progress from an all-log failure.
+type LogPollResult struct {
+	URL        string
+	Checkpoint int64
+	Status     string
+	Error      string
 }
 
 // Finding is one unexpected certificate observed in a CT log.
@@ -218,6 +235,17 @@ func (m *Monitor) Poll(ctx context.Context, tenantID string, log LogState) (LogS
 // advanced states (in the input order) and the aggregated findings. The first
 // error from any log is returned.
 func (m *Monitor) PollAll(ctx context.Context, tenantID string, logs []LogState) ([]LogState, []Finding, error) {
+	outcomes, findings, err := m.PollAllDetailed(ctx, tenantID, logs)
+	states := make([]LogState, len(outcomes))
+	for i, outcome := range outcomes {
+		states[i] = LogState{URL: outcome.URL, Checkpoint: outcome.Checkpoint}
+	}
+	return states, findings, err
+}
+
+// PollAllDetailed polls every log and retains one ordered outcome per input.
+// A peer failure never hides successful progress or findings from another log.
+func (m *Monitor) PollAllDetailed(ctx context.Context, tenantID string, logs []LogState) ([]LogPollResult, []Finding, error) {
 	pool := bulkhead.New(bulkhead.Config{Name: "ct-monitor", Workers: m.workers, Queue: m.queue})
 	defer pool.Close()
 
@@ -245,14 +273,35 @@ func (m *Monitor) PollAll(ctx context.Context, tenantID string, logs []LogState)
 	wg.Wait()
 
 	var findings []Finding
-	var firstErr error
+	var pollErrs []error
 	for i := range logs {
-		if errs[i] != nil && firstErr == nil {
-			firstErr = errs[i]
-		}
 		findings = append(findings, results[i]...)
+		if errs[i] != nil {
+			pollErrs = append(pollErrs, fmt.Errorf("%s: %w", logs[i].URL, errs[i]))
+		}
 	}
-	return states, findings, firstErr
+	outcomes := make([]LogPollResult, len(logs))
+	for i, state := range states {
+		outcomes[i] = LogPollResult{URL: logs[i].URL, Checkpoint: state.Checkpoint, Status: LogPollSucceeded}
+		if errs[i] != nil {
+			outcomes[i].Checkpoint = logs[i].Checkpoint
+			outcomes[i].Status = LogPollFailed
+			outcomes[i].Error = boundedPollDetail(errs[i].Error())
+		}
+	}
+	return outcomes, findings, errors.Join(pollErrs...)
+}
+
+func boundedPollDetail(detail string) string {
+	detail = strings.ToValidUTF8(strings.TrimSpace(detail), "�")
+	if len(detail) <= 1024 {
+		return detail
+	}
+	detail = detail[:1024]
+	for !utf8.ValidString(detail) {
+		detail = detail[:len(detail)-1]
+	}
+	return detail
 }
 
 // submit enqueues a task, waiting out backpressure rather than dropping a log.

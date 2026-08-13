@@ -5388,6 +5388,12 @@
           "outbox_backed_alerts": {
             "type": "boolean"
           },
+          "retired_logs": {
+            "items": {
+              "$ref": "#/components/schemas/CTMonitoringLog"
+            },
+            "type": "array"
+          },
           "run": {
             "$ref": "#/components/schemas/DiscoveryRun"
           },
@@ -5423,6 +5429,7 @@
           "outbox_backed_alerts",
           "watched_domains",
           "logs",
+          "retired_logs",
           "summary",
           "findings"
         ],
@@ -5430,8 +5437,27 @@
       },
       "CTMonitoringLog": {
         "properties": {
+          "last_error": {
+            "type": "string"
+          },
+          "last_polled_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "next_index": {
             "type": "integer"
+          },
+          "retired_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "never",
+              "succeeded",
+              "failed"
+            ],
+            "type": "string"
           },
           "url": {
             "type": "string"
@@ -5439,7 +5465,8 @@
         },
         "required": [
           "url",
-          "next_index"
+          "next_index",
+          "status"
         ],
         "type": "object"
       },
@@ -5491,6 +5518,9 @@
       },
       "CTMonitoringSummary": {
         "properties": {
+          "failed_log_count": {
+            "type": "integer"
+          },
           "finding_count": {
             "type": "integer"
           },
@@ -5501,6 +5531,9 @@
             "type": "integer"
           },
           "outbox_alert_channel_count": {
+            "type": "integer"
+          },
+          "retired_log_count": {
             "type": "integer"
           },
           "source_count": {
@@ -5517,6 +5550,8 @@
           "source_count",
           "watched_domain_count",
           "log_count",
+          "retired_log_count",
+          "failed_log_count",
           "finding_count",
           "unexpected_issuance_count",
           "open_finding_count",

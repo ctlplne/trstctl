@@ -29,6 +29,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	184: true,
 	181: true,
 	179: true,
 	178: true,
@@ -68,6 +69,74 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0184BackfillsCTWatchlistAuthorityWithoutLosingCheckpointsAUD70(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 184)
+	if target.noTx || target.name != "0184_ct_watchlist_reconciliation.sql" {
+		t.Fatalf("migration 0184 classification = name:%q no_tx:%t, want transactional CT watchlist migration", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	domainCreated := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
+	checkpointUpdated := domainCreated.Add(2 * time.Hour)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO ct_watched_domains (id, tenant_id, domain, created_at)
+		 VALUES ('70707070-0000-4000-8000-000000000184', $1, 'legacy.example.test', $2)`,
+		tenantA, domainCreated); err != nil {
+		t.Fatalf("seed pre-0184 watched domain: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO ct_log_checkpoints (tenant_id, log_url, next_index, updated_at)
+		 VALUES ($1, 'https://legacy.example.test/argon/', 17, $2)`,
+		tenantA, checkpointUpdated); err != nil {
+		t.Fatalf("seed pre-0184 checkpoint: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	var domainActive bool
+	var domainActivated time.Time
+	var domainRetired *time.Time
+	if err := pool.QueryRow(ctx,
+		`SELECT active, activated_at, retired_at
+		   FROM ct_watched_domains WHERE tenant_id = $1 AND domain = 'legacy.example.test'`,
+		tenantA).Scan(&domainActive, &domainActivated, &domainRetired); err != nil {
+		t.Fatalf("read migrated watched domain: %v", err)
+	}
+	if !domainActive || !domainActivated.Equal(domainCreated) || domainRetired != nil {
+		t.Fatalf("migrated watched domain = active:%t activated:%s retired:%v", domainActive, domainActivated, domainRetired)
+	}
+
+	var nextIndex int64
+	var checkpointActive bool
+	var checkpointActivated time.Time
+	var retiredAt, polledAt *time.Time
+	var status, detail string
+	if err := pool.QueryRow(ctx,
+		`SELECT next_index, active, activated_at, retired_at,
+		        last_poll_status, last_poll_error, last_polled_at
+		   FROM ct_log_checkpoints
+		  WHERE tenant_id = $1 AND log_url = 'https://legacy.example.test/argon/'`,
+		tenantA).Scan(&nextIndex, &checkpointActive, &checkpointActivated, &retiredAt, &status, &detail, &polledAt); err != nil {
+		t.Fatalf("read migrated checkpoint: %v", err)
+	}
+	if nextIndex != 17 || !checkpointActive || !checkpointActivated.Equal(checkpointUpdated) ||
+		retiredAt != nil || status != corestore.CTPollNever || detail != "" || polledAt != nil {
+		t.Fatalf("migrated checkpoint = index:%d active:%t activated:%s retired:%v status:%q detail:%q polled:%v",
+			nextIndex, checkpointActive, checkpointActivated, retiredAt, status, detail, polledAt)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE ct_log_checkpoints SET last_poll_status = 'invented'
+		  WHERE tenant_id = $1 AND log_url = 'https://legacy.example.test/argon/'`, tenantA); err == nil {
+		t.Fatal("migration accepted an unknown CT poll status")
+	}
 }
 
 func TestMigration0181CreatesProviderOperatorLifecycleAuthorityAUD58(t *testing.T) {

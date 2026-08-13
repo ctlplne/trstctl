@@ -279,6 +279,12 @@ const deDECatalog = {
   "discovery.ct.logHealth": "Log-Checkpoints",
   "discovery.ct.logs": "CT-Logs",
   "discovery.ct.neverPolled": "nie abgefragt",
+  // AUD-70 machine-authored translations; human review required before release.
+  "discovery.ct.pollSucceeded": "letzte Abfrage erfolgreich",
+  "discovery.ct.pollFailed": "letzte Abfrage fehlgeschlagen",
+  "discovery.ct.lastPollError": "Letzter Fehler: {detail}",
+  "discovery.ct.retiredLogs": "Verlauf stillgelegter Logs (nicht abgefragt)",
+  "discovery.ct.retiredAt": "Stillgelegt {value}",
   "discovery.ct.nextIndex": "n\u00e4chster Index {value}",
   "discovery.ct.noFindings": "Keine unerwartete Ausstellung f\u00fcr die \u00fcberwachten Domains in den konfigurierten Logs.",
   "discovery.ct.notConfigured":

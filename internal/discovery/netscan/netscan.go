@@ -61,6 +61,19 @@ type Report struct {
 	Failed     int // probe errors (unreachable, no TLS, sink error)
 	Rejected   int // could not be submitted (pool closed or context cancelled)
 	Blocked    int // skipped before dialing by the SSRF/reserved-address guard
+	// TargetResults carries bounded per-target facts to the immutable run
+	// completion event. Most scanners leave it empty; CT monitoring needs it so
+	// one failed endpoint does not hide a peer's successful progress.
+	TargetResults []TargetResult
+}
+
+// TargetResult is one scanner target's terminal outcome.
+type TargetResult struct {
+	Kind   string
+	Target string
+	Status string
+	Cursor int64
+	Error  string
 }
 
 type config struct {

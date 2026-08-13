@@ -4,7 +4,7 @@ import { SectionCard, DashboardGrid } from "@/components/dashboard";
 import { StatTile } from "@/components/charts";
 import { useCan } from "@/components/rbac";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
 import { api, ApiError, type CTMonitoring, type DiscoveryFinding } from "@/lib/api";
 
 // Certificate Transparency monitoring, as a headline discovery capability (C5).
@@ -51,6 +51,12 @@ function findingDetail(finding: DiscoveryFinding): { subject: string; issuer: st
     subject: read("subject") || read("common_name") || finding.ref,
     issuer: read("issuer") || read("issuer_name"),
   };
+}
+
+function pollStatusLabel(status: string, t: I18nContextValue["t"]): string {
+  if (status === "succeeded") return t("discovery.ct.pollSucceeded");
+  if (status === "failed") return t("discovery.ct.pollFailed");
+  return t("discovery.ct.neverPolled");
 }
 
 export function CTMonitoringPanel() {
@@ -146,12 +152,37 @@ export function CTMonitoringPanel() {
                 <li key={log.url} className="grid gap-0.5 border-l-2 border-brand-accent/60 pl-2">
                   <span className="break-all font-mono text-xs">{log.url}</span>
                   <span className="text-2xs text-muted-foreground">
-                    {log.next_index > 0 ? t("discovery.ct.nextIndex", { value: log.next_index }) : t("discovery.ct.neverPolled")}
+                    {pollStatusLabel(log.status, t)} · {t("discovery.ct.nextIndex", { value: log.next_index })}
                   </span>
+                  {log.last_polled_at ? <span className="text-2xs text-muted-foreground">{formatDateTime(log.last_polled_at)}</span> : null}
+                  {log.last_error ? (
+                    <span className="break-words text-2xs text-risk-critical">{t("discovery.ct.lastPollError", { detail: log.last_error })}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
           )}
+          {(monitoring?.retired_logs ?? []).length > 0 ? (
+            <div className="mt-3 grid gap-2 border-t border-border pt-3">
+              <h4 className="text-xs font-semibold text-muted-foreground">{t("discovery.ct.retiredLogs")}</h4>
+              <ul className="grid gap-1">
+                {(monitoring?.retired_logs ?? []).map((log) => (
+                  <li key={log.url} className="grid gap-0.5 border-l-2 border-muted-foreground/40 pl-2">
+                    <span className="break-all font-mono text-xs text-muted-foreground">{log.url}</span>
+                    <span className="text-2xs text-muted-foreground">
+                      {pollStatusLabel(log.status, t)} · {t("discovery.ct.nextIndex", { value: log.next_index })}
+                    </span>
+                    {log.retired_at ? (
+                      <span className="text-2xs text-muted-foreground">{t("discovery.ct.retiredAt", { value: formatDateTime(log.retired_at) })}</span>
+                    ) : null}
+                    {log.last_error ? (
+                      <span className="break-words text-2xs text-muted-foreground">{t("discovery.ct.lastPollError", { detail: log.last_error })}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {monitoring?.run?.completed_at ? <p className="text-2xs text-muted-foreground">{formatDateTime(monitoring.run.completed_at)}</p> : null}
         </div>
 

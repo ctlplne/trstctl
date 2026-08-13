@@ -4,6 +4,8 @@ package ctmonitor
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -13,8 +15,27 @@ import (
 type Persistence interface {
 	WatchedDomains(ctx context.Context, tenantID string) ([]string, error)
 	Checkpoints(ctx context.Context, tenantID string) ([]LogState, error)
-	SaveCheckpoint(ctx context.Context, tenantID, logURL string, next int64) error
+	SavePollResult(ctx context.Context, tenantID string, result LogPollResult) error
 }
+
+// RunResult keeps successful findings and one explicit outcome per configured
+// log even when the aggregate pass is partial.
+type RunResult struct {
+	Findings []Finding
+	Logs     []LogPollResult
+}
+
+func (r RunResult) FailedLogCount() int {
+	count := 0
+	for _, result := range r.Logs {
+		if result.Status == LogPollFailed {
+			count++
+		}
+	}
+	return count
+}
+
+func (r RunResult) SucceededLogCount() int { return len(r.Logs) - r.FailedLogCount() }
 
 const defaultInterval = 5 * time.Minute
 
@@ -78,28 +99,37 @@ func NewScheduler(p Persistence, fetch Fetcher, known KnownGood, alert Alerter, 
 // RunOnce performs a single monitoring pass for the tenant. With no watched
 // domains or no tracked logs it does nothing.
 func (s *Scheduler) RunOnce(ctx context.Context, tenantID string) ([]Finding, error) {
+	result, err := s.RunOnceDetailed(ctx, tenantID)
+	return result.Findings, err
+}
+
+// RunOnceDetailed performs one monitoring pass without collapsing per-log
+// truth. Successful checkpoints are persisted even when a peer log fails.
+func (s *Scheduler) RunOnceDetailed(ctx context.Context, tenantID string) (RunResult, error) {
 	domains, err := s.persist.WatchedDomains(ctx, tenantID)
 	if err != nil {
-		return nil, err
+		return RunResult{}, err
 	}
 	logs, err := s.persist.Checkpoints(ctx, tenantID)
 	if err != nil {
-		return nil, err
+		return RunResult{}, err
 	}
 	if len(domains) == 0 || len(logs) == 0 {
-		return nil, nil
+		return RunResult{}, nil
 	}
 
 	m := New(s.fetch, s.known, s.alert, Config{WatchedDomains: domains, MaxBatch: s.maxBatch}, s.monOpts...)
-	states, findings, pollErr := m.PollAll(ctx, tenantID, logs)
+	outcomes, findings, pollErr := m.PollAllDetailed(ctx, tenantID, logs)
 
-	// Persist whatever progress was made, even if some log errored.
-	for _, st := range states {
-		if err := s.persist.SaveCheckpoint(ctx, tenantID, st.URL, st.Checkpoint); err != nil && pollErr == nil {
-			pollErr = err
+	var persistErrs []error
+	for i := range outcomes {
+		if err := s.persist.SavePollResult(ctx, tenantID, outcomes[i]); err != nil {
+			persistErrs = append(persistErrs, fmt.Errorf("persist CT poll result for %s: %w", outcomes[i].URL, err))
+			outcomes[i].Status = LogPollFailed
+			outcomes[i].Error = boundedPollDetail(err.Error())
 		}
 	}
-	return findings, pollErr
+	return RunResult{Findings: findings, Logs: outcomes}, errors.Join(pollErr, errors.Join(persistErrs...))
 }
 
 // Run polls immediately and then every interval until ctx is cancelled, at which

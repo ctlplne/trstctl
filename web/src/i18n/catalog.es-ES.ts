@@ -270,6 +270,12 @@ const esESCatalog = {
   "discovery.ct.logHealth": "Puntos de control de registros",
   "discovery.ct.logs": "Registros CT",
   "discovery.ct.neverPolled": "nunca consultado",
+  // AUD-70 machine-authored translations; human review required before release.
+  "discovery.ct.pollSucceeded": "la última consulta se completó correctamente",
+  "discovery.ct.pollFailed": "la última consulta falló",
+  "discovery.ct.lastPollError": "Último error: {detail}",
+  "discovery.ct.retiredLogs": "Historial de registros retirados (no se consultan)",
+  "discovery.ct.retiredAt": "Retirado {value}",
   "discovery.ct.nextIndex": "siguiente \u00edndice {value}",
   "discovery.ct.noFindings": "Ninguna emisi\u00f3n inesperada para los dominios vigilados, en los registros configurados.",
   "discovery.ct.notConfigured":

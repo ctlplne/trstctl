@@ -163,6 +163,7 @@ func (d *issuanceDispatcher) handleDiscoveryRun(ctx context.Context, m orchestra
 		if err := d.orch.CompleteDiscoveryRun(ctx, m.TenantID, store.DiscoveryRun{
 			ID: p.ID, Status: status, Targets: rep.Targets, Discovered: rep.Discovered,
 			Failed: rep.Failed, Rejected: rep.Rejected, Error: msg,
+			TargetResults: discoveryTargetResults(rep.TargetResults),
 		}); err != nil {
 			return nil, err
 		}
@@ -358,32 +359,57 @@ func (d *issuanceDispatcher) executeCTLogDiscoveryRun(ctx context.Context, tenan
 	if run.DryRun {
 		return netscan.Report{Targets: len(logs)}, "succeeded", "", nil
 	}
-	for _, domain := range domains {
-		if err := d.store.AddWatchedDomain(ctx, tenantID, domain); err != nil {
-			return netscan.Report{}, "", "", err
-		}
-	}
-	for _, logURL := range logs {
-		if err := d.store.RegisterCTLog(ctx, tenantID, logURL); err != nil {
-			return netscan.Report{}, "", "", err
-		}
-	}
 	sched := ctmonitor.NewScheduler(
-		ctmonitor.NewStorePersistence(d.store),
+		ctmonitor.NewStorePersistenceForWatchlist(d.store, domains, logs),
 		ctmonitor.NewHTTPFetcherWithClient(client),
 		ctmonitor.NewStoreKnownGood(d.store),
 		ctmonitor.NewStoreAlerter(d.store, d.outbox),
 		ctmonitor.WithMaxBatch(maxBatch),
 		ctmonitor.WithMonitorOptions(ctmonitor.WithWorkers(4), ctmonitor.WithQueue(64), ctmonitor.WithBackoff(10*time.Millisecond)),
 	)
-	findings, err := sched.RunOnce(ctx, tenantID)
-	if err != nil {
-		return netscan.Report{Targets: len(logs), Failed: 1}, "failed", err.Error(), nil
-	}
-	if err := d.recordCTLogFindings(ctx, tenantID, src.ID, run.ID, findings); err != nil {
+	result, _ := sched.RunOnceDetailed(ctx, tenantID)
+	if err := d.recordCTLogFindings(ctx, tenantID, src.ID, run.ID, result.Findings); err != nil {
 		return netscan.Report{}, "", "", err
 	}
-	return netscan.Report{Targets: len(logs), Discovered: len(findings)}, "succeeded", "", nil
+	targetResults := make([]netscan.TargetResult, 0, len(result.Logs))
+	for _, outcome := range result.Logs {
+		targetResults = append(targetResults, netscan.TargetResult{
+			Kind: "ct_log", Target: outcome.URL, Status: outcome.Status,
+			Cursor: outcome.Checkpoint, Error: outcome.Error,
+		})
+	}
+	report := netscan.Report{
+		Targets: len(result.Logs), Discovered: len(result.Findings), Failed: result.FailedLogCount(),
+		TargetResults: targetResults,
+	}
+	if result.FailedLogCount() == 0 {
+		return report, "succeeded", "", nil
+	}
+	message := fmt.Sprintf("%d of %d CT logs failed", result.FailedLogCount(), len(result.Logs))
+	for _, outcome := range result.Logs {
+		if outcome.Status == ctmonitor.LogPollFailed && outcome.Error != "" {
+			message += ": " + outcome.Error
+			break
+		}
+	}
+	if result.SucceededLogCount() > 0 {
+		return report, "partial", message, nil
+	}
+	return report, "failed", message, nil
+}
+
+func discoveryTargetResults(in []netscan.TargetResult) []store.DiscoveryTargetResult {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]store.DiscoveryTargetResult, 0, len(in))
+	for _, result := range in {
+		out = append(out, store.DiscoveryTargetResult{
+			Kind: result.Kind, Target: result.Target, Status: result.Status,
+			Cursor: result.Cursor, Error: result.Error,
+		})
+	}
+	return out
 }
 
 func (d *issuanceDispatcher) executeDriftDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {

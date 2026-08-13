@@ -63,10 +63,24 @@ type DiscoveryRun struct {
 	StartedAt         *time.Time
 	CompletedAt       *time.Time
 	CreatedAt         time.Time
+	// TargetResults are immutable per-target completion facts carried by the
+	// completion event. They are command data, not a discovery_runs column.
+	TargetResults []DiscoveryTargetResult `json:"-"`
 	// OnlyIfDue is command-side scheduling policy and is never projected. The
 	// scheduler sets it so concurrent leader sweeps serialize and re-check the
 	// database clock before appending a second run for one schedule.
 	OnlyIfDue bool
+}
+
+// DiscoveryTargetResult is one bounded target outcome included in a discovery
+// completion event. CT monitoring uses it to project log health without a
+// scheduler-side write to a derived table (AN-2).
+type DiscoveryTargetResult struct {
+	Kind   string
+	Target string
+	Status string
+	Cursor int64
+	Error  string
 }
 
 // DiscoveryFinding is a metadata-only credential reference produced by a run.
@@ -157,7 +171,10 @@ func (s *Store) ApplyDiscoverySourceUpsertedTx(ctx context.Context, tx pgx.Tx, s
 		          config = EXCLUDED.config,
 		          updated_at = EXCLUDED.updated_at`,
 		src.ID, src.TenantID, src.Kind, src.Name, normalizeJSON(src.Config), src.CreatedAt, src.UpdatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.reconcileCTMonitoringFromSourcesTx(ctx, tx, src.TenantID, src.UpdatedAt)
 }
 
 // ApplyDiscoveryScheduleUpsertedTx projects a discovery.schedule.upserted event.

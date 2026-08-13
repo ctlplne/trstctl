@@ -176,7 +176,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Served status strings | Every status is registered with what the code actually did; CI blocks a status spelled stronger than its own flags | [Served status vocabulary](#served-status-vocabulary-what-each-status-claims) |
 | CA hierarchy expiry horizon | Served; year-scale bands, re-alerting on each tightening, leaf-validity-compression check, horizon on the CA API and console | [The CA calendar](#the-ca-calendar-year-scale-hierarchy-expiry) |
 | ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window enforced fail-closed, runtime disable. Rotation stays a config operation | [Protocols](#protocols) |
-| Certificate Transparency monitoring | Served as a headline Discovery capability: watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
+| Certificate Transparency monitoring | Served as a headline Discovery capability: exact source replacement, active versus retired watchlist history, immutable per-log success/failure with independent checkpoint progress, unexpected-issuance findings, and remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Three paths still generate one in the control plane, each named with its successor | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance | [Key custody](custody.md) |
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`, `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, and `agent.upgrade`; each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
@@ -977,14 +977,18 @@ never live in the API process. What you can do end to end against the running bi
   served through the served discovery worker, queuing notification alerts the
   same way expiry alerts do. CT monitoring is a **headline capability on the
   Discovery workspace**, not a footnote: one surface carries the watched-domain
-  and log watchlist, per-log checkpoint state (so you can see whether a log is
-  being polled at all or has never been reached), unexpected-issuance findings
+  and log watchlist, per-log checkpoint/health state (so you can see whether a log
+  succeeded, failed, or has never been reached), retired audit history that is no
+  longer polled, unexpected-issuance findings
   with certificate detail, and a one-click hand-off to the rogue-certificate
   remediation path. It previously appeared there only as a single count shared
   with drift detection, so the capability was effectively unfindable. It covers
   **only the domains and logs configured** — a domain you have not listed, or a
   log you do not poll, produces no finding, and the surface says so beside the
-  counts so an empty list is not read as an all-clear. It also only sees what a
+  counts so an empty list is not read as an all-clear. Replacing a named watchlist
+  retires URLs absent from the new source configuration in the source event's same
+  tenant transaction; one failed active log does not discard a peer's successful
+  checkpoint or finding. It also only sees what a
   CA chose to log, which in practice means public issuance.
   For a **drift** source the worker compares configured
   credential paths against expected fingerprints/permissions and records

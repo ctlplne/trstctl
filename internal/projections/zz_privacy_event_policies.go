@@ -1303,7 +1303,8 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventProfileUpdated, 1}:                                                privacyPayloadShape[ProfileVersioned](),
 		{EventDiscoveryScheduleUpserted, 1}:                                     privacyPayloadShape[DiscoveryScheduleUpserted](),
 		{EventDiscoveryRunStarted, 1}:                                           privacyPayloadShape[DiscoveryRunStarted](),
-		{EventDiscoveryRunCompleted, 1}:                                         privacyPayloadShape[DiscoveryRunCompleted](),
+		{EventDiscoveryRunCompleted, 1}:                                         privacyPayloadShape[privacyDiscoveryRunCompletedV1](),
+		{EventDiscoveryRunCompleted, DiscoveryTargetResultsEventSchemaVersion}:  privacyPayloadShape[DiscoveryRunCompleted](),
 		{EventACMEDNS01ProviderConfigUpserted, 1}:                               privacyPayloadShape[ACMEDNS01ProviderConfigUpserted](),
 		{EventACMEDNS01ProviderConfigDeleted, 1}:                                privacyPayloadShape[ACMEDNS01ProviderConfigDeleted](),
 		{EventACMEDNS01Preflighted, 1}:                                          privacyPayloadShape[ACMEDNS01Preflighted](),
@@ -1403,6 +1404,22 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventSecretSyncWorkloadIdentityStatus, 1}:                                    privacyPayloadShape[SecretSyncWorkloadIdentitySourceStatus](),
 		{EventSecretSyncWorkloadIdentityDeleted, 1}:                                   privacyPayloadShape[SecretSyncWorkloadIdentitySourceDeleted](),
 	}
+}
+
+// privacyDiscoveryRunCompletedV1 freezes the aggregate-only historical shape.
+// AUD-70 target_results is schema v2, so privacy rewrites may never manufacture
+// that new field inside a v1 event.
+type privacyDiscoveryRunCompletedV1 struct {
+	ID                string `json:"id"`
+	Status            string `json:"status"`
+	Targets           int    `json:"targets"`
+	Discovered        int    `json:"discovered"`
+	Failed            int    `json:"failed"`
+	Rejected          int    `json:"rejected"`
+	Blocked           int    `json:"blocked,omitempty"`
+	Error             string `json:"error,omitempty"`
+	Segment           string `json:"segment,omitempty"`
+	ExecutedByAgentID string `json:"executed_by_agent_id,omitempty"`
 }
 
 // projectorRejectPrivacyRules closes the deliberately dynamic fields inside a

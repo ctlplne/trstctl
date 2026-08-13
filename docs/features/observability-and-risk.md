@@ -91,11 +91,21 @@ ct-monitoring get|update`, or the console to configure watched domains/logs, ins
 checkpoints, queue a poll, and review `ct_unexpected_issuance` findings. The worker polls,
 records tenant-scoped findings, and queues notifications via the outbox.
 
+`PUT` is exact replacement for the named source, not append. The source event and its
+tenant-local active watchlist reconcile in one PostgreSQL transaction. Logs and domains
+absent from the replacement become retired, cannot be polled by a later run, and remain
+separately readable as audit history. Each run records one bounded immutable outcome per
+configured log. A failed log therefore stays failed with its diagnostic while a working
+peer still advances its checkpoint and keeps its findings; the aggregate run is `partial`
+when both happened. The console separates active health from retired history so an old
+404 endpoint cannot make the current watchlist look broken.
+
 **Where to find it.** CT monitoring is a **discovery** capability — it answers "is
 someone issuing certificates for my domains?" — so its home is the **Discovery**
 workspace, which carries the whole loop on one surface: the watched-domain and log
 watchlist, per-log checkpoint state (so you can see whether a log is actually being
-polled or has never been reached), unexpected-issuance findings with the certificate
+polled, succeeded, failed, or has never been reached), retired log history,
+unexpected-issuance findings with the certificate
 detail, and a one-click hand-off to the rogue-certificate remediation path. Posture keeps
 the readiness view. It previously appeared on Discovery only as a single count shared
 with drift detection, which is why operators could not find the capability at all.
