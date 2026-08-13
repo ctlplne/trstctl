@@ -644,8 +644,13 @@ describe("i18n boundary", () => {
       // Product names, example URLs, env references, IDs, and numeric bounds
       // stay byte-identical. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "f8f9bd33bb51c61539bc70703580661691586221fe6e98af3b9944849e584b89",
-      "de-DE": "de3fa816347996a6b2c3f152c59117557f1b4ca491a3f9481f772d38174366ab",
+      // AUD-56 pricing-entitlement re-pin: fifteen platform.editions.* keys
+      // name the five published price bands, the signed deployment environment,
+      // production-unit consumption, and remaining bundled non-production slots.
+      // Currency, counts, and placeholders stay exact. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "a8bb4814da70f362e3f01ffa6e99c77baa2237015cae261e8045aa0e471c5dc3",
+      "de-DE": "e94a06c6d61b426c2e53061fa7dbfb79815f66cf1a7968ddd76b308f6ec01c0e",
     });
   });
 

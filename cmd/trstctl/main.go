@@ -456,6 +456,8 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "log.format: %s\n", cfg.Log.Format)
 	fmt.Fprintf(&b, "migrate.auto: %t\n", cfg.Migrate.Auto)
 	fmt.Fprintf(&b, "license.file: %s\n", cfg.License.File)
+	fmt.Fprintf(&b, "license.deployment_id: %s\n", cfg.License.DeploymentID)
+	fmt.Fprintf(&b, "license.environment: %s\n", cfg.License.Environment)
 	for _, limit := range cfg.Bulkheads.Configs() {
 		fmt.Fprintf(&b, "bulkheads.%s.workers: %d\n", limit.Name, limit.Workers)
 		fmt.Fprintf(&b, "bulkheads.%s.queue: %d\n", limit.Name, limit.Queue)

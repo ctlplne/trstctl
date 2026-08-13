@@ -1069,6 +1069,15 @@ stay observable.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_LICENSE_FILE` | unset (Community edition) | Path to the signed license file (Ed25519-verified offline, the AN-9 attach seam). |
+| `TRSTCTL_LICENSE_DEPLOYMENT_ID` | unset | Stable runtime deployment ID. Required with `TRSTCTL_LICENSE_ENVIRONMENT` for a version 2 license; it must match the signed production ID or one of at most three signed non-production IDs. |
+| `TRSTCTL_LICENSE_ENVIRONMENT` | unset | `production` or `non_production`. Required with `TRSTCTL_LICENSE_DEPLOYMENT_ID` for a version 2 license. A v1 compatibility license may omit both but remains production-only. |
+
+The ID is not a secret and does not phone home. It is a local name bound by the
+vendor's Ed25519 signature. Copying a non-production license to another control
+plane without giving that deployment its own signed ID fails startup. See
+[Editions](editions.md#signed-deployment-environment-entitlement) for the claim
+shape and [Pricing](pricing.md#bundled-non-production-entitlement) for what is
+included.
 
 The related `TRSTCTL_PCAS_*` variable surface (about two dozen settings covering
 delegation, recovery, federation, KEM, checkpoints, monitors, and retirement for

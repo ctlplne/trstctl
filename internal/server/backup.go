@@ -54,7 +54,7 @@ func recoveryProjectionOptions(
 	if len(factories) == 0 {
 		return nil, nil
 	}
-	lic, err := license.Load(cfg.License.File, license.TrustedKeys())
+	lic, err := loadConfiguredLicense(cfg, license.TrustedKeys())
 	if err != nil {
 		return nil, fmt.Errorf("load license for recovery projections: %w", err)
 	}

@@ -79,7 +79,7 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
-	lic, err := license.Load(cfg.License.File, license.TrustedKeys())
+	lic, err := loadConfiguredLicense(cfg, license.TrustedKeys())
 	if err != nil {
 		return fmt.Errorf("license: %w", err)
 	}
@@ -163,6 +163,13 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		return err
 	}
 	return serveRuntime(ctx, cfg, srv, logger, stopBackground)
+}
+
+func loadConfiguredLicense(cfg *config.Config, trustedPubPEMs [][]byte) (*license.Manager, error) {
+	return license.LoadForDeployment(cfg.License.File, trustedPubPEMs, license.DeploymentIdentity{
+		ID:          cfg.License.DeploymentID,
+		Environment: license.Environment(cfg.License.Environment),
+	})
 }
 
 func applyEditionAttachers(ctx context.Context, cfg *config.Config, logger *slog.Logger, lic *license.Manager, deps *Deps, attachers ...EditionAttach) (err error) {
@@ -417,9 +424,7 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 		managedKeysCleanup = cleanup
 		args = append(args, "--managed-keys-config", managedKeysConfig)
 	}
-	if cfg.License.File != "" {
-		args = append(args, "--license", cfg.License.File)
-	}
+	args = appendSignerLicenseArgs(args, cfg.License)
 	if cfg.Signer.AllowInsecureDevNonLinux {
 		args = append(args, "--allow-insecure-dev-nonlinux")
 	}
@@ -432,6 +437,20 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 		sup.Close()
 		managedKeysCleanup()
 	}, nil
+}
+
+func appendSignerLicenseArgs(args []string, lic config.License) []string {
+	if lic.File == "" {
+		return args
+	}
+	args = append(args, "--license", lic.File)
+	if lic.DeploymentID != "" {
+		args = append(args, "--license-deployment-id", lic.DeploymentID)
+	}
+	if lic.Environment != "" {
+		args = append(args, "--license-environment", lic.Environment)
+	}
+	return args
 }
 
 // runRestoreDrill resolves the J2 restore drill from configuration: the closure

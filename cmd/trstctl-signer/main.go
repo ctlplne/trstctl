@@ -57,6 +57,8 @@ func main() {
 	// PCAS feature (INT-02). Fail-closed: no --license, or a license without PCAS,
 	// means the signer mints no successions and MintSuccessor returns UNIMPLEMENTED.
 	licenseFile := flag.String("license", "", "path to the signed license file; enables PCAS succession minting only when the license grants the PCAS feature (fail-closed)")
+	licenseDeploymentID := flag.String("license-deployment-id", "", "stable deployment ID bound by a version 2 license")
+	licenseEnvironment := flag.String("license-environment", "", "licensed deployment environment: production or non_production")
 	flag.Parse()
 
 	if *showVersion {
@@ -92,7 +94,10 @@ func main() {
 	// it. An absent license leaves lic nil => the signer mints no successions.
 	var lic *license.Manager
 	if *licenseFile != "" {
-		m, err := license.Load(*licenseFile, license.TrustedKeys())
+		m, err := loadSignerLicense(*licenseFile, license.DeploymentIdentity{
+			ID:          *licenseDeploymentID,
+			Environment: license.Environment(*licenseEnvironment),
+		}, license.TrustedKeys())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trstctl-signer: load license: %v\n", err)
 			os.Exit(1)
@@ -165,6 +170,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: %v\n", serveErr)
 		os.Exit(1)
 	}
+}
+
+func loadSignerLicense(path string, identity license.DeploymentIdentity, trustedPubPEMs [][]byte) (*license.Manager, error) {
+	return license.LoadForDeployment(path, trustedPubPEMs, identity)
 }
 
 func signerKeystoreWrapper(kekFile, provider, keyRef, wrapCommand string, timeout time.Duration) (seal.KeyWrapper, func(), error) {

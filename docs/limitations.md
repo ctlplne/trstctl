@@ -4477,3 +4477,17 @@ The [README capability table](https://github.com/ctlplne/trstctl#capabilities)
 describes what is built and tested; this page tells you what is served by
 the binary today. When the two differ, this page is the authority for what
 you can rely on at runtime.
+
+## Non-production entitlement boundary
+
+The signed non-production entitlement is an offline deployment binding, not a
+traffic classifier. Version 2 licenses enumerate one production ID and at most
+three non-production IDs; the binary refuses an operator-declared runtime ID or
+environment that does not match. It cannot independently prove that a host
+called `non_production` carries no real-user traffic, because doing so would
+require surveillance or phone-home state that the product explicitly avoids.
+
+Version 1 license files predate environment binding. They remain loadable for
+upgrade continuity but are production-only and cannot claim the bundled
+non-production entitlement. Issue a v2 file before moving a legacy deployment
+into a staging or test slot.

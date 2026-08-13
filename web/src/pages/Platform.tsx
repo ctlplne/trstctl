@@ -61,7 +61,16 @@ const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
   managed_boundary:
     "Provider/MSP normally runs one shared control plane with multiple customer tenants, with dedicated customer deployments available when its security posture requires them.",
   pricing_posture:
-    "Free is the self-hosted MPL core. Enterprise bills per control-plane deployment. Provider/MSP wholesale pricing uses negotiable managed-customer bands and includes managed-service and resale rights for the commercial feature set; each MSP controls its own downstream hosting, support, and customer pricing. Credentials and rotations are never billing units.",
+    "Free is the self-hosted MPL core. Enterprise reference list is USD 15,000/year Standard or USD 30,000/year Plus per production control-plane deployment. Provider/MSP reference bands start at USD 12,000/year.",
+  bundled_non_production_deployments: 3,
+  non_production_support_posture: "Three bound non-production control planes are included with no production SLA.",
+  reference_price_bands: [
+    { id: "enterprise-standard", label: "", annual_usd: 15000, unit: "production control plane" },
+    { id: "enterprise-plus", label: "", annual_usd: 30000, unit: "HA production control plane" },
+    { id: "provider-1-10", label: "", annual_usd: 12000, unit: "managed customer band" },
+    { id: "provider-11-50", label: "", annual_usd: 30000, unit: "managed customer band" },
+    { id: "provider-51-250", label: "", annual_usd: 72000, unit: "managed customer band" },
+  ],
   evidence_rail: ["live eval receipts", "served NHI route coverage", "OWASP NHI mapping", "current limitations"],
   editions: [
     { id: "community", name: "Free", column: "Free", buyer_fit: "", license_boundary: "", billing: "", included: [] },
@@ -70,6 +79,14 @@ const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
   ],
   meters: [],
 };
+
+const priceBandLabelKeys = {
+  "enterprise-standard": "platform.editions.enterpriseStandard",
+  "enterprise-plus": "platform.editions.enterprisePlus",
+  "provider-1-10": "platform.editions.provider1To10",
+  "provider-11-50": "platform.editions.provider11To50",
+  "provider-51-250": "platform.editions.provider51To250",
+} as const;
 
 type PAMSessionFormState = {
   target_type: PAMSessionRequest["target_type"];
@@ -816,6 +833,31 @@ export function AdminEditions() {
                 </table>
               </div>
               <div className="overflow-x-auto rounded-panel border border-border">
+                <table className="ui-table min-w-[36rem]">
+                  <caption>{t("platform.editions.referencePrices")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("platform.editions.priceBand")}</th>
+                      <th scope="col">{t("platform.editions.annualPrice")}</th>
+                      <th scope="col">{t("platform.editions.unit")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {packaging.reference_price_bands.map((band) => {
+                      const labelKey = priceBandLabelKeys[band.id as keyof typeof priceBandLabelKeys];
+                      return (
+                        <tr key={band.id}>
+                          <td>{labelKey ? t(labelKey) : band.label}</td>
+                          <td>{formatCurrencyPolicy(band.annual_usd, formatPolicy, { maximumFractionDigits: 0 })}</td>
+                          <td>{band.unit}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <p className="px-3 pb-3 text-sm text-muted-foreground">{packaging.non_production_support_posture}</p>
+              </div>
+              <div className="overflow-x-auto rounded-panel border border-border">
                 <table className="ui-table min-w-[32rem]">
                   <caption className="sr-only">{translateNow("source.edition.feature.table.9690596a9d")}</caption>
                   <thead>
@@ -857,6 +899,35 @@ export function AdminEditions() {
                 <dt className="font-medium text-muted-foreground">{translateNow("source.expiry.6956d81401")}</dt>
                 <dd>{formatOptionalDate(editions?.expires_at, formatPolicy)}</dd>
               </div>
+              {editions?.deployment_entitlement ? (
+                <>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.editions.environment")}</dt>
+                    <dd>
+                      {editions.deployment_entitlement.environment === "non_production"
+                        ? t("platform.editions.nonProduction")
+                        : t("platform.editions.production")}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.editions.deploymentId")}</dt>
+                    <dd className="font-mono text-xs">{editions.deployment_entitlement.deployment_id || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.editions.billingUnit")}</dt>
+                    <dd>{t("platform.editions.productionUnits", { count: editions.deployment_entitlement.production_units_consumed })}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.editions.nonProduction")}</dt>
+                    <dd>
+                      {t("platform.editions.nonProductionSlots", {
+                        remaining: editions.deployment_entitlement.non_production_slots_remaining,
+                        total: editions.deployment_entitlement.bundled_non_production_deployments,
+                      })}
+                    </dd>
+                  </div>
+                </>
+              ) : null}
               <div>
                 <dt className="font-medium text-muted-foreground">{t("platform.editions.useRights")}</dt>
                 <dd>{(editions?.rights ?? ["self_host"]).map((right) => right.replaceAll("_", " ")).join(", ")}</dd>

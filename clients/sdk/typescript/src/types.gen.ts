@@ -7394,6 +7394,16 @@ export interface components {
             last_verified_at?: string;
             verified: boolean;
         };
+        DeploymentEntitlementInfo: {
+            bundled_non_production_deployments: number;
+            deployment_id?: string;
+            /** @enum {string} */
+            environment: "production" | "non_production";
+            legacy_unbound: boolean;
+            non_production_slots_remaining: number;
+            production_units_consumed: number;
+            registered_non_production_deployments: number;
+        };
         DeploymentTarget: {
             config: Record<string, never>;
             connector: string;
@@ -7870,6 +7880,7 @@ export interface components {
         };
         EditionPackaging: {
             billable_unit: string;
+            bundled_non_production_deployments: number;
             category_label: string;
             certificate_counters_classification: string;
             editions: components["schemas"]["EditionPackagingEntry"][];
@@ -7878,9 +7889,11 @@ export interface components {
             meters: components["schemas"]["UsageMeterDefinition"][];
             no_ephemeral_identity_billing: boolean;
             no_per_certificate_billing: boolean;
+            non_production_support_posture: string;
             positioning: string;
             pricing_posture: string;
             provider_billing_unit: string;
+            reference_price_bands: components["schemas"]["ReferencePriceBand"][];
         };
         EditionPackagingEntry: {
             billing: string;
@@ -7893,6 +7906,7 @@ export interface components {
         };
         EditionsInfo: {
             customer?: string;
+            deployment_entitlement?: components["schemas"]["DeploymentEntitlementInfo"];
             /** Format: date-time */
             expires_at?: string;
             features: components["schemas"]["EditionFeature"][];
@@ -10515,6 +10529,12 @@ export interface components {
         RCARequest: {
             question: string;
             subject?: string;
+        };
+        ReferencePriceBand: {
+            annual_usd: number;
+            id: string;
+            label: string;
+            unit: string;
         };
         RegionalFailoverStep: {
             action: string;

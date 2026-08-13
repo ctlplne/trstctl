@@ -123,7 +123,9 @@ type Config struct {
 
 // License configures the offline open-core license file. Empty means Community.
 type License struct {
-	File string `json:"file,omitempty"`
+	File         string `json:"file,omitempty"`
+	DeploymentID string `json:"deployment_id,omitempty"`
+	Environment  string `json:"environment,omitempty"`
 }
 
 // HA configures the multi-replica high-availability behavior of the control plane
@@ -2220,6 +2222,8 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_BACKUP_DRILL_RPO", &c.Backup.DrillRPO)
 	setString(getenv, "TRSTCTL_BACKUP_DRILL_RTO", &c.Backup.DrillRTO)
 	setString(getenv, "TRSTCTL_LICENSE_FILE", &c.License.File)
+	setString(getenv, "TRSTCTL_LICENSE_DEPLOYMENT_ID", &c.License.DeploymentID)
+	setString(getenv, "TRSTCTL_LICENSE_ENVIRONMENT", &c.License.Environment)
 	setBool(getenv, "TRSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
 	setInt(getenv, "TRSTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
 	setString(getenv, "TRSTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
@@ -2828,10 +2832,26 @@ func (c *Config) Validate() error {
 		validateFederationConfig,
 		validatePCASConfig,
 		validateProviderConfig,
+		validateLicenseConfig,
 	} {
 		errs = append(errs, validate(c)...)
 	}
 	return errors.Join(errs...)
+}
+
+func validateLicenseConfig(c *Config) []error {
+	var errs []error
+	identityConfigured := c.License.DeploymentID != "" || c.License.Environment != ""
+	if identityConfigured && c.License.File == "" {
+		errs = append(errs, errors.New("license.file is required when a license deployment identity is configured"))
+	}
+	if (c.License.DeploymentID == "") != (c.License.Environment == "") {
+		errs = append(errs, errors.New("license.deployment_id and license.environment must be configured together"))
+	}
+	if c.License.Environment != "" && c.License.Environment != "production" && c.License.Environment != "non_production" {
+		errs = append(errs, errors.New("license.environment must be production or non_production"))
+	}
+	return errs
 }
 
 func validateBulkheadConfig(c *Config) []error {

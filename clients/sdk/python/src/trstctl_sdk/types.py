@@ -2745,6 +2745,20 @@ DRPosture = TypedDict(
     total=False,
 )
 
+DeploymentEntitlementInfo = TypedDict(
+    'DeploymentEntitlementInfo',
+    {
+        'bundled_non_production_deployments': int,
+        'deployment_id': str,
+        'environment': str,
+        'legacy_unbound': bool,
+        'non_production_slots_remaining': int,
+        'production_units_consumed': int,
+        'registered_non_production_deployments': int,
+    },
+    total=False,
+)
+
 DeploymentTarget = TypedDict(
     'DeploymentTarget',
     {
@@ -3376,6 +3390,7 @@ EditionPackaging = TypedDict(
     'EditionPackaging',
     {
         'billable_unit': str,
+        'bundled_non_production_deployments': int,
         'category_label': str,
         'certificate_counters_classification': str,
         'editions': list[dict[str, Any]],
@@ -3384,9 +3399,11 @@ EditionPackaging = TypedDict(
         'meters': list[dict[str, Any]],
         'no_ephemeral_identity_billing': bool,
         'no_per_certificate_billing': bool,
+        'non_production_support_posture': str,
         'positioning': str,
         'pricing_posture': str,
         'provider_billing_unit': str,
+        'reference_price_bands': list[dict[str, Any]],
     },
     total=False,
 )
@@ -3409,6 +3426,7 @@ EditionsInfo = TypedDict(
     'EditionsInfo',
     {
         'customer': str,
+        'deployment_entitlement': dict[str, Any],
         'expires_at': str,
         'features': list[dict[str, Any]],
         'fips': dict[str, Any],
@@ -6898,6 +6916,17 @@ RCARequest = TypedDict(
     {
         'question': str,
         'subject': str,
+    },
+    total=False,
+)
+
+ReferencePriceBand = TypedDict(
+    'ReferencePriceBand',
+    {
+        'annual_usd': int,
+        'id': str,
+        'label': str,
+        'unit': str,
     },
     total=False,
 )

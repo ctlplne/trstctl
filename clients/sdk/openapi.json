@@ -7564,6 +7564,44 @@
         ],
         "type": "object"
       },
+      "DeploymentEntitlementInfo": {
+        "properties": {
+          "bundled_non_production_deployments": {
+            "type": "integer"
+          },
+          "deployment_id": {
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "production",
+              "non_production"
+            ],
+            "type": "string"
+          },
+          "legacy_unbound": {
+            "type": "boolean"
+          },
+          "non_production_slots_remaining": {
+            "type": "integer"
+          },
+          "production_units_consumed": {
+            "type": "integer"
+          },
+          "registered_non_production_deployments": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "environment",
+          "production_units_consumed",
+          "bundled_non_production_deployments",
+          "registered_non_production_deployments",
+          "non_production_slots_remaining",
+          "legacy_unbound"
+        ],
+        "type": "object"
+      },
       "DeploymentTarget": {
         "properties": {
           "config": {
@@ -9336,6 +9374,9 @@
           "billable_unit": {
             "type": "string"
           },
+          "bundled_non_production_deployments": {
+            "type": "integer"
+          },
           "category_label": {
             "type": "string"
           },
@@ -9369,6 +9410,9 @@
           "no_per_certificate_billing": {
             "type": "boolean"
           },
+          "non_production_support_posture": {
+            "type": "string"
+          },
           "positioning": {
             "type": "string"
           },
@@ -9377,6 +9421,12 @@
           },
           "provider_billing_unit": {
             "type": "string"
+          },
+          "reference_price_bands": {
+            "items": {
+              "$ref": "#/components/schemas/ReferencePriceBand"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -9389,6 +9439,9 @@
           "certificate_counters_classification",
           "managed_boundary",
           "pricing_posture",
+          "bundled_non_production_deployments",
+          "non_production_support_posture",
+          "reference_price_bands",
           "evidence_rail",
           "editions",
           "meters"
@@ -9437,6 +9490,9 @@
         "properties": {
           "customer": {
             "type": "string"
+          },
+          "deployment_entitlement": {
+            "$ref": "#/components/schemas/DeploymentEntitlementInfo"
           },
           "expires_at": {
             "format": "date-time",
@@ -19307,6 +19363,29 @@
         },
         "required": [
           "question"
+        ],
+        "type": "object"
+      },
+      "ReferencePriceBand": {
+        "properties": {
+          "annual_usd": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "annual_usd",
+          "unit"
         ],
         "type": "object"
       },

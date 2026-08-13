@@ -10,11 +10,13 @@ adds provider-plane operations plus managed-service and resale rights.
 ## Pricing Posture
 
 The canonical billing reference is [Pricing](pricing.md); the posture in brief:
-Free has no license bill. Enterprise uses `control_plane_deployment`. Provider /
-MSP uses a negotiated `managed_customer_band` as its wholesale anchor. The MSP
-controls its downstream hosting and support prices. Certificates, SVIDs, secrets,
-API keys, tokens, rotations, nodes, and deployment count are not automatic
-Provider wholesale billing units.
+Free has no license bill. Enterprise publishes annual USD reference list prices
+of $15,000 Standard and $30,000 Plus per production
+`control_plane_deployment`. Provider / MSP publishes wholesale bands of $12,000
+for 1–10 managed customers, $30,000 for 11–50, and $72,000 for 51–250; 250+
+is negotiated. The MSP controls its downstream hosting and support prices.
+Certificates, SVIDs, secrets, API keys, tokens, rotations, and nodes are never
+automatic billing units. See [Pricing](pricing.md) for support and renewal terms.
 
 ## Buyer Matrix
 
@@ -28,11 +30,60 @@ Provider wholesale billing units.
 | Provider operations | Not included | Not included | Provider plane, metering, white label, and siloed isolation |
 | Product motion and commercial `ee/` rights | Self-hosted core under MPL-2.0 | Self-hosted commercial feature set | Self-host, managed service, and resale of the commercial feature set |
 | Deployment flexibility | Customer operated | Customer operated | Shared control plane or dedicated customer deployments |
-| Pricing discretion | No license fee | Deployment contract | Wholesale band and terms are negotiable; MSP sets downstream pricing |
+| Pricing | No license fee | $15,000 Standard or $30,000 Plus annual reference list | $12,000 / $30,000 / $72,000 annual wholesale reference bands; 250+ negotiated |
+| Environment entitlement | Community deployments are unmetered | 1 production + 3 signed non-production deployment slots | Same bundle per licensed Provider control plane |
 
 The same binary lineage serves all three tiers. The offline signed tier drives
 both feature inheritance and use rights. Core multi-tenancy, audit/export, crypto,
 and the license verifier remain in core.
+
+## Signed deployment environment entitlement
+
+New licenses use claim version 2. Their signed `environment_entitlement` object
+contains `production_deployment_id`, up to three
+`non_production_deployment_ids`, and `non_production_allowance: 3`. The vendor
+helper refuses duplicate IDs, a production ID repeated as non-production, an
+unsafe ID, or more registered non-production IDs than the allowance.
+
+The offline vendor helper creates that bundle explicitly:
+
+```bash
+trstctl-license sign \
+  --private-key vendor-ed25519.key \
+  --out acme-license.json \
+  --id lic-acme-2027 --customer "Acme Corp" --tier enterprise \
+  --production-deployment-id acme-prod \
+  --non-production-deployment-ids acme-stage,acme-dev,acme-test \
+  --expires-at 2027-08-13T00:00:00Z
+```
+
+The running binary binds those claims to operator-owned configuration:
+
+```bash
+TRSTCTL_LICENSE_FILE=/etc/trstctl/license.json \
+TRSTCTL_LICENSE_DEPLOYMENT_ID=acme-stage \
+TRSTCTL_LICENSE_ENVIRONMENT=non_production \
+trstctl
+```
+
+Both runtime values are required together for v2. `production` must match the
+one signed production ID; `non_production` must match one signed non-production
+ID. A copied file with a changed or misclassified ID fails startup. The Editions
+API exposes `deployment_entitlement.environment`, `deployment_id`,
+`production_units_consumed`, registered and remaining non-production slots, and
+the legacy marker. A non-production deployment therefore provides a
+machine-readable zero production-unit result rather than relying on sales prose.
+
+Version 1 files remain readable for upgrade continuity, but they are explicitly
+production-only and `legacy_unbound: true`; a v1 file cannot activate the
+bundled non-production right. This compatibility rule avoids inventing an
+entitlement that was never signed.
+
+The supervised signer child receives the same deployment ID and environment as
+the control plane and independently applies the same bound loader. An operator
+starting `trstctl-signer` as a separate process must pass
+`--license-deployment-id` and `--license-environment` beside `--license`; a v2
+file without that pair fails closed before the signing service listens.
 
 ## Core Protocols
 

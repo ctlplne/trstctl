@@ -39,6 +39,7 @@ func TestLicenseHelperSignsVerifiesAndInspectsOfflineLicense(t *testing.T) {
 		"--id", "lic-report-004",
 		"--customer", "Example Corp",
 		"--tier", string(license.TierProvider),
+		"--production-deployment-id", "example-prod",
 		"--features", string(license.FeatureGovernance) + ", " + string(license.FeatureProviderPlane),
 		"--managed-customer-band", "25",
 		"--issued-at", "2026-07-01T00:00:00Z",
@@ -86,6 +87,7 @@ func TestLicenseHelperBandFlagsAndTierValidation(t *testing.T) {
 	}
 	base := []string{
 		"sign", "--private-key", privPath, "--id", "lic-band", "--customer", "MSP",
+		"--production-deployment-id", "msp-prod",
 		"--issued-at", "2026-07-01T00:00:00Z", "--expires-at", "2027-07-01T00:00:00Z",
 	}
 	for name, extra := range map[string][]string{

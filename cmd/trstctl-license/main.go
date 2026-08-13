@@ -82,13 +82,15 @@ func runSign(args []string, stdout, stderr io.Writer) error {
 	features := fs.String("features", "", "comma-separated explicit feature extras")
 	managedCustomerBand := fs.Int("managed-customer-band", 0, "Provider/MSP contracted managed-customer band; zero means negotiated or unlimited")
 	tenantBand := fs.Int("tenant-band", 0, "deprecated alias for --managed-customer-band")
+	productionDeploymentID := fs.String("production-deployment-id", "", "stable ID of the one licensed production control plane")
+	nonProductionDeploymentIDs := fs.String("non-production-deployment-ids", "", "comma-separated stable IDs for up to three bundled non-production control planes")
 	issuedAt := fs.String("issued-at", time.Now().UTC().Format(time.RFC3339), "RFC3339 issue time")
 	expiresAt := fs.String("expires-at", "", "RFC3339 expiry time")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *privPath == "" || *id == "" || *customer == "" || *tier == "" || *expiresAt == "" {
-		return errors.New("sign requires --private-key, --id, --customer, --tier, and --expires-at")
+	if *privPath == "" || *id == "" || *customer == "" || *tier == "" || *expiresAt == "" || *productionDeploymentID == "" {
+		return errors.New("sign requires --private-key, --id, --customer, --tier, --production-deployment-id, and --expires-at")
 	}
 	provided := make(map[string]bool)
 	fs.Visit(func(f *flag.Flag) { provided[f.Name] = true })
@@ -122,9 +124,17 @@ func runSign(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("read private key: %w", err)
 	}
 	claims := license.Claims{
-		V: 1, ID: *id, Customer: *customer, Tier: licenseTier,
+		V: 2, ID: *id, Customer: *customer, Tier: licenseTier,
 		Features: parseFeatures(*features), TenantBand: band,
+		DeploymentEntitlement: &license.DeploymentEntitlement{
+			ProductionDeploymentID:     *productionDeploymentID,
+			NonProductionDeploymentIDs: parseDeploymentIDs(*nonProductionDeploymentIDs),
+			NonProductionAllowance:     license.BundledNonProductionDeployments,
+		},
 		IssuedAt: issued, ExpiresAt: expires,
+	}
+	if err := license.ValidateClaims(claims); err != nil {
+		return fmt.Errorf("sign: %w", err)
 	}
 	raw, err := license.Sign(claims, priv)
 	if err != nil {
@@ -161,7 +171,13 @@ func runVerify(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stdout, "ok: %s %s %s expires %s managed_customer_band=%d rights=%s\n", claims.ID, claims.Customer, claims.Tier, claims.ExpiresAt.Format(time.RFC3339), claims.TenantBand, joinRights(license.TierRights(claims.Tier)))
+	productionID := "legacy-unbound"
+	nonProductionCount := 0
+	if claims.DeploymentEntitlement != nil {
+		productionID = claims.DeploymentEntitlement.ProductionDeploymentID
+		nonProductionCount = len(claims.DeploymentEntitlement.NonProductionDeploymentIDs)
+	}
+	_, _ = fmt.Fprintf(stdout, "ok: %s %s %s v%d expires %s managed_customer_band=%d production_deployment_id=%s non_production_deployments=%d/%d rights=%s\n", claims.ID, claims.Customer, claims.Tier, claims.V, claims.ExpiresAt.Format(time.RFC3339), claims.TenantBand, productionID, nonProductionCount, license.BundledNonProductionDeployments, joinRights(license.TierRights(claims.Tier)))
 	return nil
 }
 
@@ -218,6 +234,20 @@ func parseFeatures(raw string) []license.Feature {
 		part = strings.TrimSpace(part)
 		if part != "" {
 			out = append(out, license.Feature(part))
+		}
+	}
+	return out
+}
+
+func parseDeploymentIDs(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if id := strings.TrimSpace(part); id != "" {
+			out = append(out, id)
 		}
 	}
 	return out

@@ -87,6 +87,15 @@ describe("WIRE-12 Platform served admin surface", () => {
       customer: "Acme Robotics",
       license_id: "lic_test_editions",
       expires_at: "2026-12-31T00:00:00Z",
+      deployment_entitlement: {
+        deployment_id: "acme-stage",
+        environment: "non_production",
+        production_units_consumed: 0,
+        bundled_non_production_deployments: 3,
+        registered_non_production_deployments: 1,
+        non_production_slots_remaining: 2,
+        legacy_unbound: false,
+      },
       rights: ["self_host"],
       features: [{ name: "fips", tier: "enterprise", licensed: true, mode: "enabled" }],
       fips: { module_active: false, required: false, self_test_passed: true },
@@ -98,6 +107,15 @@ describe("WIRE-12 Platform served admin surface", () => {
         no_ephemeral_identity_billing: true,
         certificate_counters_classification: "operational_telemetry",
         managed_boundary: "Provider/MSP normally runs one shared control plane; dedicated customer deployments are supported.",
+        bundled_non_production_deployments: 3,
+        non_production_support_posture: "Bundled non-production deployments include all Enterprise features and no production SLA.",
+        reference_price_bands: [
+          { id: "enterprise-standard", label: "Enterprise Standard", annual_usd: 15000, unit: "production control plane" },
+          { id: "enterprise-plus", label: "Enterprise Plus", annual_usd: 30000, unit: "HA production control plane" },
+          { id: "provider-1-10", label: "Provider 1–10", annual_usd: 12000, unit: "managed customer band" },
+          { id: "provider-11-50", label: "Provider 11–50", annual_usd: 30000, unit: "managed customer band" },
+          { id: "provider-51-250", label: "Provider 51–250", annual_usd: 72000, unit: "managed customer band" },
+        ],
         editions: [
           { id: "community", name: "Free" },
           { id: "enterprise", name: "Enterprise self-host" },
@@ -311,6 +329,12 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByText("ENTERPRISE")).toBeInTheDocument();
     expect(screen.getByText("Acme Robotics")).toBeInTheDocument();
     expect(screen.getByText("self host")).toBeInTheDocument();
+    expect(screen.getAllByText("Non-production").length).toBeGreaterThan(0);
+    expect(screen.getByText("acme-stage")).toBeInTheDocument();
+    expect(screen.getByText("0 production units")).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 non-production slots remaining")).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Enterprise Standard.*\$15,000/i })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Provider 51–250.*\$72,000/i })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Free Enterprise self-host Provider \/ MSP/i })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
     expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();

@@ -44,7 +44,13 @@ type editionsTestResponse struct {
 		CertificateCountersClassification string `json:"certificate_counters_classification"`
 		ManagedBoundary                   string `json:"managed_boundary"`
 		PricingPosture                    string `json:"pricing_posture"`
-		Editions                          []struct {
+		BundledNonProductionDeployments   int    `json:"bundled_non_production_deployments"`
+		NonProductionSupportPosture       string `json:"non_production_support_posture"`
+		ReferencePriceBands               []struct {
+			ID        string `json:"id"`
+			AnnualUSD int    `json:"annual_usd"`
+		} `json:"reference_price_bands"`
+		Editions []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"editions"`
@@ -170,6 +176,43 @@ func TestEditionsEndpointReturnsLoadedLicense(t *testing.T) {
 	assertEditionsFeature(t, got.Features, license.FeatureFIPS, license.TierEnterprise, true, license.ModeEnabled)
 }
 
+func TestAUD56EditionsEndpointServesEffectiveNonProductionEntitlementAndPriceBands(t *testing.T) {
+	mgr := testBoundLicenseManager(t, license.EnvironmentNonProduction, "acme-stage")
+	var got editionsTestResponse
+	getCanonicalEditions(t, api.New(nil, nil, nil, api.WithLicense(mgr)), &got)
+
+	posture := got.DeploymentEntitlement
+	if posture == nil {
+		t.Fatal("deployment_entitlement is absent")
+	}
+	if posture.Environment != license.EnvironmentNonProduction || posture.DeploymentID != "acme-stage" {
+		t.Fatalf("effective deployment identity = %+v", posture)
+	}
+	if posture.ProductionUnitsConsumed != 0 || posture.BundledNonProductionDeployments != 3 || posture.NonProductionSlotsRemaining != 2 {
+		t.Fatalf("non-production consumption posture = %+v", posture)
+	}
+	if got.Packaging.BundledNonProductionDeployments != 3 || !strings.Contains(strings.ToLower(got.Packaging.NonProductionSupportPosture), "no production sla") {
+		t.Fatalf("packaging non-production promise = %+v", got.Packaging)
+	}
+	for wantID, wantAnnual := range map[string]int{
+		"enterprise-standard": 15000,
+		"enterprise-plus":     30000,
+		"provider-1-10":       12000,
+		"provider-11-50":      30000,
+		"provider-51-250":     72000,
+	} {
+		found := false
+		for _, band := range got.Packaging.ReferencePriceBands {
+			if band.ID == wantID && band.AnnualUSD == wantAnnual {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("reference price %s=%d missing from %+v", wantID, wantAnnual, got.Packaging.ReferencePriceBands)
+		}
+	}
+}
+
 func getEditions(t *testing.T, h http.Handler, out *editionsTestResponse) {
 	t.Helper()
 	rec := httptest.NewRecorder()
@@ -248,6 +291,36 @@ func testLicenseManager(t *testing.T, tier license.Tier) *license.Manager {
 		t.Fatal(err)
 	}
 	mgr, err := license.Load(path, [][]byte{pub})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mgr
+}
+
+func testBoundLicenseManager(t *testing.T, environment license.Environment, deploymentID string) *license.Manager {
+	t.Helper()
+	priv, pub, err := crypto.GenerateEd25519KeyPEM()
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	raw, err := license.Sign(license.Claims{
+		V: 2, ID: "lic_aud56", Customer: "Acme Robotics", Tier: license.TierEnterprise,
+		IssuedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour),
+		DeploymentEntitlement: &license.DeploymentEntitlement{
+			ProductionDeploymentID:     "acme-prod",
+			NonProductionDeploymentIDs: []string{"acme-stage"},
+			NonProductionAllowance:     license.BundledNonProductionDeployments,
+		},
+	}, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "license.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mgr, err := license.LoadForDeployment(path, [][]byte{pub}, license.DeploymentIdentity{ID: deploymentID, Environment: environment})
 	if err != nil {
 		t.Fatal(err)
 	}

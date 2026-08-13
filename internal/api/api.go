@@ -1351,12 +1351,16 @@ func (a *API) licensedRouteRegistry() []route {
 		if lr.Handler == nil {
 			continue
 		}
+		handler := lr.Handler(a)
+		if lr.Mutation {
+			handler = a.requireWritableCommercialLicense(handler)
+		}
 		out = append(out, route{
 			method:            lr.Method,
 			path:              lr.Path,
 			opID:              lr.OperationID,
 			summary:           lr.Summary,
-			handler:           lr.Handler(a),
+			handler:           handler,
 			pathParams:        routeParams(lr.PathParams),
 			query:             routeParams(lr.Query),
 			reqSchema:         lr.RequestSchema,
@@ -1369,6 +1373,21 @@ func (a *API) licensedRouteRegistry() []route {
 		})
 	}
 	return out
+}
+
+// requireWritableCommercialLicense preserves licensed read paths after the
+// renewal grace period while refusing proprietary state changes. Core routes
+// are deliberately outside this wrapper: an expired commercial license must
+// never stop the MPL control plane from issuing, rotating, or revoking through
+// its Community surfaces.
+func (a *API) requireWritableCommercialLicense(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if a.licenseManager().State() == license.StateReadOnly {
+			a.writeError(w, errStatus(http.StatusForbidden, "commercial license is read-only after its renewal grace period; renew the license to mutate commercial state"))
+			return
+		}
+		next(w, r)
+	}
 }
 
 // tenantFromHeader resolves the tenant from the X-Tenant-ID header. It is a

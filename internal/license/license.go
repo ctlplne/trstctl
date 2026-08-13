@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -157,16 +158,48 @@ func FeatureTier(f Feature) Tier {
 	return TierCommunity
 }
 
-// Claims is the signed license payload.
+// Environment names the production meaning of one control-plane deployment.
+type Environment string
+
+const (
+	EnvironmentProduction    Environment = "production"
+	EnvironmentNonProduction Environment = "non_production"
+)
+
+// BundledNonProductionDeployments is the public Enterprise/Provider promise.
+// Keep the signed-claim validator, editions API, console, and pricing docs pinned
+// to this one constant so the product cannot sell three while enforcing two.
+const BundledNonProductionDeployments = 3
+
+// DeploymentEntitlement is signed into a version 2 license. Explicit IDs make
+// the offline allowance mechanically bounded without a phone-home counter.
+type DeploymentEntitlement struct {
+	ProductionDeploymentID     string   `json:"production_deployment_id"`
+	NonProductionDeploymentIDs []string `json:"non_production_deployment_ids,omitempty"`
+	NonProductionAllowance     int      `json:"non_production_allowance"`
+}
+
+// DeploymentIdentity is operator-owned runtime posture. A version 2 license is
+// usable only when both fields match one signed slot.
+type DeploymentIdentity struct {
+	ID          string      `json:"deployment_id"`
+	Environment Environment `json:"environment"`
+}
+
+// Claims is the signed license payload. Version 1 licenses predate deployment
+// binding and remain loadable as production-only compatibility licenses.
+// Version 2 signs one production control plane and the explicitly named
+// non-production control planes that share its commercial entitlement.
 type Claims struct {
-	V          int       `json:"v"`
-	ID         string    `json:"id"`
-	Customer   string    `json:"customer"`
-	Tier       Tier      `json:"tier"`
-	Features   []Feature `json:"features,omitempty"`
-	TenantBand int       `json:"tenant_band,omitempty"`
-	IssuedAt   time.Time `json:"issued_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
+	V                     int                    `json:"v"`
+	ID                    string                 `json:"id"`
+	Customer              string                 `json:"customer"`
+	Tier                  Tier                   `json:"tier"`
+	Features              []Feature              `json:"features,omitempty"`
+	TenantBand            int                    `json:"tenant_band,omitempty"`
+	DeploymentEntitlement *DeploymentEntitlement `json:"environment_entitlement,omitempty"`
+	IssuedAt              time.Time              `json:"issued_at"`
+	ExpiresAt             time.Time              `json:"expires_at"`
 }
 
 // File is the on-disk envelope: exact base64 payload bytes and a detached
@@ -202,8 +235,10 @@ const (
 // Manager answers edition questions for one loaded license. It is immutable
 // after construction; tests replace clock to prove the grace ladder.
 type Manager struct {
-	claims *Claims
-	clock  func() time.Time
+	claims        *Claims
+	clock         func() time.Time
+	deployment    *DeploymentIdentity
+	legacyUnbound bool
 }
 
 // Community returns the keyless/default-open manager.
@@ -254,7 +289,7 @@ func Verify(raw []byte, trustedPubPEMs [][]byte) (*Claims, error) {
 }
 
 func validateClaims(claims Claims) error {
-	if claims.V != 1 {
+	if claims.V != 1 && claims.V != 2 {
 		return fmt.Errorf("license: unsupported license version %d", claims.V)
 	}
 	if claims.Tier != TierEnterprise && claims.Tier != TierProvider {
@@ -265,6 +300,64 @@ func validateClaims(claims Claims) error {
 	}
 	if claims.TenantBand < 0 {
 		return fmt.Errorf("license: managed customer band cannot be negative")
+	}
+	if claims.V == 1 {
+		if claims.DeploymentEntitlement != nil {
+			return fmt.Errorf("license: version 1 cannot carry a deployment entitlement")
+		}
+		return nil
+	}
+	if err := validateDeploymentEntitlement(claims.DeploymentEntitlement); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateClaims applies the same strict schema checks used after signature
+// verification. The vendor-side helper calls it before signing so it cannot mint
+// an unusable or over-allocated file and discover that only at customer startup.
+func ValidateClaims(claims Claims) error {
+	return validateClaims(claims)
+}
+
+func validateDeploymentEntitlement(entitlement *DeploymentEntitlement) error {
+	if entitlement == nil {
+		return fmt.Errorf("license: version 2 requires an environment entitlement")
+	}
+	if err := validateDeploymentID(entitlement.ProductionDeploymentID); err != nil {
+		return fmt.Errorf("license: production deployment id: %w", err)
+	}
+	if entitlement.NonProductionAllowance != BundledNonProductionDeployments {
+		return fmt.Errorf("license: non-production allowance must be %d", BundledNonProductionDeployments)
+	}
+	if len(entitlement.NonProductionDeploymentIDs) > entitlement.NonProductionAllowance {
+		return fmt.Errorf("license: %d non-production deployments exceed allowance %d", len(entitlement.NonProductionDeploymentIDs), entitlement.NonProductionAllowance)
+	}
+	seen := map[string]struct{}{entitlement.ProductionDeploymentID: {}}
+	for _, id := range entitlement.NonProductionDeploymentIDs {
+		if err := validateDeploymentID(id); err != nil {
+			return fmt.Errorf("license: non-production deployment id: %w", err)
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return fmt.Errorf("license: deployment id %q is duplicated across environment slots", id)
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
+}
+
+func validateDeploymentID(id string) error {
+	if id == "" {
+		return fmt.Errorf("deployment id is required")
+	}
+	if len(id) > 128 || id != strings.TrimSpace(id) {
+		return fmt.Errorf("must be 1-128 trimmed ASCII letters, digits, dot, underscore, colon, or hyphen")
+	}
+	for _, r := range id {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == ':' || r == '-' {
+			continue
+		}
+		return fmt.Errorf("must be 1-128 trimmed ASCII letters, digits, dot, underscore, colon, or hyphen")
 	}
 	return nil
 }
@@ -283,6 +376,62 @@ func Load(path string, trustedPubPEMs [][]byte) (*Manager, error) {
 		return nil, err
 	}
 	return &Manager{claims: claims, clock: time.Now}, nil
+}
+
+// LoadForDeployment verifies a license and binds it to the operator-declared
+// runtime identity. Version 2 fails closed unless the ID and environment match a
+// signed slot. Version 1 remains production-only so an upgrade does not brick an
+// existing paid deployment while also never inventing a non-production right.
+func LoadForDeployment(path string, trustedPubPEMs [][]byte, identity DeploymentIdentity) (*Manager, error) {
+	manager, err := Load(path, trustedPubPEMs)
+	if err != nil {
+		return nil, err
+	}
+	if manager.claims == nil {
+		return manager, nil
+	}
+	if manager.claims.V == 1 {
+		if identity.Environment == "" {
+			identity.Environment = EnvironmentProduction
+		}
+		if identity.Environment != EnvironmentProduction {
+			return nil, fmt.Errorf("license: version 1 licenses are production-only; issue a bound version 2 license for non-production")
+		}
+		if identity.ID != "" {
+			if err := validateDeploymentID(identity.ID); err != nil {
+				return nil, fmt.Errorf("license: deployment id: %w", err)
+			}
+		}
+		manager.deployment = &identity
+		manager.legacyUnbound = true
+		return manager, nil
+	}
+	if err := validateDeploymentID(identity.ID); err != nil {
+		return nil, fmt.Errorf("license: deployment id: %w", err)
+	}
+	if identity.Environment != EnvironmentProduction && identity.Environment != EnvironmentNonProduction {
+		return nil, fmt.Errorf("license: environment must be production or non_production")
+	}
+	entitlement := manager.claims.DeploymentEntitlement
+	switch identity.Environment {
+	case EnvironmentProduction:
+		if identity.ID != entitlement.ProductionDeploymentID {
+			return nil, fmt.Errorf("license: deployment id %q does not match licensed production deployment", identity.ID)
+		}
+	case EnvironmentNonProduction:
+		matched := false
+		for _, id := range entitlement.NonProductionDeploymentIDs {
+			if identity.ID == id {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return nil, fmt.Errorf("license: deployment id %q is not licensed as non-production", identity.ID)
+		}
+	}
+	manager.deployment = &identity
+	return manager, nil
 }
 
 // Sign serializes claims and signs the exact payload bytes with a PEM Ed25519
@@ -395,16 +544,29 @@ type FeatureInfo struct {
 
 // Info is the operator-visible Editions payload.
 type Info struct {
-	Tier                Tier          `json:"tier"`
-	State               State         `json:"state"`
-	Customer            string        `json:"customer,omitempty"`
-	LicenseID           string        `json:"license_id,omitempty"`
-	ExpiresAt           *time.Time    `json:"expires_at,omitempty"`
-	ReadOnlyAt          *time.Time    `json:"read_only_at,omitempty"`
-	TenantBand          int           `json:"tenant_band,omitempty"`
-	ManagedCustomerBand int           `json:"managed_customer_band,omitempty"`
-	Rights              []Right       `json:"rights"`
-	Features            []FeatureInfo `json:"features"`
+	Tier                  Tier                       `json:"tier"`
+	State                 State                      `json:"state"`
+	Customer              string                     `json:"customer,omitempty"`
+	LicenseID             string                     `json:"license_id,omitempty"`
+	ExpiresAt             *time.Time                 `json:"expires_at,omitempty"`
+	ReadOnlyAt            *time.Time                 `json:"read_only_at,omitempty"`
+	TenantBand            int                        `json:"tenant_band,omitempty"`
+	ManagedCustomerBand   int                        `json:"managed_customer_band,omitempty"`
+	Rights                []Right                    `json:"rights"`
+	Features              []FeatureInfo              `json:"features"`
+	DeploymentEntitlement *DeploymentEntitlementInfo `json:"deployment_entitlement,omitempty"`
+}
+
+// DeploymentEntitlementInfo is the effective, safe-to-serve result of matching
+// runtime configuration to the signed deployment bundle.
+type DeploymentEntitlementInfo struct {
+	DeploymentID                       string      `json:"deployment_id,omitempty"`
+	Environment                        Environment `json:"environment"`
+	ProductionUnitsConsumed            int         `json:"production_units_consumed"`
+	BundledNonProductionDeployments    int         `json:"bundled_non_production_deployments"`
+	RegisteredNonProductionDeployments int         `json:"registered_non_production_deployments"`
+	NonProductionSlotsRemaining        int         `json:"non_production_slots_remaining"`
+	LegacyUnbound                      bool        `json:"legacy_unbound"`
 }
 
 // Info renders the current license truth.
@@ -419,6 +581,22 @@ func (m *Manager) Info() Info {
 		info.ReadOnlyAt = &ro
 		info.TenantBand = m.claims.TenantBand
 		info.ManagedCustomerBand = m.ManagedCustomerBand()
+		if m.deployment != nil {
+			posture := &DeploymentEntitlementInfo{
+				DeploymentID:  m.deployment.ID,
+				Environment:   m.deployment.Environment,
+				LegacyUnbound: m.legacyUnbound,
+			}
+			if m.deployment.Environment == EnvironmentProduction {
+				posture.ProductionUnitsConsumed = 1
+			}
+			if m.claims.DeploymentEntitlement != nil {
+				posture.BundledNonProductionDeployments = BundledNonProductionDeployments
+				posture.RegisteredNonProductionDeployments = len(m.claims.DeploymentEntitlement.NonProductionDeploymentIDs)
+				posture.NonProductionSlotsRemaining = m.claims.DeploymentEntitlement.NonProductionAllowance - posture.RegisteredNonProductionDeployments
+			}
+			info.DeploymentEntitlement = posture
+		}
 	}
 	for _, f := range AllFeatures() {
 		info.Features = append(info.Features, FeatureInfo{

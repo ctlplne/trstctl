@@ -198,7 +198,8 @@ export const messages = {
     description: "Heading for native scheduled audit delivery to external collectors.",
   },
   "audit.feeds.description": {
-    defaultMessage: "Deliver exact, bounded audit batches to Splunk HEC or Microsoft Sentinel. Retries reuse the same batch, and this table keeps durable lag, failure, and collector-receipt evidence.",
+    defaultMessage:
+      "Deliver exact, bounded audit batches to Splunk HEC or Microsoft Sentinel. Retries reuse the same batch, and this table keeps durable lag, failure, and collector-receipt evidence.",
     description: "Technical explanation of native audit feed delivery guarantees.",
   },
   "audit.feeds.listLabel": {
@@ -5696,6 +5697,66 @@ export const messages = {
   "platform.editions.billingUnit": {
     defaultMessage: "Billing unit",
     description: "Label for the billing-unit row on the managed-offering panel.",
+  },
+  "platform.editions.referencePrices": {
+    defaultMessage: "Published annual reference prices",
+    description: "Heading for the public annual reference price table.",
+  },
+  "platform.editions.priceBand": {
+    defaultMessage: "Band",
+    description: "Column label for a commercial price band.",
+  },
+  "platform.editions.annualPrice": {
+    defaultMessage: "Annual price",
+    description: "Column label for annual USD list price.",
+  },
+  "platform.editions.unit": {
+    defaultMessage: "Unit",
+    description: "Column label for the unit covered by a price band.",
+  },
+  "platform.editions.enterpriseStandard": {
+    defaultMessage: "Enterprise Standard",
+    description: "Published Enterprise Standard reference price band.",
+  },
+  "platform.editions.enterprisePlus": {
+    defaultMessage: "Enterprise Plus",
+    description: "Published Enterprise Plus reference price band.",
+  },
+  "platform.editions.provider1To10": {
+    defaultMessage: "Provider 1–10",
+    description: "Published Provider reference price band for one through ten managed customers.",
+  },
+  "platform.editions.provider11To50": {
+    defaultMessage: "Provider 11–50",
+    description: "Published Provider reference price band for eleven through fifty managed customers.",
+  },
+  "platform.editions.provider51To250": {
+    defaultMessage: "Provider 51–250",
+    description: "Published Provider reference price band for fifty-one through 250 managed customers.",
+  },
+  "platform.editions.environment": {
+    defaultMessage: "Environment entitlement",
+    description: "Label for the effective signed production or non-production environment.",
+  },
+  "platform.editions.deploymentId": {
+    defaultMessage: "Deployment ID",
+    description: "Label for the runtime deployment identity bound by the signed license.",
+  },
+  "platform.editions.production": {
+    defaultMessage: "Production",
+    description: "Human label for a production license environment.",
+  },
+  "platform.editions.nonProduction": {
+    defaultMessage: "Non-production",
+    description: "Human label for a bundled non-production license environment.",
+  },
+  "platform.editions.productionUnits": {
+    defaultMessage: "{count} production units",
+    description: "Effective production billing units consumed by this deployment.",
+  },
+  "platform.editions.nonProductionSlots": {
+    defaultMessage: "{remaining} of {total} non-production slots remaining",
+    description: "Remaining signed non-production slots in the license bundle.",
   },
   "platform.scale.heading": {
     defaultMessage: "Scale orchestration",

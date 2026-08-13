@@ -1935,6 +1935,16 @@ export interface DRPosture {
   verified: boolean;
 }
 
+export interface DeploymentEntitlementInfo {
+  bundled_non_production_deployments: number;
+  deployment_id?: string;
+  environment: "production" | "non_production";
+  legacy_unbound: boolean;
+  non_production_slots_remaining: number;
+  production_units_consumed: number;
+  registered_non_production_deployments: number;
+}
+
 export interface DeploymentTarget {
   config: Record<string, unknown>;
   connector: string;
@@ -2380,6 +2390,7 @@ export interface EditionFeature {
 
 export interface EditionPackaging {
   billable_unit: string;
+  bundled_non_production_deployments: number;
   category_label: string;
   certificate_counters_classification: string;
   editions: EditionPackagingEntry[];
@@ -2388,9 +2399,11 @@ export interface EditionPackaging {
   meters: UsageMeterDefinition[];
   no_ephemeral_identity_billing: boolean;
   no_per_certificate_billing: boolean;
+  non_production_support_posture: string;
   positioning: string;
   pricing_posture: string;
   provider_billing_unit: string;
+  reference_price_bands: ReferencePriceBand[];
 }
 
 export interface EditionPackagingEntry {
@@ -2405,6 +2418,7 @@ export interface EditionPackagingEntry {
 
 export interface EditionsInfo {
   customer?: string;
+  deployment_entitlement?: DeploymentEntitlementInfo;
   expires_at?: string;
   features: EditionFeature[];
   fips: FIPSStatus;
@@ -4906,6 +4920,13 @@ export interface ProtocolProfileStatus {
 export interface RCARequest {
   question: string;
   subject?: string;
+}
+
+export interface ReferencePriceBand {
+  annual_usd: number;
+  id: string;
+  label: string;
+  unit: string;
 }
 
 export interface RegionalFailoverStep {

@@ -1076,6 +1076,13 @@ export interface EditionPackagingEntry {
   included: string[];
 }
 
+export interface ReferencePriceBand {
+  id: string;
+  label: string;
+  annual_usd: number;
+  unit: string;
+}
+
 export interface EditionPackaging {
   category_label: string;
   positioning: string;
@@ -1086,6 +1093,9 @@ export interface EditionPackaging {
   certificate_counters_classification: string;
   managed_boundary: string;
   pricing_posture: string;
+  bundled_non_production_deployments: number;
+  non_production_support_posture: string;
+  reference_price_bands: ReferencePriceBand[];
   evidence_rail: string[];
   editions: EditionPackagingEntry[];
   meters: UsageMeterDefinition[];
@@ -1113,6 +1123,15 @@ export interface EditionsInfo {
   license_id?: string;
   expires_at?: string;
   read_only_at?: string;
+  deployment_entitlement?: {
+    deployment_id?: string;
+    environment: "production" | "non_production";
+    production_units_consumed: number;
+    bundled_non_production_deployments: number;
+    registered_non_production_deployments: number;
+    non_production_slots_remaining: number;
+    legacy_unbound: boolean;
+  };
   tenant_band?: number;
   managed_customer_band?: number;
   rights?: Array<"self_host" | "managed_service" | "resale">;

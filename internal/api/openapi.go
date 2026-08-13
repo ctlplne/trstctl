@@ -881,6 +881,21 @@ func componentSchemas() map[string]*Schema {
 		"billing":          str(),
 		"included":         {Type: "array", Items: str()},
 	}, "id", "name", "column", "buyer_fit", "license_boundary", "billing", "included")
+	referencePriceBand := object(map[string]*Schema{
+		"id":         str(),
+		"label":      str(),
+		"annual_usd": {Type: "integer"},
+		"unit":       str(),
+	}, "id", "label", "annual_usd", "unit")
+	deploymentEntitlementInfo := object(map[string]*Schema{
+		"deployment_id":                         str(),
+		"environment":                           {Type: "string", Enum: []string{"production", "non_production"}},
+		"production_units_consumed":             {Type: "integer"},
+		"bundled_non_production_deployments":    {Type: "integer"},
+		"registered_non_production_deployments": {Type: "integer"},
+		"non_production_slots_remaining":        {Type: "integer"},
+		"legacy_unbound":                        {Type: "boolean"},
+	}, "environment", "production_units_consumed", "bundled_non_production_deployments", "registered_non_production_deployments", "non_production_slots_remaining", "legacy_unbound")
 	usageMeterDefinition := object(map[string]*Schema{
 		"name":             str(),
 		"classification":   str(),
@@ -897,23 +912,27 @@ func componentSchemas() map[string]*Schema {
 		"certificate_counters_classification": str(),
 		"managed_boundary":                    str(),
 		"pricing_posture":                     str(),
+		"bundled_non_production_deployments":  {Type: "integer"},
+		"non_production_support_posture":      str(),
+		"reference_price_bands":               {Type: "array", Items: ref("ReferencePriceBand")},
 		"evidence_rail":                       {Type: "array", Items: str()},
 		"editions":                            {Type: "array", Items: ref("EditionPackagingEntry")},
 		"meters":                              {Type: "array", Items: ref("UsageMeterDefinition")},
-	}, "category_label", "positioning", "billable_unit", "provider_billing_unit", "no_per_certificate_billing", "no_ephemeral_identity_billing", "certificate_counters_classification", "managed_boundary", "pricing_posture", "evidence_rail", "editions", "meters")
+	}, "category_label", "positioning", "billable_unit", "provider_billing_unit", "no_per_certificate_billing", "no_ephemeral_identity_billing", "certificate_counters_classification", "managed_boundary", "pricing_posture", "bundled_non_production_deployments", "non_production_support_posture", "reference_price_bands", "evidence_rail", "editions", "meters")
 	editionsInfo := object(map[string]*Schema{
-		"tier":                  {Type: "string", Enum: editionTiers},
-		"state":                 {Type: "string", Enum: editionStates},
-		"customer":              str(),
-		"license_id":            str(),
-		"expires_at":            timestamp(),
-		"read_only_at":          timestamp(),
-		"tenant_band":           {Type: "integer"},
-		"managed_customer_band": {Type: "integer"},
-		"rights":                {Type: "array", Items: &Schema{Type: "string", Enum: []string{"self_host", "managed_service", "resale"}}},
-		"features":              {Type: "array", Items: ref("EditionFeature")},
-		"fips":                  ref("FIPSStatus"),
-		"packaging":             ref("EditionPackaging"),
+		"tier":                   {Type: "string", Enum: editionTiers},
+		"state":                  {Type: "string", Enum: editionStates},
+		"customer":               str(),
+		"license_id":             str(),
+		"expires_at":             timestamp(),
+		"read_only_at":           timestamp(),
+		"deployment_entitlement": ref("DeploymentEntitlementInfo"),
+		"tenant_band":            {Type: "integer"},
+		"managed_customer_band":  {Type: "integer"},
+		"rights":                 {Type: "array", Items: &Schema{Type: "string", Enum: []string{"self_host", "managed_service", "resale"}}},
+		"features":               {Type: "array", Items: ref("EditionFeature")},
+		"fips":                   ref("FIPSStatus"),
+		"packaging":              ref("EditionPackaging"),
 	}, "tier", "state", "features", "fips", "packaging")
 	managedOfferingStatus := object(map[string]*Schema{
 		"served":                {Type: "boolean"},
@@ -5507,6 +5526,8 @@ func componentSchemas() map[string]*Schema {
 		"EditionFeature":                    editionFeature,
 		"EditionPackaging":                  editionPackaging,
 		"EditionPackagingEntry":             editionPackagingEntry,
+		"ReferencePriceBand":                referencePriceBand,
+		"DeploymentEntitlementInfo":         deploymentEntitlementInfo,
 		"FIPSAlgorithmMode":                 fipsAlgorithmMode,
 		"FIPSNonFIPSFence":                  fipsNonFIPSFence,
 		"FIPSCustodyValidationCertificate":  fipsCustodyValidationCertificate,
