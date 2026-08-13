@@ -672,8 +672,13 @@ describe("i18n boundary", () => {
       // all-projection count, its two named sources, loading, and unavailable
       // authority. "Unavailable" must never collapse to a translated zero.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "8b37e041829689f4dcb42e5fe139ac2d0eca7faeb8dfd34f6f446d2e2d4c5348",
-      "de-DE": "527e83c28b742bc86495a421416dd67f38aef1dffe49654882608db74449523c",
+      // AUD-69 safe Explorer re-pin: thirty-eight keys label editable path,
+      // query, header, and JSON inputs; exact-request review; validation;
+      // cancellation; and expired/revoked token truth. Protocol tokens such
+      // as UUID, RFC3339, JSON, OpenAPI, and Idempotency-Key stay exact.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "2af864fe4b5b75fc2e47fe474c64b250c2c0b544de5b872454f377a952cf27a0",
+      "de-DE": "8798780aac2fa49edc2983491e8105de0d9c82bf5a77d7df8a6a545f4700621e",
     });
   });
 

@@ -8594,6 +8594,18 @@ export const messages = {
     defaultMessage: "Query parameters",
     description: "Heading for query parameters.",
   },
+  "apiExplorer.headerParameters": {
+    defaultMessage: "Header parameters",
+    description: "Heading for operator-editable request header parameters.",
+  },
+  "apiExplorer.parameterValue": {
+    defaultMessage: "Value for {name} {location} parameter",
+    description: "Accessible label for an editable OpenAPI parameter value.",
+  },
+  "apiExplorer.schemaString": {
+    defaultMessage: "string",
+    description: "Fallback OpenAPI parameter type label.",
+  },
   "apiExplorer.noParameters": {
     defaultMessage: "This request has no required parameters.",
     description: "Empty state for API operation parameters.",
@@ -8601,6 +8613,10 @@ export const messages = {
   "apiExplorer.requestBody": {
     defaultMessage: "Request body",
     description: "Heading for request body sample.",
+  },
+  "apiExplorer.bodyInput": {
+    defaultMessage: "Request body JSON",
+    description: "Accessible label for the editable request JSON body.",
   },
   "apiExplorer.requestPreview": {
     defaultMessage: "Request preview",
@@ -8662,6 +8678,130 @@ export const messages = {
     defaultMessage: "Expires",
     description: "Label for a test key expiry.",
   },
+  "apiExplorer.keyExpired": {
+    defaultMessage: "Test key expired.",
+    description: "Status shown when the runnable Explorer test key has expired.",
+  },
+  "apiExplorer.keyRevoked": {
+    defaultMessage: "Test key revoked.",
+    description: "Status shown after the runnable Explorer test key is revoked.",
+  },
+  "apiExplorer.revokeKey": {
+    defaultMessage: "Revoke test key",
+    description: "Button label for revoking the current short-lived Explorer test key.",
+  },
+  "apiExplorer.revokingKey": {
+    defaultMessage: "Revoking...",
+    description: "Button status while revoking the current Explorer test key.",
+  },
+  "apiExplorer.previewSecretNote": {
+    defaultMessage: "This is the exact request; only the bearer secret is hidden.",
+    description: "Explains the one redaction in the exact final request preview.",
+  },
+  "apiExplorer.fixValidation": {
+    defaultMessage: "Fix validation errors to build the final request.",
+    description: "Request-preview placeholder when the draft is invalid.",
+  },
+  "apiExplorer.validationFailed": {
+    defaultMessage: "Request is not ready",
+    description: "Heading for request-draft validation problems.",
+  },
+  "apiExplorer.validation.required": {
+    defaultMessage: "{name} is required.",
+    description: "Validation message for a missing required request value.",
+  },
+  "apiExplorer.validation.enum": {
+    defaultMessage: "{name} must be one of: {values}.",
+    description: "Validation message for a request value outside its OpenAPI enum.",
+  },
+  "apiExplorer.validation.integer": {
+    defaultMessage: "{name} must be an integer.",
+    description: "Validation message for an invalid integer request value.",
+  },
+  "apiExplorer.validation.number": {
+    defaultMessage: "{name} must be a number.",
+    description: "Validation message for an invalid numeric request value.",
+  },
+  "apiExplorer.validation.minimum": {
+    defaultMessage: "{name} must be at least {value}.",
+    description: "Validation message for a request number below its OpenAPI minimum.",
+  },
+  "apiExplorer.validation.maximum": {
+    defaultMessage: "{name} must be at most {value}.",
+    description: "Validation message for a request number above its OpenAPI maximum.",
+  },
+  "apiExplorer.validation.boolean": {
+    defaultMessage: "{name} must be true or false.",
+    description: "Validation message for an invalid boolean request value.",
+  },
+  "apiExplorer.validation.arrayValue": {
+    defaultMessage: "{name} must contain at least one value.",
+    description: "Validation message for an empty array request parameter.",
+  },
+  "apiExplorer.validation.uuid": {
+    defaultMessage: "{name} must be a UUID.",
+    description: "Validation message for an invalid UUID request value.",
+  },
+  "apiExplorer.validation.dateTime": {
+    defaultMessage: "{name} must be an RFC3339 date-time.",
+    description: "Validation message for an invalid date-time request value.",
+  },
+  "apiExplorer.validation.minLength": {
+    defaultMessage: "{name} must contain at least {value} characters.",
+    description: "Validation message for a request string below its OpenAPI minimum length.",
+  },
+  "apiExplorer.validation.maxLength": {
+    defaultMessage: "{name} must contain at most {value} characters.",
+    description: "Validation message for a request string above its OpenAPI maximum length.",
+  },
+  "apiExplorer.validation.pattern": {
+    defaultMessage: "{name} does not match the required format.",
+    description: "Validation message for a request string outside its OpenAPI pattern.",
+  },
+  "apiExplorer.validation.invalidPattern": {
+    defaultMessage: "{name} cannot be validated because the contract pattern is invalid.",
+    description: "Fail-closed validation message for an invalid OpenAPI regular expression.",
+  },
+  "apiExplorer.validation.oneOf": {
+    defaultMessage: "{name} does not match any allowed schema.",
+    description: "Validation message when JSON matches no OpenAPI oneOf branch.",
+  },
+  "apiExplorer.validation.object": {
+    defaultMessage: "{name} must be an object.",
+    description: "Validation message for a non-object JSON value.",
+  },
+  "apiExplorer.validation.array": {
+    defaultMessage: "{name} must be an array.",
+    description: "Validation message for a non-array JSON value.",
+  },
+  "apiExplorer.validation.string": {
+    defaultMessage: "{name} must be a string.",
+    description: "Validation message for a non-string JSON value.",
+  },
+  "apiExplorer.validation.notAllowed": {
+    defaultMessage: "{name} is not allowed.",
+    description: "Validation message for an unexpected JSON property.",
+  },
+  "apiExplorer.validation.allPath": {
+    defaultMessage: "Every path parameter needs a value.",
+    description: "Validation message when a templated route still has an unresolved path field.",
+  },
+  "apiExplorer.validation.bodyRequired": {
+    defaultMessage: "Request body is required.",
+    description: "Validation message for a missing required JSON request body.",
+  },
+  "apiExplorer.validation.json": {
+    defaultMessage: "Request body is not valid JSON: {detail}",
+    description: "Validation message for malformed request JSON.",
+  },
+  "apiExplorer.confirmMutation": {
+    defaultMessage: "I reviewed this exact mutation request",
+    description: "Explicit confirmation required before a write request can run.",
+  },
+  "apiExplorer.confirmMutationDetail": {
+    defaultMessage: "Changing any input clears this confirmation. The request can change tenant state.",
+    description: "Safety detail beside the mutation confirmation checkbox.",
+  },
   "apiExplorer.run": {
     defaultMessage: "Run request",
     description: "Button label for executing the selected API request.",
@@ -8669,6 +8809,14 @@ export const messages = {
   "apiExplorer.running": {
     defaultMessage: "Running...",
     description: "Button status while the selected API request is running.",
+  },
+  "apiExplorer.cancel": {
+    defaultMessage: "Cancel request",
+    description: "Button label for aborting an in-flight Explorer request.",
+  },
+  "apiExplorer.cancelled": {
+    defaultMessage: "Request cancelled.",
+    description: "Status shown after an in-flight Explorer request is aborted.",
   },
   "apiExplorer.needsKey": {
     defaultMessage: "Generate a scoped test key before running this request.",
@@ -8709,6 +8857,10 @@ export const messages = {
   "apiExplorer.runFailed": {
     defaultMessage: "Request execution failed.",
     description: "Error title when request execution fails before a response.",
+  },
+  "apiExplorer.runFailedDetail": {
+    defaultMessage: "Request execution failed. {detail}",
+    description: "Error text with transport detail when request execution fails before a response.",
   },
   "integrate.title": {
     defaultMessage: "Integrate",

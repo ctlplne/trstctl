@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Clipboard, KeyRound, Loader2, Play, RefreshCw } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
 import { api, type APITokenCreateResponse } from "@/lib/api";
 
 export const apiExplorerSpecURL = "/api/v1/openapi.json";
@@ -22,6 +26,13 @@ interface JSONSchema {
   items?: JSONSchema;
   properties?: Record<string, JSONSchema>;
   required?: string[];
+  oneOf?: JSONSchema[];
+  additionalProperties?: boolean | JSONSchema;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
 }
 
 interface OpenAPIParameter {
@@ -30,6 +41,8 @@ interface OpenAPIParameter {
   required?: boolean;
   description?: string;
   schema?: JSONSchema;
+  style?: string;
+  explode?: boolean;
 }
 
 interface OpenAPIResponse {
@@ -65,7 +78,7 @@ export interface OperationEntry {
   path: string;
   operation: OpenAPIOperation;
   permission: string;
-  samplePath: string;
+  examplePath: string;
   sampleBody: unknown;
 }
 
@@ -83,6 +96,30 @@ interface ExplorerResponse {
   };
 }
 
+export interface RequestDraft {
+  parameterValues: Record<string, string>;
+  bodyText: string;
+}
+
+interface DraftIssue {
+  key: string;
+  message: string;
+}
+
+interface FinalRequest {
+  path: string;
+  headers: Record<string, string>;
+  body?: string;
+  preview: string;
+}
+
+interface PreparedDraft {
+  issues: DraftIssue[];
+  request?: FinalRequest;
+}
+
+type Translate = I18nContextValue["t"];
+
 function methodLabel(method: HTTPMethod): string {
   return method.toUpperCase();
 }
@@ -93,6 +130,18 @@ function isUnsafe(method: HTTPMethod): boolean {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAbortError(value: unknown): boolean {
+  return isObject(value) && value.name === "AbortError";
+}
+
+function parameterKey(parameter: OpenAPIParameter): string {
+  return `${parameter.in}:${parameter.name}`;
+}
+
+function uuidValue(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function newIdempotencyKey(): string {
@@ -151,6 +200,211 @@ function requestBodySample(operation: OpenAPIOperation, spec: OpenAPIDocument): 
   return schema ? sampleForSchema(schema, spec, schemaRefName(schema) ?? "request") : undefined;
 }
 
+function parameterSample(parameter: OpenAPIParameter, spec: OpenAPIDocument): string {
+  const sampled = sampleForSchema(parameter.schema, spec, parameter.name);
+  if (Array.isArray(sampled)) return sampled.map(String).join(",");
+  if (isObject(sampled)) return JSON.stringify(sampled);
+  return String(sampled ?? "");
+}
+
+export function buildInitialRequestDraft(entry: OperationEntry, spec: OpenAPIDocument): RequestDraft {
+  const parameterValues: Record<string, string> = {};
+  for (const parameter of entry.operation.parameters ?? []) {
+    if (parameter.in === "cookie") continue;
+    const key = parameterKey(parameter);
+    if (parameter.in === "header" && parameter.name.toLowerCase() === "idempotency-key") {
+      parameterValues[key] = newIdempotencyKey();
+      continue;
+    }
+    parameterValues[key] = parameter.required || parameter.in === "path" ? parameterSample(parameter, spec) : "";
+  }
+  return {
+    parameterValues,
+    bodyText: entry.sampleBody === undefined ? "" : safeJSON(entry.sampleBody),
+  };
+}
+
+function validatePrimitive(name: string, rawValue: string, schema: JSONSchema | undefined, spec: OpenAPIDocument, t: Translate): string | undefined {
+  const resolved = dereference(schema, spec);
+  if (!resolved) return undefined;
+  if (resolved.enum && !resolved.enum.some((value) => String(value) === rawValue)) {
+    return t("apiExplorer.validation.enum", { name, values: resolved.enum.map(String).join(", ") });
+  }
+  if (resolved.type === "integer" && !/^-?\d+$/.test(rawValue)) return t("apiExplorer.validation.integer", { name });
+  if (resolved.type === "number" && !Number.isFinite(Number(rawValue))) return t("apiExplorer.validation.number", { name });
+  if (resolved.type === "boolean" && rawValue !== "true" && rawValue !== "false") return t("apiExplorer.validation.boolean", { name });
+  if ((resolved.type === "integer" || resolved.type === "number") && resolved.minimum !== undefined && Number(rawValue) < resolved.minimum) {
+    return t("apiExplorer.validation.minimum", { name, value: resolved.minimum });
+  }
+  if ((resolved.type === "integer" || resolved.type === "number") && resolved.maximum !== undefined && Number(rawValue) > resolved.maximum) {
+    return t("apiExplorer.validation.maximum", { name, value: resolved.maximum });
+  }
+  if (resolved.type === "array") {
+    const values = rawValue
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (values.length === 0) return t("apiExplorer.validation.arrayValue", { name });
+    for (const value of values) {
+      const issue = validatePrimitive(name, value, resolved.items, spec, t);
+      if (issue) return issue;
+    }
+  }
+  if (resolved.format === "uuid" && !uuidValue(rawValue)) return t("apiExplorer.validation.uuid", { name });
+  if (resolved.format === "date-time" && Number.isNaN(Date.parse(rawValue))) return t("apiExplorer.validation.dateTime", { name });
+  if (resolved.minLength !== undefined && rawValue.length < resolved.minLength)
+    return t("apiExplorer.validation.minLength", { name, value: resolved.minLength });
+  if (resolved.maxLength !== undefined && rawValue.length > resolved.maxLength)
+    return t("apiExplorer.validation.maxLength", { name, value: resolved.maxLength });
+  if (resolved.pattern) {
+    try {
+      if (!new RegExp(resolved.pattern).test(rawValue)) return t("apiExplorer.validation.pattern", { name });
+    } catch {
+      return t("apiExplorer.validation.invalidPattern", { name });
+    }
+  }
+  return undefined;
+}
+
+function validateJSONValue(value: unknown, schema: JSONSchema | undefined, spec: OpenAPIDocument, t: Translate, path = "request body", depth = 0): string[] {
+  const resolved = dereference(schema, spec);
+  if (!resolved || depth > 12) return [];
+  if (resolved.oneOf?.length) {
+    if (resolved.oneOf.some((candidate) => validateJSONValue(value, candidate, spec, t, path, depth + 1).length === 0)) return [];
+    return [t("apiExplorer.validation.oneOf", { name: path })];
+  }
+  if (resolved.enum && !resolved.enum.some((candidate) => JSON.stringify(candidate) === JSON.stringify(value))) {
+    return [t("apiExplorer.validation.enum", { name: path, values: resolved.enum.map(String).join(", ") })];
+  }
+  if (resolved.type === "object" || resolved.properties) {
+    if (!isObject(value)) return [t("apiExplorer.validation.object", { name: path })];
+    const issues: string[] = [];
+    for (const name of resolved.required ?? []) {
+      if (!(name in value)) issues.push(t("apiExplorer.validation.required", { name: path === "request body" ? name : `${path}.${name}` }));
+    }
+    for (const [name, child] of Object.entries(resolved.properties ?? {})) {
+      if (name in value) issues.push(...validateJSONValue(value[name], child, spec, t, path === "request body" ? name : `${path}.${name}`, depth + 1));
+    }
+    if (resolved.additionalProperties === false) {
+      for (const name of Object.keys(value)) {
+        if (!(name in (resolved.properties ?? {}))) issues.push(t("apiExplorer.validation.notAllowed", { name: `${path}.${name}` }));
+      }
+    } else if (isObject(resolved.additionalProperties)) {
+      for (const name of Object.keys(value)) {
+        if (!(name in (resolved.properties ?? {})))
+          issues.push(...validateJSONValue(value[name], resolved.additionalProperties, spec, t, `${path}.${name}`, depth + 1));
+      }
+    }
+    return issues;
+  }
+  if (resolved.type === "array") {
+    if (!Array.isArray(value)) return [t("apiExplorer.validation.array", { name: path })];
+    return value.flatMap((item, index) => validateJSONValue(item, resolved.items, spec, t, `${path}[${index}]`, depth + 1));
+  }
+  if (resolved.type === "string" && typeof value !== "string") return [t("apiExplorer.validation.string", { name: path })];
+  if (resolved.type === "integer" && (typeof value !== "number" || !Number.isInteger(value))) return [t("apiExplorer.validation.integer", { name: path })];
+  if (resolved.type === "number" && (typeof value !== "number" || !Number.isFinite(value))) return [t("apiExplorer.validation.number", { name: path })];
+  if (resolved.type === "boolean" && typeof value !== "boolean") return [t("apiExplorer.validation.boolean", { name: path })];
+  if (typeof value === "number" && resolved.minimum !== undefined && value < resolved.minimum) {
+    return [t("apiExplorer.validation.minimum", { name: path, value: resolved.minimum })];
+  }
+  if (typeof value === "number" && resolved.maximum !== undefined && value > resolved.maximum) {
+    return [t("apiExplorer.validation.maximum", { name: path, value: resolved.maximum })];
+  }
+  if (typeof value === "string" && resolved.format === "uuid" && !uuidValue(value)) return [t("apiExplorer.validation.uuid", { name: path })];
+  if (typeof value === "string" && resolved.format === "date-time" && Number.isNaN(Date.parse(value)))
+    return [t("apiExplorer.validation.dateTime", { name: path })];
+  if (typeof value === "string" && resolved.minLength !== undefined && value.length < resolved.minLength) {
+    return [t("apiExplorer.validation.minLength", { name: path, value: resolved.minLength })];
+  }
+  if (typeof value === "string" && resolved.maxLength !== undefined && value.length > resolved.maxLength) {
+    return [t("apiExplorer.validation.maxLength", { name: path, value: resolved.maxLength })];
+  }
+  if (typeof value === "string" && resolved.pattern) {
+    try {
+      if (!new RegExp(resolved.pattern).test(value)) return [t("apiExplorer.validation.pattern", { name: path })];
+    } catch {
+      return [t("apiExplorer.validation.invalidPattern", { name: path })];
+    }
+  }
+  return [];
+}
+
+function appendQueryValue(search: URLSearchParams, parameter: OpenAPIParameter, rawValue: string): void {
+  const schema = parameter.schema;
+  if (schema?.type !== "array") {
+    search.set(parameter.name, rawValue);
+    return;
+  }
+  const values = rawValue
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (parameter.explode === false) search.set(parameter.name, values.join(","));
+  else values.forEach((value) => search.append(parameter.name, value));
+}
+
+function prepareRequest(entry: OperationEntry, spec: OpenAPIDocument, draft: RequestDraft, t: Translate): PreparedDraft {
+  const issues: DraftIssue[] = [];
+  let path = entry.path;
+  const query = new URLSearchParams();
+  const headers: Record<string, string> = {};
+  for (const parameter of entry.operation.parameters ?? []) {
+    if (parameter.in === "cookie") continue;
+    const key = parameterKey(parameter);
+    const value = (draft.parameterValues[key] ?? "").trim();
+    if (!value) {
+      if (parameter.required || parameter.in === "path") issues.push({ key, message: t("apiExplorer.validation.required", { name: parameter.name }) });
+      continue;
+    }
+    const issue = validatePrimitive(parameter.name, value, parameter.schema, spec, t);
+    if (issue) {
+      issues.push({ key, message: issue });
+      continue;
+    }
+    if (parameter.in === "path") path = path.replaceAll(`{${parameter.name}}`, encodeURIComponent(value));
+    if (parameter.in === "query") appendQueryValue(query, parameter, value);
+    if (parameter.in === "header") headers[parameter.name] = value;
+  }
+  if (/\{[^}]+\}/.test(path)) issues.push({ key: "path", message: t("apiExplorer.validation.allPath") });
+
+  let body: string | undefined;
+  let previewBody = "";
+  const bodySchema = entry.operation.requestBody?.content?.["application/json"]?.schema;
+  if (bodySchema || entry.operation.requestBody) {
+    const bodyText = draft.bodyText.trim();
+    if (!bodyText) {
+      if (entry.operation.requestBody?.required) issues.push({ key: "body", message: t("apiExplorer.validation.bodyRequired") });
+    } else {
+      try {
+        const parsed = JSON.parse(bodyText) as unknown;
+        for (const message of validateJSONValue(parsed, bodySchema, spec, t)) issues.push({ key: "body", message });
+        body = JSON.stringify(parsed);
+        previewBody = safeJSON(parsed);
+        headers["Content-Type"] = "application/json";
+      } catch (error) {
+        issues.push({ key: "body", message: t("apiExplorer.validation.json", { detail: error instanceof Error ? error.message : String(error) }) });
+      }
+    }
+  }
+
+  const queryText = query.toString();
+  const finalPath = `${path}${queryText ? `?${queryText}` : ""}`;
+  const previewHeaders = {
+    ...headers,
+    // The scoped test key and response contract are runner-owned. A future
+    // OpenAPI header parameter cannot replace either one with operator text.
+    Accept: "application/json",
+    Authorization: "Bearer [scoped test key hidden]",
+  };
+  const preview = [
+    `${methodLabel(entry.method)} ${finalPath}`,
+    ...Object.entries(previewHeaders).map(([name, value]) => `${name}: ${value}`),
+    ...(previewBody ? ["", previewBody] : []),
+  ].join("\n");
+  return { issues, request: issues.length === 0 ? { path: finalPath, headers, body, preview } : undefined };
+}
+
 function replacePathParameters(path: string, parameters: OpenAPIParameter[]): string {
   let next = path;
   for (const parameter of parameters.filter((param) => param.in === "path")) {
@@ -176,14 +430,14 @@ export function buildOperations(spec: OpenAPIDocument): OperationEntry[] {
       const operation = pathItem[method];
       if (!operation?.operationId) continue;
       const parameters = operation.parameters ?? [];
-      const samplePath = `${replacePathParameters(path, parameters)}${queryString(parameters)}`;
+      const examplePath = `${replacePathParameters(path, parameters)}${queryString(parameters)}`;
       entries.push({
         key: `${method}:${path}`,
         method,
         path,
         operation,
         permission: operation["x-trstctl-permission"] ?? "access:read",
-        samplePath,
+        examplePath,
         sampleBody: requestBodySample(operation, spec),
       });
     }
@@ -208,7 +462,7 @@ function responseNames(operation: OpenAPIOperation): string[] {
 
 function curlExample(entry: OperationEntry): string {
   const lines = [
-    `curl -sS -X ${methodLabel(entry.method)} https://control-plane.example${entry.samplePath}`,
+    `curl -sS -X ${methodLabel(entry.method)} https://control-plane.example${entry.examplePath}`,
     `  -H 'Authorization: Bearer $TRSTCTL_DOCS_TOKEN'`,
     `  -H 'Accept: application/json'`,
   ];
@@ -286,9 +540,79 @@ function MethodBadge({ method }: { method: HTTPMethod }) {
 
 function CodeBlock({ value, labelledBy }: { value: string; labelledBy?: string }) {
   return (
-    <pre aria-labelledby={labelledBy} className="max-h-72 overflow-auto rounded-panel border border-border bg-muted p-3 text-xs leading-relaxed">
+    <pre
+      aria-labelledby={labelledBy}
+      className="max-h-72 min-w-0 max-w-full overflow-auto rounded-panel border border-border bg-muted p-3 text-xs leading-relaxed"
+    >
       <code>{value}</code>
     </pre>
+  );
+}
+
+function ParameterEditor({
+  title,
+  parameters,
+  values,
+  issues,
+  onChange,
+  noParameters,
+  requiredLabel,
+  optionalLabel,
+  schemaFallback,
+  inputLabel,
+}: {
+  title: string;
+  parameters: OpenAPIParameter[];
+  values: Record<string, string>;
+  issues: Map<string, string>;
+  onChange: (parameter: OpenAPIParameter, value: string) => void;
+  noParameters: string;
+  requiredLabel: string;
+  optionalLabel: string;
+  schemaFallback: string;
+  inputLabel: (parameter: OpenAPIParameter) => string;
+}) {
+  return (
+    <div className="ui-panel p-comfortable">
+      <h3 className="text-body font-semibold">{title}</h3>
+      {parameters.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">{noParameters}</p>
+      ) : (
+        <div className="mt-3 grid gap-3">
+          {parameters.map((parameter) => {
+            const key = parameterKey(parameter);
+            const issue = issues.get(key);
+            return (
+              <Field
+                key={key}
+                className="rounded-control border border-border px-3 py-2 text-sm"
+                required={parameter.required}
+                description={parameter.description}
+                error={issue}
+                label={
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs">{parameter.name}</span>
+                    <span className="text-caption font-normal text-muted-foreground">{parameter.required ? requiredLabel : optionalLabel}</span>
+                    <span className="text-caption font-normal text-muted-foreground">{parameter.schema?.type ?? schemaFallback}</span>
+                  </span>
+                }
+              >
+                {(control) => (
+                  <Input
+                    {...control}
+                    className="font-mono text-xs"
+                    aria-label={inputLabel(parameter)}
+                    required={parameter.required}
+                    value={values[key] ?? ""}
+                    onChange={(event) => onChange(parameter, event.target.value)}
+                  />
+                )}
+              </Field>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -304,9 +628,15 @@ export function ApiExplorer() {
   const [testKey, setTestKey] = useState<APITokenCreateResponse | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keyBusy, setKeyBusy] = useState(false);
+  const [keyRevoked, setKeyRevoked] = useState(false);
+  const [revokeBusy, setRevokeBusy] = useState(false);
+  const [tokenNow, setTokenNow] = useState(() => Date.now());
+  const [draft, setDraft] = useState<RequestDraft>({ parameterValues: {}, bodyText: "" });
+  const [mutationConfirmed, setMutationConfirmed] = useState(false);
   const [response, setResponse] = useState<ExplorerResponse | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [runBusy, setRunBusy] = useState(false);
+  const runController = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -336,6 +666,31 @@ export function ApiExplorer() {
   }, [operations, selectedKey]);
 
   const selected = operations.find((entry) => entry.key === selectedKey) ?? operations[0];
+  useEffect(() => {
+    if (!selected || !spec) return;
+    runController.current?.abort();
+    runController.current = null;
+    setDraft(buildInitialRequestDraft(selected, spec));
+    setMutationConfirmed(false);
+    setRunBusy(false);
+    setResponse(null);
+    setRunError(null);
+  }, [selected, spec]);
+
+  useEffect(() => {
+    const expiresAt = testKey?.expires_at ? Date.parse(testKey.expires_at) : Number.NaN;
+    if (!Number.isFinite(expiresAt)) return;
+    const delay = Math.max(0, expiresAt - Date.now());
+    if (delay === 0) {
+      setTokenNow(Date.now());
+      return;
+    }
+    const timer = globalThis.setTimeout(() => setTokenNow(Date.now()), delay);
+    return () => globalThis.clearTimeout(timer);
+  }, [testKey]);
+
+  useEffect(() => () => runController.current?.abort(), []);
+
   const loweredFilter = filter.trim().toLowerCase();
   const visibleOperations = operations.filter((entry) => {
     if (!loweredFilter) return true;
@@ -347,15 +702,20 @@ export function ApiExplorer() {
     if (!selected) return;
     setKeyBusy(true);
     setKeyError(null);
-    setTestKey(null);
     const expiresAt = new Date(Date.now() + docsTokenTTLMinutes * 60 * 1000).toISOString();
     try {
+      if (testKey && !keyRevoked && !tokenExpired) {
+        await api.revokeAPIToken(testKey.id);
+        setKeyRevoked(true);
+      }
       const created = await api.createAPIToken({
         subject: tokenSubject.trim(),
         scopes: [selected.permission],
         expires_at: expiresAt,
       });
       setTestKey(created);
+      setKeyRevoked(false);
+      setTokenNow(Date.now());
     } catch (err) {
       setKeyError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -363,40 +723,80 @@ export function ApiExplorer() {
     }
   }
 
+  async function revokeTestKey() {
+    if (!testKey || keyRevoked) return;
+    setRevokeBusy(true);
+    setKeyError(null);
+    try {
+      await api.revokeAPIToken(testKey.id);
+      setKeyRevoked(true);
+      runController.current?.abort();
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRevokeBusy(false);
+    }
+  }
+
   async function runRequest() {
-    if (!selected || !testKey) return;
+    if (!selected || !testKey || !prepared.request || tokenExpired || keyRevoked || (isUnsafe(selected.method) && !mutationConfirmed)) return;
     setRunBusy(true);
     setRunError(null);
     setResponse(null);
     const headers: Record<string, string> = {
+      ...prepared.request.headers,
       Accept: "application/json",
       Authorization: `Bearer ${testKey.token}`,
     };
-    let body: string | undefined;
-    if (selected.sampleBody !== undefined) {
-      headers["Content-Type"] = "application/json";
-      body = JSON.stringify(selected.sampleBody);
-    }
-    if (isUnsafe(selected.method)) headers["Idempotency-Key"] = newIdempotencyKey();
+    const controller = new AbortController();
+    runController.current = controller;
     try {
-      const res = await fetch(selected.samplePath, {
+      const res = await fetch(prepared.request.path, {
         method: methodLabel(selected.method),
         headers,
-        body,
+        body: prepared.request.body,
+        signal: controller.signal,
       });
-      setResponse(await readExplorerResponse(res));
+      const nextResponse = await readExplorerResponse(res);
+      if (!controller.signal.aborted) setResponse(nextResponse);
     } catch (err) {
-      setRunError(err instanceof Error ? err.message : String(err));
+      if (runController.current === controller) {
+        setRunError(isAbortError(err) ? t("apiExplorer.cancelled") : err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setRunBusy(false);
+      if (runController.current === controller) {
+        runController.current = null;
+        setRunBusy(false);
+      }
     }
   }
 
   const pathParameters = selected?.operation.parameters?.filter((parameter) => parameter.in === "path") ?? [];
   const queryParameters = selected?.operation.parameters?.filter((parameter) => parameter.in === "query") ?? [];
-  const requestBody = selected?.sampleBody === undefined ? "" : safeJSON(selected.sampleBody);
+  const headerParameters = selected?.operation.parameters?.filter((parameter) => parameter.in === "header") ?? [];
+  const prepared = selected && spec ? prepareRequest(selected, spec, draft, t) : { issues: [] };
+  const issueByKey = new Map(prepared.issues.map((issue) => [issue.key, issue.message]));
+  const bodyIssues = prepared.issues.filter((issue) => issue.key === "body");
+  const tokenExpiry = testKey?.expires_at ? Date.parse(testKey.expires_at) : Number.NaN;
+  const tokenExpired = Boolean(testKey && (!Number.isFinite(tokenExpiry) || tokenExpiry <= tokenNow));
+  const keyUsable = Boolean(testKey && !tokenExpired && !keyRevoked && testKey.scopes.includes(selected?.permission ?? ""));
+  const canRun = Boolean(prepared.request && keyUsable && !runBusy && (!selected || !isUnsafe(selected.method) || mutationConfirmed));
   const curl = selected ? curlExample(selected) : "";
   const sdk = selected ? sdkExample(selected) : "";
+
+  function updateParameter(parameter: OpenAPIParameter, value: string) {
+    runController.current?.abort();
+    setDraft((current) => ({ ...current, parameterValues: { ...current.parameterValues, [parameterKey(parameter)]: value } }));
+    setMutationConfirmed(false);
+    setResponse(null);
+  }
+
+  function updateBody(value: string) {
+    runController.current?.abort();
+    setDraft((current) => ({ ...current, bodyText: value }));
+    setMutationConfirmed(false);
+    setResponse(null);
+  }
 
   return (
     <section aria-labelledby="api-explorer-heading" className="grid gap-6">
@@ -438,8 +838,8 @@ export function ApiExplorer() {
       )}
 
       {selected && (
-        <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)_minmax(22rem,0.9fr)]">
-          <aside className="ui-panel min-h-0 p-comfortable" aria-labelledby="api-operation-list-heading">
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)] 2xl:grid-cols-[18rem_minmax(0,1fr)_minmax(22rem,0.9fr)]">
+          <aside className="ui-panel min-h-0 min-w-0 p-comfortable" aria-labelledby="api-operation-list-heading">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 id="api-operation-list-heading" className="text-title font-semibold">
                 {t("apiExplorer.operations")}
@@ -448,7 +848,7 @@ export function ApiExplorer() {
             </div>
             <label className="mb-3 grid gap-1 text-sm">
               <span className="sr-only">{t("apiExplorer.searchLabel")}</span>
-              <input className="ui-input" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t("apiExplorer.searchPlaceholder")} />
+              <Input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t("apiExplorer.searchPlaceholder")} />
             </label>
             <div className="max-h-[34rem] overflow-auto pr-1">
               {visibleOperations.length === 0 ? (
@@ -482,7 +882,7 @@ export function ApiExplorer() {
             </div>
           </aside>
 
-          <main className="grid gap-4" aria-labelledby="api-operation-detail-heading">
+          <main className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4" aria-labelledby="api-operation-detail-heading">
             <section className="ui-panel p-comfortable">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -513,56 +913,60 @@ export function ApiExplorer() {
               </dl>
             </section>
 
-            <section className="grid gap-4 lg:grid-cols-2">
-              <div className="ui-panel p-comfortable">
-                <h3 className="text-body font-semibold">{t("apiExplorer.pathParameters")}</h3>
-                {pathParameters.length === 0 ? (
-                  <p className="mt-2 text-sm text-muted-foreground">{t("apiExplorer.noParameters")}</p>
-                ) : (
-                  <ul className="mt-2 grid gap-2 text-sm">
-                    {pathParameters.map((parameter) => (
-                      <li key={parameter.name} className="rounded-control border border-border px-3 py-2">
-                        <span className="font-mono text-xs">{parameter.name}</span>
-                        <span className="ml-2 text-caption text-muted-foreground">
-                          {parameter.required ? t("apiExplorer.required") : t("apiExplorer.optional")}
-                        </span>
-                        {parameter.description && <p className="mt-1 text-xs text-muted-foreground">{parameter.description}</p>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="ui-panel p-comfortable">
-                <h3 className="text-body font-semibold">{t("apiExplorer.queryParameters")}</h3>
-                {queryParameters.length === 0 ? (
-                  <p className="mt-2 text-sm text-muted-foreground">{t("apiExplorer.noParameters")}</p>
-                ) : (
-                  <ul className="mt-2 grid gap-2 text-sm">
-                    {queryParameters.map((parameter) => (
-                      <li key={parameter.name} className="rounded-control border border-border px-3 py-2">
-                        <span className="font-mono text-xs">{parameter.name}</span>
-                        <span className="ml-2 text-caption text-muted-foreground">
-                          {parameter.required ? t("apiExplorer.required") : t("apiExplorer.optional")}
-                        </span>
-                        {parameter.description && <p className="mt-1 text-xs text-muted-foreground">{parameter.description}</p>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+            <section className="grid gap-4 2xl:grid-cols-3">
+              {[
+                { title: t("apiExplorer.pathParameters"), parameters: pathParameters },
+                { title: t("apiExplorer.queryParameters"), parameters: queryParameters },
+                { title: t("apiExplorer.headerParameters"), parameters: headerParameters },
+              ].map(({ title, parameters }) => (
+                <ParameterEditor
+                  key={title}
+                  title={title}
+                  parameters={parameters}
+                  values={draft.parameterValues}
+                  issues={issueByKey}
+                  onChange={updateParameter}
+                  noParameters={t("apiExplorer.noParameters")}
+                  requiredLabel={t("apiExplorer.required")}
+                  optionalLabel={t("apiExplorer.optional")}
+                  schemaFallback={t("apiExplorer.schemaString")}
+                  inputLabel={(parameter) => t("apiExplorer.parameterValue", { name: parameter.name, location: parameter.in })}
+                />
+              ))}
             </section>
 
             <section className="ui-panel p-comfortable">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 id="api-request-body-heading" className="text-body font-semibold">
-                    {t("apiExplorer.requestBody")}
-                  </h3>
-                  <p className="text-caption text-muted-foreground">{schemaNameForOperation(selected.operation)}</p>
-                </div>
+                <h3 id="api-request-body-heading" className="text-body font-semibold">
+                  {t("apiExplorer.requestBody")}
+                </h3>
               </div>
-              {requestBody ? (
-                <CodeBlock labelledBy="api-request-body-heading" value={requestBody} />
+              {selected.operation.requestBody ? (
+                <Field
+                  label={t("apiExplorer.bodyInput")}
+                  description={schemaNameForOperation(selected.operation)}
+                  required={selected.operation.requestBody.required}
+                  error={
+                    bodyIssues.length > 0 ? (
+                      <span className="grid gap-1">
+                        {bodyIssues.map((issue, index) => (
+                          <span key={`${issue.message}-${index}`}>{issue.message}</span>
+                        ))}
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  {(control) => (
+                    <Textarea
+                      {...control}
+                      className="min-h-52 font-mono text-xs leading-relaxed"
+                      aria-label={t("apiExplorer.bodyInput")}
+                      required={selected.operation.requestBody?.required}
+                      value={draft.bodyText}
+                      onChange={(event) => updateBody(event.target.value)}
+                    />
+                  )}
+                </Field>
               ) : (
                 <p className="text-sm text-muted-foreground">{t("apiExplorer.noRequestBody")}</p>
               )}
@@ -582,15 +986,15 @@ export function ApiExplorer() {
             </section>
           </main>
 
-          <aside className="grid content-start gap-4">
-            <section className="ui-panel p-comfortable" aria-labelledby="api-runner-heading">
+          <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4 xl:col-span-2 2xl:col-span-1">
+            <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-runner-heading">
               <h2 id="api-runner-heading" className="text-title font-semibold">
                 {t("apiExplorer.runner")}
               </h2>
-              <form onSubmit={(event) => void mintTestKey(event)} className="mt-4 grid gap-3">
+              <form onSubmit={(event) => void mintTestKey(event)} className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium text-muted-foreground">{t("apiExplorer.subject")}</span>
-                  <input className="ui-input" value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
+                  <Input value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
                 </label>
                 <div className="grid gap-1 text-sm">
                   <span className="font-medium text-muted-foreground">{t("apiExplorer.tokenScope")}</span>
@@ -607,28 +1011,86 @@ export function ApiExplorer() {
                 </p>
               )}
               {testKey && (
-                <div role="status" className="mt-3 rounded-panel border border-status-success/30 bg-status-success/10 p-3 text-sm text-status-success">
-                  <p className="font-medium">{t("apiExplorer.keyReady", { scope: testKey.scopes.join(", ") })}</p>
+                <div
+                  role="status"
+                  className={`mt-3 rounded-panel border p-3 text-sm ${
+                    tokenExpired || keyRevoked
+                      ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
+                      : "border-status-success/30 bg-status-success/10 text-status-success"
+                  }`}
+                >
+                  <p className="font-medium">
+                    {tokenExpired
+                      ? t("apiExplorer.keyExpired")
+                      : keyRevoked
+                        ? t("apiExplorer.keyRevoked")
+                        : t("apiExplorer.keyReady", { scope: testKey.scopes.join(", ") })}
+                  </p>
                   <p className="mt-1 text-xs">{t("apiExplorer.revealOnce")}</p>
                   {testKey.expires_at && (
                     <p className="mt-1 text-xs">
                       {t("apiExplorer.expires")}: {formatDateTime(testKey.expires_at)}
                     </p>
                   )}
+                  {!tokenExpired && !keyRevoked && (
+                    <Button className="mt-3" type="button" size="sm" variant="outline" disabled={revokeBusy} onClick={() => void revokeTestKey()}>
+                      {revokeBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                      {revokeBusy ? t("apiExplorer.revokingKey") : t("apiExplorer.revokeKey")}
+                    </Button>
+                  )}
                 </div>
               )}
 
-              <div className="mt-4 grid gap-3">
-                <div>
+              <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
+                <div className="min-w-0">
                   <h3 id="api-request-preview-heading" className="mb-2 text-body font-semibold">
                     {t("apiExplorer.requestPreview")}
                   </h3>
-                  <CodeBlock labelledBy="api-request-preview-heading" value={`${methodLabel(selected.method)} ${selected.samplePath}`} />
+                  <p className="mb-2 text-caption text-muted-foreground">{t("apiExplorer.previewSecretNote")}</p>
+                  <CodeBlock
+                    labelledBy="api-request-preview-heading"
+                    value={prepared.request?.preview ?? `${methodLabel(selected.method)} ${selected.path}\n\n${t("apiExplorer.fixValidation")}`}
+                  />
                 </div>
-                <Button type="button" onClick={() => void runRequest()} disabled={runBusy || !testKey}>
-                  {runBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
-                  {runBusy ? t("apiExplorer.running") : t("apiExplorer.run")}
-                </Button>
+                {prepared.issues.length > 0 && (
+                  <div role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    <p className="font-medium">{t("apiExplorer.validationFailed")}</p>
+                    <ul className="mt-1 list-disc ps-5 text-xs">
+                      {prepared.issues.map((issue, index) => (
+                        <li key={`${issue.key}-${issue.message}-${index}`}>{issue.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {isUnsafe(selected.method) && prepared.request && (
+                  <label
+                    htmlFor="api-explorer-confirm-mutation"
+                    className="flex items-start gap-2 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm"
+                  >
+                    <Checkbox
+                      id="api-explorer-confirm-mutation"
+                      className="mt-0.5 accent-brand-accent"
+                      aria-label={t("apiExplorer.confirmMutation")}
+                      checked={mutationConfirmed}
+                      onChange={(event) => setMutationConfirmed(event.target.checked)}
+                    />
+                    <span>
+                      <span className="font-medium">{t("apiExplorer.confirmMutation")}</span>
+                      <span className="mt-1 block text-xs text-muted-foreground">{t("apiExplorer.confirmMutationDetail")}</span>
+                    </span>
+                  </label>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" onClick={() => void runRequest()} disabled={!canRun}>
+                    {runBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
+                    {runBusy ? t("apiExplorer.running") : t("apiExplorer.run")}
+                  </Button>
+                  {runBusy && (
+                    <Button type="button" variant="outline" onClick={() => runController.current?.abort()}>
+                      {t("apiExplorer.cancel")}
+                    </Button>
+                  )}
+                </div>
                 {!testKey && <p className="text-sm text-muted-foreground">{t("apiExplorer.needsKey")}</p>}
               </div>
             </section>
@@ -639,7 +1101,7 @@ export function ApiExplorer() {
               </h2>
               {runError && (
                 <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {t("apiExplorer.runFailed")} {runError}
+                  {runError === t("apiExplorer.cancelled") ? runError : t("apiExplorer.runFailedDetail", { detail: runError })}
                 </p>
               )}
               {!runError && !response && <p className="mt-3 text-sm text-muted-foreground">{t("apiExplorer.noResponse")}</p>}

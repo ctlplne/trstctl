@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildOperations, type OpenAPIDocument } from "@/pages/ApiExplorer";
+import { buildInitialRequestDraft, buildOperations, type OpenAPIDocument } from "@/pages/ApiExplorer";
 import { apiWorkflowCoverage, type ApiWorkflowCoverage } from "@/lib/apiWorkflowCoverage";
 import { appRoutePaths, contextualRouteItems, navGroups, realGuiSurfaces, taskNavItems } from "@/lib/navigation";
 
@@ -219,6 +219,27 @@ describe("route-level product surface parity", () => {
       expect(operationKeys.has(key)).toBe(true);
     }
     expect(appRoutePaths).toContain("/integrate/api");
+  });
+
+  it("builds an operator-owned draft for every served OpenAPI parameter and JSON body", () => {
+    const spec = servedOpenAPI();
+    const operations = buildOperations(spec);
+
+    for (const operation of operations) {
+      const draft = buildInitialRequestDraft(operation, spec);
+      const parameters = (operation.operation.parameters ?? []).filter((parameter) => parameter.in !== "cookie");
+      expect(Object.keys(draft.parameterValues), operation.key).toHaveLength(parameters.length);
+      for (const parameter of parameters) {
+        const value = draft.parameterValues[`${parameter.in}:${parameter.name}`];
+        expect(value, `${operation.key} must expose ${parameter.in}:${parameter.name}`).toBeDefined();
+        if (parameter.required || parameter.in === "path") expect(value, `${operation.key} must initialize required ${parameter.name}`).not.toBe("");
+        if (!parameter.required && parameter.in === "query")
+          expect(value, `${operation.key} must leave optional ${parameter.name} operator-controlled`).toBe("");
+      }
+      if (operation.operation.requestBody?.content?.["application/json"]) {
+        expect(draft.bodyText, `${operation.key} must expose editable JSON`).not.toBe("");
+      }
+    }
   });
 
   it("documents every served path without a domain wrapper as a workflow or explicit exception", () => {

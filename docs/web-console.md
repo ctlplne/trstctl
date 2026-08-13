@@ -361,10 +361,20 @@ SPIRE upstream authority. Every reference points at a served surface. See
 
 API Explorer is a live console over the served OpenAPI contract, not a static
 viewer: it lists every operation with its permission scope and response schema,
-builds a sample request body and matching curl/SDK snippets, and — with a
-self-service, 15-minute token scoped to just that operation — runs the request and
-shows the real response, including RFC 7807 problem details on failure. Backed by
-`GET /api/v1/openapi.json` and `POST /api/v1/access/api-tokens`.
+builds a sample request body and matching curl/SDK snippets, and turns every served
+path, query, and header parameter plus JSON body into an editable request draft.
+Optional query fields stay empty until the operator supplies them. Required values,
+UUIDs, RFC3339 timestamps, enums, numbers, booleans, arrays, and recursive JSON
+requirements validate before execution; the exact encoded URL, headers, and
+normalized body are shown with only the bearer secret hidden.
+
+The runner uses a self-service 15-minute token scoped to just that operation. A
+write cannot run until the draft validates and the operator explicitly confirms
+the exact preview; changing any input clears that confirmation. In-flight requests
+can be cancelled, expired tokens fail closed in the browser, and the current token
+can be revoked immediately. The response panel shows real status/content type,
+including RFC 7807 problem details. Backed by `GET /api/v1/openapi.json`,
+`POST /api/v1/access/api-tokens`, and `DELETE /api/v1/access/api-tokens/{id}`.
 
 ### Operations queue and notifications (`/operations`, `/notifications`)
 
