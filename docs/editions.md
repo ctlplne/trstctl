@@ -250,9 +250,13 @@ be read across tenancies.
 Platform → Usage & invoice evidence) returns the evidence document for a period.
 Two properties of that document matter more than the totals:
 
-- **It is scoped to the caller's own tenancy.** A `customer_id` naming any other
-  tenant is refused with 403 before the store is touched. A provider pulls a
-  customer's evidence from inside that customer's tenancy.
+- **The tenant route is scoped to the caller's own tenancy.** A `customer_id`
+  naming any other tenant is refused with 403 before the store is touched.
+  Provider billing staff do not impersonate that tenant: their separate
+  workforce credential calls `GET
+  /provider/v1/tenants/{id}/usage-evidence` with an exact customer read delegation
+  (the `read` operation). An undelegated customer or a grant for another operation is
+  refused before the customer's forced-RLS metering transaction opens.
 - **It says whether it may be billed.** `signable` is false, with a `reason`, for
   any period the metering store cannot vouch for end to end — an open period,
   metering that was not durable for the whole window, or coverage that starts
@@ -263,3 +267,14 @@ Two properties of that document matter more than the totals:
 
 An absent metering store returns 503 rather than a zero-usage document: no
 metering and no usage are different facts.
+
+The Provider route returns the same canonical signed JSON/JWS document as the
+tenant route, or `?format=csv` for a strict finance CSV whose rows retain the
+customer, period, signable verdict, reconciliation result, and document digest.
+The `/provider` console selects customer and period, downloads signed JSON or
+finance CSV, and fetches public trust separately from `GET
+/provider/v1/evidence/verification-keys`. It reconstructs the displayed
+document's canonical bytes and shows **Signature verified** only when RS256,
+the protected billing-invoice artifact domain, key id, digest, and signature
+all match. A green label therefore does not trust the evidence response's own
+`signable` boolean.

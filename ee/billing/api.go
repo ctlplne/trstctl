@@ -109,7 +109,6 @@ func evidenceSchemas() map[string]*api.Schema {
 // the truth is "your usage is incomplete and here is exactly how" — and the
 // second is actionable while the first gets escalated to engineering.
 func serveEvidence(a *api.API, w http.ResponseWriter, r *http.Request, deps EvidenceDeps) {
-	reader := deps.Reader
 	// The customer is the CALLER'S TENANT, never a name in the query string.
 	//
 	// An evidence document is a full record of one tenant's activity, so a
@@ -126,16 +125,33 @@ func serveEvidence(a *api.API, w http.ResponseWriter, r *http.Request, deps Evid
 	customer := strings.TrimSpace(caller)
 	q := r.URL.Query()
 	if named := strings.TrimSpace(q.Get("customer_id")); named != "" && named != customer {
-		// Fail closed and SAY WHY. Cross-customer evidence needs the provider
-		// delegation set (ee/provider), which has no served or stored form yet;
-		// answering here would mean inventing an authorization decision this
-		// binary cannot make.
+		// Fail closed and SAY WHY. Provider staff use the separate Provider
+		// workforce plane; a tenant permission never becomes cross-customer
+		// authority just because a query parameter names another UUID.
 		writeEvidenceError(w, http.StatusForbidden,
-			"customer_id names another tenant. Cross-customer evidence requires a provider delegation, "+
-				"which is not served yet, so this route refuses rather than guessing that the caller "+
-				"is entitled to another customer's usage")
+			"customer_id names another tenant. Use the Provider evidence route with an explicit "+
+				"customer read delegation; this tenant route refuses cross-customer access")
 		return
 	}
+	ServeEvidenceForCustomer(w, r, deps, customer)
+}
+
+// ServeEvidenceForCustomer renders one already-authorized customer's evidence.
+//
+// Authentication and cross-customer authorization stay with the caller: the
+// tenant API derives customer from its principal above, while ee/provider
+// checks its separate workforce credential and exact read delegation before it
+// calls this function. Keeping assembly here means both surfaces emit the same
+// canonical JSON/JWS and CSV bytes instead of maintaining two invoice formats
+// that can drift.
+func ServeEvidenceForCustomer(w http.ResponseWriter, r *http.Request, deps EvidenceDeps, customer string) {
+	reader := deps.Reader
+	customer = strings.TrimSpace(customer)
+	if customer == "" {
+		writeEvidenceError(w, http.StatusForbidden, "invoice evidence requires an authorized customer")
+		return
+	}
+	q := r.URL.Query()
 	start, err := time.Parse(time.RFC3339, strings.TrimSpace(q.Get("period_start")))
 	if err != nil {
 		writeEvidenceError(w, http.StatusBadRequest, "period_start must be RFC3339")

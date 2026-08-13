@@ -276,6 +276,12 @@ describe("i18n boundary", () => {
       // SCIM lifecycle, exact customer/operation grants, expiry, last use, and
       // retained revocation evidence. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
+      // AUD-59 Provider billing re-pin: twenty-one keys label customer/period
+      // selection, billable and reconciliation truth, independent signature
+      // verification, digest, and signed-JSON/finance-CSV downloads. The
+      // negation in not-billable, verification-failed, unsigned, and
+      // unreconciled must survive translation. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
       // AUD-37 AD CS evidence re-pin: twenty-three keys expose configured IIS
       // probes, CA restriction unknown-state honesty, exact endpoint evidence,
       // signed compliance references, and an explicit private-CIDR SSRF
@@ -653,8 +659,8 @@ describe("i18n boundary", () => {
       // production-unit consumption, and remaining bundled non-production slots.
       // Currency, counts, and placeholders stay exact. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "b4459397138ae2c635942e9e552b9affebc585b98603e8a9d97312cc6267f9d2",
-      "de-DE": "aa3e4efae6b7087f4069e02ba04b25cd13e3453d4fa80be66a1de09a7071f632",
+      "es-ES": "0ef27b7f73760f30247143e6994314be50f20c4397b67d7fdd8cff9568da2d00",
+      "de-DE": "fc117b7afc3fd20265a50c922dbecd40edb99e1de2d39793ee03704045250416",
     });
   });
 

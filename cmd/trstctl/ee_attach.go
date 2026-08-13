@@ -314,16 +314,21 @@ func attachEEProviderPlane(ctx context.Context, cfg *config.Config, log *slog.Lo
 	attachEEProviderGovernance(log, lic, deps)
 	siloInstall := attachEEProviderSilo(log, lic, deps)
 	brandInstall := attachEEProviderBrand(log, lic, deps)
-	if err := attachEEProviderAPI(ctx, cfg, log, lic, deps, siloInstall, brandInstall); err != nil {
+	billingEvidence, err := attachEEProviderMetering(ctx, log, lic, deps)
+	if err != nil {
 		return err
 	}
-	attachEEProviderMetering(ctx, log, lic, deps)
+	if err := attachEEProviderAPI(ctx, cfg, log, lic, deps, siloInstall, brandInstall, billingEvidence); err != nil {
+		return err
+	}
 	return nil
 }
 
 // Each helper below owns one license block. Keeping the blocks separate makes
 // the edition boundary easy to audit while preserving attachEEProviderPlane's
-// order: foundations first, provider API second, metering last.
+// order: foundations first, metering authority second, Provider API consumer
+// last. That lets both the tenant and Provider routes share one exact evidence
+// dependency set instead of constructing signing truth twice.
 func attachEEProviderBYOK(cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) {
 	if lic == nil || !lic.Has(license.FeatureBYOK) {
 		return
@@ -394,6 +399,7 @@ func attachEEProviderAPI(
 	deps *server.Deps,
 	siloInstall *eesilo.Installation,
 	brandInstall *eewhitelabel.Installation,
+	billingEvidence providerBillingEvidence,
 ) error {
 	if lic == nil || !lic.Has(license.FeatureProviderPlane) {
 		return nil
@@ -446,21 +452,23 @@ func attachEEProviderAPI(
 		deps.RestoreDrill = server.RestoreDrillRunner(cfg, attachEEProjectionOptions)
 	}
 	deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
-		License:       lic,
-		Store:         eeprovider.NewPGStore(deps.Store),
-		Audit:         eeprovider.NewEventLogAuditSink(deps.Log),
-		Mutations:     authorityMutations,
-		Activity:      eeprovider.NewEventLogActivitySource(deps.Log),
-		Idempotency:   providerIdempotency,
-		Authenticator: operatorAuth,
-		Delegations:   delegations,
-		Access:        access,
-		SAML:          samlAuth,
-		SCIM:          providerSCIM,
-		Telemetry:     eeprovider.NewPGStore(deps.Store),
-		Quotas:        eebilling.NewPGStore(deps.Store),
-		Brands:        providerBrandStore(brandInstall),
-		Drills:        isolationDrillerAdapter{store: deps.Store, lanes: laneDrillFor(siloInstall, deps.Log)},
+		License:                  lic,
+		Store:                    eeprovider.NewPGStore(deps.Store),
+		Audit:                    eeprovider.NewEventLogAuditSink(deps.Log),
+		Mutations:                authorityMutations,
+		Activity:                 eeprovider.NewEventLogActivitySource(deps.Log),
+		Idempotency:              providerIdempotency,
+		Authenticator:            operatorAuth,
+		Delegations:              delegations,
+		Access:                   access,
+		SAML:                     samlAuth,
+		SCIM:                     providerSCIM,
+		Telemetry:                eeprovider.NewPGStore(deps.Store),
+		Quotas:                   eebilling.NewPGStore(deps.Store),
+		Evidence:                 billingEvidence.deps,
+		EvidenceVerificationJWKS: billingEvidence.verificationJWKS,
+		Brands:                   providerBrandStore(brandInstall),
+		Drills:                   isolationDrillerAdapter{store: deps.Store, lanes: laneDrillFor(siloInstall, deps.Log)},
 	})
 	if log == nil {
 		return nil
@@ -593,9 +601,14 @@ func providerSCIMConfig(cfg *config.Config) (*eeprovider.SCIMConfig, error) {
 	return result, nil
 }
 
-func attachEEProviderMetering(ctx context.Context, log *slog.Logger, lic *license.Manager, deps *server.Deps) {
+type providerBillingEvidence struct {
+	deps             eebilling.EvidenceDeps
+	verificationJWKS []byte
+}
+
+func attachEEProviderMetering(ctx context.Context, log *slog.Logger, lic *license.Manager, deps *server.Deps) (providerBillingEvidence, error) {
 	if lic == nil || !lic.Has(license.FeatureMetering) {
-		return
+		return providerBillingEvidence{}, nil
 	}
 	// The durable meter compares quotas against current tenant resources and
 	// keeps invoice coverage through restarts.
@@ -609,21 +622,29 @@ func attachEEProviderMetering(ctx context.Context, log *slog.Logger, lic *licens
 		reconciler = billingInst.PG
 	}
 	var evidenceSigner eebilling.EvidenceSigner
+	var verificationJWKS []byte
 	if deps.AuditSigningKey == nil {
 		if log != nil {
 			log.Warn("invoice evidence will be served UNSIGNABLE: the signer-bound audit evidence key is unavailable")
 		}
 	} else {
 		evidenceSigner = &eebilling.AuditKeySigner{Key: deps.AuditSigningKey}
+		var err error
+		verificationJWKS, err = deps.AuditSigningKey.PublicJWKS()
+		if err != nil {
+			return providerBillingEvidence{}, fmt.Errorf("publish invoice evidence verification keys: %w", err)
+		}
 	}
 	// All auditor-facing exports share the signer-bound audit-evidence key.
+	evidenceDeps := eebilling.EvidenceDeps{
+		Reader: evidenceReader, Reconciler: reconciler, Signer: evidenceSigner,
+	}
 	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory,
-		eebilling.NewAPIOptionsFactory(eebilling.EvidenceDeps{
-			Reader: evidenceReader, Reconciler: reconciler, Signer: evidenceSigner,
-		}))
+		eebilling.NewAPIOptionsFactory(evidenceDeps))
 	if log != nil {
 		log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
 	}
+	return providerBillingEvidence{deps: evidenceDeps, verificationJWKS: verificationJWKS}, nil
 }
 
 func attachPQC(log *slog.Logger, deps *server.Deps) {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/ee/billing"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -88,8 +89,19 @@ type Config struct {
 	// Quotas is the durable per-customer limit store (L2). NIL MEANS QUOTA
 	// ADMINISTRATION REFUSES: accepting a cap that cannot survive a restart
 	// would tell a provider their customer is limited when nothing is.
-	Quotas    QuotaStore
-	Telemetry TelemetryReader
+	Quotas QuotaStore
+	// Evidence is the L2 canonical document builder's durable reader,
+	// reconciler, and isolated-signer-backed signer. The Provider handler owns
+	// authentication plus delegation; billing owns the bytes. A nil Reader
+	// leaves the Provider evidence routes unserved rather than reporting an
+	// unmetered customer as zero usage.
+	Evidence billing.EvidenceDeps
+	// EvidenceVerificationJWKS is public-only trust for the exact signer above.
+	// It is copied into the handler and served to authenticated Provider staff
+	// so the console verifies the detached JWS rather than trusting a green
+	// `signable` field from the same response.
+	EvidenceVerificationJWKS []byte
+	Telemetry                TelemetryReader
 	// Drills runs the on-demand isolation drill (L3). NIL MEANS THE DRILL
 	// ENDPOINT REFUSES: a provider must not be told isolation "passed" by a
 	// plane that has nothing wired to actually test it.

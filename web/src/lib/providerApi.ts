@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import type { UsageEvidence } from "./api";
+
 // The provider-plane client (epic L3).
 //
 // /provider/v1 is a SEPARATE plane from /api/v1: its caller is the provider's
@@ -145,6 +147,17 @@ export interface ProviderOperatorAccess {
   delegations: ProviderDelegation[];
 }
 
+export type ProviderUsageEvidence = UsageEvidence;
+
+export interface ProviderEvidenceJWKSet {
+  keys: Array<JsonWebKey & { kid?: string; alg?: string; use?: string }>;
+}
+
+export interface ProviderEvidenceVerification {
+  verified: boolean;
+  keyId?: string;
+}
+
 /** ProviderAuthError is thrown when no operator token is present or the plane
  * refuses the credential — the console renders the login gate rather than an
  * error banner, because "not signed in" is not a failure. */
@@ -164,7 +177,7 @@ function newProviderIdempotencyKey(): string {
   return `provider-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-async function providerReq<T>(path: string, init?: RequestInit): Promise<T> {
+async function providerFetch(path: string, init?: RequestInit): Promise<Response> {
   const token = providerToken();
   const method = String(init?.method ?? "GET").toUpperCase();
   const mutationHeaders: Record<string, string> = method === "GET" || method === "HEAD" ? {} : { "Idempotency-Key": newProviderIdempotencyKey() };
@@ -187,6 +200,11 @@ async function providerReq<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new ProviderApiError(res.status, await res.text());
   }
+  return res;
+}
+
+async function providerReq<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await providerFetch(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
@@ -198,6 +216,97 @@ function providerCSRFCookie(): string | null {
     if (name === "trstctl_provider_csrf") return decodeURIComponent(value.join("="));
   }
   return null;
+}
+
+function providerEvidencePath(customerId: string, periodStart: string, periodEnd: string, format?: "csv"): string {
+  const query = new URLSearchParams({ period_start: periodStart, period_end: periodEnd });
+  if (format) query.set("format", format);
+  return `/provider/v1/tenants/${encodeURIComponent(customerId)}/usage-evidence?${query.toString()}`;
+}
+
+// canonicalProviderUsageEvidence is byte-for-byte the Go billing document's
+// canonical form. The console verifies THESE displayed values, not merely the
+// signature over some hidden payload returned beside them.
+export function canonicalProviderUsageEvidence(document: ProviderUsageEvidence): Uint8Array {
+  let canonical = `${document.customer_id}\n${document.period_start}\n${document.period_end}\n${String(document.signable)}\n${document.reason}\n`;
+  canonical += `${document.observed_from ?? ""}\n${document.observed_to ?? ""}\n`;
+  for (const line of document.lines ?? []) {
+    canonical += `${line.meter}|${line.kind}|${line.value}\n`;
+  }
+  for (const line of document.reconciliation ?? []) {
+    canonical += `reconcile:${line.meter ?? ""}|${line.metered ?? 0}|${line.event_history ?? 0}|${String(line.checked ?? false)}|${String(line.matches ?? false)}\n`;
+  }
+  return new TextEncoder().encode(canonical);
+}
+
+function decodeBase64URL(segment: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]*$/.test(segment)) throw new Error("invalid base64url");
+  const base64 = segment.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - (segment.length % 4)) % 4);
+  const raw = atob(base64);
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
+  return difference === 0;
+}
+
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.slice().buffer as ArrayBuffer;
+}
+
+function hex(bytes: ArrayBuffer): string {
+  return [...new Uint8Array(bytes)].map((part) => part.toString(16).padStart(2, "0")).join("");
+}
+
+export async function verifyProviderUsageEvidence(document: ProviderUsageEvidence, jwks: ProviderEvidenceJWKSet): Promise<ProviderEvidenceVerification> {
+  const envelope = document.signature;
+  const keyId = envelope?.key_id;
+  if (!envelope?.jws || envelope.alg !== "RS256" || !keyId) return { verified: false, keyId };
+  try {
+    const parts = envelope.jws.split(".");
+    if (parts.length !== 3) return { verified: false, keyId };
+    const header = JSON.parse(new TextDecoder().decode(decodeBase64URL(parts[0]))) as {
+      alg?: string;
+      kid?: string;
+      trstctl_artifact?: string;
+    };
+    if (header.alg !== "RS256" || header.kid !== keyId || header.trstctl_artifact !== "trstctl.audit-evidence/billing-invoice/v1") {
+      return { verified: false, keyId };
+    }
+    const jwk = jwks.keys.find((candidate) => candidate.kid === keyId && candidate.kty === "RSA");
+    if (!jwk || (jwk.alg && jwk.alg !== "RS256") || (jwk.use && jwk.use !== "sig")) return { verified: false, keyId };
+
+    const payload = decodeBase64URL(parts[1]);
+    if (!equalBytes(payload, canonicalProviderUsageEvidence(document))) return { verified: false, keyId };
+    if (hex(await crypto.subtle.digest("SHA-256", asArrayBuffer(payload))) !== document.digest.toLowerCase()) return { verified: false, keyId };
+
+    const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    const verified = await crypto.subtle.verify(
+      { name: "RSASSA-PKCS1-v1_5" },
+      key,
+      asArrayBuffer(decodeBase64URL(parts[2])),
+      asArrayBuffer(new TextEncoder().encode(`${parts[0]}.${parts[1]}`)),
+    );
+    return { verified, keyId };
+  } catch {
+    return { verified: false, keyId };
+  }
+}
+
+async function downloadProviderEvidence(customerId: string, periodStart: string, periodEnd: string, format: "json" | "csv"): Promise<void> {
+  const response = await providerFetch(providerEvidencePath(customerId, periodStart, periodEnd, format === "csv" ? "csv" : undefined), {
+    headers: { Accept: format === "csv" ? "text/csv" : "application/json" },
+  });
+  const blob = await response.blob();
+  const objectURL = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectURL;
+  anchor.download = `usage-evidence-${customerId}-${periodStart.slice(0, 10)}-${periodEnd.slice(0, 10)}.${format}`;
+  anchor.click();
+  URL.revokeObjectURL(objectURL);
 }
 
 export const providerApi = {
@@ -223,6 +332,13 @@ export const providerApi = {
     const out = await providerReq<{ tenants: ProviderTenant[] | null }>("/provider/v1/access/customers");
     return out.tenants ?? [];
   },
+  usageEvidence: (customerId: string, periodStart: string, periodEnd: string): Promise<ProviderUsageEvidence> =>
+    providerReq<ProviderUsageEvidence>(providerEvidencePath(customerId, periodStart, periodEnd)),
+  evidenceVerificationKeys: (): Promise<ProviderEvidenceJWKSet> => providerReq<ProviderEvidenceJWKSet>("/provider/v1/evidence/verification-keys"),
+  verifyUsageEvidence: async (document: ProviderUsageEvidence): Promise<ProviderEvidenceVerification> =>
+    verifyProviderUsageEvidence(document, await providerApi.evidenceVerificationKeys()),
+  downloadUsageEvidence: (customerId: string, periodStart: string, periodEnd: string, format: "json" | "csv"): Promise<void> =>
+    downloadProviderEvidence(customerId, periodStart, periodEnd, format),
   grantOperatorAccess: (
     operatorId: string,
     input: { customer_id: string; operations: ProviderOperation[]; expires_at?: string },

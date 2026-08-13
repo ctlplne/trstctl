@@ -1195,9 +1195,18 @@ never live in the API process. What you can do end to end against the running bi
   in the document that the metered value stands alone; only the
   certificates_stored cap is enforced at a served create path (agents, tenants
   and secrets caps are stored and reported but no create site consults them
-  yet); cross-customer evidence pulls still require the provider delegation
-  route that does not exist (the route serves the caller's own tenancy and
-  refuses a foreign customer_id); and reconciliation compares against the
+  yet). The tenant-self-service route still serves only the caller's own
+  tenancy and refuses a foreign `customer_id`. Provider staff use authenticated
+  `GET /provider/v1/tenants/{id}/usage-evidence` instead: the handler requires
+  that exact customer's `read` delegation before billing opens the customer's
+  forced-RLS transaction, then returns the same signed JSON document or
+  `?format=csv` finance CSV. `GET
+  /provider/v1/evidence/verification-keys` supplies the separately fetched
+  public-only JWK set; the Provider console reconstructs the exact displayed
+  canonical bytes and shows **Signature verified** only after checking the
+  RS256 signature, protected billing-invoice domain, key id, and digest. An
+  undelegated customer or wrong-operation grant is refused before metering is
+  touched. Reconciliation compares against the
   transitions projection, so a rebuild-in-progress can transiently refuse to
   sign — the refusal names the numbers, which is the correct behaviour while
   the projection catches up.
@@ -2601,6 +2610,11 @@ than sending an operator looking for a credential that was never there.
   session and sends only the non-credential CSRF value from JavaScript. OIDC
   bearer input remains as a memory-only option for operator tooling. The local
   `trstctl provider-grant` command remains the install-time bootstrap path;
+  AUD-59 adds invoice evidence in the same console: an operator selects a
+  delegated billing customer and closed period, pulls the signed JSON without
+  impersonating a tenant, sees billable/reconciliation/digest plus independent
+  **Signature verified** posture, and downloads either the signed JSON or the
+  finance CSV whose every row retains customer, period, verdict, and digest.
   break-glass request, consent, and result-use APIs are still not exposed in
   this console.
 - AD CS certificate-database lifecycle visibility (F4, PARTIAL): `POST

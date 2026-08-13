@@ -23,6 +23,9 @@ const { providerMock } = vi.hoisted(() => ({
     grantOperatorAccess: vi.fn(),
     revokeOperatorAccess: vi.fn(),
     setOperatorRole: vi.fn(),
+    usageEvidence: vi.fn(),
+    verifyUsageEvidence: vi.fn(),
+    downloadUsageEvidence: vi.fn(),
     signOut: vi.fn(),
   },
 }));
@@ -54,6 +57,8 @@ describe("provider console (L3)", () => {
     providerMock.session.mockRejectedValue(new Error("no provider session"));
     providerMock.listOperatorAccess.mockResolvedValue([]);
     providerMock.listAccessCustomers.mockResolvedValue([]);
+    providerMock.verifyUsageEvidence.mockResolvedValue({ verified: false });
+    providerMock.downloadUsageEvidence.mockResolvedValue(undefined);
     providerMock.signOut.mockResolvedValue(undefined);
   });
 
@@ -284,5 +289,44 @@ describe("provider console (L3)", () => {
         reason: "Revoked in Provider access console",
       }),
     );
+  });
+
+  it("pulls, verifies, and downloads a selected customer's invoice evidence", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "tenant-alpha", slug: "alpha", name: "Alpha Bank", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+      { id: "tenant-bravo", slug: "bravo", name: "Bravo Health", status: "active", created_at: "2026-02-01T00:00:00Z", updated_at: "2026-02-01T00:00:00Z" },
+    ]);
+    providerMock.usageEvidence.mockResolvedValue({
+      customer_id: "tenant-bravo",
+      period_start: "2026-07-01T00:00:00Z",
+      period_end: "2026-08-01T00:00:00Z",
+      lines: [{ meter: "certificates_issued", kind: "counter", value: 7 }],
+      signable: true,
+      reason: "complete and reconciled",
+      reconciliation: [{ meter: "certificates_issued", metered: 7, event_history: 7, checked: true, matches: true }],
+      digest: "abc123",
+      signature: { alg: "RS256", key_id: "audit-1", jws: "header.payload.signature" },
+      guidance: "verify before invoicing",
+    });
+    providerMock.verifyUsageEvidence.mockResolvedValue({ verified: true, keyId: "audit-1" });
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    const customer = await screen.findByLabelText("Billing customer");
+    fireEvent.change(customer, { target: { value: "tenant-bravo" } });
+    fireEvent.change(screen.getByLabelText("Billing period start"), { target: { value: "2026-07-01" } });
+    fireEvent.change(screen.getByLabelText("Billing period end"), { target: { value: "2026-08-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Pull invoice evidence" }));
+
+    await waitFor(() => expect(providerMock.usageEvidence).toHaveBeenCalledWith("tenant-bravo", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z"));
+    expect(await screen.findByText("Signature verified")).toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
+    expect(screen.getByText("abc123")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Download signed JSON" }));
+    fireEvent.click(screen.getByRole("button", { name: "Download finance CSV" }));
+    await waitFor(() => expect(providerMock.downloadUsageEvidence).toHaveBeenCalledTimes(2));
+    expect(providerMock.downloadUsageEvidence).toHaveBeenNthCalledWith(1, "tenant-bravo", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z", "json");
+    expect(providerMock.downloadUsageEvidence).toHaveBeenNthCalledWith(2, "tenant-bravo", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z", "csv");
   });
 });

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useApiQuery } from "@/lib/query";
 import { ProviderAccessPanel } from "@/pages/provider/ProviderAccessPanel";
+import { ProviderBillingPanel } from "@/pages/provider/ProviderBillingPanel";
 import {
   providerApi,
   providerToken,
@@ -360,6 +361,14 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
       {error ? <p className="mt-3 text-caption text-status-danger">{error}</p> : null}
 
       <ProviderAccessPanel
+        onAuthError={() => {
+          clearProviderToken();
+          onSignOut();
+        }}
+      />
+
+      <ProviderBillingPanel
+        tenants={tenants ?? []}
         onAuthError={() => {
           clearProviderToken();
           onSignOut();

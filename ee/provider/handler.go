@@ -26,15 +26,18 @@ import (
 func NewHandler(cfg Config) http.Handler {
 	return &handler{
 		svc: NewService(cfg), idem: cfg.Idempotency, saml: cfg.SAML,
-		scim: newSCIMHandler(cfg.SCIM, cfg.Access, cfg.Mutations, cfg.Clock),
+		scim:     newSCIMHandler(cfg.SCIM, cfg.Access, cfg.Mutations, cfg.Clock),
+		evidence: cfg.Evidence, evidenceVerificationJWKS: append([]byte(nil), cfg.EvidenceVerificationJWKS...),
 	}
 }
 
 type handler struct {
-	svc  *Service
-	idem *orchestrator.Idempotency
-	saml *SAMLAuthenticator
-	scim *providerSCIMHandler
+	svc                      *Service
+	idem                     *orchestrator.Idempotency
+	saml                     *SAMLAuthenticator
+	scim                     *providerSCIMHandler
+	evidence                 billing.EvidenceDeps
+	evidenceVerificationJWKS []byte
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -168,6 +171,10 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.listOperatorAccess(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/access/customers":
 		h.listAccessCustomers(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/evidence/verification-keys":
+		h.serveEvidenceVerificationKeys(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/usage-evidence"):
+		h.serveUsageEvidence(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/operators/") && strings.HasSuffix(r.URL.Path, "/delegations"):
 		h.grantOperatorAccess(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/operators/") && strings.HasSuffix(r.URL.Path, "/revocations"):
@@ -680,6 +687,75 @@ func (h *handler) getQuota(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(q)
+}
+
+// serveUsageEvidence bridges the Provider workforce boundary to L2's one
+// canonical invoice builder. The order is the security property: authenticate,
+// require a real MFA-backed operator, authorize this exact customer + read
+// operation, and only then let billing open that customer's RLS transaction.
+func (h *handler) serveUsageEvidence(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	if h.evidence.Reader == nil {
+		http.NotFound(w, r)
+		return
+	}
+	customerID, ok := providerTenantPathID(r.URL.Path, "/usage-evidence")
+	if !ok {
+		writeProviderError(w, errors.New("provider: usage-evidence path must name exactly one customer"))
+		return
+	}
+	if named := strings.TrimSpace(r.URL.Query().Get("customer_id")); named != "" && named != customerID {
+		writeProviderError(w, fmt.Errorf("%w: customer_id cannot redirect evidence away from the authorized path", ErrForbidden))
+		return
+	}
+	if err := h.svc.requireOperator(op); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	if err := h.svc.authorize(r.Context(), op, customerID, OpRead); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	billing.ServeEvidenceForCustomer(w, r, h.evidence, customerID)
+}
+
+func providerTenantPathID(path, suffix string) (string, bool) {
+	const prefix = "/provider/v1/tenants/"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return "", false
+	}
+	id := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix))
+	if id == "" || strings.Contains(id, "/") {
+		return "", false
+	}
+	return id, true
+}
+
+func (h *handler) serveEvidenceVerificationKeys(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	if h.evidence.Reader == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.requireOperator(op); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	if len(h.evidenceVerificationJWKS) == 0 {
+		writeProviderError(w, errors.New("provider: invoice evidence verification keys are not attached"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/jwk-set+json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(h.evidenceVerificationJWKS)
 }
 
 func (h *handler) requestBreakGlass(w http.ResponseWriter, r *http.Request) {
