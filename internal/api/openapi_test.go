@@ -382,6 +382,7 @@ func TestOpenAPIPathParameterSchemas(t *testing.T) {
 	assertPathParamSchema(t, doc, "post", "/api/v1/mcp/tools/{tool}", "tool", "string", "")
 	assertPathParamSchema(t, doc, "get", "/api/v1/secrets/store/{name}", "name", "string", "")
 	assertPathParamSchema(t, doc, "post", "/api/v1/ephemeral/{id}/approvals", "id", "string", "uuid")
+	assertPathParamSchema(t, doc, "post", "/api/v1/enrollment/diagnostics/{id}/prove-fixed", "id", "string", "")
 }
 
 func TestNoManualAPIV1MuxRoutesBypassOpenAPI(t *testing.T) {

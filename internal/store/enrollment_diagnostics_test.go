@@ -106,6 +106,47 @@ func TestEnrollmentDiagnosticsAggregateInsideTenantRLS(t *testing.T) {
 	}
 }
 
+func TestNewEnrollmentRefusalInvalidatesEarlierProofLink(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	seedTwoTenants(t, st)
+	base := time.Date(2026, 8, 13, 5, 0, 0, 0, time.UTC)
+	observed := store.EnrollmentDiagnostic{
+		TenantID: tenantA, DiagnosticID: "diagnostic:aud49-repeat", Protocol: "est",
+		Step: "authorize", Cause: "template_acl_denied", Summary: "template refused",
+		ObservedAt: base, SourceEventID: "diag-repeat-1", EventSequence: 1,
+	}
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return st.ApplyEnrollmentDiagnosticObservedTx(ctx, tx, observed)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return st.ApplyEnrollmentDiagnosticVerificationQueuedTx(ctx, tx, tenantA,
+			observed.DiagnosticID, "endpoint-proof-1", "fingerprint-proof-1", base.Add(time.Second), 2)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	linked, err := st.ListEnrollmentDiagnostics(ctx, tenantA, 10)
+	if err != nil || len(linked) != 1 || linked[0].VerificationEndpointID != "endpoint-proof-1" ||
+		linked[0].ExpectedFingerprint != "fingerprint-proof-1" {
+		t.Fatalf("queued proof link = %+v err=%v", linked, err)
+	}
+	observed.ObservedAt = base.Add(2 * time.Second)
+	observed.SourceEventID = "diag-repeat-3"
+	observed.EventSequence = 3
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return st.ApplyEnrollmentDiagnosticObservedTx(ctx, tx, observed)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	invalidated, err := st.ListEnrollmentDiagnostics(ctx, tenantA, 10)
+	if err != nil || len(invalidated) != 1 || invalidated[0].VerificationEndpointID != "" ||
+		invalidated[0].ExpectedFingerprint != "" || !invalidated[0].VerificationQueuedAt.IsZero() {
+		t.Fatalf("new refusal retained stale prove-fixed authority: %+v err=%v", invalidated, err)
+	}
+}
+
 func TestEnrollmentDiagnosticRetentionIsBoundedPerTenant(t *testing.T) {
 	ctx := context.Background()
 	st := newStore(t)

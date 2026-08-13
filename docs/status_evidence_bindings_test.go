@@ -77,6 +77,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("DiscoveryRun", "status", eventProjectionPredicate, "internal/orchestrator/discovery.go:Orchestrator.CompleteDiscoveryRun"),
 	evidence("DiscoverySegmentCoverage", "status", observationPredicate, "internal/api/discovery.go:API.getDiscoveryCoverage"),
 	evidence("EdgeDelegation", "status", eventProjectionPredicate, "internal/api/edge_delegation.go:API.listEdgeDelegations"),
+	evidence("EnrollmentDiagnosticVerification", "status", predicate(evidenceEventProjection, "queued requires an immutable tenant-scoped enrollment.diagnostic.verification.queued event plus the same-transaction endpoint-verification outbox command; it is only an action receipt and never claims that the endpoint was contacted or fixed"), "internal/orchestrator/enrollment_diagnostics.go:Orchestrator.QueueEnrollmentDiagnosticVerification"),
 	evidence("EndpointVerification", "status", predicate(evidenceObservation, "verified/diverged require a live listener handshake receipt; unreachable/not_checked explicitly carry no positive verdict"), "internal/api/endpoint_verification.go:endpointVerificationStatus"),
 	evidence("EphemeralApproval", "status", operationApprovalPredicate, "internal/server/ephemeral.go:ephemeralIssuerService.ApproveEphemeralCredential"),
 	evidence("ExternalCA", "status", observationPredicate, "internal/api/external_ca.go:API.listExternalCAs"),

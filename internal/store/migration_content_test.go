@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	179: true,
 	178: true,
 	176: true,
 	175: true,
@@ -63,6 +64,66 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	102: true,
 	105: true,
 	106: true,
+}
+
+func TestMigration0179PreservesLegacyDiagnosticsAndPermitsExactOperationsAUD49(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 179)
+	if target.noTx || target.name != "0179_enrollment_diagnostic_workflows.sql" {
+		t.Fatalf("migration 0179 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name) VALUES ($1, 'aud49')`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO enrollment_diagnostic_observations
+		       (tenant_id, source_event_id, event_sequence, protocol, step, cause, observed_at)
+		VALUES ($1, 'event-legacy', 7, 'est', 'issue', 'template_acl_denied', now())`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO enrollment_diagnostics
+		       (tenant_id, protocol, step, cause, summary, remediation, actionable,
+		        observed_at, observation_count, source_event_id, event_sequence)
+		VALUES ($1, 'est', 'issue', 'template_acl_denied', 'legacy refusal', 'fix policy', true,
+		        now(), 3, 'event-legacy', 7)`, tenantA); err != nil {
+		t.Fatal(err)
+	}
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	const legacyID = "legacy:est:issue:template_acl_denied"
+	var projectedID, observedID string
+	if err := pool.QueryRow(ctx, `
+		SELECT diagnostic_id
+		  FROM enrollment_diagnostics
+		 WHERE tenant_id = $1 AND source_event_id = 'event-legacy'`, tenantA).Scan(&projectedID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT diagnostic_id
+		  FROM enrollment_diagnostic_observations
+		 WHERE tenant_id = $1 AND source_event_id = 'event-legacy'`, tenantA).Scan(&observedID); err != nil {
+		t.Fatal(err)
+	}
+	if projectedID != legacyID || observedID != legacyID {
+		t.Fatalf("legacy ids = projection:%q observation:%q, want %q", projectedID, observedID, legacyID)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO enrollment_diagnostics
+		       (tenant_id, diagnostic_id, protocol, step, cause, summary, actionable,
+		        observed_at, observation_count, source_event_id, event_sequence)
+		VALUES ($1, 'exact-operation-2', 'est', 'issue', 'template_acl_denied',
+		        'second exact refusal', true, now(), 1, 'event-exact-2', 8)`, tenantA); err != nil {
+		t.Fatalf("new primary key still collapses distinct exact operations: %v", err)
+	}
 }
 
 func TestMigration0178RetiresOnlyUnnamedTicketSyncJobsAUD47(t *testing.T) {

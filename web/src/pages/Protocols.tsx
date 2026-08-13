@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Braces, CheckCircle2, Copy, MinusCircle, Signature, X, XCircle } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { useCan } from "@/components/rbac";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
@@ -25,6 +26,7 @@ import {
   type Agent,
   type ACMEDNS01ProviderConfigRequest,
   type EnrollmentDiagnosticList,
+  type EnrollmentDiagnostic,
   type MDMSCEPPolicy,
   type MDMSCEPPolicyRequest,
   type MDMSCEPStatus,
@@ -209,6 +211,8 @@ export function Protocols() {
   // I4: recent enrolment refusals, classified. Loaded separately so a
   // deployment without the surface still renders the rest of the page.
   const [diagnostics, setDiagnostics] = useState<EnrollmentDiagnosticList | null>(null);
+  const [verifyingDiagnostic, setVerifyingDiagnostic] = useState<string | null>(null);
+  const [diagnosticVerificationError, setDiagnosticVerificationError] = useState<string | null>(null);
   const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
   const [dnsProviders, setDNSProviders] = useState<ACMEDNS01ProviderCatalogItem[]>([]);
   const [dnsProviderConfigs, setDNSProviderConfigs] = useState<ACMEDNS01ProviderConfig[]>([]);
@@ -222,6 +226,7 @@ export function Protocols() {
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const { toast } = useToast();
+  const canProveEnrollmentFixed = useCan("certs:issue");
   const [scepEditPolicy, setSCEPEditPolicy] = useState<MDMSCEPPolicy | null>(null);
   const [scepDeletePolicy, setSCEPDeletePolicy] = useState<MDMSCEPPolicy | null>(null);
   const [scepRotatePolicy, setSCEPRotatePolicy] = useState<MDMSCEPPolicy | null>(null);
@@ -354,6 +359,72 @@ export function Protocols() {
     toast({ kind: "success", title: t("parity.dns01ProviderConfigDeleted_9ead6a"), description: config.name });
   }
 
+  async function proveEnrollmentDiagnosticFixed(row: EnrollmentDiagnostic) {
+    if (!row.id || verifyingDiagnostic) return;
+    setVerifyingDiagnostic(row.id);
+    setDiagnosticVerificationError(null);
+    try {
+      const queued = await api.proveEnrollmentDiagnosticFixed(row.id);
+      setDiagnostics((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === row.id
+                  ? {
+                      ...item,
+                      verification_endpoint_id: queued.verification_endpoint_id,
+                      verification_queued_at: queued.queued_at,
+                      verification_status: queued.status,
+                      verification_result_path: queued.result_path,
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      );
+      toast({
+        kind: "success",
+        title: translateNow("source.verification.queued.i4diag0023"),
+        description: row.endpoint_ref,
+      });
+    } catch (err: unknown) {
+      setDiagnosticVerificationError(protocolStatusError(err));
+    } finally {
+      setVerifyingDiagnostic(null);
+    }
+  }
+
+  const hasQueuedEnrollmentVerification = Boolean(
+    diagnostics?.items.some((item) => item.verification_status === "queued"),
+  );
+
+  useEffect(() => {
+    if (!hasQueuedEnrollmentVerification || typeof api.enrollmentDiagnostics !== "function") return;
+    let active = true;
+    let attempts = 0;
+    let timer: number | undefined;
+    const refresh = async () => {
+      attempts += 1;
+      try {
+        const list = await api.enrollmentDiagnostics();
+        if (active) setDiagnostics(list);
+      } catch {
+        // Keep the explicit queued state and retry within the fixed budget. A
+        // transient read failure is not proof that the verification failed.
+      } finally {
+        if (active && attempts < 30) {
+          timer = window.setTimeout(() => void refresh(), 2_000);
+        }
+      }
+    };
+    void refresh();
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [hasQueuedEnrollmentVerification]);
+
   useEffect(() => {
     let active = true;
     if (typeof api.enrollmentDiagnostics !== "function") return;
@@ -407,6 +478,11 @@ export function Protocols() {
               {translateNow("source.enrollment.diagnostics.i4diag0001")}
             </h2>
             <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{diagnostics?.guidance}</p>
+            {diagnosticVerificationError ? (
+              <p role="alert" className="mt-2 text-xs text-danger">
+                {diagnosticVerificationError}
+              </p>
+            ) : null}
           </div>
           <div className="ui-panel overflow-x-auto">
             <table className="ui-table min-w-[60rem]">
@@ -417,12 +493,14 @@ export function Protocols() {
                   <th scope="col">{translateNow("source.failing.step.i4diag0004")}</th>
                   <th scope="col">{translateNow("source.what.happened.i4diag0005")}</th>
                   <th scope="col">{translateNow("source.what.to.do.i4diag0006")}</th>
+                  <th scope="col">{translateNow("source.exact.evidence.i4diag0010")}</th>
+                  <th scope="col">{translateNow("source.verification.i4diag0011")}</th>
                   <th scope="col">{translateNow("source.seen.i4diag0007")}</th>
                 </tr>
               </thead>
               <tbody>
                 {(diagnostics?.items ?? []).map((row) => (
-                  <tr key={`${row.protocol}:${row.step}:${row.cause}`} className="align-top">
+                  <tr key={row.id || `${row.protocol}:${row.step}:${row.cause}`} className="align-top">
                     <td className="font-mono text-xs">{row.protocol}</td>
                     <td className="font-mono text-xs">{row.step}</td>
                     <td className="max-w-[24rem] text-xs">{row.summary}</td>
@@ -434,6 +512,56 @@ export function Protocols() {
                         row.remediation
                       ) : (
                         <span className="text-muted-foreground">{translateNow("source.cause.not.established.i4diag0008")}</span>
+                      )}
+                    </td>
+                    <td className="max-w-[24rem] text-xs">
+                      <dl className="grid gap-1">
+                        {row.operation_ref ? (
+                          <div>
+                            <dt className="inline text-muted-foreground">{translateNow("source.operation.i4diag0012")}: </dt>
+                            <dd className="inline break-all font-mono">{row.operation_ref}</dd>
+                          </div>
+                        ) : null}
+                        {row.identity_ref ? (
+                          <div>
+                            <dt className="inline text-muted-foreground">{translateNow("source.identity.i4diag0013")}: </dt>
+                            <dd className="inline break-all font-mono">{row.identity_ref}</dd>
+                          </div>
+                        ) : null}
+                        {row.endpoint_ref ? (
+                          <div>
+                            <dt className="inline text-muted-foreground">{translateNow("source.endpoint.i4diag0014")}: </dt>
+                            <dd className="inline break-all font-mono">{row.endpoint_ref}</dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </td>
+                    <td className="max-w-[22rem] text-xs">
+                      {row.verification_status === "verified" ? (
+                        <div className="grid gap-1">
+                          <span className="font-semibold text-success">{translateNow("source.verified.fixed.i4diag0015")}</span>
+                          {row.verification_agent ? <span className="font-mono">{row.verification_agent}</span> : null}
+                          {row.verification_evidence_digest ? <span className="break-all font-mono">{row.verification_evidence_digest}</span> : null}
+                          {row.verification_result_path ? (
+                            <a className="font-medium text-brand-accent underline" href={row.verification_result_path}>
+                              {translateNow("source.signed.verification.evidence.i4diag0016")}
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : row.verification_status === "queued" ? (
+                        <span>{translateNow("source.queued.network.verification.i4diag0017")}</span>
+                      ) : row.verification_status === "diverged" ? (
+                        <span className="text-danger">{translateNow("source.verification.diverged.i4diag0018")}</span>
+                      ) : row.verification_status === "unreachable" ? (
+                        <span className="text-danger">{translateNow("source.verification.unreachable.i4diag0019")}</span>
+                      ) : canProveEnrollmentFixed && row.verification_kind === "endpoint.verify" ? (
+                        <Button size="sm" variant="outline" disabled={verifyingDiagnostic !== null} onClick={() => void proveEnrollmentDiagnosticFixed(row)}>
+                          {verifyingDiagnostic === row.id
+                            ? translateNow("source.queueing.verification.i4diag0020")
+                            : translateNow("source.prove.fixed.i4diag0021")}
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground">{translateNow("source.no.network.proof.queued.i4diag0022")}</span>
                       )}
                     </td>
                     <td className="text-xs text-muted-foreground">

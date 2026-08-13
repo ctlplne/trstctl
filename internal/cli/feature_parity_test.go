@@ -195,9 +195,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// destructive `ca keys retire` raises it to 369 and keeps the signer-gated
 	// operation usable from a headless recovery terminal. AUD-44's owner attest
 	// plus exception list/grant/revoke commands raise it to 373 and expose the
-	// ownership-readiness gate from a headless incident terminal.
-	if len(out) != 374 {
-		t.Fatalf("CLI commands = %d, want 374", len(out))
+	// ownership-readiness gate from a headless incident terminal. AUD-49's
+	// exact endpoint result, redacted diagnostic addendum, and prove-fixed
+	// mutation raise it to 377.
+	if len(out) != 377 {
+		t.Fatalf("CLI commands = %d, want 377", len(out))
 	}
 	return out
 }

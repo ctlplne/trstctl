@@ -682,10 +682,12 @@ never live in the API process. What you can do end to end against the running bi
   projected in one tenant transaction, so a crash cannot commit a red drill while
   silently dropping its alert. The scheduler logs structural/signing failures
   instead of discarding its returned error.
-  Enrolment diagnostics (I4): a refused ACME enrolment now produces a diagnosis
-  naming the protocol, the step that failed, a cause from a CLOSED set, and a
-  remediation. The hook sits at the single point every ACME refusal passes through,
-  so a refusal added later is diagnosed without anybody remembering to wire it.
+  Enrolment diagnostics (I4): refused ACME, EST, SCEP, and AD CS enrolments now
+  produce a diagnosis naming the protocol, the step that failed, a cause from a
+  CLOSED set, and a remediation. Each protocol emits at its shared refusal choke
+  point, so a new refusal cannot silently bypass the recorder. AD CS keeps only an
+  allow-listed stable HRESULT (`0x80094800` or `0x80094801`); its free-form upstream
+  status is never retained because IIS or a proxy can echo submitted credentials.
   The design constraint is that it must DECLINE rather than guess. A tool that says
   "your DNS record is missing" when the responder was unreachable sends an operator
   to the zone file for an hour, and they will doubt it afterwards on the occasions it
@@ -702,23 +704,42 @@ never live in the API process. What you can do end to end against the running bi
   `trstctl enrollment diagnostics`, and shown on the Protocols console — where an
   unclassified failure renders "cause could not be established" rather than an empty
   remediation cell, because a blank reads as a rendering bug and the honest answer is
-  a real one. Identical diagnoses are collapsed with a count: a broken challenge
-  fails on every retry, and a hundred identical rows would bury the second, different
-  failure that explains the first.
-  Each observation is an immutable `enrollment.diagnostic.observed` event whose
-  envelope carries the request tenant. PostgreSQL projects those events into a
-  FORCE-RLS table, collapses repeats only within that tenant, and retains the newest
-  200 distinct diagnosis keys per tenant. Restart, snapshot restore, and full replay
-  therefore reproduce counts and timestamps instead of clearing a process-global
-  map; an authenticated read always binds the caller's tenant.
-  SCOPE. The classifier is wired into the served ACME path only.
-  EST, SCEP and AD CS classifiers exist and are tested but are not yet emitted from
-  their served paths — those protocols surface far less structure about why they
-  refused, and wiring them is a separate change. The offline support bundle remains
-  deliberately tenant-data-free and therefore includes no enrollment-diagnostic
-  addendum; the console also has no prove-fixed action or durable verification link
-  yet. Those are capability gaps, not reasons to weaken the tenant boundary of the
-  rows that are served today.
+  a real one. Repeats collapse only when the stable diagnostic id names the same
+  protocol, operation, identity, and endpoint. Two devices refused at the same step
+  remain two rows; a retry storm for one exact operation remains one counted row.
+  Each observation is a versioned immutable `enrollment.diagnostic.observed` event
+  whose envelope carries the request tenant. PostgreSQL projects the exact refs into
+  a FORCE-RLS table and retains the newest 200 operations per tenant. Version-1
+  history replays under a deterministic `legacy:` id; version 2 carries the exact id
+  and refs. Restart, snapshot restore, and full replay therefore reproduce both the
+  refusal and its verification link instead of clearing a process-global map.
+
+  `POST /api/v1/enrollment/diagnostics/{id}/prove-fixed` requires `certs:issue` and
+  an `Idempotency-Key`. It appends an immutable queued receipt, then projects the
+  link and writes one network-role `endpoint.verify` intent in the same PostgreSQL
+  tenant transaction. If the event append wins but that transaction rolls back,
+  startup reconciliation recreates the exact intent from the event. The intent
+  contains one explicit deployment-target address and server name; it never
+  guesses `SAN:443` and never treats the enrollment server as the workload endpoint.
+  The operator must first retry enrollment successfully. A newer active certificate
+  issued after the refusal supplies the expected fingerprint; without that evidence
+  the action returns `409` and queues nothing. A real
+  relay performs the TLS handshake; `verified` means the signed transcript reached
+  that endpoint and matched the expected certificate. `diverged` and `unreachable`
+  remain red, and a queued row never reads as success. The result is available
+  through `GET /api/v1/endpoints/verifications/{id}`, its matching CLI command, and
+  the Protocols console's signed-evidence link. While a row is queued, the console
+  performs at most 30 bounded read-only refreshes and stops immediately when a
+  terminal signed result appears.
+
+  The ordinary offline support bundle remains tenant-data-free by default. An
+  operator can explicitly add authorized, redacted aggregates with
+  `trstctl support-bundle --include-enrollment-diagnostics` plus `TRSTCTL_URL` and
+  `TRSTCTL_TOKEN`. The fetched shape can contain only protocol/cause/actionable/count
+  aggregates and an unknown count; tenant ids, times, diagnostic ids, and exact
+  operation/identity/endpoint refs cannot fit in its type. The fetch rejects
+  redirects, bounds the body to 64 KiB, and never copies an upstream error body or
+  bearer token into its error.
   Relay revocation cache (R3): a network-role relay started with
   `--revocation-cache-config` serves issuer-specific CRL and OCSP paths to relying
   parties in one named segment. The JSON file declares a bounded listener, the

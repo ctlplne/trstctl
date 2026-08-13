@@ -107,6 +107,41 @@ func TestCreateSurvivesInvalidConfigAndRedactsCompleteArchive(t *testing.T) {
 	}
 }
 
+func TestCreateIncludesOnlyTypedRedactedEnrollmentDiagnosticAddendum(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "diagnostics.tar.gz")
+	addendum := &EnrollmentDiagnosticsAddendum{
+		SchemaVersion: 1,
+		Rows: []EnrollmentDiagnosticAggregate{
+			{Protocol: "est", Cause: "template_acl_denied", Actionable: true, Count: 7},
+			{Protocol: "acme", Cause: "unknown", Actionable: false, Count: 2},
+		},
+		UnknownCount: 2,
+	}
+	if _, err := Create(context.Background(), Options{
+		Output: output, EnrollmentDiagnostics: addendum,
+		Getenv: func(string) string { return "" },
+		Now:    func() time.Time { return time.Date(2026, 8, 13, 4, 0, 0, 0, time.UTC) },
+	}); err != nil {
+		t.Fatal(err)
+	}
+	entries := readBundle(t, output)
+	body, ok := entries["enrollment-diagnostics.json"]
+	if !ok {
+		t.Fatal("support archive omitted the requested diagnostics addendum")
+	}
+	text := string(body)
+	for _, want := range []string{`"protocol": "est"`, `"cause": "template_acl_denied"`, `"count": 7`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("diagnostics addendum missing %s: %s", want, text)
+		}
+	}
+	for _, forbidden := range []string{"operation_ref", "identity_ref", "endpoint_ref", "tenant_id", "observed_at", "diagnostic_id"} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("diagnostics addendum leaked %q: %s", forbidden, text)
+		}
+	}
+}
+
 func readBundle(t *testing.T, path string) map[string][]byte {
 	t.Helper()
 	file, err := os.Open(path) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)

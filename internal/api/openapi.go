@@ -2338,16 +2338,39 @@ func componentSchemas() map[string]*Schema {
 	}, "backup_configured", "verified", "artifacts_checked", "artifacts_unverifiable", "detail", "guidance")
 	// I4: recent enrolment refusals, classified.
 	enrollmentDiagnostic := object(map[string]*Schema{
+		"id":       str(),
 		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "adcs"}},
 		"step":     str(), "cause": str(), "summary": str(),
 		"remediation": str(), "actionable": {Type: "boolean"},
 		"observed_at": timestamp(), "count": {Type: "integer"},
-	}, "protocol", "step", "cause", "summary", "actionable", "observed_at", "count")
+		"operation_ref": str(), "identity_ref": str(), "endpoint_ref": str(),
+		"verification_kind":    {Type: "string", Enum: []string{"endpoint.verify"}},
+		"verification_address": str(), "verification_server_name": str(),
+		"expected_fingerprint": str(), "verification_endpoint_id": str(),
+		"verification_queued_at":       timestamp(),
+		"verification_status":          {Type: "string", Enum: []string{"queued", "verified", "diverged", "unreachable"}},
+		"verification_evidence_digest": str(), "verification_agent": str(),
+		"verification_checked_at": timestamp(), "verification_result_path": str(),
+	}, "id", "protocol", "step", "cause", "summary", "actionable", "observed_at", "count")
 	enrollmentDiagnosticList := object(map[string]*Schema{
 		"items":         {Type: "array", Items: ref("EnrollmentDiagnostic")},
 		"unknown_count": {Type: "integer"},
 		"guidance":      str(),
 	}, "items", "unknown_count", "guidance")
+	enrollmentDiagnosticVerification := object(map[string]*Schema{
+		"diagnostic_id": str(), "verification_endpoint_id": str(),
+		"status":    {Type: "string", Enum: []string{"queued"}},
+		"queued_at": timestamp(), "result_path": str(),
+	}, "diagnostic_id", "verification_endpoint_id", "status", "queued_at", "result_path")
+	enrollmentDiagnosticSupportAggregate := object(map[string]*Schema{
+		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "adcs"}},
+		"cause":    str(), "actionable": {Type: "boolean"}, "count": {Type: "integer"},
+	}, "protocol", "cause", "actionable", "count")
+	enrollmentDiagnosticsSupportAddendum := object(map[string]*Schema{
+		"schema_version": {Type: "integer"},
+		"rows":           {Type: "array", Items: ref("EnrollmentDiagnosticSupportAggregate")},
+		"unknown_count":  {Type: "integer"},
+	}, "schema_version", "rows", "unknown_count")
 	relayPluginGrant := object(map[string]*Schema{
 		"capability":  {Type: "string", Enum: []string{"fs.read", "fs.write", "net.dial"}},
 		"constraints": {Type: "array", Items: str()},
@@ -4986,6 +5009,9 @@ func componentSchemas() map[string]*Schema {
 		"DRPosture":                                drPosture,
 		"EnrollmentDiagnostic":                     enrollmentDiagnostic,
 		"EnrollmentDiagnosticList":                 enrollmentDiagnosticList,
+		"EnrollmentDiagnosticVerification":         enrollmentDiagnosticVerification,
+		"EnrollmentDiagnosticSupportAggregate":     enrollmentDiagnosticSupportAggregate,
+		"EnrollmentDiagnosticsSupportAddendum":     enrollmentDiagnosticsSupportAddendum,
 		"ConnectorSupportRow":                      connectorSupportRow,
 		"ConnectorRelayParity":                     connectorRelayParity,
 		"ConnectorCatalogItem":                     connectorCatalogItem,

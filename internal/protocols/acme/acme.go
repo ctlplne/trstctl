@@ -1027,6 +1027,7 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 		return
 	}
 	s.mu.Unlock()
+	r = withACMEDiagnosticIdentity(r, "dns:"+strings.ToLower(strings.TrimSpace(az.domain)))
 
 	if err := s.challengeAllowed(r.Context(), az.domain, ch.typ); err != nil {
 		s.writeDVPolicyProblem(w, r, err)
@@ -1637,13 +1638,55 @@ func (s *Server) problem(w http.ResponseWriter, r *http.Request, status int, typ
 	if notify != nil {
 		// The step comes from the path the client was on, which is the only
 		// evidence available here about where in the flow this happened.
-		notify(r.Context(), enrollmentdiag.ClassifyACME(acmeStepForPath(r), typ, nil))
+		diagnosis := enrollmentdiag.ClassifyACME(acmeStepForPath(r), typ, nil).WithEvidence(enrollmentdiag.Evidence{
+			OperationRef: r.Method + " " + r.URL.Path,
+			IdentityRef:  acmeIdentityRef(r), EndpointRef: strings.TrimSpace(r.Host),
+		})
+		notify(r.Context(), diagnosis)
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"type": "urn:ietf:params:acme:error:" + typ, "detail": detail, "status": status,
 	})
+}
+
+type acmeDiagnosticIdentityContextKey struct{}
+
+func withACMEDiagnosticIdentity(r *http.Request, identityRef string) *http.Request {
+	if r == nil || strings.TrimSpace(identityRef) == "" {
+		return r
+	}
+	return r.WithContext(context.WithValue(r.Context(), acmeDiagnosticIdentityContextKey{}, identityRef))
+}
+
+func acmeIdentityRef(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if identityRef, _ := r.Context().Value(acmeDiagnosticIdentityContextKey{}).(string); identityRef != "" {
+		return identityRef
+	}
+	path := strings.Trim(r.URL.Path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	id := parts[len(parts)-1]
+	if id == "" {
+		return ""
+	}
+	switch {
+	case strings.Contains(r.URL.Path, "/challenge/"):
+		return "challenge:" + id
+	case strings.Contains(r.URL.Path, "/authz/"):
+		return "authorization:" + id
+	case strings.Contains(r.URL.Path, "/order/"), strings.Contains(r.URL.Path, "/finalize/"):
+		return "order:" + id
+	case strings.Contains(r.URL.Path, "/certificate/"):
+		return "certificate:" + id
+	}
+	return ""
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

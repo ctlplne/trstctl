@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { RbacProvider } from "@/components/rbac";
 import { ToastProvider } from "@/components/ToastProvider";
-import { ApiError } from "@/lib/api";
+import { ApiError, type EnrollmentDiagnosticList } from "@/lib/api";
 import { AppQueryProvider } from "@/lib/query";
 import { Protocols } from "@/pages/Protocols";
 
@@ -23,6 +23,7 @@ const { apiMock } = vi.hoisted(() => ({
     acmeDNS01Preflight: vi.fn(),
     acmeUpstreamAuthorizations: vi.fn(),
     enrollmentDiagnostics: vi.fn(),
+    proveEnrollmentDiagnosticFixed: vi.fn(),
     agentPage: vi.fn(),
     revocationCaches: vi.fn(),
   },
@@ -88,6 +89,7 @@ describe("protocol surface", () => {
     apiMock.acmeDNS01Preflight.mockReset();
     apiMock.acmeUpstreamAuthorizations.mockReset();
     apiMock.enrollmentDiagnostics.mockReset();
+    apiMock.proveEnrollmentDiagnosticFixed.mockReset();
     apiMock.agentPage.mockReset();
     apiMock.revocationCaches.mockReset();
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
@@ -489,6 +491,139 @@ describe("protocol surface", () => {
     expect(screen.getByText("The authority could not see the challenge this system published.")).toBeInTheDocument();
     expect(screen.getByText("Check propagation from an external resolver.")).toBeInTheDocument();
     expect(screen.getByText(/3×, last at/)).toBeInTheDocument();
+  });
+
+  it("shows exact refusal evidence and queues a network proof with issue permission", async () => {
+    const initialDiagnostics: EnrollmentDiagnosticList = {
+      items: [
+        {
+          id: "diag-acme-validation-1",
+          protocol: "acme",
+          step: "validation",
+          cause: "challenge_not_visible",
+          summary: "The authority could not see the challenge this system published.",
+          remediation: "Check propagation from an external resolver.",
+          actionable: true,
+          observed_at: "2026-08-10T05:10:00Z",
+          count: 1,
+          operation_ref: "order/order-42/authorization/authz-9/challenge/chal-7",
+          identity_ref: "dns/api.example.test",
+          endpoint_ref: "https/api.example.test:443",
+          verification_kind: "endpoint.verify",
+          verification_address: "api.example.test:443",
+          verification_server_name: "api.example.test",
+        },
+      ],
+      unknown_count: 0,
+      guidance: "Each row is one exact failed operation.",
+    };
+    let resolveVerificationPoll: (value: typeof initialDiagnostics) => void = () => undefined;
+    const verificationPoll = new Promise<typeof initialDiagnostics>((resolve) => {
+      resolveVerificationPoll = resolve;
+    });
+    apiMock.enrollmentDiagnostics.mockResolvedValueOnce(initialDiagnostics).mockImplementationOnce(() => verificationPoll);
+    apiMock.proveEnrollmentDiagnosticFixed.mockResolvedValue({
+      diagnostic_id: "diag-acme-validation-1",
+      verification_endpoint_id: "verify-1",
+      status: "queued",
+      queued_at: "2026-08-13T04:00:00Z",
+      result_path: "/api/v1/endpoints/verifications/verify-1",
+    });
+    mountProtocols(["certs:issue"]);
+
+    const panel = await screen.findByRole("region", { name: "Enrolment failures" });
+    expect(within(panel).getByText("order/order-42/authorization/authz-9/challenge/chal-7")).toBeInTheDocument();
+    expect(within(panel).getByText("dns/api.example.test")).toBeInTheDocument();
+    expect(within(panel).getByText("https/api.example.test:443")).toBeInTheDocument();
+
+    await userEvent.click(within(panel).getByRole("button", { name: "Prove fixed" }));
+    await waitFor(() => expect(apiMock.proveEnrollmentDiagnosticFixed).toHaveBeenCalledWith("diag-acme-validation-1"));
+    expect(within(panel).getByText("Queued for network verification")).toBeInTheDocument();
+    expect(within(panel).queryByRole("link", { name: "Signed verification evidence" })).not.toBeInTheDocument();
+
+    resolveVerificationPoll({
+      ...initialDiagnostics,
+      items: [
+        {
+          ...initialDiagnostics.items[0],
+          verification_endpoint_id: "verify-1",
+          verification_status: "verified",
+          verification_evidence_digest: "sha256:network-proof",
+          verification_agent: "relay-7",
+          verification_result_path: "/api/v1/endpoints/verifications/verify-1",
+        },
+      ],
+    });
+    expect(await within(panel).findByText("Verified fixed")).toBeInTheDocument();
+    expect(within(panel).getByText("sha256:network-proof")).toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: "Signed verification evidence" })).toHaveAttribute(
+      "href",
+      "/api/v1/endpoints/verifications/verify-1",
+    );
+  });
+
+  it("does not render the prove-fixed control for a read-only operator", async () => {
+    apiMock.enrollmentDiagnostics.mockResolvedValue({
+      items: [
+        {
+          id: "diag-read-only",
+          protocol: "scep",
+          step: "authorize",
+          cause: "client_cert_rejected",
+          summary: "The client certificate presented for enrollment was refused.",
+          remediation: "Check the client certificate chain.",
+          actionable: true,
+          observed_at: "2026-08-10T05:10:00Z",
+          count: 1,
+          operation_ref: "scep:txn-read-only",
+          identity_ref: "device:SERIAL-7",
+          endpoint_ref: "https/scep.example.test:443",
+          verification_kind: "endpoint.verify",
+          verification_address: "scep.example.test:443",
+        },
+      ],
+      unknown_count: 0,
+      guidance: "Each row is one exact failed operation.",
+    });
+    mountProtocols(["certs:read"]);
+
+    const panel = await screen.findByRole("region", { name: "Enrolment failures" });
+    expect(within(panel).queryByRole("button", { name: "Prove fixed" })).not.toBeInTheDocument();
+    expect(within(panel).getByText("No network proof queued")).toBeInTheDocument();
+  });
+
+  it("links signed green evidence instead of claiming a refusal is fixed from operator intent", async () => {
+    apiMock.enrollmentDiagnostics.mockResolvedValue({
+      items: [
+        {
+          id: "diag-est-issuance-1",
+          protocol: "est",
+          step: "issuance",
+          cause: "ca_policy_rejected",
+          summary: "The CA rejected this exact enrollment.",
+          actionable: true,
+          observed_at: "2026-08-10T05:10:00Z",
+          count: 1,
+          operation_ref: "idempotency/est-42",
+          identity_ref: "csr-sha256/abc123",
+          endpoint_ref: "https/est.example.test:443",
+          verification_status: "verified",
+          verification_evidence_digest: "sha256:feedface",
+          verification_agent: "network-relay-7",
+          verification_checked_at: "2026-08-13T04:05:00Z",
+          verification_result_path: "/api/v1/endpoints/verifications/verify-est-1",
+        },
+      ],
+      unknown_count: 0,
+      guidance: "Each row is one exact failed operation.",
+    });
+    mountProtocols(["certs:issue"]);
+
+    const panel = await screen.findByRole("region", { name: "Enrolment failures" });
+    expect(within(panel).getByText("Verified fixed")).toBeInTheDocument();
+    expect(within(panel).getByText("network-relay-7")).toBeInTheDocument();
+    expect(within(panel).getByText("sha256:feedface")).toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: "Signed verification evidence" })).toHaveAttribute("href", "/api/v1/endpoints/verifications/verify-est-1");
   });
 
   it("renders ARI publication and scheduler-consumption truth without mutation controls", async () => {

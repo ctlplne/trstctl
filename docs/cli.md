@@ -34,6 +34,10 @@ running HTTP server. Use
 `trstctl support-bundle --output support.tar.gz --log-file <local-log>` during
 cold-start failures. The archive is bounded, contains posture and aggregate counts
 instead of raw configuration, and refuses residual secret/PII data after redaction.
+It stays offline by default. `--include-enrollment-diagnostics` is the explicit
+exception: it requires `TRSTCTL_URL` and `TRSTCTL_TOKEN`, fetches the authorized
+aggregate-only addendum, and still excludes tenant, operation, identity, endpoint,
+diagnostic, and timestamp references.
 
 ## Global flags
 
@@ -86,6 +90,8 @@ exhaustive subcommand list:
 | `discovery`                        | Discovery segments, sources, schedules, runs, findings, CT monitoring, drift remediation, continuous monitoring (`segments create` · `sources` · `schedules` · `runs` · `findings` · `ct-monitoring` · `drift-remediation` · `monitoring`) |
 | `editions`                         | Show edition, license, and FIPS posture (`status`)                                                                                                           |
 | `ephemeral`                        | Approval-gated JIT credentials and short-TTL API keys (`issue` · `api-keys issue` · `approve`)                                                               |
+| `endpoints`                        | Read live endpoint identity and key-custody evidence, including one exact signed verification (`verifications` · `verifications get` · `key-custody`)       |
+| `enrollment diagnostics`           | Read exact tenant refusal evidence, export aggregate-only support counts, and queue signed proof after a successful retry (`list` · `support-addendum` · `prove-fixed`) |
 | `external-cas`                     | List and issue through configured upstream CA integrations (`list` · `issue`)                                                                                |
 | `graph`                            | Query the credential graph, reachability, and blast radius (`nodes` · `reachable` · `blast-radius` · `query`)                                                |
 | `identities`                       | Identity lifecycle: create, list, transition, dual-control approvals, bulk-revoke (`create` · `list` · `get` · `transition` · `approve` · `approve issue` · `approve rotate` · `approve revoke` · `bulk-revoke`) |

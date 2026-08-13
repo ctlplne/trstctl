@@ -330,3 +330,16 @@ func TestTicketIntakeCheckpointIsSnapshotSafeAUD47(t *testing.T) {
 		t.Fatalf("SnapshotFormatVersion = %d; a v29 payload cannot restore a bounded ticket intake sweep", SnapshotFormatVersion)
 	}
 }
+
+func TestEnrollmentDiagnosticVerificationIsSnapshotSafeAUD49(t *testing.T) {
+	const table = "enrollment_diagnostics"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Fatalf("%s is event-derived but missing from the cold-rebuild truncate set", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s is missing from snapshots, so restore would erase the exact refusal and its prove-fixed link", table)
+	}
+	if SnapshotFormatVersion < 31 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v30 payload cannot restore AUD-49 exact refusal references or prove-fixed state", SnapshotFormatVersion)
+	}
+}

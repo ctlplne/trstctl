@@ -2447,16 +2447,52 @@ export interface EnrollmentDiagnostic {
   actionable: boolean;
   cause: string;
   count: number;
+  endpoint_ref?: string;
+  expected_fingerprint?: string;
+  id: string;
+  identity_ref?: string;
   observed_at: string;
+  operation_ref?: string;
   protocol: "acme" | "est" | "scep" | "adcs";
   remediation?: string;
   step: string;
   summary: string;
+  verification_address?: string;
+  verification_agent?: string;
+  verification_checked_at?: string;
+  verification_endpoint_id?: string;
+  verification_evidence_digest?: string;
+  verification_kind?: "endpoint.verify";
+  verification_queued_at?: string;
+  verification_result_path?: string;
+  verification_server_name?: string;
+  verification_status?: "queued" | "verified" | "diverged" | "unreachable";
 }
 
 export interface EnrollmentDiagnosticList {
   guidance: string;
   items: EnrollmentDiagnostic[];
+  unknown_count: number;
+}
+
+export interface EnrollmentDiagnosticSupportAggregate {
+  actionable: boolean;
+  cause: string;
+  count: number;
+  protocol: "acme" | "est" | "scep" | "adcs";
+}
+
+export interface EnrollmentDiagnosticVerification {
+  diagnostic_id: string;
+  queued_at: string;
+  result_path: string;
+  status: "queued";
+  verification_endpoint_id: string;
+}
+
+export interface EnrollmentDiagnosticsSupportAddendum {
+  rows: EnrollmentDiagnosticSupportAggregate[];
+  schema_version: number;
   unknown_count: number;
 }
 

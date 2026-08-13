@@ -9573,8 +9573,23 @@
           "count": {
             "type": "integer"
           },
+          "endpoint_ref": {
+            "type": "string"
+          },
+          "expected_fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "identity_ref": {
+            "type": "string"
+          },
           "observed_at": {
             "format": "date-time",
+            "type": "string"
+          },
+          "operation_ref": {
             "type": "string"
           },
           "protocol": {
@@ -9594,9 +9609,51 @@
           },
           "summary": {
             "type": "string"
+          },
+          "verification_address": {
+            "type": "string"
+          },
+          "verification_agent": {
+            "type": "string"
+          },
+          "verification_checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verification_endpoint_id": {
+            "type": "string"
+          },
+          "verification_evidence_digest": {
+            "type": "string"
+          },
+          "verification_kind": {
+            "enum": [
+              "endpoint.verify"
+            ],
+            "type": "string"
+          },
+          "verification_queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verification_result_path": {
+            "type": "string"
+          },
+          "verification_server_name": {
+            "type": "string"
+          },
+          "verification_status": {
+            "enum": [
+              "queued",
+              "verified",
+              "diverged",
+              "unreachable"
+            ],
+            "type": "string"
           }
         },
         "required": [
+          "id",
           "protocol",
           "step",
           "cause",
@@ -9626,6 +9683,88 @@
           "items",
           "unknown_count",
           "guidance"
+        ],
+        "type": "object"
+      },
+      "EnrollmentDiagnosticSupportAggregate": {
+        "properties": {
+          "actionable": {
+            "type": "boolean"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "protocol": {
+            "enum": [
+              "acme",
+              "est",
+              "scep",
+              "adcs"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "protocol",
+          "cause",
+          "actionable",
+          "count"
+        ],
+        "type": "object"
+      },
+      "EnrollmentDiagnosticVerification": {
+        "properties": {
+          "diagnostic_id": {
+            "type": "string"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "result_path": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued"
+            ],
+            "type": "string"
+          },
+          "verification_endpoint_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "diagnostic_id",
+          "verification_endpoint_id",
+          "status",
+          "queued_at",
+          "result_path"
+        ],
+        "type": "object"
+      },
+      "EnrollmentDiagnosticsSupportAddendum": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/EnrollmentDiagnosticSupportAggregate"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "unknown_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "rows",
+          "unknown_count"
         ],
         "type": "object"
       },
@@ -32702,6 +32841,64 @@
         "x-trstctl-permission": "certs:read"
       }
     },
+    "/api/v1/endpoints/verifications/{id}": {
+      "get": {
+        "operationId": "getEndpointVerification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointVerification"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get one signed relay endpoint verification",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
     "/api/v1/enrollment/diagnostics": {
       "get": {
         "operationId": "listEnrollmentDiagnostics",
@@ -32747,6 +32944,120 @@
         ],
         "summary": "List recent enrolment refusals with the failing step, cause and remediation",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/enrollment/diagnostics/support-addendum": {
+      "get": {
+        "operationId": "getEnrollmentDiagnosticsSupportAddendum",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentDiagnosticsSupportAddendum"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get aggregate redacted enrollment diagnostics for an authorized support bundle",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/enrollment/diagnostics/{id}/prove-fixed": {
+      "post": {
+        "operationId": "proveEnrollmentDiagnosticFixed",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "stable enrollment diagnostic id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentDiagnosticVerification"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue a signed network verification for the exact endpoint named by an enrollment diagnostic",
+        "x-trstctl-permission": "certs:issue"
       }
     },
     "/api/v1/ephemeral": {

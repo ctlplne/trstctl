@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/enrollmentdiag"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
@@ -80,6 +81,7 @@ type Server struct {
 	deviceLimit   int
 	deviceWindow  time.Duration
 	deviceLimiter *deviceWindowCounter
+	onFailure     func(context.Context, enrollmentdiag.Diagnosis)
 	mux           *http.ServeMux
 }
 
@@ -104,6 +106,9 @@ type Config struct {
 	// use a non-zero cap for MDM-backed profiles so one device cannot flood issuance.
 	MaxEnrollmentsPerDevice int
 	DeviceRateLimitWindow   time.Duration
+	// FailureDiagnosis receives typed refusal evidence for tenant-scoped durable
+	// projection by the served assembly.
+	FailureDiagnosis func(context.Context, enrollmentdiag.Diagnosis)
 }
 
 // New builds the SCEP server.
@@ -112,7 +117,7 @@ func New(cfg Config) *Server {
 		enroller: cfg.Enroller, caChain: cfg.CAChainDER, raCertDER: cfg.RACertDER,
 		raKeyPKCS8: cfg.RAKeyPKCS8, profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
 		challenge: cfg.ChallengeValidator, deviceLimit: cfg.MaxEnrollmentsPerDevice,
-		deviceWindow: cfg.DeviceRateLimitWindow, deviceLimiter: newDeviceWindowCounter(nil),
+		deviceWindow: cfg.DeviceRateLimitWindow, deviceLimiter: newDeviceWindowCounter(nil), onFailure: cfg.FailureDiagnosis,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/scep", s.handle)
@@ -169,6 +174,8 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 	body, err := readPKIMessage(r)
 	if err != nil {
 		s.audit(r.Context(), "deny", err.Error(), "")
+		s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepOrder, "badRequest", err),
+			r.Method+" "+r.URL.Path, "")
 		if errors.Is(err, bodylimit.ErrTooLarge) {
 			http.Error(w, "scep: request body too large", http.StatusRequestEntityTooLarge)
 			return
@@ -179,6 +186,8 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 	req, err := crypto.ParseSCEPRequest(body, s.raCertDER, s.raKeyPKCS8)
 	if err != nil {
 		s.audit(r.Context(), "deny", "malformed pkiMessage", "")
+		s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepOrder, "badMessageCheck", err),
+			r.Method+" "+r.URL.Path, "")
 		http.Error(w, "scep: bad request", http.StatusBadRequest)
 		return
 	}
@@ -188,9 +197,12 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		s.emitAttempt(r.Context(), EventIssuanceObserved, AttemptEvidence{
 			TransactionID: req.TransactionID, Profile: s.profile, Outcome: "failed", Detail: "The certificate request could not be inspected.",
 		})
+		s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepOrder, "badRequest", err),
+			"scep:"+req.TransactionID, "csr-sha256:"+crypto.SHA256Hex(req.CSRDER))
 		http.Error(w, "scep: bad request", http.StatusBadRequest)
 		return
 	}
+	identityRef := scepIdentityRef(req.CSRDER, deviceSerial)
 	baseEvidence := AttemptEvidence{
 		TransactionID: req.TransactionID, DeviceSerial: deviceSerial, Profile: s.profile,
 	}
@@ -212,6 +224,8 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 			failed.Outcome = "failed"
 			failed.Detail = "Challenge validation rejected the request; verify the MDM challenge trust, audience, expiry, and one-time nonce."
 			s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
+			s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepAuthorize, "badMessageCheck", cerr),
+				"scep:"+req.TransactionID, identityRef)
 			http.Error(w, "scep: challenge rejected", http.StatusForbidden)
 			return
 		}
@@ -223,6 +237,8 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		failed.Outcome = "failed"
 		failed.Detail = "The certificate request did not satisfy the device enrollment checks."
 		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
+		s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepAuthorize, "badRequest", err),
+			"scep:"+req.TransactionID, identityRef)
 		http.Error(w, "scep: bad request", http.StatusBadRequest)
 		return
 	}
@@ -232,6 +248,8 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		failed.Outcome = "failed"
 		failed.Detail = "The per-device SCEP rate limit refused this attempt; wait for the configured window before retrying."
 		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
+		s.emitFailure(r, enrollmentdiag.Diagnose(enrollmentdiag.ProtocolSCEP, enrollmentdiag.StepOrder, enrollmentdiag.CauseRateLimited),
+			"scep:"+req.TransactionID, identityRef)
 		http.Error(w, "scep: device rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
@@ -260,6 +278,8 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		failed.Outcome = "failed"
 		failed.Detail = "The bounded SCEP worker pool was full; retry this same transaction."
 		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
+		s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepIssue, "badRequest", rerr),
+			"scep:"+req.TransactionID, identityRef)
 		http.Error(w, "busy", http.StatusServiceUnavailable)
 	case rerr != nil:
 		s.audit(r.Context(), "deny", rerr.Error(), req.TransactionID)
@@ -267,6 +287,8 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		failed.Outcome = "failed"
 		failed.Detail = "The signer-backed issuance path refused this request; inspect the profile and signer evidence before retrying."
 		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
+		s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepIssue, "badRequest", rerr),
+			"scep:"+req.TransactionID, identityRef)
 		http.Error(w, "scep: enrollment refused", http.StatusForbidden)
 	default:
 		s.audit(r.Context(), "allow", "", req.TransactionID)
@@ -274,6 +296,24 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-pki-message")
 		_, _ = w.Write(reply)
 	}
+}
+
+func (s *Server) emitFailure(r *http.Request, diagnosis enrollmentdiag.Diagnosis, operationRef, identityRef string) {
+	if s.onFailure == nil || r == nil {
+		return
+	}
+	s.onFailure(r.Context(), diagnosis.WithEvidence(enrollmentdiag.Evidence{
+		OperationRef: operationRef, IdentityRef: identityRef, EndpointRef: strings.TrimSpace(r.Host),
+	}))
+}
+
+func scepIdentityRef(csrDER []byte, deviceSerial string) string {
+	if info, err := crypto.InspectCSR(csrDER); err == nil && len(info.DNSNames) > 0 {
+		if name := strings.ToLower(strings.TrimSpace(info.DNSNames[0])); name != "" {
+			return "dns:" + name
+		}
+	}
+	return "device:" + deviceSerial
 }
 
 func scepDeviceSerial(csrDER []byte) (string, error) {

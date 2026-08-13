@@ -161,6 +161,45 @@ func (s *Store) ListEndpointVerifications(ctx context.Context, tenantID string) 
 	return out, err
 }
 
+// GetEndpointVerification returns one exact tenant/vantage observation. The
+// prove-fixed link always requests relay because that is the signed D2 workflow
+// the diagnostic mutation queues.
+func (s *Store) GetEndpointVerification(ctx context.Context, tenantID, endpointID, vantage string) (EndpointVerification, error) {
+	var rec EndpointVerification
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var notBefore, notAfter, lastGood *time.Time
+		var sequence int64
+		err := tx.QueryRow(ctx,
+			`SELECT tenant_id::text, endpoint_id, address, vantage, reached, mismatch,
+			        expected_fingerprint, observed_fingerprint, checked_sans, checked_chain,
+			        not_before, not_after, detail, evidence_digest, agent_common_name,
+			        last_checked_at, last_good_at, event_sequence
+			   FROM endpoint_verifications
+			  WHERE tenant_id = $1 AND endpoint_id = $2 AND vantage = $3`,
+			tenantID, endpointID, vantage).Scan(
+			&rec.TenantID, &rec.EndpointID, &rec.Address, &rec.Vantage,
+			&rec.Reached, &rec.Mismatch, &rec.ExpectedFingerprint, &rec.ObservedFingerprint,
+			&rec.CheckedSANs, &rec.CheckedChain, &notBefore, &notAfter, &rec.Detail,
+			&rec.EvidenceDigest, &rec.AgentCommonName, &rec.LastCheckedAt, &lastGood,
+			&sequence)
+		if err != nil {
+			return err
+		}
+		if notBefore != nil {
+			rec.NotBefore = *notBefore
+		}
+		if notAfter != nil {
+			rec.NotAfter = *notAfter
+		}
+		if lastGood != nil {
+			rec.LastGoodAt = *lastGood
+		}
+		rec.EventSequence = uint64(sequence) // #nosec G115 -- constrained positive database sequence (CWE-190)
+		return nil
+	})
+	return rec, err
+}
+
 // EndpointVerificationSummary is the estate-wide roll-up behind the dashboard
 // tile.
 type EndpointVerificationSummary struct {

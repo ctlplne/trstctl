@@ -161,6 +161,14 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			Log:          s.log,
 			CSRVerifier:  issuer.verifyCSR,
 			CSRInspector: issuer.inspectCSRInfo,
+			FailureDiagnosis: func(requestCtx context.Context, diagnosis enrollmentdiag.Diagnosis) {
+				if s.api == nil {
+					return
+				}
+				if err := s.api.RecordEnrollmentDiagnosis(requestCtx, sp.estTenant, diagnosis); err != nil && s.logger != nil {
+					s.logger.Warn("enrollment diagnosis persistence failed", slog.String("protocol", string(diagnosis.Protocol)), slog.String("error", err.Error()))
+				}
+			},
 		})
 		dispatcher, err := est.NewDispatcher([]est.ProfileRoute{{Server: estSrv}})
 		if err != nil {
@@ -353,6 +361,14 @@ func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, is
 		Pool:               pool,
 		Log:                s.log,
 		ChallengeValidator: challengeValidator,
+		FailureDiagnosis: func(requestCtx context.Context, diagnosis enrollmentdiag.Diagnosis) {
+			if s.api == nil {
+				return
+			}
+			if err := s.api.RecordEnrollmentDiagnosis(requestCtx, tenantID, diagnosis); err != nil && s.logger != nil {
+				s.logger.Warn("enrollment diagnosis persistence failed", slog.String("protocol", string(diagnosis.Protocol)), slog.String("error", err.Error()))
+			}
+		},
 	})
 	dispatcher, err := scep.NewDispatcher([]scep.ProfileRoute{{Server: scepSrv}})
 	if err != nil {

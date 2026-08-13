@@ -51,6 +51,35 @@ func TestARefusalOnTheServedPathProducesADiagnosis(t *testing.T) {
 	if !d.Actionable() {
 		t.Error("a classified failure reported itself as not actionable")
 	}
+	if d.OperationRef != "POST /acme/challenge/abc" {
+		t.Errorf("operation ref = %q, want exact refused method and path", d.OperationRef)
+	}
+	if d.IdentityRef != "challenge:abc" {
+		t.Errorf("identity ref = %q, want exact challenge id", d.IdentityRef)
+	}
+	if d.EndpointRef != "example.com" || d.VerificationAddress != "" {
+		t.Errorf("endpoint evidence = ref %q address %q, want exact refused host without guessed deployment address",
+			d.EndpointRef, d.VerificationAddress)
+	}
+	if d.VerificationKind != "" {
+		t.Errorf("verification kind = %q, want none until an explicit deployment route is resolved", d.VerificationKind)
+	}
+}
+
+func TestChallengeRefusalCarriesTheExactDNSIdentityWithoutGuessingItsDeployment(t *testing.T) {
+	t.Parallel()
+	s := &Server{}
+	var got enrollmentdiag.Diagnosis
+	s.SetFailureDiagnosis(func(_ context.Context, d enrollmentdiag.Diagnosis) { got = d })
+	req := httptest.NewRequest(http.MethodPost, "https://acme.example.test/acme/challenge/abc", nil)
+	req = withACMEDiagnosticIdentity(req, "dns:api.example.test")
+	s.problem(httptest.NewRecorder(), req, http.StatusForbidden, "dns", "TXT record is not visible")
+	if got.IdentityRef != "dns:api.example.test" || got.EndpointRef != "acme.example.test" {
+		t.Fatalf("challenge evidence = %+v, want exact DNS identity and refused ACME endpoint", got)
+	}
+	if got.VerificationKind != "" || got.VerificationAddress != "" {
+		t.Fatalf("challenge evidence guessed a deployment route: %+v", got)
+	}
 }
 
 // The step is inferred from the path, and an unrecognised path does not invent

@@ -7664,8 +7664,11 @@
                 "getConnectorDelivery",
                 "listOutboxCircuits",
                 "listEndpointVerifications",
+                "getEndpointVerification",
                 "listEndpointKeyCustody",
                 "listEnrollmentDiagnostics",
+                "getEnrollmentDiagnosticsSupportAddendum",
+                "proveEnrollmentDiagnosticFixed",
                 "getDRPosture"
             ],
             "api_na": "",
@@ -7684,8 +7687,11 @@
                 "connectors deliveries get",
                 "connectors outbox-circuits",
                 "endpoints verifications",
+                "endpoints verifications get",
                 "endpoints key-custody",
                 "enrollment diagnostics",
+                "enrollment diagnostics support-addendum",
+                "enrollment diagnostics prove-fixed",
                 "platform dr-posture"
             ],
             "cli_na": "",

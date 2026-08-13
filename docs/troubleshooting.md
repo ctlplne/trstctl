@@ -90,6 +90,17 @@ incident, not a transient health check to silence.
   example, a read-only token attempting a write). Use a token with the required
   scope. See the [CLI reference](cli.md).
 
+## Enrollment “Prove fixed” returns 409
+
+The refusal is recorded, but there is not yet a newer issued certificate whose
+deployment can be proved. Retry the exact enrollment successfully first. Also
+bind its DNS identity to one enabled deployment target with explicit
+`verify_address` (and `verify_server_name` when TLS needs it). “Prove fixed”
+never guesses `SAN:443` and never probes the enrollment server as a substitute
+for the repaired workload endpoint. After the retry creates an active issued
+certificate, run the action again with a fresh `Idempotency-Key`; only the
+network relay's signed matching result turns the row green.
+
 ## The web UI shows "the web UI has not been built"
 
 You are running a binary built without the bundled web assets. Build them and
@@ -126,3 +137,18 @@ log lines. It never copies raw environment/configuration values or endpoint,
 path, tenant, subject, or destination identifiers. Logs pass through secret and
 PII redaction followed by a residual fail-closed scan. Review the archive before
 sharing it; if the scan cannot make it safe, the command refuses to write it.
+
+The default archive contains no live tenant diagnostic rows. To add only the
+authorized aggregate enrollment-failure counts, opt in explicitly:
+
+```bash
+TRSTCTL_URL=https://trstctl.example.test \
+TRSTCTL_TOKEN="$TRSTCTL_SUPPORT_TOKEN" \
+trstctl support-bundle --output trstctl-support.tar.gz \
+  --include-enrollment-diagnostics
+```
+
+The addendum excludes tenant ids, timestamps, diagnostic ids, and exact
+operation, identity, and endpoint references. Use the authenticated Protocols
+console or `trstctl enrollment diagnostics` when those troubleshooting refs are
+needed; do not move them into a support ticket by copying the live API response.

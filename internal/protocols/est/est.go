@@ -24,11 +24,13 @@ import (
 	"net/http"
 	"net/textproto"
 	"strconv"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/enrollmentdiag"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
@@ -83,6 +85,7 @@ type Server struct {
 	log                          *events.Log
 	verifyCSR                    func([]byte) error
 	inspectCSR                   func([]byte) (crypto.CSRInfo, error)
+	onFailure                    func(context.Context, enrollmentdiag.Diagnosis)
 	mux                          *http.ServeMux
 }
 
@@ -106,6 +109,9 @@ type Config struct {
 	// internal/crypto classical parser.
 	CSRVerifier  func([]byte) error
 	CSRInspector func([]byte) (crypto.CSRInfo, error)
+	// FailureDiagnosis receives every refusal as a typed, secret-free operator
+	// diagnosis. The served assembly persists it as a tenant event.
+	FailureDiagnosis func(context.Context, enrollmentdiag.Diagnosis)
 }
 
 // New builds the EST server.
@@ -115,7 +121,7 @@ func New(cfg Config) *Server {
 		channelBindingRequired: cfg.ChannelBindingRequired, channelBindingCertificateDER: cfg.ChannelBindingCertificateDER, mtlsClientCAsDER: cfg.MTLSClientCAsDER,
 		principalLimit: cfg.MaxEnrollmentsPerPrincipal, principalWindow: cfg.PrincipalRateLimitWindow,
 		auth: cfg.Auth, caChain: cfg.CAChainDER, profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
-		verifyCSR: cfg.CSRVerifier, inspectCSR: cfg.CSRInspector,
+		verifyCSR: cfg.CSRVerifier, inspectCSR: cfg.CSRInspector, onFailure: cfg.FailureDiagnosis,
 	}
 	if s.verifyCSR == nil {
 		s.verifyCSR = crypto.VerifyCertificateRequest
@@ -273,22 +279,30 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 				return
 			}
 			s.audit(r.Context(), opType, "deny", err.Error())
+			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepOrder, http.StatusBadRequest, err),
+				r.Method+" "+r.URL.Path, "")
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if err := s.verifyChannelBinding(csrDER); err != nil {
 			s.audit(r.Context(), opType, "deny", err.Error())
+			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusBadRequest, err),
+				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
 			writeChannelBindingError(w, err)
 			return
 		}
 		allowed, err := s.allowPrincipalEnrollment(r, csrDER)
 		if err != nil {
 			s.audit(r.Context(), opType, "deny", err.Error())
+			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusBadRequest, err),
+				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
 			http.Error(w, "est: invalid CSR principal", http.StatusBadRequest)
 			return
 		}
 		if !allowed {
 			s.audit(r.Context(), opType, "shed", "principal enrollment limit reached")
+			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepOrder, http.StatusTooManyRequests, nil),
+				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
 			http.Error(w, "est: principal enrollment rate limit", http.StatusTooManyRequests)
 			return
 		}
@@ -304,11 +318,15 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 		})
 		if errors.Is(rerr, bulkhead.ErrRejected) {
 			s.audit(r.Context(), opType, "shed", "bulkhead full")
+			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepIssue, http.StatusServiceUnavailable, rerr),
+				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
 			http.Error(w, "busy", http.StatusServiceUnavailable)
 			return
 		}
 		if rerr != nil {
 			s.audit(r.Context(), opType, "deny", rerr.Error())
+			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusForbidden, rerr),
+				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
 			http.Error(w, "enrollment refused", http.StatusForbidden)
 			return
 		}
@@ -320,6 +338,31 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 		s.audit(r.Context(), opType, "allow", "")
 		writePKCS7(w, p7)
 	}
+}
+
+func estOperationRef(r *http.Request, opType string, csrDER []byte) string {
+	if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
+		return opType + ":" + key
+	}
+	return estFallbackIdempotencyKey(opType, csrDER)
+}
+
+func (s *Server) emitFailure(r *http.Request, diagnosis enrollmentdiag.Diagnosis, operationRef, identityRef string) {
+	if s.onFailure == nil || r == nil {
+		return
+	}
+	s.onFailure(r.Context(), diagnosis.WithEvidence(enrollmentdiag.Evidence{
+		OperationRef: operationRef, IdentityRef: identityRef, EndpointRef: strings.TrimSpace(r.Host),
+	}))
+}
+
+func (s *Server) diagnosticIdentityRef(csrDER []byte) string {
+	if info, err := s.inspectCSR(csrDER); err == nil && len(info.DNSNames) > 0 {
+		if name := strings.ToLower(strings.TrimSpace(info.DNSNames[0])); name != "" {
+			return "dns:" + name
+		}
+	}
+	return "csr-sha256:" + crypto.SHA256Hex(csrDER)
 }
 
 func (s *Server) verifyChannelBinding(csrDER []byte) error {
@@ -422,6 +465,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 	if isMTLSRoute(r.Context()) {
 		if err := crypto.VerifyTLSClientCertificate(r.TLS, s.mtlsClientCAsDER); err != nil {
 			s.audit(r.Context(), opType, "deny", "mTLS client certificate rejected")
+			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusUnauthorized, err),
+				r.Method+" "+r.URL.Path, "client-certificate:rejected")
 			http.Error(w, "mTLS client certificate required", http.StatusUnauthorized)
 			return false
 		}
@@ -429,6 +474,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 	}
 	if limiter, ok := s.auth.(limitedAuthenticator); ok && limiter.TooManyFailures(r) {
 		s.audit(r.Context(), opType, "shed", "basic auth failures over limit")
+		s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusTooManyRequests, nil),
+			r.Method+" "+r.URL.Path, "principal:rate-limited")
 		http.Error(w, "too many failed enrollment attempts", http.StatusTooManyRequests)
 		return false
 	}
@@ -437,6 +484,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 			limiter.RecordFailure(r)
 		}
 		w.Header().Set("WWW-Authenticate", `Basic realm="est"`)
+		s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAccount, http.StatusUnauthorized, nil),
+			r.Method+" "+r.URL.Path, "principal:unauthorized")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return false
 	}

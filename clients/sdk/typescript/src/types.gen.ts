@@ -1960,6 +1960,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/endpoints/verifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one signed relay endpoint verification */
+        get: operations["getEndpointVerification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/enrollment/diagnostics": {
         parameters: {
             query?: never;
@@ -1971,6 +1988,40 @@ export interface paths {
         get: operations["listEnrollmentDiagnostics"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/enrollment/diagnostics/support-addendum": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get aggregate redacted enrollment diagnostics for an authorized support bundle */
+        get: operations["getEnrollmentDiagnosticsSupportAddendum"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/enrollment/diagnostics/{id}/prove-fixed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a signed network verification for the exact endpoint named by an enrollment diagnostic */
+        post: operations["proveEnrollmentDiagnosticFixed"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7827,17 +7878,57 @@ export interface components {
             actionable: boolean;
             cause: string;
             count: number;
+            endpoint_ref?: string;
+            expected_fingerprint?: string;
+            id: string;
+            identity_ref?: string;
             /** Format: date-time */
             observed_at: string;
+            operation_ref?: string;
             /** @enum {string} */
             protocol: "acme" | "est" | "scep" | "adcs";
             remediation?: string;
             step: string;
             summary: string;
+            verification_address?: string;
+            verification_agent?: string;
+            /** Format: date-time */
+            verification_checked_at?: string;
+            verification_endpoint_id?: string;
+            verification_evidence_digest?: string;
+            /** @enum {string} */
+            verification_kind?: "endpoint.verify";
+            /** Format: date-time */
+            verification_queued_at?: string;
+            verification_result_path?: string;
+            verification_server_name?: string;
+            /** @enum {string} */
+            verification_status?: "queued" | "verified" | "diverged" | "unreachable";
         };
         EnrollmentDiagnosticList: {
             guidance: string;
             items: components["schemas"]["EnrollmentDiagnostic"][];
+            unknown_count: number;
+        };
+        EnrollmentDiagnosticSupportAggregate: {
+            actionable: boolean;
+            cause: string;
+            count: number;
+            /** @enum {string} */
+            protocol: "acme" | "est" | "scep" | "adcs";
+        };
+        EnrollmentDiagnosticVerification: {
+            diagnostic_id: string;
+            /** Format: date-time */
+            queued_at: string;
+            result_path: string;
+            /** @enum {string} */
+            status: "queued";
+            verification_endpoint_id: string;
+        };
+        EnrollmentDiagnosticsSupportAddendum: {
+            rows: components["schemas"]["EnrollmentDiagnosticSupportAggregate"][];
+            schema_version: number;
             unknown_count: number;
         };
         EnrollmentToken: {
@@ -17442,6 +17533,46 @@ export interface operations {
             };
         };
     };
+    getEndpointVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointVerification"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listEnrollmentDiagnostics: {
         parameters: {
             query?: never;
@@ -17458,6 +17589,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrollmentDiagnosticList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEnrollmentDiagnosticsSupportAddendum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentDiagnosticsSupportAddendum"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    proveEnrollmentDiagnosticFixed: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description stable enrollment diagnostic id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentDiagnosticVerification"];
                 };
             };
             /** @description client error */

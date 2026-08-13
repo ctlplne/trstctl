@@ -24,6 +24,7 @@ package enrollmentdiag
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 )
@@ -37,6 +38,31 @@ const (
 	ProtocolSCEP Protocol = "scep"
 	ProtocolADCS Protocol = "adcs"
 )
+
+// VerificationKind names an already-existing evidence workflow that can check
+// whether the operator's repair landed. Diagnostics never invent an executor:
+// the durable mutation dispatches one of these through the normal signed job
+// fabric.
+type VerificationKind string
+
+const (
+	// VerificationEndpoint is D2's relay-side TLS handshake. It proves that the
+	// exact network target is reachable and records what it served.
+	VerificationEndpoint VerificationKind = "endpoint.verify"
+)
+
+// Evidence is the bounded, secret-free join material attached at the refusal
+// boundary. The references answer three separate questions: which operation
+// failed, which requested identity it concerned, and which endpoint should be
+// checked after repair.
+type Evidence struct {
+	OperationRef           string
+	IdentityRef            string
+	EndpointRef            string
+	VerificationKind       VerificationKind
+	VerificationAddress    string
+	VerificationServerName string
+}
 
 // Step is where in an enrollment the failure happened.
 //
@@ -96,7 +122,13 @@ type Diagnosis struct {
 	// actually took — D2's handshake evidence rather than a second enrollment
 	// attempt, because a successful retry proves issuance worked and says
 	// nothing about whether the endpoint serves it.
-	ProveFixedRef string `json:"prove_fixed_ref,omitempty"`
+	ProveFixedRef          string           `json:"prove_fixed_ref,omitempty"`
+	OperationRef           string           `json:"operation_ref,omitempty"`
+	IdentityRef            string           `json:"identity_ref,omitempty"`
+	EndpointRef            string           `json:"endpoint_ref,omitempty"`
+	VerificationKind       VerificationKind `json:"verification_kind,omitempty"`
+	VerificationAddress    string           `json:"verification_address,omitempty"`
+	VerificationServerName string           `json:"verification_server_name,omitempty"`
 }
 
 // catalog is the single table mapping a cause to its words.
@@ -178,8 +210,61 @@ func Diagnose(p Protocol, step Step, cause Cause) Diagnosis {
 // WithProveFixed attaches the verification reference that would demonstrate the
 // fix landed.
 func (d Diagnosis) WithProveFixed(ref string) Diagnosis {
-	d.ProveFixedRef = strings.TrimSpace(ref)
+	d.ProveFixedRef = bounded(strings.TrimSpace(ref), 512)
 	return d
+}
+
+// WithEvidence attaches exact, bounded references captured by the protocol
+// handler. It strips line breaks because these values flow into operator views
+// and signed job intents; one request must never turn one field into two.
+func (d Diagnosis) WithEvidence(e Evidence) Diagnosis {
+	d.OperationRef = bounded(e.OperationRef, 512)
+	d.IdentityRef = bounded(e.IdentityRef, 512)
+	d.EndpointRef = bounded(e.EndpointRef, 512)
+	d.VerificationKind = e.VerificationKind
+	d.VerificationAddress = bounded(e.VerificationAddress, 512)
+	d.VerificationServerName = bounded(e.VerificationServerName, 253)
+	return d
+}
+
+// EndpointEvidence normalizes an HTTP Host into the exact D2 target. A host
+// without an explicit port is HTTPS port 443 because every production
+// enrollment mount is TLS. Invalid/empty input returns empty values, which
+// prevents a later prove-fixed action from guessing a network destination.
+func EndpointEvidence(host string) (ref, address, serverName string) {
+	ref = bounded(strings.TrimSpace(host), 512)
+	if ref == "" {
+		return "", "", ""
+	}
+	hostOnly, port, err := net.SplitHostPort(ref)
+	if err != nil {
+		if strings.Contains(ref, ":") && net.ParseIP(strings.Trim(ref, "[]")) == nil {
+			return ref, "", ""
+		}
+		hostOnly, port = strings.Trim(ref, "[]"), "443"
+	}
+	hostOnly = strings.Trim(hostOnly, "[]")
+	if hostOnly == "" || port == "" {
+		return ref, "", ""
+	}
+	address = net.JoinHostPort(hostOnly, port)
+	if net.ParseIP(hostOnly) == nil {
+		serverName = strings.ToLower(strings.TrimSuffix(hostOnly, "."))
+	}
+	return ref, address, serverName
+}
+
+func bounded(value string, limit int) string {
+	value = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == 0 {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(value))
+	if len(value) > limit {
+		value = value[:limit]
+	}
+	return value
 }
 
 // Actionable reports whether this diagnosis tells the reader what to do.

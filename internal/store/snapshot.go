@@ -108,7 +108,10 @@ import (
 // checkpoints. A v29 payload can restore the schedule but not the exact
 // ServiceNow keyset or Jira continuation token, so accepting one could restart
 // page one while the projection head skips the page events that moved it.
-const SnapshotFormatVersion = 30
+// Bumped to 31 when exact enrollment-diagnostic operation refs and their
+// prove-fixed endpoint links joined the read model. A v30 payload would advance
+// past those events while restoring only the older protocol/step/cause rows.
+const SnapshotFormatVersion = 31
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

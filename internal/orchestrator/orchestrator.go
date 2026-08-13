@@ -749,6 +749,29 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			healed = healedBefore
 			reconcileErr = o.quarantineOutboxReconciliationConflict(ctx, log, ev, conflict)
 		}()
+		if ev.Type == projections.EventEnrollmentDiagnosticVerificationQueued {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var queued projections.EnrollmentDiagnosticVerificationQueued
+			if err := json.Unmarshal(ev.Data, &queued); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			entry, err := enrollmentDiagnosticVerificationOutboxEntry(ev.TenantID, ev.ID, queued)
+			if err != nil {
+				return err
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+				if inserted {
+					healed++
+				}
+				return err
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventCMDBSweepDispatched || ev.Type == projections.EventCMDBSweepPageObserved {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err

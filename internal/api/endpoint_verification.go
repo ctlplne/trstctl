@@ -3,8 +3,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
@@ -161,6 +164,53 @@ func (a *API) listEndpointVerifications(w http.ResponseWriter, r *http.Request) 
 		out.Items = append(out.Items, item)
 	}
 	a.writeJSON(w, http.StatusOK, out)
+}
+
+func (a *API) getEndpointVerification(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.store == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "endpoint verification is not configured"))
+		return
+	}
+	record, err := a.store.GetEndpointVerification(r.Context(), tenantID, r.PathValue("id"), "relay")
+	if errors.Is(err, pgx.ErrNoRows) {
+		a.writeError(w, errStatus(http.StatusNotFound, "endpoint verification not found"))
+		return
+	}
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, endpointVerificationDTO(record, time.Now().UTC()))
+}
+
+func endpointVerificationDTO(rec store.EndpointVerification, now time.Time) EndpointVerification {
+	item := EndpointVerification{
+		EndpointID: rec.EndpointID, Address: rec.Address, Vantage: rec.Vantage,
+		Status: endpointVerificationStatus(rec), Mismatch: rec.Mismatch,
+		CheckedSANs: rec.CheckedSANs, CheckedChain: rec.CheckedChain,
+		ExpectedFingerprint: rec.ExpectedFingerprint, ObservedFingerprint: rec.ObservedFingerprint,
+		Detail: rec.Detail, EvidenceDigest: rec.EvidenceDigest, AgentCommonName: rec.AgentCommonName,
+	}
+	if !rec.NotAfter.IsZero() {
+		item.NotAfter = rec.NotAfter.UTC().Format(time.RFC3339)
+	}
+	if !rec.LastCheckedAt.IsZero() {
+		item.LastCheckedAt = rec.LastCheckedAt.UTC().Format(time.RFC3339)
+	}
+	if !rec.LastGoodAt.IsZero() {
+		item.LastGoodAt = rec.LastGoodAt.UTC().Format(time.RFC3339)
+		stale := int64(now.Sub(rec.LastGoodAt).Seconds())
+		if stale < 0 {
+			stale = 0
+		}
+		item.StaleForSeconds = &stale
+	}
+	return item
 }
 
 // endpointVerificationStatus maps a stored observation onto the served

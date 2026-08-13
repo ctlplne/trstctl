@@ -173,18 +173,19 @@ func TestCARetirementCommandRequiresForceAndCarriesExactCommandAUD42(t *testing.
 
 // capture records the request the CLI sent.
 type capture struct {
-	Method string
-	Path   string
-	Query  string
-	Header http.Header
-	Body   []byte
+	Method  string
+	Path    string
+	RawPath string
+	Query   string
+	Header  http.Header
+	Body    []byte
 }
 
 func mockServer(t *testing.T, status int, respBody string, cap *capture) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
-		cap.Method, cap.Path, cap.Query, cap.Header, cap.Body = r.Method, r.URL.Path, r.URL.RawQuery, r.Header, b
+		cap.Method, cap.Path, cap.RawPath, cap.Query, cap.Header, cap.Body = r.Method, r.URL.Path, r.URL.RawPath, r.URL.RawQuery, r.Header, b
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		_, _ = io.WriteString(w, respBody)
@@ -338,6 +339,62 @@ func TestRevocationHealthCommandIsReadOnlyAndPreservesSignedEvidence(t *testing.
 	}
 	if len(decoded.Items) != 1 || decoded.Items[0].Status != "fresh" || !decoded.Items[0].SignatureVerified || decoded.Items[0].EvidenceDigest != "sha256:abc" {
 		t.Fatalf("stdout lost signed revocation evidence: %s", stdout)
+	}
+}
+
+func TestEnrollmentDiagnosticCommandsPreserveExactAndRedactedEvidenceAUD49(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		method     string
+		path       string
+		response   string
+		wantKey    bool
+		wantOutput string
+	}{
+		{
+			name: "exact signed result", args: []string{"endpoints", "verifications", "get", "verify/aud49"},
+			method: http.MethodGet, path: "/api/v1/endpoints/verifications/verify/aud49",
+			response:   `{"endpoint_id":"verify/aud49","status":"verified","evidence_digest":"sha256:signed"}`,
+			wantOutput: `"evidence_digest": "sha256:signed"`,
+		},
+		{
+			name: "aggregate-only support addendum", args: []string{"enrollment", "diagnostics", "support-addendum"},
+			method: http.MethodGet, path: "/api/v1/enrollment/diagnostics/support-addendum",
+			response:   `{"schema_version":1,"unknown_count":0,"rows":[{"protocol":"est","cause":"template_acl_denied","actionable":true,"count":2}]}`,
+			wantOutput: `"cause": "template_acl_denied"`,
+		},
+		{
+			name: "prove fixed mutation", args: []string{"enrollment", "diagnostics", "prove-fixed", "diagnostic/aud49"},
+			method: http.MethodPost, path: "/api/v1/enrollment/diagnostics/diagnostic/aud49/prove-fixed",
+			response: `{"diagnostic_id":"diagnostic/aud49","verification_endpoint_id":"verify-1","status":"queued","queued_at":"2026-08-13T00:00:00Z","result_path":"/api/v1/endpoints/verifications/verify-1"}`,
+			wantKey:  true, wantOutput: `"status": "queued"`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var captured capture
+			server := mockServer(t, http.StatusOK, test.response, &captured)
+			code, stdout, stderr := run(t, test.args, cli.Env{
+				Server: server.URL, Token: "aud49-token", Tenant: "tenant-a", HTTPClient: server.Client(),
+			}, "")
+			if code != 0 {
+				t.Fatalf("exit = %d stderr=%s", code, stderr)
+			}
+			if captured.Method != test.method || captured.Path != test.path || len(captured.Body) != 0 {
+				t.Fatalf("request = %s %s body=%q", captured.Method, captured.Path, captured.Body)
+			}
+			if strings.Contains(test.path, "/verify/aud49") && captured.RawPath != "/api/v1/endpoints/verifications/verify%2Faud49" ||
+				strings.Contains(test.path, "/diagnostic/aud49/") && captured.RawPath != "/api/v1/enrollment/diagnostics/diagnostic%2Faud49/prove-fixed" {
+				t.Fatalf("escaped path = %q, want the identifier kept in one segment", captured.RawPath)
+			}
+			if (captured.Header.Get("Idempotency-Key") != "") != test.wantKey {
+				t.Fatalf("Idempotency-Key = %q, want mutation=%t", captured.Header.Get("Idempotency-Key"), test.wantKey)
+			}
+			if !strings.Contains(stdout, test.wantOutput) {
+				t.Fatalf("stdout lost evidence: %s", stdout)
+			}
+		})
 	}
 }
 

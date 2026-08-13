@@ -13,6 +13,8 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/enrollmentdiag"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -34,6 +36,9 @@ type ExternalCA struct {
 	Type     string
 	Name     string
 	TenantID string
+	// Endpoint is non-secret operator routing metadata used to bind refusal
+	// diagnostics to the exact D2 prove-fixed target.
+	Endpoint string
 	CA       ca.CA
 	Factory  ExternalCAFactory
 	// ReplaySafety may opt a custom adapter into retry-after-ambiguous-failure
@@ -60,6 +65,39 @@ func (c factoryExternalCA) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 		return ca.Certificate{}, errors.New("external CA factory returned no implementation")
 	}
 	return implementation.Issue(ctx, req)
+}
+
+type externalCAOperationRefContextKey struct{}
+
+// diagnosticExternalCA observes the raw provider refusal before AD CS's
+// at-most-once guard intentionally turns every ambiguous error into
+// ErrEffectIndeterminate. After that guard, the stable HRESULT is gone.
+type diagnosticExternalCA struct {
+	inner       ca.CA
+	authorityID string
+	endpoint    string
+	orch        *orchestrator.Orchestrator
+}
+
+func (c diagnosticExternalCA) Name() string { return c.inner.Name() }
+
+func (c diagnosticExternalCA) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate, error) {
+	certificate, err := c.inner.Issue(ctx, req)
+	if err == nil || c.orch == nil {
+		return certificate, err
+	}
+	operationKey, _ := ctx.Value(externalCAOperationRefContextKey{}).(string)
+	if operationKey == "" {
+		operationKey = req.ProviderIdempotencyKey
+	}
+	diagnosis := enrollmentdiag.ClassifyADCS(enrollmentdiag.StepAuthorize, err.Error(), err).WithEvidence(enrollmentdiag.Evidence{
+		OperationRef: "external-ca:" + c.authorityID + ":" + operationKey,
+		IdentityRef:  externalCAIdentityRef(req), EndpointRef: strings.TrimSpace(c.endpoint),
+	})
+	if diagnosticErr := c.orch.RecordEnrollmentDiagnosis(ctx, req.TenantID, diagnosis); diagnosticErr != nil {
+		return ca.Certificate{}, errors.Join(err, fmt.Errorf("server: persist AD CS refusal diagnosis: %w", diagnosticErr))
+	}
+	return ca.Certificate{}, err
 }
 
 type externalCARegistry struct {
@@ -109,6 +147,11 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 		typ := strings.TrimSpace(cfg.Type)
 		if typ == "" {
 			typ = implementation.Name()
+		}
+		if strings.EqualFold(typ, "adcs") && s.orch != nil {
+			implementation = diagnosticExternalCA{
+				inner: implementation, authorityID: id, endpoint: strings.TrimSpace(cfg.Endpoint), orch: s.orch,
+			}
 		}
 		meta := api.ExternalCA{ID: id, Type: typ, Name: name, Status: "available"}
 		replaySafety := cfg.ReplaySafety
@@ -211,7 +254,24 @@ func (r *externalCARegistry) DeliverExternalCAIssue(ctx context.Context, m orche
 	if entry.tenantID != "" && entry.tenantID != m.TenantID {
 		return fmt.Errorf("server: external CA outbox tenant is not bound to authority %q", payload.AuthorityID)
 	}
+	ctx = context.WithValue(ctx, externalCAOperationRefContextKey{}, m.IdempotencyKey)
 	return entry.svc.DeliverExternalIssue(ctx, m)
+}
+
+func externalCAIdentityRef(req ca.IssueRequest) string {
+	for _, name := range req.DNSNames {
+		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+			return "dns:" + name
+		}
+	}
+	if info, err := crypto.InspectCSR(req.CSR); err == nil {
+		for _, name := range info.DNSNames {
+			if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+				return "dns:" + name
+			}
+		}
+	}
+	return "csr-sha256:" + crypto.SHA256Hex(req.CSR)
 }
 
 func externalCAUpstreamDetail(err error) string {

@@ -6586,6 +6586,62 @@ export const messages = {
     defaultMessage: "{value1}\u00d7, last at {value2}",
     description: "I4: how many times this diagnosis was seen and when it was last seen.",
   },
+  "source.exact.evidence.i4diag0010": {
+    defaultMessage: "Exact failed operation",
+    description: "I4/AUD-49: column heading for stable operation, identity, and endpoint references.",
+  },
+  "source.verification.i4diag0011": {
+    defaultMessage: "Network proof",
+    description: "I4/AUD-49: column heading for the signed prove-fixed workflow.",
+  },
+  "source.operation.i4diag0012": {
+    defaultMessage: "Operation",
+    description: "I4/AUD-49: label for the exact failed protocol operation reference.",
+  },
+  "source.identity.i4diag0013": {
+    defaultMessage: "Identity",
+    description: "I4/AUD-49: label for the exact failed enrollment identity reference.",
+  },
+  "source.endpoint.i4diag0014": {
+    defaultMessage: "Endpoint",
+    description: "I4/AUD-49: label for the exact failed network endpoint reference.",
+  },
+  "source.verified.fixed.i4diag0015": {
+    defaultMessage: "Verified fixed",
+    description: "I4/AUD-49: a signed network relay proved that the exact endpoint now matches.",
+  },
+  "source.signed.verification.evidence.i4diag0016": {
+    defaultMessage: "Signed verification evidence",
+    description: "I4/AUD-49: link to the network relay's signed verification result.",
+  },
+  "source.queued.network.verification.i4diag0017": {
+    defaultMessage: "Queued for network verification",
+    description: "I4/AUD-49: an exact endpoint recheck is waiting for a network relay.",
+  },
+  "source.verification.diverged.i4diag0018": {
+    defaultMessage: "Still failing: the endpoint serves a different certificate",
+    description: "I4/AUD-49: signed verification reached the endpoint but its evidence diverged.",
+  },
+  "source.verification.unreachable.i4diag0019": {
+    defaultMessage: "Still unproven: the network relay could not reach the endpoint",
+    description: "I4/AUD-49: signed verification could not reach the exact failed endpoint.",
+  },
+  "source.queueing.verification.i4diag0020": {
+    defaultMessage: "Queueing verification\u2026",
+    description: "I4/AUD-49: prove-fixed mutation is in flight.",
+  },
+  "source.prove.fixed.i4diag0021": {
+    defaultMessage: "Prove fixed",
+    description: "I4/AUD-49: queues a network relay to recheck the exact failed endpoint.",
+  },
+  "source.no.network.proof.queued.i4diag0022": {
+    defaultMessage: "No network proof queued",
+    description: "I4/AUD-49: no verification result exists and this operator cannot queue one.",
+  },
+  "source.verification.queued.i4diag0023": {
+    defaultMessage: "Verification queued",
+    description: "I4/AUD-49: success toast after the durable verification intent is queued.",
+  },
   "source.device.proof.e1dev00001": {
     defaultMessage: "Device proof",
     description: "E1: column heading \u2014 whether this connector's deploy is exercised against a double of its device API.",

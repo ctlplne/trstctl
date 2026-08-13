@@ -8,6 +8,9 @@ import (
 )
 
 func validateEnrollmentDiagnosticObserved(diagnostic EnrollmentDiagnosticObserved) error {
+	if strings.TrimSpace(diagnostic.DiagnosticID) == "" {
+		return fmt.Errorf("projections: enrollment diagnostic id is required")
+	}
 	if !diagnosticOneOf(diagnostic.Protocol, "acme", "est", "scep", "adcs") {
 		return fmt.Errorf("projections: enrollment diagnostic protocol %q is not known", diagnostic.Protocol)
 	}
@@ -25,6 +28,12 @@ func validateEnrollmentDiagnosticObserved(diagnostic EnrollmentDiagnosticObserve
 	}
 	if diagnostic.Cause == "unknown" && strings.TrimSpace(diagnostic.Remediation) != "" {
 		return fmt.Errorf("projections: unknown enrollment diagnostic cannot invent remediation")
+	}
+	if diagnostic.VerificationKind != "" && diagnostic.VerificationKind != "endpoint.verify" {
+		return fmt.Errorf("projections: enrollment diagnostic verification kind %q is not known", diagnostic.VerificationKind)
+	}
+	if diagnostic.VerificationKind != "" && strings.TrimSpace(diagnostic.VerificationAddress) == "" {
+		return fmt.Errorf("projections: enrollment diagnostic verification address is required")
 	}
 	return nil
 }

@@ -85,6 +85,9 @@ const (
 	// I4: one typed enrollment refusal. The envelope carries tenant_id and time;
 	// PostgreSQL collapses repeats into a tenant-local bounded projection.
 	EventEnrollmentDiagnosticObserved = "enrollment.diagnostic.observed"
+	// AUD-49: an operator explicitly asked the existing signed D2 workflow to
+	// check the target named by one exact diagnosis.
+	EventEnrollmentDiagnosticVerificationQueued = "enrollment.diagnostic.verification.queued"
 	// I5: one MDM device record joined to one SCEP transaction.
 	EventMDMDeviceCorrelated = "mdm.device.correlated"
 	// I5: a tenant's standing instruction to re-read an MDM.
@@ -692,11 +695,42 @@ type IssuanceRequestDecided struct {
 // at a protocol refusal boundary (I4). Tenant and observation time live in the
 // event envelope so a producer cannot smuggle a different tenant into payload.
 type EnrollmentDiagnosticObserved struct {
+	DiagnosticID           string `json:"diagnostic_id"`
+	Protocol               string `json:"protocol"`
+	Step                   string `json:"step"`
+	Cause                  string `json:"cause"`
+	Summary                string `json:"summary"`
+	Remediation            string `json:"remediation,omitempty"`
+	OperationRef           string `json:"operation_ref,omitempty"`
+	IdentityRef            string `json:"identity_ref,omitempty"`
+	EndpointRef            string `json:"endpoint_ref,omitempty"`
+	VerificationKind       string `json:"verification_kind,omitempty"`
+	VerificationAddress    string `json:"verification_address,omitempty"`
+	VerificationServerName string `json:"verification_server_name,omitempty"`
+}
+
+// enrollmentDiagnosticObservedV1 is the replay-only shape written before
+// AUD-49 added exact workflow evidence. Keep it separate so privacy/schema
+// validation cannot silently bless v2 fields under the old contract.
+type enrollmentDiagnosticObservedV1 struct {
 	Protocol    string `json:"protocol"`
 	Step        string `json:"step"`
 	Cause       string `json:"cause"`
 	Summary     string `json:"summary"`
 	Remediation string `json:"remediation,omitempty"`
+}
+
+const EnrollmentDiagnosticEventSchemaVersion = 2
+
+// EnrollmentDiagnosticVerificationQueued is both the immutable action receipt
+// and the complete authority needed to recreate a missing outbox row after a
+// crash. The relay intent is deliberately one endpoint, never a guessed sweep.
+type EnrollmentDiagnosticVerificationQueued struct {
+	DiagnosticID           string `json:"diagnostic_id"`
+	VerificationEndpointID string `json:"verification_endpoint_id"`
+	Address                string `json:"address"`
+	ServerName             string `json:"server_name,omitempty"`
+	ExpectedFingerprint    string `json:"expected_fingerprint,omitempty"`
 }
 
 // OwnershipReconciled is the payload of an ownership.reconciled event (I2).
@@ -3075,7 +3109,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTicketIntakeSweepDispatched:              {1: true},
 	EventTicketIntakeSweepPageObserved:            {1: true},
 	EventTicketIntakeSweepFailed:                  {1: true},
-	EventEnrollmentDiagnosticObserved:             {1: true},
+	EventEnrollmentDiagnosticObserved:             {1: true, EnrollmentDiagnosticEventSchemaVersion: true},
+	EventEnrollmentDiagnosticVerificationQueued:   {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
 	EventMDMPollConfigured:                        {1: true},
 	EventEdgeSegmentPolicySet:                     {1: true, EdgeCustodyEventSchemaVersion: true},
@@ -3482,15 +3517,31 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		if e.SchemaVersion == 1 && pl.DiagnosticID == "" {
+			pl.DiagnosticID = "legacy:" + pl.Protocol + ":" + pl.Step + ":" + pl.Cause
+		}
 		if err := validateEnrollmentDiagnosticObserved(pl); err != nil {
 			return err
 		}
 		return p.store.ApplyEnrollmentDiagnosticObservedTx(ctx, tx, store.EnrollmentDiagnostic{
-			TenantID: e.TenantID, Protocol: pl.Protocol, Step: pl.Step, Cause: pl.Cause,
+			TenantID: e.TenantID, DiagnosticID: pl.DiagnosticID, Protocol: pl.Protocol, Step: pl.Step, Cause: pl.Cause,
 			Summary: pl.Summary, Remediation: pl.Remediation,
-			Actionable: pl.Cause != "unknown" && strings.TrimSpace(pl.Remediation) != "",
-			ObservedAt: e.Time, SourceEventID: e.ID, EventSequence: e.Sequence,
+			OperationRef: pl.OperationRef, IdentityRef: pl.IdentityRef, EndpointRef: pl.EndpointRef,
+			VerificationKind: pl.VerificationKind, VerificationAddress: pl.VerificationAddress,
+			VerificationServerName: pl.VerificationServerName,
+			Actionable:             pl.Cause != "unknown" && strings.TrimSpace(pl.Remediation) != "",
+			ObservedAt:             e.Time, SourceEventID: e.ID, EventSequence: e.Sequence,
 		})
+	case EventEnrollmentDiagnosticVerificationQueued:
+		var pl EnrollmentDiagnosticVerificationQueued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.DiagnosticID == "" || pl.VerificationEndpointID == "" || pl.Address == "" || pl.ExpectedFingerprint == "" {
+			return fmt.Errorf("projections: %s requires diagnostic, endpoint, address, and expected fingerprint", e.Type)
+		}
+		return p.store.ApplyEnrollmentDiagnosticVerificationQueuedTx(ctx, tx, e.TenantID,
+			pl.DiagnosticID, pl.VerificationEndpointID, pl.ExpectedFingerprint, e.Time, e.Sequence)
 	case EventADCSDatabaseIngested:
 		var pl ADCSDatabaseIngested
 		if err := decode(e, &pl); err != nil {

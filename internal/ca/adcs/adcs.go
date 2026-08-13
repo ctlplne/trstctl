@@ -20,6 +20,7 @@ package adcs
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/ca"
@@ -70,6 +71,33 @@ type Submission struct {
 	RequestID     int
 	CertChainPEM  []byte
 	StatusMessage string
+}
+
+// RefusalError is the bounded AD CS fact a caller may safely classify. The
+// upstream StatusMessage is never retained: IIS and proxies can echo submitted
+// credentials into it. Code is populated only for the small allow-list of
+// stable HRESULTs whose meaning is unambiguous.
+type RefusalError struct {
+	RequestID   int
+	Disposition Disposition
+	Code        string
+}
+
+func (e *RefusalError) Error() string {
+	if e.Code != "" {
+		return fmt.Sprintf("adcs: request %d not issued (%s, %s)", e.RequestID, e.Disposition, e.Code)
+	}
+	return fmt.Sprintf("adcs: request %d not issued (%s)", e.RequestID, e.Disposition)
+}
+
+func safeRefusalCode(status string) string {
+	lower := strings.ToLower(status)
+	for _, code := range []string{"0x80094800", "0x80094801"} {
+		if strings.Contains(lower, code) {
+			return code
+		}
+	}
+	return ""
 }
 
 // Transport performs submission/retrieval against an ADCS CA. Production uses
@@ -178,7 +206,7 @@ func (b *backend) resolve(ctx context.Context, sub Submission) ([]byte, error) {
 		default:
 			// StatusMessage comes from an upstream/free-form transport field. Never
 			// let it escape: IIS/proxies can echo submitted credentials in it.
-			return nil, fmt.Errorf("adcs: request %d not issued (%s)", sub.RequestID, sub.Disposition)
+			return nil, &RefusalError{RequestID: sub.RequestID, Disposition: sub.Disposition, Code: safeRefusalCode(sub.StatusMessage)}
 		}
 	}
 }

@@ -80,6 +80,28 @@ describe("api error handling (SURFACE-007)", () => {
   });
 });
 
+describe("enrollment diagnostic verification (AUD-49)", () => {
+  it("posts the exact diagnostic route with an Idempotency-Key", async () => {
+    mockFetch(
+      202,
+      JSON.stringify({
+        diagnostic_id: "diag/unsafe id",
+        verification_endpoint_id: "verify-1",
+        status: "queued",
+        queued_at: "2026-08-13T04:00:00Z",
+        result_path: "/api/v1/endpoints/verifications/verify-1",
+      }),
+    );
+
+    await api.proveEnrollmentDiagnosticFixed("diag/unsafe id");
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("/api/v1/enrollment/diagnostics/diag%2Funsafe%20id/prove-fixed");
+    expect(call[1]?.method).toBe("POST");
+    expect((call[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeTruthy();
+  });
+});
+
 describe("CA migration execution contract (AUD-40)", () => {
   it("keeps assessment read-only and sends idempotent run controls to exact paths", async () => {
     const run = { id: "run-1", status: "running", waves: [] };

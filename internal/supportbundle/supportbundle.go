@@ -48,10 +48,28 @@ var (
 // defaults to os.Getenv. Output may be empty for a timestamped current-directory
 // name. LogFile is optional and is never named inside the archive.
 type Options struct {
-	Getenv  func(string) string
-	Output  string
-	LogFile string
-	Now     func() time.Time
+	Getenv                func(string) string
+	Output                string
+	LogFile               string
+	Now                   func() time.Time
+	EnrollmentDiagnostics *EnrollmentDiagnosticsAddendum
+}
+
+// EnrollmentDiagnosticsAddendum is the only live tenant-data shape accepted by
+// the offline bundle builder. It contains closed-vocabulary aggregate counts;
+// exact operation, identity, endpoint, tenant, and time references cannot fit
+// in the type and therefore cannot accidentally enter the archive.
+type EnrollmentDiagnosticsAddendum struct {
+	SchemaVersion int                             `json:"schema_version"`
+	Rows          []EnrollmentDiagnosticAggregate `json:"rows"`
+	UnknownCount  int64                           `json:"unknown_count"`
+}
+
+type EnrollmentDiagnosticAggregate struct {
+	Protocol   string `json:"protocol"`
+	Cause      string `json:"cause"`
+	Actionable bool   `json:"actionable"`
+	Count      int64  `json:"count"`
 }
 
 type manifest struct {
@@ -176,6 +194,13 @@ func Create(ctx context.Context, opts Options) (string, error) {
 	addJSON(entries, "dependencies.json", deps)
 	addJSON(entries, "migrations.json", migrations)
 	addJSON(entries, "queues.json", queues)
+	if opts.EnrollmentDiagnostics != nil {
+		addendum, err := validatedEnrollmentDiagnostics(*opts.EnrollmentDiagnostics)
+		if err != nil {
+			return "", err
+		}
+		addJSON(entries, "enrollment-diagnostics.json", addendum)
+	}
 	entries["logs/recent.log"] = []byte(logs)
 
 	names := make([]string, 0, len(entries)+1)
@@ -208,6 +233,56 @@ func Create(ctx context.Context, opts Options) (string, error) {
 		return "", err
 	}
 	return output, nil
+}
+
+func validatedEnrollmentDiagnostics(in EnrollmentDiagnosticsAddendum) (EnrollmentDiagnosticsAddendum, error) {
+	if in.SchemaVersion != 1 {
+		return EnrollmentDiagnosticsAddendum{}, errors.New("support bundle enrollment diagnostics schema_version must be 1")
+	}
+	if in.UnknownCount < 0 || len(in.Rows) > 64 {
+		return EnrollmentDiagnosticsAddendum{}, errors.New("support bundle enrollment diagnostic aggregates are invalid")
+	}
+	protocols := map[string]bool{"acme": true, "est": true, "scep": true, "adcs": true}
+	causes := map[string]bool{
+		"challenge_not_visible": true, "challenge_wrong_value": true,
+		"template_acl_denied": true, "eab_unauthorized": true,
+		"client_cert_rejected": true, "responder_unreachable": true,
+		"chain_incomplete": true, "name_not_permitted": true,
+		"rate_limited": true, "unknown": true,
+	}
+	out := EnrollmentDiagnosticsAddendum{
+		SchemaVersion: 1, UnknownCount: in.UnknownCount,
+		Rows: append([]EnrollmentDiagnosticAggregate(nil), in.Rows...),
+	}
+	seen := map[string]bool{}
+	var computedUnknown int64
+	for _, row := range out.Rows {
+		key := row.Protocol + "\x00" + row.Cause + "\x00" + fmt.Sprint(row.Actionable)
+		if !protocols[row.Protocol] || !causes[row.Cause] || row.Count <= 0 || seen[key] ||
+			row.Actionable != (row.Cause != "unknown") {
+			return EnrollmentDiagnosticsAddendum{}, errors.New("support bundle enrollment diagnostic row is invalid")
+		}
+		seen[key] = true
+		if row.Cause == "unknown" {
+			if computedUnknown > int64(^uint64(0)>>1)-row.Count {
+				return EnrollmentDiagnosticsAddendum{}, errors.New("support bundle enrollment diagnostic aggregates overflow")
+			}
+			computedUnknown += row.Count
+		}
+	}
+	if computedUnknown != out.UnknownCount {
+		return EnrollmentDiagnosticsAddendum{}, errors.New("support bundle enrollment diagnostic unknown count is inconsistent")
+	}
+	sort.Slice(out.Rows, func(i, j int) bool {
+		if out.Rows[i].Protocol != out.Rows[j].Protocol {
+			return out.Rows[i].Protocol < out.Rows[j].Protocol
+		}
+		if out.Rows[i].Cause != out.Rows[j].Cause {
+			return out.Rows[i].Cause < out.Rows[j].Cause
+		}
+		return !out.Rows[i].Actionable && out.Rows[j].Actionable
+	})
+	return out, nil
 }
 
 func collectConfigPosture(cfg *config.Config, cfgErr error) configPosture {

@@ -45,7 +45,9 @@ import type {
   EndpointVerification,
   EndpointVerificationList,
   EndpointKeyCustodyList,
+  EnrollmentDiagnostic,
   EnrollmentDiagnosticList,
+  EnrollmentDiagnosticVerification,
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
   ADCSInventorySource as GenADCSInventorySource,
@@ -655,7 +657,9 @@ export type {
   EndpointVerification,
   EndpointVerificationList,
   EndpointKeyCustodyList,
+  EnrollmentDiagnostic,
   EnrollmentDiagnosticList,
+  EnrollmentDiagnosticVerification,
   ACMEDNS01ProviderConfigRequest,
   ActiveActiveIssuancePlan,
   AgentCertRevocation,
@@ -1420,6 +1424,8 @@ export interface Api {
   endpointKeyCustody(): Promise<EndpointKeyCustodyList>;
   // I4: recent enrolment refusals, classified.
   enrollmentDiagnostics(): Promise<EnrollmentDiagnosticList>;
+  /** I4/AUD-49: queue one network relay to re-check the exact failed target. */
+  proveEnrollmentDiagnosticFixed(id: string): Promise<EnrollmentDiagnosticVerification>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
@@ -1831,6 +1837,8 @@ const liveApi: Api = {
   endpointVerifications: () => req<EndpointVerificationList>("/api/v1/endpoints/verifications"),
   endpointKeyCustody: () => req<EndpointKeyCustodyList>("/api/v1/endpoints/key-custody"),
   enrollmentDiagnostics: () => req<EnrollmentDiagnosticList>("/api/v1/enrollment/diagnostics"),
+  proveEnrollmentDiagnosticFixed: (id) =>
+    mutate<EnrollmentDiagnosticVerification>("POST", `/api/v1/enrollment/diagnostics/${encodeURIComponent(id)}/prove-fixed`, {}),
   mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),
   mdmSCEPPolicies: () => req<MDMSCEPPolicyList>("/api/v1/mdm/scep/policies"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),

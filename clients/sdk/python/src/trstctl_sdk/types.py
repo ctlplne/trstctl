@@ -3471,11 +3471,26 @@ EnrollmentDiagnostic = TypedDict(
         'actionable': bool,
         'cause': str,
         'count': int,
+        'endpoint_ref': str,
+        'expected_fingerprint': str,
+        'id': str,
+        'identity_ref': str,
         'observed_at': str,
+        'operation_ref': str,
         'protocol': str,
         'remediation': str,
         'step': str,
         'summary': str,
+        'verification_address': str,
+        'verification_agent': str,
+        'verification_checked_at': str,
+        'verification_endpoint_id': str,
+        'verification_evidence_digest': str,
+        'verification_kind': str,
+        'verification_queued_at': str,
+        'verification_result_path': str,
+        'verification_server_name': str,
+        'verification_status': str,
     },
     total=False,
 )
@@ -3485,6 +3500,39 @@ EnrollmentDiagnosticList = TypedDict(
     {
         'guidance': str,
         'items': list[dict[str, Any]],
+        'unknown_count': int,
+    },
+    total=False,
+)
+
+EnrollmentDiagnosticSupportAggregate = TypedDict(
+    'EnrollmentDiagnosticSupportAggregate',
+    {
+        'actionable': bool,
+        'cause': str,
+        'count': int,
+        'protocol': str,
+    },
+    total=False,
+)
+
+EnrollmentDiagnosticVerification = TypedDict(
+    'EnrollmentDiagnosticVerification',
+    {
+        'diagnostic_id': str,
+        'queued_at': str,
+        'result_path': str,
+        'status': str,
+        'verification_endpoint_id': str,
+    },
+    total=False,
+)
+
+EnrollmentDiagnosticsSupportAddendum = TypedDict(
+    'EnrollmentDiagnosticsSupportAddendum',
+    {
+        'rows': list[dict[str, Any]],
+        'schema_version': int,
         'unknown_count': int,
     },
     total=False,

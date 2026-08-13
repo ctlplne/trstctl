@@ -156,8 +156,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// and maps onto F47 beside endpoint health: the former asks whether an
 	// upstream is healthy; this one asks whether isolated clients have a fresh
 	// validated local copy.
-	if len(out) != 364 {
-		t.Fatalf("OpenAPI operationIds = %d, want 364", len(out))
+	// AUD-49 adds exact signed endpoint-result readback, an authorized redacted
+	// support addendum, and the prove-fixed mutation.
+	if len(out) != 367 {
+		t.Fatalf("OpenAPI operationIds = %d, want 367", len(out))
 	}
 	return out
 }
