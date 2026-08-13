@@ -23,6 +23,7 @@ const { providerMock } = vi.hoisted(() => ({
     grantOperatorAccess: vi.fn(),
     revokeOperatorAccess: vi.fn(),
     setOperatorRole: vi.fn(),
+    customerHealth: vi.fn(),
     usageEvidence: vi.fn(),
     verifyUsageEvidence: vi.fn(),
     downloadUsageEvidence: vi.fn(),
@@ -57,6 +58,7 @@ describe("provider console (L3)", () => {
     providerMock.session.mockRejectedValue(new Error("no provider session"));
     providerMock.listOperatorAccess.mockResolvedValue([]);
     providerMock.listAccessCustomers.mockResolvedValue([]);
+    providerMock.customerHealth.mockResolvedValue({ tenant_id: "", health: "unknown", active_certificates: 0 });
     providerMock.verifyUsageEvidence.mockResolvedValue({ verified: false });
     providerMock.downloadUsageEvidence.mockResolvedValue(undefined);
     providerMock.signOut.mockResolvedValue(undefined);
@@ -328,5 +330,61 @@ describe("provider console (L3)", () => {
     await waitFor(() => expect(providerMock.downloadUsageEvidence).toHaveBeenCalledTimes(2));
     expect(providerMock.downloadUsageEvidence).toHaveBeenNthCalledWith(1, "tenant-bravo", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z", "json");
     expect(providerMock.downloadUsageEvidence).toHaveBeenNthCalledWith(2, "tenant-bravo", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z", "csv");
+  });
+
+  it("renders delegated customer health beside the selected usage evidence", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "tenant-alpha", slug: "alpha", name: "Alpha Bank", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+      { id: "tenant-bravo", slug: "bravo", name: "Bravo Health", status: "suspended", created_at: "2026-02-01T00:00:00Z", updated_at: "2026-02-01T00:00:00Z" },
+    ]);
+    providerMock.customerHealth.mockResolvedValue({ tenant_id: "tenant-bravo", health: "suspended", active_certificates: 4 });
+    providerMock.usageEvidence.mockResolvedValue({
+      customer_id: "tenant-bravo",
+      period_start: "2026-07-01T00:00:00Z",
+      period_end: "2026-08-01T00:00:00Z",
+      lines: [],
+      signable: false,
+      reason: "meter coverage is incomplete",
+      digest: "health-fixture",
+      guidance: "do not invoice",
+    });
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    expect(await screen.findByText("Health unknown")).toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText("Billing customer"), { target: { value: "tenant-bravo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Pull invoice evidence" }));
+
+    await waitFor(() => expect(providerMock.customerHealth).toHaveBeenCalledWith("tenant-bravo"));
+    expect(await screen.findByText("Customer health")).toBeInTheDocument();
+    expect(screen.getByText("Suspended")).toBeInTheDocument();
+    expect(screen.getByText("Active certificates")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("Not billable")).toBeInTheDocument();
+  });
+
+  it("keeps invoice truth visible when customer health is explicitly unavailable", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "tenant-alpha", slug: "alpha", name: "Alpha Bank", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    providerMock.customerHealth.mockRejectedValue(new Error("customer health is unavailable"));
+    providerMock.usageEvidence.mockResolvedValue({
+      customer_id: "tenant-alpha",
+      period_start: "2026-07-01T00:00:00Z",
+      period_end: "2026-08-01T00:00:00Z",
+      lines: [],
+      signable: false,
+      reason: "meter coverage is incomplete",
+      digest: "unavailable-fixture",
+      guidance: "do not invoice",
+    });
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Pull invoice evidence" }));
+
+    expect(await screen.findByText(/Health unavailable: customer health is unavailable/)).toBeInTheDocument();
+    expect(screen.getByText("Not billable")).toBeInTheDocument();
+    expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
   });
 });

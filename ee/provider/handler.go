@@ -173,6 +173,8 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.listAccessCustomers(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/evidence/verification-keys":
 		h.serveEvidenceVerificationKeys(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/health"):
+		h.serveTenantHealth(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/usage-evidence"):
 		h.serveUsageEvidence(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/operators/") && strings.HasSuffix(r.URL.Path, "/delegations"):
@@ -723,6 +725,29 @@ func (h *handler) serveUsageEvidence(w http.ResponseWriter, r *http.Request) {
 	billing.ServeEvidenceForCustomer(w, r, h.evidence, customerID)
 }
 
+// serveTenantHealth exposes the narrow DirectTenantSnapshot already owned by
+// Service. Service performs the important order: authenticate the Provider
+// operator here, require the exact customer OpRead delegation there, and only
+// then let PGStore open that customer's forced-RLS certificate transaction.
+func (h *handler) serveTenantHealth(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID, ok := providerTenantPathID(r.URL.Path, "/health")
+	if !ok {
+		writeProviderError(w, errors.New("provider: health path must name exactly one customer"))
+		return
+	}
+	snapshot, err := h.svc.DirectTenantSnapshot(r.Context(), op, customerID)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, snapshot)
+}
+
 func providerTenantPathID(path, suffix string) (string, bool) {
 	const prefix = "/provider/v1/tenants/"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
@@ -938,6 +963,8 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusNotFound, "not_found"
 	case errors.Is(err, ErrReadOnly):
 		status, code = http.StatusForbidden, "read_only"
+	case errors.Is(err, ErrTenantSnapshotUnavailable):
+		status, code = http.StatusServiceUnavailable, "customer_health_unavailable"
 	case errors.Is(err, ErrMutationConflict), errors.Is(err, orchestrator.ErrIdempotencyConflict):
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, orchestrator.ErrInProgress), errors.Is(err, orchestrator.ErrEffectIndeterminate):

@@ -452,7 +452,14 @@ func (s *Service) DirectTenantSnapshot(ctx context.Context, actor Operator, tena
 	if err := s.authorize(ctx, actor, tenantID, OpRead); err != nil {
 		return TenantSnapshot{}, err
 	}
-	return s.store.DirectTenantSnapshot(ctx, tenantID)
+	snapshot, err := s.store.DirectTenantSnapshot(ctx, tenantID)
+	if err == nil || errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
+		return snapshot, err
+	}
+	// Do not turn a PostgreSQL/network failure into bad input or expose its
+	// internals. The Provider console renders this stable 503 as "unavailable"
+	// and never converts it into a healthy zero.
+	return TenantSnapshot{}, ErrTenantSnapshotUnavailable
 }
 
 func (s *Service) RequestBreakGlass(ctx context.Context, actor Operator, req BreakGlassRequest) (BreakGlassGrant, error) {

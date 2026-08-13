@@ -4697,6 +4697,16 @@ const deDECatalog = {
   "source.provider.billing.reconciled.aud590019": "{meter}: mit {events} Ereignisverlaufsdatensätzen abgeglichen.",
   "source.provider.billing.unreconciled.aud590020": "{meter}: nicht abgeglichen; erst nach Behebung des oben genannten Grundes abrechnen.",
   "source.provider.billing.download.csv.aud590021": "Finanz-CSV herunterladen",
+  "source.provider.health.title.aud600001": "Kundenzustand",
+  "source.provider.health.loading.aud600002": "Kundenzustand wird geladen…",
+  "source.provider.health.unknown.aud600003": "Zustand unbekannt",
+  "source.provider.health.healthy.aud600004": "Gesund",
+  "source.provider.health.suspended.aud600005": "Gesperrt",
+  "source.provider.health.offboarded.aud600006": "Außer Betrieb genommen",
+  "source.provider.health.noCertificates.aud600007": "Keine aktiven Zertifikate",
+  "source.provider.health.status.aud600008": "Status",
+  "source.provider.health.activeCertificates.aud600009": "Aktive Zertifikate",
+  "source.provider.health.unavailable.aud600010": "Zustand nicht verfügbar",
   // E4 relay plugin census — Machine-authored translations, FLAG FOR HUMAN REVIEW.
   "connectors.relayPlugins.title": "Verifizierte Relay-Plugins",
   "connectors.relayPlugins.help":

@@ -61,6 +61,26 @@ describe("provider API idempotency", () => {
     }
   });
 
+  it("reads one customer health snapshot through the delegated customer path", async () => {
+    const snapshot = { tenant_id: "tenant/acme", health: "healthy", active_certificates: 4 };
+    vi.mocked(fetch).mockResolvedValueOnce(response(200, snapshot));
+
+    await expect(providerApi.customerHealth("tenant/acme")).resolves.toEqual(snapshot);
+
+    const [path, init] = vi.mocked(fetch).mock.calls[0];
+    expect(path).toBe("/provider/v1/tenants/tenant%2Facme/health");
+    expect((init?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
+  });
+
+  it("refuses a mismatched or impossible customer health response", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(200, { tenant_id: "tenant-beta", health: "healthy", active_certificates: 4 }))
+      .mockResolvedValueOnce(response(200, { tenant_id: "tenant-alpha", health: "healthy", active_certificates: -1 }));
+
+    await expect(providerApi.customerHealth("tenant-alpha")).rejects.toThrow("does not match the requested customer");
+    await expect(providerApi.customerHealth("tenant-alpha")).rejects.toThrow("does not match the requested customer");
+  });
+
   it("pulls customer-path invoice evidence and public verification keys without a tenant session", async () => {
     const evidence = {
       customer_id: "tenant/acme",

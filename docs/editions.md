@@ -278,3 +278,15 @@ document's canonical bytes and shows **Signature verified** only when RS256,
 the protected billing-invoice artifact domain, key id, digest, and signature
 all match. A green label therefore does not trust the evidence response's own
 `signable` boolean.
+
+The same customer selection also reads `GET
+/provider/v1/tenants/{id}/health`. This is a small operational view, not
+break-glass access: after the exact `read` delegation succeeds,
+`DirectTenantSnapshot` enters that customer's PostgreSQL RLS identity and
+counts only active certificate rows for that tenant. The response distinguishes
+healthy, suspended, offboarded, and no-active-certificate states. A customer
+that does not exist returns 404; a storage failure returns 503; and the console
+renders both as unknown/unavailable rather than showing zero as if it were a
+measured fact. **Customer health** and **Invoice evidence** therefore name the
+same selected customer while keeping lifecycle/count truth separate from the
+signed billing period.

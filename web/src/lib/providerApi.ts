@@ -309,6 +309,22 @@ async function downloadProviderEvidence(customerId: string, periodStart: string,
   URL.revokeObjectURL(objectURL);
 }
 
+async function providerCustomerHealth(customerId: string): Promise<ProviderTenantSnapshot> {
+  const snapshot = await providerReq<ProviderTenantSnapshot>(`/provider/v1/tenants/${encodeURIComponent(customerId)}/health`);
+  if (
+    snapshot.tenant_id !== customerId ||
+    typeof snapshot.health !== "string" ||
+    snapshot.health.trim() === "" ||
+    !Number.isSafeInteger(snapshot.active_certificates) ||
+    snapshot.active_certificates < 0
+  ) {
+    // A mismatched or malformed count is UNKNOWN, never another customer's
+    // health displayed under the selected customer's label.
+    throw new Error("provider: customer health response does not match the requested customer");
+  }
+  return snapshot;
+}
+
 export const providerApi = {
   authMethods: async (): Promise<string[]> => {
     const out = await providerReq<{ methods: string[] | null }>("/provider/v1/auth/methods");
@@ -332,6 +348,7 @@ export const providerApi = {
     const out = await providerReq<{ tenants: ProviderTenant[] | null }>("/provider/v1/access/customers");
     return out.tenants ?? [];
   },
+  customerHealth: providerCustomerHealth,
   usageEvidence: (customerId: string, periodStart: string, periodEnd: string): Promise<ProviderUsageEvidence> =>
     providerReq<ProviderUsageEvidence>(providerEvidencePath(customerId, periodStart, periodEnd)),
   evidenceVerificationKeys: (): Promise<ProviderEvidenceJWKSet> => providerReq<ProviderEvidenceJWKSet>("/provider/v1/evidence/verification-keys"),

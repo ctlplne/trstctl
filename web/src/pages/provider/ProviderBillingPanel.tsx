@@ -6,7 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { translateNow } from "@/i18n/I18nProvider";
-import { ProviderAuthError, providerApi, type ProviderEvidenceVerification, type ProviderTenant, type ProviderUsageEvidence } from "@/lib/providerApi";
+import {
+  ProviderAuthError,
+  providerApi,
+  type ProviderEvidenceVerification,
+  type ProviderTenant,
+  type ProviderTenantSnapshot,
+  type ProviderUsageEvidence,
+} from "@/lib/providerApi";
 
 function defaultBillingPeriod(): { start: string; end: string } {
   const now = new Date();
@@ -21,11 +28,28 @@ function asRFC3339(date: string): string {
 
 type VerificationState = ProviderEvidenceVerification | null;
 
+function healthLabel(health: string): string {
+  switch (health) {
+    case "healthy":
+      return translateNow("source.provider.health.healthy.aud600004");
+    case "suspended":
+      return translateNow("source.provider.health.suspended.aud600005");
+    case "offboarded":
+      return translateNow("source.provider.health.offboarded.aud600006");
+    case "no_certificates":
+      return translateNow("source.provider.health.noCertificates.aud600007");
+    default:
+      return translateNow("source.provider.health.unknown.aud600003");
+  }
+}
+
 export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: ProviderTenant[]; onAuthError: () => void }) {
   const defaults = defaultBillingPeriod();
   const [customerId, setCustomerId] = useState("");
   const [periodStart, setPeriodStart] = useState(defaults.start);
   const [periodEnd, setPeriodEnd] = useState(defaults.end);
+  const [health, setHealth] = useState<ProviderTenantSnapshot | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [document, setDocument] = useState<ProviderUsageEvidence | null>(null);
   const [verification, setVerification] = useState<VerificationState>(null);
   const [loading, setLoading] = useState(false);
@@ -36,15 +60,46 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
     if (customerId && !tenants.some((tenant) => tenant.id === customerId)) setCustomerId(tenants[0]?.id ?? "");
   }, [customerId, tenants]);
 
+  useEffect(() => {
+    // Never leave one customer's health/evidence visible under another
+    // customer's selected label. The operator must pull the new customer.
+    setHealth(null);
+    setHealthError(null);
+    setDocument(null);
+    setVerification(null);
+    setError(null);
+  }, [customerId]);
+
   async function pull(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!customerId || !periodStart || !periodEnd) return;
     setLoading(true);
     setError(null);
+    setHealth(null);
+    setHealthError(null);
     setDocument(null);
     setVerification(null);
     try {
-      const evidence = await providerApi.usageEvidence(customerId, asRFC3339(periodStart), asRFC3339(periodEnd));
+      const [healthResult, evidenceResult] = await Promise.allSettled([
+        providerApi.customerHealth(customerId),
+        providerApi.usageEvidence(customerId, asRFC3339(periodStart), asRFC3339(periodEnd)),
+      ]);
+      for (const result of [healthResult, evidenceResult]) {
+        if (result.status === "rejected" && result.reason instanceof ProviderAuthError) {
+          onAuthError();
+          return;
+        }
+      }
+      if (healthResult.status === "fulfilled") {
+        setHealth(healthResult.value);
+      } else {
+        setHealthError(healthResult.reason instanceof Error ? healthResult.reason.message : String(healthResult.reason));
+      }
+      if (evidenceResult.status === "rejected") {
+        setError(evidenceResult.reason instanceof Error ? evidenceResult.reason.message : String(evidenceResult.reason));
+        return;
+      }
+      const evidence = evidenceResult.value;
       setDocument(evidence);
       if (evidence.signature?.jws) {
         setVerification(await providerApi.verifyUsageEvidence(evidence));
@@ -133,6 +188,29 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
           {error}
         </p>
       ) : null}
+      <div className="mt-4 grid gap-2 rounded-md border border-border/60 p-4" aria-label={translateNow("source.provider.health.title.aud600001")}>
+        <h3 className="text-sm font-semibold">{translateNow("source.provider.health.title.aud600001")}</h3>
+        {loading && !health && !healthError ? (
+          <p className="text-caption text-muted-foreground">{translateNow("source.provider.health.loading.aud600002")}</p>
+        ) : health ? (
+          <dl className="grid gap-2 text-caption sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">{translateNow("source.provider.health.status.aud600008")}</dt>
+              <dd className={health.health === "healthy" ? "text-status-success" : "text-status-warning"}>{healthLabel(health.health)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">{translateNow("source.provider.health.activeCertificates.aud600009")}</dt>
+              <dd className="tabular-nums">{health.active_certificates}</dd>
+            </div>
+          </dl>
+        ) : healthError ? (
+          <p className="text-caption text-status-danger" role="alert">
+            {translateNow("source.provider.health.unavailable.aud600010")}: {healthError}
+          </p>
+        ) : (
+          <p className="text-caption text-muted-foreground">{translateNow("source.provider.health.unknown.aud600003")}</p>
+        )}
+      </div>
       {document ? (
         <div className="mt-4 grid gap-3 rounded-md border border-border/60 p-4">
           <div className="flex flex-wrap items-center gap-2">

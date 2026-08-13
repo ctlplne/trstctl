@@ -4683,6 +4683,16 @@ const esESCatalog = {
   "source.provider.billing.reconciled.aud590019": "{meter}: conciliado con {events} registros del historial de eventos.",
   "source.provider.billing.unreconciled.aud590020": "{meter}: no conciliado; no facture hasta resolver el motivo anterior.",
   "source.provider.billing.download.csv.aud590021": "Descargar CSV financiero",
+  "source.provider.health.title.aud600001": "Salud del cliente",
+  "source.provider.health.loading.aud600002": "Cargando la salud del cliente…",
+  "source.provider.health.unknown.aud600003": "Salud desconocida",
+  "source.provider.health.healthy.aud600004": "Saludable",
+  "source.provider.health.suspended.aud600005": "Suspendido",
+  "source.provider.health.offboarded.aud600006": "Dado de baja",
+  "source.provider.health.noCertificates.aud600007": "Sin certificados activos",
+  "source.provider.health.status.aud600008": "Estado",
+  "source.provider.health.activeCertificates.aud600009": "Certificados activos",
+  "source.provider.health.unavailable.aud600010": "Salud no disponible",
   // E4 relay plugin census — Machine-authored translations, FLAG FOR HUMAN REVIEW.
   "connectors.relayPlugins.title": "Plugins de relay verificados",
   "connectors.relayPlugins.help":

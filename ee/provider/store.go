@@ -34,9 +34,13 @@ var (
 	// integration keep sending one and believe it worked.
 	ErrProviderConsentSubjectNotSettable = errors.New(
 		"provider: consent subject is taken from the authenticated operator and must not be supplied")
-	ErrUnlicensed                = errors.New("provider: unlicensed")
-	ErrReadOnly                  = errors.New("provider: read-only license")
-	ErrNotFound                  = errors.New("provider: not found")
+	ErrUnlicensed = errors.New("provider: unlicensed")
+	ErrReadOnly   = errors.New("provider: read-only license")
+	ErrNotFound   = errors.New("provider: not found")
+	// ErrTenantSnapshotUnavailable is deliberately stable and non-diagnostic.
+	// A provider operator needs to know the health read failed, but a database
+	// error from inside another customer's RLS transaction is not response data.
+	ErrTenantSnapshotUnavailable = errors.New("provider: customer health is unavailable")
 	ErrBreakGlassNotConsented    = errors.New("provider: break-glass grant is not active")
 	ErrBreakGlassWrongOperator   = errors.New("provider: break-glass grant is bound to another operator")
 	ErrBreakGlassExpired         = errors.New("provider: break-glass grant expired")

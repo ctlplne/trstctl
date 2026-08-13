@@ -6,6 +6,8 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -181,6 +183,22 @@ func TestAttachEEProviderLicenseMountsEnterpriseAndProviderSurfaces(t *testing.T
 	}
 	if deps.ProviderHandler == nil {
 		t.Fatal("Provider license did not mount the Provider control-plane surface")
+	}
+}
+
+func TestAUD60AttachEEProviderMountsCustomerHealthRoute(t *testing.T) {
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, commercialLicense(t, license.TierProvider), deps); err != nil {
+		t.Fatalf("provider attachEE: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/provider/v1/tenants/customer-a/health", nil)
+	rec := httptest.NewRecorder()
+	deps.ProviderHandler.ServeHTTP(rec, req)
+	// No Provider authenticator is configured in this assembly fixture, so the
+	// route must reach the real handler and refuse 401. A missing route would be
+	// 404 and would reproduce AUD-60's unreachable service method.
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("assembled Provider health route = %d body=%s, want authenticated handler refusal 401", rec.Code, rec.Body.String())
 	}
 }
 

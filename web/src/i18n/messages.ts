@@ -6658,6 +6658,25 @@ export const messages = {
     description: "AUD-59: Missing or divergent reconciliation warning.",
   },
   "source.provider.billing.download.csv.aud590021": { defaultMessage: "Download finance CSV", description: "AUD-59: Finance CSV download." },
+  "source.provider.health.title.aud600001": { defaultMessage: "Customer health", description: "AUD-60: Delegated customer health heading." },
+  "source.provider.health.loading.aud600002": { defaultMessage: "Loading customer health…", description: "AUD-60: Customer health loading state." },
+  "source.provider.health.unknown.aud600003": { defaultMessage: "Health unknown", description: "AUD-60: Health has not been loaded or cannot be classified." },
+  "source.provider.health.healthy.aud600004": { defaultMessage: "Healthy", description: "AUD-60: Customer has active certificates and active lifecycle." },
+  "source.provider.health.suspended.aud600005": { defaultMessage: "Suspended", description: "AUD-60: Customer lifecycle is suspended." },
+  "source.provider.health.offboarded.aud600006": { defaultMessage: "Offboarded", description: "AUD-60: Customer lifecycle is offboarded." },
+  "source.provider.health.noCertificates.aud600007": {
+    defaultMessage: "No active certificates",
+    description: "AUD-60: Active customer has zero active certificates.",
+  },
+  "source.provider.health.status.aud600008": { defaultMessage: "Status", description: "AUD-60: Customer health status label." },
+  "source.provider.health.activeCertificates.aud600009": {
+    defaultMessage: "Active certificates",
+    description: "AUD-60: Tenant-confined active-certificate count label.",
+  },
+  "source.provider.health.unavailable.aud600010": {
+    defaultMessage: "Health unavailable",
+    description: "AUD-60: Explicit customer health read failure.",
+  },
   "source.adcs.database.error.f4adcs0013": {
     defaultMessage: "Could not load the AD CS certificate-database summary.",
     description: "F4: error state heading.",

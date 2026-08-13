@@ -2615,6 +2615,16 @@ than sending an operator looking for a credential that was never there.
   impersonating a tenant, sees billable/reconciliation/digest plus independent
   **Signature verified** posture, and downloads either the signed JSON or the
   finance CSV whose every row retains customer, period, verdict, and digest.
+  AUD-60 adds **Customer health** beside that **Invoice evidence** for the same
+  selected customer. `GET /provider/v1/tenants/{id}/health` requires the exact
+  customer's `read` delegation before `DirectTenantSnapshot` opens the
+  customer's forced-RLS certificate transaction. It reports lifecycle-derived
+  health and the active-certificate count; a missing customer is 404 and an
+  unavailable snapshot is an explicit 503. Before a pull, or after a failed
+  read, the console says health is unknown/unavailable — it never turns missing
+  telemetry into a healthy zero. Another customer's active certificates cannot
+  enter the count because the query carries and is confined by the selected
+  customer's tenant identity.
   break-glass request, consent, and result-use APIs are still not exposed in
   this console.
 - AD CS certificate-database lifecycle visibility (F4, PARTIAL): `POST
