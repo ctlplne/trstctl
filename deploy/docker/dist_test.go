@@ -716,7 +716,9 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	manifest := repoFile(t, "deploy", "supply-chain", "embedded-postgres.json")
 	mustContainAll(t, "embedded-postgres manifest", manifest, "16.14.0", "sha256")
 	mustContainAll(t, "embedded-postgres scanner receipt policy", manifest,
-		"receiptArtifact", "embedded-postgres-trivy-receipt", "failOnFixableCritical", "lastResult")
+		"receiptArtifact", "embedded-postgres-trivy-receipt", "failOnFixableHighOrCritical",
+		"PostgreSQL Global Development Group CVE Numbering Authority", "exactVersionRequired",
+		"maxAgeSeconds", "failOnAffectedHighOrCritical", "lastResult")
 	if strings.Contains(manifest, "pending first CI run") {
 		t.Fatal("embedded-postgres manifest still says the scanner receipt is pending")
 	}
@@ -728,7 +730,10 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	mustContainAll(t, "embedded-postgres Docker Trivy DB receipt path", verifyPG,
 		`trivy_cache="$archWorkdir/trivy-cache"`,
 		`-v "${trivy_cache}:/root/.cache/trivy"`,
-		`-v "${trivy_cache}:/root/.cache/trivy:ro" "$TRIVY_IMAGE" --version >"$trivy_version_out"`)
+		`-v "${trivy_cache}:/root/.cache/trivy:ro" "$TRIVY_IMAGE" --version >"$trivy_version_out"`,
+		`security_url="https://www.postgresql.org/support/security/${postgres_major}/"`,
+		`postgresql-security-catalog.py`,
+		`"$security_catalog"`)
 
 	// (4) The manifest pin is the version the SERVED eval path requests (that tie
 	// is asserted in internal/server); the tests still pin the library's V16.
@@ -885,13 +890,20 @@ func TestEmbeddedPostgresScanReceiptPolicySelfTest(t *testing.T) {
 	// SUPPLY-009: the self-test prints one SELFTEST-OK line per case. Pinning the
 	// exact count makes deleting a case a failure here rather than a silent
 	// reduction in what the receipt policy is proven to reject.
-	if got := strings.Count(string(out), "SELFTEST-OK "); got != 6 {
-		t.Fatalf("SUPPLY-009: receipt self-test ran %d cases, want 6 — a case was removed\n%s", got, out)
+	if got := strings.Count(string(out), "SELFTEST-OK "); got != 13 {
+		t.Fatalf("SUPPLY-009/AUD-80: receipt self-test ran %d cases, want 13 — a case was removed\n%s", got, out)
 	}
 	for _, want := range []string{
+		"SELFTEST-OK parses-authoritative-postgresql-catalog",
 		"SELFTEST-OK rejects-empty-inventory",
 		"SELFTEST-OK rejects-missing-pinned-version-evidence",
-		"SELFTEST-OK names-the-package-that-supplied-the-version-evidence",
+		"SELFTEST-OK accepts-wrapper-only-with-clean-official-evidence",
+		"SELFTEST-OK rejects-wrapper-only-without-authoritative-evidence",
+		"SELFTEST-OK rejects-official-high-server-advisory",
+		"SELFTEST-OK rejects-stale-official-evidence",
+		"SELFTEST-OK rejects-version-mismatched-official-evidence",
+		"SELFTEST-OK rejects-provenance-mismatch",
+		"SELFTEST-OK rejects-fixable-high",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("SUPPLY-009: receipt self-test no longer proves %q; the empty-scan vacuity guard is weakened", want)

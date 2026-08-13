@@ -894,8 +894,9 @@ jobs:
 
       # Verify and scan the embedded-postgres runtime binary (PostgreSQL pulled
       # from Maven Central — it lives outside go.sum): checksum-pin against the
-      # committed provenance manifest (hard fail on any change), then Trivy-scan
-      # the extracted binaries and write a machine-readable scanner receipt.
+      # committed provenance manifest (hard fail on any change), then combine a
+      # Trivy scan with the official PostgreSQL CNA advisory catalog. This fails
+      # closed when Trivy sees only the Maven wrapper around the real server.
       - name: Verify & scan the embedded-postgres binary
         env:
           ARCH: linux-amd64
@@ -923,7 +924,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install embedded-postgres verifier tools
-        run: sudo apt-get update && sudo apt-get install -y curl jq unzip
+        run: sudo apt-get update && sudo apt-get install -y curl jq python3 unzip
 
       - name: Verify & scan the embedded-postgres binary
         env:

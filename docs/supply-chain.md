@@ -162,26 +162,39 @@ merely scanned in CI:
   still caught. A test asserts the binary's built-in pins and the JSON
   manifest never drift.
 - `scripts/supply-chain/verify-embedded-postgres.sh` verifies the downloaded
-  jar and its inner `.txz` against the committed pins and Trivy-scans the
-  extracted binaries for HIGH/CRITICAL issues. CI runs it per architecture
-  and stores a Trivy receipt artifact (raw JSON report, Trivy version/DB metadata,
-  severity counts, pass/fail). Any fixable CRITICAL finding fails
-  the gate, because a patched upstream binary is available and the pin
-  must move.
+  jar and its inner `.txz` against the committed pins, Trivy-scans the
+  extracted binaries, and fetches the supported-major security table from the
+  PostgreSQL project (PostgreSQL's CVE Numbering Authority). CI runs it per
+  architecture and stores the raw Trivy report, Trivy version/DB metadata, the
+  raw PostgreSQL security page and SHA-256, its normalized
+  exact-version advisory catalog, matched advisories, and the final receipt.
+- Checksum provenance and vulnerability coverage are separate decisions. A
+  matching hash proves which bytes arrived; it cannot prove those bytes have no
+  published vulnerability. Fixable Trivy HIGH/CRITICAL findings and official
+  HIGH/CRITICAL advisories fixed after the exact pin fail the gate.
 - The receipt also records INVENTORY COVERAGE, because severity counts alone
   cannot tell "scanned the binary and found nothing" apart from "scanned
   nothing" — both read as `high=0 critical=0`.
   `coverage.packages_inventoried` is how many packages the report listed,
   `coverage.pinned_version_evidence[]` names the package(s) carrying the
   pinned server version and the Trivy Results block each came from, and
-  `coverage.postgres_server_package_inventoried` says whether the PostgreSQL
-  server itself was inventoried. A report with no packages, or with no
-  package at the pinned version, is written out as `result: "fail"` and the
-  gate exits non-zero (SUPPLY-009). On the extracted zonky archive that flag
-  is `false`: Trivy finds no package database inside it, so the pinned
-  version is evidenced by the Maven packaging coordinate and PostgreSQL
-  server advisories would not be matched by this scan. The committed version
-  pin — not the scan — is what keeps the eval binary off a published CVE.
+  `coverage.postgres_server_package_inventoried` says whether Trivy actually
+  named the PostgreSQL server. A report with no packages or no exact-version
+  evidence fails (SUPPLY-009). On the extracted Zonky archive that server flag
+  is normally `false`: Trivy sees the Maven wrapper, not a server package
+  database. The wrapper can pass only when a fresh (at most 24 hours old)
+  official PostgreSQL catalog independently evaluates the exact pin. Missing,
+  invalid, stale, wrong-version, or wrong-major authority fails closed, and the
+  receipt preserves the source URL/hash plus every affected HIGH/CRITICAL row.
+- If Zonky lags a PostgreSQL security release, CI intentionally turns red until
+  the patched per-architecture wrapper artifacts exist and their committed
+  jar/TXZ hashes can move. This is an honest external-update prerequisite, not
+  a reason to relabel a provenance-valid vulnerable binary as clean.
+
+CI retains this evidence for every supported host architecture. The tagged-release
+gate reruns the Linux/amd64 verifier and publishes
+`embedded-postgres-security-linux-amd64.tar.gz` beside the npm and chaos receipts;
+the release stops before publication when the server advisory decision is red.
 
 This binary is not bundled in the shipped distroless image (Go binaries
 only); it is fetched on first run of the bundled single-node/eval path.

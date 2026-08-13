@@ -67,6 +67,30 @@ func TestSupply101VulnScansStayRequired(t *testing.T) {
 		"Verify & scan the embedded-postgres binary",
 		"run: bash scripts/supply-chain/verify-embedded-postgres.sh",
 		"embedded-postgres-trivy-receipt",
+		"official PostgreSQL CNA advisory catalog",
+	)
+
+	verifyPG := read(t, "../scripts/supply-chain/verify-embedded-postgres.sh")
+	requireAllContained(t, "AUD-80", "verify-embedded-postgres.sh", verifyPG,
+		"https://www.postgresql.org/support/security/${postgres_major}/",
+		"postgresql-security-catalog.py",
+		"$security_catalog",
+	)
+	reducer := read(t, "../scripts/supply-chain/embedded-postgres-scan-receipt.sh")
+	requireAllContained(t, "AUD-80", "embedded-postgres-scan-receipt.sh", reducer,
+		"observed artifact provenance does not match the committed manifest",
+		"verified-against-committed-manifest",
+		"require_postgres_server_advisory_coverage",
+		"authoritative_catalog_max_age_seconds",
+		"affected_advisories",
+		"fresh-official-postgresql-cna-catalog-for-exact-version",
+	)
+	release := read(t, "../.github/workflows/release.yml")
+	requireAllContained(t, "AUD-80", "release.yml", release,
+		"Verify embedded-postgres provenance and server advisories",
+		"bash scripts/supply-chain/verify-embedded-postgres.sh",
+		"embedded-postgres-security-linux-amd64.tar.gz",
+		"release-embedded-postgres-security-evidence-linux-amd64",
 	)
 }
 

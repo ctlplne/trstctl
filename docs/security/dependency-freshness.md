@@ -2,8 +2,10 @@
 
 Dependency freshness is not the same thing as vulnerability scanning.
 
-`govulncheck`, `npm audit`, Trivy, and the embedded-postgres checksum pins answer the
-security question: "is a known bad dependency reachable or shipped right now?"
+`govulncheck`, `npm audit`, Trivy, and the embedded-postgres checksum plus official
+PostgreSQL CNA advisory gate answer the security question: "is a known bad
+dependency reachable or shipped right now?" A checksum alone answers provenance,
+not vulnerability status.
 Freshness answers the engineering question: "are important dependencies becoming old
 enough that the next security fix will be expensive?"
 

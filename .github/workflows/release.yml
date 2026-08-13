@@ -120,6 +120,28 @@ jobs:
       - name: Install npm audit scanner (pinned)
         run: npm install -g npm@${NPM_AUDIT_VERSION}
 
+      - name: Install embedded-postgres verifier tools
+        run: sudo apt-get update && sudo apt-get install -y curl jq python3 unzip
+
+      - name: Verify embedded-postgres provenance and server advisories
+        env:
+          ARCH: linux-amd64
+          TRSTCTL_EMBEDDED_PG_SCAN_DIR: dist/release-evidence/embedded-postgres-security-linux-amd64
+        run: bash scripts/supply-chain/verify-embedded-postgres.sh
+
+      - name: Package embedded-postgres release evidence
+        run: |
+          tar -C dist/release-evidence/embedded-postgres-security-linux-amd64 \
+            -czf dist/release-evidence/embedded-postgres-security-linux-amd64.tar.gz .
+
+      - name: Upload embedded-postgres release evidence artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-embedded-postgres-security-evidence-linux-amd64
+          path: dist/release-evidence/embedded-postgres-security-linux-amd64
+          if-no-files-found: error
+
       - name: Run chaos and write release evidence
         shell: bash
         env:
@@ -169,6 +191,7 @@ jobs:
             gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
           gh release upload "$GITHUB_REF_NAME" dist/release-evidence/trstctl-chaos-evidence.txt --clobber
           gh release upload "$GITHUB_REF_NAME" dist/release-evidence/npm-audit-dependency-surfaces.json --clobber
+          gh release upload "$GITHUB_REF_NAME" dist/release-evidence/embedded-postgres-security-linux-amd64.tar.gz --clobber
 
   github-action:
     name: GitHub Action / package + publish

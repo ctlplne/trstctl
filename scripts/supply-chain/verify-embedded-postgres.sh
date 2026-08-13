@@ -23,7 +23,7 @@ repo="$(cd "$here/../.." && pwd)"
 manifest="$repo/deploy/supply-chain/embedded-postgres.json"
 workdir="$repo/.supply-chain/embedded-postgres"
 
-for tool in jq curl sha256sum unzip; do
+for tool in jq curl sha256sum unzip python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "::error::$tool is required" >&2; exit 1; }
 done
 
@@ -90,10 +90,10 @@ find "$archWorkdir" -name '*.txz' -print0 | while IFS= read -r -d '' txz; do
   tar -xf "$txz" -C "$archWorkdir" 2>/dev/null || true
 done
 
-# The Trivy JSON report and compact receipt are CI artifacts. HIGH and non-fixable
-# CRITICAL findings are recorded for audit. Fixable CRITICAL findings fail the gate:
-# the pinned binary has an available patched upstream replacement, so continuing
-# would turn the receipt into a known-bad green check.
+# The CI artifact keeps BOTH evidence channels. Trivy covers recognized packages;
+# the live official PostgreSQL CNA catalog covers the exact server version when
+# the archive has no package database. Fixable scanner HIGH/CRITICAL findings or
+# official HIGH/CRITICAL rows fixed after the pin turn the receipt red.
 TRIVY_IMAGE="aquasec/trivy@sha256:ab70a02200597efa04748f210f793936eb647cbcdb0ea69cc30b226d6f5a22c7"
 case "$TRIVY_IMAGE" in
   *@sha256:*) ;;
@@ -109,6 +109,20 @@ receipt_dir="$(cd "$receipt_dir" && pwd)"
 trivy_report="$receipt_dir/trivy-rootfs.json"
 trivy_version_out="$receipt_dir/trivy-version.txt"
 receipt="$receipt_dir/embedded-postgres-trivy-receipt.json"
+postgres_major="${ver%%.*}"
+security_url="https://www.postgresql.org/support/security/${postgres_major}/"
+security_html="$receipt_dir/postgresql-security-${postgres_major}.html"
+security_catalog="$receipt_dir/postgresql-security-${postgres_major}.json"
+
+echo ">> fetching official PostgreSQL ${postgres_major} security catalog"
+curl -fsSL --proto '=https' --tlsv1.2 "$security_url" -o "$security_html"
+"$here/postgresql-security-catalog.py" \
+  --html "$security_html" \
+  --output "$security_catalog" \
+  --postgres-version "$ver" \
+  --source-url "$security_url"
+echo ">> normalized official PostgreSQL advisory evidence: $security_catalog"
+
 if command -v trivy >/dev/null 2>&1; then
   echo ">> trivy rootfs scan (local binary; receipt ${receipt_dir})"
   trivy "${scan_args[@]}" --output "$trivy_report" "$archWorkdir"
@@ -123,7 +137,7 @@ else
   echo "::error::neither trivy nor docker present; cannot produce the embedded-postgres scanner receipt (SUPPLY-003)" >&2
   exit 1
 fi
-"$here/embedded-postgres-scan-receipt.sh" "$trivy_report" "$trivy_version_out" "$receipt" "$arch" "$ver" "$gotJar" "$gotTxz"
+"$here/embedded-postgres-scan-receipt.sh" "$trivy_report" "$trivy_version_out" "$receipt" "$arch" "$ver" "$gotJar" "$gotTxz" "$manifest" "$security_catalog"
 echo ">> wrote embedded-postgres Trivy receipt: $receipt"
 
 echo ">> embedded-postgres supply-chain check complete"

@@ -3521,7 +3521,9 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		`"linux-amd64"`,
 		`"linux-arm64v8"`,
 		`"darwin-arm64v8"`,
-		`"failOnFixableCritical": true`,
+		`"failOnFixableHighOrCritical": true`,
+		`"exactVersionRequired": true`,
+		`"failOnAffectedHighOrCritical": true`,
 		`"embedded-postgres-trivy-receipt-<arch>"`,
 	)
 }
