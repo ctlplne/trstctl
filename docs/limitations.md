@@ -2362,7 +2362,13 @@ than sending an operator looking for a credential that was never there.
   agreement with the gate guarding direct issuance. Requests default to a 7-day
   expiry; the list surface serves closed rows too and counts open separately,
   because one total cannot say whether a queue needs attention or is merely long
-  with history. TICKET-DRIVEN INTAKE is now real: `PUT/GET
+  with history. Direct API/console requests require `owner_id`: the mutation accepts
+  only a syntactically valid UUID that resolves through the caller's tenant RLS
+  context. Missing/malformed identifiers return 400 before event append; missing and
+  cross-tenant owners share one 422 response so the endpoint does not reveal another
+  tenant's roster. Historical and ticket-intake events predate this binding and can
+  still project with no owner; that absence remains explicit instead of being
+  backfilled with a guessed account. TICKET-DRIVEN INTAKE is now real: `PUT/GET
   /api/v1/issuance-requests/intake-schedule` (`trstctl issuance-requests
   intake-schedule set|show`) configures a per-tenant ServiceNow or Jira read.
   Each provider has its own schedule row, so a slow ServiceNow sweep cannot

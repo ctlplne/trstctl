@@ -2163,8 +2163,36 @@ export const messages = {
     description: "Request-credential wizard button from step 2 to step 3.",
   },
   "request.wizard.ownerHint": {
-    defaultMessage: "Prefilled with your session principal.",
-    description: "Hint under the owner-id field in the request wizard.",
+    defaultMessage: "Choose the tenant owner accountable for this credential.",
+    description: "Hint under the owner selector in the request wizard.",
+  },
+  "request.wizard.ownerPlaceholder": {
+    defaultMessage: "Choose an owner",
+    description: "Unselected option in the request wizard owner selector.",
+  },
+  "request.wizard.ownerOption": {
+    defaultMessage: "{name} — {kind}",
+    description: "One option in the request wizard owner selector, naming the owner and owner kind.",
+  },
+  "request.wizard.ownerSearch": {
+    defaultMessage: "Search owners",
+    description: "Label for the request wizard owner roster filter.",
+  },
+  "request.wizard.ownerNoMatch": {
+    defaultMessage: "No owners match this search",
+    description: "Disabled request wizard owner option when its filter matches nothing.",
+  },
+  "request.wizard.ownerUnavailable": {
+    defaultMessage: "Owner list unavailable",
+    description: "Title for a request-wizard owner roster loading failure.",
+  },
+  "request.wizard.noOwnersTitle": {
+    defaultMessage: "No owners available",
+    description: "Title when the request wizard has no selectable tenant owners.",
+  },
+  "request.wizard.noOwnersHelp": {
+    defaultMessage: "Ask an operator to create an accountable owner before requesting a credential.",
+    description: "Recovery guidance when the request wizard has no selectable owners.",
   },
   "identities.decommission.description": {
     defaultMessage: "Retire or revoke identities in response to HR departures, vendor terminations, or inactivity windows.",

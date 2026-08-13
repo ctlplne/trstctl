@@ -16,6 +16,8 @@ import type {
   CryptoReadiness,
   CryptoReadinessExport,
   CMDBReconcileSchedule,
+  IssuanceRequest,
+  IssuanceRequestInput,
   IssuanceRequestList,
   MDMDeviceList,
   MDMDeviceTrace,
@@ -1493,6 +1495,8 @@ export interface Api {
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
   issuanceRequests(): Promise<IssuanceRequestList>;
+  /** I3/AUD-78: open a request without pretending it is already an identity. */
+  createIssuanceRequest(input: IssuanceRequestInput): Promise<IssuanceRequest>;
   /** I3/AUD-47: one provider's durable relay cursor, coverage, terminal run, and failure. */
   ticketIntakeSchedule(system?: "servicenow" | "jira"): Promise<TicketIntakeSchedule>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
@@ -1888,6 +1892,7 @@ const liveApi: Api = {
     }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
+  createIssuanceRequest: (input) => mutate<IssuanceRequest>("POST", "/api/v1/issuance-requests", input),
   ticketIntakeSchedule: (system = "servicenow") => req<TicketIntakeSchedule>(`/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}`),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
   mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),

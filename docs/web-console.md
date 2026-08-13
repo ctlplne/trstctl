@@ -397,7 +397,11 @@ the notification outbox; toasts report success and failure.
 
 - Request a credential (`/request`) and the approvals inbox (`/approvals`) are the
   self-service pair: submit, then approve as a distinct principal — the inbox blocks
-  self-approval of your own request.
+  self-approval of your own request. The request wizard reads the tenant owner
+  roster and requires an explicit accountable owner; an authentication subject is
+  never guessed to be an owner UUID. Submission opens the first-class
+  `issuance.request.opened` lifecycle object, so the requester and approver read the
+  same event-projected request instead of two independently inferred views.
 - Policy (`/policy`) includes access-change approvals for NHI entitlement changes: a
   PR/ticket/CAB-backed request, evidence refs, and approve/deny by a distinct
   reviewer. The panel stores metadata and evidence references only, never credential

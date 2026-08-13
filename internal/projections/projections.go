@@ -505,6 +505,7 @@ type MDMPollConfigured struct {
 type IssuanceRequestOpened struct {
 	ID            string    `json:"id"`
 	Subject       string    `json:"subject"`
+	OwnerID       string    `json:"owner_id,omitempty"`
 	Profile       string    `json:"profile,omitempty"`
 	CSRPEM        string    `json:"csr_pem,omitempty"`
 	Requester     string    `json:"requester"`
@@ -3756,7 +3757,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyIssuanceRequestOpenedTx(ctx, tx, store.IssuanceRequest{
 			ID: pl.ID, TenantID: e.TenantID, Subject: pl.Subject, Profile: pl.Profile,
-			CSRPEM: pl.CSRPEM, Requester: pl.Requester, Justification: pl.Justification,
+			OwnerID: pl.OwnerID, CSRPEM: pl.CSRPEM, Requester: pl.Requester, Justification: pl.Justification,
 			Origin: pl.Origin, TicketRef: pl.TicketRef, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
 		})
 	case EventIssuanceRequestDecided:

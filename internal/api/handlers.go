@@ -369,9 +369,11 @@ func (a *API) createIdentity(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if req.OwnerID == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "owner_id is required")
+		ownerID, err := validateOwnerID(req.OwnerID)
+		if err != nil {
+			return 0, nil, err
 		}
+		req.OwnerID = ownerID
 		if err := validateIdentityRequest(req); err != nil {
 			return 0, nil, err
 		}

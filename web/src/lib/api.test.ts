@@ -80,6 +80,41 @@ describe("api error handling (SURFACE-007)", () => {
   });
 });
 
+describe("first-class issuance requests (AUD-78)", () => {
+  it("posts the selected owner UUID through the idempotent request mutation", async () => {
+    document.cookie = "trstctl_csrf=csrf-request; path=/";
+    mockFetch(201, JSON.stringify({
+      id: "request-1",
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      subject: "payments-api",
+      owner_id: "11111111-1111-4111-8111-111111111119",
+      requester: "oidc|dev-1",
+      status: "requested",
+      expires_at: "2026-08-20T00:00:00Z",
+      created_at: "2026-08-13T00:00:00Z",
+    }));
+
+    await api.createIssuanceRequest({
+      subject: "payments-api",
+      owner_id: "11111111-1111-4111-8111-111111111119",
+      profile: "web-server:2",
+      origin: "console",
+    });
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("/api/v1/issuance-requests");
+    expect(call[1]?.method).toBe("POST");
+    expect(lastSentHeaders()["X-CSRF-Token"]).toBe("csrf-request");
+    expect(lastSentHeaders()["Idempotency-Key"]).toBeTruthy();
+    expect(JSON.parse(String(call[1]?.body))).toEqual({
+      subject: "payments-api",
+      owner_id: "11111111-1111-4111-8111-111111111119",
+      profile: "web-server:2",
+      origin: "console",
+    });
+  });
+});
+
 describe("enrollment diagnostic verification (AUD-49)", () => {
   it("posts the exact diagnostic route with an Idempotency-Key", async () => {
     mockFetch(

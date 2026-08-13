@@ -3955,7 +3955,7 @@ func componentSchemas() map[string]*Schema {
 		"guidance": str(),
 	}, "trace", "guidance")
 	issuanceRequestSchema := object(map[string]*Schema{
-		"id": uuid(), "tenant_id": uuid(), "subject": str(), "profile": str(),
+		"id": uuid(), "tenant_id": uuid(), "subject": str(), "owner_id": uuid(), "profile": str(),
 		"requester": str(), "justification": str(), "origin": str(), "ticket_ref": str(),
 		// status is an enum drawn from issuancerequest.States, the same list the
 		// server validates against — a hand-copied second enum drifts, and the
@@ -3965,9 +3965,9 @@ func componentSchemas() map[string]*Schema {
 		"identity_id": uuid(), "expires_at": str(), "created_at": str(),
 	}, "id", "tenant_id", "subject", "requester", "status", "expires_at", "created_at")
 	issuanceRequestInput := object(map[string]*Schema{
-		"subject": str(), "profile": str(), "csr_pem": str(), "justification": str(),
+		"subject": str(), "owner_id": uuid(), "profile": str(), "csr_pem": str(), "justification": str(),
 		"origin": str(), "ticket_ref": str(),
-	}, "subject")
+	}, "subject", "owner_id")
 	issuanceDecisionInput := object(map[string]*Schema{
 		"reason": str(), "identity_id": uuid(),
 	})

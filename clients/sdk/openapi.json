@@ -11956,6 +11956,10 @@
           "origin": {
             "type": "string"
           },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "profile": {
             "type": "string"
           },
@@ -12006,6 +12010,10 @@
           "origin": {
             "type": "string"
           },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "profile": {
             "type": "string"
           },
@@ -12017,7 +12025,8 @@
           }
         },
         "required": [
-          "subject"
+          "subject",
+          "owner_id"
         ],
         "type": "object"
       },

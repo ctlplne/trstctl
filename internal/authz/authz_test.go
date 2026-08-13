@@ -189,6 +189,12 @@ func TestRegistrationAuthoritySeparation(t *testing.T) {
 	if !ra.Can(authz.ProfilesWrite, scope) {
 		t.Error("ra-officer must be able to author profiles")
 	}
+	if !ra.Can(authz.OwnersRead, scope) {
+		t.Error("ra-officer must be able to choose an accountable tenant owner for a request")
+	}
+	if ra.Can(authz.IdentitiesWrite, scope) {
+		t.Error("SEPARATION VIOLATED: ra-officer must open a request, not create an identity directly")
+	}
 	if ra.Can(authz.CertsIssue, scope) {
 		t.Error("SEPARATION VIOLATED: ra-officer must NOT be able to self-issue (certs:issue)")
 	}

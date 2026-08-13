@@ -20,6 +20,7 @@ type IssuanceRequest struct {
 	ID             string
 	TenantID       string
 	Subject        string
+	OwnerID        string
 	Profile        string
 	CSRPEM         string
 	Requester      string
@@ -35,13 +36,13 @@ type IssuanceRequest struct {
 	CreatedAt      time.Time
 }
 
-const issuanceRequestCols = `id::text, tenant_id::text, subject, profile, csr_pem, requester,
+const issuanceRequestCols = `id::text, tenant_id::text, subject, coalesce(owner_id::text, ''), profile, csr_pem, requester,
 	justification, origin, ticket_ref, status, decided_by, decision_reason, decided_at,
 	coalesce(identity_id::text, ''), expires_at, created_at`
 
 func scanIssuanceRequest(row pgx.Row) (IssuanceRequest, error) {
 	var r IssuanceRequest
-	err := row.Scan(&r.ID, &r.TenantID, &r.Subject, &r.Profile, &r.CSRPEM, &r.Requester,
+	err := row.Scan(&r.ID, &r.TenantID, &r.Subject, &r.OwnerID, &r.Profile, &r.CSRPEM, &r.Requester,
 		&r.Justification, &r.Origin, &r.TicketRef, &r.Status, &r.DecidedBy, &r.DecisionReason,
 		&r.DecidedAt, &r.IdentityID, &r.ExpiresAt, &r.CreatedAt)
 	return r, err

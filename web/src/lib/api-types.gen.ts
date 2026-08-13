@@ -3042,6 +3042,7 @@ export interface IssuanceRequest {
   identity_id?: string;
   justification?: string;
   origin?: string;
+  owner_id?: string;
   profile?: string;
   requester: string;
   status: "requested" | "approved" | "denied" | "expired" | "cancelled" | "issued";
@@ -3054,6 +3055,7 @@ export interface IssuanceRequestInput {
   csr_pem?: string;
   justification?: string;
   origin?: string;
+  owner_id: string;
   profile?: string;
   subject: string;
   ticket_ref?: string;

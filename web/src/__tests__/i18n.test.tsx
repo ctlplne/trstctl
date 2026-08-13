@@ -681,8 +681,13 @@ describe("i18n boundary", () => {
       // per-log failure, bounded diagnostic detail, and retired audit history
       // that is explicitly not polled. Machine-authored es/de; human review is
       // required before release.
-      "es-ES": "9c8cde2c6f83e9019810c9257fafe84d2d21f72823886ff28b304cdd71725920",
-      "de-DE": "dc0fb1e720b8f80a4cf91aa4306366c947bb63c0e59165057a9fe2e6b0a54fab",
+      // AUD-78 owner-selector re-pin: eight keys replace the false session-
+      // principal prefill with explicit tenant-owner selection, unavailable
+      // and empty roster states, searchable name/kind/email/UUID filtering,
+      // and actionable recovery. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "544583425fc5b789854623308cdd4f033a4e1c9d68c26cf86629821c31260633",
+      "de-DE": "b09abfa505d426e2b2f2e54370be5269c7d08088f24210c268bc659c296dacc1",
     });
   });
 

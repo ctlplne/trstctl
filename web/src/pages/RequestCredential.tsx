@@ -16,7 +16,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
-import { api, ApiError, identityState, type Identity, type Profile } from "@/lib/api";
+import { api, ApiError, type IssuanceRequest, type Owner, type Profile } from "@/lib/api";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
@@ -43,7 +43,7 @@ function profileKey(profile: Profile): string {
 const requestFormSchema = z.object({
   profileKey: z.string().min(1, "Choose an issuance profile."),
   name: z.string().trim().min(1, "Credential name is required."),
-  ownerId: z.string().trim().min(1, "Owner id is required."),
+  ownerId: z.string().uuid("Choose an owner."),
   purpose: z.string().trim(),
   // B1: the requester's own PKCS#10. Optional, because the deprecated
   // server-side-keygen path still works for one release train — but supplying it
@@ -62,39 +62,27 @@ const requestFormSchema = z.object({
 type RequestFormValues = z.infer<typeof requestFormSchema>;
 
 function requesterFor(user: ReturnType<typeof useAuth>["user"]): string {
-  return user?.email || user?.subject || "";
+  // The server binds issuance.request.opened.requester to Principal.Subject.
+  // Email is presentation data and can change; filtering an immutable request
+  // by it makes a successful request disappear immediately (AUD-78).
+  return user?.subject || user?.email || "";
 }
 
-function isRequesterIdentity(identity: Identity, requester: string, subject?: string): boolean {
-  const attrRequester = identity.attributes?.requester;
-  return (typeof attrRequester === "string" && attrRequester === requester) || (subject != null && identity.owner_id === subject);
-}
-
-function profileLabel(identity: Identity): string {
-  const name = identity.attributes?.profile_name;
-  const version = identity.attributes?.profile_version;
-  if (typeof name !== "string" || !name.trim() || name.trim().toLowerCase() === "not served") return "—";
-  return typeof version === "number" || typeof version === "string" ? `${name} v${version}` : name;
-}
-
-function approvalCount(identity: Identity): string | null {
-  const approvals = identity.attributes?.approvals;
-  if (typeof approvals !== "string" || !approvals.trim()) return null;
-  const [done, total] = approvals.split("/");
-  if (!done || !total) return approvals;
-  return `${done.trim()} of ${total.trim()}`;
-}
-
-function requestStage(identity: Identity): string {
-  const state = identityState(identity);
-  if (state === "requested") {
-    const approvals = approvalCount(identity);
-    return approvals ? `Awaiting approval ${approvals}` : "Accepted";
+function requestStage(request: IssuanceRequest): string {
+  switch (request.status) {
+    case "requested":
+      return "Awaiting approval";
+    case "approved":
+      return "Approved";
+    case "denied":
+      return "Denied";
+    case "expired":
+      return "Expired";
+    case "cancelled":
+      return "Cancelled";
+    case "issued":
+      return "Issued";
   }
-  if (state === "issued" || state === "deployed") return "Issued";
-  if (state === "revoked") return "Revoked";
-  if (state === "retired") return "Retired";
-  return state ? state.replace(/[_-]+/g, " ") : "Unknown";
 }
 
 function formatDate(value?: string): string {
@@ -107,7 +95,10 @@ export function RequestCredential() {
   const [step, setStep] = useState(0);
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [requests, setRequests] = useState<Identity[] | null>(null);
+  const [owners, setOwners] = useState<Owner[] | null>(null);
+  const [ownerError, setOwnerError] = useState<string | null>(null);
+  const [ownerQuery, setOwnerQuery] = useState("");
+  const [requests, setRequests] = useState<IssuanceRequest[] | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
   const {
     control,
@@ -131,6 +122,7 @@ export function RequestCredential() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const requester = requesterFor(user);
+  const requesterLabel = user?.email || requester;
 
   const loadProfiles = useCallback(async () => {
     try {
@@ -144,8 +136,8 @@ export function RequestCredential() {
 
   const loadRequests = useCallback(async () => {
     try {
-      const identities = await api.identities();
-      setRequests(identities);
+      const result = await api.issuanceRequests();
+      setRequests(result.items);
       setRequestError(null);
     } catch (err) {
       setRequests([]);
@@ -153,14 +145,21 @@ export function RequestCredential() {
     }
   }, []);
 
-  useEffect(() => {
-    void loadProfiles();
-    void loadRequests();
-  }, [loadProfiles, loadRequests]);
+  const loadOwners = useCallback(async () => {
+    try {
+      setOwners((await api.owners()).sort((a, b) => a.name.localeCompare(b.name)));
+      setOwnerError(null);
+    } catch (err) {
+      setOwners([]);
+      setOwnerError(problemMessage(err, "Could not load owners"));
+    }
+  }, []);
 
   useEffect(() => {
-    if (!ownerId && user?.subject) setValue("ownerId", user.subject);
-  }, [ownerId, setValue, user?.subject]);
+    void loadProfiles();
+    void loadOwners();
+    void loadRequests();
+  }, [loadOwners, loadProfiles, loadRequests]);
 
   const activeProfiles = useMemo(() => (profiles ?? []).filter((profile) => profile.active !== false).sort((a, b) => a.name.localeCompare(b.name)), [profiles]);
 
@@ -169,40 +168,48 @@ export function RequestCredential() {
   }, [activeProfiles, selectedProfileKey, setValue]);
 
   const selectedProfile = activeProfiles.find((profile) => profileKey(profile) === selectedProfileKey) ?? null;
+  const selectedOwner = (owners ?? []).find((owner) => owner.id === ownerId) ?? null;
+  const matchingOwners = useMemo(() => {
+    const query = ownerQuery.trim().toLocaleLowerCase();
+    if (!query) return owners ?? [];
+    return (owners ?? []).filter((owner) =>
+      [owner.name, owner.kind, owner.email ?? "", owner.id].some((value) => value.toLocaleLowerCase().includes(query)),
+    );
+  }, [ownerQuery, owners]);
   const myRequests = useMemo(
     () =>
       (requests ?? [])
-        .filter((identity) => isRequesterIdentity(identity, requester, user?.subject))
-        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? "")),
-    [requester, requests, user?.subject],
+        .filter((request) => request.requester === requester)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    [requester, requests],
   );
 
-  const requestColumns = useMemo<Array<DataGridColumn<Identity>>>(
+  const requestColumns = useMemo<Array<DataGridColumn<IssuanceRequest>>>(
     () => [
       {
         id: "name",
         header: "Credential",
-        cell: (identity) => <span className="font-medium">{identity.name}</span>,
+        cell: (request) => <span className="font-medium">{request.subject}</span>,
       },
       {
         id: "profile",
         header: "Profile",
-        cell: (identity) => profileLabel(identity),
+        cell: (request) => request.profile || "—",
       },
       {
         id: "stage",
         header: "Request stage",
-        cell: (identity) => requestStage(identity),
+        cell: (request) => requestStage(request),
       },
       {
-        id: "lifecycle",
-        header: "Lifecycle",
-        cell: (identity) => <StatusBadge vocabulary="lifecycle" value={identityState(identity) || "requested"} />,
+        id: "status",
+        header: "Status",
+        cell: (request) => <StatusBadge vocabulary="lifecycle" value={request.status} />,
       },
       {
         id: "requested",
         header: "Requested",
-        cell: (identity) => formatDate(identity.created_at),
+        cell: (request) => formatDate(request.created_at),
       },
     ],
     [],
@@ -218,26 +225,22 @@ export function RequestCredential() {
 
     setBusy(true);
     try {
-      const created = await api.createIdentity({
-        kind: "x509_certificate",
-        name: values.name,
+      const created = await api.createIssuanceRequest({
+        subject: values.name,
+        profile: `${selectedProfile.name}:${selectedProfile.version}`,
         owner_id: values.ownerId,
-        attributes: {
-          requester,
-          profile_name: selectedProfile.name,
-          profile_version: selectedProfile.version,
-          purpose: values.purpose,
-          // The CSR belongs to the request, not to whoever approves it: an
-          // approver should not have to re-supply key material they never had.
-          ...(values.subjectCSRPEM ? { subject_csr_pem: values.subjectCSRPEM } : {}),
-        },
+        justification: values.purpose,
+        origin: "console",
+        // The CSR belongs to the request, not to whoever approves it: an
+        // approver should not have to re-supply key material they never had.
+        ...(values.subjectCSRPEM ? { csr_pem: values.subjectCSRPEM } : {}),
       });
       setRequests((current) => {
         const rows = current ?? [];
-        return [created, ...rows.filter((identity) => identity.id !== created.id)];
+        return [created, ...rows.filter((request) => request.id !== created.id)];
       });
-      setNotice(`Request accepted for ${created.name}. It is awaiting approval; no certificate has been minted yet.`);
-      reset({ profileKey: values.profileKey, ownerId: values.ownerId, name: "", purpose: "" });
+      setNotice(`Request accepted for ${created.subject}. It is awaiting approval; no certificate has been minted yet.`);
+      reset({ profileKey: values.profileKey, ownerId: values.ownerId, name: "", purpose: "", subjectCSRPEM: "" });
       setStep(0);
     } catch (err) {
       setSubmitError(problemMessage(err, "Could not submit request"));
@@ -251,7 +254,7 @@ export function RequestCredential() {
     { id: "details", label: t("request.wizard.details.label"), description: t("request.wizard.details.description") },
     { id: "review", label: t("request.wizard.review.label"), description: t("request.wizard.review.description") },
   ];
-  const nextDisabled = step === 0 ? !selectedProfile : step === 1 ? !name.trim() || !ownerId.trim() : true;
+  const nextDisabled = step === 0 ? !selectedProfile : step === 1 ? !name.trim() || !selectedOwner : true;
   const nextLabel = step === 0 ? t("request.wizard.nextDetails") : t("request.wizard.nextReview");
 
   const requestGridState: DataGridState = requestError ? "error" : requests == null ? "loading" : myRequests.length ? "ready" : "empty";
@@ -276,6 +279,7 @@ export function RequestCredential() {
         </h2>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
           <form aria-labelledby="new-request-heading" className="grid gap-4" onSubmit={submit}>
+            {ownerError && <ErrorState title={t("request.wizard.ownerUnavailable")}>{ownerError}</ErrorState>}
             <StepShell
               steps={wizardSteps}
               currentIndex={step}
@@ -333,16 +337,47 @@ export function RequestCredential() {
 
               {step === 1 && (
                 <div className="grid max-w-xl gap-4">
+                  {owners == null && !ownerError && <LoadingState>{translateNow("source.loading.owners.8fcc1cacd9")}</LoadingState>}
+                  {owners && owners.length === 0 && !ownerError && (
+                    <EmptyState title={t("request.wizard.noOwnersTitle")}>{t("request.wizard.noOwnersHelp")}</EmptyState>
+                  )}
                   <Field label={translateNow("source.credential.name.911c43d9f0")} error={errors.name?.message} required>
                     {(control) => <Input {...control} {...register("name")} placeholder={translateNow("source.payments.api.682a1c47a1")} required />}
                   </Field>
+                  <Field label={t("request.wizard.ownerSearch")}>
+                    {(control) => (
+                      <Input
+                        {...control}
+                        value={ownerQuery}
+                        onChange={(event) => setOwnerQuery(event.target.value)}
+                        placeholder={translateNow("source.owner.name.id.email.or.kind.d0081dd7f1")}
+                        disabled={owners == null || owners.length === 0 || ownerError != null}
+                      />
+                    )}
+                  </Field>
                   <Field
-                    label={translateNow("source.owner.id.da58f15949")}
+                    label={translateNow("source.owner.4b1b8aa360")}
                     description={t("request.wizard.ownerHint")}
                     error={errors.ownerId?.message}
                     required
                   >
-                    {(control) => <Input {...control} {...register("ownerId")} required />}
+                    {(control) => (
+                      <Select {...control} {...register("ownerId")} disabled={owners == null || owners.length === 0 || ownerError != null} required>
+                        <option value="" disabled>
+                          {t("request.wizard.ownerPlaceholder")}
+                        </option>
+                        {matchingOwners.length === 0 && ownerQuery.trim() && (
+                          <option value="__no_owner_match__" disabled>
+                            {t("request.wizard.ownerNoMatch")}
+                          </option>
+                        )}
+                        {matchingOwners.map((owner) => (
+                          <option key={owner.id} value={owner.id}>
+                            {t("request.wizard.ownerOption", { name: owner.name, kind: owner.kind })}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
                   </Field>
                   <Field label={translateNow("source.business.purpose.286d11d720")}>
                     {(control) => (
@@ -397,8 +432,11 @@ export function RequestCredential() {
                       <dd className="font-medium">{name.trim() || "—"}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-caption text-muted-foreground">{translateNow("source.owner.id.da58f15949")}</dt>
-                      <dd>{ownerId.trim() || "—"}</dd>
+                      <dt className="text-caption text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
+                      <dd className="text-end">
+                        {selectedOwner ? t("request.wizard.ownerOption", { name: selectedOwner.name, kind: selectedOwner.kind }) : "—"}
+                        {selectedOwner && <code className="block font-mono text-xs text-muted-foreground">{selectedOwner.id}</code>}
+                      </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-caption text-muted-foreground">{translateNow("source.business.purpose.286d11d720")}</dt>
@@ -406,12 +444,12 @@ export function RequestCredential() {
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-caption text-muted-foreground">{translateNow("source.requester.b5687cf04a")}</dt>
-                      <dd>{requester || translateNow("source.no.session.principal.ffe06f6da5")}</dd>
+                      <dd>{requesterLabel || translateNow("source.no.session.principal.ffe06f6da5")}</dd>
                     </div>
                   </dl>
                   {submitError && <ErrorState title={translateNow("source.request.failed.cfce761bef")}>{submitError}</ErrorState>}
                   <div>
-                    <Button type="submit" loading={busy} disabled={activeProfiles.length === 0}>
+                    <Button type="submit" loading={busy} disabled={activeProfiles.length === 0 || !selectedOwner}>
                       <Send className="h-4 w-4" aria-hidden="true" />
                       {translateNow("source.submit.request.917e144e4b")}
                     </Button>
@@ -426,7 +464,7 @@ export function RequestCredential() {
             <dl className="grid gap-2">
               <div>
                 <dt className="text-caption text-muted-foreground">{translateNow("source.requester.b5687cf04a")}</dt>
-                <dd>{requester || translateNow("source.no.session.principal.ffe06f6da5")}</dd>
+                <dd>{requesterLabel || translateNow("source.no.session.principal.ffe06f6da5")}</dd>
               </div>
               <div>
                 <dt className="text-caption text-muted-foreground">{translateNow("source.mutation.c26ee0e4b9")}</dt>
@@ -445,7 +483,7 @@ export function RequestCredential() {
         ariaLabel="My credential requests"
         rows={myRequests}
         columns={requestColumns}
-        getRowId={(identity) => identity.id}
+        getRowId={(request) => request.id}
         state={requestGridState}
         stateTitle={requestError ? "Request status unavailable" : "No requests yet"}
         stateMessage={requestError ?? "Self-service requests created by this session principal appear here after the backend accepts them."}

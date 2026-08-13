@@ -16,6 +16,7 @@ import (
 
 type issuanceRequestBody struct {
 	Subject       string `json:"subject"`
+	OwnerID       string `json:"owner_id"`
 	Profile       string `json:"profile"`
 	CSRPEM        string `json:"csr_pem"`
 	Justification string `json:"justification"`
@@ -35,6 +36,7 @@ type issuanceRequestResponse struct {
 	ID             string `json:"id"`
 	TenantID       string `json:"tenant_id"`
 	Subject        string `json:"subject"`
+	OwnerID        string `json:"owner_id,omitempty"`
 	Profile        string `json:"profile,omitempty"`
 	Requester      string `json:"requester"`
 	Justification  string `json:"justification,omitempty"`
@@ -69,7 +71,7 @@ const issuanceRequestGuidance = "A request has a real lifecycle: requested, then
 // halves available to anyone who can list.
 func toIssuanceRequestResponse(r store.IssuanceRequest) issuanceRequestResponse {
 	out := issuanceRequestResponse{
-		ID: r.ID, TenantID: r.TenantID, Subject: r.Subject, Profile: r.Profile,
+		ID: r.ID, TenantID: r.TenantID, Subject: r.Subject, OwnerID: r.OwnerID, Profile: r.Profile,
 		Requester: r.Requester, Justification: r.Justification, Origin: r.Origin,
 		TicketRef: r.TicketRef, Status: r.Status, DecidedBy: r.DecidedBy,
 		DecisionReason: r.DecisionReason, IdentityID: r.IdentityID,
@@ -104,13 +106,25 @@ func (a *API) createIssuanceRequest(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(body.Subject) == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "subject is required")
 		}
+		ownerID, err := validateOwnerID(body.OwnerID)
+		if err != nil {
+			return 0, nil, err
+		}
+		// GetOwner executes under the caller's tenant RLS context. A UUID in a
+		// different tenant is deliberately indistinguishable from an absent row.
+		if _, err := a.store.GetOwner(ctx, tenantID, ownerID); err != nil {
+			if store.IsNotFound(err) {
+				return 0, nil, errStatus(http.StatusUnprocessableEntity, "owner_id does not reference an existing owner")
+			}
+			return 0, nil, err
+		}
 		requester := principalSubject(ctx)
 		if requester == "" {
 			return 0, nil, errStatus(http.StatusUnauthorized,
 				"an issuance request must name its requester; without one the self-approval check has nothing to compare")
 		}
 		out, err := a.orch.OpenIssuanceRequest(ctx, tenantID, projections.IssuanceRequestOpened{
-			Subject: strings.TrimSpace(body.Subject), Profile: strings.TrimSpace(body.Profile),
+			Subject: strings.TrimSpace(body.Subject), OwnerID: ownerID, Profile: strings.TrimSpace(body.Profile),
 			CSRPEM: strings.TrimSpace(body.CSRPEM), Requester: requester,
 			Justification: strings.TrimSpace(body.Justification),
 			Origin:        strings.TrimSpace(body.Origin), TicketRef: strings.TrimSpace(body.TicketRef),

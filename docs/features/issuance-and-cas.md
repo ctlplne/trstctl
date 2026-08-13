@@ -277,15 +277,22 @@ profiles is covered in the
 [certificate-profile guide](../guides/profile-authoring.md).
 
 The self-service requester path is served end to end for X.509 requests. `/request`
-lists active profiles and submits a tenant-scoped `x509_certificate` identity with
-requester, profile, version, and business-purpose metadata, keeping the row
-`requested`. `/approvals` records distinct `issue`, `rotate`, and `revoke` approvals
-through `POST /api/v1/identities/{id}/approvals`; the requester cannot self-issue, and
-the RA cannot approve their own privileged action. Once the distinct issue approval
-exists, `POST /api/v1/identities/{id}/transitions` moves the request to `issued`, the
-outbox mints through the isolated signer, and certificate inventory records the
-resulting `certificate.recorded` evidence — the served CAP-ISS-11 test drives that
-exact path.
+lists active profiles and tenant-visible owners, makes the requester choose the
+accountable owner by name, and submits that owner's UUID to
+`POST /api/v1/issuance-requests`. The server checks UUID shape and tenant-scoped
+owner existence before appending `issuance.request.opened`; missing/malformed values
+return 400, while absent and other-tenant UUIDs return the same 422 answer. This is
+important: `oidc|dev-1` names an authenticated caller, while an owner UUID names a
+tenant database row. They are different identifiers and are never substituted for
+one another.
+
+The requester's `/request` history and the `/approvals` inbox read the same
+first-class issuance-request projection. A submission therefore remains
+`requested`; it does not create an identity or mint a certificate. A distinct
+principal can approve or deny the exact request, and approval is still not issuance:
+the request becomes `issued` only after the authorized issuance outcome is linked.
+The built-in `ra-officer` can read owners, author/read profiles, and request
+certificates, but still cannot write identities or hold `certs:issue`.
 
 ### Telling clients when to renew: ARI (F46)
 

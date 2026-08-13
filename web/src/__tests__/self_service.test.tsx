@@ -12,6 +12,11 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
     profiles: vi.fn(),
+    owners: vi.fn(),
+    issuanceRequests: vi.fn(),
+    createIssuanceRequest: vi.fn(),
+    // Kept until the failing-first assertion proves the page still uses the
+    // identity mutation instead of the first-class request API.
     identities: vi.fn(),
     createIdentity: vi.fn(),
   },
@@ -43,11 +48,32 @@ const activeProfile = {
   spec: { max_validity: "2160h", allowed_ekus: ["serverAuth"] },
 };
 
+const selectedOwner = {
+  id: "11111111-1111-4111-8111-111111111119",
+  tenant_id: "t1",
+  kind: "team",
+  name: "Payments platform",
+  email: "payments@example.test",
+  escalation_chain: [],
+  ownership_attested: true,
+  ownership_complete: true,
+  ownership_current: true,
+};
+
+const otherOwner = {
+  ...selectedOwner,
+  id: "22222222-2222-4222-8222-222222222229",
+  name: "Data platform",
+  email: "data@example.test",
+};
+
 describe("self-service credential requests", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.me.mockResolvedValue({ subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
     apiMock.profiles.mockResolvedValue([activeProfile]);
+    apiMock.owners.mockResolvedValue([otherOwner, selectedOwner]);
+    apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
     apiMock.identities.mockResolvedValue([]);
   });
 
@@ -55,20 +81,16 @@ describe("self-service credential requests", () => {
     const requested = {
       id: "req-1",
       tenant_id: "t1",
-      name: "payments-api",
-      kind: "x509_certificate",
-      owner_id: "dev-1",
+      owner_id: selectedOwner.id,
+      subject: "payments-api",
+      profile: "web-server:2",
+      requester: "dev-1",
+      justification: "staging TLS",
       status: "requested",
+      expires_at: "2026-06-27T04:00:00Z",
       created_at: "2026-06-20T04:00:00Z",
-      attributes: {
-        requester: "dev@example.test",
-        profile_name: "web-server",
-        profile_version: 2,
-        approvals: "0/2",
-        purpose: "staging TLS",
-      },
     };
-    apiMock.createIdentity.mockResolvedValue(requested);
+    apiMock.createIssuanceRequest.mockResolvedValue(requested);
     const user = userEvent.setup();
     renderAt("/request");
 
@@ -79,8 +101,12 @@ describe("self-service credential requests", () => {
     await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
     await user.click(screen.getByRole("button", { name: "Next: name it" }));
 
-    // Step 2 — name the credential; owner id is prefilled from the session.
-    expect(screen.getByLabelText("Owner id")).toHaveValue("dev-1");
+    // Step 2 — a session subject is never guessed to be an owner UUID. The
+    // requester chooses one tenant-visible owner by name.
+    expect(screen.getByLabelText("Owner")).toHaveDisplayValue("Choose an owner");
+    await user.type(screen.getByLabelText("Search owners"), "payments");
+    expect(screen.queryByRole("option", { name: /Data platform/i })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Owner"), selectedOwner.id);
     await user.type(screen.getByLabelText("Credential name"), "payments-api");
     await user.type(screen.getByLabelText("Business purpose"), "staging TLS");
     await user.click(screen.getByRole("button", { name: "Next: review" }));
@@ -90,60 +116,67 @@ describe("self-service credential requests", () => {
     await user.click(screen.getByRole("button", { name: "Submit request" }));
 
     await waitFor(() =>
-      expect(apiMock.createIdentity).toHaveBeenCalledWith({
-        kind: "x509_certificate",
-        name: "payments-api",
-        owner_id: "dev-1",
-        attributes: {
-          requester: "dev@example.test",
-          profile_name: "web-server",
-          profile_version: 2,
-          purpose: "staging TLS",
-        },
+      expect(apiMock.createIssuanceRequest).toHaveBeenCalledWith({
+        subject: "payments-api",
+        profile: "web-server:2",
+        owner_id: selectedOwner.id,
+        justification: "staging TLS",
+        origin: "console",
       }),
     );
+    expect(apiMock.createIdentity).not.toHaveBeenCalled();
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Request accepted for payments-api. It is awaiting approval; no certificate has been minted yet.",
     );
-    expect(screen.getByRole("row", { name: /payments-api.*Awaiting approval 0 of 2.*requested/i })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /payments-api.*web-server:2.*Awaiting approval.*requested/i })).toBeInTheDocument();
     expect(screen.queryByText(/has been issued/i)).not.toBeInTheDocument();
   });
 
   it("lists only the current requester's items with honest request status", async () => {
-    apiMock.identities.mockResolvedValue([
-      {
-        id: "mine-1",
-        tenant_id: "t1",
-        name: "checkout-api",
-        kind: "x509_certificate",
-        owner_id: "dev-1",
-        status: "requested",
-        attributes: { requester: "dev@example.test", profile_name: "web-server", profile_version: 2, approvals: "1/2" },
-      },
-      {
-        id: "mine-2",
-        tenant_id: "t1",
-        name: "billing-api",
-        kind: "x509_certificate",
-        owner_id: "dev-1",
-        status: "issued",
-        attributes: { requester: "dev@example.test", profile_name: "web-server", profile_version: 2, approvals: "2/2" },
-      },
-      {
-        id: "other-1",
-        tenant_id: "t1",
-        name: "other-team",
-        kind: "x509_certificate",
-        owner_id: "owner-2",
-        status: "requested",
-        attributes: { requester: "other@example.test", profile_name: "web-server", approvals: "0/2" },
-      },
-    ]);
+    apiMock.issuanceRequests.mockResolvedValue({
+      open: 2,
+      guidance: "",
+      items: [
+        {
+          id: "mine-1",
+          tenant_id: "t1",
+          subject: "checkout-api",
+          profile: "web-server:2",
+          owner_id: selectedOwner.id,
+          requester: "dev-1",
+          status: "requested",
+          expires_at: "2026-06-27T04:00:00Z",
+          created_at: "2026-06-20T04:00:00Z",
+        },
+        {
+          id: "mine-2",
+          tenant_id: "t1",
+          subject: "billing-api",
+          profile: "web-server:2",
+          owner_id: selectedOwner.id,
+          requester: "dev-1",
+          status: "approved",
+          expires_at: "2026-06-27T04:00:00Z",
+          created_at: "2026-06-19T04:00:00Z",
+        },
+        {
+          id: "other-1",
+          tenant_id: "t1",
+          subject: "other-team",
+          profile: "web-server:2",
+          owner_id: "22222222-2222-4222-8222-222222222229",
+          requester: "other@example.test",
+          status: "requested",
+          expires_at: "2026-06-27T04:00:00Z",
+          created_at: "2026-06-18T04:00:00Z",
+        },
+      ],
+    });
 
     renderAt("/request");
 
-    expect(await screen.findByRole("row", { name: /checkout-api.*Awaiting approval 1 of 2/i })).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /billing-api.*Issued/i })).toBeInTheDocument();
+    expect(await screen.findByRole("row", { name: /checkout-api.*Awaiting approval/i })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /billing-api.*Approved/i })).toBeInTheDocument();
     expect(screen.queryByText("other-team")).not.toBeInTheDocument();
   });
 
@@ -156,11 +189,13 @@ describe("self-service credential requests", () => {
     empty.unmount();
 
     apiMock.profiles.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "profile store unavailable" })));
-    apiMock.identities.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "identity list unavailable" })));
+    apiMock.owners.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "owner list unavailable" })));
+    apiMock.issuanceRequests.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "request list unavailable" })));
     renderAt("/request");
 
     expect(await screen.findByText("profile store unavailable")).toBeInTheDocument();
-    expect(await screen.findByText("identity list unavailable")).toBeInTheDocument();
+    expect(await screen.findByText("owner list unavailable")).toBeInTheDocument();
+    expect(await screen.findByText("request list unavailable")).toBeInTheDocument();
   });
 
   it("keeps the requester portal accessible", async () => {

@@ -8594,6 +8594,8 @@ export interface components {
             identity_id?: string;
             justification?: string;
             origin?: string;
+            /** Format: uuid */
+            owner_id?: string;
             profile?: string;
             requester: string;
             /** @enum {string} */
@@ -8607,6 +8609,8 @@ export interface components {
             csr_pem?: string;
             justification?: string;
             origin?: string;
+            /** Format: uuid */
+            owner_id: string;
             profile?: string;
             subject: string;
             ticket_ref?: string;

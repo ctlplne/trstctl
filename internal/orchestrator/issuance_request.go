@@ -75,7 +75,7 @@ func (o *Orchestrator) openIssuanceRequest(ctx context.Context, tenantID string,
 	}
 	return store.IssuanceRequest{
 		ID: in.ID, TenantID: tenantID, Subject: in.Subject, Profile: in.Profile,
-		CSRPEM: in.CSRPEM, Requester: in.Requester, Justification: in.Justification,
+		OwnerID: in.OwnerID, CSRPEM: in.CSRPEM, Requester: in.Requester, Justification: in.Justification,
 		Origin: in.Origin, TicketRef: in.TicketRef, Status: issuancerequest.StateRequested,
 		ExpiresAt: in.ExpiresAt, CreatedAt: ev.Time,
 	}, nil

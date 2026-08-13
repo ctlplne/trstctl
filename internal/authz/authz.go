@@ -169,7 +169,7 @@ func BuiltinRoles() map[string]Role {
 		"cli":      {Name: "cli", Permissions: cli},
 		// Registration authority: may author/read profiles and REQUEST certificates,
 		// but may NOT approve/issue them (no certs:issue) — the RA separation (S8.1).
-		"ra-officer": {Name: "ra-officer", Permissions: []Permission{ProfilesRead, ProfilesWrite, CertsRead, CertsRequest}},
+		"ra-officer": {Name: "ra-officer", Permissions: []Permission{OwnersRead, ProfilesRead, ProfilesWrite, CertsRead, CertsRequest}},
 	}
 }
 
