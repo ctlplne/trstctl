@@ -110,12 +110,6 @@ type Log struct {
 	// duplicateWindow is normally the production safety window. Tests may shorten
 	// it to prove recovery does not mistake broker memory for durable authority.
 	duplicateWindow time.Duration
-	// infoMu serializes stream.Info() calls. The JetStream client caches the result
-	// in the shared stream handle without locking, so two concurrent Info() callers
-	// race on that cache (data race in (*stream).Info). LastSequence is now called
-	// from a background lag sampler (SPINE-009) concurrently with API/health callers,
-	// so every Info() on the shared handle goes through this lock.
-	infoMu sync.Mutex
 	// history coordinates read views and destructive cutover across control-plane
 	// replicas. Embedded mode installs a process-local implementation. External
 	// mode must be given a deployment-wide implementation before a rewrite is
@@ -160,17 +154,15 @@ type Log struct {
 	pruneTestHook func(sequence uint64) error
 }
 
-// streamInfo fetches fresh stream info under infoMu so concurrent callers do not race
-// on the JetStream client's internal info cache. Holding the lock across the (fast)
-// JetStream round-trip is fine: the only contention is the periodic lag sampler.
+// streamInfo fetches metadata through a private client handle. NATS Stream handles
+// contain a mutable metadata cache, so an independently resolved handle is the
+// concurrency boundary between a lag/readiness sample and an overlapping replay.
 func (l *Log) streamInfo(ctx context.Context) (*jetstream.StreamInfo, error) {
 	_, stream, err := l.resolveActiveStream(ctx)
 	if err != nil {
 		return nil, err
 	}
-	l.infoMu.Lock()
-	defer l.infoMu.Unlock()
-	return stream.Info(ctx)
+	return cachedInfoForResolvedStream(stream)
 }
 
 // OpenOption configures event-log coordination without coupling this package to
@@ -695,7 +687,7 @@ func (l *Log) resolveReplayStream(
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("events: resolve replay stream: %w", err)
 	}
-	info, err := l.infoForStream(ctx, stream)
+	info, err := cachedInfoForResolvedStream(stream)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("events: stream info: %w", err)
 	}

@@ -38,6 +38,14 @@ the checkpoint by hand: preserve PostgreSQL and JetStream, inspect the named
 sequence in the logs, and fix the database, schema, or producer fault that made
 the immutable event fail.
 
+Metadata sampling, backup-restore fencing, replay, and the durable tail may read
+the same JetStream generation at the same time. trstctl pins the durable generation
+name under the history barrier but resolves a private NATS client handle for each
+operation. This matters because the NATS `Stream` object contains a mutable metadata
+cache: sharing that object between `Info` and message reads is not concurrency-safe.
+The private handles isolate only client memory; they do not create another event
+stream, weaken the generation fence, or serialize unrelated readers.
+
 ## Metrics
 
 The control plane emits, at minimum:

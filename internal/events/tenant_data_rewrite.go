@@ -2672,9 +2672,38 @@ func (l *Log) historyGenerationReadRoute(
 }
 
 func (l *Log) infoForStream(ctx context.Context, stream jetstream.Stream) (*jetstream.StreamInfo, error) {
-	l.infoMu.Lock()
-	defer l.infoMu.Unlock()
-	return stream.Info(ctx)
+	if stream == nil {
+		return nil, errors.New("events: stream handle is nil")
+	}
+	cached := stream.CachedInfo()
+	if cached == nil || strings.TrimSpace(cached.Config.Name) == "" {
+		return nil, errors.New("events: stream handle has no cached name")
+	}
+	// AUD-127: jetstream.Stream.Info mutates the handle's cached StreamInfo while
+	// GetMsg reads that cache to choose its direct-read path. Resolve the durable
+	// name into a private handle instead of refreshing a handle another replay may
+	// be reading. Different callers therefore remain parallel without a global
+	// event-log lock, and the returned StreamInfo is already fresh from the server.
+	fresh, err := l.js.Stream(ctx, cached.Config.Name)
+	if err != nil {
+		return nil, err
+	}
+	info := fresh.CachedInfo()
+	if info == nil {
+		return nil, errors.New("events: refreshed stream handle has no metadata")
+	}
+	return info, nil
+}
+
+func cachedInfoForResolvedStream(stream jetstream.Stream) (*jetstream.StreamInfo, error) {
+	if stream == nil {
+		return nil, errors.New("events: resolved stream handle is nil")
+	}
+	info := stream.CachedInfo()
+	if info == nil {
+		return nil, errors.New("events: resolved stream handle has no metadata")
+	}
+	return info, nil
 }
 
 func (l *Log) activeStreamName(ctx context.Context) (string, error) {
@@ -2694,7 +2723,7 @@ func (l *Log) ActiveGeneration(ctx context.Context) (string, error) {
 		if err != nil {
 			return err
 		}
-		info, err := l.infoForStream(ctx, stream)
+		info, err := cachedInfoForResolvedStream(stream)
 		if err != nil {
 			return err
 		}
@@ -2708,7 +2737,14 @@ func (l *Log) ActiveGeneration(ctx context.Context) (string, error) {
 }
 
 func (l *Log) resolveActiveStream(ctx context.Context) (string, jetstream.Stream, error) {
-	if name, stream, ok := l.historyGenerationReadRoute(ctx); ok {
+	if name, _, ok := l.historyGenerationReadRoute(ctx); ok {
+		// A frozen-generation lease pins the durable name, not a mutable NATS
+		// client object. The history wall prevents deletion while each nested read
+		// resolves its own concurrency-safe handle for that exact generation.
+		stream, err := l.js.Stream(ctx, name)
+		if err != nil {
+			return "", nil, err
+		}
 		return name, stream, nil
 	}
 	name, err := l.activeStreamName(ctx)
@@ -2726,13 +2762,9 @@ func (l *Log) resolveActiveStream(ctx context.Context) (string, jetstream.Stream
 		l.setActiveStreamNamed(pendingName, pending)
 		return pendingName, pending, nil
 	}
-	l.activeMu.RLock()
-	if l.activeName == name && l.stream != nil {
-		stream := l.stream
-		l.activeMu.RUnlock()
-		return name, stream, nil
-	}
-	l.activeMu.RUnlock()
+	// StreamNameBySubject establishes which durable generation owns events.>.
+	// Always resolve that name into a new client handle: Stream.Info mutates a
+	// handle-local cache that GetMsg reads without synchronization.
 	stream, err := l.js.Stream(ctx, name)
 	if err != nil {
 		return "", nil, err

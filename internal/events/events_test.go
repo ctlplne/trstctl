@@ -7,6 +7,8 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,6 +45,132 @@ func collect(t *testing.T, log *events.Log, from uint64) []events.Event {
 		t.Fatalf("Replay: %v", err)
 	}
 	return got
+}
+
+type aud127HistoryCoordinator struct {
+	operation sync.Mutex
+	barrier   sync.RWMutex
+}
+
+func (c *aud127HistoryCoordinator) WithRewriteOperation(ctx context.Context, fn func(context.Context) error) error {
+	c.operation.Lock()
+	defer c.operation.Unlock()
+	return fn(ctx)
+}
+
+func (c *aud127HistoryCoordinator) WithCutover(ctx context.Context, fn func(context.Context) error) error {
+	c.barrier.Lock()
+	defer c.barrier.Unlock()
+	return fn(ctx)
+}
+
+func (c *aud127HistoryCoordinator) WithRead(ctx context.Context, fn func(context.Context) error) error {
+	c.barrier.RLock()
+	defer c.barrier.RUnlock()
+	return fn(ctx)
+}
+
+// AUD-127: metadata refresh and replay are ordinary concurrent production
+// operations. The NATS client mutates a Stream handle's cached metadata in Info
+// while GetMsg reads that cache, so the event log must not share one mutable
+// handle between these independent calls.
+func TestConcurrentStreamMetadataAndReplayAUD127(t *testing.T) {
+	srv, err := natsserver.NewServer(&natsserver.Options{
+		ServerName: "aud127-concurrent-read", JetStream: true, StoreDir: t.TempDir(), Port: -1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go srv.Start()
+	if !srv.ReadyForConnections(10 * time.Second) {
+		t.Fatal("external server not ready")
+	}
+	t.Cleanup(srv.Shutdown)
+	log, err := events.Open(context.Background(), config.NATS{
+		Mode:               config.NATSExternal,
+		URL:                srv.ClientURL(),
+		Replicas:           1,
+		AllowSingleReplica: true,
+	}, events.WithHistoryRewriteCoordinator(&aud127HistoryCoordinator{}))
+	if err != nil {
+		t.Fatalf("Open external event log: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	ctx := context.Background()
+	for i := 0; i < 32; i++ {
+		if _, err := log.Append(ctx, events.Event{
+			Type: "test.concurrent-stream-read", TenantID: "tenant-a", Data: []byte("event"),
+		}); err != nil {
+			t.Fatalf("Append event %d: %v", i, err)
+		}
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, 16)
+	var workers sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			for attempt := 0; attempt < 40; attempt++ {
+				if _, err := log.LastSequence(ctx); err != nil {
+					errs <- err
+					return
+				}
+				if err := log.RequireNoPendingBackupRestore(ctx); err != nil {
+					errs <- err
+					return
+				}
+			}
+		}()
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			for attempt := 0; attempt < 10; attempt++ {
+				var err error
+				if attempt%2 == 0 {
+					err = log.Replay(ctx, 1, func(events.Event) error { return nil })
+				} else {
+					err = log.ReplayThrough(ctx, 1, 32, func(events.Event) error { return nil })
+				}
+				if err != nil {
+					errs <- err
+					return
+				}
+			}
+		}()
+	}
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		<-start
+		tailCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		var tailed atomic.Int32
+		err := log.TailFrom(tailCtx,
+			func(context.Context) (uint64, error) { return 0, nil },
+			func(events.Event) error {
+				if tailed.Add(1) == 32 {
+					cancel()
+				}
+				return nil
+			})
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			errs <- err
+			return
+		}
+		if tailed.Load() != 32 {
+			errs <- errors.New("TailFrom did not deliver all retained events")
+		}
+	}()
+	close(start)
+	workers.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatalf("concurrent event-log read: %v", err)
+	}
 }
 
 func TestAppendAssignsSequenceAndTime(t *testing.T) {

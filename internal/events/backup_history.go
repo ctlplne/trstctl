@@ -99,7 +99,7 @@ func (l *Log) requireNoPendingBackupRestoreStream(
 	ctx context.Context,
 	stream jetstream.Stream,
 ) error {
-	info, err := l.infoForStream(ctx, stream)
+	info, err := cachedInfoForResolvedStream(stream)
 	if err != nil {
 		return fmt.Errorf("events: inspect pending backup restore metadata: %w", err)
 	}
