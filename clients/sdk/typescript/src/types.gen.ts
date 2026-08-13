@@ -4148,6 +4148,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/caches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List signed per-segment and per-issuer relay CRL/OCSP cache freshness */
+        get: operations["listRevocationCaches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/revocation/crls": {
         parameters: {
             query?: never;
@@ -10454,6 +10471,47 @@ export interface components {
             detail?: string;
             kind: string;
             ref: string;
+        };
+        RevocationCachePosture: {
+            guidance: string;
+            items: components["schemas"]["RevocationCacheStatus"][];
+            observed: boolean;
+            summary: components["schemas"]["RevocationCacheSummary"];
+        };
+        RevocationCacheStatus: {
+            agent_id: string;
+            agent_name: string;
+            cache_id: string;
+            cached_responses: number;
+            detail_code?: string;
+            fresh: boolean;
+            issuer_fingerprint: string;
+            /** Format: date-time */
+            last_validated_at?: string;
+            local_path: string;
+            metadata_only: boolean;
+            /** Format: date-time */
+            next_update?: string;
+            /** @enum {string} */
+            protocol: "crl" | "ocsp";
+            refused_requests: number;
+            /** Format: date-time */
+            reported_at: string;
+            segment: string;
+            served_requests: number;
+            signature_verified: boolean;
+            signer_fingerprint: string;
+            /** @enum {string} */
+            status: "fresh" | "stale" | "empty" | "error";
+            /** Format: date-time */
+            this_update?: string;
+        };
+        RevocationCacheSummary: {
+            caches: number;
+            empty: number;
+            error: number;
+            fresh: number;
+            stale: number;
         };
         RevocationEndpointHealth: {
             certificate_fingerprint: string;
@@ -23943,6 +24001,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RemediationPlaybookRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listRevocationCaches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevocationCachePosture"];
                 };
             };
             /** @description client error */

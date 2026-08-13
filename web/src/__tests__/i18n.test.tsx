@@ -628,8 +628,13 @@ describe("i18n boundary", () => {
       // name immutable before/after history, dangerous lifecycle facts, and
       // say explicitly that only a worsening change creates a notification.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "2666247cce206e27d447da1e585929b27c1fa07c6738d3f5fc0fe61dbcd5e492",
-      "de-DE": "2417f71201ddc6ac73856e38da14d06f7ae1627104d8e36435130df0d39cd1e8",
+      // AUD-39 revocation-cache re-pin: twenty-eight keys name per-segment
+      // CRL/OCSP freshness, issuer-signature evidence, traffic, and the honest
+      // unobserved state. “No report” must not become “healthy,” and stale must
+      // remain distinct from empty in every locale. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "5e69390b6cf424ea6109727790c2a8d095598a35026e54a51a91e40e1a5a123b",
+      "de-DE": "44a0a7535b9ac122181ed45456bba18a44f5d5b2ab781e4bc57a589a11561db6",
     });
   });
 

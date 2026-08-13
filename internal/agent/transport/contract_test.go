@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/protocol"
+	"trstctl.com/trstctl/internal/revcacheposture"
 )
 
 type agentContract struct {
@@ -207,6 +208,8 @@ func currentAgentContract() agentContract {
 			"RelayPluginEntry":          {Fields: jsonFieldsOf(plugincensus.Entry{})},
 			"RelayPluginGrant":          {Fields: jsonFieldsOf(plugincensus.Grant{})},
 			"RelayPluginReport":         {Fields: jsonFieldsOf(plugincensus.Report{})},
+			"RevocationCacheEntry":      {Fields: jsonFieldsOf(revcacheposture.Entry{})},
+			"RevocationCacheReport":     {Fields: jsonFieldsOf(revcacheposture.Report{})},
 			"RenewRequest":              {Fields: jsonFieldsOf(RenewRequest{})},
 			"RenewResponse":             {Fields: jsonFieldsOf(RenewResponse{})},
 			"InventoryFinding":          {Fields: jsonFieldsOf(InventoryFinding{})},

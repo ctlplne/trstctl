@@ -73,6 +73,12 @@ func TestACMEARIPostureCommandExists(t *testing.T) {
 	}
 }
 
+func TestRevocationCacheCommandExistsAUD39(t *testing.T) {
+	if !cliCommandSet(t)["revocation caches"] {
+		t.Fatal(`missing CLI command "revocation caches"`)
+	}
+}
+
 func TestMDMSCEPPolicyCommandsExist(t *testing.T) {
 	commands := cliCommandSet(t)
 	for _, command := range []string{
@@ -179,7 +185,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// application-secret bulk-import command because that compatibility route is
 	// explicitly unavailable, leaving 360 commands. AUD-38's read-only
 	// `revocation health` command raises it to 361 and exposes the same signed
-	// relay evidence as the API and console. AUD-40's six `migrations`
+	// relay evidence as the API and console. AUD-39's read-only `revocation
+	// caches` command raises it to 362 and exposes the signed segment-local cache
+	// evidence without moving protocol bytes or upstream locations. AUD-40's six `migrations`
 	// start/list/show/pause/resume/rollback commands raise it to 367 and map the
 	// complete durable CA-wave control surface onto F48. AUD-118's `discovery
 	// segments create` raises it to 368 and closes the prerequisite already
@@ -188,8 +196,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// operation usable from a headless recovery terminal. AUD-44's owner attest
 	// plus exception list/grant/revoke commands raise it to 373 and expose the
 	// ownership-readiness gate from a headless incident terminal.
-	if len(out) != 373 {
-		t.Fatalf("CLI commands = %d, want 373", len(out))
+	if len(out) != 374 {
+		t.Fatalf("CLI commands = %d, want 374", len(out))
 	}
 	return out
 }

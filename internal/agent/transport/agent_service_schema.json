@@ -230,6 +230,11 @@
           "go_type": "*plugincensus.Report",
           "name": "relay_plugins",
           "presence": "optional"
+        },
+        {
+          "go_type": "*revcacheposture.Report",
+          "name": "revocation_caches",
+          "presence": "optional"
         }
       ]
     },
@@ -575,6 +580,104 @@
           "go_type": "int64",
           "name": "lease_expires_unix",
           "presence": "optional"
+        }
+      ]
+    },
+    "RevocationCacheEntry": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "cache_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "segment",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "protocol",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "issuer_fingerprint",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "local_path",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "status",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "detail_code",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int",
+          "name": "cached_responses",
+          "presence": "required"
+        },
+        {
+          "go_type": "bool",
+          "name": "fresh",
+          "presence": "required"
+        },
+        {
+          "go_type": "bool",
+          "name": "signature_verified",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "this_update_unix",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int64",
+          "name": "next_update_unix",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int64",
+          "name": "last_validated_at_unix",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int64",
+          "name": "served_requests",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "refused_requests",
+          "presence": "required"
+        }
+      ]
+    },
+    "RevocationCacheReport": {
+      "fields": [
+        {
+          "go_type": "[]revcacheposture.Entry",
+          "name": "entries",
+          "presence": "required"
+        },
+        {
+          "go_type": "int64",
+          "name": "issued_at_unix",
+          "presence": "required"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "signature",
+          "presence": "required"
         }
       ]
     },

@@ -1442,6 +1442,51 @@ waited.
 See [Getting started](getting-started.md) for the blank Compose stack's published
 agent-channel port and the local CA-pinning steps to reach it from an agent CLI.
 
+### Relay-local CRL and OCSP cache
+
+A certificate enrolled with the `network` role may serve revocation data to an
+isolated segment. Start it with `--revocation-cache-config <file>`. The JSON file is
+limited to 1 MiB, rejects unknown fields, and contains public issuer certificates
+and routes—not private keys, tokens, or bind credentials:
+
+```json
+{
+  "listen": "10.42.0.12:8088",
+  "segment": "plant-7",
+  "refresh_interval": "5m",
+  "issuers": [
+    {
+      "id": "manufacturing-root",
+      "issuer_file": "/etc/trstctl/manufacturing-root.pem",
+      "crl": {
+        "upstream_url": "https://pki.internal/crl/manufacturing.crl",
+        "local_path": "/crl/manufacturing"
+      },
+      "ocsp": {
+        "upstream_url": "https://ocsp.internal/manufacturing",
+        "local_path": "/ocsp/manufacturing"
+      }
+    }
+  ]
+}
+```
+
+Issuer and segment IDs are bounded tokens, every local path must be unique, and the
+refresh interval must be between one minute and 24 hours. RFC 1918 and IPv6 ULA
+upstreams are allowed because an internal CA is the normal case; loopback,
+link-local, metadata-service, multicast, CGNAT, credentials-in-URL, and DNS-rebind
+targets remain refused. CRLs are fetched on the refresh interval. OCSP is fetched on
+demand and only nonce-free responses are reused. The listener serves no stale or
+unverified bytes.
+
+The first mTLS heartbeat already contains the relay's signed, metadata-only cache
+status. Read it at `GET /api/v1/revocation/caches` or Protocols → Revocation cache by
+segment. That status includes segment, issuer fingerprint, local path, signed time
+window, validation time, and request counts. It never includes the upstream URL,
+issuer/response bytes, or OCSP request. The older `--crl-cache-*` flags remain for a
+single CRL; pair them with `--revocation-cache-segment` so their heartbeat has an
+operator-defined segment identity.
+
 For host connector execution, `trstctl-agent --host-exec-profile <file>` also
 initializes an encrypted two-generation predecessor ledger. Set
 `--host-rollback-dir <absolute-directory>` to choose its durable location; when

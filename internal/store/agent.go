@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/plugincensus"
+	"trstctl.com/trstctl/internal/revcacheposture"
 )
 
 // Agent is an in-network agent that performs discovery, deployment, and drift
@@ -62,10 +64,17 @@ type Agent struct {
 	RelayPluginsSignature         []byte
 	RelayPluginsSignerFingerprint string
 	RelayPluginsReportedAt        *time.Time
-	CreatedAt                     time.Time
-	OffboardedAt                  *time.Time
-	OffboardedBy                  string
-	OffboardReason                string
+	// RevocationCaches* is the newest signed metadata-only cache posture from
+	// this certificate-bound relay. Protocol bytes and upstream URLs stay local.
+	RevocationCaches                  []revcacheposture.Entry
+	RevocationCachesStatement         string
+	RevocationCachesSignature         []byte
+	RevocationCachesSignerFingerprint string
+	RevocationCachesReportedAt        *time.Time
+	CreatedAt                         time.Time
+	OffboardedAt                      *time.Time
+	OffboardedBy                      string
+	OffboardReason                    string
 }
 
 // AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
@@ -73,6 +82,17 @@ type Agent struct {
 type AgentFleetHealth struct {
 	Total int64
 	Stale int64
+}
+
+// AgentRevocationCache is one signed per-cache row flattened from the newest
+// accepted relay heartbeat. Signature bytes remain in the projection and are
+// never returned by the API; SignerFingerprint and ReportedAt are safe proof.
+type AgentRevocationCache struct {
+	AgentID           string
+	AgentName         string
+	Entry             revcacheposture.Entry
+	SignerFingerprint string
+	ReportedAt        time.Time
 }
 
 // AgentCertRevocation is a projected deny-list selector for one agent mTLS
@@ -116,6 +136,18 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 	if err != nil {
 		return fmt.Errorf("store: encode relay plugin census: %w", err)
 	}
+	caches := a.RevocationCaches
+	if caches == nil {
+		caches = []revcacheposture.Entry{}
+	}
+	cacheSignature := a.RevocationCachesSignature
+	if cacheSignature == nil {
+		cacheSignature = []byte{}
+	}
+	revocationCaches, err := json.Marshal(caches)
+	if err != nil {
+		return fmt.Errorf("store: encode revocation cache posture: %w", err)
+	}
 	_, err = tx.Exec(ctx,
 		`INSERT INTO agents (id, tenant_id, name, status, version, roles, last_seen_at,
 		                     workload_api_served, workload_api_svids, workload_api_reported_at,
@@ -125,10 +157,13 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		                     enrollment_proxy_refused, enrollment_proxy_last_forwarded_at,
 		                     enrollment_proxy_last_failover_at, enrollment_proxy_reported_at,
 		                     relay_plugins, relay_plugins_statement, relay_plugins_signature,
-		                     relay_plugins_signer_fingerprint, relay_plugins_reported_at)
+		                     relay_plugins_signer_fingerprint, relay_plugins_reported_at,
+		                     revocation_caches, revocation_caches_statement, revocation_caches_signature,
+		                     revocation_caches_signer_fingerprint, revocation_caches_reported_at)
 		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10,
 		         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
-		         $23::jsonb, $24, $25, $26, $27)
+		         $23::jsonb, $24, $25, $26, $27,
+		         $28::jsonb, $29, $30, $31, $32)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
 		        status = CASE WHEN agents.status = 'offboarded' THEN agents.status ELSE EXCLUDED.status END,
@@ -210,7 +245,27 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		        relay_plugins_reported_at = CASE
 		            WHEN EXCLUDED.relay_plugins_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.relay_plugins_reported_at
 		            WHEN agents.relay_plugins_reported_at IS NOT NULL AND EXCLUDED.relay_plugins_reported_at <= agents.relay_plugins_reported_at THEN agents.relay_plugins_reported_at
-		            ELSE EXCLUDED.relay_plugins_reported_at END`,
+		            ELSE EXCLUDED.relay_plugins_reported_at END,
+		        revocation_caches = CASE
+		            WHEN EXCLUDED.revocation_caches_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.revocation_caches
+		            WHEN agents.revocation_caches_reported_at IS NOT NULL AND EXCLUDED.revocation_caches_reported_at <= agents.revocation_caches_reported_at THEN agents.revocation_caches
+		            ELSE EXCLUDED.revocation_caches END,
+		        revocation_caches_statement = CASE
+		            WHEN EXCLUDED.revocation_caches_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.revocation_caches_statement
+		            WHEN agents.revocation_caches_reported_at IS NOT NULL AND EXCLUDED.revocation_caches_reported_at <= agents.revocation_caches_reported_at THEN agents.revocation_caches_statement
+		            ELSE EXCLUDED.revocation_caches_statement END,
+		        revocation_caches_signature = CASE
+		            WHEN EXCLUDED.revocation_caches_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.revocation_caches_signature
+		            WHEN agents.revocation_caches_reported_at IS NOT NULL AND EXCLUDED.revocation_caches_reported_at <= agents.revocation_caches_reported_at THEN agents.revocation_caches_signature
+		            ELSE EXCLUDED.revocation_caches_signature END,
+		        revocation_caches_signer_fingerprint = CASE
+		            WHEN EXCLUDED.revocation_caches_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.revocation_caches_signer_fingerprint
+		            WHEN agents.revocation_caches_reported_at IS NOT NULL AND EXCLUDED.revocation_caches_reported_at <= agents.revocation_caches_reported_at THEN agents.revocation_caches_signer_fingerprint
+		            ELSE EXCLUDED.revocation_caches_signer_fingerprint END,
+		        revocation_caches_reported_at = CASE
+		            WHEN EXCLUDED.revocation_caches_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.revocation_caches_reported_at
+		            WHEN agents.revocation_caches_reported_at IS NOT NULL AND EXCLUDED.revocation_caches_reported_at <= agents.revocation_caches_reported_at THEN agents.revocation_caches_reported_at
+		            ELSE EXCLUDED.revocation_caches_reported_at END`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt,
 		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt,
 		a.EnrollmentProxyServing, a.EnrollmentProxySegment, a.EnrollmentProxyPublicURL,
@@ -218,7 +273,9 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		a.EnrollmentProxyUpstreamFailures, a.EnrollmentProxyForwarded, a.EnrollmentProxyRefused,
 		a.EnrollmentProxyLastForwardedAt, a.EnrollmentProxyLastFailoverAt, a.EnrollmentProxyReportedAt,
 		relayPlugins, a.RelayPluginsStatement, signature,
-		a.RelayPluginsSignerFingerprint, a.RelayPluginsReportedAt)
+		a.RelayPluginsSignerFingerprint, a.RelayPluginsReportedAt,
+		revocationCaches, a.RevocationCachesStatement, cacheSignature,
+		a.RevocationCachesSignerFingerprint, a.RevocationCachesReportedAt)
 	return err
 }
 
@@ -384,7 +441,7 @@ func normalizeAgentCertSelector(selectorType, v string) string {
 // GetAgent loads an agent in its tenant context.
 func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error) {
 	var a Agent
-	var relayPlugins []byte
+	var relayPlugins, revocationCaches []byte
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, status, version, roles, last_seen_at, created_at,
@@ -395,7 +452,9 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 			        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
 			        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at,
 			        relay_plugins, relay_plugins_statement, relay_plugins_signature,
-			        relay_plugins_signer_fingerprint, relay_plugins_reported_at
+			        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
+			        revocation_caches, revocation_caches_statement, revocation_caches_signature,
+			        revocation_caches_signer_fingerprint, revocation_caches_reported_at
 			   FROM agents WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
 				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
@@ -405,10 +464,15 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 				&a.EnrollmentProxyUpstreamFailures, &a.EnrollmentProxyForwarded, &a.EnrollmentProxyRefused,
 				&a.EnrollmentProxyLastForwardedAt, &a.EnrollmentProxyLastFailoverAt, &a.EnrollmentProxyReportedAt,
 				&relayPlugins, &a.RelayPluginsStatement, &a.RelayPluginsSignature,
-				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt)
+				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt,
+				&revocationCaches, &a.RevocationCachesStatement, &a.RevocationCachesSignature,
+				&a.RevocationCachesSignerFingerprint, &a.RevocationCachesReportedAt)
 	})
 	if err == nil {
 		err = json.Unmarshal(relayPlugins, &a.RelayPlugins)
+	}
+	if err == nil {
+		err = json.Unmarshal(revocationCaches, &a.RevocationCaches)
 	}
 	return a, err
 }
@@ -434,7 +498,9 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
 				        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at,
 				        relay_plugins, relay_plugins_statement, relay_plugins_signature,
-				        relay_plugins_signer_fingerprint, relay_plugins_reported_at
+				        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
+				        revocation_caches, revocation_caches_statement, revocation_caches_signature,
+				        revocation_caches_signer_fingerprint, revocation_caches_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1 AND (created_at, id) > ($2, $3)
 				  ORDER BY created_at, id
@@ -450,7 +516,9 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				        enrollment_proxy_upstream_failures, enrollment_proxy_forwarded, enrollment_proxy_refused,
 				        enrollment_proxy_last_forwarded_at, enrollment_proxy_last_failover_at, enrollment_proxy_reported_at,
 				        relay_plugins, relay_plugins_statement, relay_plugins_signature,
-				        relay_plugins_signer_fingerprint, relay_plugins_reported_at
+				        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
+				        revocation_caches, revocation_caches_statement, revocation_caches_signature,
+				        revocation_caches_signer_fingerprint, revocation_caches_reported_at
 				   FROM agents
 				  WHERE tenant_id = $1
 				  ORDER BY created_at, id
@@ -463,7 +531,7 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 		defer rows.Close()
 		for rows.Next() {
 			var a Agent
-			var relayPlugins []byte
+			var relayPlugins, revocationCaches []byte
 			if err := rows.Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
 				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
 				&a.WorkloadAPIServed, &a.WorkloadAPISVIDs, &a.WorkloadAPIReportedAt,
@@ -472,16 +540,79 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				&a.EnrollmentProxyUpstreamFailures, &a.EnrollmentProxyForwarded, &a.EnrollmentProxyRefused,
 				&a.EnrollmentProxyLastForwardedAt, &a.EnrollmentProxyLastFailoverAt, &a.EnrollmentProxyReportedAt,
 				&relayPlugins, &a.RelayPluginsStatement, &a.RelayPluginsSignature,
-				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt); err != nil {
+				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt,
+				&revocationCaches, &a.RevocationCachesStatement, &a.RevocationCachesSignature,
+				&a.RevocationCachesSignerFingerprint, &a.RevocationCachesReportedAt); err != nil {
 				return err
 			}
 			if err := json.Unmarshal(relayPlugins, &a.RelayPlugins); err != nil {
 				return fmt.Errorf("store: decode relay plugin census: %w", err)
 			}
+			if err := json.Unmarshal(revocationCaches, &a.RevocationCaches); err != nil {
+				return fmt.Errorf("store: decode revocation cache posture: %w", err)
+			}
 			out = append(out, a)
 		}
 		return rows.Err()
 	})
+	return out, err
+}
+
+// ListAgentRevocationCaches returns active relay cache rows in stable
+// agent/cache/protocol order. The tenant filter is explicit even under RLS.
+func (s *Store) ListAgentRevocationCaches(ctx context.Context, tenantID string, limit int) ([]AgentRevocationCache, error) {
+	if limit <= 0 || limit > 5000 {
+		limit = 1000
+	}
+	var out []AgentRevocationCache
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, name, revocation_caches,
+			        revocation_caches_signer_fingerprint, revocation_caches_reported_at
+			   FROM agents
+			  WHERE tenant_id = $1 AND status <> 'offboarded'
+			    AND revocation_caches_reported_at IS NOT NULL
+			  ORDER BY name, id
+			  LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var agentID, agentName, signerFingerprint string
+			var raw []byte
+			var reportedAt time.Time
+			if err := rows.Scan(&agentID, &agentName, &raw, &signerFingerprint, &reportedAt); err != nil {
+				return err
+			}
+			var entries []revcacheposture.Entry
+			if err := json.Unmarshal(raw, &entries); err != nil {
+				return fmt.Errorf("store: decode revocation cache posture: %w", err)
+			}
+			for _, entry := range entries {
+				out = append(out, AgentRevocationCache{
+					AgentID: agentID, AgentName: agentName, Entry: entry,
+					SignerFingerprint: signerFingerprint, ReportedAt: reportedAt.UTC(),
+				})
+			}
+		}
+		return rows.Err()
+	})
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].AgentName != out[j].AgentName {
+			return out[i].AgentName < out[j].AgentName
+		}
+		if out[i].Entry.Segment != out[j].Entry.Segment {
+			return out[i].Entry.Segment < out[j].Entry.Segment
+		}
+		if out[i].Entry.CacheID != out[j].Entry.CacheID {
+			return out[i].Entry.CacheID < out[j].Entry.CacheID
+		}
+		return out[i].Entry.Protocol < out[j].Entry.Protocol
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
 	return out, err
 }
 

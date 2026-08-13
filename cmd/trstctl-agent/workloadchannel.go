@@ -134,19 +134,7 @@ const (
 	// different operational situations and a percentage renders them the same.
 	enrollProxyHealthyKey   = "enroll_proxy_endpoints_healthy"
 	enrollProxyUnhealthyKey = "enroll_proxy_endpoints_unhealthy"
-	// R3: whether a CRL is cached at all, and whether it may currently be
-	// served. Both, because cached-and-stale is a distinct state.
-	revCacheCachedKey = "crl_cache_present"
-	revCacheFreshKey  = "crl_cache_fresh"
 )
-
-// boolCounter renders a boolean for the heartbeat's integer counters.
-func boolCounter(v bool) int64 {
-	if v {
-		return 1
-	}
-	return 0
-}
 
 // pluginConnectorCount is how many verified third-party connectors this relay
 // loaded at start.
@@ -184,17 +172,6 @@ func workloadAPICounters(inv map[string]int64) map[string]int64 {
 	// segments have a working proxy and how many endpoints each relay can
 	// currently reach. Reported by the relay because only the relay knows which
 	// of its upstreams are answering from where it sits.
-	// R3: whether this segment's relying parties can currently check revocation.
-	//
-	// Cached-but-not-fresh is reported as its own state rather than folded into
-	// "no cache". It is the situation an operator most needs to see: the relay
-	// HAS a list and is correctly refusing to serve it, which is working as
-	// designed and looks exactly like an outage from inside the segment.
-	if cache := revocationCache.Load(); cache != nil {
-		st := cache.Status()
-		out[revCacheCachedKey] = boolCounter(st.Cached)
-		out[revCacheFreshKey] = boolCounter(st.Fresh)
-	}
 	if pool := enrollProxyPool.Load(); pool != nil {
 		h := pool.Health()
 		out[enrollProxyHealthyKey] = int64(h.Healthy)

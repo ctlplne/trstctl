@@ -37,6 +37,13 @@ func FuzzParseOCSPRequestSerial(f *testing.F) {
 	f.Add(validReqDER)
 
 	f.Fuzz(func(t *testing.T, reqDER []byte) {
+		validatedSerial, validateErr := crypto.ValidateOCSPRequestForIssuer(reqDER, issuerDER)
+		if validateErr != nil && !errors.Is(validateErr, crypto.ErrMalformedOCSPRequest) {
+			t.Fatalf("ValidateOCSPRequestForIssuer error = %v, want ErrMalformedOCSPRequest-wrapped error", validateErr)
+		}
+		if validateErr == nil && validatedSerial == "" {
+			t.Fatal("ValidateOCSPRequestForIssuer returned empty serial with nil error")
+		}
 		serial, err := crypto.ParseOCSPRequestSerial(reqDER)
 		if err != nil {
 			if !errors.Is(err, crypto.ErrMalformedOCSPRequest) {

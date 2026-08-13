@@ -461,6 +461,36 @@ func ParseOCSPRequestSerial(reqDER []byte) (string, error) {
 	return req.SerialNumber.Text(16), nil
 }
 
+// ValidateOCSPRequestForIssuer parses an OCSP request and proves its issuer
+// name/key hashes were built for issuerDER. Serial matching alone is not
+// enough: two issuers can issue the same serial, and a relay route must never
+// forward one issuer's request to another issuer's responder.
+func ValidateOCSPRequestForIssuer(reqDER, issuerDER []byte) (string, error) {
+	req, err := ocsp.ParseRequest(reqDER)
+	if err != nil || req.SerialNumber == nil {
+		return "", fmt.Errorf("%w: %v", ErrMalformedOCSPRequest, err)
+	}
+	issuer, err := x509.ParseCertificate(issuerDER)
+	if err != nil {
+		return "", fmt.Errorf("crypto: parse OCSP request issuer: %w", err)
+	}
+	expectedDER, err := ocsp.CreateRequest(&x509.Certificate{SerialNumber: req.SerialNumber}, issuer,
+		&ocsp.RequestOptions{Hash: req.HashAlgorithm})
+	if err != nil {
+		return "", fmt.Errorf("crypto: build expected OCSP request identity: %w", err)
+	}
+	expected, err := ocsp.ParseRequest(expectedDER)
+	if err != nil {
+		return "", fmt.Errorf("crypto: parse expected OCSP request identity: %w", err)
+	}
+	if req.HashAlgorithm != expected.HashAlgorithm ||
+		!bytes.Equal(req.IssuerNameHash, expected.IssuerNameHash) ||
+		!bytes.Equal(req.IssuerKeyHash, expected.IssuerKeyHash) {
+		return "", fmt.Errorf("%w: issuer hashes do not match the configured cache issuer", ErrMalformedOCSPRequest)
+	}
+	return req.SerialNumber.Text(16), nil
+}
+
 // ParseOCSPRequestNonce extracts the optional RFC 6960 id-pkix-ocsp-nonce
 // extension from an OCSP request. It returns present=false when the extension is
 // absent. If present, the nonce must be a non-empty DER OCTET STRING no larger

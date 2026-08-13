@@ -3,9 +3,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -18,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/revcacheposture"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -233,87 +237,177 @@ func startEnrollProxy(ctx context.Context, o agentOptions, client *http.Client) 
 // enrollProxyPool holds the running pool so the heartbeat can report its health.
 var enrollProxyPool atomic.Pointer[enrollproxy.Pool]
 
-// startRevocationCache serves the control plane's CRL to this segment (epic R3).
-//
-// Returns a stop function that is always safe to call. A configuration problem
-// is reported and does not bring the agent down: revocation caching is additive,
-// and an operator who mistyped a URL should not also lose this segment's
-// enrolment proxy and connector deploys.
-func startRevocationCache(ctx context.Context, o agentOptions) func() {
-	listen := strings.TrimSpace(o.revCacheListen)
-	if listen == "" {
-		return func() {}
-	}
-	upstream := strings.TrimSpace(o.revCacheUpstream)
-	issuerPath := strings.TrimSpace(o.revCacheIssuer)
-	if upstream == "" || issuerPath == "" {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: --crl-cache-listen needs both --crl-cache-upstream "+
-			"and --crl-cache-issuer; without the issuer the relay cannot tell a CRL from anything "+
-			"else it might be handed, so the cache will not start")
-		return func() {}
-	}
-	issuerPEM, err := os.ReadFile(issuerPath) // #nosec G304 -- operator-supplied issuer path (CWE-22)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: read CRL cache issuer:", err)
-		return func() {}
-	}
-	issuerDER, err := mtls.FirstCertDER(issuerPEM)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: CRL cache issuer is not a certificate:", err)
-		return func() {}
-	}
-	cache, err := revcache.New(upstream, issuerDER, revcache.Options{
-		Grace:  o.revCacheGrace,
-		Client: netsec.SafeClient(30 * time.Second),
-	})
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: CRL cache:", err)
-		return func() {}
-	}
+// revocationCacheFile is the operator-owned multi-issuer runtime description.
+// IssuerFile contains only a public certificate. Upstream URLs may be internal,
+// but credentials in URLs are rejected by the cache manager.
+type revocationCacheFile struct {
+	Listen          string                      `json:"listen"`
+	Segment         string                      `json:"segment"`
+	RefreshInterval string                      `json:"refresh_interval,omitempty"`
+	Issuers         []revocationCacheFileIssuer `json:"issuers"`
+}
 
-	// Fetch once at start so the segment is covered immediately rather than
-	// after the first refresh interval — a relay that came up serving nothing
-	// for a minute would look identical to one that is broken.
-	if err := cache.Refresh(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: initial CRL fetch:", err)
-	}
+type revocationCacheFileIssuer struct {
+	ID         string                   `json:"id"`
+	IssuerFile string                   `json:"issuer_file"`
+	CRL        *revocationCacheFileCRL  `json:"crl,omitempty"`
+	OCSP       *revocationCacheFileOCSP `json:"ocsp,omitempty"`
+}
 
-	srv := &http.Server{Addr: listen, Handler: cache, ReadHeaderTimeout: 10 * time.Second}
+type revocationCacheFileCRL struct {
+	UpstreamURL string `json:"upstream_url"`
+	LocalPath   string `json:"local_path"`
+	Grace       string `json:"grace,omitempty"`
+}
+
+type revocationCacheFileOCSP struct {
+	UpstreamURL string `json:"upstream_url"`
+	LocalPath   string `json:"local_path"`
+}
+
+func revocationCacheConfigured(o agentOptions) bool {
+	return strings.TrimSpace(o.revCacheConfig) != "" || strings.TrimSpace(o.revCacheListen) != ""
+}
+
+// startRevocationCache starts all configured issuer caches before the first
+// heartbeat and returns the live metadata snapshot that heartbeat signs.
+func startRevocationCache(ctx context.Context, o agentOptions) (func() []revcacheposture.Entry, func()) {
+	if !revocationCacheConfigured(o) {
+		return nil, func() {}
+	}
+	listen, refreshEvery, cfg, err := loadRevocationCacheConfig(o)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: revocation cache configuration:", err)
+		return nil, func() {}
+	}
+	client := o.revCacheHTTPClient
+	if client == nil {
+		client = netsec.SafeClientWithOptions(30*time.Second, netsec.SafeClientOptions{
+			AllowPrivateCIDRs: rfc1918AndULA(),
+		})
+	}
+	manager, err := revcache.NewManager(cfg, revcache.ManagerOptions{Client: client})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: revocation cache:", err)
+		return nil, func() {}
+	}
+	if err := manager.RefreshCRLs(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: initial CRL cache refresh:", err)
+	}
+	listener, err := net.Listen("tcp", listen)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: revocation cache cannot bind:", err)
+		return nil, func() {}
+	}
+	srv := &http.Server{Handler: manager, ReadHeaderTimeout: 10 * time.Second}
 	refreshCtx, cancelRefresh := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		fmt.Printf("trstctl-agent: CRL cache serving on %s from %s\n", listen, upstream)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			fmt.Fprintln(os.Stderr, "trstctl-agent: CRL cache stopped:", err)
+		fmt.Printf("trstctl-agent: CRL/OCSP cache serving segment %s on %s (%d cache routes)\n",
+			cfg.Segment, listener.Addr(), len(manager.Statuses()))
+		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: revocation cache stopped:", err)
 		}
 	}()
 	go func() {
-		// Refresh well inside a typical CRL lifetime. The cost of an extra fetch
-		// is one request; the cost of missing one is a segment that fails closed
-		// and looks like an outage.
-		t := time.NewTicker(15 * time.Minute)
-		defer t.Stop()
+		ticker := time.NewTicker(refreshEvery)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-refreshCtx.Done():
 				return
-			case <-t.C:
-				if err := cache.Refresh(refreshCtx); err != nil && refreshCtx.Err() == nil {
-					fmt.Fprintln(os.Stderr, "trstctl-agent: CRL refresh:", err)
+			case <-ticker.C:
+				if err := manager.RefreshCRLs(refreshCtx); err != nil && refreshCtx.Err() == nil {
+					fmt.Fprintln(os.Stderr, "trstctl-agent: CRL cache refresh:", err)
 				}
 			}
 		}
 	}()
-	revocationCache.Store(cache)
-	return func() {
+	report := func() []revcacheposture.Entry { return manager.Statuses() }
+	stop := func() {
 		cancelRefresh()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutCtx)
 		<-done
 	}
+	return report, stop
 }
 
-// revocationCache holds the running cache so the heartbeat can report freshness.
-var revocationCache atomic.Pointer[revcache.Cache]
+func loadRevocationCacheConfig(o agentOptions) (string, time.Duration, revcache.ManagerConfig, error) {
+	if path := strings.TrimSpace(o.revCacheConfig); path != "" {
+		if strings.TrimSpace(o.revCacheListen) != "" || strings.TrimSpace(o.revCacheUpstream) != "" || strings.TrimSpace(o.revCacheIssuer) != "" {
+			return "", 0, revcache.ManagerConfig{}, errors.New("--revocation-cache-config cannot be combined with legacy --crl-cache-* flags")
+		}
+		file, err := os.Open(path) // #nosec G304 -- operator-supplied runtime configuration path (CWE-22)
+		if err != nil {
+			return "", 0, revcache.ManagerConfig{}, err
+		}
+		defer func() { _ = file.Close() }()
+		raw, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
+		if err != nil || len(raw) > 1<<20 {
+			return "", 0, revcache.ManagerConfig{}, errors.New("revocation cache configuration is unreadable or exceeds 1 MiB")
+		}
+		var disk revocationCacheFile
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&disk); err != nil {
+			return "", 0, revcache.ManagerConfig{}, fmt.Errorf("decode JSON: %w", err)
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			return "", 0, revcache.ManagerConfig{}, errors.New("configuration contains trailing JSON")
+		}
+		refreshEvery := 15 * time.Minute
+		if strings.TrimSpace(disk.RefreshInterval) != "" {
+			refreshEvery, err = time.ParseDuration(disk.RefreshInterval)
+			if err != nil || refreshEvery < time.Minute || refreshEvery > 24*time.Hour {
+				return "", 0, revcache.ManagerConfig{}, errors.New("refresh_interval must be between 1m and 24h")
+			}
+		}
+		cfg := revcache.ManagerConfig{Segment: disk.Segment}
+		for _, source := range disk.Issuers {
+			issuerPEM, err := os.ReadFile(source.IssuerFile) // #nosec G304 -- operator-supplied public issuer certificate (CWE-22)
+			if err != nil {
+				return "", 0, revcache.ManagerConfig{}, fmt.Errorf("read issuer %q: %w", source.ID, err)
+			}
+			issuerDER, err := mtls.FirstCertDER(issuerPEM)
+			if err != nil {
+				return "", 0, revcache.ManagerConfig{}, fmt.Errorf("issuer %q is not a certificate: %w", source.ID, err)
+			}
+			entry := revcache.IssuerConfig{ID: source.ID, IssuerDER: issuerDER}
+			if source.CRL != nil {
+				grace := time.Duration(0)
+				if strings.TrimSpace(source.CRL.Grace) != "" {
+					grace, err = time.ParseDuration(source.CRL.Grace)
+					if err != nil || grace < 0 || grace > 24*time.Hour {
+						return "", 0, revcache.ManagerConfig{}, fmt.Errorf("issuer %q CRL grace must be between 0 and 24h", source.ID)
+					}
+				}
+				entry.CRL = &revcache.CRLConfig{UpstreamURL: source.CRL.UpstreamURL, LocalPath: source.CRL.LocalPath, Grace: grace}
+			}
+			if source.OCSP != nil {
+				entry.OCSP = &revcache.OCSPConfig{UpstreamURL: source.OCSP.UpstreamURL, LocalPath: source.OCSP.LocalPath}
+			}
+			cfg.Issuers = append(cfg.Issuers, entry)
+		}
+		return strings.TrimSpace(disk.Listen), refreshEvery, cfg, nil
+	}
+
+	if strings.TrimSpace(o.revCacheSegment) == "" {
+		return "", 0, revcache.ManagerConfig{}, errors.New("legacy --crl-cache-listen requires --revocation-cache-segment")
+	}
+	issuerPEM, err := os.ReadFile(strings.TrimSpace(o.revCacheIssuer)) // #nosec G304 -- operator-supplied public issuer certificate (CWE-22)
+	if err != nil {
+		return "", 0, revcache.ManagerConfig{}, fmt.Errorf("read legacy CRL issuer: %w", err)
+	}
+	issuerDER, err := mtls.FirstCertDER(issuerPEM)
+	if err != nil {
+		return "", 0, revcache.ManagerConfig{}, fmt.Errorf("legacy CRL issuer is not a certificate: %w", err)
+	}
+	return strings.TrimSpace(o.revCacheListen), 15 * time.Minute, revcache.ManagerConfig{
+		Segment: strings.TrimSpace(o.revCacheSegment),
+		Issuers: []revcache.IssuerConfig{{ID: "default", IssuerDER: issuerDER,
+			CRL: &revcache.CRLConfig{UpstreamURL: strings.TrimSpace(o.revCacheUpstream), LocalPath: "/crl/default", Grace: o.revCacheGrace}}},
+	}, nil
+}

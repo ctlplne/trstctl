@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -39,6 +40,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/plugincensus"
+	"trstctl.com/trstctl/internal/revcacheposture"
 )
 
 func main() {
@@ -74,6 +76,8 @@ func main() {
 	revCacheUpstream := flag.String("crl-cache-upstream", "", "the control plane CRL URL this relay caches, e.g. https://cp.example/crl/<tenant>.crl")
 	revCacheIssuer := flag.String("crl-cache-issuer", "", "PEM file holding the issuing CA certificate the cached CRL must verify against. Required with --crl-cache-listen: without it the relay cannot tell a CRL from a captive portal's login page")
 	revCacheGrace := flag.Duration("crl-cache-grace", 0, "how long past nextUpdate a cached CRL may still be served. Zero — the default — serves nothing past nextUpdate; any other value is a decision to serve a list the CA said had expired, which only the operator can weigh")
+	revCacheSegment := flag.String("revocation-cache-segment", "", "stable operator name for the dark segment served by the legacy single-CRL flags; required with --crl-cache-listen")
+	revCacheConfig := flag.String("revocation-cache-config", "", "JSON file defining one segment listener and multiple issuer CRL/OCSP caches. The file holds public issuer paths and upstream URLs, never private keys or credentials")
 	pluginDir := flag.String("connector-plugin-dir", "", "directory of signature-verified third-party WASM connectors this relay may execute (epic E4). Each <name>.wasm needs a sibling <name>.wasm.sig from a key named by --connector-plugin-key. Empty disables third-party connectors; a directory with no trust keys is refused rather than loaded")
 	pluginKeys := flag.String("connector-plugin-key", "", "comma-separated PEM files holding the publisher public keys whose signatures this relay accepts for third-party connectors. Required whenever --connector-plugin-dir is set: loading unverified partner code inside a customer network is refused, not warned about")
 	pluginPins := flag.String("connector-plugin-pin", "", "comma-separated hex SHA-256 digests restricting third-party connectors to exactly these builds. A signature says who built a module; a pin says which build, which is what stops a compromised publisher key from shipping a new one")
@@ -289,6 +293,8 @@ func main() {
 		revCacheUpstream:                  *revCacheUpstream,
 		revCacheIssuer:                    *revCacheIssuer,
 		revCacheGrace:                     *revCacheGrace,
+		revCacheSegment:                   strings.TrimSpace(*revCacheSegment),
+		revCacheConfig:                    strings.TrimSpace(*revCacheConfig),
 		pluginDir:                         *pluginDir,
 		pluginKeys:                        *pluginKeys,
 		pluginPins:                        *pluginPins,
@@ -399,6 +405,11 @@ type agentOptions struct {
 	revCacheUpstream string
 	revCacheIssuer   string
 	revCacheGrace    time.Duration
+	revCacheSegment  string
+	revCacheConfig   string
+	// revCacheHTTPClient is a test-only composition seam. Production flag
+	// assembly leaves it nil and always gets the SSRF-guarded client below.
+	revCacheHTTPClient *http.Client
 
 	pluginDir       string
 	pluginKeys      string
@@ -477,6 +488,9 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if strings.TrimSpace(o.enrollProxyListen) != "" && !agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
 		return fmt.Errorf("--enroll-proxy-listen requires a certificate carrying the %q role; re-enroll this agent with a network-role bootstrap token", mtls.AgentRoleNetwork)
 	}
+	if revocationCacheConfigured(o) && !agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
+		return fmt.Errorf("revocation caching requires a certificate carrying the %q role; re-enroll this agent with a network-role bootstrap token", mtls.AgentRoleNetwork)
+	}
 	// E4: verify and load third-party connectors BEFORE the first heartbeat.
 	// That first beat is the boot record operators trust; reporting an empty
 	// runtime and correcting it one interval later would be a false outage.
@@ -509,9 +523,13 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	// device request.
 	reportEnrollmentProxy, stopEnrollProxy := startEnrollProxy(ctx, o, enrollClient)
 	defer stopEnrollProxy()
+	reportRevocationCaches, stopRevocationCaches := startRevocationCache(ctx, o)
+	defer stopRevocationCaches()
 	ch := channelAdapter{
-		c:               transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())),
-		enrollmentProxy: reportEnrollmentProxy,
+		c:                  transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())),
+		enrollmentProxy:    reportEnrollmentProxy,
+		revocationCaches:   reportRevocationCaches,
+		revocationIssuedAt: &atomic.Int64{},
 	}
 	if agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
 		ch.pluginIdentity = a.Identity()
@@ -633,11 +651,6 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			}
 		}
 	}
-
-	// R3: the revocation cache, so relying parties in this segment can check
-	// revocation without a route to the control plane.
-	stopRevCache := startRevocationCache(ctx, o)
-	defer stopRevCache()
 
 	// B3: the SPIFFE Workload API, served on this host for the workloads that
 	// run on it. Its own goroutine because it is a listener rather than a
@@ -1037,10 +1050,14 @@ func agentIdentityFilesExist(o agentOptions) bool {
 // agent core's message types so the agent library has no hard dependency on the
 // transport message structs.
 type channelAdapter struct {
-	c               *transport.AgentClient
-	enrollmentProxy func() *transport.EnrollmentProxyReport
-	pluginIdentity  *mtls.AgentIdentity
-	pluginCensus    func() []plugincensus.Entry
+	c                *transport.AgentClient
+	enrollmentProxy  func() *transport.EnrollmentProxyReport
+	pluginIdentity   *mtls.AgentIdentity
+	pluginCensus     func() []plugincensus.Entry
+	revocationCaches func() []revcacheposture.Entry
+	// revocationIssuedAt makes signed evidence strictly newer across immediate
+	// reconnects even when the wall clock has only one-second wire precision.
+	revocationIssuedAt *atomic.Int64
 }
 
 func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatRequest) (*agent.HeartbeatResponse, error) {
@@ -1063,11 +1080,40 @@ func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatReque
 		}
 		wire.RelayPlugins = report
 	}
+	if a.revocationCaches != nil {
+		if a.pluginIdentity == nil {
+			return nil, errors.New("revocation cache posture signer is not configured")
+		}
+		issuedAt := time.Now().UTC().Unix()
+		if a.revocationIssuedAt != nil {
+			issuedAt = nextMonotonicUnix(a.revocationIssuedAt, issuedAt)
+		}
+		report, err := transport.SignedRevocationCachePosture(a.pluginIdentity,
+			a.pluginIdentity.TenantID(), a.pluginIdentity.CommonName(),
+			a.revocationCaches(), issuedAt)
+		if err != nil {
+			return nil, fmt.Errorf("sign revocation cache posture: %w", err)
+		}
+		wire.RevocationCaches = report
+	}
 	resp, err := a.c.Heartbeat(ctx, wire)
 	if err != nil {
 		return nil, err
 	}
 	return &agent.HeartbeatResponse{TenantID: resp.TenantID, NextHeartbeatSeconds: resp.NextHeartbeatSeconds}, nil
+}
+
+func nextMonotonicUnix(last *atomic.Int64, now int64) int64 {
+	for {
+		prior := last.Load()
+		next := now
+		if next <= prior {
+			next = prior + 1
+		}
+		if last.CompareAndSwap(prior, next) {
+			return next
+		}
+	}
 }
 
 func (a channelAdapter) Renew(ctx context.Context, req *agent.RenewRequest) (*agent.RenewResponse, error) {

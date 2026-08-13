@@ -365,6 +365,17 @@ This proves the relay's observation, not every relying party's fail-closed or
 soft-fail configuration. Controlled CRL/OCSP responders cover repository CI; a
 real Windows AD CS lab run remains external infrastructure evidence.
 
+Dark-segment serving is a separate local-cache path. A network-role agent can load a
+bounded `--revocation-cache-config` with multiple issuers and explicit local CRL and
+OCSP routes. It verifies CRL issuer signature, number, and signed time window before
+caching. For OCSP it also binds the request to the configured issuer and validates
+the responder signature, requested serial, nonce, `thisUpdate`, and `nextUpdate`.
+Only nonce-free answers are reused, and stale or invalid objects produce 503 with no
+protocol bytes. Each mTLS heartbeat signs metadata per segment/issuer/protocol;
+`GET /api/v1/revocation/caches` and Protocols → Revocation cache by segment expose
+fresh, stale, empty, and error without exporting upstream URLs or cached objects.
+An unreported relay is unknown, not healthy.
+
 CT submission is served at `POST /api/v1/revocation/ct-submissions` /
 `trstctl-cli revocation ct-submit`: the outbox queues a precertificate and final
 certificate to configured RFC 6962 CT logs, recording `ct.submission.queued` then

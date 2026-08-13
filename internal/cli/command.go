@@ -172,6 +172,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "health"}, Method: "GET", Path: "/api/v1/certificates/health", Summary: "Show estate-wide certificate expiry and source health"},
 	{Name: []string{"revocation", "crls"}, Method: "GET", Path: "/api/v1/revocation/crls", Summary: "List published full, sharded, and delta CRL distribution artifacts"},
+	{Name: []string{"revocation", "caches"}, Method: "GET", Path: "/api/v1/revocation/caches", Summary: "List signed segment-local CRL and OCSP cache freshness evidence"},
 	{Name: []string{"revocation", "health"}, Method: "GET", Path: "/api/v1/revocation/health", Summary: "List signed network-relay CRL and OCSP endpoint health evidence"},
 	{Name: []string{"revocation", "rogue-certificates"}, Method: "GET", Path: "/api/v1/revocation/rogue-certificates", Summary: "List rogue and non-compliant certificate detection findings"},
 	{Name: []string{"revocation", "ct-submit"}, Method: "POST", Path: "/api/v1/revocation/ct-submissions", Body: bodyFile, Summary: "Queue precertificate and certificate submission to Certificate Transparency logs"},

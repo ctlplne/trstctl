@@ -7,10 +7,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -499,6 +502,37 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 	if err := os.WriteFile(tokenPath, []byte("one-time-bootstrap-token"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	revocationIssuerKey, err := cryptoboundary.GenerateLockedKey(cryptoboundary.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer revocationIssuerKey.Destroy()
+	revocationIssuerDER, err := cryptoboundary.SelfSignedCACert(revocationIssuerKey, "AUD-39 cache issuer", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revocationIssuerPath := filepath.Join(dir, "revocation-issuer.pem")
+	if err := os.WriteFile(revocationIssuerPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: revocationIssuerDER}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	revocationCRL, err := cryptoboundary.CreateCRL(revocationIssuerDER, revocationIssuerKey, nil, 39,
+		time.Now().Add(-time.Minute), time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	revocationUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/pkix-crl")
+		_, _ = w.Write(revocationCRL)
+	}))
+	t.Cleanup(revocationUpstream.Close)
+	reservedCacheListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	revocationCacheAddr := reservedCacheListener.Addr().String()
+	if err := reservedCacheListener.Close(); err != nil {
+		t.Fatal(err)
+	}
 	options := agentOptions{
 		enrollURL:            "https://" + enrollmentListener.Addr().String(),
 		tokenFile:            tokenPath,
@@ -513,6 +547,11 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 		enrollProxyUpstream:  "https://" + enrollmentListener.Addr().String(),
 		enrollProxySegment:   "plant-7",
 		enrollProxyPublicURL: "https://enrol.plant-7.example",
+		revCacheListen:       revocationCacheAddr,
+		revCacheUpstream:     revocationUpstream.URL + "/issuer.crl",
+		revCacheIssuer:       revocationIssuerPath,
+		revCacheSegment:      "plant-7",
+		revCacheHTTPClient:   revocationUpstream.Client(),
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	result := make(chan error, 1)
@@ -530,6 +569,22 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 		if census := heartbeat.RelayPlugins; census == nil || census.Plugins == nil ||
 			len(census.Plugins) != 0 || census.IssuedAtUnix <= 0 || len(census.Signature) == 0 {
 			t.Fatalf("initial heartbeat plugin census = %+v, want a signed explicit empty runtime view", census)
+		}
+		if posture := heartbeat.RevocationCaches; posture == nil || len(posture.Entries) != 1 ||
+			posture.Entries[0].Segment != "plant-7" || posture.Entries[0].Protocol != "crl" ||
+			posture.Entries[0].CacheID != "default" || posture.Entries[0].Status != "fresh" ||
+			posture.IssuedAtUnix <= 0 || len(posture.Signature) == 0 {
+			t.Fatalf("initial heartbeat revocation cache posture = %+v, want signed pre-channel cache state", posture)
+		}
+		response, err := http.Get("http://" + revocationCacheAddr + "/crl/default") // #nosec G107 -- loopback-only assembled test listener (CWE-918)
+		if err != nil {
+			t.Fatalf("isolated client GET assembled relay CRL: %v", err)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		parsed, parseErr := cryptoboundary.ParseCRL(body, revocationIssuerDER)
+		if readErr != nil || response.StatusCode != http.StatusOK || parseErr != nil || parsed.Number != 39 {
+			t.Fatalf("assembled local CRL status=%d read=%v parse=%v info=%+v", response.StatusCode, readErr, parseErr, parsed)
 		}
 		cancel()
 	case <-time.After(10 * time.Second):

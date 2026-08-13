@@ -19555,6 +19555,156 @@
         ],
         "type": "object"
       },
+      "RevocationCachePosture": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RevocationCacheStatus"
+            },
+            "type": "array"
+          },
+          "observed": {
+            "type": "boolean"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/RevocationCacheSummary"
+          }
+        },
+        "required": [
+          "observed",
+          "items",
+          "summary",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "RevocationCacheStatus": {
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "agent_name": {
+            "type": "string"
+          },
+          "cache_id": {
+            "type": "string"
+          },
+          "cached_responses": {
+            "type": "integer"
+          },
+          "detail_code": {
+            "type": "string"
+          },
+          "fresh": {
+            "type": "boolean"
+          },
+          "issuer_fingerprint": {
+            "type": "string"
+          },
+          "last_validated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "local_path": {
+            "type": "string"
+          },
+          "metadata_only": {
+            "type": "boolean"
+          },
+          "next_update": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "protocol": {
+            "enum": [
+              "crl",
+              "ocsp"
+            ],
+            "type": "string"
+          },
+          "refused_requests": {
+            "type": "integer"
+          },
+          "reported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "segment": {
+            "type": "string"
+          },
+          "served_requests": {
+            "type": "integer"
+          },
+          "signature_verified": {
+            "type": "boolean"
+          },
+          "signer_fingerprint": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "fresh",
+              "stale",
+              "empty",
+              "error"
+            ],
+            "type": "string"
+          },
+          "this_update": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "agent_name",
+          "segment",
+          "cache_id",
+          "protocol",
+          "issuer_fingerprint",
+          "local_path",
+          "status",
+          "cached_responses",
+          "fresh",
+          "signature_verified",
+          "metadata_only",
+          "served_requests",
+          "refused_requests",
+          "signer_fingerprint",
+          "reported_at"
+        ],
+        "type": "object"
+      },
+      "RevocationCacheSummary": {
+        "properties": {
+          "caches": {
+            "type": "integer"
+          },
+          "empty": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "integer"
+          },
+          "fresh": {
+            "type": "integer"
+          },
+          "stale": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "caches",
+          "fresh",
+          "stale",
+          "empty",
+          "error"
+        ],
+        "type": "object"
+      },
       "RevocationEndpointHealth": {
         "properties": {
           "certificate_fingerprint": {
@@ -42043,6 +42193,53 @@
         ],
         "summary": "Run an automated remediation playbook",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/revocation/caches": {
+      "get": {
+        "operationId": "listRevocationCaches",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationCachePosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List signed per-segment and per-issuer relay CRL/OCSP cache freshness",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/revocation/crls": {

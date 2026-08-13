@@ -3,9 +3,14 @@
 package crypto
 
 import (
+	stdcrypto "crypto"
+	"crypto/x509"
 	"errors"
+	"math/big"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ocsp"
 )
 
 // caForRevocation builds a self-signed CA whose signing key is a DigestSigner —
@@ -167,6 +172,38 @@ func TestBuildOCSPRequestForSerialRoundTrips(t *testing.T) {
 	}
 	if got != serial {
 		t.Errorf("request serial = %q, want %q", got, serial)
+	}
+}
+
+func TestValidateOCSPRequestForIssuerRejectsAnotherIssuerAUD39(t *testing.T) {
+	caDER, _ := caForRevocation(t)
+	otherDER, _ := caForRevocation(t)
+	reqDER, err := BuildOCSPRequestForSerial(caDER, "42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serial, err := ValidateOCSPRequestForIssuer(reqDER, caDER); err != nil || serial != "42" {
+		t.Fatalf("configured issuer request = serial:%q err:%v", serial, err)
+	}
+	if _, err := ValidateOCSPRequestForIssuer(reqDER, otherDER); !errors.Is(err, ErrMalformedOCSPRequest) {
+		t.Fatalf("wrong issuer request error=%v, want ErrMalformedOCSPRequest", err)
+	}
+}
+
+func TestValidateOCSPRequestForIssuerPreservesRequestHashAlgorithmAUD39(t *testing.T) {
+	caDER, _ := caForRevocation(t)
+	issuer, err := x509.ParseCertificate(caDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqDER, err := ocsp.CreateRequest(&x509.Certificate{SerialNumber: big.NewInt(66)}, issuer,
+		&ocsp.RequestOptions{Hash: stdcrypto.SHA256})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serial, err := ValidateOCSPRequestForIssuer(reqDER, caDER)
+	if err != nil || serial != "42" {
+		t.Fatalf("SHA-256 issuer-bound request serial=%q err=%v", serial, err)
 	}
 }
 

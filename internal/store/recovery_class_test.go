@@ -292,3 +292,15 @@ func TestADCSEnrollmentServicePostureIsRebuiltAndSnapshotSafeAUD37(t *testing.T)
 		t.Fatalf("SnapshotFormatVersion = %d; a v26 payload cannot restore enrollment-service posture", SnapshotFormatVersion)
 	}
 }
+
+func TestAgentRevocationCachePostureInvalidatesLegacySnapshotsAUD39(t *testing.T) {
+	if !containsRecoveryTable(ReadModelTables, "agents") {
+		t.Fatal("agents is missing from the cold-rebuild truncate set")
+	}
+	if !containsRecoveryTable(snapshotTables, "agents") {
+		t.Fatal("agents is missing from snapshots, so restore would erase signed revocation-cache posture")
+	}
+	if SnapshotFormatVersion < 28 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v27 payload cannot restore signed revocation-cache posture", SnapshotFormatVersion)
+	}
+}

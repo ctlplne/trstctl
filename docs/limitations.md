@@ -719,17 +719,32 @@ never live in the API process. What you can do end to end against the running bi
   addendum; the console also has no prove-fixed action or durable verification link
   yet. Those are capability gaps, not reasons to weaken the tenant boundary of the
   rows that are served today.
-  Relay revocation cache (R3): a relay started with `--crl-cache-listen` serves the
-  control plane's CRL to relying parties in its segment. Revocation checking is the
+  Relay revocation cache (R3): a network-role relay started with
+  `--revocation-cache-config` serves issuer-specific CRL and OCSP paths to relying
+  parties in one named segment. The JSON file declares a bounded listener, the
+  segment, and multiple issuers; each issuer points at a public certificate file and
+  may declare a CRL GET path, an OCSP POST path, or both. The old
+  `--crl-cache-listen` flags remain a single-issuer CRL compatibility path and now
+  require `--revocation-cache-segment`. Revocation checking is the
   part of PKI that fails quietly — a client that cannot reach a distribution point
   usually proceeds rather than refusing — so a segment with no route silently stops
   checking, and nobody finds out until a compromised certificate is used.
-  The relay SIGNS NOTHING: it holds the CA's signed bytes and hands them over, so a
+  The relay SIGNS NO REVOCATION OBJECT: it holds the CA's signed bytes and hands them over, so a
   compromised relay can withhold a CRL (visible: the fetch fails) but cannot forge
   one (which would not be). It verifies a fetched CRL against the configured issuer
   before caching, which is not the relay adding trust — a relying party checks the
   signature regardless — but the relay declining to store what no client would
   accept, such as a captive portal's login page.
+  The OCSP path accepts only bounded `application/ocsp-request` POST bodies. It
+  proves that the request's issuer hashes match the configured issuer, forwards the
+  exact request, and accepts a response only after the issuer/responder signature,
+  requested serial, nonce equality, `thisUpdate`, and `nextUpdate` all validate.
+  Nonce-free responses are cached in a 4,096-entry per-issuer bound; nonce-bearing
+  responses are never reused because a nonce binds one response to one request.
+  Expired entries are evicted first. The relay returns 503 with no OCSP response
+  bytes when the upstream is unreachable or its answer is stale, malformed, for a
+  different issuer/serial, or incorrectly signed.
+
   IT FAILS CLOSED ON STALENESS, and that is the property the feature exists for. A
   stale CRL is dangerous precisely BECAUSE it still verifies: nextUpdate has passed
   and the signature is good, so a relying party accepts it and trusts a certificate
@@ -740,8 +755,19 @@ never live in the API process. What you can do end to end against the running bi
   only they can weigh. A CRL whose number went BACKWARDS is refused, since replaying
   an older list is how a revoked certificate comes back to life. A failed refresh
   keeps a still-valid cached list rather than discarding it. Both fail-closed
-  properties are mutation-verified, and the heartbeat reports cached-but-stale as its
-  own state — it is working as designed and looks exactly like an outage.
+  properties are mutation-verified. Before opening its steady-state channel, the
+  relay signs a normalized metadata-only row per segment, issuer, and protocol with
+  the same certificate key used by mTLS. The server verifies the certificate
+  signature, tenant/agent binding, timestamp, network role, and monotonic order,
+  then event-projects it. `GET /api/v1/revocation/caches` and Protocols → Revocation
+  cache by segment show fresh, stale, empty, and error separately. Upstream URLs,
+  issuer bytes, OCSP requests/responses, CRL bytes, and credentials never enter the
+  heartbeat, event, API, or console. A missing report remains unobserved rather than
+  green. The repository proves multiple issuers, signature-valid local CRL/OCSP
+  clients, nonce policy, stale refusal, signed assembled-agent heartbeat, tenant
+  isolation, replay, snapshot, and cold rebuild against controlled responders. A
+  domain-joined Windows AD CS deployment using its real CDP/OCSP endpoints remains
+  external lab evidence rather than a repository claim.
   Enrolment proxy for dark segments (A4): a network-role relay started with
   `--enroll-proxy-listen`, `--enroll-proxy-segment`,
   `--enroll-proxy-public-url`, and `--enroll-proxy-upstream` serves ACME, EST and

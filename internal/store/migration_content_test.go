@@ -26,6 +26,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	175: true,
 	173: true,
 	172: true,
 	170: true,
@@ -576,6 +577,60 @@ func TestMigration0163BuildsTenantEffectiveLaneProcessingIndexWithoutChangingRow
 // write values, not just shapes, must prove their before/after transform over
 // populated multi-tenant data at the exact N-1 -> N boundary.
 func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0175_agent_revocation_cache_posture", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 175)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		for _, row := range []struct{ id, tenant, name string }{
+			{"17500000-0000-4000-8000-000000000001", "11111111-1111-1111-1111-111111111111", "relay-a"},
+			{"17500000-0000-4000-8000-000000000002", "22222222-2222-2222-2222-222222222222", "relay-b"},
+		} {
+			if _, err := pool.Exec(ctx, `
+				INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
+				VALUES ($1, $2, $3, 'online', 'pre-0175', '2026-08-12T12:00:00Z')`,
+				row.id, row.tenant, row.name); err != nil {
+				t.Fatalf("seed pre-0175 agent %s: %v", row.name, err)
+			}
+		}
+		const stableProjection = `
+			SELECT id::text, tenant_id::text, name, status, version, last_seen_at::text
+			  FROM agents
+			 ORDER BY tenant_id, id`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stableProjection)
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, stableProjection)
+		if beforeCount != afterCount || beforeChecksum != afterChecksum {
+			t.Fatalf("0175 disturbed existing agent evidence: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+
+		var unsafeDefaults int
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*) FROM agents
+			 WHERE revocation_caches <> '[]'::jsonb
+			    OR revocation_caches_statement <> ''
+			    OR octet_length(revocation_caches_signature) <> 0
+			    OR revocation_caches_signer_fingerprint <> ''
+			    OR revocation_caches_reported_at IS NOT NULL`).Scan(&unsafeDefaults); err != nil {
+			t.Fatalf("read post-0175 defaults: %v", err)
+		}
+		if unsafeDefaults != 0 {
+			t.Fatalf("%d legacy agents acquired fabricated revocation-cache evidence", unsafeDefaults)
+		}
+		if _, err := pool.Exec(ctx, `
+			UPDATE agents SET revocation_caches_reported_at = now()
+			 WHERE id = '17500000-0000-4000-8000-000000000001'`); err == nil {
+			t.Fatal("0175 accepted a reported-at timestamp without signed evidence")
+		}
+	})
+
 	t.Run("0153_secret_sync_target_order", testMigration0153SecretSyncTargetOrder)
 	t.Run("0143_lifecycle_rotation_event_order", func(t *testing.T) {
 		ctx := context.Background()

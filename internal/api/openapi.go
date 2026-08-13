@@ -1717,6 +1717,28 @@ func componentSchemas() map[string]*Schema {
 		"observed": {Type: "boolean"}, "items": {Type: "array", Items: ref("RevocationEndpointHealth")},
 		"summary": ref("RevocationHealthSummary"), "guidance": str(),
 	}, "observed", "items", "summary", "guidance")
+	// R3: signed metadata-only relay-local cache posture.
+	revocationCacheStatus := object(map[string]*Schema{
+		"agent_id": str(), "agent_name": str(), "segment": str(), "cache_id": str(),
+		"protocol":           {Type: "string", Enum: []string{"crl", "ocsp"}},
+		"issuer_fingerprint": str(), "local_path": str(),
+		"status":      {Type: "string", Enum: []string{"fresh", "stale", "empty", "error"}},
+		"detail_code": str(), "cached_responses": {Type: "integer"}, "fresh": {Type: "boolean"},
+		"signature_verified": {Type: "boolean"}, "metadata_only": {Type: "boolean"},
+		"this_update": timestamp(), "next_update": timestamp(), "last_validated_at": timestamp(),
+		"served_requests": {Type: "integer"}, "refused_requests": {Type: "integer"},
+		"signer_fingerprint": str(), "reported_at": timestamp(),
+	}, "agent_id", "agent_name", "segment", "cache_id", "protocol", "issuer_fingerprint", "local_path",
+		"status", "cached_responses", "fresh", "signature_verified", "metadata_only", "served_requests",
+		"refused_requests", "signer_fingerprint", "reported_at")
+	revocationCacheSummary := object(map[string]*Schema{
+		"caches": {Type: "integer"}, "fresh": {Type: "integer"}, "stale": {Type: "integer"},
+		"empty": {Type: "integer"}, "error": {Type: "integer"},
+	}, "caches", "fresh", "stale", "empty", "error")
+	revocationCachePosture := object(map[string]*Schema{
+		"observed": {Type: "boolean"}, "items": {Type: "array", Items: ref("RevocationCacheStatus")},
+		"summary": ref("RevocationCacheSummary"), "guidance": str(),
+	}, "observed", "items", "summary", "guidance")
 	// B2: where each deployment target's private key is generated.
 	endpointKeyCustody := object(map[string]*Schema{
 		"target_id": str(), "name": str(), "connector": str(),
@@ -4879,6 +4901,9 @@ func componentSchemas() map[string]*Schema {
 		"RevocationEndpointHealth":                 revocationEndpointHealth,
 		"RevocationHealthSummary":                  revocationHealthSummary,
 		"RevocationHealth":                         revocationHealth,
+		"RevocationCacheStatus":                    revocationCacheStatus,
+		"RevocationCacheSummary":                   revocationCacheSummary,
+		"RevocationCachePosture":                   revocationCachePosture,
 		"EndpointKeyCustody":                       endpointKeyCustody,
 		"EndpointCustodySummary":                   endpointCustodySummary,
 		"EndpointKeyCustodyList":                   endpointKeyCustodyList,

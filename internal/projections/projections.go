@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/privacyref"
+	"trstctl.com/trstctl/internal/revcacheposture"
 	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/rotationcommand"
 	"trstctl.com/trstctl/internal/store"
@@ -1498,11 +1499,18 @@ type AgentHeartbeat struct {
 	// RelayPlugins is present only on v2 events after the server verified the
 	// report against the exact mTLS peer certificate and freshness window.
 	RelayPlugins *AgentRelayPluginCensus `json:"relay_plugins,omitempty"`
+	// RevocationCaches is present only on v3 events after the server verified
+	// the report against the exact mTLS peer certificate and freshness window.
+	RevocationCaches *AgentRevocationCachePosture `json:"revocation_caches,omitempty"`
 }
 
 // AgentHeartbeatPluginCensusSchemaVersion adds signed relay-plugin metadata to
 // the legacy heartbeat without changing how v1 history replays.
 const AgentHeartbeatPluginCensusSchemaVersion = 2
+
+// AgentHeartbeatRevocationCacheSchemaVersion adds signed per-cache CRL/OCSP
+// posture while keeping v1/v2 append-only history replayable.
+const AgentHeartbeatRevocationCacheSchemaVersion = 3
 
 // AgentRelayPluginCensus preserves the evidence needed to audit the projection.
 // Publisher and digest fields inside Plugins are fingerprints only.
@@ -1512,6 +1520,16 @@ type AgentRelayPluginCensus struct {
 	Signature         []byte               `json:"signature"`
 	Statement         string               `json:"statement"`
 	SignerFingerprint string               `json:"signer_fingerprint"`
+}
+
+// AgentRevocationCachePosture preserves the verified evidence needed to audit
+// and replay one metadata-only per-cache view.
+type AgentRevocationCachePosture struct {
+	Entries           []revcacheposture.Entry `json:"entries"`
+	IssuedAtUnix      int64                   `json:"issued_at_unix"`
+	Signature         []byte                  `json:"signature"`
+	Statement         string                  `json:"statement"`
+	SignerFingerprint string                  `json:"signer_fingerprint"`
 }
 
 func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, heartbeat AgentHeartbeat) error {
@@ -1525,6 +1543,13 @@ func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, hear
 	case AgentHeartbeatPluginCensusSchemaVersion:
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v2 requires relay plugin census")
+		}
+	case AgentHeartbeatRevocationCacheSchemaVersion:
+		// A v3 heartbeat is introduced by revocation-cache posture. Plugin census
+		// remains independently optional so a compatible relay need not invent a
+		// plugin report merely to publish cache state.
+		if report == nil {
+			return nil
 		}
 	default:
 		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
@@ -1542,6 +1567,38 @@ func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, hear
 	fingerprint, err := hex.DecodeString(report.SignerFingerprint)
 	if err != nil || len(fingerprint) != 32 || report.SignerFingerprint != strings.ToLower(report.SignerFingerprint) {
 		return errors.New("projections: relay plugin census signer fingerprint is invalid")
+	}
+	return nil
+}
+
+func validateAgentHeartbeatRevocationCaches(schemaVersion int, tenantID string, heartbeat AgentHeartbeat) error {
+	report := heartbeat.RevocationCaches
+	switch schemaVersion {
+	case events.DefaultSchemaVersion, AgentHeartbeatPluginCensusSchemaVersion:
+		if report != nil {
+			return fmt.Errorf("projections: agent.heartbeat v%d cannot carry revocation cache posture", schemaVersion)
+		}
+		return nil
+	case AgentHeartbeatRevocationCacheSchemaVersion:
+		if report == nil {
+			return errors.New("projections: agent.heartbeat v3 requires revocation cache posture")
+		}
+	default:
+		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
+	}
+	canonical, err := (revcacheposture.Statement{
+		TenantID: tenantID, AgentCommonName: heartbeat.Agent,
+		Entries: report.Entries, IssuedAtUnix: report.IssuedAtUnix,
+	}).Canonical()
+	if err != nil {
+		return fmt.Errorf("projections: revocation cache posture metadata: %w", err)
+	}
+	if report.Statement != string(canonical) || len(report.Signature) == 0 {
+		return errors.New("projections: revocation cache posture evidence is incomplete or does not match metadata")
+	}
+	fingerprint, err := hex.DecodeString(report.SignerFingerprint)
+	if err != nil || len(fingerprint) != 32 || report.SignerFingerprint != strings.ToLower(report.SignerFingerprint) {
+		return errors.New("projections: revocation cache posture signer fingerprint is invalid")
 	}
 	return nil
 }
@@ -2972,7 +3029,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventBreakglassCACrossSigned:                  {1: true},
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
-	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true},
+	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true},
 	EventAgentCertRenewed:                         {1: true},
 	EventAgentCertRevoked:                         {1: true},
 	EventAgentOffboarded:                          {1: true},
@@ -3804,6 +3861,9 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := validateAgentHeartbeatPluginCensus(schemaVersionOf(e), e.TenantID, pl); err != nil {
 			return err
 		}
+		if err := validateAgentHeartbeatRevocationCaches(schemaVersionOf(e), e.TenantID, pl); err != nil {
+			return err
+		}
 		lastSeen := e.Time
 		row := store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: pl.Status,
@@ -3842,6 +3902,14 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			row.RelayPluginsSignerFingerprint = report.SignerFingerprint
 			reported := time.Unix(report.IssuedAtUnix, 0).UTC()
 			row.RelayPluginsReportedAt = &reported
+		}
+		if report := pl.RevocationCaches; report != nil {
+			row.RevocationCaches = report.Entries
+			row.RevocationCachesStatement = report.Statement
+			row.RevocationCachesSignature = append([]byte(nil), report.Signature...)
+			row.RevocationCachesSignerFingerprint = report.SignerFingerprint
+			reported := time.Unix(report.IssuedAtUnix, 0).UTC()
+			row.RevocationCachesReportedAt = &reported
 		}
 		return p.store.ApplyAgentHeartbeatTx(ctx, tx, row)
 	case EventAgentCertRenewed:

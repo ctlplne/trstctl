@@ -152,8 +152,12 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// AUD-36's semantic AD CS drift history read raises it to 363 and maps onto
 	// discovery: it is the consecutive-sweep history behind F1 posture, not a
 	// parallel inventory surface.
-	if len(out) != 363 {
-		t.Fatalf("OpenAPI operationIds = %d, want 363", len(out))
+	// AUD-39's signed per-segment/per-issuer CRL/OCSP cache read raises it to 364
+	// and maps onto F47 beside endpoint health: the former asks whether an
+	// upstream is healthy; this one asks whether isolated clients have a fresh
+	// validated local copy.
+	if len(out) != 364 {
+		t.Fatalf("OpenAPI operationIds = %d, want 364", len(out))
 	}
 	return out
 }

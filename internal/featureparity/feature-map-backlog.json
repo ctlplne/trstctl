@@ -3091,10 +3091,10 @@
             "phase": "P1",
             "priority": 21,
             "served_state": "served",
-            "backend_status": "served for trstctl hierarchy plus signed network-relay CRL/OCSP endpoint monitoring, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture",
-            "current_frontend_mapping": "Certificates page shows signed relay CRL/OCSP endpoint freshness evidence, rogue/non-compliant certificate posture, CRL distribution status, full/shard/delta URLs, CT precert/cert submission queueing, and identity revoke/audit evidence",
+            "backend_status": "served for trstctl hierarchy plus signed network-relay CRL/OCSP endpoint monitoring, validating multi-issuer relay-local CRL/OCSP caches, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture",
+            "current_frontend_mapping": "Certificates shows signed relay CRL/OCSP endpoint freshness, rogue/non-compliant posture, CRL distribution, and CT queueing; Protocols shows signed per-segment/per-issuer relay-local CRL/OCSP cache freshness; Identities and Audit expose revocation actions/evidence",
             "target_gui_mapping": "Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence.",
-            "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, signed relay CRL/OCSP freshness and unknown-before-observation states, audit link, the Certificates page CRL distribution status, rogue/non-compliant certificate posture, and CT submission queueing; served tests prove the AUD-38 scheduled relay journey, CAP-REV-05 detection, and CAP-REV-06 CT add-pre-chain/add-chain through the outbox worker.",
+            "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, signed endpoint and per-segment cache freshness with unknown-before-observation states, audit link, CRL distribution, rogue/non-compliant posture, and CT queueing; served tests prove AUD-38 monitoring, AUD-39 multi-issuer local CRL/OCSP clients and signed projection, CAP-REV-05 detection, and CAP-REV-06 CT delivery.",
             "source_docs": [
                 "docs/features/issuance-and-cas.md"
             ],
@@ -3108,17 +3108,22 @@
                 "internal/api/rogue_certificates.go",
                 "/api/v1/revocation/health",
                 "internal/api/revocation_health.go",
-                "internal/server/revocation_health_scheduler.go"
+                "internal/server/revocation_health_scheduler.go",
+                "/api/v1/revocation/caches",
+                "internal/agent/revcache/manager.go",
+                "internal/api/revocation_caches.go"
             ],
             "source_frontend": [
                 "web/src/pages/Identities.tsx",
                 "web/src/pages/Audit.tsx",
                 "web/src/pages/Certificates.tsx",
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/RevocationCachePanel.tsx",
                 "web/src/lib/api.ts",
                 "web/src/__tests__/search_and_empty.test.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. COMPETE-043 update: CAP-REV-02 now serves published full CRLs, partitioned/sharded CRLs, delta CRLs with deltaCRLIndicator, public manifest/shard/delta URLs, and an authenticated CRL distribution API/CLI/UI status surface. COMPETE-067 update: CAP-REV-06 now serves CT precertificate/final-certificate submission via POST /api/v1/revocation/ct-submissions, CLI revocation ct-submit, Certificates UI controls, ct.submit outbox rows, and ct.submission queued/delivered audit events. Test evidence includes TestServedPartitionedAndDeltaCRLsCAPREV02, TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06, api.crlDistributions contract coverage, and the Certificates console CRL distribution plus CT submission acceptance checks. COMPETE-066 update: CAP-REV-05 now serves rogue and non-compliant certificate posture via GET /api/v1/revocation/rogue-certificates, CLI revocation rogue-certificates, Certificates UI posture evidence, and TestServedRogueCertificateDetectionCAPREV05EndToEnd. AUD-38 serves scheduled, bounded network-relay CRL/OCSP probes, exact issuer/leaf verification context, lease-bound signed ingestion, immutable queue/observation events, replay-safe projection and alert recovery, GET /api/v1/revocation/health, and the Certificates CRL & CT health view. The repository test uses controlled signed responders; a domain-joined Windows AD CS CDP/OCSP run remains honestly external lab evidence.",
+            "notes": "Closed by route-level feature-map evidence. COMPETE-043 serves published full/sharded/delta CRLs. COMPETE-067 serves outbox-backed CT precertificate/final-certificate submission. COMPETE-066 serves rogue and non-compliant certificate posture. AUD-38 serves scheduled network-relay CRL/OCSP endpoint monitoring with signed projection and alert recovery. AUD-39 serves bounded multi-issuer relay-local CRL/OCSP caches, exact issuer/serial/nonce/signature/freshness validation, signed metadata-only heartbeat projection, GET /api/v1/revocation/caches, and Protocols segment visibility. Controlled signed responders prove repository behavior; a domain-joined Windows AD CS CDP/OCSP run remains honestly external lab evidence.",
             "api_surface": [
                 "transitionIdentity",
                 "searchAudit",
@@ -3127,7 +3132,8 @@
                 "listCRLDistributions",
                 "submitCertificateTransparency",
                 "listRogueCertificates",
-                "listRevocationHealth"
+                "listRevocationHealth",
+                "listRevocationCaches"
             ],
             "api_na": "",
             "cli_surface": [
@@ -3136,6 +3142,7 @@
                 "identities bulk-revoke",
                 "certificates bulk-revoke",
                 "revocation crls",
+                "revocation caches",
                 "revocation health",
                 "revocation ct-submit",
                 "revocation rogue-certificates"
@@ -3148,8 +3155,9 @@
                         "CAP-REV-06 served mutation: POST /api/v1/revocation/ct-submissions validates public certificate PEM and CT log URLs, records ct.submit outbox rows, and the worker posts RFC 6962 add-pre-chain/add-chain.",
                         "CAP-REV-05 served read route: GET /api/v1/revocation/rogue-certificates enumerates CT unexpected-issuance findings plus active inventory violations for weak keys, expired active state, lifetime policy, owner attribution, and issuer metadata.",
                         "AUD-38 served path schedules distinct CRL/OCSP endpoints, requires a network-role relay, verifies signed freshness/status, ingests a lease-bound receipt, projects endpoint health, and queues non-fresh alerts.",
+                        "AUD-39 served path starts bounded multi-issuer CRL/OCSP caches before the agent channel, verifies issuer/signature/serial/nonce/freshness, signs metadata-only per-segment posture, and projects it into a tenant read API.",
                         "served_state=served",
-                        "backend_status=served for trstctl hierarchy plus signed network-relay CRL/OCSP endpoint monitoring, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture"
+                        "backend_status=served for trstctl hierarchy plus signed network-relay endpoint monitoring and validating multi-issuer relay-local CRL/OCSP caches"
                     ],
                     "refs": [
                         "internal/server/ct_submission.go",
@@ -3159,7 +3167,9 @@
                         "internal/api/rogue_certificates.go",
                         "internal/server/ct_drift_served_test.go",
                         "internal/server/revocation_health_scheduler.go",
-                        "internal/server/revocation_health_served_test.go"
+                        "internal/server/revocation_health_served_test.go",
+                        "internal/agent/revcache/manager.go",
+                        "internal/server/agentchannel_revocation_cache_test.go"
                     ],
                     "commands": [
                         "make test"
@@ -3172,7 +3182,8 @@
                         "Certificates page renders the served CRL distribution status, full CRL link, shard count, delta base link, and freshness window.",
                         "Certificates page renders the CT submission form and calls api.submitCertificateTransparency with certificate_pem, precertificate_pem, chain_pem, logs, and allow_private_endpoint.",
                         "Certificates page renders CAP-REV-05 summary counts, rogue/non-compliant finding rows, severity, recommendations, and projection evidence refs from api.rogueCertificates.",
-                        "Certificates → CRL & CT renders each signed relay CRL/OCSP observation with freshness status, signature evidence, relay identity, evidence digest, nextUpdate, and explicit unknown-before-observation copy."
+                        "Certificates → CRL & CT renders each signed relay CRL/OCSP observation with freshness status, signature evidence, relay identity, evidence digest, nextUpdate, and explicit unknown-before-observation copy.",
+                        "Protocols → Revocation cache by segment renders signed relay-local CRL/OCSP metadata per segment/issuer with fresh, stale, empty, error, and unobserved states."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
@@ -3180,6 +3191,8 @@
                         "web/src/pages/Identities.tsx",
                         "web/src/pages/Audit.tsx",
                         "web/src/pages/Certificates.tsx",
+                        "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/RevocationCachePanel.tsx",
                         "web/src/lib/api.ts",
                         "web/src/__tests__/search_and_empty.test.tsx"
                     ]
@@ -3191,6 +3204,7 @@
                         "CLI command: identities bulk-revoke",
                         "CLI command: certificates bulk-revoke",
                         "CLI command: revocation crls",
+                        "CLI command: revocation caches",
                         "CLI command: revocation health",
                         "CLI command: revocation ct-submit",
                         "CLI command: revocation rogue-certificates"
@@ -3209,7 +3223,8 @@
                         "OpenAPI operationId: listCRLDistributions",
                         "OpenAPI operationId: submitCertificateTransparency",
                         "OpenAPI operationId: listRogueCertificates",
-                        "OpenAPI operationId: listRevocationHealth"
+                        "OpenAPI operationId: listRevocationHealth",
+                        "OpenAPI operationId: listRevocationCaches"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -3232,7 +3247,12 @@
                         "web/src/__tests__/search_and_empty.test.tsx asserts the Certificates console renders rogue and non-compliant certificate posture from api.rogueCertificates.",
                         "web/src/lib/api.test.ts asserts api.rogueCertificates calls /api/v1/revocation/rogue-certificates as a read-only GET.",
                         "TestServedRevocationHealthSchedulesRelayAndProjectsSignedCRLOCSPAUD38 proves concurrent scheduling, role selection, real signed CRL/OCSP validation, signed receipt ingestion, notification, API, cold replay, and cross-tenant isolation.",
-                        "web/src/lib/api.test.ts and web/src/__tests__/search_and_empty.test.tsx prove the revocation health client route and operator evidence view."
+                        "web/src/lib/api.test.ts and web/src/__tests__/search_and_empty.test.tsx prove the revocation health client route and operator evidence view.",
+                        "TestManagerServesMultipleIssuerCRLsAndValidatingOCSPFailClosedAUD39 proves local signature-valid multi-issuer CRL/OCSP responses, nonce policy, bounded reuse, and stale refusal.",
+                        "TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel proves the assembled agent serves a signature-valid local CRL and sends signed cache posture before its steady-state channel.",
+                        "TestSignedRevocationCachePostureIsTenantAgentBoundServedAndReplayableAUD39 proves certificate signature, role/tenant/freshness/replay validation, metadata-only API projection, and cold rebuild.",
+                        "TestRevocationCachesCommandIsReadOnlyAndPreservesSignedMetadataAUD39 proves the headless tenant workflow reads the exact cache route without mutation material or relay-local protocol bytes.",
+                        "web/src/__tests__/protocols.test.tsx proves the Protocols cache table and honest unobserved state."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
@@ -3244,7 +3264,12 @@
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx",
                         "internal/server/ct_drift_served_test.go",
-                        "internal/server/revocation_health_served_test.go"
+                        "internal/server/revocation_health_served_test.go",
+                        "internal/agent/revcache/manager_test.go",
+                        "cmd/trstctl-agent/bootstrap_token_test.go",
+                        "internal/server/agentchannel_revocation_cache_test.go",
+                        "internal/cli/cli_test.go",
+                        "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
                 "docs": {
@@ -3254,13 +3279,15 @@
                         "CLI and console surfaces documented in docs/cli.md and docs/web-console.md",
                         "CT submission surface documented in docs/features/issuance-and-cas.md, docs/limitations.md, docs/cli.md, and docs/web-console.md",
                         "CAP-REV-05 route, CLI command, UI surface, metadata-only response, and residual CT/provider-native limits are documented in docs/features/issuance-and-cas.md, docs/cli.md, and docs/limitations.md.",
-                        "AUD-38 scheduling, signed CRL/OCSP evidence, client soft-fail guidance, LDAP limit, and external Windows AD CS lab boundary are documented in docs/features/issuance-and-cas.md and docs/limitations.md."
+                        "AUD-38 scheduling, signed CRL/OCSP evidence, client soft-fail guidance, LDAP limit, and external Windows AD CS lab boundary are documented in docs/features/issuance-and-cas.md and docs/limitations.md.",
+                        "AUD-39 multi-issuer configuration, validating OCSP nonce/cache policy, fail-closed behavior, signed metadata boundary, API/console surface, and external Windows lab boundary are documented in configuration, feature, console, and limitation docs."
                     ],
                     "refs": [
                         "docs/features/issuance-and-cas.md",
                         "docs/limitations.md",
                         "docs/cli.md",
-                        "docs/web-console.md"
+                        "docs/web-console.md",
+                        "docs/configuration.md"
                     ]
                 },
                 "rbac": {
@@ -3268,7 +3295,7 @@
                         "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: transitionIdentity, searchAudit, bulkRevokeIdentities, bulkRevokeCertificates, listCRLDistributions, submitCertificateTransparency",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
                         "CT submission is guarded by certs:write and all mutations require Idempotency-Key.",
-                        "feature authz manifest maps listRogueCertificates and listRevocationHealth to certs:read; OpenAPI publishes x-trstctl-permission on the guarded read routes."
+                        "feature authz manifest maps listRogueCertificates, listRevocationHealth, and listRevocationCaches to certs:read; OpenAPI publishes x-trstctl-permission on the guarded read routes."
                     ],
                     "refs": [
                         "internal/featureparity/authz_manifest.go",
@@ -3285,6 +3312,7 @@
                         "ct.submission.queued and ct.submission.delivered events record CT submission queue and delivery evidence without private key material.",
                         "CAP-REV-05 is read-only and returns projection evidence refs for certificates, discovery findings, and CT notification outbox rows; mutating revocation and CT submission paths retain event/audit evidence.",
                         "AUD-38 retains revocation.probe.queued and revocation.health.observed events and binds each projected row to the verified terminal-receipt evidence digest."
+                        ,"AUD-39 retains certificate-signed metadata-only cache posture in agent.heartbeat.v3; cached protocol bytes and upstream locations never enter the event."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -3317,13 +3345,15 @@
                         "web/src/pages/Identities.tsx",
                         "web/src/pages/Audit.tsx",
                         "web/src/pages/Certificates.tsx",
+                        "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/RevocationCachePanel.tsx",
                         "web/src/lib/api.ts",
                         "web/src/__tests__/search_and_empty.test.tsx"
                     ]
                 },
                 "i18n": {
                     "evidence": [
-                        "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+                        "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check; AUD-39 cache-state strings ship in English, Spanish, and German with an explicit human-review flag."
                     ],
                     "refs": [
                         "web/scripts/extract-i18n-messages.mjs",

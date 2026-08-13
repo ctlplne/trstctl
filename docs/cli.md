@@ -330,6 +330,10 @@ trstctl-cli revocation crls
 # Show signed network-relay CRL and OCSP endpoint health evidence.
 trstctl-cli revocation health
 
+# Show signed per-segment relay-local CRL and OCSP cache freshness metadata.
+# Cached protocol bytes and upstream locations remain inside the segment.
+trstctl-cli revocation caches
+
 # List rogue and non-compliant certificate posture findings.
 trstctl-cli revocation rogue-certificates
 

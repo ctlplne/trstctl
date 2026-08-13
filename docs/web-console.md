@@ -306,8 +306,17 @@ durable lifecycle scheduler state that consumed that window. Loading, no affecte
 certificates, permission denied, API error, and ACME-not-served are distinct states;
 the panel never turns an unavailable publisher into a success-looking empty table.
 
+The read-only **Revocation cache by segment** panel calls
+`GET /api/v1/revocation/caches` with `certs:read`. It shows each certificate-bound
+network relay's segment, issuer fingerprint, CRL/OCSP local path, signed freshness
+window, validation time, and served/refused counts. Fresh, stale, empty, API failure,
+and never-reported are different states. The response is metadata-only: cached CRL
+or OCSP bytes, requests, issuer certificates, upstream URLs, and credentials never
+reach the browser.
+
 A client-setup section gives copy-paste commands per protocol, with links to SSH
 Trust and Code Signing. Backed by `/api/v1/acme/ari/posture`,
+`/api/v1/revocation/caches`,
 `/api/v1/acme/dns-01/providers`, `/api/v1/acme/dns-01/provider-configs`,
 `/api/v1/mdm/scep/status`, and `/api/v1/mdm/scep/policies`.
 

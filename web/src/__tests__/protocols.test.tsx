@@ -24,6 +24,7 @@ const { apiMock } = vi.hoisted(() => ({
     acmeUpstreamAuthorizations: vi.fn(),
     enrollmentDiagnostics: vi.fn(),
     agentPage: vi.fn(),
+    revocationCaches: vi.fn(),
   },
 }));
 
@@ -88,8 +89,59 @@ describe("protocol surface", () => {
     apiMock.acmeUpstreamAuthorizations.mockReset();
     apiMock.enrollmentDiagnostics.mockReset();
     apiMock.agentPage.mockReset();
+    apiMock.revocationCaches.mockReset();
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
     apiMock.enrollmentDiagnostics.mockResolvedValue({ items: [], unknown_count: 0, guidance: "" });
+    apiMock.revocationCaches.mockResolvedValue({
+      observed: true,
+      summary: { caches: 4, fresh: 3, stale: 1, empty: 0, error: 0 },
+      guidance: "Signed relay metadata only.",
+      items: [
+        {
+          agent_id: "relay-primary",
+          agent_name: "plant-7-relay-a",
+          cache_id: "issuer-a",
+          segment: "plant-7",
+          protocol: "crl",
+          issuer_fingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          local_path: "/crl/issuer-a",
+          status: "fresh",
+          cached_responses: 1,
+          fresh: true,
+          signature_verified: true,
+          this_update: "2026-08-12T13:00:00Z",
+          next_update: "2026-08-12T15:00:00Z",
+          last_validated_at: "2026-08-12T13:59:00Z",
+          served_requests: 42,
+          refused_requests: 1,
+          signer_fingerprint: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          reported_at: "2026-08-12T14:00:00Z",
+          metadata_only: true,
+        },
+        {
+          agent_id: "relay-primary",
+          agent_name: "plant-7-relay-a",
+          cache_id: "issuer-a",
+          segment: "plant-7",
+          protocol: "ocsp",
+          issuer_fingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          local_path: "/ocsp/issuer-a",
+          status: "stale",
+          detail_code: "next_update_passed",
+          cached_responses: 4,
+          fresh: false,
+          signature_verified: true,
+          this_update: "2026-08-12T12:00:00Z",
+          next_update: "2026-08-12T13:00:00Z",
+          last_validated_at: "2026-08-12T12:59:00Z",
+          served_requests: 11,
+          refused_requests: 3,
+          signer_fingerprint: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          reported_at: "2026-08-12T14:00:00Z",
+          metadata_only: true,
+        },
+      ],
+    });
     apiMock.agentPage.mockResolvedValue({
       agents: [
         {
@@ -383,6 +435,33 @@ describe("protocol surface", () => {
     const panel = await screen.findByRole("region", { name: "Enrollment relay topology" });
     expect(within(panel).queryByText("2 relays")).not.toBeInTheDocument();
     expect(within(panel).getAllByText("1 relay")).toHaveLength(2);
+  });
+
+  it("renders signed multi-issuer revocation-cache freshness without cache bytes or upstream locations", async () => {
+    await renderProtocols();
+
+    const panel = await screen.findByRole("region", { name: "Revocation cache by segment" });
+    expect(within(panel).getByText("3 fresh / 1 stale / 0 empty / 0 error")).toBeInTheDocument();
+    expect(within(panel).getAllByText("issuer-a")).toHaveLength(2);
+    expect(within(panel).getByText("/crl/issuer-a")).toBeInTheDocument();
+    expect(within(panel).getByText("/ocsp/issuer-a")).toBeInTheDocument();
+    expect(within(panel).getAllByText("Issuer signature verified")).toHaveLength(2);
+    expect(within(panel).getByText("next_update_passed")).toBeInTheDocument();
+    expect(within(panel).getByText("4 cached responses")).toBeInTheDocument();
+    expect(within(panel).queryByText(/BEGIN|\.der|upstream\.example|application\/ocsp-response/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps unobserved revocation posture distinct from a healthy empty cache", async () => {
+    apiMock.revocationCaches.mockResolvedValueOnce({
+      observed: false,
+      summary: { caches: 0, fresh: 0, stale: 0, empty: 0, error: 0 },
+      guidance: "No signed relay report.",
+      items: [],
+    });
+    mountProtocols();
+
+    expect(await screen.findByText("No revocation cache has reported")).toBeInTheDocument();
+    expect(screen.getByText(/does not prove that an isolated segment has fresh revocation data/i)).toBeInTheDocument();
   });
 
   it("renders the authenticated tenant's durable diagnosis, count, timestamp, and remediation", async () => {

@@ -96,7 +96,12 @@ import (
 // Bumped to 26 when event-derived ownership-readiness exceptions joined the
 // read model. A v25 payload cannot carry temporary deployment authority and
 // must not skip its grant/revocation events.
-const SnapshotFormatVersion = 27
+// Bumped to 27 when AD CS enrollment-service posture joined the read model.
+// Bumped to 28 when signed agent revocation-cache posture joined the agents
+// projection. A v27 payload has the agent row but none of its signed cache
+// evidence, so resuming after its covered sequence would show an empty cache
+// surface even though the retained heartbeat observation was already skipped.
+const SnapshotFormatVersion = 28
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

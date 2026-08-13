@@ -187,6 +187,7 @@ type Status struct {
 	// refusing to serve it, which is correct and looks like an outage.
 	Fresh      bool
 	Number     int64
+	ThisUpdate time.Time
 	NextUpdate time.Time
 	FetchedAt  time.Time
 }
@@ -203,7 +204,8 @@ func (c *Cache) Status() Status {
 	}
 	return Status{
 		Cached: true, Fresh: c.freshAt(c.now()),
-		Number: c.info.Number, NextUpdate: c.info.NextUpdate, FetchedAt: c.fetched,
+		Number: c.info.Number, ThisUpdate: c.info.ThisUpdate,
+		NextUpdate: c.info.NextUpdate, FetchedAt: c.fetched,
 	}
 }
 

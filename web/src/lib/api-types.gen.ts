@@ -4987,6 +4987,44 @@ export interface RetirementDependent {
   ref: string;
 }
 
+export interface RevocationCachePosture {
+  guidance: string;
+  items: RevocationCacheStatus[];
+  observed: boolean;
+  summary: RevocationCacheSummary;
+}
+
+export interface RevocationCacheStatus {
+  agent_id: string;
+  agent_name: string;
+  cache_id: string;
+  cached_responses: number;
+  detail_code?: string;
+  fresh: boolean;
+  issuer_fingerprint: string;
+  last_validated_at?: string;
+  local_path: string;
+  metadata_only: boolean;
+  next_update?: string;
+  protocol: "crl" | "ocsp";
+  refused_requests: number;
+  reported_at: string;
+  segment: string;
+  served_requests: number;
+  signature_verified: boolean;
+  signer_fingerprint: string;
+  status: "fresh" | "stale" | "empty" | "error";
+  this_update?: string;
+}
+
+export interface RevocationCacheSummary {
+  caches: number;
+  empty: number;
+  error: number;
+  fresh: number;
+  stale: number;
+}
+
 export interface RevocationEndpointHealth {
   certificate_fingerprint: string;
   certificate_id: string;

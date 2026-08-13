@@ -60,6 +60,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/revcacheposture"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -539,6 +540,17 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 		beatPayload.RelayPlugins = report
 		eventSchemaVersion = projections.AgentHeartbeatPluginCensusSchemaVersion
 	}
+	if req.RevocationCaches != nil {
+		if !agentHasRole(info.Roles, mtls.AgentRoleNetwork) {
+			return nil, status.Error(codes.PermissionDenied, "only a certificate-bound network relay may report serving revocation caches")
+		}
+		report, err := a.validatedRevocationCachePosture(ctx, info, req.RevocationCaches)
+		if err != nil {
+			return nil, err
+		}
+		beatPayload.RevocationCaches = report
+		eventSchemaVersion = projections.AgentHeartbeatRevocationCacheSchemaVersion
+	}
 	payload, err := json.Marshal(beatPayload)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
@@ -598,6 +610,46 @@ func (a *agentService) validatedRelayPluginCensus(ctx context.Context, info mtls
 	}
 	return &projections.AgentRelayPluginCensus{
 		Plugins: report.Plugins, IssuedAtUnix: report.IssuedAtUnix,
+		Signature: append([]byte(nil), report.Signature...), Statement: string(canonical),
+		SignerFingerprint: strings.ToLower(strings.TrimSpace(info.FingerprintSHA256)),
+	}, nil
+}
+
+func (a *agentService) validatedRevocationCachePosture(ctx context.Context, info mtls.PeerCertInfo,
+	report *revcacheposture.Report) (*projections.AgentRevocationCachePosture, error) {
+	if report == nil {
+		return nil, nil
+	}
+	now := time.Now().UTC()
+	if report.IssuedAtUnix <= 0 {
+		return nil, status.Error(codes.PermissionDenied, "revocation cache posture has no issued-at")
+	}
+	issued := time.Unix(report.IssuedAtUnix, 0).UTC()
+	if delta := now.Sub(issued); delta > receiptSkew || delta < -receiptSkew {
+		return nil, status.Error(codes.PermissionDenied, "revocation cache posture issued-at is outside the accepted window")
+	}
+	statement := revcacheposture.Statement{
+		TenantID: info.TenantID, AgentCommonName: info.CommonName,
+		Entries: report.Entries, IssuedAtUnix: report.IssuedAtUnix,
+	}
+	canonical, err := statement.Canonical()
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "revocation cache posture is not normalized: %v", err)
+	}
+	if err := mtls.VerifyStatement(info.LeafDER, canonical, report.Signature); err != nil {
+		return nil, status.Error(codes.PermissionDenied, "revocation cache posture signature does not verify against the presented certificate")
+	}
+	if a.store != nil {
+		prior, err := a.store.GetAgent(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName))
+		switch {
+		case err == nil && prior.RevocationCachesReportedAt != nil && !issued.After(*prior.RevocationCachesReportedAt):
+			return nil, status.Error(codes.FailedPrecondition, "revocation cache posture is not newer than the accepted posture")
+		case err != nil && !errors.Is(err, pgx.ErrNoRows):
+			return nil, status.Errorf(codes.Internal, "read prior revocation cache posture: %v", err)
+		}
+	}
+	return &projections.AgentRevocationCachePosture{
+		Entries: report.Entries, IssuedAtUnix: report.IssuedAtUnix,
 		Signature: append([]byte(nil), report.Signature...), Statement: string(canonical),
 		SignerFingerprint: strings.ToLower(strings.TrimSpace(info.FingerprintSHA256)),
 	}, nil

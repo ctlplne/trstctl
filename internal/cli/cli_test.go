@@ -341,6 +341,47 @@ func TestRevocationHealthCommandIsReadOnlyAndPreservesSignedEvidence(t *testing.
 	}
 }
 
+func TestRevocationCachesCommandIsReadOnlyAndPreservesSignedMetadataAUD39(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, http.StatusOK, `{"observed":true,"items":[{"agent_id":"relay-1","segment":"plant-a","cache_id":"issuer-a","protocol":"ocsp","status":"fresh","signature_verified":true,"signer_fingerprint":"sha256:abc","cached_responses":2}],"summary":{"caches":1,"fresh":1}}`, &cap)
+	env := cli.Env{Server: srv.URL, Token: "tok-revocation", Tenant: "tenant-revocation", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"revocation", "caches"}, env, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0; stderr=%s", code, stderr)
+	}
+	if cap.Method != http.MethodGet || cap.Path != "/api/v1/revocation/caches" || cap.Query != "" {
+		t.Fatalf("request = %s %s?%s, want exact read-only revocation-cache route", cap.Method, cap.Path, cap.Query)
+	}
+	if cap.Header.Get("Authorization") != "Bearer tok-revocation" || cap.Header.Get("X-Tenant-ID") != "tenant-revocation" {
+		t.Fatalf("request lost tenant authentication: authorization=%q tenant=%q", cap.Header.Get("Authorization"), cap.Header.Get("X-Tenant-ID"))
+	}
+	if len(cap.Body) != 0 || cap.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("read-only revocation-cache command sent mutation material: body=%q idempotency=%q", cap.Body, cap.Header.Get("Idempotency-Key"))
+	}
+	var decoded struct {
+		Observed bool `json:"observed"`
+		Items    []struct {
+			Segment           string `json:"segment"`
+			Status            string `json:"status"`
+			SignatureVerified bool   `json:"signature_verified"`
+			SignerFingerprint string `json:"signer_fingerprint"`
+			CachedResponses   int    `json:"cached_responses"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+	if !decoded.Observed || len(decoded.Items) != 1 || decoded.Items[0].Segment != "plant-a" ||
+		decoded.Items[0].Status != "fresh" || !decoded.Items[0].SignatureVerified ||
+		decoded.Items[0].SignerFingerprint != "sha256:abc" || decoded.Items[0].CachedResponses != 2 {
+		t.Fatalf("stdout lost signed segment-local revocation-cache metadata: %s", stdout)
+	}
+	if strings.Contains(stdout, "upstream") || strings.Contains(stdout, "request_der") || strings.Contains(stdout, "response_der") {
+		t.Fatalf("stdout leaked relay-local revocation material: %s", stdout)
+	}
+}
+
 func TestGetSubstitutesPathParam(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"id":"abc-123"}`, &cap)

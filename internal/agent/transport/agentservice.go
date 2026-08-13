@@ -42,6 +42,7 @@ import (
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/protocol"
+	"trstctl.com/trstctl/internal/revcacheposture"
 )
 
 // AgentCodecName is the content-subtype under which the agent steady-state RPCs are
@@ -99,6 +100,9 @@ type HeartbeatRequest struct {
 	// exact relay process verified and loaded. Nil means an older agent cannot
 	// report it; non-nil with zero plugins is an explicit current empty census.
 	RelayPlugins *plugincensus.Report `json:"relay_plugins,omitempty"`
+	// RevocationCaches is signed metadata for every local CRL/OCSP cache this
+	// relay serves. Cached protocol bytes and upstream URLs stay in the segment.
+	RevocationCaches *revcacheposture.Report `json:"revocation_caches,omitempty"`
 }
 
 // EnrollmentProxyReport is metadata-only evidence from one relay process.

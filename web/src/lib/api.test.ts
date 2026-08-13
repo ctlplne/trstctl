@@ -480,6 +480,25 @@ describe("api compliance evidence packs", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/revocation/health");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
   });
+
+  it("fetches signed per-segment CRL and OCSP cache posture without mutation headers", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        observed: true,
+        summary: { caches: 1, fresh: 1, stale: 0, empty: 0, error: 0 },
+        items: [{ cache_id: "issuer-a", segment: "plant-7", protocol: "ocsp", metadata_only: true }],
+        guidance: "Signed relay metadata only.",
+      }),
+    );
+
+    const result = await api.revocationCaches();
+
+    expect(result.items[0]?.metadata_only).toBe(true);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/revocation/caches");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+    expect((vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string> | undefined)?.["Idempotency-Key"]).toBeUndefined();
+  });
 });
 
 describe("api CA hierarchy and managed keys", () => {

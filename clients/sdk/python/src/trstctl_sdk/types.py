@@ -7021,6 +7021,56 @@ RetirementDependent = TypedDict(
     total=False,
 )
 
+RevocationCachePosture = TypedDict(
+    'RevocationCachePosture',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'observed': bool,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+RevocationCacheStatus = TypedDict(
+    'RevocationCacheStatus',
+    {
+        'agent_id': str,
+        'agent_name': str,
+        'cache_id': str,
+        'cached_responses': int,
+        'detail_code': str,
+        'fresh': bool,
+        'issuer_fingerprint': str,
+        'last_validated_at': str,
+        'local_path': str,
+        'metadata_only': bool,
+        'next_update': str,
+        'protocol': str,
+        'refused_requests': int,
+        'reported_at': str,
+        'segment': str,
+        'served_requests': int,
+        'signature_verified': bool,
+        'signer_fingerprint': str,
+        'status': str,
+        'this_update': str,
+    },
+    total=False,
+)
+
+RevocationCacheSummary = TypedDict(
+    'RevocationCacheSummary',
+    {
+        'caches': int,
+        'empty': int,
+        'error': int,
+        'fresh': int,
+        'stale': int,
+    },
+    total=False,
+)
+
 RevocationEndpointHealth = TypedDict(
     'RevocationEndpointHealth',
     {

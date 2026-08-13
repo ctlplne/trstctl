@@ -5862,6 +5862,61 @@ export const messages = {
     defaultMessage: "Enrollment relay topology could not be loaded",
     description: "Enrollment relay topology read failure title.",
   },
+  "protocols.revocationCache.heading": {
+    defaultMessage: "Revocation cache by segment",
+    description: "Heading for signed dark-segment CRL and OCSP cache posture.",
+  },
+  "protocols.revocationCache.description": {
+    defaultMessage:
+      "Each row is metadata signed by a certificate-bound network relay. Fresh means the cached CRL or OCSP response passed issuer, signature, and signed-time checks; response bytes and upstream URLs stay inside the segment.",
+    description: "Explanation of the revocation cache evidence boundary.",
+  },
+  "protocols.revocationCache.loading": {
+    defaultMessage: "Loading signed revocation-cache posture.",
+    description: "Loading state for revocation cache posture.",
+  },
+  "protocols.revocationCache.loadFailed": {
+    defaultMessage: "Revocation-cache posture could not be loaded",
+    description: "Error title for revocation cache posture.",
+  },
+  "protocols.revocationCache.emptyTitle": {
+    defaultMessage: "No revocation cache has reported",
+    description: "Empty-state title for revocation cache posture.",
+  },
+  "protocols.revocationCache.emptyBody": {
+    defaultMessage: "No current network relay has supplied signed CRL or OCSP cache metadata. This does not prove that an isolated segment has fresh revocation data.",
+    description: "Empty-state explanation for revocation cache posture.",
+  },
+  "protocols.revocationCache.summary": {
+    defaultMessage: "{fresh} fresh / {stale} stale / {empty} empty / {error} error",
+    description: "Revocation cache posture status totals.",
+  },
+  "protocols.revocationCache.caption": {
+    defaultMessage: "Signed CRL and OCSP cache freshness by isolated segment and issuer",
+    description: "Accessible caption for the revocation cache posture table.",
+  },
+  "protocols.revocationCache.segment": { defaultMessage: "Segment", description: "Revocation cache table segment column." },
+  "protocols.revocationCache.relay": { defaultMessage: "Relay", description: "Revocation cache table relay column." },
+  "protocols.revocationCache.cache": { defaultMessage: "Cache and issuer", description: "Revocation cache table cache identity column." },
+  "protocols.revocationCache.endpoint": { defaultMessage: "Local endpoint", description: "Revocation cache table protocol and local path column." },
+  "protocols.revocationCache.freshness": { defaultMessage: "Freshness", description: "Revocation cache table freshness column." },
+  "protocols.revocationCache.evidence": { defaultMessage: "Signed evidence", description: "Revocation cache table validation evidence column." },
+  "protocols.revocationCache.traffic": { defaultMessage: "Cache traffic", description: "Revocation cache table request counts column." },
+  "protocols.revocationCache.nextUpdate": {
+    defaultMessage: "Signed expiry: {at}",
+    description: "Signed nextUpdate timestamp for a cached revocation object.",
+  },
+  "protocols.revocationCache.noNextUpdate": { defaultMessage: "No signed expiry observed", description: "Missing revocation object nextUpdate state." },
+  "protocols.revocationCache.signatureVerified": { defaultMessage: "Issuer signature verified", description: "Verified revocation object signature state." },
+  "protocols.revocationCache.signatureUnverified": { defaultMessage: "No verified issuer signature", description: "Unverified revocation object signature state." },
+  "protocols.revocationCache.validated": { defaultMessage: "Validated: {at}", description: "Revocation object last validation timestamp." },
+  "protocols.revocationCache.neverValidated": { defaultMessage: "Never validated", description: "Revocation object validation empty state." },
+  "protocols.revocationCache.reported": { defaultMessage: "Heartbeat: {at}", description: "Relay-signed cache posture heartbeat timestamp." },
+  "protocols.revocationCache.cached": { defaultMessage: "{count} cached responses", description: "Bounded cache response count." },
+  "protocols.revocationCache.requests": {
+    defaultMessage: "{delivered} delivered / {blocked} blocked",
+    description: "Revocation cache request counters.",
+  },
   "protocols.dns01.heading": {
     defaultMessage: "DNS-01 providers",
     description: "Heading for the ACME DNS-01 provider catalog section.",
