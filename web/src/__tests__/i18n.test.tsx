@@ -373,6 +373,9 @@ describe("i18n boundary", () => {
       // all natural-language values carry placeholder-safe es/de translations.
       // UX-04 follow-up: the intermediate-CA description now uses customer
       // language in every locale instead of the internal "served" status.
+      // AUD-180 target-timeline re-pin: deploy, listener verification, and
+      // rollback evidence keep their order and target placeholder while the
+      // Spanish and German copy drops the internal served-API phrase.
       // Posture follow-up: the localized crypto inventory separator preserves
       // its leading space so adjacent algorithm and transport text stays clear.
       // Discovery-coverage re-pin: eight discovery.coverage.* keys (panel
@@ -686,8 +689,8 @@ describe("i18n boundary", () => {
       // and empty roster states, searchable name/kind/email/UUID filtering,
       // and actionable recovery. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "544583425fc5b789854623308cdd4f033a4e1c9d68c26cf86629821c31260633",
-      "de-DE": "b09abfa505d426e2b2f2e54370be5269c7d08088f24210c268bc659c296dacc1",
+      "es-ES": "3cb96b1bd0c2302d49271e5a5ee5ccdddd2e3d04b9816bd32ab12c3541a3d181",
+      "de-DE": "8aa0f20fc54d8fcd899c3d28b1e1bf64ad6484a2920ef40ed47c8f9491019f47",
     });
   });
 
