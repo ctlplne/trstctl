@@ -24,6 +24,14 @@ import (
 func TestIdempotencyResultMigrationIsRLSScopedResumableAndLeavesNoPlaintext(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
+	t.Cleanup(func() {
+		if _, err := s.SystemPool().Exec(context.Background(), `
+			ALTER TABLE idempotency_keys
+			    DROP CONSTRAINT IF EXISTS idempotency_keys_result_sealed_floor_chk,
+			    ALTER COLUMN result_codec SET DEFAULT 'raw-v0'`); err != nil {
+			t.Errorf("restore pre-ratchet idempotency schema: %v", err)
+		}
+	})
 	for _, tenantID := range []string{tenantA, tenantB} {
 		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: tenantID, EventSeq: 1}); err != nil {
 			t.Fatalf("UpsertTenant(%s): %v", tenantID, err)
