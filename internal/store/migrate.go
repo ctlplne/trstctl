@@ -183,8 +183,8 @@ func purgeLegacyReadModelSnapshots(ctx context.Context, conn *pgxpool.Conn) erro
 	}
 
 	var legacy bool
-	//trstctl:system-query — cross-tenant system startup inspects only whether any disposable snapshot uses a pre-current format; no tenant ID or payload leaves PostgreSQL (AN-1 exemption).
 	if err := tx.QueryRow(ctx,
+		//trstctl:system-query — cross-tenant system startup inspects only whether any disposable snapshot uses a pre-current format; no tenant ID or payload leaves PostgreSQL (AN-1 exemption).
 		`SELECT EXISTS (
 			SELECT 1 FROM read_model_snapshots WHERE format_version < $1
 		)`, SnapshotFormatVersion).Scan(&legacy); err != nil {

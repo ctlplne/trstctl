@@ -259,8 +259,8 @@ func (s *Store) WriteReadModelSnapshots(ctx context.Context) (int, error) {
 			// A complete generation is published by its repeated metadata, not by a
 			// mutable pointer row. Removing the prior current-format rows first means a
 			// crash exposes only an obviously incomplete generation.
-			//trstctl:system-query — cross-tenant system invalidation removes only the reconstructible current snapshot generation; every replacement row is captured under its tenant's FORCE-RLS context (AN-1 exemption).
 			if _, err := s.pool.Exec(projectionCtx,
+				//trstctl:system-query — cross-tenant system invalidation removes only the reconstructible current snapshot generation; every replacement row is captured under its tenant's FORCE-RLS context (AN-1 exemption).
 				`DELETE FROM read_model_snapshots WHERE format_version = $1`,
 				SnapshotFormatVersion); err != nil {
 				return fmt.Errorf("store: invalidate prior snapshot set: %w", err)

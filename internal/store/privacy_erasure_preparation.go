@@ -601,8 +601,8 @@ func (s *Store) WithPrivacyTenantProjectionRepeatableRead(
 // must wait for deterministic completion.
 func (s *Store) AssertNoPrivacySubjectErasurePreparations(ctx context.Context) error {
 	var active bool
-	//trstctl:system-query — cross-tenant by design: atomic rebuild/snapshot replacement must stop if ANY tenant has an unfinished privacy history cutover; returns one boolean and no tenant, subject reference, selector, or command data (AN-1 exemption).
 	if err := s.pool.QueryRow(ctx,
+		//trstctl:system-query — cross-tenant by design: atomic rebuild/snapshot replacement must stop if ANY tenant has an unfinished privacy history cutover; returns one boolean and no tenant, subject reference, selector, or command data (AN-1 exemption).
 		`SELECT EXISTS (SELECT 1 FROM privacy_subject_erasure_preparations)`).Scan(&active); err != nil {
 		return err
 	}
