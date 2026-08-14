@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -99,6 +100,104 @@ func marshalRotationTickRun(
 		t.Fatalf("marshal scheduler run receipt: %v", err)
 	}
 	return body
+}
+
+func rotationTickJSONEqual(left, right []byte) bool {
+	var leftValue, rightValue any
+	return json.Unmarshal(left, &leftValue) == nil && json.Unmarshal(right, &rightValue) == nil &&
+		reflect.DeepEqual(leftValue, rightValue)
+}
+
+func TestSecretRotationScheduleTickIncrementalOutcomeIsExactAndContinuousAUD187(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	dueAt := time.Date(2026, 8, 14, 11, 0, 0, 0, time.UTC)
+	const (
+		key        = "aud187-incremental-outcome"
+		binding    = "aud187-incremental-outcome-binding"
+		firstID    = "18700000-0000-4000-8000-000000000001"
+		secondID   = "18700000-0000-4000-8000-000000000002"
+		owner      = "aud187-owner"
+		firstChild = "aud187-child-one"
+	)
+	for index, id := range []string{firstID, secondID} {
+		seedSecretRotationSchedule(t, s, store.SecretRotationSchedule{
+			ID: id, TenantID: tenantA, Name: fmt.Sprintf("aud187-%d", index+1),
+			Provider: "connector:ci", Key: fmt.Sprintf("rotation/aud187-%d", index+1),
+			OldRef: "version:1", IntervalSeconds: 3600, Enabled: true,
+			NextRunAt: dueAt,
+		})
+	}
+	tick, state, err := s.ClaimSecretRotationScheduleTick(
+		ctx, tenantA, key, binding,
+		testRotationTenantRegistrationID, testRotationTenantRegistrationSequence,
+		owner, "aud187-initial-child", time.Minute)
+	if err != nil || state != store.SecretRotationScheduleTickAcquired || tick.SnapshotCount != 2 {
+		t.Fatalf("claim incremental tick=%+v state=%q err=%v", tick, state, err)
+	}
+	first, err := s.GetSecretRotationScheduleTickRow(ctx, tenantA, key, 1)
+	if err != nil || first.ID != firstID {
+		t.Fatalf("load first incremental row=%+v err=%v", first, err)
+	}
+	tick, err = s.StartSecretRotationScheduleTickRow(
+		ctx, tick, tick.OwnerToken, tick.OwnerGeneration, first, firstChild, time.Minute)
+	if err != nil {
+		t.Fatalf("start first incremental row: %v", err)
+	}
+	deferred := json.RawMessage(fmt.Sprintf(
+		`{"schedule_id":%q,"reason":"approval_pending","due_at":%q,"error":"scheduled rotation is waiting for approval"}`,
+		first.ID, first.NextRunAt.Format(time.RFC3339Nano)))
+	if _, err := s.CompleteSecretRotationScheduleTickRowOutcome(
+		ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+		store.SecretRotationScheduleTickRowOutcome{Run: marshalRotationTickRun(
+			t, first.ID, orchestrator.SecretRotationScheduleRunID(
+				tenantA, testRotationTenantRegistrationSequence, first.ID, first.NextRunAt),
+			first.NextRunAt, "queued"), Deferred: deferred},
+		nil, time.Minute); !errors.Is(err, store.ErrSecretRotationScheduleTickConflict) {
+		t.Fatalf("double incremental outcome error=%v, want conflict", err)
+	}
+	progressed, err := s.CompleteSecretRotationScheduleTickRowOutcome(
+		ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+		store.SecretRotationScheduleTickRowOutcome{Deferred: deferred}, nil, time.Minute)
+	if err != nil || progressed.Scanned != 1 || progressed.Ran != 0 || progressed.AfterScheduleID != firstID {
+		t.Fatalf("append incremental deferral: tick=%+v err=%v", progressed, err)
+	}
+	var receipt rotationTickReceiptFixture
+	if err := json.Unmarshal(progressed.Receipt, &receipt); err != nil || receipt.Scanned != 1 ||
+		len(receipt.Runs) != 0 || len(receipt.Deferred) != 1 ||
+		!rotationTickJSONEqual(receipt.Deferred[0], deferred) {
+		t.Fatalf("incremental receipt=%s decoded=%+v err=%v", progressed.Receipt, receipt, err)
+	}
+
+	second, err := s.GetSecretRotationScheduleTickRow(ctx, tenantA, key, 2)
+	if err != nil || second.ID != secondID {
+		t.Fatalf("load second incremental row=%+v err=%v", second, err)
+	}
+	forged := progressed
+	forged.Receipt = append(json.RawMessage(nil), progressed.Receipt...)
+	forged.Receipt[0] = '['
+	if _, err := s.StartSecretRotationScheduleTickRow(
+		ctx, forged, forged.OwnerToken, forged.OwnerGeneration, second,
+		"aud187-forged-child", time.Minute); !errors.Is(err, store.ErrSecretRotationScheduleTickConflict) {
+		t.Fatalf("forged incremental continuation error=%v, want conflict", err)
+	}
+	tick, err = s.StartSecretRotationScheduleTickRow(
+		ctx, progressed, progressed.OwnerToken, progressed.OwnerGeneration, second,
+		"aud187-child-two", time.Minute)
+	if err != nil {
+		t.Fatalf("start second incremental row: %v", err)
+	}
+	completed, err := s.CompleteSecretRotationScheduleTickRowOutcome(
+		ctx, tick, tick.OwnerToken, tick.OwnerGeneration,
+		store.SecretRotationScheduleTickRowOutcome{}, nil, time.Minute)
+	if err != nil || completed.Scanned != 2 || completed.Ran != 0 || completed.AfterScheduleID != secondID {
+		t.Fatalf("consume stale incremental row: tick=%+v err=%v", completed, err)
+	}
+	if err := json.Unmarshal(completed.Receipt, &receipt); err != nil || receipt.Scanned != 2 ||
+		len(receipt.Deferred) != 1 || len(receipt.Runs) != 0 {
+		t.Fatalf("stale incremental receipt=%s decoded=%+v err=%v", completed.Receipt, receipt, err)
+	}
 }
 
 func TestSecretRotationScheduleTickRejectsPreboundOuterWithoutAtomicSnapshotAUD113(t *testing.T) {

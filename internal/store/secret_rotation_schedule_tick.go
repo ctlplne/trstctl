@@ -134,6 +134,16 @@ type SecretRotationScheduleCommandLeaseRelease struct {
 	LeaseToken string
 }
 
+// SecretRotationScheduleTickRowOutcome is the one new immutable result a
+// scheduler row may add to its aggregate receipt. Exactly one of Run or
+// Deferred may be present. An empty outcome means another reconciler already
+// terminalized the frozen due edge, so the row consumes a scan without adding a
+// duplicate child receipt.
+type SecretRotationScheduleTickRowOutcome struct {
+	Run      json.RawMessage
+	Deferred json.RawMessage
+}
+
 type secretRotationScheduleTickReceipt struct {
 	Ran              int               `json:"ran"`
 	Scanned          int               `json:"scanned"`
@@ -368,6 +378,122 @@ func validateSecretRotationScheduleTickProgress(
 		return fmt.Errorf("%w: row completion appends more than one outcome", ErrSecretRotationScheduleTickConflict)
 	}
 	return nil
+}
+
+func validateSecretRotationScheduleTickContinuation(
+	retained, presented SecretRotationScheduleTick,
+) error {
+	if retained.TenantID != presented.TenantID ||
+		retained.IdempotencyKey != presented.IdempotencyKey ||
+		retained.RequestBinding != presented.RequestBinding ||
+		retained.Phase != presented.Phase ||
+		retained.OwnerToken != presented.OwnerToken ||
+		retained.OwnerGeneration != presented.OwnerGeneration ||
+		retained.Ran != presented.Ran || retained.Scanned != presented.Scanned ||
+		retained.SnapshotCount != presented.SnapshotCount ||
+		retained.AfterScheduleID != presented.AfterScheduleID ||
+		!bytes.Equal(retained.Receipt, presented.Receipt) {
+		return fmt.Errorf("%w: scheduler caller no longer presents the last store-returned progress",
+			ErrSecretRotationScheduleTickConflict)
+	}
+	return nil
+}
+
+func validateSecretRotationScheduleTickRowOutcome(
+	retained SecretRotationScheduleTick,
+	outcome SecretRotationScheduleTickRowOutcome,
+) error {
+	if retained.CurrentSchedule == nil || retained.Phase != "row_started" {
+		return fmt.Errorf("%w: incremental outcome has no retained row snapshot",
+			ErrSecretRotationScheduleTickConflict)
+	}
+	hasRun := len(outcome.Run) > 0
+	hasDeferred := len(outcome.Deferred) > 0
+	if hasRun && hasDeferred {
+		return fmt.Errorf("%w: one scheduler row cannot append both a run and a deferral",
+			ErrSecretRotationScheduleTickConflict)
+	}
+	type scheduleEvidence struct {
+		ScheduleID string    `json:"schedule_id"`
+		RunID      string    `json:"run_id"`
+		DueAt      time.Time `json:"due_at"`
+		Status     string    `json:"status"`
+	}
+	switch {
+	case hasRun:
+		if _, changed, err := rewriteSecretRotationSchedulePrivacyRun(outcome.Run, "", ""); err != nil {
+			return err
+		} else if changed {
+			return fmt.Errorf("%w: incremental run required an unexpected privacy rewrite",
+				ErrSecretRotationScheduleTickConflict)
+		}
+		if err := validateSecretRotationScheduleTickErrorVocabulary(secretRotationScheduleTickReceipt{
+			Runs: []json.RawMessage{outcome.Run}, Deferred: []json.RawMessage{},
+		}); err != nil {
+			return err
+		}
+		var evidence scheduleEvidence
+		if json.Unmarshal(outcome.Run, &evidence) != nil ||
+			evidence.ScheduleID != retained.CurrentSchedule.ID ||
+			!evidence.DueAt.Equal(retained.CurrentSchedule.NextRunAt) ||
+			!secretRotationScheduleTerminalStatus(evidence.Status) ||
+			evidence.RunID != rotationcommand.RunID(
+				retained.TenantID, retained.TenantRegistrationEventSequence,
+				retained.CurrentSchedule.ID, retained.CurrentSchedule.NextRunAt) {
+			return fmt.Errorf("%w: incremental run is not the exact lifecycle-bound terminal due edge",
+				ErrSecretRotationScheduleTickConflict)
+		}
+	case hasDeferred:
+		if _, changed, err := rewriteSecretRotationSchedulePrivacyDeferred(outcome.Deferred, "", ""); err != nil {
+			return err
+		} else if changed {
+			return fmt.Errorf("%w: incremental deferral required an unexpected privacy rewrite",
+				ErrSecretRotationScheduleTickConflict)
+		}
+		if err := validateSecretRotationScheduleTickErrorVocabulary(secretRotationScheduleTickReceipt{
+			Runs: []json.RawMessage{}, Deferred: []json.RawMessage{outcome.Deferred},
+		}); err != nil {
+			return err
+		}
+		var evidence scheduleEvidence
+		if json.Unmarshal(outcome.Deferred, &evidence) != nil ||
+			evidence.ScheduleID != retained.CurrentSchedule.ID ||
+			!evidence.DueAt.Equal(retained.CurrentSchedule.NextRunAt) {
+			return fmt.Errorf("%w: incremental deferral names another due edge",
+				ErrSecretRotationScheduleTickConflict)
+		}
+	}
+	return nil
+}
+
+func appendSecretRotationScheduleTickRowOutcome(
+	retained SecretRotationScheduleTick,
+	outcome SecretRotationScheduleTickRowOutcome,
+) ([]byte, int, int, error) {
+	if err := validateSecretRotationScheduleTickRowOutcome(retained, outcome); err != nil {
+		return nil, 0, 0, err
+	}
+	var receipt secretRotationScheduleTickReceipt
+	if json.Unmarshal(retained.Receipt, &receipt) != nil || receipt.Runs == nil || receipt.Deferred == nil ||
+		receipt.Ran != retained.Ran || receipt.Scanned != retained.Scanned ||
+		len(receipt.Runs) != retained.Ran || retained.Scanned < retained.Ran+len(receipt.Deferred) ||
+		receipt.Complete || receipt.Partial || receipt.RunLimitReached || receipt.ScanLimitReached ||
+		receipt.FailedScheduleID != "" || receipt.SystemError != "" {
+		return nil, 0, 0, fmt.Errorf("%w: retained incremental receipt state is inconsistent",
+			ErrSecretRotationScheduleTickConflict)
+	}
+	if len(outcome.Run) > 0 {
+		receipt.Runs = append(receipt.Runs, append(json.RawMessage(nil), outcome.Run...))
+		receipt.Ran++
+	} else if len(outcome.Deferred) > 0 {
+		receipt.Deferred = append(receipt.Deferred, append(json.RawMessage(nil), outcome.Deferred...))
+	}
+	receipt.Scanned++
+	encoded, err := json.Marshal(receipt)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return encoded, receipt.Ran, receipt.Scanned, nil
 }
 
 func validateSecretRotationScheduleTickTerminal(retained SecretRotationScheduleTick, body []byte, httpStatus int) error {
@@ -632,6 +758,10 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 		return prepared, fmt.Errorf("%w: retained tick differs from the outer idempotency claim", ErrSecretRotationScheduleTickConflict)
 	} else if err := validateSecretRotationScheduleTickSnapshotTx(ctx, tx, tick); err != nil {
 		return prepared, err
+	} else if tick.Phase != "terminal" && tick.Phase != "privacy_erased" {
+		if err := validateSecretRotationScheduleTickReceipt(tick.Receipt, tick.Ran, tick.Scanned, 0); err != nil {
+			return prepared, err
+		}
 	}
 	if cursor.ActiveTickKey != "" && (!tickExists || cursor.ActiveTickKey != idempotencyKey) {
 		var cursorTick SecretRotationScheduleTick
@@ -1068,6 +1198,9 @@ func (s *Store) StartSecretRotationScheduleTickRow(
 			if err := validateSecretRotationScheduleTickOwner(cursor, active, retained, ownerToken, ownerGeneration); err != nil {
 				return err
 			}
+			if err := validateSecretRotationScheduleTickContinuation(retained, tick); err != nil {
+				return err
+			}
 			if err := validateSecretRotationScheduleTickSnapshotTx(ctx, tx, retained); err != nil {
 				return err
 			}
@@ -1231,12 +1364,47 @@ func (s *Store) CompleteSecretRotationScheduleTickRow(
 	commandRelease *SecretRotationScheduleCommandLeaseRelease,
 	leaseDuration time.Duration,
 ) (SecretRotationScheduleTick, error) {
+	if err := validateSecretRotationScheduleTickReceipt(receipt, ran, scanned, 0); err != nil {
+		return SecretRotationScheduleTick{}, err
+	}
+	return s.completeSecretRotationScheduleTickRow(
+		ctx, tick, ownerToken, ownerGeneration, receipt, ran, scanned,
+		nil, commandRelease, leaseDuration)
+}
+
+// CompleteSecretRotationScheduleTickRowOutcome appends only the current row's
+// new closed-schema outcome. The store owns the growing aggregate receipt, so a
+// 500-row tick does not repeatedly submit and deeply revalidate all prior
+// outcomes. Full receipts are still validated when a tick is claimed/recovered,
+// finalized, replayed, or passed through the legacy completion entry point.
+func (s *Store) CompleteSecretRotationScheduleTickRowOutcome(
+	ctx context.Context,
+	tick SecretRotationScheduleTick,
+	ownerToken string,
+	ownerGeneration int64,
+	outcome SecretRotationScheduleTickRowOutcome,
+	commandRelease *SecretRotationScheduleCommandLeaseRelease,
+	leaseDuration time.Duration,
+) (SecretRotationScheduleTick, error) {
+	return s.completeSecretRotationScheduleTickRow(
+		ctx, tick, ownerToken, ownerGeneration, nil, 0, 0,
+		&outcome, commandRelease, leaseDuration)
+}
+
+func (s *Store) completeSecretRotationScheduleTickRow(
+	ctx context.Context,
+	tick SecretRotationScheduleTick,
+	ownerToken string,
+	ownerGeneration int64,
+	receipt []byte,
+	ran, scanned int,
+	outcome *SecretRotationScheduleTickRowOutcome,
+	commandRelease *SecretRotationScheduleCommandLeaseRelease,
+	leaseDuration time.Duration,
+) (SecretRotationScheduleTick, error) {
 	var out SecretRotationScheduleTick
 	if ownerToken == "" || ownerGeneration <= 0 || leaseDuration <= 0 {
 		return out, fmt.Errorf("%w: live tick ownership is required", ErrSecretRotationScheduleTickConflict)
-	}
-	if err := validateSecretRotationScheduleTickReceipt(receipt, ran, scanned, 0); err != nil {
-		return out, err
 	}
 	err := s.WithPrivacyTenantProjectionRepeatableRead(
 		ctx, tick.TenantID, "secret rotation scheduler row completion", func(tx pgx.Tx) error {
@@ -1262,8 +1430,19 @@ func (s *Store) CompleteSecretRotationScheduleTickRow(
 			if err := validateSecretRotationScheduleTickSnapshotTx(ctx, tx, retained); err != nil {
 				return err
 			}
-			if err := validateSecretRotationScheduleTickProgress(retained, receipt, ran, scanned); err != nil {
-				return err
+			if outcome == nil {
+				if err := validateSecretRotationScheduleTickProgress(retained, receipt, ran, scanned); err != nil {
+					return err
+				}
+			} else {
+				if err := validateSecretRotationScheduleTickContinuation(retained, tick); err != nil {
+					return err
+				}
+				var err error
+				receipt, ran, scanned, err = appendSecretRotationScheduleTickRowOutcome(retained, *outcome)
+				if err != nil {
+					return err
+				}
 			}
 			if commandRelease != nil {
 				if commandRelease.ScheduleID != retained.CurrentSchedule.ID ||

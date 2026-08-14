@@ -1246,6 +1246,7 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 				var (
 					run            secretRotationScheduleRunResponse
 					commandRelease *store.SecretRotationScheduleCommandLeaseRelease
+					outcome        store.SecretRotationScheduleTickRowOutcome
 					runErr         error
 				)
 				if sched.ConfigEventSequence == 0 {
@@ -1263,9 +1264,14 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 				if errors.Is(runErr, store.ErrSecretRotationScheduleDueEdgeStale) {
 					// A retained terminal event already owns this exact frozen due edge.
 				} else if reason, detail, deferred := secretRotationScheduleDeferredReason(runErr); deferred {
-					resp.Deferred = append(resp.Deferred, secretRotationScheduleDeferredResponse{
+					deferredReceipt := secretRotationScheduleDeferredResponse{
 						ScheduleID: sched.ID, Reason: reason, DueAt: sched.NextRunAt, Error: detail,
-					})
+					}
+					resp.Deferred = append(resp.Deferred, deferredReceipt)
+					outcome.Deferred, err = json.Marshal(deferredReceipt)
+					if err != nil {
+						return 0, nil, err
+					}
 				} else if runErr != nil {
 					// The typed 503 is terminal for this outer key, not for the
 					// row_started child. Cursor position and logical budgets stay put;
@@ -1274,17 +1280,21 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 				} else {
 					resp.Runs = append(resp.Runs, run)
 					resp.Ran++
+					outcome.Run, err = json.Marshal(run)
+					if err != nil {
+						return 0, nil, err
+					}
 				}
 				resp.Scanned++
-				progress, err := json.Marshal(resp)
+				tick, err = a.store.CompleteSecretRotationScheduleTickRowOutcome(
+					ctx, tick, ownerToken, tick.OwnerGeneration, outcome,
+					commandRelease, tickLeaseDuration)
 				if err != nil {
 					return 0, nil, err
 				}
-				tick, err = a.store.CompleteSecretRotationScheduleTickRow(
-					ctx, tick, ownerToken, tick.OwnerGeneration, progress,
-					resp.Ran, resp.Scanned, commandRelease, tickLeaseDuration)
-				if err != nil {
-					return 0, nil, err
+				if tick.Ran != resp.Ran || tick.Scanned != resp.Scanned {
+					return 0, nil, fmt.Errorf("%w: incremental scheduler budgets diverged",
+						store.ErrSecretRotationScheduleTickConflict)
 				}
 			}
 			exhausted := tick.Scanned == tick.SnapshotCount
