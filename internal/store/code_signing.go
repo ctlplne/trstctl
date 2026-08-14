@@ -571,9 +571,12 @@ func (s *Store) consumeCodeSigningApprovalTx(ctx context.Context, tx pgx.Tx, op 
 	}
 	if op.Approval.ResourceKind != "code_signing" || op.Approval.ResourceID != expectedResource ||
 		op.Approval.Action != "sign" || op.Approval.TargetVersion != 0 {
-		return ErrApprovalDrifted
+		return fmt.Errorf("%w: code-signing approval resource binding differs", ErrApprovalDrifted)
 	}
-	return s.ConsumeOperationApprovalTx(ctx, tx, op.TenantID, *op.Approval, op.SourceEventID, op.CreatedAt)
+	if err := s.ConsumeOperationApprovalTx(ctx, tx, op.TenantID, *op.Approval, op.SourceEventID, op.CreatedAt); err != nil {
+		return fmt.Errorf("store: consume code-signing approval: %w", err)
+	}
+	return nil
 }
 
 // ApplyCodeSigningCompletedTx stores the exact API response and, in the same

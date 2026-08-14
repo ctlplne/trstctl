@@ -126,7 +126,7 @@ func init() {
 		{Path: "/approval/target_version", Mode: PrivacyFieldOpaqueExact},
 		{Path: "/approval/required_approvals", Mode: PrivacyFieldOpaqueExact},
 		{Path: "/approval/reason", Mode: PrivacyFieldFreeTextClear},
-		{Path: "/approval/evidence_refs", Mode: PrivacyFieldFreeTextClear},
+		{Path: "/approval/evidence_refs/*", Mode: PrivacyFieldFreeTextClear},
 		{Path: "/approval/issuance", Mode: PrivacyFieldOpaqueExact},
 	}
 	policies := map[int]PrivacyEventPolicy{

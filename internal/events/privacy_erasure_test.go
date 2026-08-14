@@ -76,7 +76,8 @@ func TestPseudonymizeLegacyCodeSigningKeyUsesOperationBoundMapping(t *testing.T)
 	}
 	if got.OperationID != operationID ||
 		got.IdempotencyKey != codesigningref.LegacyStorageKeyForRaw(operationID, "release/alice@example.com/42") ||
-		got.Approval.ResourceID != "codesign:"+strings.Repeat("b", 64) {
+		got.Approval.ResourceID != "codesign:"+strings.Repeat("b", 64) ||
+		len(got.Approval.EvidenceRefs) != 1 || got.Approval.EvidenceRefs[0] != "" {
 		t.Fatalf("legacy identity rewrite = %+v", got)
 	}
 	again, changed, err := PseudonymizeEventDataForSubject(
@@ -101,7 +102,7 @@ func TestPseudonymizePrivacySafeCodeSigningPreservesOneWayIdentityFields(t *test
 	const subject = "alice@example.com"
 	keyRef := "sha256:" + strings.Repeat("a", 64)
 	binding := strings.Repeat("b", 64)
-	input := []byte(`{"operation_id":"codesign-33333333-3333-4333-8333-333333333333","idempotency_key_ref":"` + keyRef + `","request_binding":"` + binding + `","mode":"key","request_hash":"` + strings.Repeat("c", 64) + `","sealed_command":"Y2lwaGVydGV4dA==","approval":{"request_id":"request-a","intent_digest":"` + strings.Repeat("e", 64) + `","requester":"alice@example.com","resource_kind":"code_signing","resource_id":"codesign:` + strings.Repeat("d", 64) + `","action":"sign","target_version":0,"required_approvals":1}}`)
+	input := []byte(`{"operation_id":"codesign-33333333-3333-4333-8333-333333333333","idempotency_key_ref":"` + keyRef + `","request_binding":"` + binding + `","mode":"key","request_hash":"` + strings.Repeat("c", 64) + `","sealed_command":"Y2lwaGVydGV4dA==","approval":{"request_id":"request-a","intent_digest":"` + strings.Repeat("e", 64) + `","requester":"alice@example.com","resource_kind":"code_signing","resource_id":"codesign:` + strings.Repeat("d", 64) + `","action":"sign","target_version":0,"required_approvals":1,"reason":"requested by alice@example.com","evidence_refs":["ticket:alice@example.com"]}}`)
 	rewritten, changed, err := PseudonymizeEventDataForSubject(
 		input, "11111111-1111-1111-1111-111111111111", subject,
 		privacyCodeSigningCommandedEvent, 3,
@@ -116,7 +117,12 @@ func TestPseudonymizePrivacySafeCodeSigningPreservesOneWayIdentityFields(t *test
 	var gotRef, gotBinding string
 	_ = json.Unmarshal(got["idempotency_key_ref"], &gotRef)
 	_ = json.Unmarshal(got["request_binding"], &gotBinding)
-	if gotRef != keyRef || gotBinding != binding {
+	var approval struct {
+		EvidenceRefs []string `json:"evidence_refs"`
+	}
+	_ = json.Unmarshal(got["approval"], &approval)
+	if gotRef != keyRef || gotBinding != binding || bytes.Contains(rewritten, []byte(subject)) ||
+		len(approval.EvidenceRefs) != 1 || approval.EvidenceRefs[0] != "" {
 		t.Fatalf("v3 one-way identity changed: ref=%q binding=%q", gotRef, gotBinding)
 	}
 }

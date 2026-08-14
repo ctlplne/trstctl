@@ -102,12 +102,14 @@ func ValidateApprovedTargetPrivacyRewrite(
 	tenantID string,
 	original, current, retained OperationApprovalUse,
 ) error {
-	if current.Reason != "" || len(current.EvidenceRefs) != 0 ||
-		(!privacy.IsPlaceholder(current.Requester) && !strings.HasPrefix(current.Requester, "retained:")) {
+	if !privacy.IsPlaceholder(current.Requester) && !strings.HasPrefix(current.Requester, "retained:") {
 		return ErrApprovalDrifted
 	}
 	if reflect.DeepEqual(retained, original) {
 		return nil
+	}
+	if current.Reason != "" || len(current.EvidenceRefs) != 0 {
+		return ErrApprovalDrifted
 	}
 	if reflect.DeepEqual(retained, current) {
 		return nil
@@ -118,10 +120,14 @@ func ValidateApprovedTargetPrivacyRewrite(
 	}
 	erased := original
 	erased.Requester = strings.ReplaceAll(erased.Requester, original.Requester, current.Requester)
-	erased.Reason = strings.ReplaceAll(erased.Reason, original.Requester, current.Requester)
+	if strings.Contains(erased.Reason, original.Requester) {
+		erased.Reason = ""
+	}
 	erased.EvidenceRefs = append([]string(nil), erased.EvidenceRefs...)
 	for i := range erased.EvidenceRefs {
-		erased.EvidenceRefs[i] = strings.ReplaceAll(erased.EvidenceRefs[i], original.Requester, current.Requester)
+		if strings.Contains(erased.EvidenceRefs[i], original.Requester) {
+			erased.EvidenceRefs[i] = ""
+		}
 	}
 	if !reflect.DeepEqual(retained, erased) {
 		return ErrApprovalDrifted
@@ -735,16 +741,77 @@ func (s *Store) LockApprovedTargetFenceTx(
 	// intent/resource/state fields below; a live approved request or an ordinary
 	// requester can never enter this branch.
 	privacyRequester := privacy.IsPlaceholder(request.Requester) || strings.HasPrefix(request.Requester, "retained:")
-	if !privacyRequester || request.Reason != "" || len(request.EvidenceRefs) != 0 {
-		return ApprovedTargetFence{}, OperationApprovalUse{}, false, ErrApprovalDrifted
+	if !privacyRequester {
+		return ApprovedTargetFence{}, OperationApprovalUse{}, false,
+			fmt.Errorf("%w: approved-target privacy marker is incomplete", ErrApprovalDrifted)
+	}
+	currentUse, currentUseErr := OperationApprovalUseFromRequest(request)
+	if currentUseErr != nil {
+		return ApprovedTargetFence{}, OperationApprovalUse{}, false, currentUseErr
+	}
+	if approvedTargetFenceCoreMatchesCurrent(fence.Approval, currentUse) &&
+		approvedTargetFencePayloadApprovalMatchesCurrent(fence.Payload, currentUse) {
+		return fence, currentUse, true, nil
+	}
+	if request.Reason != "" || len(request.EvidenceRefs) != 0 {
+		return ApprovedTargetFence{}, OperationApprovalUse{}, false,
+			fmt.Errorf("%w: approved-target privacy marker is incomplete", ErrApprovalDrifted)
 	}
 	use.Reason = request.Reason
 	use.EvidenceRefs = append([]string(nil), request.EvidenceRefs...)
 	use.Issuance = nil
-	if err := validateOperationApprovalUseBinding(request, use); err != nil {
-		return ApprovedTargetFence{}, OperationApprovalUse{}, false, err
+	if err := validateOperationApprovalUseBinding(request, use); err == nil {
+		return fence, use, true, nil
+	}
+	if request.Status != ApprovalStatusConsumed || request.ConsumedEventID != fence.EventID {
+		return ApprovedTargetFence{}, OperationApprovalUse{}, false,
+			fmt.Errorf("%w: approved-target privacy marker does not name the fenced event", ErrApprovalDrifted)
+	}
+	use.approvedTargetPrivacyRecovery = true
+	if err := validatePreparedApprovedTargetPrivacyUse(request, use); err != nil {
+		return ApprovedTargetFence{}, OperationApprovalUse{}, false,
+			fmt.Errorf("%w: approved-target prepared privacy binding differs", err)
 	}
 	return fence, use, true, nil
+}
+
+func approvedTargetFenceCoreMatchesCurrent(fence ApprovedTargetFenceApproval, current OperationApprovalUse) bool {
+	return fence.RequestID == current.RequestID && fence.IntentDigest == current.IntentDigest &&
+		fence.ResourceKind == current.ResourceKind && fence.ResourceID == current.ResourceID &&
+		fence.Action == current.Action && fence.FromState == current.FromState &&
+		fence.ToState == current.ToState && fence.TargetVersion == current.TargetVersion &&
+		fence.RequiredApprovals == current.RequiredApprovals &&
+		reflect.DeepEqual(fence.Issuance, current.Issuance)
+}
+
+func approvedTargetFencePayloadApprovalMatchesCurrent(payload []byte, current OperationApprovalUse) bool {
+	var target struct {
+		Approval *OperationApprovalUse `json:"approval"`
+	}
+	return json.Unmarshal(payload, &target) == nil && target.Approval != nil &&
+		reflect.DeepEqual(*target.Approval, current)
+}
+
+// validatePreparedApprovedTargetPrivacyUse recognizes the exact SQL marker
+// written after a history rewrite has already made the independently durable
+// target fence privacy-safe. The fence retains the command's real authority
+// fields; the SQL preparation replaces all subject-searchable coordinates with
+// one tenant-bound placeholder. Only the already-consumed exact fence event may
+// bridge those two shapes, and only through the unencoded in-memory capability.
+func validatePreparedApprovedTargetPrivacyUse(request OperationApprovalRequest, use OperationApprovalUse) error {
+	marker := request.Requester
+	if !use.approvedTargetPrivacyRecovery || !privacy.IsPlaceholder(marker) ||
+		request.ID != use.RequestID || request.IntentDigest != use.IntentDigest ||
+		request.TargetVersion != use.TargetVersion ||
+		request.RequiredApprovals != use.RequiredApprovals ||
+		request.ResourceKind != marker || request.ResourceID != marker ||
+		request.ResourceName != marker || request.Action != marker ||
+		request.FromState != marker || request.ToState != marker ||
+		request.Reason != "" || len(request.EvidenceRefs) != 0 ||
+		use.Requester != marker || use.Reason != "" || len(use.EvidenceRefs) != 0 {
+		return ErrApprovalDrifted
+	}
+	return nil
 }
 
 // CompleteApprovedTargetFenceTx retires the independent command only after the

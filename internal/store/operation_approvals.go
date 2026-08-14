@@ -180,6 +180,12 @@ type OperationApprovalUse struct {
 	Reason            string                            `json:"reason,omitempty"`
 	EvidenceRefs      []string                          `json:"evidence_refs,omitempty"`
 	Issuance          *OperationApprovalIssuanceBinding `json:"issuance,omitempty"`
+
+	// approvedTargetPrivacyRecovery is an in-memory capability set only after
+	// LockApprovedTargetFenceTx locks the exact consumed-event fence and proves
+	// the SQL row is the privacy preparation's closed marker. It is never encoded
+	// into an event, so replayed input cannot manufacture this bypass.
+	approvedTargetPrivacyRecovery bool
 }
 
 // OperationApprovalAttempt contains the parts of a requester command that stay
@@ -805,8 +811,15 @@ func (s *Store) ConsumeOperationApprovalTx(ctx context.Context, tx pgx.Tx, tenan
 	if err != nil {
 		return err
 	}
-	if err := validateOperationApprovalUseBinding(r, use); err != nil {
-		return err
+	if bindingErr := validateOperationApprovalUseBinding(r, use); bindingErr != nil {
+		if !use.approvedTargetPrivacyRecovery || r.Status != ApprovalStatusConsumed ||
+			r.ConsumedEventID != eventID {
+			return bindingErr
+		}
+		if err := validatePreparedApprovedTargetPrivacyUse(r, use); err != nil {
+			return err
+		}
+		return nil
 	}
 	if r.Status == ApprovalStatusConsumed {
 		if r.ConsumedEventID == eventID {

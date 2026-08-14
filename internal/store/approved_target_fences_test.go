@@ -259,9 +259,11 @@ func TestApprovedTargetFencePrivacyRecoveryRequiresConsumedEventAndPlaceholder(t
 		t.Fatalf("ordinary requester with cleared evidence locked fence = %v, want ErrApprovalDrifted", err)
 	}
 
+	placeholder := privacy.Placeholder(privacy.SubjectRef(tenantA, request.Requester))
 	if _, err := s.SystemPool().Exec(ctx, `UPDATE operation_approval_requests
-		SET requester = 'retained:0123456789ab'
-		WHERE tenant_id = $1 AND id = $2`, tenantA, request.ID); err != nil {
+		SET requester = $3, resource_kind = $3, resource_id = $3, resource_name = $3, action = $3,
+		    from_state = $3, to_state = $3
+		WHERE tenant_id = $1 AND id = $2`, tenantA, request.ID, placeholder); err != nil {
 		t.Fatal(err)
 	}
 	err = s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
@@ -270,9 +272,27 @@ func TestApprovedTargetFencePrivacyRecoveryRequiresConsumedEventAndPlaceholder(t
 		if err != nil {
 			return err
 		}
-		if !privacyRewritten || recoveredUse.Requester != "retained:0123456789ab" ||
+		if !privacyRewritten || recoveredUse.Requester != placeholder ||
 			recoveredUse.Reason != "" || len(recoveredUse.EvidenceRefs) != 0 {
 			t.Fatalf("privacy recovery = rewritten %t use %+v", privacyRewritten, recoveredUse)
+		}
+		encodedUse, err := json.Marshal(recoveredUse)
+		if err != nil {
+			return err
+		}
+		var replayedUse store.OperationApprovalUse
+		if err := json.Unmarshal(encodedUse, &replayedUse); err != nil {
+			return err
+		}
+		if err := s.ConsumeOperationApprovalTx(
+			ctx, tx, tenantA, replayedUse, locked.EventID, locked.EventTime,
+		); !errors.Is(err, store.ErrApprovalDrifted) {
+			t.Fatalf("serialized privacy recovery capability error = %v, want ErrApprovalDrifted", err)
+		}
+		if err := s.ConsumeOperationApprovalTx(
+			ctx, tx, tenantA, recoveredUse, "77000000-0000-4000-8000-000000000824", locked.EventTime,
+		); !errors.Is(err, store.ErrApprovalDrifted) {
+			t.Fatalf("privacy recovery for another event error = %v, want ErrApprovalDrifted", err)
 		}
 		return s.ConsumeOperationApprovalTx(ctx, tx, tenantA, recoveredUse,
 			locked.EventID, locked.EventTime)
@@ -377,6 +397,29 @@ func TestApprovedTargetFenceUsesEventHistoryPrivacyRewriteAndDefersRetention(t *
 	current.EvidenceRefs = []string{}
 	if err := store.ValidateApprovedTargetPrivacyRewrite(tenantA, use, current, *retained.Approval); err != nil {
 		t.Fatalf("event-history-equivalent fence rewrite refused: %v", err)
+	}
+	elementCleared := use
+	elementCleared.Requester = placeholder
+	elementCleared.Reason = ""
+	elementCleared.EvidenceRefs = make([]string, len(use.EvidenceRefs))
+	if err := store.ValidateApprovedTargetPrivacyRewrite(tenantA, use, current, elementCleared); err != nil {
+		t.Fatalf("cardinality-preserving event evidence rewrite refused: %v", err)
+	}
+	originalWithOpaque := use
+	originalWithOpaque.EvidenceRefs = append(append([]string(nil), use.EvidenceRefs...), "sha256:opaque-attempt-binding")
+	retainedWithOpaque := elementCleared
+	retainedWithOpaque.EvidenceRefs = []string{"", "sha256:opaque-attempt-binding"}
+	if err := store.ValidateApprovedTargetPrivacyRewrite(
+		tenantA, originalWithOpaque, current, retainedWithOpaque,
+	); err != nil {
+		t.Fatalf("opaque evidence binding did not survive privacy recovery: %v", err)
+	}
+	hostileClearedOpaque := retainedWithOpaque
+	hostileClearedOpaque.EvidenceRefs = []string{"", ""}
+	if err := store.ValidateApprovedTargetPrivacyRewrite(
+		tenantA, originalWithOpaque, current, hostileClearedOpaque,
+	); !errors.Is(err, store.ErrApprovalDrifted) {
+		t.Fatalf("cleared opaque evidence error = %v, want ErrApprovalDrifted", err)
 	}
 	if err := store.ValidateApprovedTargetActorPrivacyRewrite(
 		tenantA, candidate.Actor, current.Requester, rewritten.Actor, subject,
