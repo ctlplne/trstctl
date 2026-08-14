@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     connectorDeliveries: vi.fn(),
     approvalRequests: vi.fn(),
     approveApprovalRequest: vi.fn(),
+    denyApprovalRequest: vi.fn(),
     transitionIdentity: vi.fn(),
   },
 }));
@@ -95,6 +96,14 @@ describe("C10-2 operations queue", () => {
       required_approvals: 3,
       status: "pending",
     });
+    apiMock.denyApprovalRequest.mockResolvedValue({
+      id: "019fec49-6641-7131-ae7f-17f7ea4b5e0e",
+      intent_digest: "sha256:jit-db",
+      resource: "jit-1",
+      action: "issue",
+      approver: "ra@example.test",
+      status: "denied",
+    });
     apiMock.transitionIdentity.mockResolvedValue({
       id: "jit-1",
       name: "jit-db",
@@ -136,7 +145,10 @@ describe("C10-2 operations queue", () => {
     const dialog = await screen.findByRole("dialog", { name: "Reject issue for jit-db" });
     await user.type(within(dialog).getByLabelText("Reason"), "missing CAB approval");
     await user.click(within(dialog).getByRole("button", { name: "Reject request" }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("jit-1", "retired", "missing CAB approval"));
+    await waitFor(() =>
+      expect(apiMock.denyApprovalRequest).toHaveBeenCalledWith("019fec49-6641-7131-ae7f-17f7ea4b5e0e", "sha256:jit-db", "missing CAB approval"),
+    );
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
 
     await user.click(within(rotationRow).getByRole("button", { name: "Cancel rot-1" }));
     expect(await screen.findByRole("status")).toHaveTextContent(
