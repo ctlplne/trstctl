@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -18,11 +20,12 @@ import (
 func TestLegacyCodeSigningPrivacyMappingRebuildsWithoutServingRawKey(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "legacy-code-signing-privacy"}); err != nil {
+	tenantID := uuid.NewString()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "legacy-code-signing-privacy"}); err != nil {
 		t.Fatal(err)
 	}
 	const rawKey = "release/alice@example.com/legacy"
-	operationID := store.LegacyCodeSigningOperationID(tenantA, rawKey)
+	operationID := store.LegacyCodeSigningOperationID(tenantID, rawKey)
 	mappedKey := store.LegacyCodeSigningStorageKey(operationID, rawKey)
 	payload := projections.CodeSigningCommanded{
 		OperationID: operationID, IdempotencyKey: mappedKey, Mode: "key",
@@ -34,7 +37,7 @@ func TestLegacyCodeSigningPrivacyMappingRebuildsWithoutServingRawKey(t *testing.
 	}
 	event := events.Event{
 		ID:   "codesign-event-77110000-0000-4000-8000-000000000001",
-		Type: projections.EventCodeSigningCommanded, TenantID: tenantA,
+		Type: projections.EventCodeSigningCommanded, TenantID: tenantID,
 		Time: time.Now().UTC(), SchemaVersion: 1, Data: data,
 	}
 	project := func() store.CodeSigningOperation {
@@ -42,7 +45,7 @@ func TestLegacyCodeSigningPrivacyMappingRebuildsWithoutServingRawKey(t *testing.
 		if err := projections.New(s).Apply(ctx, event); err != nil {
 			t.Fatalf("project sanitized legacy command: %v", err)
 		}
-		op, found, err := s.CodeSigningOperationByIdempotency(ctx, tenantA, rawKey)
+		op, found, err := s.CodeSigningOperationByIdempotency(ctx, tenantID, rawKey)
 		if err != nil || !found {
 			t.Fatalf("lookup by transient raw retry key = found %t err=%v", found, err)
 		}
