@@ -13,8 +13,12 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+const dualControlManagedKeyProvider = "test-managed-key-provider"
 
 type fakeManagedKeyService struct{}
 
@@ -65,7 +69,7 @@ func (s *dualControlManagedKeyService) Zeroize(ctx context.Context, tenantID, ke
 }
 
 func (s *dualControlManagedKeyService) authorize(ctx context.Context, tenantID, keyID, action, requester string) error {
-	toState := "active"
+	toState := "superseded"
 	switch action {
 	case api.ManagedKeyActionRevoke:
 		toState = "revoked"
@@ -76,14 +80,47 @@ func (s *dualControlManagedKeyService) authorize(ctx context.Context, tenantID, 
 		TenantID: tenantID, ResourceKind: "managed_key", ResourceID: keyID,
 		ResourceName: keyID, Action: action, Requester: requester,
 		FromState: "active", ToState: toState, TargetVersion: 1,
-		Reason:       "authorize one exact managed-key test command",
-		EvidenceRefs: []string{"test-command:" + action}, RequiredApprovals: 2,
+		Reason: "authorize one exact managed-key test command",
+		EvidenceRefs: []string{
+			"managed-key-algorithm:" + string(crypto.RSA2048),
+			"test-command:" + action,
+			"managed-key-provider:" + dualControlManagedKeyProvider,
+		},
+		RequiredApprovals: 2,
 	})
 	if !approved {
 		return fmt.Errorf("%w: %s", api.ErrManagedKeyNotApproved, reason)
 	}
 	s.calls[action]++
 	return nil
+}
+
+func projectDualControlManagedKey(t *testing.T, h *servedHarness, key api.ManagedKey) {
+	t.Helper()
+	command := projections.ManagedKeyCommand{
+		OperationID: "managed-key-dual-generate-operation", Provider: dualControlManagedKeyProvider,
+		Action: "generate", Algorithm: string(key.Algorithm), RequestBinding: "managed-key-dual-generate-binding",
+	}
+	appendAndProject := func(eventType string, payload any) {
+		t.Helper()
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("marshal %s fixture: %v", eventType, err)
+		}
+		event, err := h.log.Append(context.Background(), events.Event{
+			Type: eventType, TenantID: h.tenant, Data: raw,
+		})
+		if err != nil {
+			t.Fatalf("append %s fixture: %v", eventType, err)
+		}
+		if err := projections.New(h.store).Apply(context.Background(), event); err != nil {
+			t.Fatalf("project %s fixture: %v", eventType, err)
+		}
+	}
+	appendAndProject(projections.EventManagedKeyCommandRequested, command)
+	appendAndProject(projections.EventManagedKeyCommandCompleted, projections.ManagedKeyCommandCompleted{
+		ManagedKeyCommand: command, ResultKeyID: key.KeyID, PublicDER: key.PublicDER, State: key.State,
+	})
 }
 
 func TestManagedKeysServedThroughEditionFactory(t *testing.T) {
@@ -149,6 +186,7 @@ func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testin
 	if err := json.Unmarshal(body, &key); err != nil {
 		t.Fatalf("decode generated managed key: %v", err)
 	}
+	projectDualControlManagedKey(t, h, key)
 
 	for _, action := range []struct {
 		name      string
@@ -236,6 +274,9 @@ func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testin
 		if result.State != action.state {
 			t.Fatalf("%s state = %q, want %q", action.name, result.State, action.state)
 		}
-		key = result
+		// This seam service proves the core approval wiring only; the EE durable
+		// lifecycle owns mutation projection and consumption. Keep every action
+		// aimed at the same event-projected active generation so each independent
+		// two-person gate is checked against real target authority.
 	}
 }
