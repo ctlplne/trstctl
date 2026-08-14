@@ -379,11 +379,14 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 	if hasSideEffect {
 		replayPayload := append([]byte(nil), outboxPayload...)
-		if approval != nil || issuance != nil || ownershipReadiness != nil {
+		if approval != nil || issuance != nil || (ownershipReadiness != nil && len(sideEffectPayload) == 0) {
 			// V4 approval, v5 issuance, and v6 ownership-readiness events have one command body, not an
-			// opaque base64 copy inside themselves. Warm enqueue and boot
-			// reconciliation derive the body by removing this SideEffect object
-			// from the canonical event.
+			// opaque base64 copy inside themselves. An ownership-ready transition
+			// with an EXPLICIT side-effect body is different: its transformed body
+			// may be a tenant-sealed credential that cannot be reconstructed from
+			// the outer ownership metadata, so v6 retains that exact replay body.
+			// Warm enqueue and boot reconciliation derive only the ordinary body by
+			// removing this SideEffect object from the canonical event.
 			replayPayload = nil
 		}
 		basePayload.SideEffect = &transitionSideEffect{
@@ -1401,10 +1404,25 @@ func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest 
 		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): side_effect idempotency key is not event-derived", ev.Type, ev.Sequence)
 	}
 	if ev.SchemaVersion == projections.LifecycleApprovalEventSchemaVersion ||
-		ev.SchemaVersion == projections.LifecycleIssuanceEventSchemaVersion ||
-		ev.SchemaVersion == projections.LifecycleOwnershipReadinessEventSchemaVersion {
+		ev.SchemaVersion == projections.LifecycleIssuanceEventSchemaVersion {
 		if len(pl.SideEffect.Payload) != 0 {
 			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): canonical side_effect must not duplicate the outer payload", ev.Type, ev.Sequence)
+		}
+		canonical := pl
+		canonical.SideEffect = nil
+		payload, err := json.Marshal(canonical)
+		if err != nil {
+			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): derive canonical outbox payload: %w", ev.Type, ev.Sequence, err)
+		}
+		return pl.SideEffect.IdempotencyKey, payload, nil
+	}
+	if ev.SchemaVersion == projections.LifecycleOwnershipReadinessEventSchemaVersion {
+		// An explicit v6 body has already crossed the caller's storage-boundary
+		// transform (connector credentials are tenant-sealed here). It is the only
+		// replay authority for those bytes. Ordinary v6 transitions still omit the
+		// duplicate and derive their command from the outer lifecycle envelope.
+		if len(pl.SideEffect.Payload) != 0 {
+			return pl.SideEffect.IdempotencyKey, pl.SideEffect.Payload, nil
 		}
 		canonical := pl
 		canonical.SideEffect = nil

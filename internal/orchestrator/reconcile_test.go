@@ -9,6 +9,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -608,6 +609,148 @@ func TestReconcileOutboxRestoresReplayableLifecycleSideEffectPayload(t *testing.
 	gotPayload := outboxPayload(t, ctx, s.SystemPool(), tenantA, eventID)
 	if !bytes.Equal(gotPayload, wantPayload) {
 		t.Fatalf("reconciled payload = %s, want replayable side-effect payload %s", gotPayload, wantPayload)
+	}
+}
+
+func TestOwnershipReadinessTransitionRetainsTransformedSideEffectForRecoveryAUD189(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	const (
+		identityID = "fefefefe-fefe-4efe-8efe-fefefefefefe"
+		ownerID    = "89898989-8989-4989-8989-898989898989"
+	)
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "AUD-189 tenant"}); err != nil {
+		t.Fatal(err)
+	}
+	verifiedAt := time.Now().UTC().Add(-time.Minute)
+	owner := store.Owner{
+		ID: ownerID, TenantID: tenantA, Kind: store.OwnerService, Name: "AUD-189 owner",
+		ApplicationID: "APP-AUD-189", Environment: "production",
+		OwnershipVerifiedAt: &verifiedAt, OwnershipVerifiedBy: "auditor@example.test",
+	}
+	var err error
+	owner.OwnershipModelDigest, err = store.OwnerModelDigest(owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertOwner(ctx, owner); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertIdentity(ctx, store.Identity{
+		ID: identityID, TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: "aud-189.example.test", OwnerID: ownerID, Status: string(orchestrator.StateIssued),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	orch := orchestrator.NewOrchestrator(log, s, ob,
+		orchestrator.WithProjector(projections.New(s, projections.WithOwnershipAttestationCadence(time.Hour))),
+		orchestrator.WithOwnershipAttestationCadence(time.Hour))
+
+	transient := []byte(`{"credential":"plaintext-must-not-enter-history"}`)
+	var transformed []byte
+	err = orch.TransitionWithSideEffectPayloadTransform(ctx, tenantA, identityID,
+		orchestrator.StateDeployed, "deploy through current ownership authority", transient,
+		func(_ context.Context, payloadCtx orchestrator.SideEffectPayloadContext) ([]byte, error) {
+			transformed = []byte(`{"format":"test-sealed","binding":"` + payloadCtx.IdempotencyKey + `","sealed":"opaque"}`)
+			return append([]byte(nil), transformed...), nil
+		})
+	if err != nil {
+		t.Fatalf("ownership-ready transition: %v", err)
+	}
+
+	var deployed events.Event
+	if err := log.Replay(ctx, 1, func(ev events.Event) error {
+		if ev.Type == projections.EventIdentityDeployed {
+			deployed = ev
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if deployed.ID == "" {
+		t.Fatal("ownership-ready deployed event was not retained")
+	}
+	if bytes.Contains(deployed.Data, transient) || bytes.Contains(deployed.Data, []byte("plaintext-must-not-enter-history")) {
+		t.Fatal("transient credential entered immutable lifecycle history")
+	}
+	var envelope struct {
+		SideEffect replayableTransitionSideEffect `json:"side_effect"`
+	}
+	if err := json.Unmarshal(deployed.Data, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.SideEffect.IdempotencyKey == "" || !bytes.Equal(envelope.SideEffect.Payload, transformed) {
+		t.Fatalf("retained transformed side effect = key %q bytes_equal=%v, want exact opaque command",
+			envelope.SideEffect.IdempotencyKey, bytes.Equal(envelope.SideEffect.Payload, transformed))
+	}
+	if got := outboxPayload(t, ctx, s.SystemPool(), tenantA, envelope.SideEffect.IdempotencyKey); !bytes.Equal(got, transformed) {
+		t.Fatalf("inline outbox payload equals transformed command = %v", bytes.Equal(got, transformed))
+	}
+
+	if _, err := s.SystemPool().Exec(ctx,
+		`DELETE FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+		tenantA, envelope.SideEffect.IdempotencyKey); err != nil {
+		t.Fatalf("delete inline outbox row: %v", err)
+	}
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("reconcile ownership-ready command: %v", err)
+	}
+	if healed != 1 {
+		t.Fatalf("reconciled commands = %d, want one", healed)
+	}
+	if got := outboxPayload(t, ctx, s.SystemPool(), tenantA, envelope.SideEffect.IdempotencyKey); !bytes.Equal(got, transformed) {
+		t.Fatalf("reconciled outbox payload equals transformed command = %v", bytes.Equal(got, transformed))
+	}
+
+	// The custom-body rule must not make ordinary v6 transitions duplicate their
+	// outer lifecycle command inside side_effect.payload. They retain the compact
+	// v6 shape and reconciliation derives that ordinary body exactly as before.
+	const ordinaryIdentityID = "edededed-eded-4ded-8ded-edededededed"
+	if err := s.UpsertIdentity(ctx, store.Identity{
+		ID: ordinaryIdentityID, TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: "ordinary-v6.example.test", OwnerID: ownerID, Status: string(orchestrator.StateIssued),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := orch.Transition(ctx, tenantA, ordinaryIdentityID, orchestrator.StateDeployed,
+		"ordinary ownership-ready deployment"); err != nil {
+		t.Fatalf("ordinary ownership-ready transition: %v", err)
+	}
+	var ordinaryEnvelope struct {
+		IdentityID string                         `json:"identity_id"`
+		SideEffect replayableTransitionSideEffect `json:"side_effect"`
+	}
+	if err := log.Replay(ctx, deployed.Sequence+1, func(ev events.Event) error {
+		if ev.Type != projections.EventIdentityDeployed {
+			return nil
+		}
+		var candidate struct {
+			IdentityID string                         `json:"identity_id"`
+			SideEffect replayableTransitionSideEffect `json:"side_effect"`
+		}
+		if err := json.Unmarshal(ev.Data, &candidate); err != nil {
+			return err
+		}
+		if candidate.IdentityID == ordinaryIdentityID {
+			ordinaryEnvelope = candidate
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if ordinaryEnvelope.IdentityID == "" || ordinaryEnvelope.SideEffect.IdempotencyKey == "" ||
+		len(ordinaryEnvelope.SideEffect.Payload) != 0 {
+		t.Fatalf("ordinary v6 side effect = %+v, want event-derived key and no duplicate payload", ordinaryEnvelope.SideEffect)
+	}
+	ordinaryPayload := outboxPayload(t, ctx, s.SystemPool(), tenantA, ordinaryEnvelope.SideEffect.IdempotencyKey)
+	if bytes.Contains(ordinaryPayload, []byte(`"side_effect"`)) ||
+		!bytes.Contains(ordinaryPayload, []byte(`"ownership_readiness"`)) {
+		t.Fatalf("ordinary v6 derived outbox body has side_effect=%v ownership_readiness=%v",
+			bytes.Contains(ordinaryPayload, []byte(`"side_effect"`)),
+			bytes.Contains(ordinaryPayload, []byte(`"ownership_readiness"`)))
 	}
 }
 

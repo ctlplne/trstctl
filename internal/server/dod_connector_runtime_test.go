@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"trstctl.com/trstctl/internal/auth"
@@ -25,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
@@ -39,6 +41,79 @@ type dodConnectorTarget struct {
 	config       json.RawMessage
 	target       string
 	readbackPath string
+}
+
+type dodConnectorDispatchDiagnostic struct {
+	inner   orchestrator.Handler
+	mu      sync.Mutex
+	classes map[string]string
+}
+
+func (d *dodConnectorDispatchDiagnostic) Deliver(ctx context.Context, message orchestrator.Message) error {
+	err := d.inner.Deliver(ctx, message)
+	if err == nil {
+		return nil
+	}
+	d.mu.Lock()
+	d.classes[message.Destination] = dodConnectorDispatchErrorClass(err.Error())
+	d.mu.Unlock()
+	return err
+}
+
+func (d *dodConnectorDispatchDiagnostic) DeliverTerminalFailure(ctx context.Context, message orchestrator.Message, cause error) error {
+	terminal, ok := d.inner.(orchestrator.TerminalFailureHandler)
+	if !ok {
+		return nil
+	}
+	return terminal.DeliverTerminalFailure(ctx, message, cause)
+}
+
+func (d *dodConnectorDispatchDiagnostic) errorClass(destination string) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if class := d.classes[destination]; class != "" {
+		return class
+	}
+	return "none"
+}
+
+func dodConnectorDispatchErrorClass(raw string) string {
+	value := strings.ToLower(raw)
+	for _, candidate := range []struct {
+		contains string
+		class    string
+	}{
+		{"tenant cryptographic access unavailable", "tenant-custody"},
+		{"load identity", "identity-load"},
+		{"issuance admission", "issuance-admission"},
+		{"signer unavailable", "signer-unavailable"},
+		{"signer timed out", "signer-timeout"},
+		{"issuance failed", "signer-issuance"},
+		{"certificate profile", "certificate-profile"},
+		{"record certificate", "certificate-record"},
+		{"seal connector deploy", "connector-intent-seal"},
+		{"transition", "lifecycle-transition"},
+		{"crl", "crl"},
+		{"tenant", "tenant-other"},
+		{"sign", "signing-other"},
+		{"certificate", "certificate-other"},
+		{"owner", "owner"},
+		{"idempot", "idempotency"},
+		{"projection", "projection"},
+		{"event", "event-log"},
+		{"no rows", "not-found"},
+		{"not found", "not-found"},
+		{"uuid", "identifier"},
+		{"policy", "policy"},
+		{"approval", "approval"},
+		{"state", "state"},
+		{"postgres", "postgres"},
+	} {
+		if strings.Contains(value, candidate.contains) {
+			return candidate.class
+		}
+	}
+	return dodSecretIntegrationErrorClass(raw)
 }
 
 // dodRuntimeSelection makes a shared runtime test fail before starting any
@@ -691,12 +766,24 @@ func dodConnectorCreateOwner(t *testing.T, srv *Server, token string) string {
 	t.Helper()
 	body := dodConnectorRequest(t, srv, token, http.MethodPost, "/api/v1/owners", "dod-connector-owner", map[string]any{
 		"kind": "workload", "name": "trstctl DoD connector owner",
+		"email": "dod-connectors@example.test", "application_id": "APP-DOD-CONNECTORS",
+		"service": "native-connector-proof", "business_unit": "security",
+		"environment": "test", "escalation_chain": []string{"dod-connectors@example.test"},
 	}, http.StatusCreated)
 	var owner struct {
 		ID string `json:"id"`
 	}
 	if json.Unmarshal(body, &owner) != nil || owner.ID == "" {
 		t.Fatalf("decode connector proof owner: %s", body)
+	}
+	attested := dodConnectorRequest(t, srv, token, http.MethodPost, "/api/v1/owners/"+owner.ID+"/attest",
+		"dod-connector-owner-attestation", nil, http.StatusOK)
+	var authority struct {
+		VerifiedBy string `json:"ownership_verified_by"`
+		Current    bool   `json:"ownership_current"`
+	}
+	if json.Unmarshal(attested, &authority) != nil || authority.VerifiedBy != "dod-connector-operator" || !authority.Current {
+		t.Fatalf("connector proof owner is not current attested authority: %s", attested)
 	}
 	return owner.ID
 }
@@ -728,8 +815,29 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 	dodConnectorRequest(t, srv, token, http.MethodPost, "/api/v1/connectors/targets/"+configured.ID+"/deploy", "dod-deploy-"+stem, map[string]any{
 		"identity_id": identity.ID, "reason": "DoD production connector deployment",
 	}, http.StatusOK)
-	if err := srv.Drain(context.Background()); err != nil {
-		t.Fatalf("drain %s deployment: %v", entryID, err)
+	diagnostic := &dodConnectorDispatchDiagnostic{
+		inner: srv.obHandler, classes: make(map[string]string),
+	}
+	srv.obHandler = diagnostic
+	drainErr := srv.Drain(context.Background())
+	srv.obHandler = diagnostic.inner
+	if drainErr != nil {
+		t.Fatalf("drain %s deployment: %v", entryID, drainErr)
+	}
+	request, err := http.NewRequest(http.MethodGet, "/api/v1/connectors/deliveries?limit=100", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	session := proof.Start(t, entryID, srv.Handler(), request)
+	if !bytes.Contains(session.ResponseBody(), []byte(`"status":"delivered"`)) || !bytes.Contains(session.ResponseBody(), []byte(`"connector":"`+connectorName+`"`)) {
+		pending, pendingErr := srv.outbox.Pending(context.Background(), dodConnectorTenant)
+		states := make([]string, 0, len(pending))
+		for _, item := range pending {
+			states = append(states, fmt.Sprintf("%s:%s:%d", item.Destination, item.Status, item.Attempts))
+		}
+		t.Fatalf("%s delivery receipt is not user-visible delivered evidence: %s pending=%v pending_err=%v ca_issue_error_class=%s",
+			entryID, session.ResponseBody(), states, pendingErr, diagnostic.errorClass("ca.issue"))
 	}
 	ident, err := srv.store.GetIdentity(context.Background(), dodConnectorTenant, identity.ID)
 	if err != nil {
@@ -745,15 +853,6 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 		first := firstDifferentByte(written, readback)
 		leftEnd, rightEnd := min(first+8, len(written)), min(first+8, len(readback))
 		t.Fatalf("%s independent readback differs from issued leaf: written_bytes=%d readback_bytes=%d first_difference=%d written_window=%q readback_window=%q", entryID, len(written), len(readback), first, written[max(0, first-3):leftEnd], readback[max(0, first-3):rightEnd])
-	}
-	request, err := http.NewRequest(http.MethodGet, "/api/v1/connectors/deliveries?limit=100", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Authorization", "Bearer "+token)
-	session := proof.Start(t, entryID, srv.Handler(), request)
-	if !bytes.Contains(session.ResponseBody(), []byte(`"status":"delivered"`)) || !bytes.Contains(session.ResponseBody(), []byte(`"connector":"`+connectorName+`"`)) {
-		t.Fatalf("%s delivery receipt is not user-visible delivered evidence: %s", entryID, session.ResponseBody())
 	}
 	executionReceipt := external.StopAndReceipt()
 	session.Complete(proof.ExternalWrite(proof.ExternalWriteProbe{

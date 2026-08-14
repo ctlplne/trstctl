@@ -6027,8 +6027,7 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 			return fmt.Errorf("projections: %s ownership-readiness payload/schema mismatch", e.Type)
 		}
 		if pl.SideEffect == nil || pl.SideEffect.Destination != "connector.deploy" ||
-			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) ||
-			len(pl.SideEffect.Payload) != 0 {
+			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) {
 			return fmt.Errorf("projections: %s ownership-readiness side-effect mismatch", e.Type)
 		}
 		return nil
