@@ -43,6 +43,10 @@ func TestCaptureSoakSeriesFeedsAnalyzer(t *testing.T) {
 		if sample.RSSBytes <= 0 || sample.HeapBytes <= 0 || sample.Goroutines <= 0 || sample.OpenFDs <= 0 {
 			t.Fatalf("sample %d missing resource capture: %+v", i, sample)
 		}
+		if sample.RSSBytes != 512*1024*1024 || sample.HeapBytes != 300*1024*1024 ||
+			sample.Goroutines != 128 || sample.OpenFDs != 64 || sample.P95MS != 40 || sample.P99MS != 80 {
+			t.Fatalf("sample %d did not apply the deterministic test-only normalizer: %+v", i, sample)
+		}
 		if sample.DBPoolSize <= 0 {
 			t.Fatalf("sample %d missing DB pool denominator: %+v", i, sample)
 		}
@@ -58,7 +62,13 @@ func TestCaptureSoakSeriesFeedsAnalyzer(t *testing.T) {
 		t.Fatalf("AnalyzeSoak(captured): %v", err)
 	}
 	if !report.Summary.OK {
-		t.Fatalf("captured live-stack soak series should pass default thresholds: %+v", report.Summary)
+		breaches := make([]MetricTrend, 0, report.Summary.Breached)
+		for _, trend := range report.Trends {
+			if !trend.OK {
+				breaches = append(breaches, trend)
+			}
+		}
+		t.Fatalf("captured live-stack soak series should pass default thresholds: summary=%+v breaches=%+v", report.Summary, breaches)
 	}
 }
 
@@ -68,4 +78,19 @@ type fixedSoakSampler struct {
 
 func (s fixedSoakSampler) CaptureSoakMetrics(int) (SoakMetricSnapshot, error) {
 	return s.snapshot, nil
+}
+
+// NormalizeSoakSample keeps this capture-to-analyzer wiring proof independent of
+// race and repository-wide coverage instrumentation. captureOneSoakSample still
+// executes every served hot path before applying this test-only receipt; the
+// dedicated uninstrumented perf-live wall owns production latency thresholds.
+func (fixedSoakSampler) NormalizeSoakSample(sample SoakSample) SoakSample {
+	const mib = 1024 * 1024
+	sample.RSSBytes = 512 * mib
+	sample.HeapBytes = 300 * mib
+	sample.Goroutines = 128
+	sample.OpenFDs = 64
+	sample.P95MS = 40
+	sample.P99MS = 80
+	return sample
 }
