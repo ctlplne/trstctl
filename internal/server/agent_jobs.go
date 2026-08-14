@@ -458,62 +458,7 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		return nil, status.Errorf(codes.Internal, "record signed certificate custody: %v", err)
 	}
 
-	// Apply structured observations before closing the lease. A failed or
-	// interrupted projection leaves the durable job claim retryable. Receivers
-	// derive stable event IDs from the outbox key, so partial retries converge.
-	var ingestErr error
-	if a.recordMigrationResult == nil {
-		if _, handled, decodeErr := decodeMigrationReceiptClaim(claim.Destination, claim.Payload); decodeErr != nil {
-			ingestErr = decodeErr
-		} else if handled {
-			ingestErr = errors.New("migration result receiver is not configured")
-		}
-	} else {
-		_, ingestErr = a.recordMigrationResult(ctx, info.TenantID, agentID, claim.Destination,
-			claim.IdempotencyKey, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest)
-	}
-	if ingestErr != nil {
-		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
-	}
-	switch claim.Destination {
-	case agentJobKindCMDBSync:
-		if a.recordCMDBSync == nil {
-			ingestErr = errors.New("CMDB result receiver is not configured")
-		} else {
-			ingestErr = a.recordCMDBSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-		}
-	case agentJobKindMDMSync:
-		if a.recordMDMSync == nil {
-			ingestErr = errors.New("MDM result receiver is not configured")
-		} else {
-			ingestErr = a.recordMDMSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-		}
-	case agentJobKindTicketSync:
-		if a.recordTicketSync == nil {
-			ingestErr = errors.New("ticket result receiver is not configured")
-		} else {
-			ingestErr = a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-		}
-	case relay.KindDiscoveryRun:
-		if a.recordDiscoveryScan == nil {
-			ingestErr = errors.New("discovery result receiver is not configured")
-		} else {
-			ingestErr = a.recordDiscoveryScan(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-		}
-	case relay.KindADCSInventory:
-		if a.recordADCSInventory == nil {
-			ingestErr = errors.New("AD CS inventory result receiver is not configured")
-		} else {
-			ingestErr = a.recordADCSInventory(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-		}
-	case relay.KindRevocationProbe:
-		if a.recordRevocationHealth == nil {
-			ingestErr = errors.New("revocation health result receiver is not configured")
-		} else {
-			ingestErr = a.recordRevocationHealth(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail, req.EvidenceDigest)
-		}
-	}
-	if ingestErr != nil {
+	if ingestErr := a.ingestExecutedReport(ctx, info, agentID, claim, req); ingestErr != nil {
 		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
 	}
 
@@ -623,6 +568,67 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, idemKey, req.Outcome, "")
 	}
 	return &transport.ReportJobResultResponse{Accepted: true}, nil
+}
+
+// ingestExecutedReport applies structured observations before closing the
+// lease. A failed or interrupted projection leaves the durable claim retryable.
+// Receivers derive stable event IDs from the outbox key, so partial retries
+// converge before the outbox intent becomes terminal.
+func (a *agentService) ingestExecutedReport(
+	ctx context.Context,
+	info mtls.PeerCertInfo,
+	agentID string,
+	claim store.AgentJobResultClaim,
+	req *transport.ReportJobResultRequest,
+) error {
+	var ingestErr error
+	if a.recordMigrationResult == nil {
+		if _, handled, decodeErr := decodeMigrationReceiptClaim(claim.Destination, claim.Payload); decodeErr != nil {
+			ingestErr = decodeErr
+		} else if handled {
+			ingestErr = errors.New("migration result receiver is not configured")
+		}
+	} else {
+		_, ingestErr = a.recordMigrationResult(ctx, info.TenantID, agentID, claim.Destination,
+			claim.IdempotencyKey, claim.Payload, req.Outcome, req.Detail, req.EvidenceDigest)
+	}
+	if ingestErr != nil {
+		return ingestErr
+	}
+	switch claim.Destination {
+	case agentJobKindCMDBSync:
+		if a.recordCMDBSync == nil {
+			return errors.New("CMDB result receiver is not configured")
+		}
+		return a.recordCMDBSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case agentJobKindMDMSync:
+		if a.recordMDMSync == nil {
+			return errors.New("MDM result receiver is not configured")
+		}
+		return a.recordMDMSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case agentJobKindTicketSync:
+		if a.recordTicketSync == nil {
+			return errors.New("ticket result receiver is not configured")
+		}
+		return a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case relay.KindDiscoveryRun:
+		if a.recordDiscoveryScan == nil {
+			return errors.New("discovery result receiver is not configured")
+		}
+		return a.recordDiscoveryScan(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case relay.KindADCSInventory:
+		if a.recordADCSInventory == nil {
+			return errors.New("AD CS inventory result receiver is not configured")
+		}
+		return a.recordADCSInventory(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case relay.KindRevocationProbe:
+		if a.recordRevocationHealth == nil {
+			return errors.New("revocation health result receiver is not configured")
+		}
+		return a.recordRevocationHealth(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail, req.EvidenceDigest)
+	default:
+		return nil
+	}
 }
 
 // acceptFailedReport releases — or permanently retires — work an agent could not

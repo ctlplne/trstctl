@@ -648,49 +648,9 @@ func (s *servedCodeSigningService) projectCodeSigningFenceUnbarriered(
 			return err
 		}
 		if wantSemantic != locked.SemanticDigest {
-			if locked.SchemaVersion != projections.CodeSigningApprovalEventSchemaVersion {
-				return fmt.Errorf("%w: approved code-signing fence semantic digest differs", store.ErrIdempotencyConflict)
-			}
-			// A schema-v2 fence may have committed the historical nanosecond digest
-			// before PostgreSQL rounded EventTime. If JetStream retained the event,
-			// prove that exact predecessor. If Append never happened, the historical
-			// SHA leaves only the 1,000 nanosecond remainders inside the stored
-			// microsecond. Exhausting that bounded set recovers the exact original
-			// timestamp and rejects a corrupted digest instead of guessing.
-			if retainedFound {
-				if !codeSigningFenceTimesMatch(retained.Time, locked.EventTime, locked.SchemaVersion) {
-					return fmt.Errorf("%w: retained legacy code-signing fence time differs", store.ErrIdempotencyConflict)
-				}
-				var retainedPayload projections.CodeSigningCommanded
-				if err := json.Unmarshal(retained.Data, &retainedPayload); err != nil {
-					return fmt.Errorf("codesign: decode retained legacy approved command: %w", err)
-				}
-				historical, err := projections.LegacyCodeSigningHistoricalSemanticDigest(retained, retainedPayload)
-				if err != nil || historical != locked.SemanticDigest {
-					if err == nil {
-						err = store.ErrIdempotencyConflict
-					}
-					return fmt.Errorf("%w: retained legacy code-signing fence semantic digest differs", err)
-				}
-			} else {
-				matches := 0
-				base := locked.EventTime.UTC().Truncate(time.Microsecond)
-				for remainder := range 1_000 {
-					probe := candidate
-					probe.Time = base.Add(time.Duration(remainder) * time.Nanosecond)
-					historical, probeErr := projections.LegacyCodeSigningHistoricalSemanticDigest(probe, payload)
-					if probeErr != nil {
-						return probeErr
-					}
-					if historical == locked.SemanticDigest {
-						candidate.Time = probe.Time
-						matches++
-					}
-				}
-				if matches != 1 {
-					return fmt.Errorf("%w: legacy code-signing fence timestamp proof matched %d nanosecond remainders",
-						store.ErrIdempotencyConflict, matches)
-				}
+			candidate, err = proveLegacyCodeSigningFenceSemantic(locked, candidate, payload, retained, retainedFound)
+			if err != nil {
+				return err
 			}
 		}
 		event := retained
@@ -755,6 +715,58 @@ func (s *servedCodeSigningService) projectCodeSigningFenceUnbarriered(
 		}
 		return projector.ApplyTx(ctx, tx, event)
 	})
+}
+
+// proveLegacyCodeSigningFenceSemantic handles the only accepted semantic-digest
+// predecessor. Schema v2 could hash nanoseconds before PostgreSQL rounded the
+// fence time to microseconds. Retained history proves the exact predecessor; an
+// append-crash fence instead permits a bounded search of those 1,000 remainders.
+func proveLegacyCodeSigningFenceSemantic(
+	locked store.ApprovedTargetFence,
+	candidate events.Event,
+	payload projections.CodeSigningCommanded,
+	retained events.Event,
+	retainedFound bool,
+) (events.Event, error) {
+	if locked.SchemaVersion != projections.CodeSigningApprovalEventSchemaVersion {
+		return candidate, fmt.Errorf("%w: approved code-signing fence semantic digest differs", store.ErrIdempotencyConflict)
+	}
+	if retainedFound {
+		if !codeSigningFenceTimesMatch(retained.Time, locked.EventTime, locked.SchemaVersion) {
+			return candidate, fmt.Errorf("%w: retained legacy code-signing fence time differs", store.ErrIdempotencyConflict)
+		}
+		var retainedPayload projections.CodeSigningCommanded
+		if err := json.Unmarshal(retained.Data, &retainedPayload); err != nil {
+			return candidate, fmt.Errorf("codesign: decode retained legacy approved command: %w", err)
+		}
+		historical, err := projections.LegacyCodeSigningHistoricalSemanticDigest(retained, retainedPayload)
+		if err != nil || historical != locked.SemanticDigest {
+			if err == nil {
+				err = store.ErrIdempotencyConflict
+			}
+			return candidate, fmt.Errorf("%w: retained legacy code-signing fence semantic digest differs", err)
+		}
+		return candidate, nil
+	}
+	matches := 0
+	base := locked.EventTime.UTC().Truncate(time.Microsecond)
+	for remainder := range 1_000 {
+		probe := candidate
+		probe.Time = base.Add(time.Duration(remainder) * time.Nanosecond)
+		historical, err := projections.LegacyCodeSigningHistoricalSemanticDigest(probe, payload)
+		if err != nil {
+			return candidate, err
+		}
+		if historical == locked.SemanticDigest {
+			candidate.Time = probe.Time
+			matches++
+		}
+	}
+	if matches != 1 {
+		return candidate, fmt.Errorf("%w: legacy code-signing fence timestamp proof matched %d nanosecond remainders",
+			store.ErrIdempotencyConflict, matches)
+	}
+	return candidate, nil
 }
 
 func codeSigningFenceTimesMatch(eventTime, fenceTime time.Time, schemaVersion int) bool {

@@ -104,33 +104,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 	if s.caSigner == nil || len(s.caCertDER) == 0 {
 		return nil, nil // no issuing CA → protocols not served (fail closed)
 	}
-	issuer := &protocolIssuer{
-		issue:              s.IssueLeafWithProfile,
-		issueLicensed:      s.IssueLicensedLeafWithProfile,
-		inspectLicensedCSR: s.licensedCSRInspector,
-		parseLicensedCSR:   s.licensedCSRParser,
-		orch:               s.orch,
-		idem:               s.idem,
-		store:              s.store,
-		log:                s.log,
-		caID:               IssuingCAID(),
-		defaultProfile:     s.defaultProfile,
-		leafProfile:        s.leafProfile,
-		ensureCRL: func(ctx context.Context, tenantID string) error {
-			if s.revoc == nil {
-				return nil
-			}
-			return s.revoc.ensureCRL(ctx, tenantID)
-		},
-		publishCRL: func(ctx context.Context, tenantID string) error {
-			if s.revoc == nil {
-				return nil
-			}
-			_, err := s.revoc.generateCRL(ctx, tenantID)
-			return err
-		},
-		tenantCrypto: s.tenantCrypto,
-	}
+	issuer := s.newProtocolIssuer()
 	sp := &servedProtocols{}
 
 	// Protocols run on their own bounded pool (AN-7) so an enrollment burst sheds
@@ -243,6 +217,36 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 	}
 
 	return sp, nil
+}
+
+func (s *Server) newProtocolIssuer() *protocolIssuer {
+	return &protocolIssuer{
+		issue:              s.IssueLeafWithProfile,
+		issueLicensed:      s.IssueLicensedLeafWithProfile,
+		inspectLicensedCSR: s.licensedCSRInspector,
+		parseLicensedCSR:   s.licensedCSRParser,
+		orch:               s.orch,
+		idem:               s.idem,
+		store:              s.store,
+		log:                s.log,
+		caID:               IssuingCAID(),
+		defaultProfile:     s.defaultProfile,
+		leafProfile:        s.leafProfile,
+		ensureCRL: func(ctx context.Context, tenantID string) error {
+			if s.revoc == nil {
+				return nil
+			}
+			return s.revoc.ensureCRL(ctx, tenantID)
+		},
+		publishCRL: func(ctx context.Context, tenantID string) error {
+			if s.revoc == nil {
+				return nil
+			}
+			_, err := s.revoc.generateCRL(ctx, tenantID)
+			return err
+		},
+		tenantCrypto: s.tenantCrypto,
+	}
 }
 
 func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tenantFallback string, issuer *protocolIssuer, acmeValidators *acme.Validators) (*acme.Server, error) {

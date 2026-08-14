@@ -508,6 +508,37 @@ func runLeafPluginAndModelConfig(cfg *config.Config, egressGuard *egress.Guard) 
 	return leafValidity, pluginCfg, aiModel, aiModelStatus, machineAuthMethods, nil
 }
 
+// runMaintenanceWindows parses the operator's renewal freezes during startup.
+// A malformed window must stop the process rather than being ignored later by
+// a sweep that the operator believed was protected.
+func runMaintenanceWindows(cfg *config.Config) (lifecycle.WindowSet, error) {
+	windows, err := parseMaintenanceWindows(cfg.Lifecycle.MaintenanceWindows)
+	if err != nil {
+		return lifecycle.WindowSet{}, err
+	}
+	return windows, nil
+}
+
+func runBreakglassConfig(
+	ctx context.Context,
+	cfg *config.Config,
+	st *store.Store,
+	log *events.Log,
+	signer runSigner,
+) ([]byte, []byte, *configuredBreakglassRuntime, error) {
+	caCertDER, publicKeyDER, err := breakglassVerifierMaterialFromConfig(cfg.Breakglass)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("break-glass verifier material: %w", err)
+	}
+	runtime, err := breakglassRotationFromConfig(
+		ctx, cfg.Breakglass, st, log, signer.signer, signer.tokenProvider, caCertDER, publicKeyDER,
+	)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("break-glass online lifecycle: %w", err)
+	}
+	return caCertDER, publicKeyDER, runtime, nil
+}
+
 func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
 	auditKey, err := loadRunAuditSigningKey(ctx, signer.signer, suppliedAuditKey)
 	if err != nil {
@@ -518,11 +549,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		return Deps{}, err
 	}
 	retention, privacyRetentionEnabled, privacyRetentionInterval, privacyRetentionPolicy, renewBefore, alertBefore, err := runRetentionAndLifecycleWindows(cfg)
-	// D6: parsed at startup, not at sweep time. A malformed window REFUSES to
-	// start rather than being silently ignored — an operator who wrote a change
-	// freeze this could not read would believe production was protected while
-	// the scheduler renewed straight through it.
-	maintenanceWindows, windowErr := parseMaintenanceWindows(cfg.Lifecycle.MaintenanceWindows)
+	maintenanceWindows, windowErr := runMaintenanceWindows(cfg)
 	if windowErr != nil {
 		return Deps{}, windowErr
 	}
@@ -543,13 +570,9 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	breakglassCACertDER, breakglassPublicKeyDER, err := breakglassVerifierMaterialFromConfig(cfg.Breakglass)
+	breakglassCACertDER, breakglassPublicKeyDER, breakglassRuntime, err := runBreakglassConfig(ctx, cfg, st, log, signer)
 	if err != nil {
-		return Deps{}, fmt.Errorf("break-glass verifier material: %w", err)
-	}
-	breakglassRuntime, err := breakglassRotationFromConfig(ctx, cfg.Breakglass, st, log, signer.signer, signer.tokenProvider, breakglassCACertDER, breakglassPublicKeyDER)
-	if err != nil {
-		return Deps{}, fmt.Errorf("break-glass online lifecycle: %w", err)
+		return Deps{}, err
 	}
 	notificationChannels, notificationOwner, err := runNotifications(cfg.Notifications, egressGuard)
 	if err != nil {

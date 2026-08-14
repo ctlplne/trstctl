@@ -847,6 +847,21 @@ type Server struct {
 // orchestrator and API, mounts /healthz + the API + the web UI, and provisions an
 // issuing CA whose key is generated inside the signer (never in-process). It does
 // not start an HTTP listener — call Handler (tests) or Run (production).
+func resolveSignTokenProvider(d Deps) signing.SignTokenProvider {
+	if d.SignTokenProvider != nil {
+		return d.SignTokenProvider
+	}
+	if d.SignAuthorizer != nil {
+		return d.SignAuthorizer
+	}
+	if source, ok := d.Signer.(interface {
+		SignTokenProvider() signing.SignTokenProvider
+	}); ok {
+		return source.SignTokenProvider()
+	}
+	return nil
+}
+
 func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	notificationOwner := ensureNotificationChannelOwnership(&d)
 	var s *Server
@@ -876,17 +891,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if d.RestoreDrill != nil && d.AuditSigningKey == nil {
 		return nil, errors.New("server: restore drill requires the isolated audit-evidence signer")
 	}
-	signProvider := d.SignTokenProvider
-	if signProvider == nil && d.SignAuthorizer != nil {
-		signProvider = d.SignAuthorizer
-	}
-	if signProvider == nil {
-		if source, ok := d.Signer.(interface {
-			SignTokenProvider() signing.SignTokenProvider
-		}); ok {
-			signProvider = source.SignTokenProvider()
-		}
-	}
+	signProvider := resolveSignTokenProvider(d)
 	s = &Server{
 		store:                     d.Store,
 		log:                       d.Log,

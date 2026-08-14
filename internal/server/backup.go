@@ -413,14 +413,8 @@ func restoreEventLog(
 	resumeIfMatching, isolatedTarget bool,
 	factories ...EditionProjectionOptionsFactory,
 ) (int, error) {
-	if !isolatedTarget && (cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "") {
-		return 0, errors.New("restore requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
-	}
-	if isolatedTarget && cfg.NATS.Mode != config.NATSExternal && cfg.NATS.Mode != config.NATSEmbedded {
-		return 0, errors.New("isolated restore requires an embedded or external event store")
-	}
-	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
-		return 0, errors.New("restore requires an external Postgres (set TRSTCTL_POSTGRES_MODE=external and TRSTCTL_POSTGRES_DSN)")
+	if err := validateRestoreTargets(cfg, isolatedTarget); err != nil {
+		return 0, err
 	}
 	f, err := os.Open(path) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
@@ -495,22 +489,6 @@ func restoreEventLog(
 		return 0, fmt.Errorf("fence secret-sync receiver I/O before event restore: %w", err)
 	}
 
-	// Verify integrity before appending anything (OPS-006). Restore requires the
-	// separately custodied deployment KEK and therefore the artifact HMAC; its
-	// derived key also authorizes the restore-only event ingress above. SHA-256
-	// remains the public corruption check, but is never restore authority by itself.
-	rebuild := func(label string) error {
-		options, optionsErr := recoveryProjectionOptions(ctx, cfg, st, log, factories)
-		if optionsErr != nil {
-			return optionsErr
-		}
-		restoreOptions := append([]projections.Option(nil), options...)
-		restoreOptions = append(restoreOptions, projections.WithSecretSyncRecoveryBootstrap())
-		if rebuildErr := projections.New(st, restoreOptions...).Rebuild(ctx, log); rebuildErr != nil {
-			return fmt.Errorf("%s: %w", label, rebuildErr)
-		}
-		return nil
-	}
 	rebuildLabel := "rebuild read model from restored log"
 	n, err := backup.RestoreLogWithKey(ctx, log, f, key)
 	if err != nil {
@@ -549,10 +527,50 @@ func restoreEventLog(
 	); err != nil {
 		return n, fmt.Errorf("sanitize restored scheduler history before rebuild: %w", err)
 	}
-	if err := rebuild(rebuildLabel); err != nil {
+	if err := rebuildRestoredReadModel(ctx, cfg, st, log, rebuildLabel, factories); err != nil {
 		return n, err
 	}
 	return n, nil
+}
+
+// rebuildRestoredReadModel reconstructs derived state only after authenticated
+// event ingress and scheduler-history sanitation finish. Secret-sync recovery is
+// bootstrapped while paired PostgreSQL receiver authority remains fenced.
+func rebuildRestoredReadModel(
+	ctx context.Context,
+	cfg *config.Config,
+	st *store.Store,
+	log *events.Log,
+	label string,
+	factories []EditionProjectionOptionsFactory,
+) error {
+	options, err := recoveryProjectionOptions(ctx, cfg, st, log, factories)
+	if err != nil {
+		return err
+	}
+	restoreOptions := append([]projections.Option(nil), options...)
+	restoreOptions = append(restoreOptions, projections.WithSecretSyncRecoveryBootstrap())
+	if err := projections.New(st, restoreOptions...).Rebuild(ctx, log); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	return nil
+}
+
+// validateRestoreTargets refuses unsafe deployment shapes before any artifact
+// file is opened or datastore can be mutated. Full isolated drills may use an
+// embedded event target; operator event-only restores still require external
+// NATS, and every restore requires external PostgreSQL.
+func validateRestoreTargets(cfg *config.Config, isolatedTarget bool) error {
+	if !isolatedTarget && (cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "") {
+		return errors.New("restore requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
+	}
+	if isolatedTarget && cfg.NATS.Mode != config.NATSExternal && cfg.NATS.Mode != config.NATSEmbedded {
+		return errors.New("isolated restore requires an embedded or external event store")
+	}
+	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
+		return errors.New("restore requires an external Postgres (set TRSTCTL_POSTGRES_MODE=external and TRSTCTL_POSTGRES_DSN)")
+	}
+	return nil
 }
 
 // RunFullRestore restores a full DR artifact directory created by RunFullBackup.
@@ -607,26 +625,8 @@ func runFullRestore(
 	if err := verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl")); err != nil {
 		return result, err
 	}
-	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
-	if err != nil {
-		return result, fmt.Errorf("open event log for full-restore preflight: %w", err)
-	}
-	postgresFile, err := os.Open(filepath.Join(dir, "postgres-state.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
-	if err != nil {
-		_ = eventFile.Close()
-		return result, fmt.Errorf("open postgres state for full-restore preflight: %w", err)
-	}
-	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile)
-	eventCloseErr := eventFile.Close()
-	postgresCloseErr := postgresFile.Close()
-	if preflightErr != nil {
-		return result, preflightErr
-	}
-	if eventCloseErr != nil {
-		return result, fmt.Errorf("close event log after full-restore preflight: %w", eventCloseErr)
-	}
-	if postgresCloseErr != nil {
-		return result, fmt.Errorf("close postgres state after full-restore preflight: %w", postgresCloseErr)
+	if err := verifyFullRestoreArtifactFiles(dir); err != nil {
+		return result, err
 	}
 	// Version-1 backups created before AUD-63 carried a separate plaintext audit
 	// PEM. Restore it only when present so the signer can migrate it before serving;
@@ -719,6 +719,34 @@ func runFullRestore(
 		}
 	}
 	return result, nil
+}
+
+// verifyFullRestoreArtifactFiles proves the event and PostgreSQL artifacts name
+// the same backup cut, then observes both close errors before restoration starts.
+// Keeping this preflight separate makes its no-mutation boundary explicit.
+func verifyFullRestoreArtifactFiles(dir string) error {
+	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
+	if err != nil {
+		return fmt.Errorf("open event log for full-restore preflight: %w", err)
+	}
+	postgresFile, err := os.Open(filepath.Join(dir, "postgres-state.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
+	if err != nil {
+		_ = eventFile.Close()
+		return fmt.Errorf("open postgres state for full-restore preflight: %w", err)
+	}
+	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile)
+	eventCloseErr := eventFile.Close()
+	postgresCloseErr := postgresFile.Close()
+	if preflightErr != nil {
+		return preflightErr
+	}
+	if eventCloseErr != nil {
+		return fmt.Errorf("close event log after full-restore preflight: %w", eventCloseErr)
+	}
+	if postgresCloseErr != nil {
+		return fmt.Errorf("close postgres state after full-restore preflight: %w", postgresCloseErr)
+	}
+	return nil
 }
 
 // proveFullRestoreRuntime starts the recovered assembly over the isolated

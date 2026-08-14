@@ -363,105 +363,9 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		return fmt.Errorf("server: dynamic-secret provider %q is not configured for tenant", command.Provider)
 	}
 	request := dynsecret.GenerateRequest{Role: command.Role, TTL: nativeTTL, LeaseID: command.ID}
-	var credential dynsecret.Credential
-	if preparedProvider, ok := provider.(dynsecret.PreparedProvider); ok {
-		preparedEventID := dynamicSecretEventID(
-			m.TenantID, command.TenantEpoch, "provider-prepared", command.ID)
-		// Read immutable preparation evidence before either Prepare or
-		// GeneratePrepared can touch the provider. SQL can lag the event log after a
-		// crash, including when an older row still carries preparation ciphertext.
-		recoveredPreparation, recoverErr := d.recoverDynamicSecretPrepared(
-			ctx, preparedEventID, m.TenantID, command)
-		if recoverErr != nil {
-			return recoverErr
-		}
-		sealedPreparation := record.SealedPreparation
-		if len(sealedPreparation) > 0 && len(command.SealedPreparation) > 0 &&
-			!bytes.Equal(sealedPreparation, command.SealedPreparation) {
-			return fmt.Errorf("%w: projected and queued dynamic-secret preparations differ", store.ErrIdempotencyConflict)
-		}
-		if len(sealedPreparation) == 0 {
-			// Compatibility with pending intents written before preparation moved
-			// wholly into the worker.
-			sealedPreparation = command.SealedPreparation
-		}
-		if recoveredPreparation {
-			record, err = d.store.GetDynamicSecretLease(ctx, m.TenantID, command.ID)
-			if err != nil {
-				return fmt.Errorf("server: reload recovered dynamic-secret preparation: %w", err)
-			}
-			if record.TenantEpoch != command.TenantEpoch || record.State != store.DynamicSecretLeasePending ||
-				len(record.SealedPreparation) == 0 {
-				return errors.New("server: recovered dynamic-secret preparation lost its pending command binding")
-			}
-			if len(sealedPreparation) > 0 && !bytes.Equal(sealedPreparation, record.SealedPreparation) {
-				return fmt.Errorf("%w: retained and projected dynamic-secret preparations differ", store.ErrIdempotencyConflict)
-			}
-			sealedPreparation = record.SealedPreparation
-		}
-		if len(sealedPreparation) == 0 {
-			prepared, prepareErr := preparedProvider.Prepare(ctx, request)
-			if prepareErr != nil {
-				return fmt.Errorf("server: prepare dynamic-secret identity in outbox worker: %w", prepareErr)
-			}
-			if len(prepared) == 0 {
-				return errors.New("server: prepared dynamic-secret provider returned empty retry identity")
-			}
-			preparedLocked, lockErr := secret.NewFrom(prepared)
-			secret.Wipe(prepared)
-			if lockErr != nil {
-				return fmt.Errorf("server: lock dynamic-secret preparation: %w", lockErr)
-			}
-			sealedPreparation, err = sealTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, preparedLocked.Bytes(), dynamicSecretPreparationAAD(m.TenantID, command.ID, command.Provider))
-			preparedLocked.Destroy()
-			if err != nil {
-				return fmt.Errorf("server: seal dynamic-secret preparation: %w", err)
-			}
-			if err := d.appendAndProjectID(ctx, preparedEventID, m.TenantID, projections.EventDynamicSecretLeasePrepared, projections.DynamicSecretLeasePrepared{
-				TenantEpoch: command.TenantEpoch, ID: command.ID,
-				Provider: command.Provider, SealedPreparation: sealedPreparation,
-			}); err != nil {
-				return fmt.Errorf("server: persist dynamic-secret preparation before provider call: %w", err)
-			}
-			record, err = d.store.GetDynamicSecretLease(ctx, m.TenantID, command.ID)
-			if err != nil {
-				return fmt.Errorf("server: reload canonical dynamic-secret preparation: %w", err)
-			}
-			if record.TenantEpoch != command.TenantEpoch || record.State != store.DynamicSecretLeasePending ||
-				!bytes.Equal(record.SealedPreparation, sealedPreparation) {
-				return fmt.Errorf("%w: projected dynamic-secret preparation differs from canonical event", store.ErrIdempotencyConflict)
-			}
-			sealedPreparation = record.SealedPreparation
-		}
-		if len(sealedPreparation) == 0 {
-			return errors.New("server: canonical dynamic-secret preparation is empty")
-		}
-		var preparedLocked *secret.Buffer
-		if len(sealedPreparation) > 0 {
-			prepared, openErr := openTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, sealedPreparation, dynamicSecretPreparationAAD(m.TenantID, command.ID, command.Provider))
-			if openErr != nil {
-				return fmt.Errorf("server: open dynamic-secret preparation: %w", openErr)
-			}
-			preparedLocked, err = secret.NewFrom(prepared)
-			secret.Wipe(prepared)
-			if err != nil {
-				return fmt.Errorf("server: lock dynamic-secret preparation: %w", err)
-			}
-			defer preparedLocked.Destroy()
-		}
-		var prepared []byte
-		if preparedLocked != nil {
-			prepared = preparedLocked.Bytes()
-		}
-		credential, err = preparedProvider.GeneratePrepared(ctx, request, prepared)
-	} else {
-		if len(command.SealedPreparation) > 0 || len(record.SealedPreparation) > 0 {
-			return errors.New("server: dynamic-secret command carries preparation for an incompatible provider")
-		}
-		credential, err = provider.Generate(ctx, request)
-	}
+	credential, err := d.generateDynamicSecretCredential(ctx, m, command, record, provider, request)
 	if err != nil {
-		return fmt.Errorf("server: generate dynamic-secret lease %s with provider %s: %w", command.ID, command.Provider, err)
+		return err
 	}
 	if credential.BackendRef == "" || len(credential.Secret) == 0 {
 		secret.Wipe(credential.Secret)
@@ -484,6 +388,116 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		Role: command.Role, BackendRef: credential.BackendRef, SealedCredential: sealedCredential,
 		ExpiresAt: command.ExpiresAt, HardExpiresAt: command.HardExpiresAt,
 	})
+}
+
+// generateDynamicSecretCredential owns the provider preparation state machine.
+// Immutable preparation evidence is recovered or projected before the external
+// provider call, and plaintext retry identity stays in locked memory only while
+// GeneratePrepared is executing.
+func (d *secretIntegrationOutboxDispatcher) generateDynamicSecretCredential(
+	ctx context.Context,
+	m orchestrator.Message,
+	command projections.DynamicSecretIssueCommand,
+	record store.DynamicSecretLease,
+	provider dynsecret.Provider,
+	request dynsecret.GenerateRequest,
+) (dynsecret.Credential, error) {
+	preparedProvider, preparedCapable := provider.(dynsecret.PreparedProvider)
+	if !preparedCapable {
+		if len(command.SealedPreparation) > 0 || len(record.SealedPreparation) > 0 {
+			return dynsecret.Credential{}, errors.New("server: dynamic-secret command carries preparation for an incompatible provider")
+		}
+		credential, err := provider.Generate(ctx, request)
+		if err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("server: generate dynamic-secret lease %s with provider %s: %w", command.ID, command.Provider, err)
+		}
+		return credential, nil
+	}
+	preparedEventID := dynamicSecretEventID(m.TenantID, command.TenantEpoch, "provider-prepared", command.ID)
+	// Read immutable preparation evidence before either Prepare or
+	// GeneratePrepared can touch the provider. SQL can lag the event log after a
+	// crash, including when an older row still carries preparation ciphertext.
+	recoveredPreparation, err := d.recoverDynamicSecretPrepared(ctx, preparedEventID, m.TenantID, command)
+	if err != nil {
+		return dynsecret.Credential{}, err
+	}
+	sealedPreparation := record.SealedPreparation
+	if len(sealedPreparation) > 0 && len(command.SealedPreparation) > 0 &&
+		!bytes.Equal(sealedPreparation, command.SealedPreparation) {
+		return dynsecret.Credential{}, fmt.Errorf("%w: projected and queued dynamic-secret preparations differ", store.ErrIdempotencyConflict)
+	}
+	if len(sealedPreparation) == 0 {
+		// Compatibility with pending intents written before preparation moved
+		// wholly into the worker.
+		sealedPreparation = command.SealedPreparation
+	}
+	if recoveredPreparation {
+		record, err = d.store.GetDynamicSecretLease(ctx, m.TenantID, command.ID)
+		if err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("server: reload recovered dynamic-secret preparation: %w", err)
+		}
+		if record.TenantEpoch != command.TenantEpoch || record.State != store.DynamicSecretLeasePending ||
+			len(record.SealedPreparation) == 0 {
+			return dynsecret.Credential{}, errors.New("server: recovered dynamic-secret preparation lost its pending command binding")
+		}
+		if len(sealedPreparation) > 0 && !bytes.Equal(sealedPreparation, record.SealedPreparation) {
+			return dynsecret.Credential{}, fmt.Errorf("%w: retained and projected dynamic-secret preparations differ", store.ErrIdempotencyConflict)
+		}
+		sealedPreparation = record.SealedPreparation
+	}
+	if len(sealedPreparation) == 0 {
+		prepared, prepareErr := preparedProvider.Prepare(ctx, request)
+		if prepareErr != nil {
+			return dynsecret.Credential{}, fmt.Errorf("server: prepare dynamic-secret identity in outbox worker: %w", prepareErr)
+		}
+		if len(prepared) == 0 {
+			return dynsecret.Credential{}, errors.New("server: prepared dynamic-secret provider returned empty retry identity")
+		}
+		preparedLocked, lockErr := secret.NewFrom(prepared)
+		secret.Wipe(prepared)
+		if lockErr != nil {
+			return dynsecret.Credential{}, fmt.Errorf("server: lock dynamic-secret preparation: %w", lockErr)
+		}
+		sealedPreparation, err = sealTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, preparedLocked.Bytes(), dynamicSecretPreparationAAD(m.TenantID, command.ID, command.Provider))
+		preparedLocked.Destroy()
+		if err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("server: seal dynamic-secret preparation: %w", err)
+		}
+		if err := d.appendAndProjectID(ctx, preparedEventID, m.TenantID, projections.EventDynamicSecretLeasePrepared, projections.DynamicSecretLeasePrepared{
+			TenantEpoch: command.TenantEpoch, ID: command.ID,
+			Provider: command.Provider, SealedPreparation: sealedPreparation,
+		}); err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("server: persist dynamic-secret preparation before provider call: %w", err)
+		}
+		record, err = d.store.GetDynamicSecretLease(ctx, m.TenantID, command.ID)
+		if err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("server: reload canonical dynamic-secret preparation: %w", err)
+		}
+		if record.TenantEpoch != command.TenantEpoch || record.State != store.DynamicSecretLeasePending ||
+			!bytes.Equal(record.SealedPreparation, sealedPreparation) {
+			return dynsecret.Credential{}, fmt.Errorf("%w: projected dynamic-secret preparation differs from canonical event", store.ErrIdempotencyConflict)
+		}
+		sealedPreparation = record.SealedPreparation
+	}
+	if len(sealedPreparation) == 0 {
+		return dynsecret.Credential{}, errors.New("server: canonical dynamic-secret preparation is empty")
+	}
+	prepared, err := openTenantValue(ctx, d.tenantCrypto, d.kek, m.TenantID, sealedPreparation,
+		dynamicSecretPreparationAAD(m.TenantID, command.ID, command.Provider))
+	if err != nil {
+		return dynsecret.Credential{}, fmt.Errorf("server: open dynamic-secret preparation: %w", err)
+	}
+	preparedLocked, err := secret.NewFrom(prepared)
+	secret.Wipe(prepared)
+	if err != nil {
+		return dynsecret.Credential{}, fmt.Errorf("server: lock dynamic-secret preparation: %w", err)
+	}
+	defer preparedLocked.Destroy()
+	credential, err := preparedProvider.GeneratePrepared(ctx, request, preparedLocked.Bytes())
+	if err != nil {
+		return dynsecret.Credential{}, fmt.Errorf("server: generate dynamic-secret lease %s with provider %s: %w", command.ID, command.Provider, err)
+	}
+	return credential, nil
 }
 
 func (d *secretIntegrationOutboxDispatcher) recoverDynamicSecretIssued(ctx context.Context, eventID, tenantID string, command projections.DynamicSecretIssueCommand) (bool, error) {
@@ -712,12 +726,7 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 			return orchestrator.DeferDelivery(errors.New("server: older secret-sync command for this target is still pending"))
 		}
 	}
-	var target *secretsync.Target
-	if d.syncTargets != nil {
-		target = d.syncTargets.ForTenant(m.TenantID)[targetID]
-	} else {
-		target = d.fallbackSyncTargets[targetID]
-	}
+	target := d.secretSyncTarget(m.TenantID, targetID)
 	if target == nil {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: secret-sync target %q is not configured for tenant", targetID))
 	}
@@ -769,6 +778,15 @@ func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Contex
 		return err
 	}
 	return nil
+}
+
+// secretSyncTarget resolves tenant-owned targets before the worker opens the
+// sealed value. The fallback exists only for the legacy single-tenant wiring.
+func (d *secretIntegrationOutboxDispatcher) secretSyncTarget(tenantID, targetID string) *secretsync.Target {
+	if d.syncTargets != nil {
+		return d.syncTargets.ForTenant(tenantID)[targetID]
+	}
+	return d.fallbackSyncTargets[targetID]
 }
 
 var errSecretSyncSourceLocated = errors.New("server: secret-sync queued source located")

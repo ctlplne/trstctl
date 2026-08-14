@@ -264,6 +264,24 @@ func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, t
 		return s.responseFromCertificate(ctx, verifier, req.RequestID, att, approvalRequest, recovered)
 	}
 
+	return s.issueApprovedEphemeralCredential(
+		ctx, tenantID, req, verifier, approvalRequest, approvalUse, requestBinding, issueKey,
+	)
+}
+
+// issueApprovedEphemeralCredential mints and records the certificate only after
+// the caller has proved the approval is current, ready, and has no canonical
+// target event to recover. The deterministic issue key and approval capability
+// cross this stage together so minting cannot drift away from event authority.
+func (s *ephemeralIssuerService) issueApprovedEphemeralCredential(
+	ctx context.Context,
+	tenantID string,
+	req api.EphemeralCredentialRequest,
+	verifier *attest.Verifier,
+	approvalRequest store.OperationApprovalRequest,
+	approvalUse store.OperationApprovalUse,
+	requestBinding, issueKey string,
+) (api.EphemeralCredential, error) {
 	issuer, err := ephemerallib.New(ephemerallib.Config{
 		TenantID: tenantID,
 		Verifier: verifier,
