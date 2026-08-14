@@ -27,3 +27,15 @@ func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string
 func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, binding string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
 	return fn(ctx)
 }
+
+// TenantRegistrationCommand is the bespoke crash-safe registration receiver's
+// command. The analyzer must prove this exact field gets approved provenance.
+type TenantRegistrationCommand struct {
+	IdempotencyKey string
+	Name           string
+}
+
+// ExecuteTenantRegistration stands in for the exact typed registration sink.
+func ExecuteTenantRegistration(ctx context.Context, log, store, projector any, idem *Idempotency, command TenantRegistrationCommand) (any, error) {
+	return nil, nil
+}

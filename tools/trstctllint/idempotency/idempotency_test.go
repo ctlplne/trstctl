@@ -22,7 +22,8 @@ import (
 // so it can import the orchestrator stub for type-resolved sink detection.
 func TestIdempotency(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), idempotency.Analyzer,
-		"trstctl.com/trstctl/internal/api")
+		"trstctl.com/trstctl/internal/api",
+		"trstctl.com/trstctl/internal/app")
 }
 
 func TestIdempotencyRejectsUnapprovedKeyProvenance(t *testing.T) {

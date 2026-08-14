@@ -12,6 +12,8 @@
 //   - the canonical sinks on orchestrator.Idempotency (Do, DoBound,
 //     DoDurableEffect, DoDurableEffectBound, and DoAtMostOnceEffect), resolved by type (the
 //     receiver's method, not its spelling); or
+//   - the exact orchestrator.ExecuteTenantRegistration sink when approved key
+//     provenance is assigned to TenantRegistrationCommand.IdempotencyKey; or
 //   - a forwarding call whose callee declares an idempotency-named parameter in
 //     the position the key is passed to (for example the served handlers'
 //     a.mutate(w, r, idempotencyKey, fn), whose third parameter is itself the
@@ -60,6 +62,9 @@ const (
 	atMostOnceMethod   = "DoAtMostOnceEffect"
 	apiPkgPath         = "trstctl.com/trstctl/internal/api"
 	idempotencyHeader  = "Idempotency-Key"
+	registrationSink   = "ExecuteTenantRegistration"
+	registrationCmd    = "TenantRegistrationCommand"
+	registrationKey    = "IdempotencyKey"
 )
 
 // Analyzer enforces AN-5.
@@ -143,6 +148,11 @@ func functionHonorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.F
 			honored = true
 			return false
 		}
+		if isTenantRegistrationSink(callee) &&
+			callPassesApprovedTenantRegistrationCommand(pass, call, callee, approved) {
+			honored = true
+			return false
+		}
 		if param, ok := callForwardsApprovedIdempotencyArgToParam(pass, call, callee.Type(), approved); ok {
 			if calleeDecl := decls[callee]; calleeDecl != nil &&
 				functionHonorsIdempotency(pass, decls, callee, calleeDecl, map[*types.Var]bool{param: true}, visiting) {
@@ -160,6 +170,39 @@ func callPassesApprovedIdempotencyKey(pass *analysis.Pass, call *ast.CallExpr, a
 		return false
 	}
 	return exprHasApprovedProvenance(pass, call.Args[2], approved)
+}
+
+// callPassesApprovedTenantRegistrationCommand accepts only the bespoke,
+// crash-safe registration receiver's exact typed command literal. The caller's
+// approved key must populate IdempotencyKey itself; provenance in Name or any
+// other field cannot stand in for the receiver key.
+func callPassesApprovedTenantRegistrationCommand(pass *analysis.Pass, call *ast.CallExpr, callee *types.Func, approved map[types.Object]bool) bool {
+	sig, ok := callee.Type().(*types.Signature)
+	if !ok {
+		return false
+	}
+	params := sig.Params()
+	for i := 0; i < params.Len() && i < len(call.Args); i++ {
+		if !isNamedType(params.At(i).Type(), idempotencyPkgPath, registrationCmd) {
+			continue
+		}
+		literal, ok := call.Args[i].(*ast.CompositeLit)
+		if !ok || !isNamedType(pass.TypesInfo.TypeOf(literal), idempotencyPkgPath, registrationCmd) {
+			return false
+		}
+		for _, elt := range literal.Elts {
+			field, ok := elt.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			name, ok := field.Key.(*ast.Ident)
+			if ok && name.Name == registrationKey {
+				return exprHasApprovedProvenance(pass, field.Value, approved)
+			}
+		}
+		return false
+	}
+	return false
 }
 
 func recordApprovedAssignments(pass *analysis.Pass, approved map[types.Object]bool, lhs, rhs []ast.Expr) {
@@ -325,6 +368,30 @@ func isCanonicalIdempotencyDo(fn *types.Func) bool {
 	obj := recv.Obj()
 	return obj != nil && obj.Name() == idempotencyType &&
 		obj.Pkg() != nil && obj.Pkg().Path() == idempotencyPkgPath
+}
+
+func isTenantRegistrationSink(fn *types.Func) bool {
+	if fn == nil || fn.Name() != registrationSink || fn.Pkg() == nil || fn.Pkg().Path() != idempotencyPkgPath {
+		return false
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok || sig.Recv() != nil {
+		return false
+	}
+	for i := 0; i < sig.Params().Len(); i++ {
+		if isNamedType(sig.Params().At(i).Type(), idempotencyPkgPath, registrationCmd) {
+			return true
+		}
+	}
+	return false
+}
+
+func isNamedType(t types.Type, pkgPath, name string) bool {
+	named := derefNamed(t)
+	if named == nil || named.Obj() == nil || named.Obj().Pkg() == nil {
+		return false
+	}
+	return named.Obj().Pkg().Path() == pkgPath && named.Obj().Name() == name
 }
 
 // callForwardsApprovedIdempotencyArgToParam reports whether this call passes an
