@@ -558,7 +558,8 @@ func TestApprovedCodeSigningRetryAfterAppendAndSQLRollbackUsesDurableFirstComman
 	operationID := codeSigningOperationID(h.tenant, idempotencyKey)
 	keyRef := store.CodeSigningIdempotencyKeyRef(idempotencyKey)
 	requestBinding := projections.CodeSigningRequestBinding(requestHash, idempotencyKey)
-	untruncated := time.Date(2032, time.February, 3, 4, 5, 6, 123456789, time.FixedZone("approval-test", 9*60*60))
+	untruncated := approval.ExpiresAt.Add(-time.Minute + 789*time.Nanosecond).
+		In(time.FixedZone("approval-test", 9*60*60))
 	h.srv.codeSign.now = func() time.Time { return untruncated }
 	rollback := errors.New("simulated crash after append ACK")
 	var event events.Event
