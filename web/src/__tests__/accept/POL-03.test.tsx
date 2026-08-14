@@ -16,6 +16,8 @@ const { apiMock } = vi.hoisted(() => ({
     nhiStaticPosture: vi.fn(),
     nhiExposurePosture: vi.fn(),
     identities: vi.fn(),
+    issuanceRequests: vi.fn(),
+    owners: vi.fn(),
     profiles: vi.fn(),
     createIdentity: vi.fn(),
     approvalRequests: vi.fn(),
@@ -152,6 +154,8 @@ describe("POL-03 polish fixes", () => {
       priorities: [],
     });
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "jit-1", action: "issue", approver: "ra", approvals: 2 });
+    apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
+    apiMock.owners.mockResolvedValue([]);
     apiMock.profiles.mockResolvedValue([{ id: "prof-1", name: "web-server", version: 2, active: true }]);
   });
 
@@ -208,17 +212,21 @@ describe("POL-03 polish fixes", () => {
   });
 
   it("renders missing request profile data as an em dash, not a not-served cell value", async () => {
-    apiMock.identities.mockResolvedValue([
-      {
-        id: "mine-1",
-        tenant_id: "t1",
-        name: "checkout-api",
-        kind: "x509_certificate",
-        owner_id: "dev-1",
-        status: "requested",
-        attributes: { requester: "dev@example.test", profile_name: "not served", approvals: "1/2" },
-      },
-    ]);
+    apiMock.issuanceRequests.mockResolvedValue({
+      items: [
+        {
+          id: "request-1",
+          tenant_id: "t1",
+          subject: "checkout-api",
+          requester: "dev-1",
+          status: "requested",
+          created_at: "2026-06-29T00:00:00Z",
+          expires_at: "2026-06-29T01:00:00Z",
+        },
+      ],
+      open: 1,
+      guidance: "",
+    });
     renderAt("/request");
 
     const row = await screen.findByRole("row", { name: /checkout-api/i });
