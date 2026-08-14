@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/issuancerequest"
 )
@@ -29,8 +30,13 @@ type servedRequest struct {
 
 func openRequest(t *testing.T, h *servedHarness, tok, key, subject string) servedRequest {
 	t.Helper()
+	ownerAdmin := seedScopedTokenSubject(t, h.store, h.tenant, "owner-admin:"+key, string(authz.OwnersWrite))
+	ownerID := servedCreateID(t, h, ownerAdmin, key+"-owner", "/api/v1/owners", map[string]any{
+		"kind": "workload", "name": key + "-owner",
+	})
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests", tok, key, map[string]any{
 		"subject":       subject,
+		"owner_id":      ownerID,
 		"justification": "renewing the payments gateway leaf",
 	})
 	if status != http.StatusCreated {
