@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -178,11 +179,14 @@ func TestStoreApprovalCheckerReportsStableRequesterTerminalReasons(t *testing.T)
 	t.Cleanup(func() { _ = log.Close() })
 	orch := orchestrator.NewOrchestrator(log, st, nil)
 	checker := storeApprovalChecker{store: st, orch: orch, required: 1}
+	for _, name := range []string{"expired", "superseded", "denied", "consumed"} {
+		seedApplicationSecretFixture(t, st, tenantID, name, []byte("sealed-"+name))
+	}
 
 	intent := func(resourceID string) api.ApprovalIntent {
 		return api.ApprovalIntent{
 			TenantID: tenantID, ResourceKind: "secret", ResourceID: resourceID,
-			ResourceName: resourceID, Action: "rotate", Requester: "alice",
+			ResourceName: strings.TrimPrefix(resourceID, "secret:"), Action: "rotate", Requester: "alice",
 			FromState: "version:1", ToState: "version:2", TargetVersion: 1,
 			Reason:       "authorize one exact terminal-reason test command",
 			EvidenceRefs: []string{"command-sha256:" + resourceID}, RequiredApprovals: 1,
