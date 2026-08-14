@@ -24,6 +24,7 @@ var vaultServedMutationSequence atomic.Uint64
 // CLI availability skip.
 func TestVaultCompatMountACLTransitPKIProductionAssembly(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "Vault compatibility production tenant")
 	token := seedScopedToken(t, h.store, h.tenant,
 		"policy:read", "policy:write", "keys:read", "keys:write", "secrets:read", "secrets:write",
 	)

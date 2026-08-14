@@ -24,6 +24,7 @@ func TestPythonSDKAuthIssueAndSecretsRoundTripAgainstServedHandler(t *testing.T)
 		t.Fatalf("python3 is required for the Python SDK acceptance test: %v", err)
 	}
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "Python SDK served tenant")
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 
 	_, thisFile, _, ok := runtime.Caller(0)

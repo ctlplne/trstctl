@@ -88,6 +88,7 @@ func TestServedIssueTransitionBindsOutboxToRequestIdempotencyKey(t *testing.T) {
 // response and does not append a second tenant event.
 func TestServedMutationIdempotencyReplayMatrix(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "served mutation replay tenant")
 	token := seedScopedToken(t, h.store, h.tenant,
 		"owners:write",
 		"issuers:write",

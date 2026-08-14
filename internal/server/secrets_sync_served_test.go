@@ -165,6 +165,7 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 			}}
 		},
 	)
+	registerServedTenant(t, h, "broad secret-sync catalog tenant")
 	tok := seedScopedTokenSubject(t, h.store, h.tenant, "secret-sync-requester-a", "secrets:read", "secrets:write")
 	otherTok := seedScopedTokenSubject(t, h.store, h.tenant, "secret-sync-requester-b", "secrets:read", "secrets:write")
 
@@ -387,6 +388,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 			}}
 		},
 	)
+	registerServedTenant(t, h, "cloud secret-manager integration tenant")
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{

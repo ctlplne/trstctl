@@ -163,7 +163,7 @@ func TestServedAzureFederatedAirGapIsTerminalWithoutNetwork(t *testing.T) {
 
 func newAzureFederatedServedHarness(t *testing.T, fixture *azureFederatedSecretSyncFixture, guard *egress.Guard) *servedHarness {
 	t.Helper()
-	return newServedHarness(t, config.Protocols{},
+	h := newServedHarness(t, config.Protocols{},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) {
 			d.EgressGuard = guard
@@ -184,6 +184,8 @@ func newAzureFederatedServedHarness(t *testing.T, fixture *azureFederatedSecretS
 			d.CloudTokenMinter = minter
 		},
 	)
+	registerServedTenant(t, h, "Azure federated secret-sync tenant")
+	return h
 }
 
 func configureServedAzureFederatedSource(t *testing.T, h *servedHarness, token string, trust servedDynamicK8sTrust) string {

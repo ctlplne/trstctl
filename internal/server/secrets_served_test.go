@@ -194,13 +194,18 @@ func seedScopedToken(t *testing.T, st *store.Store, tenant string, scopes ...str
 // tenant epoch.
 func registerServedTenant(t *testing.T, h *servedHarness, name string) {
 	t.Helper()
+	registerServedTenantID(t, h, h.tenant, name)
+}
+
+func registerServedTenantID(t *testing.T, h *servedHarness, tenantID, name string) {
+	t.Helper()
 	data, err := json.Marshal(map[string]string{"name": name})
 	if err != nil {
 		t.Fatalf("marshal tenant registration: %v", err)
 	}
 	event, err := h.log.Append(context.Background(), events.Event{
 		Type:     projections.EventTenantRegistered,
-		TenantID: h.tenant,
+		TenantID: tenantID,
 		Data:     data,
 	})
 	if err != nil {
@@ -2470,6 +2475,7 @@ func servedMachineLogin(t *testing.T, h *servedHarness, tenantID, method, creden
 func TestServedSecretsCrossTenantDenial(t *testing.T) {
 	const tenantB = "22222222-2222-2222-2222-222222222222"
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "tenant A secret-isolation tenant")
 	// Make tenant B a real, distinct tenant by giving it a row of its own (the
 	// established way the other two-tenant tests bring a second tenant into being).
 	if _, err := h.store.CreateOwner(context.Background(), store.Owner{TenantID: tenantB, Kind: store.OwnerWorkload, Name: "tenant-b"}); err != nil {

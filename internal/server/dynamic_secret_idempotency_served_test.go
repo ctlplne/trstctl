@@ -21,6 +21,7 @@ func TestDynamicLeaseIdempotencyResultIsSealedAtRest(t *testing.T) {
 		withSecretsEnabled(t, nil),
 		withDynamicSecretBackend(backend, time.Second),
 	)
+	registerServedTenant(t, h, "dynamic idempotency tenant")
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-requester-a", "secrets:read", "secrets:write")
 	otherToken := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-requester-b", "secrets:read", "secrets:write")
 	request := map[string]any{"provider": "stub", "role": "readonly", "ttl_seconds": 60}
@@ -80,6 +81,7 @@ func TestDynamicLeaseRenewRevokeBindingsSurviveRecorderGC(t *testing.T) {
 			d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: {provider}}
 		},
 	)
+	registerServedTenant(t, h, "dynamic lifecycle tenant")
 	startServedExternalCADispatcher(t, h)
 	caller := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-caller-a", "secrets:read", "secrets:write")
 	other := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-caller-b", "secrets:read", "secrets:write")

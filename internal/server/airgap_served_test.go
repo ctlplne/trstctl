@@ -34,6 +34,7 @@ func TestServedAirGapIssuesCertificateAndManagesSecretWithZeroOutboundEgress(t *
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.EgressGuard = guard
 	})
+	registerServedTenant(t, h, "air-gap served tenant")
 	if !h.srv.AirGapEnabled() {
 		t.Fatal("served control plane did not retain the product-wide egress guard")
 	}

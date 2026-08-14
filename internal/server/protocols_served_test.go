@@ -429,6 +429,7 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 		withSecretsEnabled(t, nil),
 		func(d *Deps) { d.ACMEValidators = &validators },
 	)
+	registerServedTenant(t, h, "ACME DNS webhook tenant")
 	startServedOutboxPump(t, h.srv)
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
 
@@ -624,6 +625,7 @@ func TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014(t *tes
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		withSecretsEnabled(t, nil),
 	)
+	registerServedTenant(t, h, "ACME delegated DNS tenant")
 	h.srv.acmeDNS01.cnameResolver = dns
 	startServedDirectOutboxPump(t, h.srv)
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
@@ -701,6 +703,7 @@ func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
 			d.APIOptions = append(d.APIOptions, api.WithACMEDNS01CAAResolver(dns))
 		},
 	)
+	registerServedTenant(t, h, "ACME live CAA tenant")
 	h.srv.acmeDNS01.caaResolver = dns
 	startServedDirectOutboxPump(t, h.srv)
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
@@ -848,6 +851,7 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 			}
 		},
 	)
+	registerServedTenant(t, h, "ACME DNS plugin tenant")
 	startServedDirectOutboxPump(t, h.srv)
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
 

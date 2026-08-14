@@ -172,6 +172,7 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		SCEPIntuneChallenge: intuneCfg,
 	}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "MDM SCEP telemetry tenant")
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
@@ -328,6 +329,7 @@ func TestServedMDMSCEPPolicyTrustAnchorLifecycleTRACE010(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{
 		SCEP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "MDM SCEP trust-anchor tenant")
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
