@@ -488,6 +488,7 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dodRegisterSecretIntegrationTenant(t, ctx, log, st)
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()
@@ -512,7 +513,7 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 	dodCrashFirstVersioningSyncAfterReceiverCommit(t, srv)
-	dodStartSecretIntegrationDispatcher(t, srv)
+	dodStartSecretSyncRuntimeWorkers(t, srv)
 	token := dodSecretIntegrationToken(t, st)
 
 	sourceValue := []byte("dod-secret-sync-value-2026")
@@ -598,6 +599,7 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 	if err != nil {
 		t.Fatal(err)
 	}
+	dodRegisterSecretIntegrationTenant(t, ctx, log, st)
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()
@@ -622,7 +624,7 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 	}
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 	dodCrashFirstVersioningSyncAfterReceiverCommit(t, srv)
-	dodStartSecretIntegrationDispatcher(t, srv)
+	dodStartSecretSyncRuntimeWorkers(t, srv)
 	token := dodSecretIntegrationToken(t, st)
 	sourceValue := []byte("dod-secret-sync-value-2026")
 	defer secret.Wipe(sourceValue)
@@ -641,6 +643,31 @@ func dodStartSecretIntegrationDispatcher(t *testing.T, srv *Server) {
 	t.Cleanup(func() {
 		cancel()
 		<-done
+	})
+}
+
+// dodStartSecretSyncRuntimeWorkers mirrors the two shipped leader workers that
+// jointly authorize a secret-sync receiver call. The projection tail advances
+// the durable event-sequence checkpoint; only then may the dispatcher claim the
+// event-derived outbox command. Starting the dispatcher alone would correctly
+// leave every post-Build sync intent pending forever.
+func dodStartSecretSyncRuntimeWorkers(t *testing.T, srv *Server) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	dispatchDone := make(chan struct{})
+	tailDone := make(chan struct{})
+	go func() {
+		defer close(dispatchDone)
+		srv.RunDispatcher(ctx)
+	}()
+	go func() {
+		defer close(tailDone)
+		srv.RunProjectionTail(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-dispatchDone
+		<-tailDone
 	})
 }
 
@@ -1274,7 +1301,7 @@ func dodProveSecretSync(t *testing.T, entryID string, external *proof.ExternalSu
 		t.Fatalf("%s sync response status=%d body=%s", target.entryID, session.StatusCode(), session.ResponseBody())
 	}
 	endpoint := external.Endpoint()
-	readback := dodWaitSecretSyncReadback(t, endpoint, remoteKey)
+	readback := dodWaitSecretSyncReadback(t, external, srv, target.id, remoteKey)
 	if !bytes.Equal(readback, sourceValue) {
 		t.Fatalf("%s external readback differs from source", target.entryID)
 	}
@@ -1338,7 +1365,7 @@ func dodAssertSecretSyncReconciledOnce(t *testing.T, endpoint, remoteKey, kind s
 		last.Sensitive, last.Category, last.CASConflicts, last.CASPreserved)
 }
 
-func dodWaitSecretSyncReadback(t *testing.T, endpoint, remoteKey string) []byte {
+func dodWaitSecretSyncReadback(t *testing.T, external *proof.ExternalSubstrate, srv *Server, targetID, remoteKey string) []byte {
 	t.Helper()
 	query := url.Values{"key": []string{remoteKey}}
 	deadline := time.Now().Add(30 * time.Second)
@@ -1346,7 +1373,7 @@ func dodWaitSecretSyncReadback(t *testing.T, endpoint, remoteKey string) []byte 
 	var lastStatus int
 	var lastBody []byte
 	for {
-		response, err := http.Get(endpoint + "/dod/readback?" + query.Encode())
+		response, err := http.Get(external.Endpoint() + "/dod/readback?" + query.Encode())
 		if err == nil {
 			body, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 			_ = response.Body.Close()
@@ -1358,7 +1385,18 @@ func dodWaitSecretSyncReadback(t *testing.T, endpoint, remoteKey string) []byte 
 			lastErr = err
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("secret sync readback key=%s status=%d err=%v body=%s", remoteKey, lastStatus, lastErr, lastBody)
+			job, jobErr := srv.store.GetLatestSecretSyncJob(context.Background(), dodSecretIntegrationTenant, "dod/sync/source", targetID, remoteKey)
+			outboxStatus, outboxAttempts, outboxErrorClass := "unavailable", -1, "unavailable"
+			if jobErr == nil {
+				if outbox, outboxErr := srv.outbox.Get(context.Background(), dodSecretIntegrationTenant, job.OutboxID); outboxErr == nil {
+					outboxStatus, outboxAttempts = outbox.Status, outbox.Attempts
+					outboxErrorClass = dodSecretIntegrationErrorClass(outbox.LastError)
+				}
+			}
+			t.Fatalf("secret sync readback key=%s status=%d err=%v response_class=%s job_status=%s job_attempts=%d job_error_class=%s job_err=%v outbox_status=%s outbox_attempts=%d outbox_error_class=%s bridge=%s",
+				remoteKey, lastStatus, lastErr, dodSecretIntegrationErrorClass(string(lastBody)), job.Status, job.Attempts,
+				dodSecretIntegrationErrorClass(job.LastError), jobErr, outboxStatus, outboxAttempts, outboxErrorClass,
+				dodSecretBridgeStatus(external))
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
