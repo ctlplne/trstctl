@@ -1951,6 +1951,7 @@ func TestServedInheritedStaticSchedulesDisableWithoutProviderPhase(t *testing.T)
 			}
 		},
 	)
+	registerServedTenant(t, h, "served inherited static schedule tenant")
 	runner := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	dueAt := time.Now().Add(-2 * time.Minute).UTC()
 	create := func(name, provider, oldRef string, at time.Time) store.SecretRotationSchedule {
