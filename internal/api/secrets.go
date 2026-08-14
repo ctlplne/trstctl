@@ -1598,9 +1598,10 @@ func (a *API) runSecretRotationSchedule(
 	if err != nil {
 		return secretRotationScheduleRunResponse{}, commandRelease, err
 	}
-	if status == "completed" {
+	switch status {
+	case "completed":
 		a.auditSecret(ctx, "secret.rotation_schedule.completed", tenantID, sched.Key, 0)
-	} else if status == "queued" {
+	case "queued":
 		a.auditSecret(ctx, "secret.rotation_schedule.queued", tenantID, sched.Key, 0)
 	}
 	result := secretRotationScheduleRunResponseFromReceipt(sched, run, false)

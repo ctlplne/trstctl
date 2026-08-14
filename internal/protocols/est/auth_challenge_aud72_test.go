@@ -33,10 +33,11 @@ func TestAuthenticatorOwnsESTChallengeAUD72(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
 	}
-	if got := rec.Header()["WWW-Authenticate"]; len(got) != 1 || got[0] != challenge {
+	rawHeader := map[string][]string(rec.Header())
+	if got := rawHeader["WWW-Authenticate"]; len(got) != 1 || got[0] != challenge {
 		t.Fatalf("WWW-Authenticate = %q, want %q", got, challenge)
 	}
-	if _, canonicalized := rec.Header()["Www-Authenticate"]; canonicalized {
+	if _, canonicalized := rawHeader["Www-Authenticate"]; canonicalized {
 		t.Fatal("challenge header was rewritten to libest-incompatible Www-Authenticate casing")
 	}
 }

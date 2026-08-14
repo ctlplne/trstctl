@@ -120,7 +120,7 @@ func RecordSuccessorIssued(in Run, waveID, identityID, fingerprint string) (Run,
 		return in, errors.New("migration: issued successor does not name the active published leaf gate")
 	}
 	if out.Status != RunRunning && out.Status != RunPaused && out.Status != RunRollingBack &&
-		!(out.Status == RunHalted && out.RollbackWaveID != "") {
+		(out.Status != RunHalted || out.RollbackWaveID == "") {
 		return in, fmt.Errorf("migration: issued successor is not licensed in run %s", out.Status)
 	}
 	member := &out.Waves[waveIndex].Members[memberIndex]

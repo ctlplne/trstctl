@@ -176,7 +176,8 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	}
 	destination := discoveryRunDestination
 	var command any = queued
-	if source.Kind == "network" || source.Kind == "ssh" {
+	switch source.Kind {
+	case "network", "ssh":
 		resolved, err := segmentscan.Resolve(source.Kind, source.Config)
 		if err != nil {
 			return store.DiscoveryRun{}, err
@@ -195,7 +196,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		resolved.DryRun, resolved.RequestedBy = in.DryRun, requestedBy
 		queued = resolved
 		command = resolved
-	} else if source.Kind == adcsdiscovery.SourceKind {
+	case adcsdiscovery.SourceKind:
 		if in.DryRun {
 			return store.DiscoveryRun{}, errors.New("orchestrator: AD CS inventory is already read-only and does not support dry-run")
 		}

@@ -40,7 +40,7 @@ func TestSignedTicketResultStaysRetryableUntilProjectionSucceeds(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("load schedule: found=%v err=%v", found, err)
 	}
-	h.servedHarness.srv.dispatchTicketSyncJob(ctx, h.tenant, sched)
+	h.srv.dispatchTicketSyncJob(ctx, h.tenant, sched)
 	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{agentJobKindTicketSync}, Limit: 1})
 	if err != nil || len(claimed.Jobs) != 1 {
 		t.Fatalf("claim: jobs=%d err=%v", len(claimed.Jobs), err)

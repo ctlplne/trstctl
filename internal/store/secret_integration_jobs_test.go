@@ -289,7 +289,7 @@ func TestSecretSyncOlderNonterminalFenceUsesOutboxOrderAndTenantTargetScope(t *t
 	newer := enqueue(tenantA, "sync-order-newer", "DATABASE_URL", base)
 	unrelatedKey := enqueue(tenantA, "sync-order-unrelated", "ANOTHER_URL", base)
 	otherTenant := enqueue(tenantB, "sync-order-other-tenant", "DATABASE_URL", base)
-	if !(older.TargetOrder > 0 && older.TargetOrder < newer.TargetOrder) {
+	if older.TargetOrder <= 0 || older.TargetOrder >= newer.TargetOrder {
 		t.Fatalf("fixture target order older=%d newer=%d", older.TargetOrder, newer.TargetOrder)
 	}
 

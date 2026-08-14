@@ -239,7 +239,7 @@ func decodeStreamRecord(raw []byte, format Format) (auditchain.Record, error) {
 		}
 		wantTime := float64(record.Time.UnixNano()) / float64(time.Second)
 		if value.Source != "trstctl" || value.SourceType != "trstctl:audit" || value.Host != "" || value.Index != "" || value.Time != wantTime {
-			return auditchain.Record{}, errors.New("Splunk envelope metadata does not match the canonical trstctl audit mapping")
+			return auditchain.Record{}, errors.New("splunk envelope metadata does not match the canonical trstctl audit mapping")
 		}
 		return record, nil
 	case FormatSentinel:

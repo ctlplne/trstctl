@@ -44,14 +44,7 @@ type gatedDestroyJournalIntent struct {
 }
 
 func gatedDestroyRequestHash(req GatedDestroyRequest) (string, error) {
-	raw, err := json.Marshal(gatedDestroyJournalIntent{
-		TenantID: req.TenantID, Handle: req.Handle, SubjectRef: req.SubjectRef,
-		AssertedFinalEpoch: req.AssertedFinalEpoch, LedgerPosition: req.LedgerPosition,
-		RequiredSet: req.RequiredSet, RequiredSetDigest: req.RequiredSetDigest,
-		SatisfiedSet: req.SatisfiedSet, SatisfactionEvidence: req.SatisfactionEvidence,
-		Authorization: req.Authorization, Approvals: req.Approvals,
-		AuditChainHead: req.AuditChainHead, Context: req.Context,
-	})
+	raw, err := json.Marshal(gatedDestroyJournalIntent(req))
 	if err != nil {
 		return "", err
 	}

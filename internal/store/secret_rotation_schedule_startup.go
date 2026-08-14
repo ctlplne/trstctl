@@ -595,7 +595,7 @@ func validateSecretRotationScheduleStartupAggregateTx(
 				ErrSecretRotationScheduleTickConflict)
 		}
 		if tick.Phase != "terminal" &&
-			!(tick.Phase == "privacy_erased" && tick.TerminalHTTPStatus != nil && len(tick.TerminalBody) > 0) {
+			(tick.Phase != "privacy_erased" || tick.TerminalHTTPStatus == nil || len(tick.TerminalBody) == 0) {
 			return fmt.Errorf("%w: completed scheduler outer key has a nonterminal tick",
 				ErrSecretRotationScheduleTickConflict)
 		}

@@ -32,7 +32,7 @@ func TestRestoreResumesExactHistoryBeforeSchedulerSanitation(t *testing.T) {
 	if strings.Contains(body[:restore], "openSanitizedHistoryAwareEventLog(") {
 		t.Fatal("restore sanitizes an artifact-bound partial prefix before exact resume")
 	}
-	if !(open < floor && floor < restore && restore < pending && pending < sanitize) {
+	if open >= floor || floor >= restore || restore >= pending || pending >= sanitize {
 		t.Fatalf("restore order = open:%d floor:%d exact:%d pending:%d sanitize:%d", open, floor, restore, pending, sanitize)
 	}
 }

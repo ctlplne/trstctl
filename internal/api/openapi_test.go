@@ -496,7 +496,7 @@ func assertSchemaProperty(t *testing.T, schemas map[string]any, name, property, 
 	if got := propertySchema["type"]; got != wantType {
 		t.Fatalf("OpenAPI schema %s property %s type = %v, want %s", name, property, got, wantType)
 	}
-	if got := propertySchema["format"]; got != wantFormat && !(wantFormat == "" && got == nil) {
+	if got := propertySchema["format"]; got != wantFormat && (wantFormat != "" || got != nil) {
 		t.Fatalf("OpenAPI schema %s property %s format = %v, want %s", name, property, got, wantFormat)
 	}
 }

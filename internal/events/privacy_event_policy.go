@@ -1766,7 +1766,7 @@ func existingPrivacyPlaceholderEnd(value string, start int) int {
 	}
 	end := start + len(prefix) + digestLen
 	for _, digit := range value[start+len(prefix) : end] {
-		if !('0' <= digit && digit <= '9' || 'a' <= digit && digit <= 'f') {
+		if (digit < '0' || digit > '9') && (digit < 'a' || digit > 'f') {
 			return 0
 		}
 	}
