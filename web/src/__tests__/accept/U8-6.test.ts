@@ -33,7 +33,8 @@ describe("U8-6 navigation & IA refresh", () => {
     // rows (Access / System / Editions), consciously spending two more rows
     // of rail budget to kill the DA-13 grab-bag. New ceiling: 34.
     // S-C2 spent five rows to give each Secrets workspace a route. Ceiling: 38.
-    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(38);
+    // H2 spent one row for the served migration workspace. Ceiling: 39.
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(39);
 
     // S-A1 promoted the formerly-hidden surfaces into the rail; they are no
     // longer contextual-only.

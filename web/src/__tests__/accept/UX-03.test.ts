@@ -20,7 +20,8 @@ describe("UX-03 task-based navigation", () => {
     // S-C2 split the Secrets mega-page's six workspaces into six sidebar
     // routes — consciously spending five rows of budget to kill the last
     // in-page tab strip (each row is one served workspace). New ceiling: 38.
-    expect(allSidebarItems.length).toBeLessThanOrEqual(38);
+    // H2 added one served migration workspace row. New ceiling: 39.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(39);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Inventory",
       "Issue & automate",
