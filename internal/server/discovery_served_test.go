@@ -23,6 +23,13 @@ import (
 func TestServedDiscoverySourceUpsertRetryKeepsTenantNameIdentity(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/segments", tok,
+		"discovery-name-upsert-segment", map[string]any{
+			"name": "retry-segment", "ranges": []string{"first.example.test", "second.example.test"}, "staleness_hours": 24,
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("declare retry segment: status %d body %s", status, body)
+	}
 
 	create := func(idem, target string) struct {
 		ID     string          `json:"id"`
@@ -56,7 +63,7 @@ func TestServedDiscoverySourceUpsertRetryKeepsTenantNameIdentity(t *testing.T) {
 		t.Fatalf("same tenant/name changed source identity: first=%q second=%q", first.ID, second.ID)
 	}
 
-	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/sources?limit=10", tok, nil)
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/sources?limit=10", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("list discovery sources: status %d body %s", status, body)
 	}

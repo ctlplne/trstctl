@@ -202,10 +202,17 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 
 func createSSHDiscoverySourceAndRun(t *testing.T, h *servedHarness, token string) (sourceID, runID string) {
 	t.Helper()
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", token, map[string]any{
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/segments", token,
+		"journey-002-segment", map[string]any{
+			"name": "ssh-fleet", "ranges": []string{"edge-1.internal"}, "staleness_hours": 24,
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("declare ssh discovery segment: status %d body %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", token, map[string]any{
 		"name":   "ssh-fleet",
 		"kind":   "ssh",
-		"config": map[string]any{"targets": []string{"edge-1.internal:22"}},
+		"config": map[string]any{"targets": []string{"edge-1.internal:22"}, "segment": "ssh-fleet"},
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("create ssh discovery source: status %d body %s", status, body)
