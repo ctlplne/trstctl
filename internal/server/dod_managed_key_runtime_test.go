@@ -859,7 +859,7 @@ func dodManagedKeyControlEnv(r *dodManagedKeyRuntime, providerEnv map[string]str
 		"TRSTCTL_SERVER_ADDR":     "127.0.0.1:" + strconv.Itoa(r.serverPort),
 		"TRSTCTL_SERVER_TLS_MODE": "disabled", "TRSTCTL_DEV_ALLOW_PLAINTEXT": "true",
 		"TRSTCTL_POSTGRES_MODE": "external", "TRSTCTL_POSTGRES_DSN": r.artifacts.postgresDSN,
-		"TRSTCTL_NATS_MODE": "embedded", "TRSTCTL_NATS_STORE_DIR": filepath.Join(r.dir, "nats"),
+		"TRSTCTL_NATS_MODE": "embedded", "TRSTCTL_NATS_STORE_DIR": filepath.Join(r.artifacts.root, "nats"), // PostgreSQL's projection checkpoint and JetStream history are one shared durable spine.
 		"TRSTCTL_LICENSE_FILE": r.artifacts.licenseFile, "TRSTCTL_MIGRATE_AUTO": "true",
 		"TRSTCTL_RATE_LIMIT_ENABLED": "false", "TRSTCTL_TELEMETRY_ENABLED": "false",
 		"TRSTCTL_AUDIT_SIGNING_KEY_FILE":  filepath.Join(r.dir, "audit.pem"),
@@ -2229,4 +2229,43 @@ func dodManagedKeyRepoRoot(t *testing.T) string {
 func dodCommandOutput(name string, args ...string) string {
 	output, _ := exec.Command(name, args...).CombinedOutput()
 	return string(output)
+}
+
+func TestDODManagedKeyControlEnvSharesEventHistoryWithProjectionStore(t *testing.T) {
+	spineDir := t.TempDir()
+	artifacts := dodManagedKeyArtifacts{
+		licenseFile: filepath.Join(spineDir, "license.json"),
+		postgresDSN: "postgres://dod",
+		root:        spineDir,
+	}
+	controlEnv := func(runtimeDir string, signerPort int) map[string]string {
+		r := &dodManagedKeyRuntime{
+			t: t, dir: runtimeDir, provider: config.ManagedKeyProviderAWS, signerPort: signerPort,
+			artifacts: artifacts,
+			mtlsMaterial: &mtls.SignerPeerMaterial{
+				ServerName: "dod-signer",
+				ControlPlane: mtls.SignerPeerConfig{
+					CertFile: "control.crt", KeyFile: "control.key", PeerCAFile: "ca.pem", PeerPinHex: "00",
+				},
+			},
+		}
+		values := map[string]string{}
+		for _, item := range dodManagedKeyControlEnv(r, nil) {
+			key, value, ok := strings.Cut(item, "=")
+			if ok {
+				values[key] = value
+			}
+		}
+		return values
+	}
+
+	first := controlEnv(t.TempDir(), 19443)
+	second := controlEnv(t.TempDir(), 19444)
+	want := filepath.Join(spineDir, "nats")
+	if got := first["TRSTCTL_NATS_STORE_DIR"]; got != want {
+		t.Fatalf("first event history = %q, want shared projection spine %q", got, want)
+	}
+	if got := second["TRSTCTL_NATS_STORE_DIR"]; got != want {
+		t.Fatalf("second event history = %q, want shared projection spine %q", got, want)
+	}
 }

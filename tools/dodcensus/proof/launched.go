@@ -1327,7 +1327,7 @@ func (p *ShippedProcess) Start(directory string, environment []string) {
 	witness, err := waitForLiveProcess(command.Process.Pid, p.build, p.expect, p.done)
 	if err != nil {
 		_ = command.Process.Kill()
-		p.t.Fatalf("DOD-CENSUS: launched process executable mismatch: %v", err)
+		p.t.Fatalf("DOD-CENSUS: %s launched process executable mismatch: %v", p.expect.ID, err)
 	}
 	if err := waitForExclusiveProcessSockets(command.Process.Pid, p.build, p.expect, p.done); err != nil {
 		_ = command.Process.Kill()
