@@ -303,6 +303,24 @@ func TestMigration0179PreservesLegacyDiagnosticsAndPermitsExactOperationsAUD49(t
 	if projectedID != legacyID || observedID != legacyID {
 		t.Fatalf("legacy ids = projection:%q observation:%q, want %q", projectedID, observedID, legacyID)
 	}
+	var onlineIndexes, primaryKeyAttach migrationFile
+	for _, migration := range orderedMigrationFiles(t) {
+		switch migration.version {
+		case 187:
+			onlineIndexes = migration
+		case 188:
+			primaryKeyAttach = migration
+		}
+	}
+	if onlineIndexes.name != "0187_reconcile_online_indexes_no_transaction.sql" || !onlineIndexes.noTx {
+		t.Fatalf("migration 0187 classification = name:%q no_tx:%t", onlineIndexes.name, onlineIndexes.noTx)
+	}
+	if primaryKeyAttach.name != "0188_enrollment_diagnostic_primary_key_attach.sql" || primaryKeyAttach.noTx {
+		t.Fatalf("migration 0188 classification = name:%q no_tx:%t", primaryKeyAttach.name, primaryKeyAttach.noTx)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{onlineIndexes, primaryKeyAttach})
+	assertIndexReady(t, ctx, pool, "enrollment_diagnostic_observations_diagnostic_idx")
+	assertPrimaryKeyColumns(t, ctx, pool, "enrollment_diagnostics", []string{"tenant_id", "diagnostic_id"})
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO enrollment_diagnostics
 		       (tenant_id, diagnostic_id, protocol, step, cause, summary, actionable,

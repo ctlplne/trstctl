@@ -24,9 +24,8 @@ ALTER TABLE application_secret_mutation_fences
         actor IS NOT NULL OR actor_subject_ref IS NULL
     );
 
-CREATE INDEX application_secret_mutation_fences_actor_subject_ref_idx
-    ON application_secret_mutation_fences (tenant_id, actor_subject_ref)
-    WHERE actor_subject_ref IS NOT NULL;
+-- Migration 0187 builds the populated-table selector index online. Keeping it
+-- here would hold application-secret writers behind a table-wide index build.
 
 COMMENT ON COLUMN application_secret_mutation_fences.actor IS
     'Exact authenticated event actor persisted across pre/post-Append crash recovery; privacy erasure rewrites only subject and preserves roles.';

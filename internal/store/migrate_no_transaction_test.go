@@ -75,6 +75,13 @@ func TestNoTransactionMigration(t *testing.T) {
 			  FROM pg_class c
 			  JOIN pg_index i ON i.indexrelid = c.oid
 			 WHERE c.relname = $1`, indexName).Scan(&ready)
+		if err == pgx.ErrNoRows && migrationAttachesConcurrentIndex(t, indexName) {
+			// PostgreSQL renames an index when a later PRIMARY KEY ... USING
+			// INDEX statement takes ownership. Successful Migrate proves that the
+			// ready/valid index was attachable; the populated migration-content
+			// harness proves the resulting primary-key columns.
+			continue
+		}
 		if err != nil {
 			t.Fatalf("concurrent index %s was not created by no-transaction migration: %v", indexName, err)
 		}
@@ -88,6 +95,28 @@ func TestNoTransactionMigration(t *testing.T) {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("second Migrate after no-transaction ledger rows: %v", err)
 	}
+}
+
+func migrationAttachesConcurrentIndex(t *testing.T, indexName string) bool {
+	t.Helper()
+	needle := regexp.MustCompile(`(?i)\busing\s+index\s+"?` + regexp.QuoteMeta(indexName) + `"?\b`)
+	entries, err := os.ReadDir("migrations")
+	if err != nil {
+		t.Fatalf("read migrations dir: %v", err)
+	}
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join("migrations", entry.Name()))
+		if err != nil {
+			t.Fatalf("read %s: %v", entry.Name(), err)
+		}
+		if needle.MatchString(stripSQLLineComments(string(raw))) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestApplicationSecretRequesterRefIndexMigrationRepairsInterruptedInvalidIndex(t *testing.T) {

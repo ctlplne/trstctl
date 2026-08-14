@@ -34,16 +34,11 @@ UPDATE enrollment_diagnostics
    AND diagnostic_id IS NULL;
 
 ALTER TABLE enrollment_diagnostics
-    ALTER COLUMN diagnostic_id SET NOT NULL,
-    DROP CONSTRAINT enrollment_diagnostics_pkey,
-    ADD PRIMARY KEY (tenant_id, diagnostic_id),
-    ADD CONSTRAINT enrollment_diagnostics_verification_kind_known
-        CHECK (verification_kind IN ('', 'endpoint.verify')),
-    ADD CONSTRAINT enrollment_diagnostics_verification_sequence_nonnegative
-        CHECK (verification_event_sequence >= 0);
+    ALTER COLUMN diagnostic_id SET NOT NULL;
 
-CREATE INDEX enrollment_diagnostic_observations_diagnostic_idx
-    ON enrollment_diagnostic_observations (tenant_id, diagnostic_id, event_sequence DESC);
+-- Migration 0187 builds the populated observation lookup and replacement
+-- diagnostic key online. Migration 0188 then performs only the short
+-- catalog swap from the legacy class key to the already-validated exact key.
 
 COMMENT ON COLUMN enrollment_diagnostics.diagnostic_id IS
     'Stable tenant-local id for one exact failed operation; v1 replay uses a legacy class id.';
