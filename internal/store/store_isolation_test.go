@@ -166,7 +166,11 @@ func TestStoreSystemPoolIsTheNamedRLSBypassAccessor(t *testing.T) {
 func TestSystemPoolProductionUseInventory(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	approved := map[string]int{
-		"internal/backup/postgres_state.go":       2,
+		// J2: one full-restore transaction replaces cross-tenant independent
+		// command state only after the artifact and event rebuild validate. The
+		// transaction never returns tenant payloads; every restored receiver row
+		// is matched to its exact event-derived tenant/job identity before commit.
+		"internal/backup/postgres_state.go":       1,
 		"internal/cli/doctor/probes_isolation.go": 1,
 		// A6 adds a third: the FABRIC-1 sweep over agent-claimable work that no
 		// agent has taken. It is cross-tenant for the same reason DUR-2 is —
@@ -190,6 +194,12 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// advisory lock; tenant reads and projection writes inside the callback
 		// still use their normal RLS-scoped transactions.
 		"internal/store/secret_sync_job.go": 2,
+		// J2: the receiver recovery red light is one deployment singleton, not a
+		// tenant row. Full restore must fence, authorize, and read it across every
+		// tenant at once or one lane could perform I/O while another is still
+		// rebuilding. The three calls expose only a boolean/reason from that fixed
+		// closed row; they never read a tenant ID, command, or sealed payload.
+		"internal/store/secret_sync_recovery.go": 3,
 		// D2: the verification scheduler's leader enumerator — "which tenants
 		// have endpoints worth re-probing" — has the same shape as the expiry
 		// enumerator above and the same justification: a scheduler must know
@@ -197,6 +207,11 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// ids ONLY; every endpoint row is then loaded under that tenant's RLS
 		// context by ListEndpointVerifications.
 		"internal/store/endpoint_verification.go": 1,
+		// R1: the leader first asks which tenant IDs own active public
+		// certificates, then re-enters each tenant's RLS context for certificate
+		// details. The second call reads PostgreSQL's clock so every replica uses
+		// one scheduling bucket; it contains no tenant data at all.
+		"internal/store/revocation_health.go": 2,
 		// H5: the CA calendar's leader enumerator — "which tenants operate a CA
 		// authority with a known expiry" — mirrors the expiry-alert enumerator in
 		// lifecycle.go. It reads tenant ids only; the authority rows themselves are
