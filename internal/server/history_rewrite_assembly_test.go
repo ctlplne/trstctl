@@ -20,6 +20,15 @@ import (
 // one-connection pool waits on itself forever. A concurrent cutover must remain
 // outside that complete view.
 func TestHistoryAwareLogNestedReplayUsesOneStoreConnection(t *testing.T) {
+	type historyAssemblyFixture struct {
+		Fixture bool `json:"fixture"`
+	}
+	if err := events.RegisterPrivacyEventPolicy("history.assembly.fixture", events.DefaultSchemaVersion, events.PrivacyEventPolicy{
+		PayloadShape:      events.PrivacyPayloadShapeOf[historyAssemblyFixture](),
+		RejectSubjectData: true,
+	}); err != nil {
+		t.Fatalf("register history assembly fixture privacy policy: %v", err)
+	}
 	dsn, err := url.Parse(serverTestPostgresDSN(t))
 	if err != nil {
 		t.Fatalf("parse test DSN: %v", err)
