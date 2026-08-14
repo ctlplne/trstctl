@@ -4,4 +4,7 @@
 
 package main
 
-const raceInstrumentationEnabled = false
+const (
+	raceInstrumentationEnabled = false
+	liveProfileSamples         = 64
+)

@@ -51,7 +51,14 @@ func TestPerfGateExitsNonzeroForInjectedRuntimeBreaches(t *testing.T) {
 }
 
 func TestPerfGateRunsLiveProfile(t *testing.T) {
-	report, err := runProfile("live", 64, nil)
+	wantSamples := 64
+	if raceInstrumentationEnabled {
+		wantSamples = 4
+	}
+	if got := liveProfileSamples; got != wantSamples {
+		t.Fatalf("live profile base samples = %d, want %d for race instrumentation=%t", got, wantSamples, raceInstrumentationEnabled)
+	}
+	report, err := runProfile("live", liveProfileSamples, nil)
 	if err != nil {
 		t.Fatalf("run live profile: %v", err)
 	}
@@ -74,6 +81,15 @@ func TestPerfGateRunsLiveProfile(t *testing.T) {
 	}
 	if got, want := len(report.Results), len(perf.HotPaths())*2; got != want {
 		t.Fatalf("live result count = %d, want %d", got, want)
+	}
+	wantPhaseSamples := []int{liveProfileSamples, liveProfileSamples * 2}
+	if got, want := len(report.LoadPhases), len(wantPhaseSamples); got != want {
+		t.Fatalf("live load phase count = %d, want %d", got, want)
+	}
+	for i, want := range wantPhaseSamples {
+		if got := report.LoadPhases[i].Samples; got != want {
+			t.Fatalf("live load phase %q samples = %d, want %d", report.LoadPhases[i].Name, got, want)
+		}
 	}
 	data, err := json.Marshal(report)
 	if err != nil {
