@@ -81,7 +81,8 @@ func newStore(t *testing.T) *store.Store {
 	// Per-test isolation: the package shares one database, so reset every
 	// tenant-scoped table (and the operational tables) between tests.
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE approved_target_event_fences, application_secret_mutation_fences,
+		`TRUNCATE approved_target_event_fences, code_signing_operations,
+		          application_secret_mutation_fences,
 		          application_secret_tenant_epochs, application_secret_mutation_receipts,
 		          privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
