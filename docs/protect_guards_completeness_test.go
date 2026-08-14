@@ -279,6 +279,7 @@ func TestFuzz006SmokeAndOSSFuzzStayReal(t *testing.T) {
 	ci := read(t, "../.github/workflows/ci.yml")
 	requireAllContained(t, "FUZZ-006", "ci.yml", ci,
 		"make fuzz-smoke",
+		"go test ./internal/crypto/ -run TestEveryMandatoryParserFamilyHasPropertyInvariants -count=1",
 		"go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1",
 		"name: ClusterFuzzLite / OSS-Fuzz (address)",
 		"google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1",
@@ -362,6 +363,19 @@ func TestOps005ConfigValidationFailsClosed(t *testing.T) {
 // the system where a subtle logic bug is most dangerous (policy decisions, tenant
 // query scoping, untrusted parsers) keep their generative/property coverage.
 func TestTest008PropertyAndFuzzSmokeSlicesStayRequired(t *testing.T) {
+	// Mandatory parser-family property denominator: property semantics stay
+	// independent from the hostile-byte fuzz denominator.
+	propertyGuard := read(t, "../internal/crypto/parserproperty_audit_test.go")
+	requireAllContained(t, "TEST-008", "internal/crypto/parserproperty_audit_test.go", propertyGuard,
+		"TestEveryMandatoryParserFamilyHasPropertyInvariants",
+		"TestPropertyACMEOrderRoundTripAndWireNormalization",
+		"TestPropertySCEPRequestResponseRoundTrip",
+		"TestPropertyX509CSRAndCertificateCanonicalization",
+		"TestPropertySSHAuthorizedKnownHostsAndPublicKeyRoundTrips",
+	)
+	requireAllContained(t, "TEST-008", "ci.yml", read(t, "../.github/workflows/ci.yml"),
+		"go test ./internal/crypto/ -run TestEveryMandatoryParserFamilyHasPropertyInvariants -count=1")
+
 	// Policy property/invariant slice.
 	for _, name := range []string{
 		"TestPolicyInvariantsBaseModule",

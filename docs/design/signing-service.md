@@ -316,6 +316,14 @@ committed corpus and fuzzes each target on a budget. A ready ClusterFuzzLite /
 OSS-Fuzz config (`.clusterfuzzlite/`) auto-discovers and builds every target as a
 libFuzzer binary; enabling the *hosted* runner is tracked as a follow-up.
 
+Generated semantic properties are a separate gate, because “hostile bytes did
+not crash” does not prove “valid structure kept the same meaning.” Policy, EST,
+ACME, SCEP/CMS, X.509/PKCS#10, and SSH have pinned `testing/quick` seeds and
+bounded counts. CI runs
+`go test ./internal/crypto/ -run TestEveryMandatoryParserFamilyHasPropertyInvariants -count=1`
+independently from `TestEveryUntrustedParserIsFuzzed`; deleting either kind of
+coverage fails its own denominator.
+
 - **Request decode + validation.** Protobuf decoding is
   `google.golang.org/protobuf`'s job, but our validation of decoded requests
   (algorithm/hash enums, handle format, size bounds) is fuzzed against

@@ -524,6 +524,11 @@ jobs:
           check-latest: true
           cache: true
 
+      # Property tests prove generated semantic invariants. This denominator is
+      # deliberately separate from the hostile-byte fuzz-target denominator.
+      - name: Property guard (every mandatory parser family has semantic invariants)
+        run: go test ./internal/crypto/ -run TestEveryMandatoryParserFamilyHasPropertyInvariants -count=1
+
       # The in-repo coverage guard (TestEveryUntrustedParserIsFuzzed) fails if any
       # untrusted-input parser lacks a fuzz target, keeping the denominator honest.
       - name: Coverage guard (every untrusted parser is fuzzed)

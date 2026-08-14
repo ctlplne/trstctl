@@ -57,7 +57,7 @@ exemption, and this page must document every required context.
 | `build / test / lint` | `ci.yml` | Build all binaries, `make test` (race + coverage), full `make lint` (gofmt/vet/**trstctllint**, golangci-lint, actionlint), gate self-tests |
 | `definition of done / wiring census` | `ci.yml` | `make dod-gate`: `go list -deps` reachability, production `buildRunDeps` assembly, and non-sentinel served-handler receipts for every required manifest row |
 | `chaos (fault injection)` | `ci.yml` | `make chaos`: signer death, NATS restart/partition, PostgreSQL failover, store-write failure, restore interruption, memory-pressure bulkhead, retry-backoff assertions |
-| `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | PR fuzz smoke plus deeper scheduled parser fuzzing keep fuzz targets and seed corpora wired into the merge gate |
+| `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | Independent semantic-property and fuzz-target census guards run before PR fuzz smoke; deeper scheduled fuzzing keeps generated invariants, fuzz targets, and seed corpora wired into the merge gate |
 | `ClusterFuzzLite / OSS-Fuzz (address)` | `ci.yml` | Hosted ClusterFuzzLite / OSS-Fuzz-family build and fuzz run, SHA-pinned upstream actions, uploaded build/SARIF, archived run artifacts |
 | `web ui (typecheck / test / build)` | `ci.yml` | Web console typecheck, Vitest + axe, Vite build, npm SCA |
 | `docs site (mkdocs build --strict)` | `ci.yml` | Docs build with no broken nav/links |

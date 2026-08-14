@@ -3976,6 +3976,14 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"FuzzAWSIIDAttest",
 		"FuzzAzureIMDSAttest",
 	)
+	propertyGuard := read(t, "../internal/crypto/parserproperty_audit_test.go")
+	check("internal/crypto/parserproperty_audit_test.go", propertyGuard,
+		"TestEveryMandatoryParserFamilyHasPropertyInvariants",
+		"TestPropertyACMEOrderRoundTripAndWireNormalization",
+		"TestPropertySCEPRequestResponseRoundTrip",
+		"TestPropertyX509CSRAndCertificateCanonicalization",
+		"TestPropertySSHAuthorizedKnownHostsAndPublicKeyRoundTrips",
+	)
 	for _, seed := range []string{
 		"../internal/crypto/testdata/fuzz/FuzzParseSCEPRequest/fuzz001_crasher_30_84",
 		"../internal/crypto/testdata/fuzz/FuzzParseSCEPResponse/fuzz001_crasher_30_84",
@@ -3997,6 +4005,7 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"schedule:",
 		"name: fuzz (smoke per-PR, deeper nightly)",
 		"timeout-minutes: 30 # TEST-004 (nightly raises the fuzz budget)",
+		"go test ./internal/crypto/ -run TestEveryMandatoryParserFamilyHasPropertyInvariants -count=1",
 		"go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1",
 		"make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}",
 	)

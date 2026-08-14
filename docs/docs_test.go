@@ -2494,6 +2494,7 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 
 	ci := read(t, "../.github/workflows/ci.yml")
 	for _, want := range []string{
+		"go test ./internal/crypto/ -run TestEveryMandatoryParserFamilyHasPropertyInvariants -count=1",
 		"go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1",
 		"make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}",
 	} {
