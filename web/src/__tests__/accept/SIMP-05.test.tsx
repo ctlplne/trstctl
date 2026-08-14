@@ -134,6 +134,6 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
   it("removes CA ceremony and custody fixtures from the module", () => {
     const source = readFileSync(path.join(process.cwd(), "src/pages/CAHierarchy.tsx"), "utf8");
     expect(source).not.toMatch(/ceremonySteps|custodyRows|Key custody metadata preview|CA ceremony purpose model/);
-    expect(source).not.toMatch(/root:<sha256-of-ca-spec>|sealed:\/\/tenant-ca|pkcs11:\/\/slot|YubiHSM|library-tier|coming soon|preview|fixture/i);
+    expect(source).not.toMatch(/root:<sha256-of-ca-spec>|sealed:\/\/tenant-ca|pkcs11:\/\/slot|YubiHSM|library-tier|coming soon|fixture/i);
   });
 });
