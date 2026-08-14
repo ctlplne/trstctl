@@ -2371,12 +2371,6 @@ func TestMigration0153RefusesUnsafeInheritedSecretSyncState(t *testing.T) {
 						 WHERE id = $1`, outboxID); err != nil {
 						t.Fatal(err)
 					}
-					if _, err := pool.Exec(ctx, `
-						UPDATE secret_sync_jobs
-						   SET idempotency_key = 'migration-0153:duplicate'
-						 WHERE tenant_id = $1 AND id = $2`, tenantA, id); err != nil {
-						t.Fatal(err)
-					}
 				}
 			},
 		},
