@@ -635,7 +635,6 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 			fingerprint = evidence.Fingerprint
 			p := a.store.ResolvePredecessorCertificateForFingerprint(ctx, tenantID, evidence.Fingerprint)
 			predecessor = predecessorCertificate{Serial: p.Serial, Fingerprint: p.Fingerprint}
-			rollbackRef = "restore predecessor for the latest enrolled host-agent deploy on " + target.Name
 		}
 		if predecessor.Fingerprint == "" {
 			return 0, nil, errStatus(http.StatusConflict,

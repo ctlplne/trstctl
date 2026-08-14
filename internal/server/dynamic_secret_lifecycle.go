@@ -605,9 +605,7 @@ func (l *durableDynamicSecretLifecycle) appendAndProjectID(ctx context.Context, 
 	if actor, ok := events.ActorFromContext(ctx); ok {
 		candidate.Actor = &actor
 	}
-	canonical := events.Event{}
-	found := false
-	canonical, found, err = l.log.EventByID(ctx, eventID)
+	canonical, found, err := l.log.EventByID(ctx, eventID)
 	if err != nil {
 		return err
 	}

@@ -91,7 +91,7 @@ func TestAuthorizedExactRestoreResumesUnsafeBoundPrefixAfterFloor(t *testing.T) 
 		if err != nil {
 			return err
 		}
-		stream, _, err = partial.bindBackupRestoreIdentity(
+		_, _, err = partial.bindBackupRestoreIdentity(
 			cutoverCtx, name, stream, info, 2, artifactDigest,
 		)
 		if err != nil {

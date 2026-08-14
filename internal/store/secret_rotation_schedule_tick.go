@@ -788,7 +788,6 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 			 RETURNING created_at`, tenantID, idempotencyKey, requestBinding).Scan(&dueThrough); err != nil {
 			return prepared, fmt.Errorf("store: atomically bind scheduler idempotency key: %w", err)
 		}
-		outerExists = true
 	}
 
 	generation := cursor.LeaseGeneration + 1

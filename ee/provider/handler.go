@@ -513,7 +513,7 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		writeProviderError(w, ErrProviderUnauthenticated)
 		return
 	}
-	r, ok = h.withMutationKey(w, r)
+	_, ok = h.withMutationKey(w, r)
 	if !ok {
 		return
 	}

@@ -1381,9 +1381,7 @@ func (d *secretIntegrationOutboxDispatcher) appendAndProjectID(ctx context.Conte
 	if actor, ok := events.ActorFromContext(ctx); ok {
 		candidate.Actor = &actor
 	}
-	canonical := events.Event{}
-	found := false
-	canonical, found, err = d.log.EventByID(ctx, eventID)
+	canonical, found, err := d.log.EventByID(ctx, eventID)
 	if err != nil {
 		return err
 	}

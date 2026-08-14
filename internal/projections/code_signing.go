@@ -304,7 +304,7 @@ func (p *Projector) applyCodeSigningTx(ctx context.Context, tx pgx.Tx, event eve
 			return true, fmt.Errorf("projections: %s approval payload/schema mismatch", event.Type)
 		}
 		approvedCommand := payload.Approval != nil
-		storedIdempotencyKey := payload.IdempotencyKey
+		var storedIdempotencyKey string
 		expectedOperationID := payload.OperationID
 		expectedResourceID := ""
 		legacyRawKey := false
