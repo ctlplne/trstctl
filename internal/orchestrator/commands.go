@@ -1910,6 +1910,30 @@ func (o *Orchestrator) ExpireAPITokens(ctx context.Context, now time.Time, limit
 // delivered or failed receipt. A queued intent has zero attempts because no
 // receiver I/O has happened yet.
 func (o *Orchestrator) RecordConnectorDelivery(ctx context.Context, tenantID string, r store.ConnectorDeliveryReceipt) (store.ConnectorDeliveryReceipt, error) {
+	return o.recordConnectorDelivery(ctx, tenantID, "", r)
+}
+
+// RecordConnectorDeliveryWithEventID is the durable-receiver form used when an
+// enrolled agent reports the result of an outbox claim. The event ID is derived
+// from the server-owned job binding, so a response loss can submit the same
+// signed result again without appending a second immutable delivery fact. A
+// changed body under the same ID fails closed.
+func (o *Orchestrator) RecordConnectorDeliveryWithEventID(
+	ctx context.Context,
+	tenantID, eventID string,
+	r store.ConnectorDeliveryReceipt,
+) (store.ConnectorDeliveryReceipt, error) {
+	if strings.TrimSpace(eventID) == "" {
+		return store.ConnectorDeliveryReceipt{}, errors.New("orchestrator: connector delivery event id is required")
+	}
+	return o.recordConnectorDelivery(ctx, tenantID, eventID, r)
+}
+
+func (o *Orchestrator) recordConnectorDelivery(
+	ctx context.Context,
+	tenantID, eventID string,
+	r store.ConnectorDeliveryReceipt,
+) (store.ConnectorDeliveryReceipt, error) {
 	if r.ID == "" {
 		r.ID = uuid.NewString()
 	}
@@ -1925,7 +1949,15 @@ func (o *Orchestrator) RecordConnectorDelivery(ctx context.Context, tenantID str
 	if err != nil {
 		return store.ConnectorDeliveryReceipt{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventConnectorDeliveryRecorded, tenantID, payload)
+	var ev events.Event
+	if eventID == "" {
+		ev, err = o.emit(ctx, projections.EventConnectorDeliveryRecorded, tenantID, payload)
+	} else {
+		ev, err = o.emitPreparedExact(ctx, events.Event{
+			ID: eventID, Type: projections.EventConnectorDeliveryRecorded,
+			TenantID: tenantID, Data: payload,
+		})
+	}
 	if err != nil {
 		return store.ConnectorDeliveryReceipt{}, err
 	}

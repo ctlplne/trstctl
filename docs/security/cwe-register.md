@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1277 annotated sites across 26 rules. Each row is
+1279 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -351,7 +351,7 @@ not this file.
 | `internal/crypto/mtls/server_test.go:168` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/server/dod_parent_substrate_bridge_runtime_test.go:183` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:275` | loopback fixture is closed below (CWE-400) |
-| `internal/server/host_agent_remote_served_test.go:484` | loopback fixture closed below (CWE-400) |
+| `internal/server/host_agent_remote_served_test.go:494` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:352` | loopback test fixture is explicitly closed (CWE-400) |
 | `internal/server/migration_run_served_test.go:87` | loopback fixture is closed below (CWE-400) |
 | `internal/server/migration_run_served_test.go:329` | loopback fixture is closed below (CWE-400) |
@@ -898,7 +898,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (329 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (330 sites)
 
 | Location | Reason |
 |---|---|
@@ -1101,12 +1101,13 @@ not this file.
 | `internal/server/ca_custody_test.go:149` | test-owned path under t.TempDir captures the planted mismatch (CWE-22) |
 | `internal/server/ca_custody_test.go:157` | same test-owned path proves the mismatch was not overwritten (CWE-22) |
 | `internal/server/cmdb_readonly_test.go:126` | test reads repo source files it names itself (CWE-22) |
+| `internal/server/dod_connector_runtime_test.go:76` | parent-created public CA fixture (CWE-22) |
 | `internal/server/dynamic_secret_failure_epoch_guard_test.go:22` | closed sibling-source fixture list. |
 | `internal/server/external_poller_boundary_test.go:16` | name comes only from the closed literal source-file list above (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:139` | parent-created test fixture path (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:193` | parent-created public fixture (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:380` | test reads its own remote-host fixture (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:732` | test-owned target fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:742` | test-owned target fixture (CWE-22) |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/migration_run_served_test.go:249` | test-owned fixture path (CWE-22) |
 | `internal/server/migration_run_served_test.go:258` | test-owned fixture path (CWE-22) |
@@ -1232,7 +1233,7 @@ not this file.
 | `tools/trstctllint/hotspot_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/licenseboundary/licenseboundary.go:35` | developer tool reading the repo paths it is pointed at (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (84 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (85 sites)
 
 | Location | Reason |
 |---|---|
@@ -1289,8 +1290,9 @@ not this file.
 | `internal/secretscan/gitleaks_options_test.go:100` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/auth_unit_test.go:64` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/cbom_served_test.go:62` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/dod_connector_runtime_test.go:815` | public CA fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:354` | public CA certificate fixture (CWE-276) |
-| `internal/server/host_agent_remote_served_test.go:562` | public CA fixture (CWE-276) |
+| `internal/server/host_agent_remote_served_test.go:572` | public CA fixture (CWE-276) |
 | `internal/server/pam_served_test.go:287` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pam_served_test.go:299` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:474` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

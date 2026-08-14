@@ -452,6 +452,13 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps({"root": str(self.state.root)}).encode()
             self._send(200, body)
             return
+        if parsed.path == "/dod/diagnostic":
+            # Failure metadata is deliberately closed and bounded: paths and
+            # booleans explain which protocol leg failed without returning a
+            # credential, header, request body, or certificate byte.
+            body = json.dumps(self.state.failure_diagnostic(), sort_keys=True, separators=(",", ":")).encode()
+            self._send(200, body)
+            return
         if parsed.path == "/dod/readback":
             query = parse_qs(parsed.query)
             if query.get("path"):

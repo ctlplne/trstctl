@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -461,6 +462,9 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if ingestErr := a.ingestExecutedReport(ctx, info, agentID, claim, req); ingestErr != nil {
 		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
 	}
+	if receiptErr := a.recordAgentConnectorDelivery(ctx, info, claim, req); receiptErr != nil {
+		return nil, status.Errorf(codes.Internal, "record signed agent connector delivery: %v", receiptErr)
+	}
 
 	// Closing the exact claim and retiring its outbox intent is ONE durable
 	// transition. A crash before it leaves the claim retryable; after it, both
@@ -568,6 +572,56 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, idemKey, req.Outcome, "")
 	}
 	return &transport.ReportJobResultResponse{Accepted: true}, nil
+}
+
+// recordAgentConnectorDelivery turns a successful agent claim into the same
+// tenant-scoped delivery timeline fact the control-plane connector worker
+// emits. The connector, target, identity, fingerprint, outbox row, and key all
+// come from the server-owned sealed job. The agent contributes only a signed
+// outcome and its certificate-bound name.
+//
+// Legacy opaque test/upgrade rows cannot be decoded into connector authority;
+// they keep their signed job receipt but do not manufacture a connector row.
+func (a *agentService) recordAgentConnectorDelivery(
+	ctx context.Context,
+	info mtls.PeerCertInfo,
+	claim store.AgentJobResultClaim,
+	req *transport.ReportJobResultRequest,
+) error {
+	if claim.Destination != "connector.deploy" {
+		return nil
+	}
+	intent, rollback := deployIntentForVerificationReceipt(claim.Payload)
+	if rollback || strings.TrimSpace(intent.Connector) == "" {
+		return nil
+	}
+	if a.orch == nil {
+		return errors.New("agent connector delivery projection is not configured")
+	}
+	var identityID *string
+	if value := strings.TrimSpace(intent.IdentityID); value != "" {
+		identityID = &value
+	}
+	reason := "agent_delivered"
+	switch strings.TrimSpace(req.Outcome) {
+	case transport.JobOutcomeVerified:
+		reason = "agent_delivered_and_verified"
+	case transport.JobOutcomeVerifyFailed:
+		reason = "agent_delivered_verification_failed"
+	}
+	receiptID := evidenceID("connector-delivery", info.TenantID, claim.IdempotencyKey, req.JobID)
+	eventKey := fmt.Sprintf("%s:attempt:%d", claim.IdempotencyKey, req.Attempt)
+	eventID := evidenceID("connector-delivery-agent-event", info.TenantID, eventKey, req.JobID)
+	_, err := a.orch.RecordConnectorDeliveryWithEventID(ctx, info.TenantID, eventID, store.ConnectorDeliveryReceipt{
+		ID: receiptID, OutboxID: outboxPtr(req.JobID), IdentityID: identityID,
+		Destination: claim.Destination, Connector: intent.Connector, Target: intent.Target,
+		Fingerprint: intent.Fingerprint, Status: servedstatus.ConnectorDelivered,
+		Attempts: req.Attempt, Reason: reason,
+		Detail:         "delivered by enrolled agent " + info.CommonName,
+		RollbackRef:    "restore previous certificate for " + intent.Target,
+		IdempotencyKey: claim.IdempotencyKey,
+	})
+	return err
 }
 
 // ingestExecutedReport applies structured observations before closing the

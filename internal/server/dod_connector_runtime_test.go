@@ -12,17 +12,26 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"trstctl.com/trstctl/internal/agent"
+	agentrelay "trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -33,6 +42,88 @@ import (
 )
 
 const dodConnectorTenant = "d0d00000-0000-4000-8000-000000000001"
+
+const (
+	dodConnectorAgentProcess    = "TRSTCTL_DOD_CONNECTOR_AGENT_PROCESS"
+	dodConnectorAgentServerName = "connector-agent.trstctl.local"
+	dodConnectorAgentHeartbeat  = "TRSTCTL_DOD_CONNECTOR_AGENT_HEARTBEAT_ONLY"
+)
+
+var dodConnectorAgentRuntimes sync.Map // map[*Server]*dodConnectorAgentRuntime
+
+type dodConnectorAgentRuntime struct {
+	address, commonName, serverName string
+	caPath, keyPath, certPath       string
+	hostProfilePaths                map[string]string
+}
+
+// TestDODNativeConnectorAgentProcessHelper is one poll of the shipped shared
+// agent executor in a fresh OS process. It reloads an enrolled mTLS identity
+// and an operator-owned host profile from disk; no certificate/key payload is
+// copied through argv or the environment.
+func TestDODNativeConnectorAgentProcessHelper(t *testing.T) {
+	if os.Getenv(dodConnectorAgentProcess) != "1" {
+		return
+	}
+	required := func(name string) string {
+		t.Helper()
+		value := strings.TrimSpace(os.Getenv(name))
+		if value == "" {
+			t.Fatalf("connector agent helper missing %s", name)
+		}
+		return value
+	}
+	caPEM, err := os.ReadFile(required("TRSTCTL_DOD_CONNECTOR_AGENT_CA_PATH")) // #nosec G304 -- parent-created public CA fixture (CWE-22)
+	if err != nil {
+		t.Fatalf("read connector agent CA: %v", err)
+	}
+	a := agent.New(agent.Config{
+		CommonName: required("TRSTCTL_DOD_CONNECTOR_AGENT_COMMON_NAME"),
+		KeyPath:    required("TRSTCTL_DOD_CONNECTOR_AGENT_KEY_PATH"), CertPath: required("TRSTCTL_DOD_CONNECTOR_AGENT_CERT_PATH"),
+		ServerName: required("TRSTCTL_DOD_CONNECTOR_AGENT_SERVER_NAME"), ServerCAPEM: caPEM,
+	}, nil)
+	if err := a.Bootstrap(t.Context()); err != nil {
+		t.Fatalf("reload connector agent identity: %v", err)
+	}
+	credentials, err := a.Credentials()
+	if err != nil {
+		t.Fatalf("connector agent credentials: %v", err)
+	}
+	connection, err := transport.Dial(required("TRSTCTL_DOD_CONNECTOR_AGENT_CHANNEL_ADDR"), credentials)
+	if err != nil {
+		t.Fatalf("dial connector agent channel: %v", err)
+	}
+	defer func() { _ = connection.Close() }()
+	transportClient := transport.NewAgentClient(connection)
+	if os.Getenv(dodConnectorAgentHeartbeat) == "1" {
+		if _, err := transportClient.Heartbeat(t.Context(), &transport.HeartbeatRequest{
+			AgentID: a.Identity().CommonName(), Version: "dod-connector-agent/1", Status: "active",
+		}); err != nil {
+			t.Fatalf("refresh connector agent heartbeat: %v", err)
+		}
+		return
+	}
+	hostProfile := connector.LocalOpsConfig{}
+	if path := strings.TrimSpace(os.Getenv("TRSTCTL_DOD_CONNECTOR_AGENT_HOST_PROFILE")); path != "" {
+		hostProfile, err = agentrelay.LoadHostProfile(path)
+		if err != nil {
+			t.Fatalf("load connector agent host profile: %v", err)
+		}
+	}
+	client := &http.Client{
+		Timeout:       60 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	channel := &servedHostRelayChannel{client: transportClient, identity: a}
+	executed, err := agentrelay.RunOnceWithHost(t.Context(), channel, client, hostProfile, 1, 60)
+	if err != nil || executed != 1 || !channel.lastAccepted {
+		t.Fatalf("connector agent pass = executed %d accepted %t err %v outcome=%q detail=%q",
+			executed, channel.lastAccepted, err, channel.lastOutcome, channel.lastDetail)
+	}
+	if channel.lastOutcome != transport.JobOutcomeExecuted && channel.lastOutcome != transport.JobOutcomeVerified {
+		t.Fatalf("connector agent outcome=%q detail=%q, want executed or verified", channel.lastOutcome, channel.lastDetail)
+	}
+}
 
 type dodConnectorTarget struct {
 	entryID      string
@@ -392,6 +483,7 @@ func dodRunAllNativeConnectorsProductionAssembly(t *testing.T) {
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
 	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
+	dodConfigureConnectorAgent(cfg, t.TempDir())
 	cfg.Connectors.Enabled = append([]string(nil), config.NativeConnectorNames...)
 	cfg.Connectors.AllowPrivateCIDRs = []string{"127.0.0.0/8"}
 	cfg.Connectors.AllowInsecureHTTP = true
@@ -437,6 +529,7 @@ func dodRunAllNativeConnectorsProductionAssembly(t *testing.T) {
 		t.Fatalf("Build production deps: %v", err)
 	}
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	dodStartConnectorAgentRuntime(t, srv, cfg.Connectors.LocalProfiles)
 	token := dodSeedConnectorToken(t, st)
 	ownerID := dodConnectorCreateOwner(t, srv, token)
 
@@ -482,6 +575,7 @@ func dodRunFocusedNativeConnector(t *testing.T, entryID, connectorName string, e
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
 	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
+	dodConfigureConnectorAgent(cfg, t.TempDir())
 	cfg.Connectors.Enabled = append([]string(nil), config.NativeConnectorNames...)
 	cfg.Connectors.AllowPrivateCIDRs = []string{"127.0.0.0/8"}
 	cfg.Connectors.AllowInsecureHTTP = true
@@ -604,6 +698,7 @@ func dodRunFocusedNativeConnector(t *testing.T, entryID, connectorName string, e
 		t.Fatalf("Build production deps: %v", err)
 	}
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	dodStartConnectorAgentRuntime(t, srv, cfg.Connectors.LocalProfiles)
 	token := dodSeedConnectorToken(t, st)
 	ownerID := dodConnectorCreateOwner(t, srv, token)
 	dodRunConnector(t, entryID, connectorName, external, srv, token, ownerID, targetConfig, target, readbackPath)
@@ -640,6 +735,189 @@ func dodConnectorLocalProfile(t *testing.T, root, endpoint, entryID string, logi
 		})
 	}
 	return profile
+}
+
+func dodConfigureConnectorAgent(cfg *config.Config, dir string) {
+	cfg.AgentChannel.Enabled = true
+	cfg.AgentChannel.CACertFile = filepath.Join(dir, "agent-ca.crt")
+	cfg.AgentChannel.ServerName = dodConnectorAgentServerName
+	cfg.AgentChannel.HeartbeatInterval = "30s"
+	cfg.AgentChannel.ClaimableJobKinds = []string{"connector.deploy"}
+}
+
+func dodStartConnectorAgentRuntime(
+	t *testing.T,
+	srv *Server,
+	profiles map[string]config.LocalConnectorProfile,
+) *dodConnectorAgentRuntime {
+	t.Helper()
+	if !srv.AgentChannelServed() || !srv.OutOfProcessAgentCA() {
+		t.Fatal("connector proof did not assemble the signer-custodied agent mTLS channel")
+	}
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen for connector agent channel: %v", err)
+	}
+	channelCtx, stopChannel := context.WithCancel(context.Background())
+	channelDone := make(chan struct{})
+	go func() {
+		defer close(channelDone)
+		srv.serveAgentChannel(channelCtx, listener)
+	}()
+	t.Cleanup(func() {
+		stopChannel()
+		<-channelDone
+	})
+
+	const commonName = "dod-native-connector-agent"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	bootstrapToken, err := srv.agentEnroll.IssueBootstrapTokenWithRoles(ctx, dodConnectorTenant, commonName,
+		[]string{mtls.AgentRoleHost, mtls.AgentRoleNetwork})
+	if err != nil {
+		t.Fatalf("issue connector agent bootstrap token: %v", err)
+	}
+	a := agent.New(agent.Config{
+		CommonName: commonName, BootstrapToken: bootstrapToken,
+		ServerName: dodConnectorAgentServerName, ServerCAPEM: srv.AgentCACertPEM(), Version: "dod-connector-agent/1",
+	}, &dodConnectorBootstrapEnroller{authority: srv.agentEnroll})
+	if err := a.Bootstrap(ctx); err != nil {
+		t.Fatalf("bootstrap connector agent: %v", err)
+	}
+	credentials, err := a.Credentials()
+	if err != nil {
+		t.Fatalf("connector agent credentials: %v", err)
+	}
+	connection, err := transport.Dial(listener.Addr().String(), credentials)
+	if err != nil {
+		t.Fatalf("dial connector agent channel for heartbeat: %v", err)
+	}
+	client := transport.NewAgentClient(connection)
+	if _, err := client.Heartbeat(ctx, &transport.HeartbeatRequest{
+		AgentID: commonName, Version: "dod-connector-agent/1", Status: "active",
+	}); err != nil {
+		_ = connection.Close()
+		t.Fatalf("heartbeat connector agent roles: %v", err)
+	}
+	if err := connection.Close(); err != nil {
+		t.Fatalf("close connector agent heartbeat connection: %v", err)
+	}
+
+	dir := t.TempDir()
+	runtime := &dodConnectorAgentRuntime{
+		address: listener.Addr().String(), commonName: commonName, serverName: dodConnectorAgentServerName,
+		caPath: filepath.Join(dir, "agent-ca.crt"), keyPath: filepath.Join(dir, "agent.key"),
+		certPath: filepath.Join(dir, "agent.crt"), hostProfilePaths: map[string]string{},
+	}
+	if err := a.Identity().Save(runtime.keyPath, runtime.certPath); err != nil {
+		t.Fatalf("persist connector agent identity: %v", err)
+	}
+	if err := os.WriteFile(runtime.caPath, srv.AgentCACertPEM(), 0o644); err != nil { // #nosec G306 -- public CA fixture (CWE-276)
+		t.Fatalf("persist connector agent CA: %v", err)
+	}
+	names := make([]string, 0, len(profiles))
+	for name := range profiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		hostProfile, err := dodConnectorHostProfile(profiles[name])
+		if err != nil {
+			t.Fatalf("build %s connector agent host profile: %v", name, err)
+		}
+		hostProfilePath := filepath.Join(dir, "host-profile-"+manifestConnectorID(name)+".json")
+		profileJSON, err := json.Marshal(hostProfile)
+		if err != nil {
+			t.Fatalf("marshal %s connector agent host profile: %v", name, err)
+		}
+		if err := os.WriteFile(hostProfilePath, profileJSON, 0o600); err != nil {
+			t.Fatalf("persist %s connector agent host profile: %v", name, err)
+		}
+		runtime.hostProfilePaths[name] = hostProfilePath
+	}
+	dodConnectorAgentRuntimes.Store(srv, runtime)
+	t.Cleanup(func() { dodConnectorAgentRuntimes.Delete(srv) })
+	return runtime
+}
+
+type dodConnectorBootstrapEnroller struct {
+	authority interface {
+		EnrollBootstrap(context.Context, []byte, []byte) ([]byte, error)
+	}
+}
+
+func (e *dodConnectorBootstrapEnroller) EnrollBootstrap(ctx context.Context, token, csrDER []byte) ([]byte, error) {
+	return e.authority.EnrollBootstrap(ctx, token, csrDER)
+}
+
+func (*dodConnectorBootstrapEnroller) EnrollRenewal(context.Context, []byte) ([]byte, error) {
+	return nil, context.Canceled
+}
+
+func dodConnectorHostProfile(configured config.LocalConnectorProfile) (agentrelay.HostProfile, error) {
+	profile := agentrelay.HostProfile{}
+	profile.AllowedRoots = append(profile.AllowedRoots, configured.AllowedRoots...)
+	for _, action := range configured.Actions {
+		timeout, err := action.TimeoutDuration()
+		if err != nil {
+			return agentrelay.HostProfile{}, err
+		}
+		seconds := int(timeout / time.Second)
+		if seconds < 1 {
+			seconds = 1
+		}
+		profile.Actions = append(profile.Actions, agentrelay.HostAction{
+			LogicalName: action.LogicalName, LogicalArgs: action.LogicalArgs,
+			Command: action.Command, Args: action.Args, PassArgs: action.PassArgs, TimeoutSecs: seconds,
+		})
+	}
+	return profile, nil
+}
+
+func (r *dodConnectorAgentRuntime) run(t *testing.T, connectorName string) error {
+	return r.runHelper(t, connectorName, false)
+}
+
+func (r *dodConnectorAgentRuntime) heartbeat(t *testing.T) error {
+	return r.runHelper(t, "", true)
+}
+
+func (r *dodConnectorAgentRuntime) runHelper(t *testing.T, connectorName string, heartbeatOnly bool) error {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDODNativeConnectorAgentProcessHelper$", "-test.v") // #nosec G204,G702 -- fixed current test binary and fixed argv (CWE-78).
+	cmd.Env = append(os.Environ(),
+		dodConnectorAgentProcess+"=1",
+		"TRSTCTL_DOD_CONNECTOR_AGENT_CA_PATH="+r.caPath,
+		"TRSTCTL_DOD_CONNECTOR_AGENT_COMMON_NAME="+r.commonName,
+		"TRSTCTL_DOD_CONNECTOR_AGENT_KEY_PATH="+r.keyPath,
+		"TRSTCTL_DOD_CONNECTOR_AGENT_CERT_PATH="+r.certPath,
+		"TRSTCTL_DOD_CONNECTOR_AGENT_SERVER_NAME="+r.serverName,
+		"TRSTCTL_DOD_CONNECTOR_AGENT_CHANNEL_ADDR="+r.address,
+		"TRSTCTL_DOD_CONNECTOR_AGENT_HOST_PROFILE="+r.hostProfilePaths[connectorName],
+	)
+	if heartbeatOnly {
+		cmd.Env = append(cmd.Env, dodConnectorAgentHeartbeat+"=1")
+	}
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("separate connector agent process: %w\n%s", err, output)
+	}
+	return nil
+}
+
+func dodConnectorFailureDiagnostic(external *proof.ExternalSubstrate) string {
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Get(external.Endpoint() + "/dod/diagnostic")
+	if err != nil {
+		return "diagnostic unavailable: " + err.Error()
+	}
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 32<<10))
+	if err != nil {
+		return "diagnostic unreadable: " + err.Error()
+	}
+	return fmt.Sprintf("status=%d body=%s", response.StatusCode, body)
 }
 
 func dodConnectorExternalRoot(t *testing.T, external *proof.ExternalSubstrate) string {
@@ -788,8 +1066,17 @@ func dodConnectorCreateOwner(t *testing.T, srv *Server, token string) string {
 	return owner.ID
 }
 
-func dodRunConnector(t *testing.T, entryID, connectorName string, external *proof.ExternalSubstrate, srv *Server, token, ownerID string, targetConfig json.RawMessage, target, readbackPath string) {
+func dodRunConnector(t *testing.T, entryID, connectorName string, external *proof.ExternalSubstrate, srv *Server, token, ownerID string, targetConfig json.RawMessage, target, readbackPath string, runtimes ...*dodConnectorAgentRuntime) {
 	t.Helper()
+	if len(runtimes) > 1 {
+		t.Fatalf("%s connector proof received %d agent runtimes, want at most one", entryID, len(runtimes))
+	}
+	var agentRuntime *dodConnectorAgentRuntime
+	if len(runtimes) == 1 {
+		agentRuntime = runtimes[0]
+	} else if value, ok := dodConnectorAgentRuntimes.Load(srv); ok {
+		agentRuntime, _ = value.(*dodConnectorAgentRuntime)
+	}
 	stem := strings.ReplaceAll(entryID, ".", "-")
 	targetBody := dodConnectorRequest(t, srv, token, http.MethodPost, "/api/v1/connectors/targets", "dod-target-"+stem, map[string]any{
 		"name": target, "connector": connectorName, "config": targetConfig,
@@ -819,10 +1106,31 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 		inner: srv.obHandler, classes: make(map[string]string),
 	}
 	srv.obHandler = diagnostic
+	vantage := nativeConnectorVantage(connectorName)
+	// Relay-vantage is the target topology, while RelayMigrated is the switch
+	// that has actually retired control-plane fallback. Cisco, FortiGate, and
+	// Palo Alto deliberately retain that fallback until their device APIs can
+	// prove rollback/readback, so the DoD journey must not invent a relay-only
+	// production policy for them.
+	agentOwned := vantage == connector.VantageHostAgent ||
+		(vantage == connector.VantageNetworkRelay && connector.RelayMigrated(connectorName))
+	if agentOwned {
+		if agentRuntime == nil {
+			t.Fatalf("%s requires %s execution but the connector agent runtime is absent", entryID, vantage)
+		}
+		if err := agentRuntime.heartbeat(t); err != nil {
+			t.Fatalf("%s refresh enrolled agent presence: %v", entryID, err)
+		}
+	}
 	drainErr := srv.Drain(context.Background())
 	srv.obHandler = diagnostic.inner
 	if drainErr != nil {
 		t.Fatalf("drain %s deployment: %v", entryID, drainErr)
+	}
+	if agentOwned {
+		if err := agentRuntime.run(t, connectorName); err != nil {
+			t.Fatalf("%s agent execution: %v; substrate %s", entryID, err, dodConnectorFailureDiagnostic(external))
+		}
 	}
 	request, err := http.NewRequest(http.MethodGet, "/api/v1/connectors/deliveries?limit=100", nil)
 	if err != nil {
@@ -830,14 +1138,33 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
 	session := proof.Start(t, entryID, srv.Handler(), request)
-	if !bytes.Contains(session.ResponseBody(), []byte(`"status":"delivered"`)) || !bytes.Contains(session.ResponseBody(), []byte(`"connector":"`+connectorName+`"`)) {
+	var deliveries struct {
+		Items []struct {
+			OutboxID       *int64  `json:"outbox_id"`
+			IdentityID     *string `json:"identity_id"`
+			Connector      string  `json:"connector"`
+			Target         string  `json:"target"`
+			Status         string  `json:"status"`
+			IdempotencyKey string  `json:"idempotency_key"`
+		} `json:"items"`
+	}
+	decodeErr := json.Unmarshal(session.ResponseBody(), &deliveries)
+	matched := 0
+	for _, item := range deliveries.Items {
+		if item.IdentityID != nil && *item.IdentityID == identity.ID &&
+			item.OutboxID != nil && item.Connector == connectorName && item.Target == target &&
+			item.Status == "delivered" && strings.TrimSpace(item.IdempotencyKey) != "" {
+			matched++
+		}
+	}
+	if decodeErr != nil || matched != 1 {
 		pending, pendingErr := srv.outbox.Pending(context.Background(), dodConnectorTenant)
 		states := make([]string, 0, len(pending))
 		for _, item := range pending {
 			states = append(states, fmt.Sprintf("%s:%s:%d", item.Destination, item.Status, item.Attempts))
 		}
-		t.Fatalf("%s delivery receipt is not user-visible delivered evidence: %s pending=%v pending_err=%v ca_issue_error_class=%s",
-			entryID, session.ResponseBody(), states, pendingErr, diagnostic.errorClass("ca.issue"))
+		t.Fatalf("%s delivery receipt is not exact user-visible delivered evidence: matches=%d decode_err=%v body=%s pending=%v pending_err=%v ca_issue_error_class=%s",
+			entryID, matched, decodeErr, session.ResponseBody(), states, pendingErr, diagnostic.errorClass("ca.issue"))
 	}
 	ident, err := srv.store.GetIdentity(context.Background(), dodConnectorTenant, identity.ID)
 	if err != nil {

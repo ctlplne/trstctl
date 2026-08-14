@@ -412,11 +412,21 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	deliveredReceipt := false
 	verifiedReceipt := false
 	for _, receipt := range receipts {
+		if receipt.IdempotencyKey == idemKey && receipt.Connector == "nginx" &&
+			receipt.Target == "remote-host-aud30" && receipt.Status == servedstatus.ConnectorDelivered &&
+			receipt.OutboxID != nil && *receipt.OutboxID == jobID &&
+			strings.Contains(receipt.Detail, h.agent) {
+			deliveredReceipt = true
+		}
 		if receipt.IdempotencyKey == idemKey+":verified" && receipt.Connector == "nginx" && receipt.Target == "remote-host-aud30" {
 			verifiedReceipt = true
 		}
+	}
+	if !deliveredReceipt {
+		t.Fatalf("agent deploy has no exact delivered receipt bound to its outbox, connector, target, and executor: %+v", receipts)
 	}
 	if !verifiedReceipt {
 		t.Fatalf("verified target timeline receipt lost sealed routing metadata: %+v", receipts)
