@@ -35,6 +35,16 @@ type Idempotency struct{}
 func (i *Idempotency) Do(ctx any, tenantID, key string, fn func(any) ([]byte, error)) ([]byte, error) {
 	return fn(ctx)
 }
+
+func (i *Idempotency) DoPreparedDurableEffectBound(ctx any, tenantID, key, binding string) ([]byte, error) {
+	return nil, nil
+}
+`)
+	writeFixture(t, dir, "src/trstctl.com/trstctl/internal/compat/keys.go", `package compat
+
+func SecretRotationScheduleTickAuthority(rawIdempotencyKey string) (string, string, error) {
+	return rawIdempotencyKey, "binding", nil
+}
 `)
 	writeFixture(t, dir, "src/trstctl.com/trstctl/internal/api/handlers.go", `package api
 
@@ -42,6 +52,7 @@ import (
 	"net/http"
 	"time"
 
+	"trstctl.com/trstctl/internal/compat"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
 
@@ -66,6 +77,11 @@ func (a *API) routes() []route {
 		{handler: a.goodVaultCompat, mutation: true},
 		{handler: a.goodVaultMutationHelper, mutation: true},
 		{handler: a.goodSCIMCompat, mutation: true},
+		{handler: a.goodScheduleAuthority, mutation: true},
+		{handler: a.badScheduleFixedInput, mutation: true},
+		{handler: a.badScheduleWrongHeader, mutation: true},
+		{handler: a.badScheduleSecondReturn, mutation: true},
+		{handler: a.badScheduleExternalLookalike, mutation: true},
 		{handler: a.badFixedString, mutation: true},
 		{handler: a.badUUIDGenerated, mutation: true},
 		{handler: a.badTimeGenerated, mutation: true},
@@ -94,6 +110,34 @@ func (a *API) goodSCIMCompat(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, nil)
 }
 
+func (a *API) goodScheduleAuthority(w http.ResponseWriter, r *http.Request) {
+	rawKey := r.Header.Get("Idempotency-Key")
+	outerKey, _, _ := secretRotationScheduleTickAuthority(rawKey)
+	a.mutatePrepared(w, r, outerKey)
+}
+
+func (a *API) badScheduleFixedInput(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
+	outerKey, _, _ := secretRotationScheduleTickAuthority("fixed")
+	a.mutatePrepared(w, r, outerKey)
+}
+
+func (a *API) badScheduleWrongHeader(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
+	outerKey, _, _ := secretRotationScheduleTickAuthority(r.Header.Get("X-Request-ID"))
+	a.mutatePrepared(w, r, outerKey)
+}
+
+func (a *API) badScheduleSecondReturn(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
+	rawKey := r.Header.Get("Idempotency-Key")
+	_, binding, _ := secretRotationScheduleTickAuthority(rawKey)
+	a.mutatePrepared(w, r, binding)
+}
+
+func (a *API) badScheduleExternalLookalike(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
+	rawKey := r.Header.Get("Idempotency-Key")
+	outerKey, _, _ := compat.SecretRotationScheduleTickAuthority(rawKey)
+	a.mutatePrepared(w, r, outerKey)
+}
+
 func (a *API) badFixedString(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
 	idempotencyKey := "fixed-key"
 	a.mutate(w, r, idempotencyKey, nil)
@@ -118,6 +162,10 @@ func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey stri
 	_, _ = a.idem.Do(r.Context(), "tenant", idempotencyKey, func(ctx any) ([]byte, error) { return nil, nil })
 }
 
+func (a *API) mutatePrepared(w http.ResponseWriter, r *http.Request, idempotencyKey string) {
+	_, _ = a.idem.DoPreparedDurableEffectBound(r.Context(), "tenant", idempotencyKey, "binding")
+}
+
 func vaultIdempotencyKey(r *http.Request, body []byte) string {
 	if key := r.Header.Get("Idempotency-Key"); key != "" {
 		return key
@@ -135,6 +183,10 @@ func scimIdempotencyKey(r *http.Request, body []byte) string {
 		return key
 	}
 	return "scim:documented-compatibility-derivation"
+}
+
+func secretRotationScheduleTickAuthority(rawIdempotencyKey string) (string, string, error) {
+	return rawIdempotencyKey, "binding", nil
 }
 `)
 	analysistest.Run(t, dir, idempotency.Analyzer, "trstctl.com/trstctl/internal/api")

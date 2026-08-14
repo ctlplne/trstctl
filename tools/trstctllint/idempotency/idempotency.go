@@ -10,8 +10,8 @@
 // FLOWS INTO A RECOGNIZED DEDUPE SINK — a call that genuinely collapses retries:
 //
 //   - the canonical sinks on orchestrator.Idempotency (Do, DoBound,
-//     DoDurableEffect, DoDurableEffectBound, and DoAtMostOnceEffect), resolved by type (the
-//     receiver's method, not its spelling); or
+//     DoDurableEffect, DoDurableEffectBound, DoPreparedDurableEffectBound, and
+//     DoAtMostOnceEffect), resolved by type (the receiver's method, not its spelling); or
 //   - the exact orchestrator.ExecuteTenantRegistration sink when approved key
 //     provenance is assigned to TenantRegistrationCommand.IdempotencyKey; or
 //   - a forwarding call whose callee declares an idempotency-named parameter in
@@ -53,18 +53,19 @@ const (
 	// idempotencyPkgPath and idempotencyTypeName/Method name the canonical
 	// dedupe sink: orchestrator.Idempotency.Do. A call resolving to this method
 	// honors AN-5 outright.
-	idempotencyPkgPath = "trstctl.com/trstctl/internal/orchestrator"
-	idempotencyType    = "Idempotency"
-	idempotencyMethod  = "Do"
-	boundMethod        = "DoBound"
-	durableMethod      = "DoDurableEffect"
-	durableBoundMethod = "DoDurableEffectBound"
-	atMostOnceMethod   = "DoAtMostOnceEffect"
-	apiPkgPath         = "trstctl.com/trstctl/internal/api"
-	idempotencyHeader  = "Idempotency-Key"
-	registrationSink   = "ExecuteTenantRegistration"
-	registrationCmd    = "TenantRegistrationCommand"
-	registrationKey    = "IdempotencyKey"
+	idempotencyPkgPath  = "trstctl.com/trstctl/internal/orchestrator"
+	idempotencyType     = "Idempotency"
+	idempotencyMethod   = "Do"
+	boundMethod         = "DoBound"
+	durableMethod       = "DoDurableEffect"
+	durableBoundMethod  = "DoDurableEffectBound"
+	preparedBoundMethod = "DoPreparedDurableEffectBound"
+	atMostOnceMethod    = "DoAtMostOnceEffect"
+	apiPkgPath          = "trstctl.com/trstctl/internal/api"
+	idempotencyHeader   = "Idempotency-Key"
+	registrationSink    = "ExecuteTenantRegistration"
+	registrationCmd     = "TenantRegistrationCommand"
+	registrationKey     = "IdempotencyKey"
 )
 
 // Analyzer enforces AN-5.
@@ -246,7 +247,7 @@ func exprHasApprovedProvenance(pass *analysis.Pass, expr ast.Expr, approved map[
 	case *ast.ParenExpr:
 		return exprHasApprovedProvenance(pass, e.X, approved)
 	case *ast.CallExpr:
-		if isDirectIdempotencyHeaderGet(e) || isApprovedIdempotencyHelper(pass, e) {
+		if isDirectIdempotencyHeaderGet(e) || approvedIdempotencyHelperProvenance(pass, e, approved) {
 			return true
 		}
 		if isTransparentStringWrapper(pass, e) && len(e.Args) == 1 {
@@ -275,7 +276,7 @@ func isDirectIdempotencyHeaderGet(call *ast.CallExpr) bool {
 	return ok && headerSel.Sel.Name == "Header"
 }
 
-func isApprovedIdempotencyHelper(pass *analysis.Pass, call *ast.CallExpr) bool {
+func approvedIdempotencyHelperProvenance(pass *analysis.Pass, call *ast.CallExpr, approved map[types.Object]bool) bool {
 	fn := calleeFunc(pass, call.Fun)
 	if fn == nil || fn.Pkg() == nil || fn.Pkg().Path() != apiPkgPath {
 		return false
@@ -286,6 +287,21 @@ func isApprovedIdempotencyHelper(pass *analysis.Pass, call *ast.CallExpr) bool {
 		// through one reviewed helper. Vault mutations fail closed when the
 		// header is absent; SCIM retains its documented compatibility derivation.
 		return true
+	case "secretRotationScheduleTickAuthority":
+		// This helper derives a lifecycle-bound receiver key from the raw header.
+		// Unlike Vault/SCIM compatibility helpers, it may not manufacture a key:
+		// its idempotency-named input must already have approved provenance. The
+		// caller's multiple assignment records only return value zero as approved.
+		sig, ok := fn.Type().(*types.Signature)
+		if !ok {
+			return false
+		}
+		for i := 0; i < sig.Params().Len() && i < len(call.Args); i++ {
+			if mentionsIdempotency(sig.Params().At(i).Name()) {
+				return exprHasApprovedProvenance(pass, call.Args[i], approved)
+			}
+		}
+		return false
 	default:
 		return false
 	}
@@ -354,7 +370,8 @@ func funcDecls(pass *analysis.Pass) map[*types.Func]*ast.FuncDecl {
 // isCanonicalIdempotencyDo reports whether fn is one of the canonical
 // orchestrator.Idempotency dedupe sinks.
 func isCanonicalIdempotencyDo(fn *types.Func) bool {
-	if fn.Name() != idempotencyMethod && fn.Name() != boundMethod && fn.Name() != durableMethod && fn.Name() != durableBoundMethod && fn.Name() != atMostOnceMethod {
+	if fn.Name() != idempotencyMethod && fn.Name() != boundMethod && fn.Name() != durableMethod &&
+		fn.Name() != durableBoundMethod && fn.Name() != preparedBoundMethod && fn.Name() != atMostOnceMethod {
 		return false
 	}
 	sig, ok := fn.Type().(*types.Signature)
