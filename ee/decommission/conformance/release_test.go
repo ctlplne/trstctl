@@ -16,7 +16,7 @@ var vdecPackageDirs = []string{"ee/decommission"}
 
 func TestEdition_CoreBuildLinksNoVDEC(t *testing.T) {
 	goBin := filepath.Join(goRoot(t), "bin", "go")
-	cmd := exec.Command(goBin, "list", "-tags", "trstctl_core", "-deps", "trstctl.com/trstctl/cmd/trstctl")
+	cmd := exec.Command(goBin, "list", "-tags", "trstctl_core", "-deps", "trstctl.com/trstctl/cmd/trstctl") // #nosec G204 -- goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78).
 	cmd.Dir = moduleRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

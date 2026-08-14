@@ -34,7 +34,7 @@ func TestAUD65ServedReadinessActionAndSignedExportShareProductionDataset(t *test
 		}
 		if err := projector.Apply(ctx, events.Event{
 			ID: fmt.Sprintf("66500000-0000-4000-8000-%012d", sequence), Type: eventType,
-			TenantID: h.tenant, Sequence: sequence, Time: base.Add(time.Duration(sequence) * time.Second), Data: data,
+			TenantID: h.tenant, Sequence: sequence, Time: base.Add(time.Duration(sequence) * time.Second), Data: data, // #nosec G115 -- fixture sequences are single-digit seconds (CWE-190).
 		}); err != nil {
 			t.Fatalf("apply %s: %v", eventType, err)
 		}

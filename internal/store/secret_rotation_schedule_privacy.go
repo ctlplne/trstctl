@@ -691,6 +691,7 @@ func lockSecretRotationSchedulePrivacyTickRowsTx(
 	return out, rows.Err()
 }
 
+// #nosec G101 -- SQL authority columns are names, not embedded credentials (CWE-798).
 const secretRotationSchedulePrivacyCommandSelect = `SELECT run_id::text, schedule_id::text, due_at,
        provider, secret_key, old_ref, new_ref, error,
        prepared_new_ref, prepared_error, tick_idempotency_key,

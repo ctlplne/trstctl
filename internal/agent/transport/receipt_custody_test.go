@@ -12,7 +12,7 @@ import (
 
 func TestHostRenewalReceiptCanonicalFormBindsCompleteCustodyAUD25(t *testing.T) {
 	t.Parallel()
-	statement := transport.JobReceiptStatement{
+	statement := transport.JobReceiptStatement{ // #nosec G101 -- the credential fingerprint is public fixture metadata, not a credential (CWE-798).
 		TenantID: "11111111-1111-1111-1111-111111111111", AgentCommonName: "host-agent-7",
 		JobID: 42, Attempt: 3, Outcome: transport.JobOutcomeVerified,
 		CredentialFingerprint: "sha256:leaf-42",

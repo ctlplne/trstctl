@@ -214,7 +214,7 @@ func wireEnrollmentDescriptor() []byte {
 	guid := []byte{0x68, 0xc9, 0x10, 0x0e, 0xfb, 0x78, 0xd2, 0x11, 0x90, 0xd4, 0x00, 0xc0, 0x4f, 0x79, 0xdc, 0x55}
 	ace := make([]byte, 12+len(guid)+len(sid))
 	ace[0] = 0x05
-	binary.LittleEndian.PutUint16(ace[2:4], uint16(len(ace)))
+	binary.LittleEndian.PutUint16(ace[2:4], uint16(len(ace))) // #nosec G115 -- this fixed fixture is 40 bytes, below MaxUint16 (CWE-190).
 	binary.LittleEndian.PutUint32(ace[4:8], 0x00000100)
 	binary.LittleEndian.PutUint32(ace[8:12], 0x1)
 	copy(ace[12:], guid)
@@ -226,7 +226,7 @@ func wireEnrollmentDescriptor() []byte {
 	binary.LittleEndian.PutUint32(descriptor[16:20], 20)
 	acl := descriptor[20:]
 	acl[0] = 4
-	binary.LittleEndian.PutUint16(acl[2:4], uint16(len(acl)))
+	binary.LittleEndian.PutUint16(acl[2:4], uint16(len(acl))) // #nosec G115 -- this fixed fixture is below MaxUint16 (CWE-190).
 	binary.LittleEndian.PutUint16(acl[4:6], 1)
 	copy(acl[8:], ace)
 	return descriptor

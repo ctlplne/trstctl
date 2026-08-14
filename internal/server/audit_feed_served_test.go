@@ -41,7 +41,7 @@ func TestServedAuditFeedsDeliverSplunkAndSentinelWithRetryAUD52(t *testing.T) {
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "aud52-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite), string(authz.OwnersWrite), string(authz.PrivateEgress),
 	})
-	status, body := doBearer(t, h.ts, http.MethodPut, "/api/v1/audit/feeds/52525252-5252-4525-8525-525252525200", token, "aud52-reject-url-credentials", map[string]any{
+	status, body := doBearer(t, h.ts, http.MethodPut, "/api/v1/audit/feeds/52525252-5252-4525-8525-525252525200", token, "aud52-reject-url-credentials", map[string]any{ // #nosec G101 -- the credential-bearing URL is a negative fixture that production must reject (CWE-798).
 		"name": "must not persist", "provider": "splunk-hec",
 		"endpoint_url": "https://collector-user:do-not-persist@collector.example.test/events",
 		"token_ref":    "env:TRSTCTL_AUD52_SPLUNK_TOKEN", "interval_seconds": 300,
@@ -59,14 +59,14 @@ func TestServedAuditFeedsDeliverSplunkAndSentinelWithRetryAUD52(t *testing.T) {
 	}
 
 	privateCIDR := serviceNowSinkCIDR(t, collector.URL("/"))
-	putAuditFeedAUD52(t, h, token, auditFeedSplunkID, map[string]any{
+	putAuditFeedAUD52(t, h, token, auditFeedSplunkID, map[string]any{ // #nosec G101 -- token_ref is a non-secret environment locator (CWE-798).
 		"name": "Splunk security lake", "provider": "splunk-hec",
 		"endpoint_url":     collector.URL("/services/collector/event"),
 		"token_ref":        "env:TRSTCTL_AUD52_SPLUNK_TOKEN",
 		"interval_seconds": 300, "batch_size": 100, "enabled": true,
 		"allow_private_endpoint": true, "private_egress_cidrs": []string{privateCIDR},
 	})
-	putAuditFeedAUD52(t, h, token, auditFeedSentinelID, map[string]any{
+	putAuditFeedAUD52(t, h, token, auditFeedSentinelID, map[string]any{ // #nosec G101 -- token_ref is a non-secret environment locator (CWE-798).
 		"name": "Sentinel audit table", "provider": "sentinel",
 		"endpoint_url":     collector.URL("/dataCollectionRules/dcr-aud52/streams/Custom-trstctl"),
 		"token_ref":        "env:TRSTCTL_AUD52_SENTINEL_TOKEN",

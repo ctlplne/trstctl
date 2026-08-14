@@ -16,6 +16,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -172,13 +173,18 @@ func main() {
 	edgeLeafKeyOut := flag.String("edge-leaf-key-out", "edge-leaf.key", "where edge-issue writes the leaf private key (0600)")
 	edgeJournalPath := flag.String("edge-journal", "edge-journal.json", "issuance journal, maintained in the exact shape `trstctl edge delegations reconcile -f` posts")
 	flag.Parse()
+	tpmPersistentHandleBase, err := checkedTPMPersistentHandleBase(*edgeTPMHandleBase)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+		os.Exit(1)
+	}
 
 	if handled, err := runEdgeCAOps(edgeCAOptions{
 		csrMode: *edgeCSRMode, tenantID: *edgeTenant, segmentID: *edgeSegment,
 		commonName: *edgeCN, keyProvider: *edgeKeyProvider, keyGeneration: *edgeKeyGeneration,
 		allowSoftwareKey: *edgeAllowSoftwareKey, keyOut: *edgeKeyOut, keyHandleOut: *edgeKeyHandleOut, csrOut: *edgeCSROut,
 		tpmPath: *edgeTPMPath, tpmOwnerAuthFile: *edgeTPMOwnerAuthFile, tpmKeyAuthFile: *edgeTPMKeyAuthFile,
-		tpmPersistentHandleBase: uint32(*edgeTPMHandleBase), pkcs11Module: *edgePKCS11Module,
+		tpmPersistentHandleBase: tpmPersistentHandleBase, pkcs11Module: *edgePKCS11Module,
 		pkcs11Token: *edgePKCS11Token, pkcs11PINFile: *edgePKCS11PINFile, pkcs11KeyLabelPrefix: *edgePKCS11KeyLabelPrefix,
 		issueMode: *edgeIssueMode, caCert: *edgeCACert, caKey: *edgeCAKey, caKeyHandle: *edgeCAKeyHandle,
 		leafCN: *edgeIssueCN, leafDNS: *edgeIssueDNS, leafTTL: *edgeIssueTTL,
@@ -348,6 +354,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 		os.Exit(1)
 	}
+}
+
+func checkedTPMPersistentHandleBase(value uint) (uint32, error) {
+	if uint64(value) > uint64(math.MaxUint32) {
+		return 0, fmt.Errorf("edge TPM persistent handle base %d exceeds 32 bits", value)
+	}
+	return uint32(value), nil // #nosec G115 -- the MaxUint32 check above proves the narrowing is exact (CWE-190).
 }
 
 type agentOptions struct {

@@ -170,7 +170,7 @@ func TestAUD58SCIMJoinerAndLeaverAreImmutableAuthorityEvents(t *testing.T) {
 	now := time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC)
 	access := newAUD58AccessStore()
 	mutations := &aud58MutationSink{store: access}
-	rawToken := "aud58-provider-scim-secret"
+	rawToken := "aud58-provider-scim-secret" // #nosec G101 -- deterministic non-deployable test bearer exercises hashing/authentication (CWE-798).
 	h := NewHandler(Config{
 		License: providerLicense(t, 10), Mutations: mutations, Access: access,
 		Clock: func() time.Time { return now },

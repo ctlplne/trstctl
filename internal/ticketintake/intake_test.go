@@ -100,6 +100,7 @@ func TestServiceNowPageUsesStrictSysIDKeysetAUD47(t *testing.T) {
 }
 
 func TestJiraEnhancedSearchPageMapsFieldsAndTokenAUD47(t *testing.T) {
+	// #nosec G101 -- TokenRef is a non-secret locator in a deterministic fixture (CWE-798).
 	intent := ticketintake.SyncIntent{
 		System: ticketintake.SystemJira, SweepID: "7f29c364-c44a-484e-bcf2-f572ba1bf9d0",
 		InstanceURL: "https://acme.atlassian.net", TokenRef: "secret://itsm/jira",
@@ -146,6 +147,7 @@ func TestJiraEnhancedSearchPageMapsFieldsAndTokenAUD47(t *testing.T) {
 
 func TestReportMustEchoExactSweepCursorAndProgressAUD47(t *testing.T) {
 	expected := 101
+	// #nosec G101 -- TokenRef is a non-secret locator in a deterministic fixture (CWE-798).
 	intent := ticketintake.SyncIntent{
 		System: ticketintake.SystemJira, SweepID: "7f29c364-c44a-484e-bcf2-f572ba1bf9d0",
 		InstanceURL: "https://acme.atlassian.net", TokenRef: "secret://itsm/jira", JiraProject: "NHI",

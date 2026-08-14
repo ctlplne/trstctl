@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -285,7 +286,7 @@ func (s *Store) ApplySecretRotationScheduleRunTx(ctx context.Context, tx pgx.Tx,
 	if alreadyTerminal {
 		if command.Status == run.Status && command.NewRef == run.NewRef && command.Error == run.Error &&
 			command.TerminalEventType == run.EventType && command.TerminalEventSequence != nil &&
-			*command.TerminalEventSequence == int64(run.EventSequence) &&
+			*command.TerminalEventSequence == int64(run.EventSequence) && // #nosec G115 -- validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190).
 			command.TerminalEventDigest == run.EventDigest && command.TerminalEventFromEvent != nil &&
 			*command.TerminalEventFromEvent && command.TerminalAt != nil &&
 			command.TerminalAt.Truncate(time.Microsecond).Equal(run.RanAt.Truncate(time.Microsecond)) {
@@ -309,7 +310,7 @@ func (s *Store) ApplySecretRotationScheduleRunTx(ctx context.Context, tx pgx.Tx,
 		    AND prepared_status = $4 AND prepared_new_ref = $5 AND prepared_error = $6
 		    AND prepared_at = $7::timestamptz AND prepared_event_digest = $10`,
 			run.TenantID, run.ScheduleID, run.RunID, run.Status, run.NewRef, run.Error, run.RanAt,
-			run.EventType, int64(run.EventSequence), run.EventDigest)
+			run.EventType, int64(run.EventSequence), run.EventDigest) // #nosec G115 -- validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190).
 		if err != nil {
 			return err
 		}
@@ -338,7 +339,8 @@ func validateBoundSecretRotationScheduleRun(run SecretRotationScheduleRun) error
 	if !validIdentity || !secretRotationScheduleTerminalStatus(run.Status) ||
 		run.Provider == "" || run.Key == "" || run.OldRef == "" || run.IntervalSeconds <= 0 ||
 		run.ConfigEventSequence == 0 || run.RequestBinding == "" ||
-		run.EventType != "secret.rotation_schedule.ran" || run.EventSequence == 0 || len(run.EventDigest) != 64 {
+		run.EventType != "secret.rotation_schedule.ran" || run.EventSequence == 0 ||
+		run.EventSequence > math.MaxInt64 || len(run.EventDigest) != 64 {
 		return fmt.Errorf("%w: terminal run lacks exact lifecycle-bound due-edge event authority", ErrSecretRotationScheduleCommandConflict)
 	}
 	return nil

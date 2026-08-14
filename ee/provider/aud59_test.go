@@ -21,7 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/usage"
 )
 
-const aud59ProviderCredential = "Bearer aud59-provider-operator"
+const aud59ProviderCredential = "Bearer aud59-provider-operator" // #nosec G101 -- deterministic non-deployable test bearer (CWE-798).
 
 var (
 	aud59PeriodStart = time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)

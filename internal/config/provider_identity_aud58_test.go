@@ -40,7 +40,7 @@ func TestAUD58ProviderSAMLAndSCIMCompleteConfigurationValidates(t *testing.T) {
 
 func TestAUD58ProviderIdentityEnvironmentOverlayIsComplete(t *testing.T) {
 	t.Parallel()
-	env := map[string]string{
+	env := map[string]string{ // #nosec G101 -- values are configuration names and file paths, never secret bytes (CWE-798).
 		"TRSTCTL_PROVIDER_OIDC_MFA_CLAIM":           "authn_methods",
 		"TRSTCTL_PROVIDER_OIDC_MFA_VALUES":          "fido2,totp",
 		"TRSTCTL_PROVIDER_SAML_ENABLED":             "true",

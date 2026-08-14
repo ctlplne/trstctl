@@ -13,6 +13,7 @@ import (
 func TestReprotect_CredentialReissueSupersession(t *testing.T) {
 	ctx := context.Background()
 	job := credentialJob()
+	// #nosec G101 -- NewCredentialID is public fixture metadata, not credential material (CWE-798).
 	issuer := &recordingCredentialIssuer{
 		replacement: CredentialReplacement{
 			NewCredentialID: "credential:new-serial-100",

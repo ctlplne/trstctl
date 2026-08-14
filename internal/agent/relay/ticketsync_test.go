@@ -63,6 +63,7 @@ func TestRelayTicketSyncUsesJiraOpaqueContinuationAUD47(t *testing.T) {
 			"nextPageToken":"opaque-after-101","isLast":false,"total":201}`))
 	}))
 	defer sink.Close()
+	// #nosec G101 -- TokenRef is a non-secret locator in a deterministic test fixture (CWE-798).
 	intent := ticketintake.SyncIntent{
 		System: ticketintake.SystemJira, SweepID: "4cc0fe9c-bf70-4c22-bd92-fbc00f13225b",
 		InstanceURL: sink.URL, TokenRef: "secret://itsm/jira", JiraProject: "NHI", Query: "status = Open",

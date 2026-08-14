@@ -3,6 +3,7 @@
 package enrollproxy_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -109,7 +110,7 @@ func TestThePublicRelayAuthoritySurvivesTheControlPlaneHop(t *testing.T) {
 	var gotHost string
 	up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotHost = r.Host
-		_, _ = io.WriteString(w, `{"newNonce":"https://`+r.Host+`/acme/new-nonce"}`)
+		_ = json.NewEncoder(w).Encode(map[string]string{"newNonce": "https://" + r.Host + "/acme/new-nonce"})
 	}))
 	defer up.Close()
 

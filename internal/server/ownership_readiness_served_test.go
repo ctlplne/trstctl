@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -239,7 +240,7 @@ func TestServedOwnershipReadinessEnforcementAUD44(t *testing.T) {
 		go func(iteration int) {
 			<-start
 			status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/"+ownerID, token,
-				"aud44-race-edit-"+string(rune('a'+iteration)), map[string]any{
+				"aud44-race-edit-"+strconv.Itoa(iteration), map[string]any{
 					"kind": "service", "name": "payments production", "email": "payments@example.test",
 					"application_id": applicationID + "-EDITED", "service": "payments-api", "business_unit": "commerce",
 					"environment": "production", "escalation_chain": []string{"payments-oncall@example.test"},
@@ -249,7 +250,7 @@ func TestServedOwnershipReadinessEnforcementAUD44(t *testing.T) {
 		go func(iteration int) {
 			<-start
 			status, body := aud44Transition(t, h, token, raceIdentityID,
-				"aud44-race-deploy-"+string(rune('a'+iteration)), "deployed")
+				"aud44-race-deploy-"+strconv.Itoa(iteration), "deployed")
 			results <- raceResult{kind: "deploy", status: status, body: body}
 		}(i)
 		close(start)

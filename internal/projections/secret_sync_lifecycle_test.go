@@ -23,7 +23,7 @@ func TestSecretSyncLifecycleAuthorityKeepsDuplicateRegistrationAndErasesWholeLif
 		}
 		return events.Event{
 			Sequence: sequence, ID: id, Type: eventType, TenantID: tenantID,
-			SchemaVersion: events.DefaultSchemaVersion, Time: now.Add(time.Duration(sequence) * time.Second), Data: data,
+			SchemaVersion: events.DefaultSchemaVersion, Time: now.Add(time.Duration(sequence) * time.Second), Data: data, // #nosec G115 -- fixture sequences are single-digit seconds (CWE-190).
 		}
 	}
 	observe := func(candidate events.Event, wantSkip bool) {

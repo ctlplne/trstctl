@@ -106,7 +106,7 @@ type tpm2Config struct {
 // licensed provider, and binds it to the signer's durable managed-key runtime.
 // Credential values must be file references; inline values fail closed.
 func ProviderOption(path, journalDir string) (signing.ServerOption, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- path is the signer operator's explicit local configuration file, never remote input (CWE-22).
 	if err != nil {
 		return nil, err
 	}

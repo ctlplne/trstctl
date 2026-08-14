@@ -45,7 +45,7 @@ func TestTrustDistributionInstallsVerifiesAndRemovesExactAnchorAUD40(t *testing.
 	if report.Verdict != TrustVerified || report.ObservedFingerprint != fingerprint || report.Operation != TrustInstall {
 		t.Fatalf("install report = %+v", report)
 	}
-	got, err := os.ReadFile(path)
+	got, err := os.ReadFile(path) // #nosec G304 -- path is created inside this test's TempDir (CWE-22).
 	if err != nil || string(got) != string(pemBytes) {
 		t.Fatalf("installed anchor = %q err=%v", got, err)
 	}
@@ -70,7 +70,7 @@ func TestTrustDistributionInstallsVerifiesAndRemovesExactAnchorAUD40(t *testing.
 	if _, err := ExecuteTrustDistribution(context.Background(), profile, remove); err == nil {
 		t.Fatal("remove deleted a path whose bytes no longer belonged to this run")
 	}
-	if got, err := os.ReadFile(path); err != nil || string(got) != "foreign-anchor" {
+	if got, err := os.ReadFile(path); err != nil || string(got) != "foreign-anchor" { // #nosec G304 -- path is created inside this test's TempDir (CWE-22).
 		t.Fatalf("refused removal changed foreign path: %q err=%v", got, err)
 	}
 	if err := os.WriteFile(path, pemBytes, 0o600); err != nil {

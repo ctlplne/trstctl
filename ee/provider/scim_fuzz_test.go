@@ -27,7 +27,7 @@ func FuzzAUD58ProviderSCIMBodiesNeverPanic(f *testing.F) {
 			Role: OperatorOperator, Active: true, Source: "scim:fuzz", CreatedAt: now, UpdatedAt: now,
 		}
 		mutations := &aud58MutationSink{store: access}
-		token := "aud58-scim-fuzz-token"
+		token := "aud58-scim-fuzz-token" // #nosec G101 -- deterministic non-deployable fuzz authenticator (CWE-798).
 		handler := newSCIMHandler(&SCIMConfig{Tokens: []SCIMToken{{Name: "fuzz", TokenHash: crypto.SHA256Hex([]byte(token))}}},
 			access, mutations, func() time.Time { return now })
 		method, path := http.MethodPost, "/provider/scim/v2/Users"

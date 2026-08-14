@@ -141,7 +141,7 @@ func buildSignerBinaryForAGID(t *testing.T) string {
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
 	bin := filepath.Join(t.TempDir(), "trstctl-signer")
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/trstctl-signer")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/trstctl-signer") // #nosec G204 -- executable and argv are fixed; output is confined to TempDir (CWE-78).
 	cmd.Dir = root
 	cmd.Env = os.Environ()
 	if out, err := cmd.CombinedOutput(); err != nil {

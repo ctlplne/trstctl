@@ -39,8 +39,8 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 	}
 	relayID := agentRowID(h.tenant, h.agent)
 	const (
-		secretName = "adcs/domain-reader"
-		secretRef  = "secret://adcs/domain-reader"
+		secretName = "adcs/domain-reader"          // #nosec G101 -- this is a logical fixture name, not secret material (CWE-798).
+		secretRef  = "secret://adcs/domain-reader" // #nosec G101 -- this is a non-secret reference, not secret material (CWE-798).
 		secretBody = "aud35-directory-bind-canary"
 	)
 	sealed, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, secretName, []byte(secretBody))

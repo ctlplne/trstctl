@@ -221,7 +221,7 @@ func shippedGitHubActionScriptAUD47(t *testing.T) string {
 
 func runShippedGitHubActionAUD47(t *testing.T, script string, env []string) (string, error) {
 	t.Helper()
-	cmd := exec.CommandContext(t.Context(), "bash", "-c", script)
+	cmd := exec.CommandContext(t.Context(), "bash", "-c", script) // #nosec G204 -- the test deliberately executes a generated copy of the fixed shipped action script (CWE-78).
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err

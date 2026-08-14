@@ -605,7 +605,7 @@ func startLicensedSignerSubprocess(t *testing.T) (*signing.Client, func(), strin
 	}
 	bin := filepath.Join(dir, "trstctl-signer")
 	ldflags := "-X trstctl.com/trstctl/internal/license.builtinPubKeysB64=" + base64.StdEncoding.EncodeToString(pub)
-	cmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", bin, "./cmd/trstctl-signer")
+	cmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", bin, "./cmd/trstctl-signer") // #nosec G204 -- executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78).
 	cmd.Dir = repoRoot(t)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.RemoveAll(dir)

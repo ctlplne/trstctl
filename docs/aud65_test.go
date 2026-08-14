@@ -15,7 +15,7 @@ func TestAUD65DocsNameCanonicalReadinessWorkflowAndEvidence(t *testing.T) {
 	}
 	joined := ""
 	for _, name := range files {
-		raw, err := os.ReadFile(name)
+		raw, err := os.ReadFile(name) // #nosec G304 -- name comes from the fixed documentation manifest in this test (CWE-22).
 		if err != nil {
 			t.Fatal(err)
 		}

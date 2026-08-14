@@ -126,7 +126,7 @@ func requireOpenSSLMLDSA(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("stock OpenSSL is required for ML-DSA interoperability: %v", err)
 	}
-	cmd := exec.Command(path, "list", "-signature-algorithms")
+	cmd := exec.Command(path, "list", "-signature-algorithms") // #nosec G204 -- path is exec.LookPath("openssl") and arguments are fixed (CWE-78).
 	out, err := cmd.CombinedOutput()
 	if err != nil || !bytes.Contains(out, []byte("ML-DSA-65")) {
 		t.Fatalf("stock OpenSSL lacks ML-DSA-65 support: %v\n%s", err, out)
@@ -136,7 +136,7 @@ func requireOpenSSLMLDSA(t *testing.T) string {
 
 func runOpenSSL(t *testing.T, openssl string, args ...string) []byte {
 	t.Helper()
-	cmd := exec.Command(openssl, args...)
+	cmd := exec.Command(openssl, args...) // #nosec G204 -- executable is the LookPath-resolved OpenSSL and test call sites supply fixed verbs plus TempDir paths (CWE-78).
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("openssl %s: %v\n%s", strings.Join(args, " "), err, out)

@@ -576,6 +576,7 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationFailedForEpochTx(ctx context.Co
 	return nil
 }
 
+// #nosec G101 -- sealed_credential is a SQL column name, not a hardcoded credential (CWE-798).
 const dynamicSecretLeaseAuthoritySelect = `SELECT id, tenant_id::text, tenant_epoch,
        idempotency_key, request_binding, provider, role, backend_ref,
        sealed_credential, sealed_preparation, preparation_digest, prepared_at,

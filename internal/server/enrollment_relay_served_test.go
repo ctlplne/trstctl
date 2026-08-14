@@ -51,7 +51,7 @@ func TestEnrollmentRelayHelperProcess(t *testing.T) {
 	}
 	defer func() { _ = listener.Close() }()
 
-	caPEM, err := os.ReadFile(os.Getenv("TRSTCTL_TEST_RELAY_CA"))
+	caPEM, err := os.ReadFile(os.Getenv("TRSTCTL_TEST_RELAY_CA")) // #nosec G703 -- the parent test supplies a freshly created public-CA fixture path to this helper process (CWE-22).
 	if err != nil {
 		t.Fatalf("relay helper control-plane CA: %v", err)
 	}

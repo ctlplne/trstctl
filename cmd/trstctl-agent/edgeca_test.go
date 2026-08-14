@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,20 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 )
+
+func TestCheckedTPMPersistentHandleBaseRejectsOverflow(t *testing.T) {
+	for _, value := range []uint{0, uint(math.MaxUint32)} {
+		got, err := checkedTPMPersistentHandleBase(value)
+		if err != nil || uint64(got) != uint64(value) {
+			t.Fatalf("checkedTPMPersistentHandleBase(%d) = %d, %v", value, got, err)
+		}
+	}
+	if uint64(^uint(0)) > uint64(math.MaxUint32) {
+		if got, err := checkedTPMPersistentHandleBase(uint(math.MaxUint32) + 1); err == nil || got != 0 {
+			t.Fatalf("overflow = %d, %v; want zero plus error", got, err)
+		}
+	}
+}
 
 // The agent's offline half of B6, end to end with no control plane anywhere:
 // edge-csr writes the key that never travels, a delegation is minted over the

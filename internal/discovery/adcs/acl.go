@@ -73,7 +73,7 @@ func EnrollmentPrincipalsFromSecurityDescriptor(raw []byte) ([]string, error) {
 	if daclOffset+8 > uint64(len(raw)) {
 		return nil, errors.New("security descriptor DACL offset is outside the value")
 	}
-	acl := raw[int(daclOffset):]
+	acl := raw[int(daclOffset):] // #nosec G115 -- the offset is uint32-derived and bounded against len(raw) above (CWE-190).
 	if acl[0] != 2 && acl[0] != 4 {
 		return nil, fmt.Errorf("DACL revision %d is unsupported", acl[0])
 	}

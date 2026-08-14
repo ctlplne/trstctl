@@ -648,7 +648,7 @@ func TestSecretSyncLegacyFailedMigrationAuthoritySurvivesColdRebuildAUD109(t *te
 			}
 			if reconciled.TargetOrder >= 0 || reconciled.TerminalEventFromEvent == nil ||
 				!*reconciled.TerminalEventFromEvent || reconciled.TerminalEventID != terminal.ID ||
-				reconciled.TerminalEventSequence == nil || *reconciled.TerminalEventSequence != int64(terminal.Sequence) {
+				reconciled.TerminalEventSequence == nil || *reconciled.TerminalEventSequence != int64(terminal.Sequence) { // #nosec G115 -- embedded JetStream fixture sequences are bounded far below MaxInt64 (CWE-190).
 				t.Fatalf("reconciled migration receipt = %+v, want exact retained terminal event and negative order", reconciled)
 			}
 			authority, err := s.SecretSyncReceiverAuthority(ctx, tenantA, job.ID)

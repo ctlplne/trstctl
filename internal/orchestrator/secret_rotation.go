@@ -211,7 +211,11 @@ func (o *Orchestrator) reconcileSecretRotationScheduleRun(
 				return fmt.Errorf("%w: scheduled rotation command was permanently closed by privacy erasure",
 					store.ErrSecretRotationScheduleCommandConflict)
 			case commandErr == nil && command.TerminalEventSequence != nil:
-				ev, found, lookupErr = o.log.EventAtSequence(barrierCtx, uint64(*command.TerminalEventSequence))
+				terminalSequence, sequenceErr := storedSecretRotationEventSequence(*command.TerminalEventSequence)
+				if sequenceErr != nil {
+					return sequenceErr
+				}
+				ev, found, lookupErr = o.log.EventAtSequence(barrierCtx, terminalSequence)
 			case commandErr == nil:
 				// Only an expired claimed receiver reaches this branch. Its stable
 				// event ID closes the one append-ACK window that has no SQL sequence.
@@ -270,11 +274,14 @@ func (o *Orchestrator) PurgeSecretRotationScheduleCommands(
 			return purged, fmt.Errorf("%w: terminal command lacks constant-time event authority",
 				store.ErrSecretRotationScheduleCommandConflict)
 		}
+		terminalSequence, sequenceErr := storedSecretRotationEventSequence(*command.TerminalEventSequence)
+		if sequenceErr != nil {
+			return purged, sequenceErr
+		}
 		deleted := false
 		err := o.store.WithPrivacyRecoveryBarrier(
 			ctx, tenantID, "secret rotation scheduler command GC", func(barrierCtx context.Context) error {
-				ev, found, lookupErr := o.log.EventAtSequence(
-					barrierCtx, uint64(*command.TerminalEventSequence))
+				ev, found, lookupErr := o.log.EventAtSequence(barrierCtx, terminalSequence)
 				if lookupErr != nil {
 					return fmt.Errorf("orchestrator: verify scheduled rotation terminal event for GC: %w", lookupErr)
 				}
@@ -291,7 +298,7 @@ func (o *Orchestrator) PurgeSecretRotationScheduleCommands(
 				}
 				if run.SchemaVersion != projections.SecretRotationScheduleRanEventSchemaVersion ||
 					command.TerminalEventType != run.EventType ||
-					*command.TerminalEventSequence != int64(run.EventSequence) ||
+					terminalSequence != run.EventSequence ||
 					command.TerminalEventDigest != run.EventDigest || command.Status != run.Status ||
 					command.NewRef != run.NewRef || command.Error != run.Error ||
 					command.PreparedStatus != run.Status || command.PreparedNewRef != run.NewRef ||
@@ -324,6 +331,13 @@ func (o *Orchestrator) PurgeSecretRotationScheduleCommands(
 		}
 	}
 	return purged, nil
+}
+
+func storedSecretRotationEventSequence(sequence int64) (uint64, error) {
+	if sequence <= 0 {
+		return 0, fmt.Errorf("%w: terminal event sequence must be positive", store.ErrSecretRotationScheduleCommandConflict)
+	}
+	return uint64(sequence), nil // #nosec G115 -- the positive int64 value always fits exactly in uint64 (CWE-190).
 }
 
 func decodeSecretRotationScheduleRunEvent(

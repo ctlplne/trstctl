@@ -14,7 +14,7 @@ import (
 func TestCMDBSweepProducerRejectsPoisonEventsBeforeAppendAUD46(t *testing.T) {
 	const tenantID = "11111111-1111-4111-8111-111111111111"
 	expected := 2
-	intent := ownership.CMDBSyncIntent{
+	intent := ownership.CMDBSyncIntent{ // #nosec G101 -- TokenRef is a non-secret locator in a deterministic fixture (CWE-798).
 		InstanceURL: "https://cmdb.example", TokenRef: "secret://cmdb/token", PageLimit: 2,
 		SweepID: "22222222-2222-4222-8222-222222222222",
 	}

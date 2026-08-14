@@ -49,7 +49,7 @@ func TestAUD56PublishesCompletePricingAndEnvironmentEntitlement(t *testing.T) {
 
 func readAUD56Doc(t *testing.T, name string) string {
 	t.Helper()
-	raw, err := os.ReadFile(name)
+	raw, err := os.ReadFile(name) // #nosec G304 -- name comes from the fixed documentation manifest in this test (CWE-22).
 	if err != nil {
 		t.Fatal(err)
 	}

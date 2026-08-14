@@ -13,7 +13,7 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
-const aud60ProviderCredential = "Bearer aud60-provider-operator"
+const aud60ProviderCredential = "Bearer aud60-provider-operator" // #nosec G101 -- deterministic non-deployable test bearer (CWE-798).
 
 // aud60SnapshotStore makes every customer inventory touch observable. A denied
 // path must never appear here: even a count query can disclose whether another

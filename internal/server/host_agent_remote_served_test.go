@@ -356,7 +356,7 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 	}
 	processCtx, cancelProcess := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelProcess()
-	cmd := exec.CommandContext(processCtx, os.Args[0], "-test.run=^TestAUD30HostAgentProcessHelper$", "-test.v") // #nosec G204 -- fixed current test binary and fixed argv (CWE-78)
+	cmd := exec.CommandContext(processCtx, os.Args[0], "-test.run=^TestAUD30HostAgentProcessHelper$", "-test.v") // #nosec G204,G702 -- fixed current test binary and fixed argv (CWE-78).
 	cmd.Env = append(os.Environ(),
 		aud30HostAgentProcess+"=1",
 		"TRSTCTL_AUD30_AGENT_CA_PATH="+agentCAPath,
@@ -566,7 +566,7 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 		t.Helper()
 		processCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(processCtx, os.Args[0], "-test.run=^TestAUD32HostAgentProcessHelper$", "-test.v") // #nosec G204 -- fixed current test binary and argv (CWE-78)
+		cmd := exec.CommandContext(processCtx, os.Args[0], "-test.run=^TestAUD32HostAgentProcessHelper$", "-test.v") // #nosec G204,G702 -- fixed current test binary and fixed argv (CWE-78).
 		cmd.Env = append(os.Environ(),
 			aud32HostAgentProcess+"=1",
 			"TRSTCTL_AUD32_AGENT_CA_PATH="+agentCAPath,

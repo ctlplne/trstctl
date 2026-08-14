@@ -700,7 +700,7 @@ func VerifyLogMatchesSanitizedSchedulerHistoryWithKey(
 				report.ChangedEvents != affected[expectedTenant] ||
 				report.ReceiptSequence != history.Sequence ||
 				report.SourceCutSequence+1 != report.ReceiptSequence ||
-				report.SourceCutSequence != h.EventCutSequence+uint64(receiptIndex) {
+				report.SourceCutSequence != h.EventCutSequence+uint64(receiptIndex) { // #nosec G115 -- receiptIndex starts at zero and is bounded by len(affectedOrder) above (CWE-190).
 				return errors.New("backup: scheduler sanitation resume continuity receipt policy mismatch")
 			}
 			receipts = append(receipts, cloneBackupHistoryRecord(history))

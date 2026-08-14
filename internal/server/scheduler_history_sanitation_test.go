@@ -11,7 +11,7 @@ import (
 )
 
 func TestSchedulerHistoryTransformIsNarrowAndSecretFree(t *testing.T) {
-	secret := "https://user:provider-token@example.invalid"
+	secret := "https://user:provider-token@example.invalid" // #nosec G101 -- deliberately toxic non-routable fixture proves sanitation (CWE-798).
 	before := []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","new_ref":"version:2","error":"` + secret + `"}`)
 	after, changed, err := schedulerHistoryTransform(
 		schedulerhistory.EventType, schedulerhistory.LegacySchemaVersion, before,

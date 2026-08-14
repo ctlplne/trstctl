@@ -242,11 +242,11 @@ func (a *SAMLAuthenticator) RevokeSession(w http.ResponseWriter, sessionID strin
 			return err
 		}
 	}
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614).
 		Name: a.sessionCookieName(), Path: "/", MaxAge: -1, HttpOnly: true,
 		Secure: a.cfg.Secure, SameSite: http.SameSiteStrictMode,
 	})
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614).
 		Name: providerCSRFCookie, Path: "/provider", MaxAge: -1,
 		Secure: a.cfg.Secure, SameSite: http.SameSiteStrictMode,
 	})
@@ -349,7 +349,7 @@ func (a *SAMLAuthenticator) setTransientCookie(w http.ResponseWriter, name, valu
 }
 
 func (a *SAMLAuthenticator) clearCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{Name: name, Path: "/provider/v1/auth/saml", MaxAge: -1, HttpOnly: true, Secure: a.cfg.Secure, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: name, Path: "/provider/v1/auth/saml", MaxAge: -1, HttpOnly: true, Secure: a.cfg.Secure, SameSite: http.SameSiteLaxMode}) // #nosec G124 -- expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614).
 }
 
 // AnyAuthenticator accepts the first positively verified configured identity

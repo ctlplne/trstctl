@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -32,7 +31,7 @@ func TestSchedulerHistorySanitationClosesAssembledSurfacesAcrossRestoreRetention
 		scheduleID = "22222222-2222-2222-2222-222222222222"
 		runID      = "33333333-3333-3333-3333-333333333333"
 		runEventID = "legacy-scheduler-run"
-		secretText = "https://operator:provider-credential@example.invalid"
+		secretText = "https://operator:provider-credential@example.invalid" // #nosec G101 -- deliberately toxic non-routable fixture proves sanitation (CWE-798).
 	)
 	st := newServerTestStore(t)
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "AUD-116"}); err != nil {
@@ -203,8 +202,13 @@ func assertAuditRecordsSecretFree(t *testing.T, records []audit.Record, eventID,
 
 func assertAuditArchivesSecretFree(t *testing.T, dir string, service *audit.Service, secretText string) {
 	t.Helper()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatalf("open retention archive root: %v", err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
 	files := 0
-	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = fs.WalkDir(root.FS(), ".", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -212,7 +216,7 @@ func assertAuditArchivesSecretFree(t *testing.T, dir string, service *audit.Serv
 			return nil
 		}
 		files++
-		signed, err := os.ReadFile(path)
+		signed, err := root.ReadFile(path)
 		if err != nil {
 			return err
 		}

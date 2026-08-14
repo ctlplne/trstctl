@@ -111,7 +111,7 @@ func TestSearchFiltersByTenantAndType(t *testing.T) {
 
 func TestSearchFailsClosedBeforeFilteringUnsafeLegacySchedulerHistory(t *testing.T) {
 	log := openLog(t)
-	secret := "postgres://audit-user:credential@provider.internal/db"
+	secret := "postgres://audit-user:credential@provider.internal/db" // #nosec G101 -- deliberately toxic non-routable fixture proves redaction (CWE-798).
 	_, err := log.Append(context.Background(), events.Event{
 		Type: schedulerhistory.EventType, TenantID: tenantA,
 		SchemaVersion: schedulerhistory.LegacySchemaVersion,
@@ -143,7 +143,7 @@ func (s fixedAuditCheckpoint) LatestAuditCheckpoint(context.Context, string) (au
 
 func TestSearchPreflightsUnsafeRetainedPrefixBelowCheckpoint(t *testing.T) {
 	log := openLog(t)
-	secret := "credential-hidden-below-retention-floor"
+	secret := "credential-hidden-below-retention-floor" // #nosec G101 -- deliberately toxic fixture proves retained-prefix redaction (CWE-798).
 	unsafe, err := log.Append(context.Background(), events.Event{
 		Type: schedulerhistory.EventType, TenantID: tenantA, SchemaVersion: 1,
 		Data: []byte(`{"schedule_id":"schedule-1","run_id":"run-1","status":"failed","error":"` + secret + `"}`),

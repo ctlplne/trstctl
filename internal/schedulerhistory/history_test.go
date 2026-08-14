@@ -9,7 +9,7 @@ import (
 )
 
 func TestRewriteLegacyRunChangesOnlyErrorToken(t *testing.T) {
-	secret := "postgres://scheduler:credential@provider.internal/db"
+	secret := "postgres://scheduler:credential@provider.internal/db" // #nosec G101 -- deliberately toxic non-routable fixture proves redaction (CWE-798).
 	before := []byte("{ \"run_id\" : \"run-1\", \"error\" : \"" + secret + "\", \"schedule_id\" : \"schedule-1\", \"new_ref\" : \"version:2\", \"status\" : \"failed\" }")
 	want := bytes.Replace(before, []byte("\""+secret+"\""), []byte(`"scheduled rotation failed"`), 1)
 
@@ -78,7 +78,7 @@ func TestCanonicalErrorRequiresStatusSpecificAgreement(t *testing.T) {
 }
 
 func TestLegacyRunValidationIsClosedAndNeverEchoesValues(t *testing.T) {
-	secret := "token-super-sensitive"
+	secret := "token-super-sensitive" // #nosec G101 -- deliberately toxic fixture proves closed parsing without echo (CWE-798).
 	tests := [][]byte{
 		[]byte(`{"schedule_id":"s","run_id":"r","status":"failed","error":"` + secret + `","error":"again"}`),
 		[]byte(`{"schedule_id":"s","run_id":"r","status":"failed","unknown":"` + secret + `"}`),

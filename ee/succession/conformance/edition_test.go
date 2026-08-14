@@ -40,7 +40,7 @@ var pcasPackageDirs = []string{"ee/succession", "ee/rpverify", "ee/translog"}
 // editions-gate`, asserted here so it runs in CI as a unit.
 func TestEdition_CoreBuildLinksNoPCAS(t *testing.T) {
 	goBin := filepath.Join(goRoot(t), "bin", "go")
-	cmd := exec.Command(goBin, "list", "-tags", "trstctl_core", "-deps", "trstctl.com/trstctl/cmd/trstctl")
+	cmd := exec.Command(goBin, "list", "-tags", "trstctl_core", "-deps", "trstctl.com/trstctl/cmd/trstctl") // #nosec G204 -- goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78).
 	cmd.Dir = moduleRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

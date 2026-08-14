@@ -32,7 +32,7 @@ func TestAUD56LicenseHelperIssuesBoundEnvironmentBundle(t *testing.T) {
 		t.Fatalf("sign environment bundle: %v", err)
 	}
 
-	raw, err := os.ReadFile(licensePath)
+	raw, err := os.ReadFile(licensePath) // #nosec G304 -- licensePath is created inside this test's TempDir (CWE-22).
 	if err != nil {
 		t.Fatal(err)
 	}

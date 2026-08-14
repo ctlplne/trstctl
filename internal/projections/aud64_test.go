@@ -39,7 +39,7 @@ func aud64Event(t *testing.T, tenantID, eventType string, sequence int, payload 
 	}
 	return events.Event{
 		ID:       fmt.Sprintf("64000000-0000-4000-8001-%012d", sequence),
-		Sequence: uint64(sequence),
+		Sequence: uint64(sequence), // #nosec G115 -- every generated fixture sequence is a positive small integer (CWE-190).
 		Type:     eventType,
 		TenantID: tenantID,
 		Time:     time.Date(2026, time.August, 13, 12, 30, sequence, 0, time.UTC),

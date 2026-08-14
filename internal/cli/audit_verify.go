@@ -99,7 +99,7 @@ func readAuditVerifyInput(path string, stdin io.Reader, limit int) ([]byte, erro
 }
 
 func readAuditVerifyFile(path string, limit int) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- path is the explicit read-only local artifact selected by this CLI command (CWE-22).
 	if err != nil {
 		return nil, err
 	}

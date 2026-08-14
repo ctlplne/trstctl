@@ -116,7 +116,7 @@ sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 sys.stdout.buffer.write(module.verify_kmip(json.load(sys.stdin)))
 `
-	command := exec.Command(python, "-c", program, module)
+	command := exec.Command(python, "-c", program, module) // #nosec G204 -- python is LookPath-resolved and module is a fixed repository verifier path (CWE-78).
 	command.Stdin = bytes.NewReader(encoded)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("independent KMIP transcript verifier: %v: %s", err, output)

@@ -46,7 +46,7 @@ func TestRPVerify_WASMParity(t *testing.T) {
 	// Build the wasm entrypoint.
 	tmp := t.TempDir()
 	wasmOut := filepath.Join(tmp, "agidverify.wasm")
-	build := exec.Command("go", "build", "-o", wasmOut, "./wasm")
+	build := exec.Command("go", "build", "-o", wasmOut, "./wasm") // #nosec G204 -- executable and argv are fixed; output is confined to TempDir (CWE-78).
 	build.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
 	if gt := os.Getenv("GOTMPDIR"); gt != "" {
 		build.Env = append(build.Env, "GOTMPDIR="+gt)
@@ -56,7 +56,7 @@ func TestRPVerify_WASMParity(t *testing.T) {
 	}
 
 	// Run the wasm binary under Node via the exec shim.
-	run := exec.Command(execShim, wasmOut)
+	run := exec.Command(execShim, wasmOut) // #nosec G204 -- execShim is Go's fixed wasm_exec_node shim and wasmOut is this test's TempDir artifact (CWE-78).
 	out, err := run.CombinedOutput()
 	if err != nil {
 		t.Fatalf("wasm run failed: %v\n%s", err, out)

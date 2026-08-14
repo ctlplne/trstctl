@@ -202,7 +202,7 @@ func TestCollectRefusesMalformedEnrollmentACLInsteadOfClaimingNobodyCanEnroll(t 
 func TestEnrollmentACLRefusesTrailingBytesAfterTrusteeSID(t *testing.T) {
 	ace := allowACE(0x10000000, sidBytes("S-1-5-11"))
 	ace = append(ace, 0xde, 0xad)
-	binary.LittleEndian.PutUint16(ace[2:4], uint16(len(ace)))
+	binary.LittleEndian.PutUint16(ace[2:4], uint16(len(ace))) // #nosec G115 -- the fixed malformed fixture is below MaxUint16 (CWE-190).
 	if _, err := adcs.EnrollmentPrincipalsFromSecurityDescriptor(securityDescriptor(ace)); err == nil {
 		t.Fatal("trailing bytes after a standard ACE trustee SID were silently accepted")
 	}
@@ -237,9 +237,9 @@ func sidBytes(text string) []byte {
 	revision, _ := strconv.ParseUint(parts[0], 10, 8)
 	authority, _ := strconv.ParseUint(parts[1], 10, 48)
 	out := make([]byte, 8+4*(len(parts)-2))
-	out[0], out[1] = byte(revision), byte(len(parts)-2)
+	out[0], out[1] = byte(revision), byte(len(parts)-2) // #nosec G115 -- test SID inputs have at most 255 sub-authorities (CWE-190).
 	for i := 0; i < 6; i++ {
-		out[7-i] = byte(authority)
+		out[7-i] = byte(authority) // #nosec G115 -- ParseUint limits authority to 48 bits and this loop emits one byte at a time (CWE-190).
 		authority >>= 8
 	}
 	for i, part := range parts[2:] {
@@ -252,7 +252,7 @@ func sidBytes(text string) []byte {
 func allowACE(mask uint32, sid []byte) []byte {
 	out := make([]byte, 8+len(sid))
 	out[0] = 0x00
-	binary.LittleEndian.PutUint16(out[2:4], uint16(len(out)))
+	binary.LittleEndian.PutUint16(out[2:4], uint16(len(out))) // #nosec G115 -- deterministic test SIDs keep the ACE below MaxUint16 (CWE-190).
 	binary.LittleEndian.PutUint32(out[4:8], mask)
 	copy(out[8:], sid)
 	return out
@@ -261,7 +261,7 @@ func allowACE(mask uint32, sid []byte) []byte {
 func objectACE(aceType byte, mask uint32, objectGUID, sid []byte) []byte {
 	out := make([]byte, 12+len(objectGUID)+len(sid))
 	out[0] = aceType
-	binary.LittleEndian.PutUint16(out[2:4], uint16(len(out)))
+	binary.LittleEndian.PutUint16(out[2:4], uint16(len(out))) // #nosec G115 -- deterministic test SIDs keep the object ACE below MaxUint16 (CWE-190).
 	binary.LittleEndian.PutUint32(out[4:8], mask)
 	binary.LittleEndian.PutUint32(out[8:12], 0x1)
 	copy(out[12:], objectGUID)
@@ -281,7 +281,7 @@ func securityDescriptor(aces ...[]byte) []byte {
 	acl := out[20:]
 	acl[0] = 4
 	binary.LittleEndian.PutUint16(acl[2:4], uint16(aclSize))
-	binary.LittleEndian.PutUint16(acl[4:6], uint16(len(aces)))
+	binary.LittleEndian.PutUint16(acl[4:6], uint16(len(aces))) // #nosec G115 -- test call sites pass a bounded literal ACE set (CWE-190).
 	offset := 8
 	for _, ace := range aces {
 		copy(acl[offset:], ace)

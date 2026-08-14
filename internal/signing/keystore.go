@@ -335,7 +335,7 @@ func (ks *KeyStore) MarkDestroyed(handle string) error {
 		return err
 	}
 	path := filepath.Join(ks.dir, stem+destroyedKeyFileExt)
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- path joins a sanitized handle to the signer-owned 0700 keystore (CWE-22).
 	if errors.Is(err, os.ErrExist) {
 		return nil
 	}
