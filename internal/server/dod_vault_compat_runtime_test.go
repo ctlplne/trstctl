@@ -17,10 +17,12 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
@@ -53,6 +55,7 @@ func TestDODVaultCompatProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
+	dodRegisterVaultCompatTenant(t, ctx, log, st)
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()
@@ -176,6 +179,16 @@ func TestDODVaultCompatProductionAssembly(t *testing.T) {
 		ClientIdentity: []byte("Vault/OpenBao v1 independent response verifier"),
 		Transcript:     transcript, IndependentVerifier: verifierReadback, ExecutionReceipt: executionReceipt,
 	}))
+}
+
+func dodRegisterVaultCompatTenant(t *testing.T, ctx context.Context, log *events.Log, st *store.Store) {
+	t.Helper()
+	service := app.New(log, st, nil)
+	defer service.Close()
+	if err := service.RegisterTenant(ctx, dodVaultCompatTenant, "DoD Vault compatibility",
+		"dod-vault-compat-register-tenant"); err != nil {
+		t.Fatalf("register Vault-compatible proof tenant through event spine: %v", err)
+	}
 }
 
 func dodVaultResponseDataString(t *testing.T, body []byte, field string) string {
