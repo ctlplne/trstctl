@@ -4220,7 +4220,7 @@ const translatedValues = [
   "Table",
   "Ziel",
   "Zielaktionen",
-  "{target}: Bereitstellungs-, Listener-Prüfungs- und Rollback-Nachweise in der von den bereitgestellten APIs aufgezeichneten Reihenfolge.",
+  "{target}: Bereitstellungs-, Listener-Prüfungs- und Rollback-Nachweise in aufgezeichneter Reihenfolge.",
   "Zielhosts",
   "Targets",
   "Team-Filter",

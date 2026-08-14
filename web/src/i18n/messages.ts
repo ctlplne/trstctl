@@ -15931,7 +15931,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
   },
   "source.target.deploy.listener.verification.and.rollback.38783cea3d": {
-    defaultMessage: "{target}: deploy, listener verification, and rollback evidence in the order the served APIs recorded it.",
+    defaultMessage: "{target}: deploy, listener verification, and rollback evidence in recorded order.",
     description: "AUD-30: target detail timeline summary naming the target and the three evidence stages shown below it.",
   },
   "source.target.hosts.b345027096": {

@@ -4220,7 +4220,7 @@ const translatedValues = [
   "Table",
   "Destino",
   "Acciones del destino",
-  "{target}: evidencias de despliegue, verificación del listener y reversión en el orden registrado por las API servidas.",
+  "{target}: evidencias de despliegue, verificación del listener y reversión en el orden registrado.",
   "Hosts de destino",
   "Targets",
   "Filtro de equipo",

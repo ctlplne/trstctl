@@ -4067,7 +4067,7 @@ const esESCatalog = {
   "source.target.978354db0c": "Destino",
   "source.target.actions.4d6d059ed8": "Acciones del destino",
   "source.target.deploy.listener.verification.and.rollback.38783cea3d":
-    "{target}: evidencias de despliegue, verificación del listener y reversión en el orden registrado por las API servidas.",
+    "{target}: evidencias de despliegue, verificación del listener y reversión en el orden registrado.",
   "source.target.hosts.b345027096": "Hosts de destino",
   "source.targets.27445f6ab6": "Targets",
   "source.team.filter.f485fa9dcf": "Filtro de equipo",
