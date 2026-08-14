@@ -87,6 +87,18 @@ type dodManagedKeyReadback struct {
 	ExportDenial string `json:"private_export"`
 }
 
+type dodManagedKeyApprovalAuthority struct {
+	ID                string `json:"id"`
+	IntentDigest      string `json:"intent_digest"`
+	ResourceID        string `json:"resource_id"`
+	ResourceKind      string `json:"resource_kind"`
+	Action            string `json:"action"`
+	Requester         string `json:"requester"`
+	ApprovalCount     int    `json:"approval_count"`
+	RequiredApprovals int    `json:"required_approvals"`
+	Status            string `json:"status"`
+}
+
 type dodTPMPublicWitness struct {
 	PublicDER []byte
 	Name      []byte
@@ -1421,7 +1433,11 @@ func (r *dodManagedKeyRuntime) approveManagedKeyAction(keyID, action string) {
 	}
 	r.requireManagedKeyCommandAbsent(action)
 
-	approval := map[string]string{"key_id": keyID, "action": action}
+	authority := r.pendingManagedKeyApproval(keyID, action)
+	approval := map[string]string{
+		"key_id": keyID, "action": action,
+		"request_id": authority.ID, "intent_digest": authority.IntentDigest,
+	}
 	self := dodManagedKeyRequest(r, http.MethodPost, "/api/v1/managed-keys/approvals", action+"-self-approval", approval)
 	selfBody := r.readManagedKeyResponse(self)
 	if self.StatusCode != http.StatusForbidden || !bytes.Contains(selfBody, []byte("cannot approve")) {
@@ -1457,6 +1473,46 @@ func (r *dodManagedKeyRuntime) approveManagedKeyAction(keyID, action string) {
 		}
 	}
 	r.requireManagedKeyCommandAbsent(action)
+}
+
+func (r *dodManagedKeyRuntime) pendingManagedKeyApproval(keyID, action string) dodManagedKeyApprovalAuthority {
+	r.t.Helper()
+	request, err := http.NewRequest(http.MethodGet,
+		fmt.Sprintf("http://127.0.0.1:%d/api/v1/approval-requests?status=pending&limit=100", r.serverPort), nil)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+r.token)
+	response, err := (&http.Client{Timeout: 35 * time.Second}).Do(request)
+	if err != nil {
+		r.t.Fatalf("list managed-key approval requests: %v logs=%s", err, r.control.Logs())
+	}
+	body := r.readManagedKeyResponse(response)
+	if response.StatusCode != http.StatusOK {
+		r.t.Fatalf("list managed-key approval requests status=%d body=%s", response.StatusCode, body)
+	}
+	var queue struct {
+		Items []dodManagedKeyApprovalAuthority `json:"items"`
+	}
+	if err := json.Unmarshal(body, &queue); err != nil {
+		r.t.Fatalf("decode managed-key approval queue: %v body=%s", err, body)
+	}
+	canonicalAction := "managedkey:" + action
+	matches := make([]dodManagedKeyApprovalAuthority, 0, 1)
+	for _, item := range queue.Items {
+		if item.ResourceKind == "managed_key" && item.ResourceID == keyID && item.Action == canonicalAction && item.Requester == "dod-hsm-operator" {
+			matches = append(matches, item)
+		}
+	}
+	if len(matches) != 1 {
+		r.t.Fatalf("pending managed-key approval matches=%d, want one for key=%q action=%q queue=%s", len(matches), keyID, canonicalAction, body)
+	}
+	authority := matches[0]
+	if authority.ID == "" || authority.IntentDigest == "" || authority.Status != "pending" ||
+		authority.ApprovalCount != 0 || authority.RequiredApprovals != 2 {
+		r.t.Fatalf("pending managed-key approval authority = %+v", authority)
+	}
+	return authority
 }
 
 func (r *dodManagedKeyRuntime) readManagedKeyResponse(response *http.Response) []byte {
