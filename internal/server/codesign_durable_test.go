@@ -825,6 +825,7 @@ func TestPrivacyRewrittenLegacyApprovedFenceWithoutRetainedEventRecoversExactNan
 			"release-key": testOperationDigestSigner{DigestSigner: inner},
 		}}}
 	})
+	registerServedTenant(t, h, "privacy-rewritten code-signing fence tenant")
 	ctx := context.Background()
 	const (
 		subject        = "legacy-fence-owner@example.com"
@@ -975,6 +976,7 @@ func TestLegacyApprovedCodeSigningFenceWithoutRetainedEventRejectsSemanticDrift(
 			"release-key": testOperationDigestSigner{DigestSigner: inner},
 		}}}
 	})
+	registerServedTenant(t, h, "corrupt code-signing fence tenant")
 	ctx := context.Background()
 	const (
 		idempotencyKey = "legacy-approved-corrupt-fence-before-append"
