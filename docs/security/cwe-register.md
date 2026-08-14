@@ -224,7 +224,7 @@ not this file.
 | `internal/orchestrator/outbox_internal_test.go:1202` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/orchestrator/outbox_internal_test.go:1251` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/perf/capacity.go:11` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/perf/perf_test.go:178` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/perf/perf_test.go:211` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/cli_api_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/secret_integrations.go:220` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -434,7 +434,7 @@ not this file.
 | `internal/orchestrator/tenant_registration_test.go:241` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:322` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/perf/live.go:848` | page size is positive and small (CWE-190) |
+| `internal/perf/live.go:855` | page size is positive and small (CWE-190) |
 | `internal/projections/application_secret_rebuild_test.go:50` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/application_secret_rebuild_test.go:76` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
@@ -467,7 +467,7 @@ not this file.
 | `internal/server/protocol_mounts.go:892` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/protocol_mounts.go:894` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:172` | event test sequence is PostgreSQL bigint-bounded. |
-| `internal/server/revocation.go:382` | value reduced modulo the shard count before conversion (CWE-190) |
+| `internal/server/revocation.go:392` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/secret_integrations_outbox.go:810` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:811` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:814` | positive int64 is exactly representable as uint64. |
@@ -726,8 +726,8 @@ not this file.
 | `internal/kms/pkcs11/softhsm_container_test.go:63` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:25` | fixed local fixture image (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:51` | fixed local fixture image and script (CWE-78) |
-| `internal/perf/live.go:728` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
-| `internal/perf/live.go:892` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:735` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:899` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/projections/server_assembly_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/acme/certbot_client_test.go:240` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/cmp/conformance_test.go:116` | test executes a fixed local tool or fixture it built itself (CWE-78) |
