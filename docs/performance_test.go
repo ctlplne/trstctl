@@ -237,6 +237,47 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 	}
 }
 
+func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
+	const proof = "TestServedScheduledRotationFairCursorReachesRow501AcrossRestartAUD111AUD113"
+	mk := read(t, "../Makefile")
+	for _, want := range []string{
+		"SERVER_IMPORT := $(MODULE)/internal/server",
+		"SERVER_ROTATION_CURSOR_TEST := ^" + proof + "$$",
+		"COVERPROFILE_SERVER := $(COVERPROFILE).server",
+		"COVERPROFILE_SERVER_ROTATION_CURSOR := $(COVERPROFILE).server-rotation-cursor",
+	} {
+		if !strings.Contains(mk, want) {
+			t.Errorf("Makefile server coverage-shard contract missing %q", want)
+		}
+	}
+	testStart := strings.Index(mk, ".PHONY: test\n")
+	wallStart := strings.Index(mk, ".PHONY: perf-live-wall\n")
+	if testStart < 0 || wallStart <= testStart {
+		t.Fatal("cannot isolate the Makefile test target")
+	}
+	testBlock := mk[testStart:wallStart]
+	for _, want := range []string{
+		"grep -v -E '^$(SERVER_IMPORT)$$'",
+		"-coverprofile=$(COVERPROFILE_SERVER) -skip '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server",
+		"-coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server",
+		"tail -n +2 $(COVERPROFILE_SERVER)",
+		"tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR)",
+	} {
+		if !strings.Contains(testBlock, want) {
+			t.Errorf("Makefile test target can lose the row-501 server proof or its coverage: missing %q", want)
+		}
+	}
+	if got := strings.Count(testBlock, "$(SERVER_ROTATION_CURSOR_TEST)"); got != 2 {
+		t.Errorf("row-501 proof selector appears in %d test commands, want one complementary skip plus one dedicated run", got)
+	}
+	if got := strings.Count(testBlock, "-timeout=10m ./internal/server"); got != 2 {
+		t.Errorf("internal/server shards carrying the hard ten-minute ceiling = %d, want 2", got)
+	}
+	if !anyTestDeclaresUnder(t, "../internal/server", proof) {
+		t.Fatalf("dedicated server proof %s is no longer declared", proof)
+	}
+}
+
 func TestLivePerformanceSLOWallIsDedicatedAndSerialized(t *testing.T) {
 	mk := read(t, "../Makefile")
 	testStart := strings.Index(mk, ".PHONY: test\n")

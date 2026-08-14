@@ -60,6 +60,12 @@ GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
 # database bootstraps contend for the same host resources. No test is skipped.
 LIVE_PERF_PACKAGES := ./internal/perf ./scripts/perf/cmd/capacitycalibrate ./scripts/perf/cmd/perfgate ./scripts/perf/cmd/soakcapture ./scripts/perf/cmd/spineburst
 LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/(capacitycalibrate|perfgate|soakcapture|spineburst))
+# internal/server has one deliberately large fairness/restart acceptance proof.
+# Keep that proof and every assertion, but give it an independent package clock;
+# otherwise its cost plus the rest of the server suite exceeds Go's same 10m
+# package deadline under race+repository-wide coverage instrumentation.
+SERVER_IMPORT := $(MODULE)/internal/server
+SERVER_ROTATION_CURSOR_TEST := ^TestServedScheduledRotationFairCursorReachesRow501AcrossRestartAUD111AUD113$$
 PCAS_E2E_RUN ?= TestINT20_FullStackPCASUserJourneys|TestINT20_PCASWASMParity_NoSkip|TestINT21_PCASOpsSLOBackpressureAndCrash
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
@@ -83,6 +89,8 @@ WEB_NPM ?= npm --prefix web
 COVERAGE_MIN ?= 70
 COVERPROFILE := cover.out
 COVERPROFILE_MAIN := $(COVERPROFILE).main
+COVERPROFILE_SERVER := $(COVERPROFILE).server
+COVERPROFILE_SERVER_ROTATION_CURSOR := $(COVERPROFILE).server-rotation-cursor
 COVERPROFILE_LIVE_PERF := $(COVERPROFILE).liveperf
 AUDIT_OUTPUTS ?= ../trustctl-audit/outputs
 
@@ -168,11 +176,15 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> go test (race + merged first-party coverage)"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
-	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
+	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' | grep -v -E '^$(SERVER_IMPORT)$$' )"; \
 	$(GO) test -race -count=1 -p=$$parallelism -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
+	@echo ">> go test internal/server complementary shard (race + merged first-party coverage)"
+	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_SERVER) -skip '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server
+	@echo ">> go test internal/server row-501 fairness shard (race + merged first-party coverage)"
+	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server
 	@echo ">> go test live perf packages (serial)"
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
-	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
+	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_SERVER); tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
 	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \
