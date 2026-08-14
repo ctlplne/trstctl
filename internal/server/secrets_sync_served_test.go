@@ -261,6 +261,7 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 		if strings.Contains(string(body), "sync-v1") {
 			t.Fatalf("%s sync response leaked the secret value: %s", tc.target, body)
 		}
+		catchUpServedProjection(t, h)
 		drainCtx, cancelDrain := context.WithTimeout(t.Context(), 10*time.Second)
 		drainErr := h.srv.Drain(drainCtx)
 		cancelDrain()
@@ -535,6 +536,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 		if err := json.Unmarshal(body, &queuedSync); err != nil || !queuedSync.Enqueued || queuedSync.Delivered {
 			t.Fatalf("%s CAP-SEC-04 durable queue response = %+v err %v", tc.target, queuedSync, err)
 		}
+		catchUpServedProjection(t, h)
 		drainCtx, cancelDrain := context.WithTimeout(t.Context(), 10*time.Second)
 		drainErr := h.srv.Drain(drainCtx)
 		cancelDrain()

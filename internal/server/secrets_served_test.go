@@ -216,6 +216,15 @@ func registerServedTenantID(t *testing.T, h *servedHarness, tenantID, name strin
 	}
 }
 
+func catchUpServedProjection(t *testing.T, h *servedHarness) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if err := h.srv.proj.ProjectCatchUp(ctx, h.log); err != nil {
+		t.Fatalf("catch up served projection before durable worker: %v", err)
+	}
+}
+
 // secretsReq issues an authenticated JSON request against the served handler and
 // returns the status and body. token authenticates (bearer); tenant is sent in
 // X-Tenant-ID (ignored by the served path once the bearer principal is resolved, but

@@ -51,6 +51,7 @@ func TestServedGCPFederatedOutboxTenantIsolationTokenRedaction(t *testing.T) {
 			fixture.stsCalls.Load(), fixture.impersonationCalls.Load(), fixture.secretManagerCalls.Load())
 	}
 
+	catchUpServedProjection(t, h)
 	drainCtx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	err := h.srv.Drain(drainCtx)
 	cancel()
@@ -66,7 +67,7 @@ func TestServedGCPFederatedOutboxTenantIsolationTokenRedaction(t *testing.T) {
 		t.Fatalf("GCP destination readback = %q", got)
 	}
 	job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant,
-		store.DurableSecretSyncJobID(h.tenant, "gcp-wif-outbox-operation"))
+		currentSecretSyncJobIDForTest(t, h.store, h.tenant, "gcp-wif-outbox-operation"))
 	if err != nil || job.Status != store.SecretSyncJobDelivered || job.Attempts != 1 {
 		t.Fatalf("federated sync job = %+v err=%v", job, err)
 	}
@@ -132,6 +133,7 @@ func TestServedGCPFederatedAirGapIsTerminalWithoutNetwork(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("queue air-gap federated GCP sync: status=%d body=%s", status, body)
 	}
+	catchUpServedProjection(t, h)
 	drainCtx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	err = h.srv.Drain(drainCtx)
 	cancel()
@@ -145,7 +147,7 @@ func TestServedGCPFederatedAirGapIsTerminalWithoutNetwork(t *testing.T) {
 			fixture.secretManagerCalls.Load(), guard.Trips())
 	}
 	job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant,
-		store.DurableSecretSyncJobID(h.tenant, "gcp-wif-airgap-operation"))
+		currentSecretSyncJobIDForTest(t, h.store, h.tenant, "gcp-wif-airgap-operation"))
 	if err != nil || job.Status != store.SecretSyncJobFailed || job.Attempts != 1 ||
 		job.LastError != "GCP workload identity disabled by air-gap policy" {
 		t.Fatalf("air-gap sync job = %+v err=%v", job, err)

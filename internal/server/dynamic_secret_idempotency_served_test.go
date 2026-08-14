@@ -22,6 +22,7 @@ func TestDynamicLeaseIdempotencyResultIsSealedAtRest(t *testing.T) {
 		withDynamicSecretBackend(backend, time.Second),
 	)
 	registerServedTenant(t, h, "dynamic idempotency tenant")
+	startServedExternalCADispatcher(t, h)
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-requester-a", "secrets:read", "secrets:write")
 	otherToken := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-requester-b", "secrets:read", "secrets:write")
 	request := map[string]any{"provider": "stub", "role": "readonly", "ttl_seconds": 60}

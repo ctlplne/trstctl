@@ -51,6 +51,7 @@ func TestServedAzureFederatedOutboxTenantIsolationTokenRedaction(t *testing.T) {
 			fixture.tokenCalls.Load(), fixture.vaultCalls.Load())
 	}
 
+	catchUpServedProjection(t, h)
 	drainCtx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	err := h.srv.Drain(drainCtx)
 	cancel()
@@ -65,7 +66,7 @@ func TestServedAzureFederatedOutboxTenantIsolationTokenRedaction(t *testing.T) {
 		t.Fatalf("Azure destination readback = %q", got)
 	}
 	job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant,
-		store.DurableSecretSyncJobID(h.tenant, "azure-wif-outbox-operation"))
+		currentSecretSyncJobIDForTest(t, h.store, h.tenant, "azure-wif-outbox-operation"))
 	if err != nil || job.Status != store.SecretSyncJobDelivered || job.Attempts != 1 {
 		t.Fatalf("federated Azure sync job = %+v err=%v", job, err)
 	}
@@ -130,6 +131,7 @@ func TestServedAzureFederatedAirGapIsTerminalWithoutNetwork(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("queue air-gap federated Azure sync: status=%d body=%s", status, body)
 	}
+	catchUpServedProjection(t, h)
 	drainCtx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	err = h.srv.Drain(drainCtx)
 	cancel()
@@ -141,7 +143,7 @@ func TestServedAzureFederatedAirGapIsTerminalWithoutNetwork(t *testing.T) {
 			fixture.tokenCalls.Load(), fixture.vaultCalls.Load(), guard.Trips())
 	}
 	job, err := h.store.GetSecretSyncJob(t.Context(), h.tenant,
-		store.DurableSecretSyncJobID(h.tenant, "azure-wif-airgap-operation"))
+		currentSecretSyncJobIDForTest(t, h.store, h.tenant, "azure-wif-airgap-operation"))
 	if err != nil || job.Status != store.SecretSyncJobFailed || job.Attempts != 1 ||
 		job.LastError != "Azure workload identity disabled by air-gap policy" {
 		t.Fatalf("air-gap Azure sync job = %+v err=%v", job, err)
