@@ -1677,7 +1677,7 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"readAndVerify(r, key)",
 		"newRestoreSpool()",
 		"spool.rewind()",
-		"log.Append(ctx, events.Event{",
+		"restoreVerifiedBackupHistory(",
 		"backup: integrity check FAILED",
 	} {
 		if !strings.Contains(backupLog, want) {
@@ -1736,7 +1736,7 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"func (p *Projector) ProjectCatchUp(",
 		"WithProjectionLock",
 		"ProjectionCheckpoint(ctx)",
-		"AdvanceProjectionCheckpoint(ctx, last)",
+		"AdvanceProjectionCheckpoint(readCtx, last)",
 		"func (p *Projector) Rebuild(",
 		"RebuildReadModelTx(readCtx",
 		"ResetProjectionCheckpointTx",
@@ -1747,7 +1747,7 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"LatestSnapshotOffset",
 		"RestoreReadModelTx",
 		"RestoreSnapshotsTx",
-		"return p.Rebuild(ctx, log)",
+		"return p.rebuildWithPrivacyBarrier(ctx, log)",
 	} {
 		if !strings.Contains(projector, want) {
 			t.Errorf("RESIL-102: projections.go no longer contains %q; transactional projection recovery evidence weakened", want)
@@ -3003,9 +3003,9 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	projectionsGo := read(t, "../internal/projections/projections.go")
 	for _, want := range []string{
 		"func (p *Projector) ProjectCatchUp(",
-		"checkpoint, err := p.store.ProjectionCheckpoint(ctx)",
-		"log.Replay(ctx, from+1",
-		"p.store.AdvanceProjectionCheckpoint(ctx, last)",
+		"from, err := p.store.ProjectionCheckpoint(readCtx)",
+		"log.ReplayThrough(readCtx, from+1, replayHead",
+		"p.store.AdvanceProjectionCheckpoint(readCtx, last)",
 		"const checkpointEvery = 256",
 		"func (p *Projector) Rebuild(",
 		"func (p *Projector) Snapshot(",
@@ -3045,7 +3045,11 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"const DefaultRetention = 24 * time.Hour",
 		"func (w *Sweeper) Sweep(",
-		"WHERE status = 'delivered' AND delivered_at IS NOT NULL AND delivered_at < $1",
+		"WHERE queued.status = 'delivered'",
+		"AND queued.delivered_at IS NOT NULL",
+		"AND queued.delivered_at < $1",
+		"queued.secret_sync_order_from_event",
+		"queued.secret_sync_receiver_io_starts = 1",
 		"func (w *Sweeper) Count(",
 		"SELECT count(*) FROM outbox",
 	} {
@@ -3674,7 +3678,7 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 	packageJSON := read(t, "../web/package.json")
 	check("web/package.json", packageJSON,
 		`"gen:api": "node scripts/gen-api-types.mjs"`,
-		`"build": "npm run gen:api -- --check && tsc -p tsconfig.build.json && vite build"`,
+		`"build": "npm run gen:api -- --check && npm run gen:i18n-runtime -- --check && tsc -p tsconfig.build.json && vite build"`,
 		`"test:coverage": "vitest run --coverage"`,
 	)
 	genScript := read(t, "../web/scripts/gen-api-types.mjs")
@@ -4422,7 +4426,7 @@ func TestReleaseGuardrailCommandsStayFirstClass(t *testing.T) {
 
 	webPackage := read(t, "../web/package.json")
 	for _, want := range []string{
-		`"build": "npm run gen:api -- --check && tsc -p tsconfig.build.json && vite build"`,
+		`"build": "npm run gen:api -- --check && npm run gen:i18n-runtime -- --check && tsc -p tsconfig.build.json && vite build"`,
 		`"lint": "eslint . --max-warnings=0"`,
 		`"format:check": "prettier --check ."`,
 		`"typecheck": "tsc -p tsconfig.json --noEmit"`,

@@ -96,9 +96,15 @@ func driftExecutorServed(t *testing.T) bool {
 
 func sshCollectorServed(t *testing.T) bool {
 	t.Helper()
-	return importsAnyOnServedPath(t,
-		`trstctl.com/trstctl/internal/discovery/sshscan"`,
-	)
+	// SSH targets are deliberately relay-owned: the control-plane server stamps the
+	// command but must not import or dial sshscan itself. Bind both halves of the
+	// shipped path so a library-only scanner and an intent-only server both fail.
+	relay := read(t, "../internal/agent/relay/discoveryscan.go")
+	server := read(t, "../internal/server/discovery.go")
+	return strings.Contains(relay, `trstctl.com/trstctl/internal/discovery/sshscan"`) &&
+		strings.Contains(relay, "sshscan.New(") &&
+		strings.Contains(server, `"ssh":               (*issuanceDispatcher).executeRelayOwnedDiscoveryRun`) &&
+		strings.Contains(server, `source.Kind == "network" || source.Kind == "ssh"`)
 }
 
 // TestDiscoveryServedControlPlaneAndNetworkScanVsLibraryCollectorsIsHonest pins

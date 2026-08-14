@@ -387,6 +387,7 @@ control-plane replica **safe**:
   that exact generation and checkpoint. A missing tenant, a partial write, mixed
   generation IDs, different covered sequences, a bad count/digest, or any legacy
   format makes the whole cache unusable and boot replays from event sequence zero.
+  A corrupt or missing snapshot falls back to a full replay automatically.
   A valid generation rehydrates the read model and replays only the **tail**, so the
   fast path is `O(events-since-snapshot)` while the event log remains the AN-2
   source of truth.

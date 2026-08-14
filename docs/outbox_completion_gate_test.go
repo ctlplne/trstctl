@@ -40,6 +40,8 @@ var (
 	// updateOutboxTable deliberately ends on a word boundary so
 	// outbox_reconciliation_checkpoint is not mistaken for the outbox table.
 	updateOutboxTable  = regexp.MustCompile(`(?is)update\s+outbox\b`)
+	setClauseKeyword   = regexp.MustCompile(`(?is)\bset\b`)
+	whereClauseKeyword = regexp.MustCompile(`(?is)\bwhere\b`)
 	setStatusDelivered = regexp.MustCompile(`(?is)status\s*=\s*'delivered'`)
 )
 
@@ -51,7 +53,20 @@ var (
 func outboxDeliveredCompletions(body string) []string {
 	var out []string
 	for _, literal := range sqlStringLiteral.FindAllString(body, -1) {
-		if updateOutboxTable.MatchString(literal) && setStatusDelivered.MatchString(literal) {
+		updateAt := updateOutboxTable.FindStringIndex(literal)
+		if updateAt == nil {
+			continue
+		}
+		afterUpdate := literal[updateAt[1]:]
+		setAt := setClauseKeyword.FindStringIndex(afterUpdate)
+		if setAt == nil {
+			continue
+		}
+		setClause := afterUpdate[setAt[1]:]
+		if whereAt := whereClauseKeyword.FindStringIndex(setClause); whereAt != nil {
+			setClause = setClause[:whereAt[0]]
+		}
+		if setStatusDelivered.MatchString(setClause) {
 			out = append(out, literal)
 		}
 	}
@@ -136,6 +151,7 @@ func TestOutboxCompletionGateFlagsAHandRolledCompletion(t *testing.T) {
 	}
 	for _, benign := range []string{
 		"_ = `UPDATE outbox SET status = 'pending', worker_id = NULL WHERE id = $1`",
+		"_ = `UPDATE outbox SET status = 'processing' WHERE EXISTS (SELECT 1 FROM secret_sync_jobs WHERE status = 'delivered')`",
 		"_ = `UPDATE outbox SET effect_lane = $3 WHERE tenant_id = $1 AND id = $2`",
 		"_ = `UPDATE outbox_reconciliation_checkpoint SET status = 'delivered' WHERE id = 1`",
 		"_ = `UPDATE secret_sync_jobs SET status = 'delivered' WHERE tenant_id = $1`",

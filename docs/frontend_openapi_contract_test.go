@@ -24,7 +24,7 @@ func TestFrontendOpenAPIContractGenerationBoundary(t *testing.T) {
 	packageJSON := read(t, "../web/package.json")
 	for _, want := range []string{
 		`"gen:api": "node scripts/gen-api-types.mjs"`,
-		`"build": "npm run gen:api -- --check && tsc -p tsconfig.build.json && vite build"`,
+		`"build": "npm run gen:api -- --check && npm run gen:i18n-runtime -- --check && tsc -p tsconfig.build.json && vite build"`,
 	} {
 		if !strings.Contains(packageJSON, want) {
 			t.Errorf("web/package.json must run the OpenAPI type check before build; missing %q", want)

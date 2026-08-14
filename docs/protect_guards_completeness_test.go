@@ -504,8 +504,10 @@ func TestCover011Trace012RestCliOpenAPIParitySpineStaysRequired(t *testing.T) {
 	requireAllContained(t, "COVER-011/TRACE-012", "internal/api/api.go", api,
 		"func (a *API) Routes() []Route",
 		"type route struct",
-		"mux             *http.ServeMux",
 	)
+	if got := strings.Count(api, "*http.ServeMux"); got != 1 {
+		t.Errorf("COVER-011/TRACE-012: internal/api/api.go owns %d *http.ServeMux fields, want exactly one central served router", got)
+	}
 
 	// The anchor moved deliberately: PACKAGING-007 flagged the licensed
 	// crypto-migration route strings sitting in command.go, so the table literal
