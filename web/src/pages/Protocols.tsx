@@ -396,7 +396,7 @@ export function Protocols() {
     }
   }
 
-  const hasQueuedEnrollmentVerification = Boolean(diagnostics?.items.some((item) => item.verification_status === "queued"));
+  const hasQueuedEnrollmentVerification = Boolean((diagnostics?.items ?? []).some((item) => item.verification_status === "queued"));
 
   useEffect(() => {
     if (!hasQueuedEnrollmentVerification || typeof api.enrollmentDiagnostics !== "function") return;
