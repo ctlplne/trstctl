@@ -67,7 +67,7 @@ func (s *Store) ValidateSecretRotationScheduleStartupAuthority(
 ) error {
 	afterTenantID := ""
 	for {
-		//trstctl:system-query — startup enumerates only tenant UUIDs and whether they own current-version scheduler authority; every payload, receipt, binding, and command is reloaded below under that tenant's FORCE-RLS repeatable-read privacy barrier (AN-1 exemption).
+		//trstctl:system-query — cross-tenant system startup enumerates only tenant UUIDs and current-version scheduler ownership; every payload, receipt, binding, and command reloads under that tenant's FORCE-RLS privacy barrier (AN-1 exemption).
 		rows, err := s.pool.Query(ctx, `
 			SELECT tenant_id::text, bool_or(requires_authority)
 			  FROM (

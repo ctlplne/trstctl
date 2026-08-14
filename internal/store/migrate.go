@@ -183,7 +183,7 @@ func purgeLegacyReadModelSnapshots(ctx context.Context, conn *pgxpool.Conn) erro
 	}
 
 	var legacy bool
-	//trstctl:system-query — startup inspects only whether any cross-tenant disposable snapshot uses a pre-current format; no tenant ID or payload leaves PostgreSQL (AN-1 exemption).
+	//trstctl:system-query — cross-tenant system startup inspects only whether any disposable snapshot uses a pre-current format; no tenant ID or payload leaves PostgreSQL (AN-1 exemption).
 	if err := tx.QueryRow(ctx,
 		`SELECT EXISTS (
 			SELECT 1 FROM read_model_snapshots WHERE format_version < $1
@@ -191,7 +191,7 @@ func purgeLegacyReadModelSnapshots(ctx context.Context, conn *pgxpool.Conn) erro
 		return fmt.Errorf("store: inspect legacy read-model snapshots: %w", err)
 	}
 	if legacy {
-		//trstctl:system-query — one legacy blob makes the mixed cache generation unusable; TRUNCATE drops every disposable cross-tenant payload so raw pre-erasure bytes are not merely ignored by restore (AN-1/AN-2 exemption).
+		//trstctl:system-query — one legacy blob makes the cross-tenant system cache generation unusable; TRUNCATE drops every disposable payload so raw pre-erasure bytes are not merely ignored by restore (AN-1/AN-2 exemption).
 		if _, err := tx.Exec(ctx, `TRUNCATE TABLE read_model_snapshots`); err != nil {
 			return fmt.Errorf("store: purge legacy read-model snapshots: %w", err)
 		}
@@ -200,7 +200,7 @@ func purgeLegacyReadModelSnapshots(ctx context.Context, conn *pgxpool.Conn) erro
 	const floorConstraint = "read_model_snapshots_format_floor_v22"
 	expectedFloorExpression := fmt.Sprintf("format_version>=%d", SnapshotFormatVersion)
 	var floorExists, floorMatches, floorValidated bool
-	//trstctl:system-query — migration startup inspects one schema constraint's type, normalized exact CHECK expression, and validation bit; normalization removes only whitespace, redundant parentheses, and PostgreSQL's no-op integer cast rendering, never operators or operands; no tenant rows or payloads leave PostgreSQL (AN-1 exemption).
+	//trstctl:system-query — cross-tenant system migration startup inspects one schema constraint's type, normalized exact CHECK expression, and validation bit; normalization never removes operators or operands, and no tenant rows or payloads leave PostgreSQL (AN-1 exemption).
 	if err := tx.QueryRow(ctx, `
 		SELECT count(*) = 1,
 		       coalesce(bool_and(

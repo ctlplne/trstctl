@@ -668,7 +668,7 @@ func (s *Store) BeginSecretSyncReceiverIO(
 			return err
 		}
 		var recoveryAuthorized bool
-		//trstctl:system-query — the singleton recovery marker carries no tenant data; checking it inside the receiver-start transaction makes an event-only restore a global no-I/O fence (AN-1 exemption).
+		//trstctl:system-query — the cross-tenant system singleton carries no tenant data; checking it inside receiver start makes an event-only restore a global no-I/O fence (AN-1 exemption).
 		if err := tx.QueryRow(ctx, `
 			SELECT receiver_io_authorized
 			  FROM secret_sync_recovery_authority

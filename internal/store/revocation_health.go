@@ -46,7 +46,7 @@ type RevocationEndpointHealth struct {
 // enumerator. Every row read after this point re-enters tenant RLS.
 func (s *Store) TenantsWithRevocationProbeCandidates(ctx context.Context) ([]string, error) {
 	rows, err := s.SystemPool().Query(ctx,
-		//trstctl:system-query — leader-only enumeration of tenants with active public certificate DER; the scheduler re-enters tenant-scoped RLS before reading certificate context.
+		//trstctl:system-query — this cross-tenant system leader enumerates only tenant IDs with active public certificate DER; the scheduler re-enters tenant RLS before reading certificate context.
 		`SELECT DISTINCT tenant_id::text
 		   FROM certificates
 		  WHERE status = 'active' AND octet_length(certificate_der) > 0
@@ -71,7 +71,7 @@ func (s *Store) TenantsWithRevocationProbeCandidates(ctx context.Context) ([]str
 func (s *Store) DatabaseTime(ctx context.Context) (time.Time, error) {
 	var now time.Time
 	err := s.SystemPool().QueryRow(ctx,
-		//trstctl:system-query — reads PostgreSQL's authority clock and no tenant data.
+		//trstctl:system-query — this cross-tenant system clock query reads PostgreSQL time only and exposes no tenant data or payload.
 		`SELECT clock_timestamp()`).Scan(&now)
 	return now.UTC(), err
 }

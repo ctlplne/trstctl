@@ -124,7 +124,7 @@ func BeginPostgresStateSnapshot(ctx context.Context, st *store.Store) (*Postgres
 
 func guardPostgresStateSnapshotTx(ctx context.Context, tx pgx.Tx) error {
 	var activePrivacyPreparation bool
-	//trstctl:system-query — a PostgreSQL-state artifact spans every tenant by design; this boolean preflight reveals no tenant, subject, selector, actor, or payload and prevents pairing sanitized event history with unfinished pre-erasure SQL (AN-1 exemption).
+	//trstctl:system-query — this cross-tenant system preflight reveals no tenant, subject, selector, actor, or payload; it only prevents pairing sanitized event history with unfinished pre-erasure SQL (AN-1 exemption).
 	if err := tx.QueryRow(ctx,
 		`SELECT EXISTS (SELECT 1 FROM privacy_subject_erasure_preparations)`,
 	).Scan(&activePrivacyPreparation); err != nil {
@@ -612,7 +612,7 @@ func reconcileSecretSyncOutboxRows(
 			outboxTargetOrder                        int64
 			outboxOrderFromEvent                     bool
 		}
-		//trstctl:system-query — full restore joins one tenant-scoped receiver key to its exact event-rebuilt job/outbox tuple before cross-tenant independent state is replaced (AN-1 exemption).
+		//trstctl:system-query — the cross-tenant system restore joins one tenant-scoped receiver key to its exact event-rebuilt job/outbox tuple before independent state is replaced (AN-1 exemption).
 		err = tx.QueryRow(ctx, `
 			SELECT job.id, job.target, job.remote_key, job.request_binding,
 			       job.target_order, job.status, job.attempts, job.last_error,
@@ -794,7 +794,7 @@ func decodePostgresJSONBytea(raw json.RawMessage) ([]byte, error) {
 // transaction-local placeholder; the final event replay rebuilds jobs whose
 // command was legitimately absent at the PostgreSQL backup cut.
 func detachSecretSyncJobsForOutboxRestore(ctx context.Context, tx pgx.Tx) error {
-	//trstctl:system-query — full restore stages every tenant's event-derived secret-sync job before replacing the cross-tenant outbox artifact; no row data leaves PostgreSQL (AN-1 exemption).
+	//trstctl:system-query — the cross-tenant system restore stages every tenant's event-derived secret-sync job before replacing the outbox artifact; no row data leaves PostgreSQL (AN-1 exemption).
 	if _, err := tx.Exec(ctx, `
 		WITH floor AS (
 			SELECT LEAST(COALESCE(min(outbox_id), 0), 0) AS outbox_id

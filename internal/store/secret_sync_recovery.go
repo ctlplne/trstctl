@@ -20,7 +20,7 @@ func (s *Store) FenceSecretSyncReceiverRecovery(ctx context.Context, reason stri
 	if reason == "" {
 		return errors.New("store: secret-sync recovery fence requires a reason")
 	}
-	//trstctl:system-query — one deployment-wide recovery marker has no tenant payload; restore must fence every tenant's receiver lane together (AN-1 exemption).
+	//trstctl:system-query — one cross-tenant system recovery marker has no tenant payload; restore must fence every tenant's receiver lane together (AN-1 exemption).
 	tag, err := s.SystemPool().Exec(ctx, `
 		UPDATE secret_sync_recovery_authority
 		   SET receiver_io_authorized = false, reason = $1, updated_at = now()
@@ -38,7 +38,7 @@ func (s *Store) FenceSecretSyncReceiverRecovery(ctx context.Context, reason stri
 // restore coordinator has imported exact receiver authority and completed its
 // final event replay.
 func (s *Store) AuthorizeSecretSyncReceiverRecovery(ctx context.Context) error {
-	//trstctl:system-query — one deployment-wide recovery marker has no tenant payload; full restore authorizes every tenant only after global validation (AN-1 exemption).
+	//trstctl:system-query — one cross-tenant system recovery marker has no tenant payload; full restore authorizes every tenant only after global validation (AN-1 exemption).
 	tag, err := s.SystemPool().Exec(ctx, `
 		UPDATE secret_sync_recovery_authority
 		   SET receiver_io_authorized = true, reason = '', updated_at = now()
@@ -57,7 +57,7 @@ func (s *Store) AuthorizeSecretSyncReceiverRecovery(ctx context.Context) error {
 // receiver-start compare-and-swap.
 func (s *Store) RequireSecretSyncReceiverRecoveryAuthorized(ctx context.Context) error {
 	var authorized bool
-	//trstctl:system-query — one deployment-wide boolean reveals no tenant or command data and blocks every receiver lane after event-only recovery (AN-1 exemption).
+	//trstctl:system-query — one cross-tenant system boolean reveals no tenant or command data and blocks every receiver lane after event-only recovery (AN-1 exemption).
 	if err := s.SystemPool().QueryRow(ctx, `
 		SELECT receiver_io_authorized
 		  FROM secret_sync_recovery_authority
