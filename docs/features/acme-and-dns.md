@@ -37,10 +37,14 @@ a **challenge** to prove control, then **finalizes** by sending a [CSR](../gloss
 and downloading the signed certificate.
 
 trstctl implements all of it (RFC 8555). Every mutating request is a signed JWS whose
-signature is verified through the single isolated cryptography path; each order offers
-three challenge types by default (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the one
-[issuance path](issuance-and-cas.md) to mint the certificate. Account registration is
-idempotent by key thumbprint, per the spec. **Served** endpoints start at
+signature is verified through the single isolated cryptography path. Before consuming
+the one-use nonce, the common server wrapper also compares the protected `url`
+byte-for-byte with the externally served request URL (scheme, authority, path, and
+query), as RFC 8555 §6.4 requires. A routing intermediary therefore cannot move a valid
+account signature to another ACME action. Each order offers three challenge types by
+default (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the one [issuance
+path](issuance-and-cas.md) to mint the certificate. Account registration is idempotent
+by key thumbprint, per the spec. **Served** endpoints start at
 `GET /directory`; challenge and order endpoints live under `/acme/...`.
 The certificate URL returns `application/pem-certificate-chain` with the
 signer-issued leaf first and the exact public issuing certificate second. The same

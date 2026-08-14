@@ -227,7 +227,9 @@ func (t *noDirectControlPlaneTransport) RoundTrip(r *http.Request) (*http.Respon
 // finishes a real signer-backed order through a secondary relay PROCESS. Its
 // transport rejects every direct control-plane dial, so leaked directory,
 // account, order, authorization, challenge, finalize, or certificate URLs fail
-// the test at the exact request where the relay path was escaped.
+// the test at the exact request where the relay path was escaped. AUD-122 adds
+// the common protected-url equality check, so completing this whole stock-client
+// journey also proves every relay forwarded the exact public URL the client signed.
 func TestStockACMEClientCompletesThroughPrimaryAndSecondaryRelayProcesses(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration: embedded PostgreSQL, NATS, signer, and two relay processes")

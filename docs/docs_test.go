@@ -3056,6 +3056,40 @@ func TestACMEChallengeValidationIsReal(t *testing.T) {
 }
 
 func TestACMEAndARICoreInteropEvidenceStaysRequired(t *testing.T) {
+	urlIntegrity := read(t, "../internal/protocols/acme/url_integrity_test.go")
+	for _, want := range []string{
+		"TestACMEOuterJWSURLIntegrityRejectsJWKBeforeNonceConsumption",
+		"TestACMEOuterJWSURLIntegrityRejectsKidPOSTAsGETBeforeNonceConsumption",
+		"TestACMEOuterJWSURLIntegrityRejectsSchemeDifference",
+		"replayCapturedACMEJWS",
+	} {
+		if !strings.Contains(urlIntegrity, want) {
+			t.Errorf("INTEROP-101/AUD-122: ACME URL-integrity suite no longer contains %q", want)
+		}
+	}
+	server := read(t, "../internal/protocols/acme/acme.go")
+	for _, want := range []string{
+		"msg.Protected.URL != requestURL(r)",
+		"JWS protected url does not match request URL",
+		"delete(s.nonces, msg.Protected.Nonce)",
+	} {
+		if !strings.Contains(server, want) {
+			t.Errorf("INTEROP-101/AUD-122: ACME common JWS wrapper no longer contains %q", want)
+		}
+	}
+	relay := read(t, "../internal/server/enrollment_relay_served_test.go")
+	for _, want := range []string{"TestStockACMEClientCompletesThroughPrimaryAndSecondaryRelayProcesses", "protected-url equality check"} {
+		if !strings.Contains(relay, want) {
+			t.Errorf("INTEROP-101/AUD-122: assembled two-relay stock-client URL-preservation journey no longer contains %q", want)
+		}
+	}
+	featureDoc := read(t, "features/acme-and-dns.md")
+	for _, want := range []string{"protected `url`", "byte-for-byte", "Before consuming", "RFC 8555 §6.4"} {
+		if !strings.Contains(featureDoc, want) {
+			t.Errorf("INTEROP-101/AUD-122: ACME feature documentation no longer contains %q", want)
+		}
+	}
+
 	conformance := read(t, "../internal/protocols/acme/conformance_test.go")
 	for _, want := range []string{
 		"golang.org/x/crypto/acme",

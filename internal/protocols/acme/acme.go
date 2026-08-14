@@ -541,6 +541,18 @@ func baseURL(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
+func requestURL(r *http.Request) string {
+	// The enrollment relay preserves the stable public authority in Host while
+	// dialing the control-plane upstream. RequestURI keeps the client's exact
+	// escaped path/query spelling, so this is the same string the stock client
+	// received from the directory/resource response and signed.
+	requestTarget := r.RequestURI
+	if requestTarget == "" {
+		requestTarget = r.URL.RequestURI()
+	}
+	return baseURL(r) + requestTarget
+}
+
 func addLink(w http.ResponseWriter, target, rel string) {
 	w.Header().Add("Link", fmt.Sprintf("<%s>;rel=\"%s\"", target, rel))
 }
@@ -650,6 +662,15 @@ func (s *Server) jws(h jwsHandler) http.HandlerFunc {
 		msg, err := jose.ParseACMEJWS(body)
 		if err != nil {
 			s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
+			return
+		}
+		// RFC 8555 §6.4/6.4.1 binds the signed protected "url" string to
+		// the exact HTTP request URL. Check it before touching the nonce: a
+		// routing intermediary that changes path, authority, or scheme must not
+		// redirect an otherwise valid account signature to another ACME action,
+		// and its rejected attempt must not burn the client's one-use nonce.
+		if msg.Protected.URL != requestURL(r) {
+			s.problem(w, r, http.StatusUnauthorized, "unauthorized", "JWS protected url does not match request URL")
 			return
 		}
 

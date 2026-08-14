@@ -841,6 +841,11 @@ never live in the API process. What you can do end to end against the running bi
   NO credential of its own: the client authenticates as itself through EST's TLS
   client certificate, SCEP's challenge password or ACME's account key, exactly as it
   would reaching the control plane directly. Both properties are mutation-verified.
+  The control plane independently requires every ordinary ACME outer JWS protected
+  `url` to equal that stable public request URL byte-for-byte before consuming its
+  nonce. Missing URL, path, authority, and scheme differences fail unauthorized;
+  the assembled two-process relay journey proves the relay preserves the same URL a
+  stock client signed through failover.
   The forwarded paths are an allowlist, not a catch-all: a segment able to reach
   /api/v1 through a relay would hold the control plane's entire administrative
   surface, which is a far larger grant than "devices here can enrol".
