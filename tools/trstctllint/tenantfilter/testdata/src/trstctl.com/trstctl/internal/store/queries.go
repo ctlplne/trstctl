@@ -32,10 +32,23 @@ const (
 	// Session/lock control functions read no table, so they are exempt: the
 	// migration advisory lock (AN-1 R2.5) carries no tenant_id, and set_config
 	// drives the RLS session variable rather than a tenant table.
-	migLock   = "SELECT pg_advisory_lock($1)"
-	migUnlock = "SELECT pg_advisory_unlock($1)"
-	setTenant = "SELECT set_config('trstctl.tenant_id', $1, true)"
-	regclass  = "SELECT to_regclass('public.schema_migrations') IS NOT NULL"
+	migLock           = "SELECT pg_advisory_lock($1)"
+	sharedLock        = "SELECT pg_advisory_lock_shared($1)"
+	migUnlock         = "SELECT pg_advisory_unlock($1)"
+	sharedUnlock      = "SELECT pg_advisory_unlock_shared($1)"
+	trySharedLock     = "SELECT pg_try_advisory_lock_shared($1)"
+	sharedXactLock    = "SELECT pg_advisory_xact_lock_shared($1)"
+	trySharedXactLock = "SELECT pg_try_advisory_xact_lock_shared($1)"
+	snapshotPin       = "SELECT pg_current_snapshot()::text"
+	setTenant         = "SELECT set_config('trstctl.tenant_id', $1, true)"
+	regclass          = "SELECT to_regclass('public.schema_migrations') IS NOT NULL"
+
+	// An arbitrary SELECT function remains subject to AN-1. Exact reviewed
+	// PostgreSQL control functions must never become a generic function bypass.
+	arbitraryFunction     = "SELECT load_secret_without_tenant($1)"                  // want "does not filter on tenant_id"
+	controlNameLookalike  = "SELECT fake_pg_advisory_lock($1)"                       // want "does not filter on tenant_id"
+	snapshotNameLookalike = "SELECT fake_pg_current_snapshot()::text"                // want "does not filter on tenant_id"
+	controlWithTableRead  = "SELECT pg_advisory_lock($1) FROM secrets WHERE id = $2" // want "does not filter on tenant_id"
 
 	// ── Substring-evasion regressions (ARCH-003 / SEC-004 / TENANT-001) ──
 	// tenant_id is present in the TEXT but NOT in a predicate. The old rule

@@ -581,9 +581,17 @@ func referencesSystemTable(s string) bool {
 // test fixture.
 var sessionControlFuncs = []string{
 	"pg_advisory_lock",
+	"pg_advisory_lock_shared",
 	"pg_advisory_unlock",
+	"pg_advisory_unlock_shared",
 	"pg_try_advisory_lock",
+	"pg_try_advisory_lock_shared",
 	"pg_advisory_xact_lock",
+	"pg_advisory_xact_lock_shared",
+	"pg_try_advisory_xact_lock_shared",
+	// pg_current_snapshot pins/returns only the current transaction's MVCC
+	// snapshot identifier. It does not read tenant rows.
+	"pg_current_snapshot",
 	// set_config / current_setting drive the RLS session variable
 	// (trstctl.tenant_id) and the role; they configure the session, not a
 	// tenant table. WithTenant itself issues `SELECT set_config(...)`.
@@ -594,14 +602,23 @@ var sessionControlFuncs = []string{
 	"to_regclass",
 }
 
+var sessionControlCallPattern = func() *regexp.Regexp {
+	names := make([]string, 0, len(sessionControlFuncs))
+	for _, name := range sessionControlFuncs {
+		names = append(names, regexp.QuoteMeta(name))
+	}
+	return regexp.MustCompile(`(?i)(?:^|[^a-z0-9_])(?:` + strings.Join(names, "|") + `)\s*\(`)
+}()
+
 // isSessionControl reports whether a query is a session/lock control call rather
 // than a data query over a table.
 func isSessionControl(s string) bool {
 	lower := strings.ToLower(s)
-	for _, fn := range sessionControlFuncs {
-		if strings.Contains(lower, fn) {
-			return true
-		}
-	}
-	return false
+	// Exact function-call tokens stop lookalikes such as
+	// fake_pg_advisory_lock() from inheriting the exemption. A FROM/JOIN clause
+	// means the SELECT also reads rows and must go through the tenant predicate
+	// rule even if it happens to call a control function in its select list.
+	return sessionControlCallPattern.MatchString(lower) &&
+		!strings.Contains(lower, " from ") &&
+		!strings.Contains(lower, " join ")
 }
