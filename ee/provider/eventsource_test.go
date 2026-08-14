@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/ee/billing"
 	"trstctl.com/trstctl/ee/whitelabel"
 	"trstctl.com/trstctl/internal/config"
@@ -435,6 +437,19 @@ func TestProviderServedMutationIsExactAndHealsPostAppendFailure(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+	servedSlug := "served-acme-" + suffix
+	failureSlug := "failure-acme-" + suffix
+	concurrentSlug := "concurrent-acme-" + suffix
+	servedTenant := CustomerID(servedSlug)
+	failureTenant := CustomerID(failureSlug)
+	concurrentTenant := CustomerID(concurrentSlug)
+	servedKey := "served-create-1-" + suffix
+	failureKey := "served-create-failure-" + suffix
+	concurrentKey := "served-concurrent-1-" + suffix
+	servedBody := fmt.Sprintf(`{"slug":%q,"name":"Served Acme"}`, servedSlug)
+	failureBody := fmt.Sprintf(`{"slug":%q,"name":"Failure Acme"}`, failureSlug)
+	concurrentBody := fmt.Sprintf(`{"slug":%q,"name":"Concurrent Acme"}`, concurrentSlug)
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
@@ -452,9 +467,8 @@ func TestProviderServedMutationIsExactAndHealsPostAppendFailure(t *testing.T) {
 			Mutations:     runtime.Mutations,
 			Idempotency:   orchestrator.NewIdempotency(st),
 			Authenticator: stubAuth{accept: "Bearer real-credential"},
-			Delegations: fullyDelegated("op-1", CustomerID("served-acme"), CustomerID("failure-acme"),
-				CustomerID("concurrent-acme")),
-			Clock: clock,
+			Delegations:   fullyDelegated("op-1", servedTenant, failureTenant, concurrentTenant),
+			Clock:         clock,
 		})
 	}
 	handler := newHandler()
@@ -469,7 +483,7 @@ func TestProviderServedMutationIsExactAndHealsPostAppendFailure(t *testing.T) {
 		return rec
 	}
 
-	missing := request("/provider/v1/tenants", "", `{"slug":"served-acme","name":"Served Acme"}`)
+	missing := request("/provider/v1/tenants", "", servedBody)
 	if missing.Code != http.StatusBadRequest {
 		t.Fatalf("missing key status = %d, want 400: %s", missing.Code, missing.Body.String())
 	}
@@ -497,37 +511,38 @@ func TestProviderServedMutationIsExactAndHealsPostAppendFailure(t *testing.T) {
 				mutation.method, mutation.path, rec.Code, rec.Body.String())
 		}
 	}
-	first := request("/provider/v1/tenants", "served-create-1", `{"slug":"served-acme","name":"Served Acme"}`)
+	first := request("/provider/v1/tenants", servedKey, servedBody)
 	if first.Code != http.StatusCreated {
 		t.Fatalf("first mutation = %d: %s", first.Code, first.Body.String())
 	}
-	replay := request("/provider/v1/tenants", "served-create-1", `{"slug":"served-acme","name":"Served Acme"}`)
+	replay := request("/provider/v1/tenants", servedKey, servedBody)
 	if replay.Code != first.Code || !bytes.Equal(replay.Body.Bytes(), first.Body.Bytes()) {
 		t.Fatalf("idempotent replay = %d/%q, want exact %d/%q", replay.Code, replay.Body.Bytes(), first.Code, first.Body.Bytes())
 	}
-	changed := request("/provider/v1/tenants", "served-create-1", `{"slug":"served-acme","name":"Changed Command"}`)
+	changed := request("/provider/v1/tenants", servedKey,
+		fmt.Sprintf(`{"slug":%q,"name":"Changed Command"}`, servedSlug))
 	if changed.Code != http.StatusConflict {
 		t.Fatalf("changed command = %d, want 409: %s", changed.Code, changed.Body.String())
 	}
 
 	failedOnce := atomic.Bool{}
 	runtime.Projection.applyHook = func(_ context.Context, event events.Event) error {
-		if event.Type == AuditTenantProvisioned && event.TenantID == CustomerID("failure-acme") && !failedOnce.Swap(true) {
+		if event.Type == AuditTenantProvisioned && event.TenantID == failureTenant && !failedOnce.Swap(true) {
 			return errors.New("injected post-append projection failure")
 		}
 		return nil
 	}
-	failed := request("/provider/v1/tenants", "served-create-failure", `{"slug":"failure-acme","name":"Failure Acme"}`)
+	failed := request("/provider/v1/tenants", failureKey, failureBody)
 	if failed.Code != http.StatusInternalServerError {
 		t.Fatalf("post-append failure = %d, want 500: %s", failed.Code, failed.Body.String())
 	}
-	healed := request("/provider/v1/tenants", "served-create-failure", `{"slug":"failure-acme","name":"Failure Acme"}`)
+	healed := request("/provider/v1/tenants", failureKey, failureBody)
 	if healed.Code != http.StatusCreated {
 		t.Fatalf("retry after projection failure = %d, want 201: %s", healed.Code, healed.Body.String())
 	}
 	var failureEvents int
 	if err := log.Replay(ctx, 0, func(event events.Event) error {
-		if event.Type == AuditTenantProvisioned && event.TenantID == CustomerID("failure-acme") {
+		if event.Type == AuditTenantProvisioned && event.TenantID == failureTenant {
 			failureEvents++
 		}
 		return nil
@@ -544,8 +559,7 @@ func TestProviderServedMutationIsExactAndHealsPostAppendFailure(t *testing.T) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			concurrent[index] = request("/provider/v1/tenants", "served-concurrent-1",
-				`{"slug":"concurrent-acme","name":"Concurrent Acme"}`)
+			concurrent[index] = request("/provider/v1/tenants", concurrentKey, concurrentBody)
 		}(i)
 	}
 	wg.Wait()
@@ -556,7 +570,7 @@ func TestProviderServedMutationIsExactAndHealsPostAppendFailure(t *testing.T) {
 	}
 	var concurrentEvents int
 	if err := log.Replay(ctx, 0, func(event events.Event) error {
-		if event.Type == AuditTenantProvisioned && event.TenantID == CustomerID("concurrent-acme") {
+		if event.Type == AuditTenantProvisioned && event.TenantID == concurrentTenant {
 			concurrentEvents++
 		}
 		return nil
