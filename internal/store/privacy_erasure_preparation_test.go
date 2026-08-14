@@ -327,6 +327,10 @@ func TestPreparePrivacySubjectErasureSnapshotsAuthorityAndRewritesRecoveryFences
 		!prepared.ErasedAt.Equal(preparedAt) {
 		t.Fatalf("prepared identity/time = %+v, want %+v", prepared, candidate)
 	}
+	if prepared.ErasedAt.Location() != time.UTC || prepared.CreatedAt.Location() != time.UTC {
+		t.Fatalf("prepared timestamp locations = erased %v created %v, want UTC for canonical replay bytes",
+			prepared.ErasedAt.Location(), prepared.CreatedAt.Location())
+	}
 	if !containsPrivacyReadModelSelector(prepared.Selectors.ReadModels,
 		"operation_approval_requests", request.ID) {
 		t.Fatalf("pre-rewrite request selector was lost: %+v", prepared.Selectors.ReadModels)

@@ -170,6 +170,8 @@ func scanPrivacySubjectErasurePreparation(row pgx.Row) (PrivacySubjectErasurePre
 		&out.ErasedAt, &out.CreatedAt); err != nil {
 		return PrivacySubjectErasurePreparation{}, err
 	}
+	out.ErasedAt = out.ErasedAt.UTC()
+	out.CreatedAt = out.CreatedAt.UTC()
 	if err := json.Unmarshal(selectors, &out.Selectors); err != nil {
 		return PrivacySubjectErasurePreparation{}, fmt.Errorf("store: decode privacy preparation selectors: %w", err)
 	}
