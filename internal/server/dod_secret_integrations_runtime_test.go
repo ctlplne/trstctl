@@ -29,6 +29,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
@@ -245,6 +246,7 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dodRegisterSecretIntegrationTenant(t, ctx, log, st)
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()
@@ -369,6 +371,7 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 	if err != nil {
 		t.Fatal(err)
 	}
+	dodRegisterSecretIntegrationTenant(t, ctx, log, st)
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()
@@ -821,6 +824,16 @@ func dodSecretIntegrationToken(t *testing.T, st *store.Store) string {
 	token := secrettext.String(raw)
 	secret.Wipe(raw)
 	return token
+}
+
+func dodRegisterSecretIntegrationTenant(t *testing.T, ctx context.Context, log *events.Log, st *store.Store) {
+	t.Helper()
+	service := app.New(log, st, nil)
+	defer service.Close()
+	if err := service.RegisterTenant(ctx, dodSecretIntegrationTenant, "DoD secret integrations",
+		"dod-secret-integrations-register-tenant"); err != nil {
+		t.Fatalf("register secret-integration tenant through event spine: %v", err)
+	}
 }
 
 func dodProveDynamicSecret(t *testing.T, entryID string, external *proof.ExternalSubstrate, srv *Server, st *store.Store, token string, deliveryErrorClass func() string, target dodSecretIntegrationTarget) {
