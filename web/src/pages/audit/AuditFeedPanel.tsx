@@ -92,6 +92,7 @@ export function AuditFeedPanel() {
   });
 
   if (!available) return null;
+  const feedItems = feeds.data?.items ?? [];
 
   const save = form.handleSubmit(async (values) => {
     setBusy(true);
@@ -212,7 +213,7 @@ export function AuditFeedPanel() {
     state = "error";
     stateTitle = t("audit.feeds.loadFailed");
     stateMessage = feeds.error;
-  } else if ((feeds.data?.items.length ?? 0) === 0) {
+  } else if (feedItems.length === 0) {
     state = "empty";
     stateTitle = t("audit.feeds.empty");
     stateMessage = t("audit.feeds.emptyBody");
@@ -229,7 +230,7 @@ export function AuditFeedPanel() {
 
       <DataGrid
         ariaLabel={t("audit.feeds.listLabel")}
-        rows={feeds.data?.items ?? []}
+        rows={feedItems}
         columns={columns}
         getRowId={(feed) => feed.id}
         state={state}
