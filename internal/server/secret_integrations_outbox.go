@@ -1286,21 +1286,6 @@ func (d *secretIntegrationOutboxDispatcher) appendAndProjectSecretSyncEvidenceLo
 	return d.validateAndProjectSecretSyncEvidence(ctx, canonical, tenantID, eventType, payload)
 }
 
-// recoverSecretSyncEvidence checks retained history before an external receiver
-// call. A success/failure event may have committed while its SQL projection did
-// not; projecting it first prevents repeating a completed side effect after a
-// worker restart.
-func (d *secretIntegrationOutboxDispatcher) recoverSecretSyncEvidence(ctx context.Context, eventID, tenantID, eventType string, payload any) (bool, error) {
-	if d.store == nil || d.log == nil {
-		return false, nil
-	}
-	canonical, found, err := d.log.EventByID(ctx, eventID)
-	if err != nil || !found {
-		return found, err
-	}
-	return true, d.validateAndProjectSecretSyncEvidence(ctx, canonical, tenantID, eventType, payload)
-}
-
 func (d *secretIntegrationOutboxDispatcher) validateAndProjectSecretSyncEvidence(ctx context.Context, canonical events.Event, tenantID, eventType string, payload any) error {
 	var expectedActor *events.Actor
 	if actor, ok := events.ActorFromContext(ctx); ok {

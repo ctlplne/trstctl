@@ -142,18 +142,6 @@ type storedEnvelopeMemberSpan struct {
 	end   int
 }
 
-func storedEnvelopeDataSpan(stored []byte) (int, int, error) {
-	spans, err := storedEnvelopeMemberSpans(stored)
-	if err != nil {
-		return 0, 0, err
-	}
-	span, ok := spans["data"]
-	if !ok {
-		return 0, 0, errors.New("events: stored envelope has no data member")
-	}
-	return span.start, span.end, nil
-}
-
 func storedEnvelopeMemberSpans(stored []byte) (map[string]storedEnvelopeMemberSpan, error) {
 	if !json.Valid(stored) {
 		return nil, errors.New("events: stored envelope is not valid JSON")

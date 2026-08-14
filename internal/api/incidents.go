@@ -12,8 +12,6 @@ import (
 
 	guuid "github.com/google/uuid"
 
-	"trstctl.com/trstctl/internal/audit"
-	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
@@ -140,18 +138,6 @@ func (a *API) getIncidentExecution(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, resp)
 }
 
-func (a *API) incidentBlastRadius(ctx context.Context, tenantID, identityID string) (graph.Impact, error) {
-	g, err := graph.Build(ctx, a.store, tenantID)
-	if err != nil {
-		return graph.Impact{}, err
-	}
-	nodeID := "id:" + identityID
-	if _, ok := g.Node(nodeID); !ok {
-		return graph.Impact{}, errStatus(http.StatusNotFound, "graph node not found for compromised identity")
-	}
-	return g.BlastRadius(nodeID), nil
-}
-
 func (a *API) recordIncidentDelivery(ctx context.Context, tenantID, replacementIdentityID string, req incidentExecutionRequest, reason, idempotencyKey string) (store.ConnectorDeliveryReceipt, error) {
 	connector := strings.TrimSpace(req.Connector)
 	if connector == "" {
@@ -173,17 +159,6 @@ func (a *API) recordIncidentDelivery(ctx context.Context, tenantID, replacementI
 		Detail:      "served incident execution queued replacement deploy before compromised identity revocation: " + reason,
 		RollbackRef: rollback, IdempotencyKey: idempotencyKey,
 	})
-}
-
-func (a *API) incidentEvidenceBundle(ctx context.Context, tenantID, identityID string) (format string, bundle string, err error) {
-	if a.audit == nil {
-		return "unavailable", "audit export service is not configured", nil
-	}
-	b, err := a.audit.Export(ctx, audit.Query{TenantID: tenantID, Contains: identityID, Limit: 100})
-	if err != nil {
-		return "", "", err
-	}
-	return "jws", b, nil
 }
 
 func incidentRevocable(s orchestrator.State) bool {

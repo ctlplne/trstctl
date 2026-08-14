@@ -2352,23 +2352,15 @@ type rotationCapturePusher struct {
 	values     map[string][]byte
 	failOnce   map[string]bool
 	successful map[string]int
-	blocked    map[string]chan struct{}
 }
 
 func newRotationCapturePusher() *rotationCapturePusher {
 	return &rotationCapturePusher{
 		values: map[string][]byte{}, failOnce: map[string]bool{}, successful: map[string]int{},
-		blocked: map[string]chan struct{}{},
 	}
 }
 
 func (p *rotationCapturePusher) Push(_ context.Context, key string, value []byte) error {
-	p.mu.Lock()
-	blocked := p.blocked[key]
-	p.mu.Unlock()
-	if blocked != nil {
-		<-blocked
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.failOnce[key] {
@@ -2378,21 +2370,6 @@ func (p *rotationCapturePusher) Push(_ context.Context, key string, value []byte
 	p.values[key] = append([]byte(nil), value...)
 	p.successful[key]++
 	return nil
-}
-
-func (p *rotationCapturePusher) block(key string) func() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	ch := make(chan struct{})
-	p.blocked[key] = ch
-	return func() {
-		p.mu.Lock()
-		if p.blocked[key] == ch {
-			delete(p.blocked, key)
-			close(ch)
-		}
-		p.mu.Unlock()
-	}
 }
 
 func (p *rotationCapturePusher) put(key string, value []byte) {
@@ -2533,34 +2510,6 @@ func assertPostgresCredentialWorks(t *testing.T, ctx context.Context, dsn []byte
 	}
 	if got != 1 {
 		t.Fatalf("smoke count = %d, want 1", got)
-	}
-}
-
-func assertPostgresCredentialRevoked(t *testing.T, ctx context.Context, dsn []byte) {
-	t.Helper()
-	if len(dsn) == 0 {
-		t.Fatal("no credential supplied to revoked-login assertion")
-	}
-	conn, err := pgx.Connect(ctx, string(dsn))
-	if err == nil {
-		_ = conn.Close(ctx)
-		t.Fatal("revoked PostgreSQL credential still logs in")
-	}
-}
-
-func assertPostgresRoleAbsent(t *testing.T, ctx context.Context, adminDSN, role string) {
-	t.Helper()
-	conn, err := pgx.Connect(ctx, adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = conn.Close(ctx) }()
-	var exists bool
-	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=$1)`, role).Scan(&exists); err != nil {
-		t.Fatal(err)
-	}
-	if exists {
-		t.Fatalf("staged rollback role %q still exists", role)
 	}
 }
 

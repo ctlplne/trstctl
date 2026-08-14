@@ -32,10 +32,6 @@ func IsCanonicalSecretRotationScheduleError(status, detail string) bool {
 	return schedulerhistory.IsCanonicalError(status, detail)
 }
 
-func isCanonicalSecretRotationScheduleError(detail string) bool {
-	return schedulerhistory.IsCanonicalError("failed", detail)
-}
-
 // SecretRotationScheduleDeferredError maps one closed row-local reason to the
 // only operator detail the durable receiver may persist for that reason.
 func SecretRotationScheduleDeferredError(reason string) string {

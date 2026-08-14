@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	guuid "github.com/google/uuid"
-
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
@@ -504,18 +502,6 @@ func (a *API) exportFleetReissuanceEvidence(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (a *API) issuerBlastRadius(ctx context.Context, tenantID, issuerID string) (graph.Impact, error) {
-	g, err := graph.Build(ctx, a.store, tenantID)
-	if err != nil {
-		return graph.Impact{}, err
-	}
-	nodeID := "iss:" + issuerID
-	if _, ok := g.Node(nodeID); !ok {
-		return graph.Impact{}, errStatus(http.StatusNotFound, "graph node not found for compromised issuer")
-	}
-	return g.BlastRadius(nodeID), nil
-}
-
 func graphNodeIDs(nodes []graph.Node) []string {
 	out := make([]string, 0, len(nodes))
 	for _, node := range nodes {
@@ -794,49 +780,6 @@ func operatorAssertedGates(gates []store.FleetReissuanceHealthGate) map[string]b
 	return out
 }
 
-// normalizeFleetHealthGates fills in the gate set for a run. trstctl evaluates
-// D6 changed what this can honestly say. The replacement-deployment gate is now
-// COMPUTED from verification receipts: D2 re-reads endpoints and D3 records the
-// verdict, so there is finally evidence to derive a verdict from.
-//
-// The rule that matters is the one an operator relies on mid-incident: any
-// failed verification fails the gate, and any replacement nobody verified keeps
-// it not_evaluated. A run cannot display all-green while one of its
-// replacements is not being served, and silence never reads as success — a
-// verdict nobody computed is still not a pass (truth-integrity 2).
-//
-// The other two gates stay not_evaluated because nothing computes them yet:
-// graph enumeration has no completeness oracle, and revocation publication is
-// R1's CRL/OCSP freshness signal, which is not wired to this run. Saying so is
-// better than deriving them from something adjacent and calling it proof.
-//
-// An operator may still assert any gate explicitly. That is an attestation and
-// is recorded as theirs — an asserted gate is never overwritten by a computed
-// one, because an operator who has looked at something this control plane
-// cannot see is the better authority.
-func normalizeFleetHealthGates(in []store.FleetReissuanceHealthGate) []store.FleetReissuanceHealthGate {
-	if len(in) == 0 {
-		return []store.FleetReissuanceHealthGate{
-			{Name: "graph enumeration", Status: servedstatus.FleetGateNotEvaluated},
-			{Name: fleetDeploymentGateName, Status: servedstatus.FleetGateNotEvaluated},
-			{Name: "revocation publication", Status: servedstatus.FleetGateNotEvaluated},
-		}
-	}
-	out := make([]store.FleetReissuanceHealthGate, 0, len(in))
-	for _, gate := range in {
-		name := strings.TrimSpace(gate.Name)
-		if name == "" {
-			name = "operator health gate"
-		}
-		status := strings.TrimSpace(gate.Status)
-		if status == "" {
-			status = servedstatus.FleetGateNotEvaluated
-		}
-		out = append(out, store.FleetReissuanceHealthGate{Name: name, Status: status})
-	}
-	return out
-}
-
 // buildFleetBatches creates the durable execution plan. The request path changes
 // only batch one from planned to queued; the fleet worker is the sole publisher
 // of every later batch.
@@ -960,8 +903,4 @@ func evaluateFleetBatchGates(
 		batches[i].HealthGate = fleetDeploymentVerdict(outcome)
 	}
 	return batches
-}
-
-func fleetReplacementID(runID, replaces string) string {
-	return guuid.NewSHA1(guuid.NameSpaceOID, []byte("fleet-replacement\x00"+runID+"\x00"+replaces)).String()
 }
