@@ -879,14 +879,6 @@ func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T
 	defer leafKey.Destroy()
 	const spiffeID = "spiffe://served.test/workload-7"
 	const certificateTTL = 3 * time.Second
-	certificateDER, err := crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, certificateTTL)
-	if err != nil {
-		t.Fatalf("sign approved certificate: %v", err)
-	}
-	certificateInfo, err := certinfo.Inspect(certificateDER)
-	if err != nil {
-		t.Fatalf("inspect approved certificate: %v", err)
-	}
 	binding, err := ephemerallib.NewApprovalBinding(approvalTestCAID, caDER, "workload-7", "test", "workload-7",
 		[]string{"selector:test"}, leafKey.Public().DER, spiffeID, certificateTTL)
 	if err != nil {
@@ -925,6 +917,17 @@ func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T
 		ResourceID: request.ResourceID, Action: request.Action,
 		FromState: request.FromState, ToState: request.ToState,
 		TargetVersion: request.TargetVersion, RequiredApprovals: request.RequiredApprovals,
+	}
+	// Mint after the immutable approval exists, exactly like the served issuance
+	// path. Minting first makes the certificate's lifetime start before the
+	// authority window, so the production validator correctly refuses it.
+	certificateDER, err := crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, certificateTTL)
+	if err != nil {
+		t.Fatalf("sign approved certificate after approval: %v", err)
+	}
+	certificateInfo, err := certinfo.Inspect(certificateDER)
+	if err != nil {
+		t.Fatalf("inspect approved certificate: %v", err)
 	}
 	nb, na := certificateInfo.NotBefore, certificateInfo.NotAfter
 	certificate := store.Certificate{
