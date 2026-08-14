@@ -128,6 +128,7 @@ func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testin
 			return service, nil
 		}
 	})
+	registerServedTenant(t, h, "managed-key dual-control tenant")
 	requester := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "managed-key-requester", []string{
 		string(authz.KeysWrite), string(authz.KeysApprove),
 	})

@@ -81,6 +81,7 @@ func TestServedIssuanceGateEnforced(t *testing.T) {
 		phaseStore.Close()
 		t.Fatalf("open event log: %v", err)
 	}
+	registerServerTestTenant(t, phaseStore, log, tenantA, "served issuance gate tenant")
 	storeServerTestProfile(t, phaseStore, tenantA, "tls-server", profile.CertificateProfile{
 		Name: "tls-server", AllowedEKUs: []string{"serverAuth"},
 		MaxValidity: profile.Duration(365 * 24 * time.Hour), AllowedProtocols: []string{"api"},
@@ -297,6 +298,7 @@ func TestServedMissingConfiguredProfileCreatesNoApprovalOrLifecycleWork(t *testi
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
+	registerServerTestTenant(t, st, log, tenantID, "missing-profile gate tenant")
 	srv, err := Build(ctx, Deps{
 		Store: st, Log: log, DefaultProfile: "missing-reviewed-profile",
 		EnablePolicyGate: true, RequireApproval: true,
@@ -373,6 +375,7 @@ func TestServedConfiguredDefaultProfileRequiresApprovalInStandardMode(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	registerServerTestTenant(t, st, log, tenantID, "configured-profile approval tenant")
 	srv, err := Build(ctx, Deps{
 		Store: st, Log: log, DefaultProfile: profileName, RequiredApprovals: 1,
 		// Deliberately leave EnablePolicyGate, EnableABAC, and the global
@@ -450,6 +453,7 @@ func TestServedConfiguredDefaultShortProfileCarriesTTLWithoutApproval(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	registerServerTestTenant(t, st, log, tenantID, "configured-profile TTL tenant")
 	srv, err := Build(ctx, Deps{
 		Store: st, Log: log, DefaultProfile: profileName,
 		APIOptions: []api.Option{api.WithInsecureHeaderResolver()},

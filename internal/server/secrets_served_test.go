@@ -198,12 +198,16 @@ func registerServedTenant(t *testing.T, h *servedHarness, name string) {
 }
 
 func registerServedTenantID(t *testing.T, h *servedHarness, tenantID, name string) {
+	registerServerTestTenant(t, h.store, h.log, tenantID, name)
+}
+
+func registerServerTestTenant(t *testing.T, st *store.Store, log *events.Log, tenantID, name string) {
 	t.Helper()
 	data, err := json.Marshal(map[string]string{"name": name})
 	if err != nil {
 		t.Fatalf("marshal tenant registration: %v", err)
 	}
-	event, err := h.log.Append(context.Background(), events.Event{
+	event, err := log.Append(context.Background(), events.Event{
 		Type:     projections.EventTenantRegistered,
 		TenantID: tenantID,
 		Data:     data,
@@ -211,7 +215,7 @@ func registerServedTenantID(t *testing.T, h *servedHarness, tenantID, name strin
 	if err != nil {
 		t.Fatalf("append tenant registration: %v", err)
 	}
-	if err := projections.New(h.store).Apply(context.Background(), event); err != nil {
+	if err := projections.New(st).Apply(context.Background(), event); err != nil {
 		t.Fatalf("project tenant registration: %v", err)
 	}
 }

@@ -20,6 +20,7 @@ func TestServedSelfServiceIssuancePortalCAPISS11(t *testing.T) {
 		d.RequireApproval = true
 		d.RequiredApprovals = 1
 	})
+	registerServedTenant(t, h, "self-service issuance tenant")
 
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "profile-admin", string(authz.OwnersWrite), string(authz.ProfilesWrite))
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "dev@example.test",
