@@ -97,7 +97,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/resource_name", token), privacyRule("/action", opaque),
 		privacyRule("/requester", exact), privacyRule("/from_state", opaque),
 		privacyRule("/to_state", opaque), privacyRule("/target_version", opaque),
-		privacyRule("/reason", clear), privacyRule("/evidence_refs", clear),
+		privacyRule("/reason", clear), privacyRule("/evidence_refs/*", clear),
 		privacyRule("/required_approvals", opaque), privacyRule("/created_at", opaque),
 		privacyRule("/expires_at", opaque),
 	)
