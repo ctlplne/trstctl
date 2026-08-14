@@ -13,6 +13,7 @@ import { useCan } from "@/components/rbac";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory, SecretImport } from "@/components/secrets";
 import { formatDateTime as formatDate } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -1774,14 +1775,14 @@ export function Secrets() {
             >
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{t("secrets.pki.custodyLabel")}</span>
-                <select
+                <Select
                   className="rounded-md border border-border bg-background px-3 py-2"
                   value={pkiMode}
                   onChange={(event) => setPkiMode(event.target.value as "csr" | "legacy")}
                 >
                   <option value="csr">{t("secrets.pki.csrMode")}</option>
                   <option value="legacy">{t("secrets.pki.legacyMode")}</option>
-                </select>
+                </Select>
               </label>
               {pkiMode === "csr" ? (
                 <label className="grid gap-1 text-sm md:col-span-2">
