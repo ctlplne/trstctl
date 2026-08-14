@@ -32,6 +32,33 @@ import (
 	"testing"
 )
 
+// readNonTestGoPackage returns one deterministic corpus for a package's shipped
+// Go source. Architecture strength can move between files without leaving the
+// package, so filename-local guards would become blind after a safe split.
+func readNonTestGoPackage(t *testing.T, dir string) string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.FromSlash(dir))
+	if err != nil {
+		t.Fatalf("read Go package %s: %v", dir, err)
+	}
+
+	var source strings.Builder
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		source.WriteString("\n// FILE: ")
+		source.WriteString(name)
+		source.WriteByte('\n')
+		source.WriteString(read(t, filepath.Join(dir, name)))
+	}
+	if source.Len() == 0 {
+		t.Fatalf("read Go package %s: no non-test Go source", dir)
+	}
+	return source.String()
+}
+
 // ---- ARCH-004: AN-1 storage tenancy guards stay in required gates ---------------
 
 // TestStorageTenancyRegressionGuardsStayRequired locks ARCH-004: tenant isolation is
@@ -3864,8 +3891,8 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 		"TestBootstrapTokenSystemQueryFixture",
 	)
 
-	api := read(t, "../internal/api/api.go")
-	check("internal/api/api.go principal-derived tenancy", api,
+	api := readNonTestGoPackage(t, "../internal/api")
+	check("internal/api package principal-derived tenancy", api,
 		"func (a *API) tenant(r *http.Request) (string, bool)",
 		"return p.TenantID, p.TenantID != \"\"",
 		"It NEVER trusts client-supplied identity headers",
@@ -4308,8 +4335,8 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)",
 	)
 
-	api := read(t, "../internal/api/api.go")
-	check("internal/api/api.go principal-derived tenant", api,
+	api := readNonTestGoPackage(t, "../internal/api")
+	check("internal/api package principal-derived tenant", api,
 		"return p.TenantID, p.TenantID != \"\"",
 		"LookupAPITokenByHash",
 		"NEVER trusts client-supplied identity headers",
