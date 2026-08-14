@@ -511,6 +511,7 @@ func TestApprovedCodeSigningRetryAfterAppendAndSQLRollbackUsesDurableFirstComman
 			}},
 		}
 	})
+	registerServedTenant(t, h, "approved code-signing rollback tenant")
 	ctx := context.Background()
 	const (
 		keySubject     = "alice.codesign@example.com"
@@ -1304,6 +1305,7 @@ allow if {
 			}},
 		}
 	})
+	registerServedTenant(t, h, "code-signing policy approval tenant")
 	gate := h.srv.codeSign.cfg.Gate
 	if gate == nil {
 		t.Fatal("production Build left the code-signing gate unwired")
