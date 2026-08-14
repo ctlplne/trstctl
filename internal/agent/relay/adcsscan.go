@@ -255,7 +255,6 @@ func observeEnrollmentEndpoint(ctx context.Context, client adcsHTTPDoer, target 
 	if err != nil {
 		return observed
 	}
-	defer response.Body.Close()
 	observed.HTTPStatus = response.StatusCode
 	observed.TLSVerified = strings.HasPrefix(strings.ToLower(target.URL), "https://")
 	observed.Authentication = authenticationSchemes(response.Header.Values("WWW-Authenticate"))
@@ -270,6 +269,15 @@ func observeEnrollmentEndpoint(ctx context.Context, client adcsHTTPDoer, target 
 		observed.State = adcs.EndpointNotFound
 	default:
 		observed.State = adcs.EndpointReachableOther
+	}
+	if err := response.Body.Close(); err != nil {
+		// Headers are not durable live evidence when the transport cannot finish
+		// the response lifecycle. Keep the exact target but fail its observation
+		// closed instead of publishing a reachable/authentication claim.
+		return adcs.EnrollmentEndpoint{
+			Kind: target.Kind, URL: target.URL, State: adcs.EndpointUnreachable,
+			ExtendedProtection: adcs.EvidenceUnobserved,
+		}
 	}
 	return observed
 }

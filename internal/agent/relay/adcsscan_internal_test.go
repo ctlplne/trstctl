@@ -5,6 +5,7 @@ package relay
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -18,6 +19,27 @@ import (
 type adcsDoerFunc func(*http.Request) (*http.Response, error)
 
 func (f adcsDoerFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
+
+type adcsCloseErrorBody struct{ io.Reader }
+
+func (adcsCloseErrorBody) Close() error { return errors.New("fixture close failed") }
+
+func TestADCSEnrollmentEvidenceFailsClosedWhenResponseCannotClose(t *testing.T) {
+	target := adcs.EnrollmentEndpointTarget{
+		Kind: adcs.EndpointWebEnrollment, URL: "https://ca.corp.example/certsrv/",
+	}
+	got := observeEnrollmentEndpoint(t.Context(), adcsDoerFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Header:     http.Header{"WWW-Authenticate": []string{"Negotiate"}},
+			Body:       adcsCloseErrorBody{Reader: strings.NewReader("ignored")},
+		}, nil
+	}), target)
+	if got.Kind != target.Kind || got.URL != target.URL || got.State != adcs.EndpointUnreachable ||
+		got.HTTPStatus != 0 || got.TLSVerified || len(got.Authentication) != 0 {
+		t.Fatalf("close-failed endpoint = %+v; want target identity plus unreachable-only evidence", got)
+	}
+}
 
 func TestADCSSearchUsesDACLOnlySecurityDescriptorControlAUD35(t *testing.T) {
 	controls := ldapSearchControls(adcs.SearchRequest{DACLOnly: true})

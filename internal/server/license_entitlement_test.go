@@ -71,7 +71,11 @@ func TestAUD56ProductionCompositionBindsConfiguredLicenseEnvironment(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			t.Errorf("close editions response: %v", err)
+		}
+	}()
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("GET editions = %d", response.StatusCode)
 	}

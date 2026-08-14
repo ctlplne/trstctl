@@ -57,7 +57,11 @@ func TestDisabledProtocolNamespacesFailClosedAUD75(t *testing.T) {
 			if err != nil {
 				t.Fatalf("request disabled %s namespace: %v", tt.protocol, err)
 			}
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					t.Errorf("close disabled %s response: %v", tt.protocol, err)
+				}
+			}()
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("read response: %v", err)
@@ -121,7 +125,11 @@ func TestEnabledProtocolRoutesSurviveNamespaceReservationAUD75(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GET enabled %s route: %v", tt.protocol, err)
 			}
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					t.Errorf("close enabled %s response: %v", tt.protocol, err)
+				}
+			}()
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("read enabled %s response: %v", tt.protocol, err)
@@ -154,7 +162,11 @@ func TestEnabledProtocolRoutesSurviveNamespaceReservationAUD75(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GET enabled %s unknown child: %v", tt.protocol, err)
 			}
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					t.Errorf("close enabled %s child response: %v", tt.protocol, err)
+				}
+			}()
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("read enabled %s unknown child: %v", tt.protocol, err)

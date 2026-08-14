@@ -4,6 +4,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -103,8 +104,16 @@ func readAuditVerifyFile(path string, limit int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	return readAuditVerifyBounded(f, limit)
+	return readAuditVerifyReadCloser(f, limit)
+}
+
+func readAuditVerifyReadCloser(r io.ReadCloser, limit int) (raw []byte, err error) {
+	defer func() {
+		if closeErr := r.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close audit verification input: %w", closeErr))
+		}
+	}()
+	return readAuditVerifyBounded(r, limit)
 }
 
 func readAuditVerifyBounded(r io.Reader, limit int) ([]byte, error) {
