@@ -221,7 +221,7 @@ func (a *API) executeConnectorApplicationSecretRotation(
 	if err != nil {
 		return rotation.Report{Key: req.Key, OldRef: req.OldRef}, err
 	}
-	_, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload)
+	_, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared)
 	if err != nil {
 		return rotation.Report{Key: req.Key, OldRef: req.OldRef}, err
 	}

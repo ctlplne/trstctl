@@ -136,10 +136,6 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 	if err != nil {
 		return nil, err
 	}
-	responder, err := s.activeOCSPResponder(ctx, tenantID)
-	if err != nil {
-		return nil, err
-	}
 	status := crypto.OCSPUnknown
 	var revokedAt time.Time
 	reason := 0
@@ -155,7 +151,7 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 	nextUpdate := now.Add(ocspCacheTTL)
 	key := ocspResponseCacheKey{
 		tenantID: tenantID, caID: s.caID, serial: serial, status: status, reason: reason,
-		revokedAt: revokedAt, responderSerial: responder.Serial,
+		revokedAt: revokedAt,
 	}
 	if !noncePresent {
 		if der, ok := s.ocspCache.get(key, now); ok {
@@ -164,6 +160,10 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 			return der, nil
 		}
 		s.observeOCSPCache("miss")
+	}
+	responder, err := s.activeOCSPResponder(ctx, tenantID)
+	if err != nil {
+		return nil, err
 	}
 	der, err := crypto.SignDelegatedOCSPResponseWithNonce(s.caCertDER, responder.CertDER, s.ocspSigner, status, serial, now, nextUpdate, revokedAt, reason, nonce)
 	if err != nil {
@@ -252,6 +252,16 @@ func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([
 	if err := s.catchUp(ctx); err != nil {
 		return nil, err
 	}
+	return s.generateCRLFromCurrentProjection(ctx, tenantID)
+}
+
+// generateCRLFromCurrentProjection signs the read model the caller has already
+// made current. Issuance projects its certificate event synchronously before it
+// asks for the initial CRL, so replaying the entire retained event history here
+// would turn every new certificate into an increasingly expensive global scan.
+// Recovery, manual, and scheduler entry points continue to use generateCRL,
+// which performs the catch-up before entering this helper.
+func (s *revocationService) generateCRLFromCurrentProjection(ctx context.Context, tenantID string) ([]byte, error) {
 	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
@@ -393,9 +403,6 @@ func crlDeltaEntries(entries []crypto.RevokedSerial, since time.Time) []crypto.R
 }
 
 func (s *revocationService) ensureCRL(ctx context.Context, tenantID string) error {
-	if err := s.catchUp(ctx); err != nil {
-		return err
-	}
 	due, err := s.store.CRLDueForRegeneration(ctx, tenantID, s.caID, s.now(), crlRefreshLead)
 	if err != nil {
 		return err
@@ -403,7 +410,7 @@ func (s *revocationService) ensureCRL(ctx context.Context, tenantID string) erro
 	if !due {
 		return nil
 	}
-	_, err = s.generateCRL(ctx, tenantID)
+	_, err = s.generateCRLFromCurrentProjection(ctx, tenantID)
 	return err
 }
 

@@ -3314,6 +3314,19 @@ func (s *Server) RunPrivacyRetentionOnce(ctx context.Context) (orchestrator.Priv
 	return sum, nil
 }
 
+// DispatchIssuanceOnce attempts one pending command owned by the built-in CA
+// issuance lane. A live diagnostic creates one durable command and calls this
+// once, so its latency includes claim, signer-backed delivery, and durable
+// finalization, but not a second empty-queue shutdown sweep. External-CA issuance
+// and every unrelated effect family are deliberately excluded.
+func (s *Server) DispatchIssuanceOnce(ctx context.Context) (bool, error) {
+	if s == nil || s.outbox == nil || s.obHandler == nil {
+		return false, errors.New("server: issuance dispatcher is unavailable")
+	}
+	scope := orchestrator.DestinationScope{IncludePrefixes: []string{"ca.issue"}}
+	return s.outbox.DispatchOneScoped(ctx, s.obHandler, scope)
+}
+
 // Drain delivers pending outbox entries through the configured handler. Families
 // sweep concurrently during shutdown as well: a slow connector cannot delay the
 // final notification or external-CA sweep until its own family deadline expires.

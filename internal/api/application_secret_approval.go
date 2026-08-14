@@ -446,6 +446,7 @@ func (a *API) appendAndProjectApplicationSecretMutation(
 	tenantID string,
 	fence store.ApplicationSecretMutationFence,
 	payload projections.ApplicationSecretMutation,
+	recoverExisting bool,
 ) (events.Event, projections.ApplicationSecretMutation, error) {
 	if a.secrets == nil || a.secrets.be.Store == nil || a.secrets.be.EventLog == nil {
 		return events.Event{}, projections.ApplicationSecretMutation{}, errors.New("api: event-sourced application-secret mutations are unavailable")
@@ -483,7 +484,7 @@ func (a *API) appendAndProjectApplicationSecretMutation(
 		}
 		latestPayload.Approval = approval
 		canonical, canonicalPayload, err = a.appendAndProjectApplicationSecretMutationUnbarriered(
-			barrierCtx, tenantID, latest, latestPayload)
+			barrierCtx, tenantID, latest, latestPayload, recoverExisting)
 		return err
 	})
 	return canonical, canonicalPayload, err
@@ -494,6 +495,7 @@ func (a *API) appendAndProjectApplicationSecretMutationUnbarriered(
 	tenantID string,
 	fence store.ApplicationSecretMutationFence,
 	payload projections.ApplicationSecretMutation,
+	recoverExisting bool,
 ) (events.Event, projections.ApplicationSecretMutation, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -519,7 +521,7 @@ func (a *API) appendAndProjectApplicationSecretMutationUnbarriered(
 		candidate.Actor = fence.Actor
 	}
 	canonical, canonicalPayload, err := recoverOrAppendApplicationSecretMutationEvent(
-		ctx, a.secrets.be.EventLog, candidate, payload)
+		ctx, a.secrets.be.EventLog, candidate, payload, recoverExisting)
 	if err != nil {
 		return events.Event{}, projections.ApplicationSecretMutation{}, err
 	}
@@ -562,12 +564,24 @@ func recoverOrAppendApplicationSecretMutationEvent(
 	log *events.Log,
 	candidate events.Event,
 	payload projections.ApplicationSecretMutation,
+	recoverExisting bool,
 ) (events.Event, projections.ApplicationSecretMutation, error) {
-	canonical, found, err := log.EventByID(ctx, candidate.ID)
-	if err != nil {
-		return events.Event{}, projections.ApplicationSecretMutation{}, err
+	var canonical events.Event
+	found := false
+	var err error
+	if recoverExisting {
+		// A previously prepared durable fence may sit on either side of the
+		// Append/project crash gap, so old retained history is authoritative.
+		canonical, found, err = log.EventByID(ctx, candidate.ID)
+		if err != nil {
+			return events.Event{}, projections.ApplicationSecretMutation{}, err
+		}
 	}
 	if !found {
+		// A fence first claimed by this request cannot already have an event. Send
+		// its deterministic ID straight to JetStream instead of replaying lifetime
+		// history to prove that impossible negative. JetStream still canonicalizes
+		// an in-window duplicate, and the exact-envelope checks below remain closed.
 		if candidate.Actor == nil {
 			// A pre-0152 fence did not persist attribution. It is recoverable only
 			// when retained source history already owns the canonical envelope. Do
@@ -771,7 +785,7 @@ func (a *API) ReconcileApplicationSecretMutationFences(ctx context.Context) (rec
 			}
 			payload.Approval = use
 			if _, _, err := a.appendAndProjectApplicationSecretMutation(
-				ctx, tenant.TenantID, fence, payload); err != nil {
+				ctx, tenant.TenantID, fence, payload, true); err != nil {
 				if errors.Is(err, errApplicationSecretLegacyActorUnavailable) {
 					blocked[applicationSecretReconcileLegacyActorUnavailable]++
 					continue

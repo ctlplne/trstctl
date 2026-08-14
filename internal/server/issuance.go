@@ -487,12 +487,14 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 	// Idempotent on the outbox key: a redelivery returns the recorded result
 	// without minting again (AN-5 ↔ AN-6).
 	_, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {
-		recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
-		if err != nil {
-			return nil, err
-		}
-		if len(recovered) > 0 {
-			return []byte(recovered[len(recovered)-1].Fingerprint), nil
+		if shouldRecoverIssuedCertificate(m.Attempts) {
+			recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
+			if err != nil {
+				return nil, err
+			}
+			if len(recovered) > 0 {
+				return []byte(recovered[len(recovered)-1].Fingerprint), nil
+			}
 		}
 		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
 		if err != nil {
@@ -559,6 +561,15 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		return err
 	}
 	return d.ensureTenantCRL(ctx, m.TenantID)
+}
+
+// shouldRecoverIssuedCertificate distinguishes a new durable outbox claim from
+// a redelivery that could be closing the append-before-idempotency crash gap.
+// Outbox attempts start at one, so the first attempt cannot have an earlier
+// certificate to recover. Zero means a direct/focused caller did not provide
+// claim evidence; that ambiguous shape keeps the fail-safe recovery check.
+func shouldRecoverIssuedCertificate(attempts int) bool {
+	return attempts != 1
 }
 
 func (d *issuanceDispatcher) admitIssuance(ctx context.Context, m orchestrator.Message, p transitionTrigger, ident store.Identity, operation string) error {
@@ -752,13 +763,15 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
 		}
-		recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
-		if err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, err
-		}
-		if len(recovered) > 0 {
-			return d.completeRecoveredRenewalRun(ctx, m.TenantID, p, run, recovered)
+		if shouldRecoverIssuedCertificate(m.Attempts) {
+			recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
+			if err != nil {
+				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+				return nil, err
+			}
+			if len(recovered) > 0 {
+				return d.completeRecoveredRenewalRun(ctx, m.TenantID, p, run, recovered)
+			}
 		}
 		certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
 		if err != nil {

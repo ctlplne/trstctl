@@ -191,6 +191,26 @@ func applicationSecretRecoveryEventCount(t *testing.T, log *events.Log) int {
 	return count
 }
 
+func TestApplicationSecretFreshCommandAppendsCanonicalEventWithoutRecoveryReplay(t *testing.T) {
+	ctx := context.Background()
+	log := openApplicationSecretRecoveryLog(t)
+	payload := applicationSecretRecoveryPayload("alice")
+	candidate := applicationSecretRecoveryEvent(t, payload)
+	candidate.Actor = &events.Actor{Subject: "alice", Roles: []string{"operator"}}
+
+	canonical, gotPayload, err := recoverOrAppendApplicationSecretMutationEvent(
+		ctx, log, candidate, payload, false)
+	if err != nil {
+		t.Fatalf("append fresh application-secret command: %v", err)
+	}
+	if canonical.ID != candidate.ID || canonical.Sequence == 0 || gotPayload.Name != payload.Name {
+		t.Fatalf("fresh canonical event = %+v payload=%+v", canonical, gotPayload)
+	}
+	if count := applicationSecretRecoveryEventCount(t, log); count != 1 {
+		t.Fatalf("fresh command published %d physical events, want one", count)
+	}
+}
+
 func TestApplicationSecretAppendRecoveryUsesRetainedEnvelopeBeyondBrokerDuplicateWindow(t *testing.T) {
 	ctx := context.Background()
 	log := openApplicationSecretRecoveryLog(t)
@@ -206,7 +226,7 @@ func TestApplicationSecretAppendRecoveryUsesRetainedEnvelopeBeyondBrokerDuplicat
 	time.Sleep(400 * time.Millisecond)
 	retryPayload := applicationSecretRecoveryPayload("erased:0123456789abcdef")
 	retry := applicationSecretRecoveryEvent(t, retryPayload)
-	canonical, gotPayload, err := recoverOrAppendApplicationSecretMutationEvent(ctx, log, retry, retryPayload)
+	canonical, gotPayload, err := recoverOrAppendApplicationSecretMutationEvent(ctx, log, retry, retryPayload, true)
 	if err != nil {
 		t.Fatalf("recover retained application-secret event: %v", err)
 	}
@@ -230,7 +250,7 @@ func TestApplicationSecretBackgroundRecoveryReusesRetainedRequestActor(t *testin
 	}
 	backgroundCandidate := applicationSecretRecoveryEvent(t, payload)
 	canonical, _, err := recoverOrAppendApplicationSecretMutationEvent(
-		ctx, log, backgroundCandidate, payload)
+		ctx, log, backgroundCandidate, payload, true)
 	if err != nil {
 		t.Fatalf("background retained recovery rejected request actor: %v", err)
 	}
@@ -264,7 +284,7 @@ func TestApplicationSecretRetainedPrivacyActorOrderRecoversWithoutWeakeningRoleB
 		Subject: retained.Actor.Subject,
 		Roles:   []string{"bob", placeholder, placeholder},
 	}
-	canonical, _, err := recoverOrAppendApplicationSecretMutationEvent(ctx, log, candidate, payload)
+	canonical, _, err := recoverOrAppendApplicationSecretMutationEvent(ctx, log, candidate, payload, true)
 	if err != nil || canonical.Sequence != first.Sequence {
 		t.Fatalf("sorted fence did not recover the order-preserving privacy event: event=%+v err=%v", canonical, err)
 	}
@@ -277,7 +297,7 @@ func TestApplicationSecretRetainedPrivacyActorOrderRecoversWithoutWeakeningRoleB
 		Subject: candidate.Actor.Subject,
 		Roles:   []string{"admin", placeholder, placeholder},
 	}
-	if _, _, err := recoverOrAppendApplicationSecretMutationEvent(ctx, log, changed, payload); !errors.Is(err, store.ErrIdempotencyConflict) {
+	if _, _, err := recoverOrAppendApplicationSecretMutationEvent(ctx, log, changed, payload, true); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("changed retained role authority error=%v, want ErrIdempotencyConflict", err)
 	}
 }
@@ -289,7 +309,7 @@ func TestApplicationSecretLegacyActorlessRecoveryWithoutRetainedEventFailsClosed
 	actorless := applicationSecretRecoveryEvent(t, payload)
 	actorless.Actor = nil
 	if _, _, err := recoverOrAppendApplicationSecretMutationEvent(
-		ctx, log, actorless, payload); !errors.Is(err, store.ErrIdempotencyConflict) {
+		ctx, log, actorless, payload, true); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("actorless legacy recovery error=%v, want ErrIdempotencyConflict", err)
 	}
 	if count := applicationSecretRecoveryEventCount(t, log); count != 0 {
@@ -311,7 +331,7 @@ func TestApplicationSecretAuthenticatedLiveRetryCannotManufactureLegacyActor(t *
 		SchemaVersion: event.SchemaVersion, Actor: nil,
 	}
 	if _, _, err := a.appendAndProjectApplicationSecretMutationUnbarriered(
-		ctx, event.TenantID, fence, payload); !errors.Is(err, errApplicationSecretLegacyActorUnavailable) ||
+		ctx, event.TenantID, fence, payload, true); !errors.Is(err, errApplicationSecretLegacyActorUnavailable) ||
 		!errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("authenticated actorless legacy retry error=%v, want bounded idempotency conflict", err)
 	}
@@ -409,7 +429,7 @@ func TestApplicationSecretAppendRecoveryRejectsRetainedEnvelopeDrift(t *testing.
 			if _, err := log.Append(ctx, poisonEvent); err != nil {
 				t.Fatal(err)
 			}
-			if _, _, err := recoverOrAppendApplicationSecretMutationEvent(ctx, log, attempt, attemptPayload); !errors.Is(err, store.ErrIdempotencyConflict) {
+			if _, _, err := recoverOrAppendApplicationSecretMutationEvent(ctx, log, attempt, attemptPayload, true); !errors.Is(err, store.ErrIdempotencyConflict) {
 				t.Fatalf("retained drift error = %v, want ErrIdempotencyConflict", err)
 			}
 			if count := applicationSecretRecoveryEventCount(t, log); count != 1 {

@@ -550,7 +550,7 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, applicationSecretMutationError(fenceErr)
 			}
 		}
-		if _, _, appendErr := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload); appendErr != nil {
+		if _, _, appendErr := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); appendErr != nil {
 			return 0, nil, applicationSecretMutationError(appendErr)
 		}
 		rec, getErr := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name)
@@ -747,7 +747,7 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, applicationSecretMutationError(err)
 		}
-		event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload)
+		event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared)
 		if err != nil {
 			return 0, nil, applicationSecretMutationError(err)
 		}
@@ -862,7 +862,7 @@ func (a *API) recoverSecretAt(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, applicationSecretMutationError(err)
 		}
-		event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload)
+		event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared)
 		if err != nil {
 			return 0, nil, applicationSecretMutationError(err)
 		}
@@ -1198,7 +1198,7 @@ func (a *API) deleteSecret(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, applicationSecretMutationError(err)
 		}
-		if _, _, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload); err != nil {
+		if _, _, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); err != nil {
 			return 0, nil, applicationSecretMutationError(err)
 		}
 		return http.StatusNoContent, nil, nil

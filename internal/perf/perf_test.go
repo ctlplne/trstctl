@@ -3,11 +3,13 @@
 package perf
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func BenchmarkIssuance(b *testing.B) {
@@ -167,6 +169,37 @@ func TestPerfLiveLoadHarnessCoversEveryHotPathAndPhase(t *testing.T) {
 	}
 	if report.Summary.Measurements != len(report.Results) || report.Summary.HotPaths != len(HotPaths()) {
 		t.Fatalf("bad live summary: %+v", report.Summary)
+	}
+}
+
+func TestPerfLiveMutationHotPathsMeetSLOFromFreshStack(t *testing.T) {
+	for _, hotPath := range []string{"api.issuance", "api.secrets", "revocation.ocsp_crl"} {
+		hotPath := hotPath
+		t.Run(hotPath, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer cancel()
+			stack, err := startLiveEvalStack(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stack.Close()
+			ops, _, err := stack.servedHotPaths()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var slo HotPathSLO
+			for _, candidate := range HotPaths() {
+				if candidate.HotPath == hotPath {
+					slo = candidate
+					break
+				}
+			}
+			result := measure(slo, ops[hotPath], 128, Observation{})
+			if !result.Met {
+				t.Fatalf("fresh served %s missed its SLO: p50=%.2fms p95=%.2fms p99=%.2fms throughput=%.2f/s failures=%v",
+					hotPath, result.P50MS, result.P95MS, result.P99MS, result.ThroughputPerSecond, result.Failures)
+			}
+		})
 	}
 }
 

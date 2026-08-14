@@ -371,6 +371,95 @@ func TestOutboxDrainHonorsConfiguredFamilyWorkerLimit(t *testing.T) {
 	}
 }
 
+func TestDispatchIssuanceOnceDeliversOneInternalCARow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts embedded PostgreSQL and NATS")
+	}
+	ctx := context.Background()
+	st := newServerTestStore(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("open event log: %v", err)
+	}
+	delivered := make(chan string, 3)
+	handler := orchestrator.HandlerFunc(func(_ context.Context, message orchestrator.Message) error {
+		delivered <- message.Destination
+		return nil
+	})
+	srv, err := Build(ctx, Deps{Store: st, Log: log, OutboxHandler: handler})
+	if err != nil {
+		_ = log.Close()
+		t.Fatalf("build control plane: %v", err)
+	}
+	t.Cleanup(func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	})
+
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "issuance-only-drain"}); err != nil {
+		t.Fatalf("upsert tenant: %v", err)
+	}
+	var caIDs []int64
+	var notificationID int64
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		for _, key := range []string{"issuance-once-ca-1", "issuance-once-ca-2"} {
+			id, err := srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{
+				TenantID: tenantID, Destination: "ca.issue", IdempotencyKey: key, Payload: []byte(`{}`),
+			})
+			if err != nil {
+				return err
+			}
+			caIDs = append(caIDs, id)
+		}
+		notificationID, err = srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{
+			TenantID: tenantID, Destination: "notification.test", IdempotencyKey: "issuance-once-notification", Payload: []byte(`{}`),
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("enqueue scoped drain rows: %v", err)
+	}
+	attempted, err := srv.DispatchIssuanceOnce(ctx)
+	if err != nil {
+		t.Fatalf("dispatch issuance once: %v", err)
+	}
+	if !attempted {
+		t.Fatal("dispatch issuance once reported no attempted row")
+	}
+	select {
+	case got := <-delivered:
+		if got != "ca.issue" {
+			t.Fatalf("issuance drain delivered %q, want ca.issue", got)
+		}
+	default:
+		t.Fatal("issuance drain delivered no internal CA row")
+	}
+	select {
+	case got := <-delivered:
+		t.Fatalf("issuance drain also delivered unrelated %q row", got)
+	default:
+	}
+	statusCounts := map[string]int{}
+	for _, id := range caIDs {
+		record, err := srv.outbox.Get(ctx, tenantID, id)
+		if err != nil {
+			t.Fatalf("get CA issuance row %d: %v", id, err)
+		}
+		statusCounts[record.Status]++
+	}
+	if statusCounts["delivered"] != 1 || statusCounts["pending"] != 1 {
+		t.Fatalf("CA issuance statuses = %v, want one delivered and one pending", statusCounts)
+	}
+	record, err := srv.outbox.Get(ctx, tenantID, notificationID)
+	if err != nil {
+		t.Fatalf("get unrelated notification row: %v", err)
+	}
+	if record.Status != "pending" {
+		t.Fatalf("unrelated notification status = %q, want pending", record.Status)
+	}
+}
+
 func (f outboxDispatchFamily) scopeMatches(destination string) bool {
 	included := len(f.scope.IncludePrefixes) == 0
 	for _, prefix := range f.scope.IncludePrefixes {

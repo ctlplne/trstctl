@@ -20,13 +20,12 @@ type ocspResponseCacheEntry struct {
 }
 
 type ocspResponseCacheKey struct {
-	tenantID        string
-	caID            string
-	serial          string
-	status          string
-	reason          int
-	revokedAt       time.Time
-	responderSerial string
+	tenantID  string
+	caID      string
+	serial    string
+	status    string
+	reason    int
+	revokedAt time.Time
 }
 
 func newOCSPResponseCache() *ocspResponseCache {
@@ -67,7 +66,6 @@ func (k ocspResponseCacheKey) String() string {
 		k.status,
 		strconv.Itoa(k.reason),
 		k.revokedAt.UTC().Format(time.RFC3339Nano),
-		k.responderSerial,
 	}
 	return strings.Join(parts, "\x1f")
 }

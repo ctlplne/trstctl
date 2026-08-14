@@ -161,6 +161,9 @@ func TestServedOCSPCachesIdenticalFreshResponses(t *testing.T) {
 	if countedResponder.signs != 1 {
 		t.Fatalf("responder SignDigest calls = %d, want 1 because the second query hits cache", countedResponder.signs)
 	}
+	if st.activeCalls != 1 {
+		t.Fatalf("ActiveOCSPResponder calls = %d, want 1 because a cache hit must not replay projection catch-up", st.activeCalls)
+	}
 }
 
 type countingDigestSigner struct {
@@ -178,10 +181,11 @@ func (c *countingDigestSigner) SignDigest(digest []byte, opts crypto.SignOptions
 }
 
 type ocspResponderRotationStore struct {
-	issued    store.IssuedCert
-	responder store.OCSPResponder
-	found     bool
-	rotations int
+	issued      store.IssuedCert
+	responder   store.OCSPResponder
+	found       bool
+	rotations   int
+	activeCalls int
 }
 
 func (f *ocspResponderRotationStore) LookupIssuedCert(_ context.Context, tenantID, caID, serial string) (store.IssuedCert, bool, error) {
@@ -192,6 +196,7 @@ func (f *ocspResponderRotationStore) LookupIssuedCert(_ context.Context, tenantI
 }
 
 func (f *ocspResponderRotationStore) ActiveOCSPResponder(_ context.Context, tenantID, caID string) (store.OCSPResponder, bool, error) {
+	f.activeCalls++
 	if f.found && f.responder.TenantID == tenantID && f.responder.CAID == caID {
 		return f.responder, true, nil
 	}

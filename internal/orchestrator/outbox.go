@@ -691,27 +691,46 @@ func (o *Outbox) DispatchScoped(ctx context.Context, h Handler, scope Destinatio
 		seenTenants[claim.msg.TenantID] = true
 		seenTenantLanes[tenantEffectiveOutboxLaneKey(claim.msg.TenantID, claim.msg.Destination, claim.msg.EffectLane)] = true
 		processed++
-		deliverErr := o.deliver(ctx, h, claim)
-		if deliverErr != nil && !IsDeliveryDeferred(deliverErr) && claim.attempts >= o.maxAttempts {
-			if terminal, ok := h.(TerminalFailureHandler); ok {
-				if err := terminal.DeliverTerminalFailure(ctx, claim.msg, deliverErr); IsDeliveryDeferred(err) {
-					// The domain knows this failure is ambiguous. Keep the durable
-					// command pending, refund this claim, and preserve its FIFO barrier
-					// until reconciliation or a later idempotent retry proves an outcome.
-					deliverErr = err
-				} else if err != nil {
-					destroyDeliveryError(deliverErr)
-					return processed, fmt.Errorf("orchestrator: record terminal delivery failure: %w", err)
-				}
-			}
-		}
-		finalizeErr := o.finalizeClaim(ctx, claim, deliverErr)
-		destroyDeliveryError(deliverErr)
-		if finalizeErr != nil {
-			return processed, finalizeErr
+		if err := o.dispatchClaim(ctx, h, claim); err != nil {
+			return processed, err
 		}
 	}
 	return processed, nil
+}
+
+// DispatchOneScoped attempts at most one currently due row from one destination
+// family. It is the exact primitive for a caller already holding one durable
+// command receipt: unlike DispatchScoped, it does not perform a second empty-queue
+// sweep merely to prove that unrelated work is absent.
+func (o *Outbox) DispatchOneScoped(ctx context.Context, h Handler, scope DestinationScope) (bool, error) {
+	if err := scope.validate(); err != nil {
+		return false, err
+	}
+	claim, claimed, err := o.claimOne(ctx, o.clockNow(), map[string]bool{}, map[string]bool{}, scope)
+	if err != nil || !claimed {
+		return claimed, err
+	}
+	return true, o.dispatchClaim(ctx, h, claim)
+}
+
+func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutboxEntry) error {
+	deliverErr := o.deliver(ctx, h, claim)
+	if deliverErr != nil && !IsDeliveryDeferred(deliverErr) && claim.attempts >= o.maxAttempts {
+		if terminal, ok := h.(TerminalFailureHandler); ok {
+			if err := terminal.DeliverTerminalFailure(ctx, claim.msg, deliverErr); IsDeliveryDeferred(err) {
+				// The domain knows this failure is ambiguous. Keep the durable
+				// command pending, refund this claim, and preserve its FIFO barrier
+				// until reconciliation or a later idempotent retry proves an outcome.
+				deliverErr = err
+			} else if err != nil {
+				destroyDeliveryError(deliverErr)
+				return fmt.Errorf("orchestrator: record terminal delivery failure: %w", err)
+			}
+		}
+	}
+	finalizeErr := o.finalizeClaim(ctx, claim, deliverErr)
+	destroyDeliveryError(deliverErr)
+	return finalizeErr
 }
 
 func (o *Outbox) deliver(ctx context.Context, h Handler, claim claimedOutboxEntry) error {

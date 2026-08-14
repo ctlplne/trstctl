@@ -575,7 +575,7 @@ func (a *API) upsertVaultKVSecret(
 				return store.Secret{}, applicationSecretMutationError(err)
 			}
 		}
-		if _, _, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload); err != nil {
+		if _, _, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); err != nil {
 			return store.Secret{}, applicationSecretMutationError(err)
 		}
 		rec, getErr := a.secrets.be.Store.GetSecret(ctx, tenantID, name)
@@ -598,7 +598,7 @@ func (a *API) upsertVaultKVSecret(
 	if err != nil {
 		return store.Secret{}, applicationSecretMutationError(err)
 	}
-	event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload)
+	event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared)
 	if err != nil {
 		return store.Secret{}, applicationSecretMutationError(err)
 	}

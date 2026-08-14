@@ -485,7 +485,14 @@ func (s *liveEvalStack) issueOverServedAPI() error {
 	}, http.StatusOK, nil); err != nil {
 		return err
 	}
-	return s.srv.Drain(ctx)
+	attempted, err := s.srv.DispatchIssuanceOnce(ctx)
+	if err != nil {
+		return err
+	}
+	if !attempted {
+		return fmt.Errorf("perf live: issued transition produced no pending built-in CA command")
+	}
+	return nil
 }
 
 func (s *liveEvalStack) rotateSecretOverServedAPI() error {
