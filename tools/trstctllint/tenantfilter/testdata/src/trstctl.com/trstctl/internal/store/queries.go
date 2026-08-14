@@ -74,6 +74,30 @@ const (
 	// tenant_id carried only by a subquery's WHERE — clean (the subquery scopes it).
 	subqueryWhere = "SELECT id::text, (SELECT count(*) FROM approvals a WHERE a.tenant_id = c.tenant_id) FROM ceremonies c WHERE c.tenant_id = $1"
 
+	// Go raw strings preserve normal SQL formatting. Newlines and tabs are SQL
+	// whitespace, so the analyzer must recognize these predicates exactly as it
+	// recognizes the single-line forms above.
+	multilineWhere = `SELECT id, name
+		FROM certificates
+		WHERE tenant_id = $1
+		ORDER BY name`
+	multilineUpdate = `UPDATE certificates
+		SET revoked = true
+		WHERE tenant_id = $1 AND id = $2`
+	multilineDelete = `DELETE FROM certificates
+		WHERE tenant_id = $1 AND id = $2`
+	multilineJoin = `SELECT c.id
+		FROM certs c
+		JOIN owners o
+		  ON o.tenant_id = c.tenant_id
+		WHERE c.id = $1`
+
+	// SET on another line must still enter the UPDATE rule. This is the fail-open
+	// half of the whitespace regression: it lacks a tenant predicate and must fail.
+	multilineUpdateBad = "UPDATE certificates\n" + // want "does not filter on tenant_id"
+		"\tSET revoked = true\n" +
+		"\tWHERE id = $1"
+
 	// A bare HTTP-method-looking string is NOT a DML statement (strict isDML),
 	// so it must not be flagged even though the package is in scope.
 	notSQL     = "DELETE"

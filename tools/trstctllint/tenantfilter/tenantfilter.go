@@ -115,7 +115,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			if !ok {
 				return true
 			}
-			clean := stripSQLComments(sql)
+			clean := normalizeSQLWhitespace(stripSQLComments(sql))
 			if !isDML(clean) {
 				return true
 			}
@@ -133,6 +133,14 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		})
 	}
 	return nil, nil
+}
+
+// normalizeSQLWhitespace gives SQL's whitespace rules the same representation
+// the clause scanner expects. Go raw strings commonly format WHERE, SET, and ON
+// across tabs/newlines; treating only an ASCII space as a separator both rejects
+// safe formatted queries and can skip an unsafe multiline UPDATE entirely.
+func normalizeSQLWhitespace(sql string) string {
+	return strings.Join(strings.Fields(sql), " ")
 }
 
 // sqlExpr returns the expression to evaluate as a SQL statement: a string
