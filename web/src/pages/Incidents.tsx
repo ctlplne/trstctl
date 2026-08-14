@@ -1248,9 +1248,7 @@ export function Incidents() {
           <h2 id="fleet-heading" className="text-title font-semibold">
             {translateNow("source.fleet.re.issuance.fa35f7921e")}
           </h2>
-          <p className="mt-1 max-w-4xl text-sm text-muted-foreground">
-            {translateNow("incidents.fleet.planSummary")}
-          </p>
+          <p className="mt-1 max-w-4xl text-sm text-muted-foreground">{translateNow("incidents.fleet.planSummary")}</p>
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={startFleetReissuance}>
           <label className="grid gap-1 text-sm font-medium">
@@ -1277,10 +1275,7 @@ export function Incidents() {
           </label>
           <label className="grid gap-1 text-sm font-medium">
             {translateNow("secrets.scan.mode")}
-            <Select
-              value={fleetForm.mode}
-              onChange={(event) => setFleetForm({ ...fleetForm, mode: event.target.value as FleetReissuanceRequest["mode"] })}
-            >
+            <Select value={fleetForm.mode} onChange={(event) => setFleetForm({ ...fleetForm, mode: event.target.value as FleetReissuanceRequest["mode"] })}>
               <option value="live">{translateNow("integrate.gitops.live")}</option>
               <option value="game_day">{translateNow("incidents.fleet.modeGameDay")}</option>
             </Select>

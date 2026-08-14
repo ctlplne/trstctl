@@ -83,16 +83,19 @@ describe("api error handling (SURFACE-007)", () => {
 describe("first-class issuance requests (AUD-78)", () => {
   it("posts the selected owner UUID through the idempotent request mutation", async () => {
     document.cookie = "trstctl_csrf=csrf-request; path=/";
-    mockFetch(201, JSON.stringify({
-      id: "request-1",
-      tenant_id: "11111111-1111-4111-8111-111111111111",
-      subject: "payments-api",
-      owner_id: "11111111-1111-4111-8111-111111111119",
-      requester: "oidc|dev-1",
-      status: "requested",
-      expires_at: "2026-08-20T00:00:00Z",
-      created_at: "2026-08-13T00:00:00Z",
-    }));
+    mockFetch(
+      201,
+      JSON.stringify({
+        id: "request-1",
+        tenant_id: "11111111-1111-4111-8111-111111111111",
+        subject: "payments-api",
+        owner_id: "11111111-1111-4111-8111-111111111119",
+        requester: "oidc|dev-1",
+        status: "requested",
+        expires_at: "2026-08-20T00:00:00Z",
+        created_at: "2026-08-13T00:00:00Z",
+      }),
+    );
 
     await api.createIssuanceRequest({
       subject: "payments-api",

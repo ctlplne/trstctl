@@ -262,7 +262,9 @@ function CRLDistributionPanel({ distributions }: { distributions: CRLDistributio
   const totalRevoked = distributions.reduce((sum, item) => sum + item.revoked_count, 0);
   return (
     <section aria-labelledby="crl-distribution-heading" className="border-y border-border py-4">
-      <h2 id="crl-distribution-heading" className="text-base font-semibold">{t("certificates.crl.heading")}</h2>
+      <h2 id="crl-distribution-heading" className="text-base font-semibold">
+        {t("certificates.crl.heading")}
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {distributions.length > 0
           ? t("certificates.crl.summary", {
@@ -278,10 +280,20 @@ function CRLDistributionPanel({ distributions }: { distributions: CRLDistributio
             <li key={item.ca_id} className="rounded-md border border-border p-3 text-sm">
               <span className="font-medium">{item.ca_id}</span>
               <div className="mt-1 flex flex-wrap gap-3 text-xs">
-                <a className="font-mono text-primary underline" href={item.full_url}>#{item.full_number}</a>
-                <span>{formatCount(item.shards.length)} · {t("certificates.crl.shardPlan", { shardCount: formatCount(item.shard_count) })}</span>
-                {item.delta_url && <a className="font-mono text-primary underline" href={item.delta_url}>{t("certificates.crl.deltaBase", { base: item.delta_base_number ?? "" })}</a>}
-                <span>{formatDate(item.this_update)} → {formatDate(item.next_update)}</span>
+                <a className="font-mono text-primary underline" href={item.full_url}>
+                  #{item.full_number}
+                </a>
+                <span>
+                  {formatCount(item.shards.length)} · {t("certificates.crl.shardPlan", { shardCount: formatCount(item.shard_count) })}
+                </span>
+                {item.delta_url && (
+                  <a className="font-mono text-primary underline" href={item.delta_url}>
+                    {t("certificates.crl.deltaBase", { base: item.delta_base_number ?? "" })}
+                  </a>
+                )}
+                <span>
+                  {formatDate(item.this_update)} → {formatDate(item.next_update)}
+                </span>
               </div>
             </li>
           ))}
@@ -294,12 +306,24 @@ function CRLDistributionPanel({ distributions }: { distributions: CRLDistributio
 function RevocationHealthPanel({ health }: { health: RevocationHealth }) {
   const { t } = useTranslation();
   const statusLabel = (status: RevocationHealth["items"][number]["status"]): string =>
-    t(status === "fresh" ? "certificates.health.stateOk" : status === "expiring" ? "nav.task.expiringSoon.label" : status === "stale" ? "secrets.rotationHealth.stale" : status === "unparseable" ? "integrate.gitops.invalid" : "protocols.ari.failed");
+    t(
+      status === "fresh"
+        ? "certificates.health.stateOk"
+        : status === "expiring"
+          ? "nav.task.expiringSoon.label"
+          : status === "stale"
+            ? "secrets.rotationHealth.stale"
+            : status === "unparseable"
+              ? "integrate.gitops.invalid"
+              : "protocols.ari.failed",
+    );
   const statusTone = (status: RevocationHealth["items"][number]["status"]) =>
     status === "fresh" ? "success" : status === "expiring" || status === "unreachable" ? "warning" : "critical";
   return (
     <section aria-labelledby="revocation-health-heading" className="border-y border-border py-4">
-      <h2 id="revocation-health-heading" className="text-base font-semibold">{t("source.revocation.r2cap00001")}</h2>
+      <h2 id="revocation-health-heading" className="text-base font-semibold">
+        {t("source.revocation.r2cap00001")}
+      </h2>
       {health.observed && (
         <ul className="mt-4 grid gap-2">
           {health.items.map((item) => (
@@ -309,7 +333,9 @@ function RevocationHealthPanel({ health }: { health: RevocationHealth }) {
                 <StatusBadge value={item.status} tone={statusTone(item.status)} label={statusLabel(item.status)} />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                {item.protocol.toUpperCase()} · {item.issuer_subject} · {item.signature_verified ? t("source.verified.j2dr000007") : item.detail_code} · {item.next_update ? formatDate(item.next_update) : formatDate(item.observed_at)} · {item.observed_by_agent_name} · <span className="font-mono">{item.evidence_digest.slice(0, 12)}…</span>
+                {item.protocol.toUpperCase()} · {item.issuer_subject} · {item.signature_verified ? t("source.verified.j2dr000007") : item.detail_code} ·{" "}
+                {item.next_update ? formatDate(item.next_update) : formatDate(item.observed_at)} · {item.observed_by_agent_name} ·{" "}
+                <span className="font-mono">{item.evidence_digest.slice(0, 12)}…</span>
               </p>
             </li>
           ))}

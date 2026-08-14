@@ -76,11 +76,7 @@ export function AuditFeedPanel() {
   const canWrite = useCan("audit:write");
   const queryClient = useQueryClient();
   const available = typeof api.auditFeeds === "function" && typeof api.putAuditFeed === "function";
-  const feeds = useApiQuery(
-    ["audit-feeds"],
-    () => (available ? api.auditFeeds() : Promise.resolve({ items: [] })),
-    { enabled: canRead && available },
-  );
+  const feeds = useApiQuery(["audit-feeds"], () => (available ? api.auditFeeds() : Promise.resolve({ items: [] })), { enabled: canRead && available });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
@@ -167,9 +163,7 @@ export function AuditFeedPanel() {
       cell: (feed) => (
         <span className="grid gap-1">
           <strong>{t("audit.feeds.recordCount", { count: formatNumber(feed.lag_records) })}</strong>
-          <span className="text-xs text-muted-foreground">
-            {t("audit.feeds.sequence", { sequence: formatNumber(feed.last_delivered_sequence) })}
-          </span>
+          <span className="text-xs text-muted-foreground">{t("audit.feeds.sequence", { sequence: formatNumber(feed.last_delivered_sequence) })}</span>
         </span>
       ),
     },
@@ -261,12 +255,7 @@ export function AuditFeedPanel() {
             <Field label={t("audit.feeds.endpoint")} error={form.formState.errors.endpointUrl?.message} required>
               {(control) => <Input {...control} type="url" placeholder={t("audit.feeds.endpointPlaceholder")} {...form.register("endpointUrl")} />}
             </Field>
-            <Field
-              label={t("audit.feeds.tokenRef")}
-              description={t("audit.feeds.tokenRefHelp")}
-              error={form.formState.errors.tokenRef?.message}
-              required
-            >
+            <Field label={t("audit.feeds.tokenRef")} description={t("audit.feeds.tokenRefHelp")} error={form.formState.errors.tokenRef?.message} required>
               {(control) => <Input {...control} placeholder={t("audit.feeds.tokenRefPlaceholder")} autoComplete="off" {...form.register("tokenRef")} />}
             </Field>
             <Field label={t("audit.feeds.interval")} error={form.formState.errors.intervalSeconds?.message} required>
@@ -294,8 +283,16 @@ export function AuditFeedPanel() {
               {t("audit.feeds.privateEndpoint")}
             </label>
           </div>
-          {operationError ? <p role="alert" className="text-sm text-risk-critical">{operationError}</p> : null}
-          {notice ? <p role="status" className="text-sm text-status-success">{notice}</p> : null}
+          {operationError ? (
+            <p role="alert" className="text-sm text-risk-critical">
+              {operationError}
+            </p>
+          ) : null}
+          {notice ? (
+            <p role="status" className="text-sm text-status-success">
+              {notice}
+            </p>
+          ) : null}
           <div>
             <Button type="submit" disabled={busy}>
               {busy ? t("audit.feeds.saving") : t("audit.feeds.save")}

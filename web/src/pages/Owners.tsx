@@ -88,8 +88,7 @@ function UnownedQueuePanel() {
             value1: String(data.counts?.no_owner ?? 0),
             value2: String(data.counts?.owner_missing_application_model ?? 0),
             value3: String(data.counts?.ownership_never_attested ?? 0),
-          })}
-          {" "}
+          })}{" "}
           {t("owners.readiness.staleCount", { count: String(data.counts?.ownership_attestation_stale ?? 0) })}
         </p>
         <ul className="space-y-2 text-sm">
@@ -510,12 +509,7 @@ export function Owners() {
             </label>
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-kind">
               {translateNow("source.owner.kind.eb9923cec7")}
-              <Select
-                id="owner-edit-kind"
-                className="font-normal"
-                value={editKind}
-                onChange={(event) => setEditKind(event.target.value as Owner["kind"])}
-              >
+              <Select id="owner-edit-kind" className="font-normal" value={editKind} onChange={(event) => setEditKind(event.target.value as Owner["kind"])}>
                 {ownerKinds.map((ownerKind) => (
                   <option key={ownerKind} value={ownerKind}>
                     {ownerKind}

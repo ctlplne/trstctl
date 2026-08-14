@@ -172,15 +172,10 @@ export function RequestCredential() {
   const matchingOwners = useMemo(() => {
     const query = ownerQuery.trim().toLocaleLowerCase();
     if (!query) return owners ?? [];
-    return (owners ?? []).filter((owner) =>
-      [owner.name, owner.kind, owner.email ?? "", owner.id].some((value) => value.toLocaleLowerCase().includes(query)),
-    );
+    return (owners ?? []).filter((owner) => [owner.name, owner.kind, owner.email ?? "", owner.id].some((value) => value.toLocaleLowerCase().includes(query)));
   }, [ownerQuery, owners]);
   const myRequests = useMemo(
-    () =>
-      (requests ?? [])
-        .filter((request) => request.requester === requester)
-        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    () => (requests ?? []).filter((request) => request.requester === requester).sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [requester, requests],
   );
 
@@ -355,12 +350,7 @@ export function RequestCredential() {
                       />
                     )}
                   </Field>
-                  <Field
-                    label={translateNow("source.owner.4b1b8aa360")}
-                    description={t("request.wizard.ownerHint")}
-                    error={errors.ownerId?.message}
-                    required
-                  >
+                  <Field label={translateNow("source.owner.4b1b8aa360")} description={t("request.wizard.ownerHint")} error={errors.ownerId?.message} required>
                     {(control) => (
                       <Select {...control} {...register("ownerId")} disabled={owners == null || owners.length === 0 || ownerError != null} required>
                         <option value="" disabled>

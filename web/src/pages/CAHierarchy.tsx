@@ -208,9 +208,7 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
   if (!checklist) return null;
   const epoch = Number(finalEpoch);
   const destroyed = checklist.retirement_status === "destroyed";
-  const recordHref = checklist.destruction_record
-    ? `data:application/json;charset=utf-8,${encodeURIComponent(checklist.destruction_record)}`
-    : "";
+  const recordHref = checklist.destruction_record ? `data:application/json;charset=utf-8,${encodeURIComponent(checklist.destruction_record)}` : "";
   return (
     <section aria-labelledby="retirement-heading" className="ui-panel space-y-3 p-comfortable">
       <h3 id="retirement-heading" className="text-title font-semibold">
@@ -243,11 +241,7 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
       )}
       {checklist.destruction_record && (
         <div className="space-y-2">
-          <a
-            className="text-sm font-medium text-brand-accent underline"
-            download={`trstctl-ca-key-${keyId}-destruction-record.json`}
-            href={recordHref}
-          >
+          <a className="text-sm font-medium text-brand-accent underline" download={`trstctl-ca-key-${keyId}-destruction-record.json`} href={recordHref}>
             {translateNow("source.retirement.download.record.h4ret00012")}
           </a>
           <details className="text-sm">
@@ -286,7 +280,11 @@ function RetirementChecklistPanel({ keyId }: { keyId: string }) {
               {translateNow("source.retirement.refresh.h4ret00007")}
             </Button>
           </div>
-          {requestError && <p className="text-sm text-destructive" role="alert">{requestError}</p>}
+          {requestError && (
+            <p className="text-sm text-destructive" role="alert">
+              {requestError}
+            </p>
+          )}
         </div>
       )}
       <p className="text-caption text-muted-foreground">{checklist.guidance}</p>
@@ -308,12 +306,7 @@ function RetirementWorkspace({ candidates }: { candidates: CAAuthority[] }) {
     <div className="space-y-3">
       <label className="grid gap-1 text-sm" htmlFor="retirement-key-selector">
         {translateNow("source.retirement.checklist.h4ret00001")}
-        <select
-          className="ui-input"
-          id="retirement-key-selector"
-          onChange={(event) => setKeyId(event.target.value)}
-          value={keyId}
-        >
+        <select className="ui-input" id="retirement-key-selector" onChange={(event) => setKeyId(event.target.value)} value={keyId}>
           {candidates.map((candidate) => (
             <option key={candidate.id} value={candidate.id}>
               {candidate.common_name} ({candidate.status})

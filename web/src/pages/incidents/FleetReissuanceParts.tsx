@@ -54,7 +54,8 @@ export function FleetReissuanceTable({
                   {run.revoked_identity_ids.length} {translateNow("source.revoked.4bb47f186d")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {run.mode} · {translateNow("source.trusted.by.count.h1trust0002", {
+                  {run.mode} ·{" "}
+                  {translateNow("source.trusted.by.count.h1trust0002", {
                     value1: run.exact_trust_store_ids?.length ?? 0,
                     value2: run.exact_trust_hosts?.length ?? 0,
                   })}
