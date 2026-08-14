@@ -582,7 +582,8 @@ const dynamicSecretLeaseAuthoritySelect = `SELECT id, tenant_id::text, tenant_ep
        credential_digest, state, issue_outbox_id, revocation_status,
        revoke_outbox_id, last_error, issued_at, expires_at, hard_expires_at,
        revoked_at, revocation_completed_at, updated_at
-  FROM dynamic_secret_leases`
+  FROM dynamic_secret_leases
+ WHERE tenant_id = $1`
 
 // loadDynamicSecretLeaseForUpdateTx locks the complete retained command/result
 // tuple before an issued replay decides whether it is the first exact result or
@@ -597,7 +598,7 @@ func loadDynamicSecretLeaseForUpdateTx(
 	var lease DynamicSecretLease
 	err := scanDynamicSecretLeaseAuthority(tx.QueryRow(ctx,
 		dynamicSecretLeaseAuthoritySelect+`
-		 WHERE tenant_id = $1 AND id = $2
+		 AND id = $2
 		 FOR UPDATE`, tenantID, leaseID), &lease)
 	return lease, err
 }
@@ -637,7 +638,7 @@ func (s *Store) GetDynamicSecretLease(ctx context.Context, tenantID, leaseID str
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanDynamicSecretLeaseAuthority(tx.QueryRow(ctx,
 			dynamicSecretLeaseAuthoritySelect+`
-			 WHERE tenant_id = $1 AND id = $2`,
+			 AND id = $2`,
 			tenantID, leaseID), &lease)
 	})
 	return lease, err
@@ -651,7 +652,7 @@ func (s *Store) GetDynamicSecretLeaseByIdempotencyKey(ctx context.Context, tenan
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanDynamicSecretLeaseAuthority(tx.QueryRow(ctx,
 			dynamicSecretLeaseAuthoritySelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2`,
+			 AND idempotency_key = $2`,
 			tenantID, idempotencyKey), &lease)
 	})
 	return lease, err
@@ -669,7 +670,7 @@ func (s *Store) ListDynamicSecretLeasesPage(ctx context.Context, tenantID, provi
 	var out []DynamicSecretLease
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, dynamicSecretLeaseAuthoritySelect+`
-			 WHERE tenant_id = $1 AND id > $2
+			 AND id > $2
 			    AND ($3 = '' OR provider = $3)
 			    AND ($4 = '' OR state = $4)
 			  ORDER BY id
@@ -704,7 +705,7 @@ func (s *Store) ListDueDynamicSecretLeases(ctx context.Context, tenantID string,
 	var out []DynamicSecretLease
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, dynamicSecretLeaseAuthoritySelect+`
-			 WHERE tenant_id = $1 AND state = 'active' AND expires_at <= $2
+			 AND state = 'active' AND expires_at <= $2
 			  ORDER BY expires_at, id
 			  LIMIT $3`,
 			tenantID, now, limit)

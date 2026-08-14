@@ -382,7 +382,7 @@ func loadSecretRotationScheduleStartupTickTx(
 	var tick SecretRotationScheduleTick
 	err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 		secretRotationScheduleTickSelect+`
-		 WHERE tenant_id = $1 AND idempotency_key = $2 AND identity_version = 3`,
+		 AND idempotency_key = $2 AND identity_version = 3`,
 		tenantID, key), &tick)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SecretRotationScheduleTick{}, false, nil

@@ -457,7 +457,8 @@ const secretRotationScheduleTickSelect = `SELECT tenant_id::text, identity_versi
 	       terminal_http_status, terminal_body,
 	       privacy_rewrite_version, privacy_subject_ref, privacy_operation_id, privacy_event_id,
 	       created_at, updated_at, completed_at
-  FROM secret_rotation_schedule_ticks`
+	  FROM secret_rotation_schedule_ticks
+	 WHERE tenant_id = $1`
 
 func scanSecretRotationScheduleTick(row rowScanner, tick *SecretRotationScheduleTick) error {
 	var (
@@ -618,7 +619,7 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 	tickExists := true
 	err = scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 		secretRotationScheduleTickSelect+`
-		 WHERE tenant_id = $1 AND idempotency_key = $2
+		 AND idempotency_key = $2
 		 FOR UPDATE`, tenantID, idempotencyKey), &tick)
 	if errors.Is(err, pgx.ErrNoRows) {
 		tickExists = false
@@ -636,7 +637,7 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 		var cursorTick SecretRotationScheduleTick
 		cursorTickErr := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 			secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2
+			 AND idempotency_key = $2
 			 FOR UPDATE`, tenantID, cursor.ActiveTickKey), &cursorTick)
 		foreignLifecycle := errors.Is(cursorTickErr, pgx.ErrNoRows) ||
 			(cursorTickErr == nil && (cursorTick.IdentityVersion != SecretRotationScheduleIdentityVersion ||
@@ -721,7 +722,7 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 			var superseded SecretRotationScheduleTick
 			if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-				 WHERE tenant_id = $1 AND idempotency_key = $2
+				 AND idempotency_key = $2
 				 FOR UPDATE`, tenantID, cursor.ActiveTickKey), &superseded); err != nil {
 				return prepared, fmt.Errorf("%w: load expired active tick: %v", ErrSecretRotationScheduleTickConflict, err)
 			}
@@ -878,7 +879,7 @@ func (s *Store) PrepareSecretRotationScheduleTickTx(
 	}
 	if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 		secretRotationScheduleTickSelect+`
-		 WHERE tenant_id = $1 AND idempotency_key = $2`, tenantID, idempotencyKey), &prepared.Tick); err != nil {
+		 AND idempotency_key = $2`, tenantID, idempotencyKey), &prepared.Tick); err != nil {
 		return prepared, err
 	}
 	if err := validateSecretRotationScheduleTickSnapshotTx(ctx, tx, prepared.Tick); err != nil {
@@ -1061,7 +1062,7 @@ func (s *Store) StartSecretRotationScheduleTickRow(
 			var retained SecretRotationScheduleTick
 			if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2
+			 AND idempotency_key = $2
 			 FOR UPDATE`, tick.TenantID, tick.IdempotencyKey), &retained); err != nil {
 				return err
 			}
@@ -1128,7 +1129,7 @@ func (s *Store) StartSecretRotationScheduleTickRow(
 			}
 			return scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2`, retained.TenantID, retained.IdempotencyKey), &out)
+			 AND idempotency_key = $2`, retained.TenantID, retained.IdempotencyKey), &out)
 		})
 	return out, err
 }
@@ -1160,7 +1161,7 @@ func (s *Store) MarkSecretRotationScheduleTickWrapped(
 			var retained SecretRotationScheduleTick
 			if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2
+			 AND idempotency_key = $2
 			 FOR UPDATE`, tick.TenantID, tick.IdempotencyKey), &retained); err != nil {
 				return err
 			}
@@ -1212,7 +1213,7 @@ func (s *Store) MarkSecretRotationScheduleTickWrapped(
 			}
 			return scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2`, retained.TenantID, retained.IdempotencyKey), &out)
+			 AND idempotency_key = $2`, retained.TenantID, retained.IdempotencyKey), &out)
 		})
 	return out, err
 }
@@ -1252,7 +1253,7 @@ func (s *Store) CompleteSecretRotationScheduleTickRow(
 			var retained SecretRotationScheduleTick
 			if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2
+			 AND idempotency_key = $2
 			 FOR UPDATE`, tick.TenantID, tick.IdempotencyKey), &retained); err != nil {
 				return err
 			}
@@ -1327,7 +1328,7 @@ func (s *Store) CompleteSecretRotationScheduleTickRow(
 			}
 			return scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2`, retained.TenantID, retained.IdempotencyKey), &out)
+			 AND idempotency_key = $2`, retained.TenantID, retained.IdempotencyKey), &out)
 		})
 	return out, err
 }
@@ -1365,7 +1366,7 @@ func (s *Store) FinalizeSecretRotationScheduleTick(
 			var retained SecretRotationScheduleTick
 			if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2
+			 AND idempotency_key = $2
 			 FOR UPDATE`, tick.TenantID, tick.IdempotencyKey), &retained); err != nil {
 				return err
 			}
@@ -1444,7 +1445,7 @@ func (s *Store) FinalizeSecretRotationScheduleTick(
 			}
 			return scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 				secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2`, retained.TenantID, retained.IdempotencyKey), &out)
+			 AND idempotency_key = $2`, retained.TenantID, retained.IdempotencyKey), &out)
 		})
 	return out, err
 }
@@ -1475,7 +1476,7 @@ func (s *Store) VerifySecretRotationScheduleTickTerminalTx(
 	var retained SecretRotationScheduleTick
 	if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 		secretRotationScheduleTickSelect+`
-		 WHERE tenant_id = $1 AND idempotency_key = $2
+		 AND idempotency_key = $2
 		 FOR UPDATE`, tenantID, idempotencyKey), &retained); err != nil {
 		return err
 	}
@@ -1529,7 +1530,7 @@ func (s *Store) GetSecretRotationScheduleTick(ctx context.Context, tenantID, ide
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 			secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2`, tenantID, idempotencyKey), &out)
+			 AND idempotency_key = $2`, tenantID, idempotencyKey), &out)
 	})
 	return out, err
 }

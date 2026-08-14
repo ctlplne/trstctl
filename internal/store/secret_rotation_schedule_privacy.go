@@ -368,7 +368,7 @@ func (s *Store) PrepareSecretRotationSchedulePrivacyErasureTx(
 		var retained SecretRotationScheduleTick
 		if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 			secretRotationScheduleTickSelect+`
-			 WHERE tenant_id = $1 AND idempotency_key = $2
+			 AND idempotency_key = $2
 			 FOR UPDATE`, tenantID, tickKey), &retained); err != nil {
 			return result, fmt.Errorf("store: lock selected scheduler tick: %w", err)
 		}
@@ -395,7 +395,7 @@ func (s *Store) PrepareSecretRotationSchedulePrivacyErasureTx(
 	for _, runID := range commandIDs {
 		retained, err := scanSecretRotationSchedulePrivacyCommand(tx.QueryRow(ctx,
 			secretRotationSchedulePrivacyCommandSelect+`
-			 WHERE tenant_id = $1 AND run_id = $2::uuid
+			 AND run_id = $2::uuid
 			 FOR UPDATE`, tenantID, runID))
 		if err != nil {
 			return result, fmt.Errorf("store: lock selected scheduler command: %w", err)
@@ -618,7 +618,7 @@ func loadSecretRotationSchedulePrivacyTicksTx(
 	tenantID string,
 ) ([]secretRotationSchedulePrivacyTick, error) {
 	rows, err := tx.Query(ctx, secretRotationScheduleTickSelect+`
-		 WHERE tenant_id = $1 ORDER BY idempotency_key`, tenantID)
+		 ORDER BY idempotency_key`, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +697,8 @@ const secretRotationSchedulePrivacyCommandSelect = `SELECT run_id::text, schedul
        terminal_event_id, status,
        privacy_rewrite_version, privacy_subject_ref,
        privacy_operation_id, privacy_event_id
-  FROM secret_rotation_schedule_commands`
+  FROM secret_rotation_schedule_commands
+ WHERE tenant_id = $1`
 
 func scanSecretRotationSchedulePrivacyCommand(row rowScanner) (secretRotationSchedulePrivacyCommand, error) {
 	var command secretRotationSchedulePrivacyCommand
@@ -719,7 +720,6 @@ func loadSecretRotationSchedulePrivacyCommandsTx(
 	tenantID string,
 ) ([]secretRotationSchedulePrivacyCommand, error) {
 	rows, err := tx.Query(ctx, secretRotationSchedulePrivacyCommandSelect+`
-		 WHERE tenant_id = $1
 		 ORDER BY run_id`, tenantID)
 	if err != nil {
 		return nil, err

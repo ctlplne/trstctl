@@ -716,7 +716,7 @@ func lockAndValidateSecretRotationScheduleTickChildTx(
 	var tick SecretRotationScheduleTick
 	if err := scanSecretRotationScheduleTick(tx.QueryRow(ctx,
 		secretRotationScheduleTickSelect+`
-		 WHERE tenant_id = $1 AND idempotency_key = $2
+		 AND idempotency_key = $2
 		 FOR UPDATE`, command.TenantID, command.TickIdempotencyKey), &tick); err != nil {
 		return fmt.Errorf("%w: load active aggregate tick: %v", ErrSecretRotationScheduleCommandConflict, err)
 	}
