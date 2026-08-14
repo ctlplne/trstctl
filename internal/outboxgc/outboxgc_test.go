@@ -73,7 +73,8 @@ func newStore(t *testing.T) *store.Store {
 	}
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE code_signing_operations, managed_key_operations, managed_keys,
-		          tenants, outbox RESTART IDENTITY CASCADE`); err != nil {
+		          secret_sync_jobs, application_secret_tenant_epochs, tenants, outbox
+		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })
@@ -127,8 +128,8 @@ func seedDeliveredSecretSync(t *testing.T, s *store.Store, key, target string, o
 		        secret_sync_order_from_event, secret_sync_receiver_effect_state,
 		        secret_sync_receiver_io_starts)
 		VALUES ($1, 'secret.sync.' || $2, 'secret.sync:' || $2, $3, $4,
-		        'delivered', $5, $6, $7, true, 'effect_possible', $5)
-		RETURNING id`, tenantA, target, []byte("sealed-command"), key, starts, deliveredAt, order).Scan(&outboxID); err != nil {
+		        'delivered', $5, $6, $7, true, 'effect_possible', $8)
+		RETURNING id`, tenantA, target, []byte("sealed-command"), key, starts, deliveredAt, order, starts).Scan(&outboxID); err != nil {
 		t.Fatalf("seed delivered secret-sync outbox %s: %v", key, err)
 	}
 	if withJob {
