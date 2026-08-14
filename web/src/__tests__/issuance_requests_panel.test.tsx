@@ -18,13 +18,17 @@ vi.mock("@/lib/api", async (orig) => {
 describe("ticket-intake relay visibility", () => {
   beforeEach(() => {
     apiMock.issuanceRequests.mockReset().mockResolvedValue({ items: [], open: 0, guidance: "" });
-    apiMock.ticketIntakeSchedule.mockReset().mockResolvedValue({
-      configured: true,
-      enabled: true,
-      system: "servicenow",
-      last_error: "a dispatched ticket.sync job is still waiting",
-      guidance: "A network relay executes the durable read; the control plane never dials ServiceNow.",
-    });
+    apiMock.ticketIntakeSchedule.mockReset().mockImplementation(async (system: "servicenow" | "jira") =>
+      system === "servicenow"
+        ? {
+            configured: true,
+            enabled: true,
+            system,
+            last_error: "a dispatched ticket.sync job is still waiting",
+            guidance: "A network relay executes the durable read; the control plane never dials ServiceNow.",
+          }
+        : { configured: false, enabled: false, system, guidance: "" },
+    );
   });
 
   it("shows the durable relay outcome even before a ticket opens a request", async () => {
@@ -35,6 +39,8 @@ describe("ticket-intake relay visibility", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Network relay" })).toBeInTheDocument();
+    expect(apiMock.ticketIntakeSchedule).toHaveBeenCalledWith("servicenow");
+    expect(apiMock.ticketIntakeSchedule).toHaveBeenCalledWith("jira");
     expect(screen.getByText((_, node) => node?.tagName === "P" && node.textContent === "servicenow · Enabled · Last run: —")).toBeInTheDocument();
     expect(screen.getByText("a dispatched ticket.sync job is still waiting")).toBeInTheDocument();
     expect(screen.getByText(/control plane never dials ServiceNow/)).toBeInTheDocument();
