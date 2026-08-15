@@ -849,6 +849,68 @@ func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(cont
 // recorded result can be loaded.
 // Reusing the raw key for another principal or route returns
 // ErrIdempotencyConflict without running fn or returning cached bytes.
+// LookupBound returns the recorded result of a COMPLETED bound operation
+// without claiming, creating, or waiting on anything. It exists for callers
+// that derive time-bucketed keys and must consult the PREVIOUS bucket before
+// executing under the current one (AUD-201 follow-up I3/V9): a byte-identical
+// retry that straddles a bucket boundary would otherwise claim a fresh row and
+// re-run the mutation. In-flight and indeterminate claims report not-found —
+// the caller then proceeds under its current key, and the underlying claim
+// machinery keeps its own guarantees.
+func (i *Idempotency) LookupBound(ctx context.Context, tenantID, key, binding string) ([]byte, bool, error) {
+	if i == nil || tenantID == "" || key == "" || binding == "" {
+		return nil, false, nil
+	}
+	if i.memory != nil {
+		i.memoryMu.Lock()
+		record, exists := i.boundMemory[tenantID+"\x00"+key]
+		var out []byte
+		found := false
+		if exists && record.completed && idempotencyBindingEqual(record.binding, binding) {
+			out = append([]byte(nil), record.result...)
+			found = true
+		}
+		i.memoryMu.Unlock()
+		return out, found, nil
+	}
+	if i.store == nil {
+		return nil, false, nil
+	}
+	var (
+		result []byte
+		codec  string
+		found  bool
+	)
+	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		scanErr := tx.QueryRow(ctx,
+			`SELECT result_codec, result
+			   FROM idempotency_keys
+			  WHERE tenant_id = $1 AND key = $2 AND request_binding = $3 AND status = 'completed'`,
+			tenantID, key, binding).Scan(&codec, &result)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return nil
+		}
+		if scanErr != nil {
+			return fmt.Errorf("orchestrator: look up bound idempotency result: %w", scanErr)
+		}
+		found = true
+		return nil
+	})
+	if err != nil || !found {
+		secret.Wipe(result)
+		return nil, false, err
+	}
+	if i.resultProtector != nil {
+		plaintext, openErr := i.openResult(ctx, tenantID, key, binding, codec, result)
+		secret.Wipe(result)
+		if openErr != nil {
+			return nil, false, openErr
+		}
+		return plaintext, true, nil
+	}
+	return result, true, nil
+}
+
 func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")

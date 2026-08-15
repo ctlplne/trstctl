@@ -27,7 +27,7 @@ func TestSCIMMutationBindsTokenRouteMethodAndRawBody(t *testing.T) {
 		t.Helper()
 		req := httptest.NewRequest(method, path, bytes.NewReader(raw))
 		recorder := httptest.NewRecorder()
-		a.scimMutate(recorder, req, tok, key, raw, fn)
+		a.scimMutate(recorder, req, tok, key, "", raw, fn)
 		return recorder
 	}
 

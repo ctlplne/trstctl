@@ -130,8 +130,8 @@ func (a *API) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "userName is required")
 		return
 	}
-	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
+	key, prevKey := scimIdempotencyKey(r, raw)
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		member, err := a.applySCIMUser(ctx, tenantID, subject, in)
 		if err != nil {
 			return 0, nil, err
@@ -203,8 +203,8 @@ func (a *API) scimPutUser(w http.ResponseWriter, r *http.Request) {
 	if in.UserName == "" {
 		in.UserName = subject
 	}
-	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
+	key, prevKey := scimIdempotencyKey(r, raw)
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		member, err := a.applySCIMUser(ctx, tenantID, subject, in)
 		if err != nil {
 			return 0, nil, err
@@ -228,8 +228,8 @@ func (a *API) scimPatchUser(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "user id is required")
 		return
 	}
-	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
+	key, prevKey := scimIdempotencyKey(r, raw)
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		cur, err := a.store.GetTenantMember(ctx, tenantID, subject)
 		if err != nil {
 			return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
@@ -257,8 +257,8 @@ func (a *API) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "user id is required")
 		return
 	}
-	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
+	key, prevKey := scimIdempotencyKey(r, raw)
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		if _, err := a.store.GetTenantMember(ctx, tenantID, subject); err != nil {
 			return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
 		}
@@ -310,8 +310,8 @@ func (a *API) scimCreateGroup(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "SCIM group must match a configured RBAC role")
 		return
 	}
-	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
+	key, prevKey := scimIdempotencyKey(r, raw)
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		for _, m := range in.Members {
 			if strings.TrimSpace(m.Value) == "" {
 				continue
@@ -385,8 +385,8 @@ func (a *API) scimPatchGroup(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "renaming SCIM groups is not supported; group id is the RBAC role name")
 		return
 	}
-	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
+	key, prevKey := scimIdempotencyKey(r, raw)
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		if gp.ReplaceAll != nil {
 			current, err := a.store.ListTenantMembersByRole(ctx, tenantID, roleName)
 			if err != nil {
@@ -440,8 +440,8 @@ func (a *API) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusNotFound, "", "group not found")
 		return
 	}
-	key := scimIdempotencyKey(r, raw)
-	a.scimMutate(w, r, tok, key, raw, func(ctx context.Context, tenantID string) (int, any, error) {
+	key, prevKey := scimIdempotencyKey(r, raw)
+	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		members, err := a.store.ListTenantMembersByRole(ctx, tenantID, roleName)
 		if err != nil {
 			return 0, nil, err
@@ -548,7 +548,7 @@ func (a *API) prepareSCIMMutation(w http.ResponseWriter, r *http.Request) (scimT
 	return tok, raw, true
 }
 
-func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, idempotencyKey string, requestBody []byte, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, idempotencyKey, previousBucketKey string, requestBody []byte, fn func(ctx context.Context, tenantID string) (int, any, error)) {
 	if a.idem == nil || a.orch == nil {
 		writeSCIMError(w, http.StatusServiceUnavailable, "", "SCIM mutation spine is not configured")
 		return
@@ -563,6 +563,16 @@ func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, 
 		return
 	}
 	ctx := events.ContextWithActor(r.Context(), events.Actor{Subject: "scim:" + tok.Name, Roles: []string{scimProvisionerRole}})
+	if previousBucketKey != "" {
+		// A derived key is a wall-clock bucket; a byte-identical retry sent
+		// moments after the boundary hashes into a fresh bucket. Consult the
+		// previous bucket's COMPLETED result first so the promised dedupe
+		// holds across exactly one boundary (I3/V9).
+		if cached, found, lookErr := a.idem.LookupBound(ctx, tok.TenantID, previousBucketKey, binding); lookErr == nil && found {
+			a.writeSCIMCached(w, cached, binding)
+			return
+		}
+	}
 	cacheRaw, err := a.idem.DoBound(ctx, tok.TenantID, idempotencyKey, binding, func(ctx context.Context) ([]byte, error) {
 		status, body, ferr := fn(ctx, tok.TenantID)
 		if ferr != nil {
@@ -583,6 +593,12 @@ func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, 
 		writeSCIMMappedError(w, err)
 		return
 	}
+	a.writeSCIMCached(w, cacheRaw, binding)
+}
+
+// writeSCIMCached decodes and serves one recorded mutation result, verifying
+// the stored binding against the authenticated request.
+func (a *API) writeSCIMCached(w http.ResponseWriter, cacheRaw []byte, binding string) {
 	defer secret.Wipe(cacheRaw)
 	var c cachedResponse
 	if err := json.Unmarshal(cacheRaw, &c); err != nil {
@@ -643,21 +659,33 @@ func decodeSCIMRaw(w http.ResponseWriter, raw []byte, dst any) bool {
 // first, returned its recorded result, and never ran. The user stayed
 // provisioned while SCIM reported success.
 //
-// Bucketing by time keeps the property that actually matters — an immediate
-// retry (which is why providers need idempotency at all) lands in the same
-// bucket and dedupes — while letting a deliberate repeat minutes later be its
-// own operation.
+// Bucketing by time keeps the property that actually matters — a retry lands
+// in the same OR the immediately previous bucket and dedupes (scimMutate
+// consults the previous bucket's recorded result before executing, so a retry
+// that straddles a bucket boundary is still deduplicated; AUD-201 follow-up
+// I3/V9) — while a deliberate repeat more than a full window later is its own
+// operation.
 const scimRetryWindow = 5 * time.Minute
 
-func scimIdempotencyKey(r *http.Request, body []byte) string {
+// scimNow is the derivation clock, injectable so boundary behaviour is
+// testable without wall-time flakiness.
+var scimNow = time.Now
+
+// scimIdempotencyKey derives the operation key and, for derived keys, the
+// PREVIOUS bucket's key. An explicit Idempotency-Key is used verbatim and has
+// no previous bucket — the provider owns dedupe entirely.
+func scimIdempotencyKey(r *http.Request, body []byte) (key, previous string) {
 	if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
-		return key
+		return key, ""
 	}
-	bucket := time.Now().UTC().Truncate(scimRetryWindow).Format(time.RFC3339)
-	material := []byte(r.Method + "\x00" + r.URL.Path + "\x00" + bucket + "\x00")
-	material = append(material, body...)
-	defer secret.Wipe(material)
-	return "scim:" + crypto.SHA256Hex(material)
+	derive := func(bucket time.Time) string {
+		material := []byte(r.Method + "\x00" + r.URL.Path + "\x00" + bucket.UTC().Format(time.RFC3339) + "\x00")
+		material = append(material, body...)
+		defer secret.Wipe(material)
+		return "scim:" + crypto.SHA256Hex(material)
+	}
+	bucket := scimNow().UTC().Truncate(scimRetryWindow)
+	return derive(bucket), derive(bucket.Add(-scimRetryWindow))
 }
 
 func scimMutationBinding(tok scimToken, r *http.Request, body []byte) (string, error) {
