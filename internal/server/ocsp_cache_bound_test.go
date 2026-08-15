@@ -25,7 +25,7 @@ func TestOCSPResponseCacheIsBounded(t *testing.T) {
 			tenantID: "tenant-a", caID: "ca-1",
 			serial: strconv.Itoa(i), status: "good", revokedAt: now,
 		}
-		c.put(key, []byte("response-der"), live)
+		c.put(key, []byte("response-der"), live, now)
 	}
 
 	c.mu.Lock()
@@ -45,7 +45,7 @@ func TestOCSPResponseCacheStillServesHits(t *testing.T) {
 	now := time.Unix(1_900_000_000, 0).UTC()
 	key := ocspResponseCacheKey{tenantID: "tenant-a", caID: "ca-1", serial: "42", status: "good", revokedAt: now}
 
-	c.put(key, []byte("response-der"), now.Add(time.Hour))
+	c.put(key, []byte("response-der"), now.Add(time.Hour), now)
 	got, ok := c.get(key, now)
 	if !ok || string(got) != "response-der" {
 		t.Fatalf("cached response not served back: ok=%v got=%q", ok, got)
@@ -66,11 +66,11 @@ func TestOCSPResponseCacheEvictsExpiredBeforeLive(t *testing.T) {
 
 	for i := 0; i < maxOCSPCacheEntries; i++ {
 		c.put(ocspResponseCacheKey{tenantID: "t", caID: "ca", serial: "old-" + strconv.Itoa(i)},
-			[]byte("stale"), now.Add(time.Minute))
+			[]byte("stale"), now.Add(time.Minute), now)
 	}
 	later := now.Add(time.Hour)
 	fresh := ocspResponseCacheKey{tenantID: "t", caID: "ca", serial: "fresh"}
-	c.put(fresh, []byte("fresh-der"), later.Add(time.Hour))
+	c.put(fresh, []byte("fresh-der"), later.Add(time.Hour), later)
 
 	if got, ok := c.get(fresh, later); !ok || string(got) != "fresh-der" {
 		t.Fatalf("a live response was evicted in favour of expired entries: ok=%v got=%q", ok, got)

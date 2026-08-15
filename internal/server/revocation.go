@@ -188,7 +188,7 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 		return nil, err
 	}
 	if !noncePresent {
-		s.ocspCache.put(key, der, nextUpdate)
+		s.ocspCache.put(key, der, nextUpdate, now)
 	}
 	s.observeOCSPResponse("signed")
 	return der, nil

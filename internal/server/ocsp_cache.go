@@ -60,14 +60,20 @@ func (c *ocspResponseCache) get(key ocspResponseCacheKey, now time.Time) ([]byte
 	return append([]byte(nil), entry.der...), true
 }
 
-func (c *ocspResponseCache) put(key ocspResponseCacheKey, der []byte, nextUpdate time.Time) {
+func (c *ocspResponseCache) put(key ocspResponseCacheKey, der []byte, nextUpdate, now time.Time) {
 	if c == nil || len(der) == 0 || nextUpdate.IsZero() {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, replacing := c.entries[key.String()]; !replacing {
-		c.evictLocked(nextUpdate)
+		// Evict against the caller's REAL clock. This used to pass the new
+		// entry's nextUpdate (now + TTL) as "now", so the expiry sweep judged
+		// every live entry against a future timestamp: at the cap, one new
+		// serial mass-deleted every still-valid response and the hit rate
+		// collapsed — reinstating exactly the signer-load amplification the
+		// bound was added to absorb (AUD-201 follow-up F1/V7).
+		c.evictLocked(now)
 	}
 	c.entries[key.String()] = ocspResponseCacheEntry{der: append([]byte(nil), der...), nextUpdate: nextUpdate}
 }
