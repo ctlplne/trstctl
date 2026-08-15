@@ -45,7 +45,12 @@ func TestEveryPublicRouteHasAbuseControl(t *testing.T) {
 		if _, ok := exempt[r.opID]; ok {
 			continue
 		}
-		body, ok := handlerNames[handlerNameForOpID(t, r.opID)]
+		// Operation ids equal handler method names by convention across this
+		// package (opID "machineLogin" -> a.machineLogin), so the id indexes
+		// the handler-source map directly (AUD-201 follow-up L1/V30: the
+		// former handlerNameForOpID wrapper was an identity function whose
+		// *testing.T implied a mapping that could fail; none exists).
+		body, ok := handlerNames[r.opID]
 		if !ok {
 			// The handler could not be located by name; skip rather than fail, so
 			// this guard never blocks on a naming convention it does not control.
@@ -66,13 +71,6 @@ func TestEveryPublicRouteHasAbuseControl(t *testing.T) {
 			"guess against it as fast as the network allows", unguarded)
 	}
 	t.Logf("checked %d public routes", len(public))
-}
-
-// handlerNameForOpID maps an operation id to the handler method name. They match
-// by convention across this package (opID "machineLogin" -> a.machineLogin).
-func handlerNameForOpID(t *testing.T, opID string) string {
-	t.Helper()
-	return opID
 }
 
 // handlerFuncNames returns every method name in the api package mapped to its body
