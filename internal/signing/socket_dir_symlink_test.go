@@ -21,7 +21,7 @@ import (
 func TestSignerSocketDirRefusesASymlink(t *testing.T) {
 	root := t.TempDir()
 	elsewhere := filepath.Join(root, "attacker-controlled")
-	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
+	if err := os.MkdirAll(elsewhere, 0o755); err != nil { // #nosec G301 -- the loose mode IS the attack fixture this test defends against (CWE-276)
 		t.Fatal(err)
 	}
 	link := filepath.Join(root, "run")
@@ -53,10 +53,10 @@ func TestSignerSocketDirRefusesASymlink(t *testing.T) {
 // narrowed to 0700 rather than rejected.
 func TestSignerSocketDirTightensAWidePreexistingDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "run")
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { // #nosec G301 -- the wide mode IS the precondition this test proves gets narrowed (CWE-276)
 		t.Fatal(err)
 	}
-	if err := os.Chmod(dir, 0o777); err != nil {
+	if err := os.Chmod(dir, 0o777); err != nil { // #nosec G302 -- deliberately widened so enforceExactSocketDirMode has something to tighten (CWE-276)
 		t.Fatal(err)
 	}
 	if err := enforceExactSocketDirMode(dir, 0o700); err != nil {

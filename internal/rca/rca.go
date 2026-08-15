@@ -143,15 +143,3 @@ func (s *Synthesizer) Answer(ctx context.Context, ev Evidence) (Answer, error) {
 	}
 	return Answer{Text: text, Citations: cites, Sufficient: true}, nil
 }
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	return string(b)
-}

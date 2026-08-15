@@ -40,7 +40,7 @@ func TestEveryEmbeddedPostgresHarnessStopsWhatItStarts(t *testing.T) {
 		if !strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		body, readErr := os.ReadFile(path) // #nosec G304 -- walks this repository's own test sources (CWE-22)
+		body, readErr := os.ReadFile(path) // #nosec G304 G122 -- walks this repository's own test sources (CWE-22)
 		if readErr != nil {
 			return nil
 		}

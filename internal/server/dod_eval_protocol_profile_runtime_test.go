@@ -68,6 +68,15 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	external := proof.StartCommand(t, "protocol_ergonomics.eval_profile")
 
 	scepConfig, scepChallenge := dodEvalIntuneChallenge(t, "eval-scep-device")
+	// CMP fails closed without operator-configured client trust anchors
+	// (AUD-201): a PKIMessage authenticates nothing until its protection
+	// identity chains to an anchor. The eval exercise therefore provisions its
+	// device identities up front and trusts exactly those, which is the same
+	// contract a real operator ships.
+	cmpDevice1 := dodEvalCMPIdentity(t, "eval-cmp-device-1")
+	cmpDevice2 := dodEvalCMPIdentity(t, "eval-cmp-device-2")
+	cmpAnchorFile := filepath.Join(dir, "cmp-client-anchors.pem")
+	dodEvalWriteCertPEM(t, cmpAnchorFile, cmpDevice1.certDER, cmpDevice2.certDER)
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
 	cfg.Audit.SigningKeyFile = filepath.Join(dir, "audit-signing-key.pem")
@@ -80,6 +89,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	cfg.Protocols.TSACertFile = filepath.Join(dir, "tsa.crt")
 	cfg.Protocols.SPIFFE.SocketPath = dodEvalLocalSocketPath(t)
 	cfg.Protocols.SCEPIntuneChallenge = scepConfig
+	cfg.Protocols.CMPClientTrustAnchorFile = cmpAnchorFile
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("validate eval-profile production config: %v", err)
 	}
@@ -158,7 +168,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	artifacts["acme"] = dodEvalEnrollACME(t, first.Client(), first.BaseURL(), challengeAddress, caDER)
 	artifacts["est"] = dodEvalEnrollEST(t, first.Client(), first.BaseURL(), estToken, caDER)
 	artifacts["scep"] = dodEvalEnrollSCEP(t, first.Client(), first.BaseURL(), scepChallenge, caDER)
-	artifacts["cmp"] = dodEvalEnrollCMP(t, first.Client(), first.BaseURL(), "eval-cmp-device-1", []byte("eval-profile-cmp-1"), caDER)
+	artifacts["cmp"] = dodEvalEnrollCMP(t, first.Client(), first.BaseURL(), cmpDevice1, []byte("eval-profile-cmp-1"), caDER)
 	sshArtifact, sshCA := dodEvalIssueSSH(t, first.Client(), first.BaseURL(), sshToken)
 	artifacts["ssh"] = sshArtifact
 	tsaArtifact, _ := dodEvalTimestamp(t, first.Client(), first.BaseURL(), "first-eval-timestamp")
@@ -217,7 +227,7 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 		t.Fatal("SCEP RA/CA readback changed across restart")
 	}
 	restartReadbacks["scep"] = crypto.SHA256Hex(restartSCEPCA)
-	restartCMP := dodEvalEnrollCMP(t, second.Client(), second.BaseURL(), "eval-cmp-device-2", []byte("eval-profile-cmp-2"), caDER)
+	restartCMP := dodEvalEnrollCMP(t, second.Client(), second.BaseURL(), cmpDevice2, []byte("eval-profile-cmp-2"), caDER)
 	restartReadbacks["cmp"] = crypto.SHA256Hex(restartCMP["response_der"].([]byte))
 	restartSSHCA := dodEvalGetBody(t, second.Client(), second.BaseURL()+"/ssh/ca", http.StatusOK)
 	if !bytes.Equal(sshCA, restartSSHCA) {
@@ -806,10 +816,38 @@ func dodEvalEnrollSCEP(t *testing.T, client *http.Client, baseURL, challenge str
 	return map[string]any{"request_der": requestDER, "response_der": responseDER, "certificate_der": issuedDER, "get_ca_der": caBody}
 }
 
-func dodEvalEnrollCMP(t *testing.T, client *http.Client, baseURL, commonName string, transactionID, caDER []byte) map[string]any {
+// dodEvalCMPIdentityMaterial is one pre-provisioned CMP device identity. The
+// identity exists BEFORE the server's config so its certificate can be listed in
+// the CMP client trust-anchor bundle — the fail-closed enrollment contract.
+type dodEvalCMPIdentityMaterial struct {
+	certDER  []byte
+	keyPKCS8 []byte
+	csrDER   []byte
+}
+
+func dodEvalCMPIdentity(t *testing.T, commonName string) dodEvalCMPIdentityMaterial {
 	t.Helper()
-	clientCertDER, clientKeyPKCS8, csrDER := dodEvalClientMaterial(t, commonName, "")
-	defer secret.Wipe(clientKeyPKCS8)
+	certDER, keyPKCS8, csrDER := dodEvalClientMaterial(t, commonName, "")
+	t.Cleanup(func() { secret.Wipe(keyPKCS8) })
+	return dodEvalCMPIdentityMaterial{certDER: certDER, keyPKCS8: keyPKCS8, csrDER: csrDER}
+}
+
+func dodEvalWriteCertPEM(t *testing.T, path string, certs ...[]byte) {
+	t.Helper()
+	var buf bytes.Buffer
+	for _, der := range certs {
+		if err := pem.Encode(&buf, &pem.Block{Type: "CERTIFICATE", Bytes: der}); err != nil {
+			t.Fatalf("encode trust anchor PEM: %v", err)
+		}
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+		t.Fatalf("write trust anchor bundle: %v", err)
+	}
+}
+
+func dodEvalEnrollCMP(t *testing.T, client *http.Client, baseURL string, device dodEvalCMPIdentityMaterial, transactionID, caDER []byte) map[string]any {
+	t.Helper()
+	clientCertDER, clientKeyPKCS8, csrDER := device.certDER, device.keyPKCS8, device.csrDER
 	nonce := crypto.SHA256Sum(append([]byte("cmp-nonce:"), transactionID...))[:16]
 	requestDER, err := crypto.BuildCMPRequest(csrDER, clientCertDER, clientKeyPKCS8, transactionID, nonce)
 	if err != nil {

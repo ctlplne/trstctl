@@ -4,6 +4,7 @@ package dynsecret
 
 import (
 	"bytes"
+	"strconv"
 	"testing"
 )
 
@@ -98,8 +99,5 @@ func TestMongoCommandCapacityIsSufficient(t *testing.T) {
 }
 
 func itoaForTest(i int) string {
-	if i < 10 {
-		return string(rune('0' + i))
-	}
-	return string(rune('0'+i/10)) + string(rune('0'+i%10))
+	return strconv.Itoa(i)
 }

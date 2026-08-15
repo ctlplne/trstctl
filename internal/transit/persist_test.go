@@ -115,7 +115,7 @@ func TestSealedKeyringNeverWritesKeyMaterialInTheClear(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	onDisk, err := os.ReadFile(filepath.Join(dir, transitStateFile))
+	onDisk, err := os.ReadFile(filepath.Join(dir, transitStateFile)) // #nosec G304 -- reads the test's own sealed keyring file (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}

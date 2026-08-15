@@ -10,10 +10,6 @@ import (
 	"testing"
 )
 
-// deferredWipeOfField matches `defer secret.Wipe(x.Field...)` — a wipe whose
-// argument is a STRUCT FIELD evaluated at defer-statement time.
-var deferredWipeOfField = regexp.MustCompile(`defer\s+secret\.Wipe\([a-zA-Z_][A-Za-z0-9_]*\.[A-Za-z]`)
-
 // TestNoDeferredWipeOfAnUnpopulatedField is the regression guard for the
 // silent-no-op secret wipe (AN-8).
 //
@@ -46,7 +42,7 @@ func TestNoDeferredWipeOfAnUnpopulatedField(t *testing.T) {
 			if relErr != nil {
 				rel = path
 			}
-			raw, readErr := os.ReadFile(path) // #nosec G304 -- walking the repo's own tree (CWE-22)
+			raw, readErr := os.ReadFile(path) // #nosec G304 G122 -- walking the repo's own tree (CWE-22)
 			if readErr != nil {
 				return readErr
 			}

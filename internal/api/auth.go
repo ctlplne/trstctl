@@ -228,7 +228,7 @@ func decodeJSONUnicodeEscape(s []byte) (rune, int, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("api: password has an invalid unicode escape")
 	}
-	r := rune(first)
+	r := rune(first) // #nosec G115 -- four hex digits parse to at most 0xFFFF, within rune range (CWE-190)
 	if !utf16.IsSurrogate(r) {
 		return r, 5, nil
 	}
@@ -239,7 +239,7 @@ func decodeJSONUnicodeEscape(s []byte) (rune, int, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("api: password has an invalid unicode escape")
 	}
-	if combined := utf16.DecodeRune(r, rune(second)); combined != utf8.RuneError {
+	if combined := utf16.DecodeRune(r, rune(second)); combined != utf8.RuneError { // #nosec G115 -- four hex digits parse to at most 0xFFFF, within rune range (CWE-190)
 		return combined, 11, nil
 	}
 	return utf8.RuneError, 5, nil
