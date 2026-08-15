@@ -2290,6 +2290,12 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setInt(getenv, "TRSTCTL_BREAKGLASS_THRESHOLD", &c.Breakglass.Threshold)
 	applyPrivacyEnv(getenv, &c.Privacy)
 	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &c.Backup.EncryptionKeyFile)
+	// Manifest signing identity (AUD-201 follow-up A3/V35): these two fields
+	// shipped with no env wiring while every sibling Backup field had one, so an
+	// env-configured deployment silently wrote unsigned backups and the failure
+	// surfaced only when a DR target with trusted keys refused the restore.
+	setString(getenv, "TRSTCTL_BACKUP_MANIFEST_SIGNING_KEY_FILE", &c.Backup.ManifestSigningKeyFile)
+	setCSV(getenv, "TRSTCTL_BACKUP_TRUSTED_MANIFEST_KEY_FILES", &c.Backup.TrustedManifestKeyFiles)
 	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &c.Backup.AllowUnencrypted)
 	setString(getenv, "TRSTCTL_BACKUP_DIRECTORY", &c.Backup.Directory)
 	setString(getenv, "TRSTCTL_BACKUP_DRILL_INTERVAL", &c.Backup.DrillInterval)
