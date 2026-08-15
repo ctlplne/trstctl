@@ -101,6 +101,11 @@ func TestConnectorCoreStaysHostNeutral(t *testing.T) {
 		// string-typed JSON. Import only the crypto boundary.
 		"trstctl.com/trstctl/internal/secretjson",
 		"trstctl.com/trstctl/internal/secrettext",
+		// netsec: the stdlib-only SSRF/reserved-address policy. The plugin
+		// sandbox's dial control shares netsec.HardBlockedIP (J3/V25) instead
+		// of hand-copying the predicate; the agent binary already links netsec
+		// for its own plugin runtime, so this widens nothing.
+		"trstctl.com/trstctl/internal/netsec",
 		// observ: the metrics/trace primitives (Registry, CounterVec, SpanData).
 		// The control-plane-only exporters — including the audit streamer that
 		// replays the event log — were split into internal/observ/otlp exactly so

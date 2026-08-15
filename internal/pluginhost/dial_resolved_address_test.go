@@ -71,16 +71,6 @@ func TestDialControlRejectsMalformedAddresses(t *testing.T) {
 	}
 }
 
-// TestPluginDialControlAgreesWithNetsec pins this package's deliberately
-// duplicated predicate against internal/netsec, which owns the same logic.
-//
-// The duplication exists because internal/connector must stay host-neutral
-// (crypto boundary, pluginhost and stdlib only, per
-// TestConnectorCoreStaysHostNeutral) and connector reaches pluginhost — so a
-// non-test import of netsec here would drag host networking policy into the
-// agent's portable core. This is a TEST import, which never ships and which the
-// guard's `go list -deps` does not traverse, so it catches drift without
-// widening the shipped graph.
 func TestPluginDialControlAgreesWithNetsec(t *testing.T) {
 	reference := netsec.SafeDialControlWithOptions(netsec.SafeClientOptions{
 		AllowPrivateCIDRs: []netip.Prefix{

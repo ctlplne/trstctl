@@ -306,6 +306,15 @@ var egressAllowSkips atomic.Int64
 // EgressAllowSkips reports how many allowlist entries were ignored at dial time.
 func EgressAllowSkips() int64 { return egressAllowSkips.Load() }
 
+// HardBlockedIP reports whether ip is unconditionally refused for egress
+// regardless of any operator allowlist: link-local (cloud metadata),
+// unspecified, multicast, carrier-grade NAT (RFC 6598), and EC2's IPv6
+// metadata address. Exported (AUD-201 follow-up J3/V25) so the plugin
+// sandbox's dial control shares THIS predicate instead of hand-copying it —
+// the two copies were identical and pinned together by a drift test, which is
+// the tax duplication charges.
+func HardBlockedIP(ip net.IP) bool { return hardBlockedIP(ip) }
+
 func hardBlockedIP(ip net.IP) bool {
 	if ip == nil {
 		return true

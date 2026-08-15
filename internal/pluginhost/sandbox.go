@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // Status codes returned to the guest by every capability function. They are part
@@ -268,17 +270,10 @@ func pluginDialControl(_ string, address string, _ syscall.RawConn) error {
 	if v4 := ip.To4(); v4 != nil {
 		ip = v4
 	}
-	// Link-local covers cloud metadata at 169.254.169.254 and 169.254.170.2.
-	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() ||
-		ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
-		return fmt.Errorf("%w: %s", errDialAddressBlocked, host)
-	}
-	// Carrier-grade NAT (RFC 6598), which IsPrivate does not cover.
-	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64 {
-		return fmt.Errorf("%w: %s", errDialAddressBlocked, host)
-	}
-	// EC2's IPv6 metadata address sits inside ULA, so it needs naming explicitly.
-	if ip.Equal(net.ParseIP("fd00:ec2::254")) {
+	// One reserved-address predicate for the whole codebase (J3/V25):
+	// link-local incl. cloud metadata, unspecified, multicast, CGNAT, and
+	// EC2's IPv6 metadata address, exactly as the netsec SSRF guard blocks.
+	if netsec.HardBlockedIP(ip) {
 		return fmt.Errorf("%w: %s", errDialAddressBlocked, host)
 	}
 	return nil
