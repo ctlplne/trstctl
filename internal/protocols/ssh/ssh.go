@@ -85,7 +85,33 @@ func New(cfg Config) (*CA, error) {
 	if cfg.Clock == nil {
 		cfg.Clock = time.Now
 	}
-	return &CA{cfg: cfg}, nil
+	seed, err := randomSerialSeed()
+	if err != nil {
+		return nil, err
+	}
+	return &CA{cfg: cfg, serial: seed}, nil
+}
+
+// randomSerialSeed picks the starting point for this CA's certificate serials,
+// mirroring internal/tsa's fix for the same defect (AUD-201 follow-up C2/V20).
+//
+// The counter used to start at zero, in memory, persisted nowhere — so every
+// process restart reissued serials 1, 2, 3. Revocation is SERIAL-based and the
+// distributed KRL outlives the process: after a restart a fresh certificate
+// could take a serial already revoked in a host-held KRL (born revoked), and a
+// revoke-by-serial issued after a restart killed a certificate from the
+// previous run.
+//
+// Seeding randomly and then incrementing keeps serials monotonic within a run
+// while making cross-restart collisions negligible (48 random bits; the top 16
+// are cleared so a serial survives JSON number round-trips exactly, matching
+// the TSA's bound).
+func randomSerialSeed() (uint64, error) {
+	b, err := crypto.RandomBytes(8)
+	if err != nil {
+		return 0, fmt.Errorf("ssh: seed certificate serial: %w", err)
+	}
+	return binary.BigEndian.Uint64(b) >> 16, nil
 }
 
 // AuthorityKey returns the CA's SSH public key (authorized_keys form), for use in
@@ -204,6 +230,13 @@ func NewKRL() *KRL {
 }
 
 // RevokeSerial revokes a certificate by serial.
+//
+// The KRL identifies certificates by SERIAL ALONE, and distributed KRLs
+// outlive this process on every host that downloaded one. That only works if
+// a serial never denotes two different certificates: the CA seeds its counter
+// randomly per instance (randomSerialSeed) precisely so a restart cannot
+// reissue a serial an old KRL already revokes, or leave an old certificate
+// aliased by a new revocation.
 func (k *KRL) RevokeSerial(serial uint64) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
