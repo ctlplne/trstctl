@@ -107,3 +107,48 @@ func lineContaining(body, needle string) string {
 	}
 	return ""
 }
+
+// TestEveryRequiredBaseImagePinIsPresent closes the gap that made the first
+// post-merge release fail by design while CI stayed green (AUD-201 follow-up
+// M1/V12): the enforcement shipped with an EMPTY pin file — every entry
+// commented out — and the well-formedness test above skips comments, so
+// nothing noticed that resolve-pinned-base.sh would hard-fail all four image
+// jobs on the next tag while sibling jobs still published a partial release.
+// The four pins are now committed (resolved from the live registries, never
+// fabricated); this test requires each to be PRESENT and uncommented, so
+// "green CI, broken release" cannot recur. The Go pin's key tracks the
+// toolchain in go.mod, so a toolchain bump fails here until the new base is
+// deliberately pinned — which is the SUPPLY-001 design.
+func TestEveryRequiredBaseImagePinIsPresent(t *testing.T) {
+	gomod := read(t, "../go.mod")
+	toolchain := regexp.MustCompile(`(?m)^toolchain go(\S+)$`).FindStringSubmatch(gomod)
+	if toolchain == nil {
+		t.Fatal("go.mod no longer declares a toolchain; the Go base-image pin key cannot be derived")
+	}
+	goKey := "GOLANG_" + strings.ReplaceAll(toolchain[1], ".", "_") + "_BOOKWORM"
+
+	body := read(t, "../.github/base-image-digests.env")
+	pinned := map[string]bool{}
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		key, _, ok := strings.Cut(trimmed, "=")
+		if ok {
+			pinned[key] = true
+		}
+	}
+	for _, required := range []string{
+		"NODE_22_BOOKWORM_SLIM",
+		goKey,
+		"DEBIAN_BOOKWORM_SLIM",
+		"DISTROLESS_STATIC_DEBIAN12_NONROOT",
+	} {
+		if !pinned[required] {
+			t.Errorf("required base-image pin %s is missing or commented out; the next tagged release fails "+
+				"deterministically at resolve-pinned-base.sh while sibling jobs publish a partial release — "+
+				"resolve the digest against the real registry and commit the pin", required)
+		}
+	}
+}
