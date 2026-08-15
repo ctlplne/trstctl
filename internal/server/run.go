@@ -660,6 +660,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		Protocols:       protocols, Plugins: pluginCfg,
 		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, SCIM: cfg.Auth.SCIM,
 		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek,
+		// AUD-201 follow-up (A1/V2): the sealed transit keyring existed, was
+		// tested, and was documented — but this assignment did not, so production
+		// always built a nil store and every transit key died with the process.
+		TransitKeyringDir:           cfg.Transit.KeyringDir,
 		TenantCrypto:                tenantCrypto,
 		IdempotencyResultProtector:  resultProtector,
 		IdempotencyResultMigrator:   resultMigrator,

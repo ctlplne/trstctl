@@ -463,6 +463,10 @@ func configSummary(cfg *config.Config) string {
 		fmt.Fprintf(&b, "bulkheads.%s.queue: %d\n", limit.Name, limit.Queue)
 	}
 	fmt.Fprintf(&b, "secrets.kek_file: %s\n", cfg.Secrets.KEKFile)
+	// Transit keyring durability (AUD-201 follow-up A1): empty means keys are
+	// memory-only and do not survive a restart, so the effective value must be
+	// visible to the operator checking the configuration.
+	fmt.Fprintf(&b, "transit.keyring_dir: %s\n", cfg.Transit.KeyringDir)
 	// Served secrets/identity surface (GAP-006): show whether /api/v1/secrets/* is
 	// mounted and whether machine login is configured, so the ops surface reflects the
 	// served capability rather than over- or under-claiming.

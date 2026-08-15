@@ -3046,7 +3046,10 @@ Two properties bound what this gives you:
 - **Persistence requires a KEK.** With no deployment KEK (or no configured
   directory) the keyring stays in memory only and keys do not survive a restart,
   exactly as before. Key material is sealed at rest or it is not written at all —
-  there is no plaintext fallback.
+  there is no plaintext fallback. The directory is set with `transit.keyring_dir`
+  in the config file or `TRSTCTL_TRANSIT_KEYRING_DIR` in the environment, and the
+  effective value is echoed by `-check-config` as `transit.keyring_dir`; it is
+  empty by default, so durability is an explicit operator decision.
 - **A keyring that cannot be opened refuses to start.** If the sealed file exists
   but the KEK cannot open it, the control plane fails to start rather than coming
   up with an empty keyring: starting anyway would mint fresh keys and silently

@@ -106,6 +106,7 @@ type Config struct {
 	Bulkheads                 Bulkheads                `json:"bulkheads"`
 	Migrate                   Migrate                  `json:"migrate"`
 	Secrets                   Secrets                  `json:"secrets"`
+	Transit                   Transit                  `json:"transit"`
 	ManagedKeys               ManagedKeys              `json:"managed_keys"`
 	Signer                    Signer                   `json:"signer"`
 	CA                        CA                       `json:"ca"`
@@ -1766,6 +1767,17 @@ type Secrets struct {
 	MachineAuth []MachineAuthMethod `json:"machine_auth,omitempty"`
 }
 
+// Transit configures the encryption-as-a-service keyring's durability.
+// KeyringDir is where the transit keyring is sealed at rest under the
+// deployment KEK (AN-8). Empty keeps the keyring in memory only — transit keys
+// then do not survive a restart, and every ciphertext under them becomes
+// permanently undecryptable when the process stops. Persistence also requires
+// the deployment KEK (secrets.kek_file): key material is sealed at rest or it
+// is not written at all.
+type Transit struct {
+	KeyringDir string `json:"keyring_dir,omitempty"`
+}
+
 // TenantSealLocalWrapper maps one non-secret stable reference to an existing
 // local wrapper-key file. trstctl never creates this file: independent custody
 // is useful only when the operator provisions and controls it separately.
@@ -2285,6 +2297,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
+	setString(getenv, "TRSTCTL_TRANSIT_KEYRING_DIR", &c.Transit.KeyringDir)
 	setBool(getenv, "TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY", &c.Secrets.IdempotencyResultFleetReady)
 	setBool(getenv, "TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY", &c.Secrets.SecretRotationHistoryFleetReady)
 	localWrapperID := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID")

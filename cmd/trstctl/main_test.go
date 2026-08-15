@@ -443,3 +443,27 @@ func TestRun_CheckConfigShowsTelemetryOff(t *testing.T) {
 		t.Errorf("check-config output %q should show telemetry disabled by default", out)
 	}
 }
+
+// TestRun_CheckConfigShowsTransitKeyringDir encodes the AUD-201 follow-up
+// A1/V2 operator contract: the effective transit keyring directory is visible
+// in --check-config, both when configured (so an operator can confirm
+// durability is on) and when empty (so the memory-only default is legible).
+func TestRun_CheckConfigShowsTransitKeyringDir(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, emptyEnv, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config): %v", err)
+	}
+	if !strings.Contains(stdout.String(), "transit.keyring_dir: \n") {
+		t.Errorf("check-config output should show the empty transit.keyring_dir default, got:\n%s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	env := envFunc(map[string]string{"TRSTCTL_TRANSIT_KEYRING_DIR": "/var/lib/trstctl/transit"})
+	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config) with keyring dir: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "transit.keyring_dir: /var/lib/trstctl/transit\n") {
+		t.Errorf("check-config output should echo the configured transit.keyring_dir, got:\n%s", stdout.String())
+	}
+}
