@@ -158,3 +158,27 @@ func TestDialTimeSkipIsObservable(t *testing.T) {
 		t.Fatalf("the dial-time skip was silent (counter moved by %d); J1/V23 stayed hidden precisely because nothing recorded it", got)
 	}
 }
+
+// TestIsLoopbackHostChosenSemantics pins the ONE loopback predicate's contract
+// (AUD-201 follow-up J4/V26) — this gate decides when plaintext HTTP is
+// allowed, so the choice is security-relevant and deliberate:
+//   - the whole loopback RANGE counts (127.0.0.2 as much as 127.0.0.1): every
+//     127/8 address is equally without a network path, and the one copy that
+//     string-compared exact addresses was the outlier;
+//   - "localhost" matches case-insensitively (DNS names are case-insensitive,
+//     so LOCALHOST is the same name);
+//   - one layer of URL brackets is stripped, so "[::1]" is recognized;
+//   - anything that is not localhost or a parseable loopback IP is NOT
+//     loopback — names, private ranges, empty strings.
+func TestIsLoopbackHostChosenSemantics(t *testing.T) {
+	for _, host := range []string{"localhost", "LOCALHOST", " localhost ", "127.0.0.1", "127.0.0.2", "::1", "[::1]"} {
+		if !netsec.IsLoopbackHost(host) {
+			t.Errorf("IsLoopbackHost(%q) = false, want true", host)
+		}
+	}
+	for _, host := range []string{"", "example.com", "10.0.0.1", "192.168.1.1", "127.0.0.1.evil.test", "fd00::1", "localhost.example.com"} {
+		if netsec.IsLoopbackHost(host) {
+			t.Errorf("IsLoopbackHost(%q) = true, want false — this gate admits plaintext HTTP", host)
+		}
+	}
+}

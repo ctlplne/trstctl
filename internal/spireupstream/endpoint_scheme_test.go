@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // validateEndpointScheme runs the real Config.validate with only the endpoint
@@ -60,16 +61,16 @@ func TestUpstreamEndpointAllowsHTTPSAndLoopback(t *testing.T) {
 	}
 }
 
-// TestIsLoopbackHostRejectsLookalikes pins the helper: a hostname that merely
-// mentions localhost is not loopback.
+// TestIsLoopbackHostRejectsLookalikes pins the shared predicate (J4/V26): a
+// hostname that merely mentions localhost is not loopback.
 func TestIsLoopbackHostRejectsLookalikes(t *testing.T) {
 	for _, host := range []string{"localhost.attacker.example", "notlocalhost", "127.0.0.1.attacker.example", ""} {
-		if isLoopbackHost(host) {
+		if netsec.IsLoopbackHost(host) {
 			t.Errorf("%q was treated as loopback", host)
 		}
 	}
 	for _, host := range []string{"localhost", "127.0.0.1", "::1"} {
-		if !isLoopbackHost(host) {
+		if !netsec.IsLoopbackHost(host) {
 			t.Errorf("%q was not treated as loopback", host)
 		}
 	}

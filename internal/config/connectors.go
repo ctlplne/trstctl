@@ -164,7 +164,7 @@ func validateConnectors(c Connectors) []error {
 		rightSizeBindings[key] = true
 		endpoint, err := url.Parse(strings.TrimSpace(binding.Endpoint))
 		if err != nil || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" ||
-			(endpoint.Scheme != "https" && (!c.AllowInsecureHTTP || endpoint.Scheme != "http" || !isLoopbackHost(endpoint.Hostname()))) {
+			(endpoint.Scheme != "https" && (!c.AllowInsecureHTTP || endpoint.Scheme != "http" || !netsec.IsLoopbackHost(endpoint.Hostname()))) {
 			errs = append(errs, fmt.Errorf("%s.endpoint must be an absolute HTTPS URL without userinfo, query, or fragment; explicit insecure http is loopback-only", where))
 		}
 		secretRef, err := url.Parse(strings.TrimSpace(binding.TokenRef))

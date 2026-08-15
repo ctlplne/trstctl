@@ -276,9 +276,9 @@ func validateExternalCANetwork(where string, item ExternalCAConfig) []error {
 		u, err := url.Parse(endpoint)
 		if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 			errs = append(errs, fmt.Errorf("%s endpoint must be an absolute http(s) URL", where))
-		} else if u.Scheme == "http" && (!n.AllowInsecureHTTP || !isLoopbackHost(u.Hostname())) {
+		} else if u.Scheme == "http" && (!n.AllowInsecureHTTP || !netsec.IsLoopbackHost(u.Hostname())) {
 			errs = append(errs, fmt.Errorf("%s endpoint must use https; explicit insecure http is allowed only for loopback development/emulators", where))
-		} else if n.AllowInsecureHTTP && (u.Scheme != "http" || !isLoopbackHost(u.Hostname())) {
+		} else if n.AllowInsecureHTTP && (u.Scheme != "http" || !netsec.IsLoopbackHost(u.Hostname())) {
 			errs = append(errs, fmt.Errorf("%s network.allow_insecure_http requires an HTTP loopback endpoint", where))
 		}
 		if n.AllowInsecureHTTP && (n.RootCAFile != "" || n.ClientCertFile != "" || n.ClientKeyFile != "" || n.ServerName != "") {

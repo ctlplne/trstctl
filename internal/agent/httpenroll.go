@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	pathpkg "path"
@@ -167,7 +166,7 @@ func validateEnrollmentBaseURL(raw string, client *http.Client, allowLoopbackDev
 			return nil, errors.New("agent: enrollment HTTPS client must be explicit and CA-pinned")
 		}
 	case "http":
-		if !allowLoopbackDevHTTP || !isLoopbackHost(base.Hostname()) {
+		if !allowLoopbackDevHTTP || !netsec.IsLoopbackHost(base.Hostname()) {
 			return nil, errors.New("agent: enrollment URL must be https with a CA-pinned client; http is allowed only for explicit loopback development")
 		}
 	default:
@@ -191,12 +190,4 @@ func normalizeEnrollmentBaseURL(base *url.URL) *url.URL {
 		normalized.Path = ""
 	}
 	return &normalized
-}
-
-func isLoopbackHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }

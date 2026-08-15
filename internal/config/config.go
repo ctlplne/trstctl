@@ -2980,7 +2980,7 @@ func validateProviderConfig(c *Config) []error {
 				continue
 			}
 			u, err := url.Parse(endpoint.value)
-			if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname()))) {
+			if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !netsec.IsLoopbackHost(u.Hostname()))) {
 				errs = append(errs, fmt.Errorf("provider.saml.%s %q must be an absolute https URL (http is allowed only for loopback)", endpoint.name, endpoint.value))
 			}
 		}
@@ -3092,7 +3092,7 @@ func isLoopbackListenAddr(addr string) bool {
 	if host == "" {
 		return false
 	}
-	return isLoopbackHost(host)
+	return netsec.IsLoopbackHost(host)
 }
 
 func validateDatastores(c *Config) []error {
@@ -3760,7 +3760,7 @@ func validateAIEndpoint(name, raw string, requireHTTPS bool) []error {
 		}
 	case u.Scheme == "https":
 		// ok
-	case u.Scheme == "http" && isLoopbackHost(u.Hostname()):
+	case u.Scheme == "http" && netsec.IsLoopbackHost(u.Hostname()):
 		// ok: local Ollama/vLLM loopback endpoint
 	default:
 		errs = append(errs, fmt.Errorf("%s %q must use https unless it is a loopback local model endpoint", name, raw))
@@ -3931,15 +3931,6 @@ func (p Plugins) validate() []error {
 
 // isLoopbackHost reports whether host is a loopback hostname/IP (127.0.0.0/8, ::1,
 // or "localhost"), for the OIDC endpoint http exemption (RFC 8252).
-func isLoopbackHost(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
-	}
-	return false
-}
 
 // validate reports the configuration problems of an enabled OIDC block. It is the
 // fail-closed gate: a missing endpoint, missing client id/issuer, no signing keys,
@@ -3986,7 +3977,7 @@ func (o OIDC) validate() []error {
 			continue
 		}
 		u, err := url.Parse(e.v)
-		if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname()))) {
+		if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !netsec.IsLoopbackHost(u.Hostname()))) {
 			errs = append(errs, fmt.Errorf("auth.oidc.%s %q must be an absolute https URL (http is allowed only for a loopback host)", e.name, e.v))
 		}
 	}
@@ -4020,7 +4011,7 @@ func (s SAML) validate() []error {
 			continue
 		}
 		u, err := url.Parse(e.v)
-		if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname()))) {
+		if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !netsec.IsLoopbackHost(u.Hostname()))) {
 			errs = append(errs, fmt.Errorf("auth.saml.%s %q must be an absolute https URL (http is allowed only for a loopback host)", e.name, e.v))
 		}
 	}
@@ -4065,7 +4056,7 @@ func (l LDAP) validate() []error {
 			switch u.Scheme {
 			case "ldaps":
 			case "ldap":
-				if !isLoopbackHost(u.Hostname()) {
+				if !netsec.IsLoopbackHost(u.Hostname()) {
 					errs = append(errs, fmt.Errorf("auth.ldap.url %q uses plaintext ldap://; use ldaps:// for non-loopback directories", l.URL))
 				}
 			default:

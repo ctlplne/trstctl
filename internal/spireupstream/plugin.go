@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,11 +17,13 @@ import (
 	"sync"
 
 	"github.com/hashicorp/hcl"
+
 	upstreamauthorityv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/upstreamauthority/v1"
 	typesv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/types"
 	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const defaultCommonName = "SPIRE Server CA"
@@ -217,7 +218,7 @@ func (c *Config) validate() error {
 		// it decides what the whole SPIFFE trust domain considers a valid root. Over
 		// plaintext, anyone on the path becomes that authority. Loopback is allowed
 		// because there is no network to be on-path of.
-		if !isLoopbackHost(u.Hostname()) {
+		if !netsec.IsLoopbackHost(u.Hostname()) {
 			return status.Errorf(codes.InvalidArgument,
 				"endpoint %q uses plaintext http to a non-loopback host; the upstream authority decides the trust domain's roots, so an on-path attacker could become it — use https", u.Host)
 		}
@@ -285,17 +286,4 @@ func zero(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
-}
-
-// isLoopbackHost reports whether host addresses only this machine, where a
-// plaintext upstream-authority endpoint has no network path to attack.
-func isLoopbackHost(host string) bool {
-	host = strings.TrimSpace(host)
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
-	}
-	return false
 }

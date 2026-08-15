@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const (
@@ -320,16 +322,11 @@ func hasSuspiciousRedirectURI(values []string) bool {
 		if err != nil {
 			continue
 		}
-		if strings.EqualFold(u.Scheme, "http") && !isLoopbackHost(u.Hostname()) {
+		if strings.EqualFold(u.Scheme, "http") && !netsec.IsLoopbackHost(u.Hostname()) {
 			return true
 		}
 	}
 	return false
-}
-
-func isLoopbackHost(host string) bool {
-	host = strings.ToLower(strings.TrimSpace(host))
-	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
 func normalizeOptionalRFC3339(field, value string) (string, error) {

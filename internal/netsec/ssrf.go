@@ -306,6 +306,28 @@ var egressAllowSkips atomic.Int64
 // EgressAllowSkips reports how many allowlist entries were ignored at dial time.
 func EgressAllowSkips() int64 { return egressAllowSkips.Load() }
 
+// IsLoopbackHost reports whether host addresses only this machine — the gate
+// several surfaces use to decide when plaintext HTTP is tolerable because the
+// traffic never leaves the host. One definition for the whole codebase
+// (AUD-201 follow-up J4/V26): four hand-written copies had drifted, and one
+// (the OAuth grant redirect check) string-compared against exactly
+// "127.0.0.1"/"::1", rejecting 127.0.0.2 — every 127/8 address is equally
+// loopback and equally without a network path. The chosen semantics: trim
+// whitespace; strip one layer of URL brackets; "localhost" case-insensitively
+// (DNS names are case-insensitive, so LOCALHOST is the same name); otherwise
+// the address must parse and be a loopback IP (the whole 127/8 range and ::1).
+func IsLoopbackHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // HardBlockedIP reports whether ip is unconditionally refused for egress
 // regardless of any operator allowlist: link-local (cloud metadata),
 // unspecified, multicast, carrier-grade NAT (RFC 6598), and EC2's IPv6
