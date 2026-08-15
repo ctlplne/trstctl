@@ -284,9 +284,15 @@ type Server struct {
 	challenges map[string]*challenge
 	certs      map[string][]byte
 	issued     map[string]*issuedCert // by SHA-256 fingerprint (hex) of the leaf DER
-	revoked    map[string]revocation  // by SHA-256 fingerprint (hex); presence == revoked
-	ariWindows map[string]ariWindow   // ARI: certID -> validity span (RFC 9773)
-	earlyRenew map[string]bool        // ARI: certIDs flagged for proactive renewal
+	// certOwner indexes certID -> owning account URL, written at the
+	// event-apply site so it is rebuilt naturally on replay/restore. getCert
+	// ownership is O(1) instead of a full scan of every certificate ever
+	// issued under the global lock (AUD-201 follow-up G2/V31). Never pruned,
+	// mirroring issued.
+	certOwner  map[string]string
+	revoked    map[string]revocation // by SHA-256 fingerprint (hex); presence == revoked
+	ariWindows map[string]ariWindow  // ARI: certID -> validity span (RFC 9773)
+	earlyRenew map[string]bool       // ARI: certIDs flagged for proactive renewal
 	sources    map[string]*sourceBudget
 	seq        int
 
@@ -314,6 +320,7 @@ func New(ca ca.CA, validator Validator) *Server {
 		orders: map[string]*order{}, authzs: map[string]*authorization{},
 		challenges: map[string]*challenge{}, certs: map[string][]byte{},
 		issued: map[string]*issuedCert{}, revoked: map[string]revocation{},
+		certOwner:  map[string]string{},
 		ariWindows: map[string]ariWindow{}, earlyRenew: map[string]bool{},
 		sources:         map[string]*sourceBudget{},
 		accountLimiter:  newMemoryAccountOrderLimiter(),
@@ -1333,13 +1340,7 @@ func (s *Server) getCert(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMes
 	certID := r.PathValue("id")
 	s.mu.Lock()
 	pem := s.certs[certID]
-	owner, known := "", false
-	for _, rec := range s.issued {
-		if rec != nil && rec.certID == certID {
-			owner, known = rec.accountURL, true
-			break
-		}
-	}
+	owner, known := s.certOwner[certID]
 	s.mu.Unlock()
 	if pem == nil {
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such certificate")

@@ -351,6 +351,12 @@ func (s *Server) applyCertificateIssuedEventLocked(payload acmeCertificateIssued
 			certID:     payload.Issued.CertID,
 		}
 	}
+	if payload.Issued.CertID != "" && payload.Issued.AccountURL != "" {
+		if s.certOwner == nil {
+			s.certOwner = map[string]string{}
+		}
+		s.certOwner[payload.Issued.CertID] = payload.Issued.AccountURL
+	}
 	s.rememberSeq(payload.Seq)
 	return nil
 }
