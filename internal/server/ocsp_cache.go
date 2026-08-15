@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"trstctl.com/trstctl/internal/ttlmap"
 )
 
 // maxOCSPCacheEntries bounds the served OCSP response cache.
@@ -78,32 +80,18 @@ func (c *ocspResponseCache) put(key ocspResponseCacheKey, der []byte, nextUpdate
 	c.entries[key.String()] = ocspResponseCacheEntry{der: append([]byte(nil), der...), nextUpdate: nextUpdate}
 }
 
-// evictLocked makes room for one new entry. It first drops everything already
-// expired — the common case, and free — and only if the cache is still full
-// evicts the entry that expires soonest, which is the one whose loss costs the
-// least. Callers hold c.mu.
+// evictLocked makes room for one new entry via the shared bounded-TTL-map
+// algorithm (F2/V28): expired entries first — the common case, and free —
+// then the entry that expires soonest, whose loss costs the least. Callers
+// hold c.mu.
 func (c *ocspResponseCache) evictLocked(now time.Time) {
-	if len(c.entries) < maxOCSPCacheEntries {
-		return
-	}
-	for k, entry := range c.entries {
-		if !entry.nextUpdate.After(now) {
-			delete(c.entries, k)
-		}
-	}
-	for len(c.entries) >= maxOCSPCacheEntries {
-		var soonestKey string
-		var soonest time.Time
-		for k, entry := range c.entries {
-			if soonestKey == "" || entry.nextUpdate.Before(soonest) {
-				soonestKey, soonest = k, entry.nextUpdate
-			}
-		}
-		if soonestKey == "" {
-			return
-		}
-		delete(c.entries, soonestKey)
-	}
+	ttlmap.MakeRoom(c.entries, now, ttlmap.Policy[ocspResponseCacheEntry]{
+		Capacity: maxOCSPCacheEntries,
+		Expired: func(e ocspResponseCacheEntry, now time.Time) bool {
+			return !e.nextUpdate.After(now)
+		},
+		Rank: func(e ocspResponseCacheEntry) time.Time { return e.nextUpdate },
+	})
 }
 
 func (k ocspResponseCacheKey) String() string {

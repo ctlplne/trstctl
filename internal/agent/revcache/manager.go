@@ -19,6 +19,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/revcacheposture"
+	"trstctl.com/trstctl/internal/ttlmap"
 )
 
 const (
@@ -347,25 +348,19 @@ func (o *managedOCSP) fresh(nextUpdate time.Time) bool {
 	return !nextUpdate.IsZero() && !o.now().UTC().After(nextUpdate)
 }
 
-// makeCacheRoomLocked bounds memory even when a client probes many serials.
-// Expired responses are evicted first; otherwise the oldest validation loses.
+// makeCacheRoomLocked bounds memory even when a client probes many serials,
+// via the shared bounded-TTL-map algorithm (F2/V28). Expired responses are
+// evicted first — on every insert, not only at capacity — otherwise the oldest
+// validation loses, ties broken deterministically by key.
 func (o *managedOCSP) makeCacheRoomLocked() {
-	for key, cached := range o.responses {
-		if !o.fresh(cached.nextUpdate) {
-			delete(o.responses, key)
-		}
-	}
-	for len(o.responses) >= maxOCSPCacheResponses {
-		var oldestKey string
-		var oldestAt time.Time
-		for key, cached := range o.responses {
-			if oldestKey == "" || cached.validatedAt.Before(oldestAt) ||
-				(cached.validatedAt.Equal(oldestAt) && key < oldestKey) {
-				oldestKey, oldestAt = key, cached.validatedAt
-			}
-		}
-		delete(o.responses, oldestKey)
-	}
+	ttlmap.MakeRoom(o.responses, o.now().UTC(), ttlmap.Policy[ocspCachedResponse]{
+		Capacity: maxOCSPCacheResponses,
+		Expired: func(e ocspCachedResponse, now time.Time) bool {
+			return e.nextUpdate.IsZero() || now.After(e.nextUpdate)
+		},
+		Rank:               func(e ocspCachedResponse) time.Time { return e.validatedAt },
+		SweepBelowCapacity: true,
+	})
 }
 
 func normalizeSerialHex(serial string) string {

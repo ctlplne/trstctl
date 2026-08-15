@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/branding"
+	"trstctl.com/trstctl/internal/ttlmap"
 )
 
 type Record struct {
@@ -127,31 +128,17 @@ func (r *Resolver) lookup(ctx context.Context, key string, fetch func(context.Co
 	return cloneRecord(record)
 }
 
-// evictLocked makes room for one new entry: expired entries first (free), then
-// the least recently fetched. Callers hold r.mu.
+// evictLocked makes room for one new entry via the shared bounded-TTL-map
+// algorithm (F2/V28): expired entries first (free), then the least recently
+// fetched. Callers hold r.mu.
 func (r *Resolver) evictLocked() {
-	if len(r.cache) < maxBrandCacheEntries {
-		return
-	}
-	now := r.now()
-	for k, entry := range r.cache {
-		if now.Sub(entry.fetched) >= r.ttl {
-			delete(r.cache, k)
-		}
-	}
-	for len(r.cache) >= maxBrandCacheEntries {
-		var oldestKey string
-		var oldest time.Time
-		for k, entry := range r.cache {
-			if oldestKey == "" || entry.fetched.Before(oldest) {
-				oldestKey, oldest = k, entry.fetched
-			}
-		}
-		if oldestKey == "" {
-			return
-		}
-		delete(r.cache, oldestKey)
-	}
+	ttlmap.MakeRoom(r.cache, r.now(), ttlmap.Policy[cachedRecord]{
+		Capacity: maxBrandCacheEntries,
+		Expired: func(e cachedRecord, now time.Time) bool {
+			return now.Sub(e.fetched) >= r.ttl
+		},
+		Rank: func(e cachedRecord) time.Time { return e.fetched },
+	})
 }
 
 func merge(tenant, master *Record) branding.Brand {
