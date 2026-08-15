@@ -302,14 +302,19 @@ func extKeyUsageString(usage x509.ExtKeyUsage) string {
 	case x509.ExtKeyUsageOCSPSigning:
 		return "ocspSigning"
 	default:
-		if oid := extKeyUsageOID(usage); oid != nil {
+		if oid := ExtKeyUsageOID(usage); oid != nil {
 			return oid.String()
 		}
 		return ""
 	}
 }
 
-func extKeyUsageOID(usage x509.ExtKeyUsage) asn1.ObjectIdentifier {
+// ExtKeyUsageOID returns the dotted-form OID for a Go-known extended key
+// usage that has no conventional short name, or nil for usages outside this
+// table. internal/crypto's hierarchy EKU renderer shares it (AUD-201 follow-up
+// E1/V13) so the emitting and inspecting sides cannot drift into two naming
+// schemes again.
+func ExtKeyUsageOID(usage x509.ExtKeyUsage) asn1.ObjectIdentifier {
 	switch usage {
 	case x509.ExtKeyUsageIPSECEndSystem:
 		return asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 5}

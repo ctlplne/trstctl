@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 const (
@@ -762,33 +764,32 @@ func parsePKIXPublicKey(pub PublicKey) (any, error) {
 func extKeyUsageStrings(usages []x509.ExtKeyUsage) []string {
 	out := make([]string, 0, len(usages))
 	for _, u := range usages {
-		switch u {
-		case x509.ExtKeyUsageServerAuth:
-			out = append(out, "serverAuth")
-		case x509.ExtKeyUsageClientAuth:
-			out = append(out, "clientAuth")
-		case x509.ExtKeyUsageCodeSigning:
-			out = append(out, "codeSigning")
-		case x509.ExtKeyUsageEmailProtection:
-			out = append(out, "emailProtection")
-		case x509.ExtKeyUsageTimeStamping:
-			out = append(out, "timeStamping")
-		case x509.ExtKeyUsageOCSPSigning:
-			out = append(out, "ocspSigning")
-		case x509.ExtKeyUsageIPSECEndSystem:
-			out = append(out, "ipsecEndSystem")
-		case x509.ExtKeyUsageIPSECTunnel:
-			out = append(out, "ipsecTunnel")
-		case x509.ExtKeyUsageIPSECUser:
-			out = append(out, "ipsecUser")
-		case x509.ExtKeyUsageAny:
-			out = append(out, "any")
-		default:
-			// Never silently drop: an unrecognised usage must break the match.
-			out = append(out, fmt.Sprintf("unrecognized-eku-%d", int(u)))
-		}
+		out = append(out, extKeyUsageString(u))
 	}
 	return out
+}
+
+// extKeyUsageString renders one EKU in exactly the vocabulary caExtKeyUsage
+// parses (AUD-201 follow-up E1/V13): the consumer's own name table for the
+// conventional usages, and the DOTTED OID — the parseable form, mirroring
+// certinfo — for every other usage Go knows. The totality fix that stopped
+// usages silently vanishing from ceremony comparisons had rendered
+// ipsecEndSystem/ipsecTunnel/ipsecUser and unrecognized-eku-N, tokens the
+// signing path could not parse back — so inheriting an EKU from an imported
+// enterprise root hard-failed child issuance instead of merely comparing.
+func extKeyUsageString(u x509.ExtKeyUsage) string {
+	for _, def := range extKeyUsageDefs {
+		if def.usage == u {
+			return def.name
+		}
+	}
+	if oid := certinfo.ExtKeyUsageOID(u); oid != nil {
+		return oid.String()
+	}
+	// Never silently drop: an unrecognised usage must break the match. The
+	// round-trip totality test proves this branch is unreachable for every
+	// usage the current Go release defines.
+	return fmt.Sprintf("unrecognized-eku-%d", int(u))
 }
 
 // extKeyUsageStringsForCertificate is extKeyUsageStrings over everything a
