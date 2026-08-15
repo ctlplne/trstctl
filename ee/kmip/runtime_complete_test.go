@@ -34,7 +34,10 @@ func TestKMIPOASIS14QueryOverMTLSListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate KMIP mTLS material: %v", err)
 	}
-	poolSet := bulkhead.NewSet(bulkhead.Config{Name: bulkhead.SubsystemProtocols, Workers: 1, Queue: 2})
+	// The runtime refuses to run without its own lane (A2/V11): the old
+	// protocols-pool fallback was the silent share that starved every other
+	// protocol, so this fixture supplies the kmip lane the contract demands.
+	poolSet := bulkhead.NewSet(bulkhead.Config{Name: bulkhead.SubsystemKMIP, Workers: 1, Queue: 2})
 	t.Cleanup(poolSet.Close)
 	log, err := events.Open(context.Background(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
 	if err != nil {

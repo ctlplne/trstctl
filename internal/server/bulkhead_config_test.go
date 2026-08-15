@@ -22,6 +22,8 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 	cfg.Bulkheads.Outbox.Workers = 2
 	cfg.Bulkheads.Outbox.Queue = 19
 	cfg.Bulkheads.OutboxConnectors = &config.BulkheadLimit{Workers: 1, Queue: 7}
+	cfg.Bulkheads.KMIP.Workers = 5
+	cfg.Bulkheads.KMIP.Queue = 23
 	auditKey := testAuditSigningKey(t)
 
 	deps, err := buildRunDeps(context.Background(), cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, auditKey)
@@ -42,6 +44,7 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 		queue   int
 	}{
 		bulkhead.SubsystemAPI:                 {workers: 3, queue: 17},
+		bulkhead.SubsystemKMIP:                {workers: 5, queue: 23},
 		bulkhead.SubsystemOutbox:              {workers: 2, queue: 19},
 		bulkhead.SubsystemOutboxExternalCA:    {workers: 2, queue: 19},
 		bulkhead.SubsystemOutboxConnectors:    {workers: 1, queue: 7},
@@ -57,6 +60,23 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 		if got.Workers != want.workers || got.Capacity != want.queue {
 			t.Fatalf("%s stats = workers %d queue %d, want workers %d queue %d", name, got.Workers, got.Capacity, want.workers, want.queue)
 		}
+	}
+
+	// The kmip lane is connection-scoped (a worker is held for an entire client
+	// connection), so the CONFIG-DERIVED set — the one production actually
+	// builds, not bulkhead.Default() — must give it a pool of its own. This is
+	// the A2/V11 regression guard: the lane existed in Default() and tests
+	// passed while every real deployment fell back to the shared protocols
+	// pool.
+	kmipPool := deps.Bulkhead.Pool(bulkhead.SubsystemKMIP)
+	if kmipPool == nil {
+		t.Fatal("config-derived bulkhead set has no kmip pool; production KMIP would fall back to a shared lane")
+	}
+	if kmipPool == deps.Bulkhead.Pool(bulkhead.SubsystemProtocols) {
+		t.Fatal("config-derived kmip pool IS the protocols pool; connection-scoped KMIP would starve every issuance protocol")
+	}
+	if kmipPool == deps.Bulkhead.Pool(bulkhead.SubsystemAPI) {
+		t.Fatal("config-derived kmip pool IS the API pool")
 	}
 
 	seen := map[*bulkhead.Pool]string{}

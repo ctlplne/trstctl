@@ -1612,8 +1612,15 @@ type Bulkheads struct {
 	Query               BulkheadLimit  `json:"query"`
 	Policy              BulkheadLimit  `json:"policy"`
 	Protocols           BulkheadLimit  `json:"protocols"`
-	Agent               BulkheadLimit  `json:"agent"`
-	CBOM                BulkheadLimit  `json:"cbom"`
+	// KMIP is connection-scoped: a worker is held for a whole client
+	// connection, TLS handshake included, so it must never share the
+	// request-scoped protocols lane (AN-7). This field was missing after the
+	// lane was registered in bulkhead.DefaultConfigs(), so the production
+	// config-derived set had no kmip pool and the runtime silently fell back
+	// to the shared protocols pool (AUD-201 follow-up A2/V11).
+	KMIP  BulkheadLimit `json:"kmip"`
+	Agent BulkheadLimit `json:"agent"`
+	CBOM  BulkheadLimit `json:"cbom"`
 }
 
 type bulkheadLimitItem struct {
@@ -1640,6 +1647,8 @@ func defaultBulkheads() Bulkheads {
 			out.Policy = limit
 		case bulkhead.SubsystemProtocols:
 			out.Protocols = limit
+		case bulkhead.SubsystemKMIP:
+			out.KMIP = limit
 		case bulkhead.SubsystemAgent:
 			out.Agent = limit
 		case bulkhead.SubsystemCBOM:
@@ -1675,6 +1684,7 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemQuery, limit: b.Query},
 		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
 		{name: bulkhead.SubsystemProtocols, limit: b.Protocols},
+		{name: bulkhead.SubsystemKMIP, limit: b.KMIP},
 		{name: bulkhead.SubsystemAgent, limit: b.Agent},
 		{name: bulkhead.SubsystemCBOM, limit: b.CBOM},
 	}
@@ -2714,6 +2724,8 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	setInt(getenv, "TRSTCTL_BULKHEAD_POLICY_QUEUE", &b.Policy.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_PROTOCOLS_WORKERS", &b.Protocols.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE", &b.Protocols.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_KMIP_WORKERS", &b.KMIP.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_KMIP_QUEUE", &b.KMIP.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_WORKERS", &b.Agent.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_QUEUE", &b.Agent.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_CBOM_WORKERS", &b.CBOM.Workers)

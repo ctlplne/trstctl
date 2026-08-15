@@ -44,15 +44,13 @@ func NewFactory() server.KMIPFactory {
 		// separate bulkhead rather than a bigger shared one.
 		pool := bulk.Pool(bulkhead.SubsystemKMIP)
 		if pool == nil {
-			// A custom bulkhead set without a KMIP lane: fall back, but never to
-			// a lane other protocols depend on.
-			pool = bulk.Pool(bulkhead.SubsystemProtocols)
-		}
-		if pool == nil {
-			pool = bulk.Pool(bulkhead.SubsystemAPI)
-		}
-		if pool == nil {
-			return nil, errors.New("KMIP requires a KMIP, protocols, or API bulkhead pool")
+			// No silent fallback: sharing another subsystem's lane is exactly the
+			// AN-7 starvation this pool exists to prevent, and a fallback is how
+			// the config-derived production set ran KMIP on the shared protocols
+			// pool for a whole release (AUD-201 follow-up A2/V11). A set without
+			// the lane is a wiring bug — refuse to serve rather than starve
+			// ACME/EST/SCEP/CMP/SSH/SPIFFE.
+			return nil, errors.New("KMIP requires its own bulkhead lane (bulkheads.kmip); refusing to fall back to a pool other subsystems depend on")
 		}
 		addr := strings.TrimSpace(cfg.Addr)
 		if addr == "" {
