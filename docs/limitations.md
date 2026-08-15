@@ -3064,6 +3064,21 @@ the encrypt still fails. Sharing the keyring across replicas — and event-sourc
 the create/rotate lifecycle facts alongside the sealed material — is tracked as
 follow-up work.
 
+**CMP binds every CSR to the authenticated protection identity by default.**
+A PKIMessage's protection identity must chain to the operator-configured
+anchors (`protocols.cmp_client_trust_anchor_file`), and — new — the CSR's
+subject and SANs must be asserted by that identity, so a device credential can
+renew only itself and a stolen credential stays one device in blast radius.
+RFC 4210 registration-authority enrollment on behalf of third parties remains
+available as an explicit opt-in: `protocols.cmp_allow_ra_enrollment` in the
+config file or `TRSTCTL_PROTOCOLS_CMP_ALLOW_RA_ENROLLMENT=true` in the
+environment (echoed by `-check-config` as
+`protocols.cmp.allow_ra_enrollment` when CMP is enabled). Cross-identity
+requests under the default are refused with a distinct audit reason
+(`csr not bound to protection identity`), so an operator can tell an
+impersonation attempt from a malformed message. Deployments that relied on the
+previous unbound behaviour must set the RA opt-in deliberately on upgrade.
+
 Six of six secrets/identity frameworks are mounted on the running binary
 under `/api/v1/secrets/*` (off by default — `secrets.enable_api` — fail-closed
 when off, requiring a KEK when on):

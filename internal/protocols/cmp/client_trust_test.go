@@ -50,15 +50,23 @@ func TestCMPRefusesUnanchoredProtectionIdentity(t *testing.T) {
 	}
 }
 
-// TestCMPAcceptsAnchoredProtectionIdentity keeps the guard honest: a client whose
-// protection identity was issued by the configured anchor still enrols, so the
-// fix is a trust check rather than a blanket refusal.
+// TestCMPAcceptsAnchoredProtectionIdentity keeps the guard honest: a client
+// whose protection identity was issued by the configured anchor still enrols.
+//
+// DELIBERATE CONTRACT CHANGE (AUD-201 follow-up H1/V22): this test used to pin
+// the UNBOUND behaviour — protection identity "anchored-device" enrolling a
+// CSR for "device-1" — which meant any anchored credential could mint ANY name
+// the profile admitted. That third-party shape is now the RFC 4210 RA case and
+// requires the explicit AllowRAEnrollment opt-in, exercised here; the default
+// fail-closed binding is pinned by TestCMPDefaultRefusesCrossIdentityCSR and
+// self-renewal by TestCMPDefaultAllowsSelfRenewal.
 func TestCMPAcceptsAnchoredProtectionIdentity(t *testing.T) {
 	ca := newRSACA(t)
 	srv := cmpsrv.New(cmpsrv.Config{
 		Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8,
 		ProfileName:           "device",
 		ClientTrustAnchorsDER: [][]byte{ca.certDER},
+		AllowRAEnrollment:     true,
 	})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()

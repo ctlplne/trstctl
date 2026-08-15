@@ -45,6 +45,7 @@ type Server struct {
 	// unavailable. allowAnonymous is the deliberate escape hatch for harnesses.
 	clientAnchors  *crypto.CMPTrustAnchors
 	anchorsErr     error
+	bindPolicy     crypto.CMPBindPolicy
 	allowAnonymous bool
 }
 
@@ -70,6 +71,13 @@ type Config struct {
 	// the caller has NO credential check and every request is trusted; the served
 	// endpoint refuses to start in that state (see New).
 	ClientTrustAnchorsDER [][]byte
+	// AllowRAEnrollment is the explicit RFC 4210 registration-authority
+	// opt-in (AUD-201 follow-up H1/V22). OFF by default: the CSR's subject and
+	// SANs must be authorized by the AUTHENTICATED protection identity, so a
+	// stolen device credential can renew only itself. ON, an authenticated
+	// client may request certificates for third parties — a deployment
+	// decision (protocols.cmp_allow_ra_enrollment), never an accident.
+	AllowRAEnrollment bool
 	// AllowUnauthenticatedClients must be set deliberately to run without
 	// anchors. It exists for differential harnesses that drive the parser
 	// directly; production wiring never sets it.
@@ -88,7 +96,11 @@ func New(cfg Config) *Server {
 		verifyCSR:      cfg.CSRVerifier,
 		clientAnchors:  anchors,
 		anchorsErr:     anchorsErr,
+		bindPolicy:     crypto.CMPBindCSRToProtectionIdentity,
 		allowAnonymous: cfg.AllowUnauthenticatedClients,
+	}
+	if cfg.AllowRAEnrollment {
+		s.bindPolicy = crypto.CMPAllowRAEnrollment
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cmp", s.handle)
@@ -133,7 +145,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cmp: enrollment unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	req, err := crypto.ParseCMPRequestWithTrust(body, s.verifyCSR, s.clientAnchors)
+	req, err := crypto.ParseCMPRequestWithTrust(body, s.verifyCSR, s.clientAnchors, s.bindPolicy)
+	if errors.Is(err, crypto.ErrCMPCSRNotBound) {
+		// Authenticated, but asking for someone else's names (H1/V22). The
+		// refusal is distinct in the audit trail so an operator can tell a
+		// cross-identity attempt from a malformed message.
+		s.audit(r.Context(), "deny", "csr not bound to protection identity", "")
+		http.Error(w, "cmp: csr not authorized for protection identity", http.StatusForbidden)
+		return
+	}
 	if err != nil {
 		s.audit(r.Context(), "deny", "malformed pkiMessage", "")
 		http.Error(w, "cmp: bad request", http.StatusBadRequest)

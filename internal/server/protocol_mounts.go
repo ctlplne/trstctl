@@ -188,6 +188,10 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 				Pool:                  pool,
 				Log:                   s.log,
 				ClientTrustAnchorsDER: cmpAnchors,
+				// H1/V22: RA-style third-party enrollment is an explicit
+				// deployment opt-in; the default binds every CSR to the
+				// authenticated protection identity.
+				AllowRAEnrollment: cfg.CMPAllowRAEnrollment,
 				// The licensed-aware verifier: subject algorithms the core
 				// parser cannot check verify through the licensed seam, the
 				// same binding EST carries (protection stays core-verified).

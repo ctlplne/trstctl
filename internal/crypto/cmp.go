@@ -23,6 +23,7 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -114,7 +115,36 @@ type CMPRequest struct {
 	CSRDER        []byte
 	TransactionID []byte
 	SenderNonce   []byte
+	// ProtectionCommonName is the subject CN of the AUTHENTICATED protection
+	// identity — the certificate that signed the PKIMessage and chained to the
+	// configured anchors. Surfaced so the serving layer can audit WHO enrolled,
+	// not merely that someone authenticated did (AUD-201 follow-up H1/V22).
+	// Empty when no anchor verification ran (harness-only paths).
+	ProtectionCommonName string
 }
+
+// ErrCMPCSRNotBound is returned when the fail-closed binding policy refuses a
+// CSR whose identifiers the protection identity does not authorize.
+var ErrCMPCSRNotBound = errors.New("cmp: CSR identifiers are not authorized by the protection identity")
+
+// CMPBindPolicy governs whether the carried CSR must be authorized by the
+// authenticated protection identity (AUD-201 follow-up H1/V22).
+type CMPBindPolicy int
+
+const (
+	// CMPBindCSRToProtectionIdentity is the fail-closed default: every
+	// identifier the CSR requests (subject CN and every SAN) must be present
+	// on the certificate that protected the message. A device can renew or
+	// re-shape its own identity; it cannot enroll names belonging to anyone
+	// else, so one stolen device credential stays one device in blast radius.
+	CMPBindCSRToProtectionIdentity CMPBindPolicy = iota
+	// CMPAllowRAEnrollment is the explicit RFC 4210 registration-authority
+	// opt-in: an authenticated RA may request certificates on behalf of third
+	// parties, so the CSR's names are not compared to the RA's own. Off by
+	// default; enabling it is a deployment decision
+	// (protocols.cmp_allow_ra_enrollment).
+	CMPAllowRAEnrollment
+)
 
 // BuildCMPRequest builds a signature-protected CMP p10cr PKIMessage carrying csrDER,
 // protected by the client's key and carrying the client cert in extraCerts. Used by CMP
@@ -171,7 +201,7 @@ func ParseCMPRequest(der []byte) (*CMPRequest, error) {
 // verified here, unconditionally, against the classical extraCerts identity; only the
 // inner CSR's verification is delegated. A nil verifier keeps the strict core parser.
 func ParseCMPRequestWithVerifier(der []byte, verifyCSR func([]byte) error) (*CMPRequest, error) {
-	return ParseCMPRequestWithTrust(der, verifyCSR, nil)
+	return ParseCMPRequestWithTrust(der, verifyCSR, nil, CMPBindCSRToProtectionIdentity)
 }
 
 // CMPTrustAnchors is the pre-parsed, immutable trust-anchor set a CMP mount
@@ -220,7 +250,11 @@ func (a *CMPTrustAnchors) Empty() bool { return a == nil || a.count == 0 }
 // anchors may be nil ONLY for a caller that authenticates the client some other
 // way (the differential harnesses do; the served endpoint does not). Passing
 // none is therefore explicit at every call site rather than the default.
-func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors *CMPTrustAnchors) (*CMPRequest, error) {
+//
+// policy applies only when anchors verified a protection identity: with no
+// authenticated identity there is nothing to bind to, so harness-only
+// anchorless paths are unaffected. The served endpoint always has anchors.
+func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors *CMPTrustAnchors, policy CMPBindPolicy) (*CMPRequest, error) {
 	if verifyCSR == nil {
 		verifyCSR = VerifyCertificateRequest
 	}
@@ -243,16 +277,92 @@ func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors 
 	if err := verifyProtection(msg.Header, msg.Body, msg.Protection, signerCert); err != nil {
 		return nil, fmt.Errorf("cmp: verify protection: %w", err)
 	}
+	identityVerified := false
 	if !anchors.Empty() {
 		if err := verifyCMPProtectionIdentity(signerCert, msg.ExtraCerts[1:], anchors); err != nil {
 			return nil, err
 		}
+		identityVerified = true
 	}
 	csrDER := msg.Body.Bytes
 	if err := verifyCSR(csrDER); err != nil {
 		return nil, fmt.Errorf("cmp: body is not a valid CSR: %w", err)
 	}
-	return &CMPRequest{Pvno: msg.Header.Pvno, CSRDER: csrDER, TransactionID: msg.Header.TransactionID, SenderNonce: msg.Header.SenderNonce}, nil
+	if identityVerified && policy == CMPBindCSRToProtectionIdentity {
+		if err := csrBoundToProtectionIdentity(csrDER, signerCert); err != nil {
+			return nil, err
+		}
+	}
+	req := &CMPRequest{Pvno: msg.Header.Pvno, CSRDER: csrDER, TransactionID: msg.Header.TransactionID, SenderNonce: msg.Header.SenderNonce}
+	if identityVerified {
+		req.ProtectionCommonName = signerCert.Subject.CommonName
+	}
+	return req, nil
+}
+
+// csrBoundToProtectionIdentity enforces the fail-closed H1/V22 binding: every
+// identifier the CSR requests must already be asserted by the certificate that
+// protected the message. CMP authenticated WHO was asking and then ignored the
+// answer — any client chaining to the anchors could enroll for ANY name the
+// profile suffix admitted, so one stolen device credential was tenant-wide in
+// blast radius. The same twin checks exist elsewhere in the codebase: ACME's
+// finalize CSR-to-order match and the mTLS agent's CN validation.
+func csrBoundToProtectionIdentity(csrDER []byte, protection *x509.Certificate) error {
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return fmt.Errorf("cmp: parse CSR for identity binding: %w", err)
+	}
+	authorized := map[string]bool{}
+	if cn := strings.TrimSpace(protection.Subject.CommonName); cn != "" {
+		authorized["dns:"+strings.ToLower(cn)] = true
+		authorized["cn:"+strings.ToLower(cn)] = true
+	}
+	for _, dns := range protection.DNSNames {
+		authorized["dns:"+strings.ToLower(dns)] = true
+	}
+	for _, ip := range protection.IPAddresses {
+		authorized["ip:"+ip.String()] = true
+	}
+	for _, email := range protection.EmailAddresses {
+		authorized["email:"+strings.ToLower(email)] = true
+	}
+	for _, uri := range protection.URIs {
+		authorized["uri:"+uri.String()] = true
+	}
+
+	var requested []string
+	if cn := strings.TrimSpace(csr.Subject.CommonName); cn != "" {
+		requested = append(requested, "cn:"+strings.ToLower(cn))
+	}
+	for _, dns := range csr.DNSNames {
+		requested = append(requested, "dns:"+strings.ToLower(dns))
+	}
+	for _, ip := range csr.IPAddresses {
+		requested = append(requested, "ip:"+ip.String())
+	}
+	for _, email := range csr.EmailAddresses {
+		requested = append(requested, "email:"+strings.ToLower(email))
+	}
+	for _, uri := range csr.URIs {
+		requested = append(requested, "uri:"+uri.String())
+	}
+	if len(requested) == 0 {
+		// Nothing to authorize is not authorization: an identifier-free CSR
+		// under the binding policy is refused rather than minted blind.
+		return fmt.Errorf("%w: the CSR requests no identifiers", ErrCMPCSRNotBound)
+	}
+	for _, want := range requested {
+		if authorized[want] {
+			continue
+		}
+		// A CSR CN is also satisfied by a matching protection SAN (cn: falls
+		// back to dns: above); anything else is a cross-identity request.
+		if strings.HasPrefix(want, "cn:") && authorized["dns:"+strings.TrimPrefix(want, "cn:")] {
+			continue
+		}
+		return fmt.Errorf("%w: %q is not asserted by the protection certificate", ErrCMPCSRNotBound, want)
+	}
+	return nil
 }
 
 // BuildCMPResponse builds a signature-protected CMP cp PKIMessage carrying the issued

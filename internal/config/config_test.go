@@ -101,6 +101,7 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_PROTOCOLS_KMIP_CERT_FILE":                      "/var/lib/trstctl/kmip.crt",
 		"TRSTCTL_PROTOCOLS_KMIP_KEY_FILE":                       "/var/lib/trstctl/kmip.key",
 		"TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE":                 "/var/lib/trstctl/kmip-clients.crt",
+		"TRSTCTL_PROTOCOLS_CMP_ALLOW_RA_ENROLLMENT":             "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -126,6 +127,9 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.Telemetry.InstanceIDFile != "/var/lib/trstctl/telemetry/instance-id" {
 		t.Errorf("telemetry instance id env override not applied: %q", cfg.Telemetry.InstanceIDFile)
+	}
+	if !cfg.Protocols.CMPAllowRAEnrollment {
+		t.Error("protocols.cmp_allow_ra_enrollment env override not applied (H1/V22 RA opt-in)")
 	}
 	if cfg.Protocols.RAKeyFile != "/var/lib/trstctl/protocol-ra.key" {
 		t.Errorf("protocols.ra_key_file env override not applied: got %q", cfg.Protocols.RAKeyFile)

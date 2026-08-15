@@ -710,10 +710,17 @@ type Protocols struct {
 	// message's own extraCerts, so without anchors the protection check proves
 	// only that the sender signed their own message and a self-signed key pair
 	// is enough to enrol. Served CMP refuses to enrol while this is unset.
-	CMPClientTrustAnchorFile string         `json:"cmp_client_trust_anchor_file,omitempty"`
-	TSACertFile              string         `json:"tsa_cert_file,omitempty"`
-	SPIFFE                   SPIFFEProtocol `json:"spiffe"`
-	SSH                      ProtocolToggle `json:"ssh"`
+	CMPClientTrustAnchorFile string `json:"cmp_client_trust_anchor_file,omitempty"`
+	// CMPAllowRAEnrollment is the explicit RFC 4210 registration-authority
+	// opt-in (AUD-201 follow-up H1/V22). Off (the default), the CMP mount
+	// fails closed: a CSR's subject and SANs must be authorized by the
+	// authenticated protection identity, so a stolen device credential can
+	// renew only itself. On, an authenticated client may enroll on behalf of
+	// third parties.
+	CMPAllowRAEnrollment bool           `json:"cmp_allow_ra_enrollment,omitempty"`
+	TSACertFile          string         `json:"tsa_cert_file,omitempty"`
+	SPIFFE               SPIFFEProtocol `json:"spiffe"`
+	SSH                  ProtocolToggle `json:"ssh"`
 	// SCEPIntuneChallenge pins Microsoft Intune Connector challenge-signing
 	// certificates. Served SCEP always wires this validator; without anchors the
 	// validator fails closed rather than accepting unauthenticated CSRs.
@@ -2670,6 +2677,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE", &p.KMIP.ClientCAFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_RA_KEY_FILE", &p.RAKeyFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_CLIENT_TRUST_ANCHOR_FILE", &p.CMPClientTrustAnchorFile)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_CMP_ALLOW_RA_ENROLLMENT", &p.CMPAllowRAEnrollment)
 	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_CERT_FILE", &p.TSACertFile)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED", &p.SPIFFE.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &p.SPIFFE.TenantID)

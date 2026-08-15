@@ -492,6 +492,9 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "protocols.est.enabled: %t\n", protocols.EST.Enabled)
 	fmt.Fprintf(&b, "protocols.scep.enabled: %t\n", protocols.SCEP.Enabled)
 	fmt.Fprintf(&b, "protocols.cmp.enabled: %t\n", protocols.CMP.Enabled)
+	if protocols.CMP.Enabled {
+		fmt.Fprintf(&b, "protocols.cmp.allow_ra_enrollment: %t\n", protocols.CMPAllowRAEnrollment)
+	}
 	fmt.Fprintf(&b, "protocols.tsa.enabled: %t\n", protocols.TSA.Enabled)
 	fmt.Fprintf(&b, "protocols.spiffe.enabled: %t\n", protocols.SPIFFE.Enabled)
 	if protocols.SPIFFE.Enabled {
