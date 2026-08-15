@@ -2289,18 +2289,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setCSV(getenv, "TRSTCTL_BREAKGLASS_OPERATORS", &c.Breakglass.Operators)
 	setInt(getenv, "TRSTCTL_BREAKGLASS_THRESHOLD", &c.Breakglass.Threshold)
 	applyPrivacyEnv(getenv, &c.Privacy)
-	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &c.Backup.EncryptionKeyFile)
-	// Manifest signing identity (AUD-201 follow-up A3/V35): these two fields
-	// shipped with no env wiring while every sibling Backup field had one, so an
-	// env-configured deployment silently wrote unsigned backups and the failure
-	// surfaced only when a DR target with trusted keys refused the restore.
-	setString(getenv, "TRSTCTL_BACKUP_MANIFEST_SIGNING_KEY_FILE", &c.Backup.ManifestSigningKeyFile)
-	setCSV(getenv, "TRSTCTL_BACKUP_TRUSTED_MANIFEST_KEY_FILES", &c.Backup.TrustedManifestKeyFiles)
-	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &c.Backup.AllowUnencrypted)
-	setString(getenv, "TRSTCTL_BACKUP_DIRECTORY", &c.Backup.Directory)
-	setString(getenv, "TRSTCTL_BACKUP_DRILL_INTERVAL", &c.Backup.DrillInterval)
-	setString(getenv, "TRSTCTL_BACKUP_DRILL_RPO", &c.Backup.DrillRPO)
-	setString(getenv, "TRSTCTL_BACKUP_DRILL_RTO", &c.Backup.DrillRTO)
+	applyBackupEnv(getenv, &c.Backup)
 	setString(getenv, "TRSTCTL_LICENSE_FILE", &c.License.File)
 	setString(getenv, "TRSTCTL_LICENSE_DEPLOYMENT_ID", &c.License.DeploymentID)
 	setString(getenv, "TRSTCTL_LICENSE_ENVIRONMENT", &c.License.Environment)
@@ -2688,6 +2677,22 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &p.SPIFFE.TrustDomain)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &p.SSH.TenantID)
+}
+
+// applyBackupEnv is the DR/backup stage of the environment overlay. Every
+// exported Backup field has a TRSTCTL_BACKUP_* line here — enforced by the
+// reflection guard TestEveryBackupFieldHasEnvWiring, because the manifest
+// signing fields shipped without theirs (AUD-201 follow-up A3/V35) and
+// env-configured deployments silently wrote unsigned backups.
+func applyBackupEnv(getenv func(string) string, b *Backup) {
+	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &b.EncryptionKeyFile)
+	setString(getenv, "TRSTCTL_BACKUP_MANIFEST_SIGNING_KEY_FILE", &b.ManifestSigningKeyFile)
+	setCSV(getenv, "TRSTCTL_BACKUP_TRUSTED_MANIFEST_KEY_FILES", &b.TrustedManifestKeyFiles)
+	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &b.AllowUnencrypted)
+	setString(getenv, "TRSTCTL_BACKUP_DIRECTORY", &b.Directory)
+	setString(getenv, "TRSTCTL_BACKUP_DRILL_INTERVAL", &b.DrillInterval)
+	setString(getenv, "TRSTCTL_BACKUP_DRILL_RPO", &b.DrillRPO)
+	setString(getenv, "TRSTCTL_BACKUP_DRILL_RTO", &b.DrillRTO)
 }
 
 func applyPrivacyEnv(getenv func(string) string, privacy *Privacy) {
