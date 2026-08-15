@@ -684,10 +684,7 @@ func runFullRestore(
 	if err := requireExistingFile(cfg.Secrets.KEKFile, "deployment KEK"); err != nil {
 		return result, err
 	}
-	if err := verifyFileArtifact(manifest, "event-log", filepath.Join(dir, "events.jsonl")); err != nil {
-		return result, err
-	}
-	if err := verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl")); err != nil {
+	if err := verifyFullRestoreManifestArtifacts(manifest, dir); err != nil {
 		return result, err
 	}
 	// A full restore targets a FRESH deployment, whose KEK — and therefore whose
@@ -800,6 +797,15 @@ func runFullRestore(
 // verifyFullRestoreArtifactFiles proves the event and PostgreSQL artifacts name
 // the same backup cut, then observes both close errors before restoration starts.
 // Keeping this preflight separate makes its no-mutation boundary explicit.
+// verifyFullRestoreManifestArtifacts checks the two restore inputs against the
+// manifest before any preflight opens them (a named stage of runFullRestore).
+func verifyFullRestoreManifestArtifacts(manifest backup.FullManifest, dir string) error {
+	if err := verifyFileArtifact(manifest, "event-log", filepath.Join(dir, "events.jsonl")); err != nil {
+		return err
+	}
+	return verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl"))
+}
+
 func verifyFullRestoreArtifactFiles(dir string, id backup.PostgresStateIdentity) error {
 	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {

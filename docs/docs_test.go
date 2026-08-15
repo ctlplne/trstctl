@@ -2180,9 +2180,11 @@ func pluginHostVerifiesSignatures(t *testing.T) bool {
 // disclosure is grounded in real code.
 func TestPluginHostProvenanceDisclosedAsAbsent(t *testing.T) {
 	host := read(t, "../internal/pluginhost/host.go")
-	// Reality anchor: Load still instantiates the supplied bytes directly.
-	if !strings.Contains(host, "InstantiateWithConfig(ctx, wasm") {
-		t.Fatal("internal/pluginhost/host.go no longer instantiates raw wasm bytes in Load; revisit this reality test (SUPPLY-004)")
+	// Reality anchor: Load still accepts and compiles the supplied raw bytes
+	// directly (J2/V8 moved instantiation to per-call from the compiled
+	// module; nothing verifies a signature over the bytes on the way in).
+	if !strings.Contains(host, "rt.CompileModule(ctx, wasm)") {
+		t.Fatal("internal/pluginhost/host.go no longer compiles raw wasm bytes in Load; revisit this reality test (SUPPLY-004)")
 	}
 
 	lim := read(t, "limitations.md")

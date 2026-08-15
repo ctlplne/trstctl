@@ -584,7 +584,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:123` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2536` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2538` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:43` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:260` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1099,9 +1099,9 @@ not this file.
 | `internal/server/backup.go:355` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:390` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:477` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:741` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:804` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:808` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:738` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:810` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:814` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup_test.go:344` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:392` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:531` | test reads its own fixture/tempdir path (CWE-22) |

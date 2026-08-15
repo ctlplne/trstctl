@@ -1727,7 +1727,7 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"func WritePostgresState(",
 		"func RestorePostgresState(",
-		"readAndVerifyPostgresState(r, key)",
+		"readAndVerifyPostgresState(r, key, id)",
 		"validatePostgresStateTables",
 		"backup: postgres-state integrity check FAILED",
 		"truncateList, err := joinQuotedTables(postgresStateTables())",
