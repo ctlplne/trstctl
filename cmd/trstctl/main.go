@@ -595,22 +595,84 @@ var dsnSecretKeywords = map[string]bool{
 	"sslpassword": true,
 }
 
-// redactKeywordValueDSN masks credential values in a libpq keyword/value DSN. It
-// reports false when conn is not that form, so the caller can fall back to URL
-// handling.
+// redactKeywordValueDSN masks credential values in a libpq keyword/value DSN.
+// It reports false when conn is a URL (the caller handles that form).
+//
+// It lexes per the conninfo rules the repo's own driver implements (pgx
+// pgconn): whitespace may surround '=', and a value may be single-quoted with
+// backslash escapes and contain spaces. The previous strings.Fields split
+// leaked exactly those legal forms (AUD-201 follow-up I1/V10):
+// password='correct horse battery' kept every fragment after the first, and
+// "password = secret" returned COMPLETELY unmasked — printed to stderr on
+// every process start. Anything this lexer cannot parse is redacted
+// CONSERVATIVELY as a whole: mask more, never emit the raw string.
 func redactKeywordValueDSN(conn string) (string, bool) {
-	fields := strings.Fields(conn)
-	if len(fields) == 0 || !strings.Contains(fields[0], "=") || strings.Contains(fields[0], "://") {
+	if strings.Contains(conn, "://") {
 		return "", false
 	}
-	for i, field := range fields {
-		key, _, found := strings.Cut(field, "=")
-		if !found {
-			continue
-		}
-		if dsnSecretKeywords[strings.ToLower(strings.TrimSpace(key))] {
-			fields[i] = key + "=xxxxx"
+	const unparseable = "[unparseable connection string; redacted]"
+	isSpace := func(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
+	s, i, n := conn, 0, len(conn)
+	skipSpace := func() {
+		for i < n && isSpace(s[i]) {
+			i++
 		}
 	}
-	return strings.Join(fields, " "), true
+	var out []string
+	for {
+		skipSpace()
+		if i >= n {
+			break
+		}
+		keyStart := i
+		for i < n && s[i] != '=' && !isSpace(s[i]) {
+			i++
+		}
+		key := s[keyStart:i]
+		skipSpace()
+		if key == "" || i >= n || s[i] != '=' {
+			return unparseable, true
+		}
+		i++ // '='
+		skipSpace()
+		var value string
+		if i < n && s[i] == '\'' {
+			valStart := i
+			i++
+			closed := false
+			for i < n {
+				switch s[i] {
+				case '\\':
+					i += 2
+				case '\'':
+					i++
+					closed = true
+				default:
+					i++
+				}
+				if closed {
+					break
+				}
+			}
+			if !closed || i > n {
+				return unparseable, true
+			}
+			value = s[valStart:i]
+		} else {
+			valStart := i
+			for i < n && !isSpace(s[i]) {
+				i++
+			}
+			value = s[valStart:i]
+		}
+		if dsnSecretKeywords[strings.ToLower(key)] {
+			out = append(out, key+"=xxxxx")
+		} else {
+			out = append(out, key+"="+value)
+		}
+	}
+	if len(out) == 0 {
+		return "", false
+	}
+	return strings.Join(out, " "), true
 }

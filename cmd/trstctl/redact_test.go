@@ -62,3 +62,50 @@ func TestRedactHandlesEmptyAndUnparseable(t *testing.T) {
 		t.Errorf("unparseable connection string was echoed back: %q", got)
 	}
 }
+
+// TestRedactMasksSpacedAndQuotedDSNForms is the regression guard for AUD-201
+// follow-up I1/V10. The keyword/value redactor split on strings.Fields and cut
+// on the first '=', so two forms that are LEGAL per this repo's own driver
+// (pgx pgconn accepts whitespace around '=' and quoted values with spaces)
+// leaked to stderr on every process start: a quoted multi-word password kept
+// every fragment after the first, and "password = secret" came back COMPLETELY
+// unmasked. The redactor now lexes conninfo rules, and anything it cannot
+// parse is redacted conservatively as a whole.
+func TestRedactMasksSpacedAndQuotedDSNForms(t *testing.T) {
+	const secret = "S3cr3tPassw0rd"
+	for _, tc := range []struct {
+		name string
+		conn string
+	}{
+		{"plain", "host=db password=" + secret + " dbname=d"},
+		{"quoted multi-word", "host=db password='" + secret + " horse battery' dbname=d"},
+		{"space both sides", "host=db password = " + secret + " dbname=d"},
+		{"space after equals", "host=db password= " + secret + " dbname=d"},
+		{"space before equals", "host=db password =" + secret + " dbname=d"},
+		{"escaped quote in value", `host=db password='it\'s ` + secret + `' dbname=d`},
+		{"escaped backslash", `host=db password='` + secret + `\\' dbname=d`},
+		{"leading secret pair", "password = " + secret},
+		{"uri form", "postgres://trstctl:" + secret + "@db.internal:5432/trstctl"},
+		{"unterminated quote", "host=db password='" + secret},
+		{"dangling key", "host=db password"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := redact(tc.conn)
+			if strings.Contains(got, secret) {
+				t.Fatalf("redact(%q) = %q — the credential leaks to stderr on every start", tc.conn, got)
+			}
+		})
+	}
+
+	// A key that merely CONTAINS "password" is not a credential keyword and
+	// must survive, so the masking is exact rather than substring-happy.
+	got := redact("host=db my_password_hint=rosebud dbname=d")
+	if !strings.Contains(got, "rosebud") {
+		t.Fatalf("redact masked a non-credential keyword: %q", got)
+	}
+	// Non-secret quoted values survive verbatim so the summary stays useful.
+	got = redact("host=db application_name='my app' password=hunter2")
+	if !strings.Contains(got, "'my app'") || strings.Contains(got, "hunter2") {
+		t.Fatalf("redact(%q) mangled non-secret values or leaked: %q", "application_name='my app'", got)
+	}
+}
